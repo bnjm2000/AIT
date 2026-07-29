@@ -188,6 +188,91 @@ class AssetEventHistoryTests(unittest.TestCase):
         self.assertEqual(event['name'], 'Launch')
         self.assertEqual(event['location'], 'Marina Bay Sands')
 
+    def test_asset_usage_days_count_unique_elapsed_deployment_dates(self):
+        today = datetime.now().date()
+
+        def storage_date(value):
+            return value.strftime('%Y%m%d')
+
+        self.data_manager.events = {
+            1: Event(
+                1,
+                'First deployment',
+                storage_date(today - timedelta(days=4)),
+                storage_date(today - timedelta(days=2)),
+                [],
+                actually_prepared=['A#01'],
+            ),
+            2: Event(
+                2,
+                'Overlapping deployment',
+                storage_date(today - timedelta(days=2)),
+                storage_date(today),
+                [],
+                returned_items=['A#01'],
+            ),
+            3: Event(
+                3,
+                'Future deployment',
+                storage_date(today + timedelta(days=1)),
+                storage_date(today + timedelta(days=3)),
+                [],
+                actually_prepared=['A#01'],
+            ),
+            4: Event(
+                4,
+                'Cancelled deployment',
+                storage_date(today - timedelta(days=10)),
+                storage_date(today - timedelta(days=8)),
+                [],
+                state='Cancelled',
+                actually_prepared=['A#01'],
+            ),
+            5: Event(
+                5,
+                'Planned only',
+                storage_date(today - timedelta(days=20)),
+                storage_date(today - timedelta(days=18)),
+                [],
+                prepared_items=['A#01'],
+            ),
+        }
+
+        response = self.client.get('/api/assets/A%2301/usage-summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['usageDays'], 5)
+
+    def test_bulk_asset_usage_counts_event_days_when_any_quantity_was_deployed(self):
+        today = datetime.now().date()
+        self.data_manager.inventory['BULK-1'] = InventoryItem(
+            asset_id='BULK-1',
+            brand='Test',
+            model_number='Cable',
+            serial_number='',
+            description='Bulk cable',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='AX',
+            is_bulk=True,
+            quantity=20,
+        )
+        self.data_manager.events = {
+            1: Event(
+                1,
+                'Bulk deployment',
+                (today - timedelta(days=2)).strftime('%Y%m%d'),
+                today.strftime('%Y%m%d'),
+                [],
+                actually_prepared=['[BULK]BULK-1|4'],
+            ),
+        }
+
+        response = self.client.get('/api/assets/BULK-1/usage-summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['usageDays'], 3)
+
 
 class EventAssignmentAccessTests(unittest.TestCase):
     def setUp(self):
@@ -454,6 +539,21 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         event_id = response.get_json()['eventId']
         self.assertEqual(self.data_manager.events[event_id].assigned_users, ['alice', 'bob'])
+        creation_action = next(
+            log.action for log in self.data_manager.logs
+            if log.action.startswith(f'Created event {event_id}:')
+        )
+        self.assertIn('location=Expo', creation_action)
+        self.assertIn('assigned users=2', creation_action)
+        self.assertTrue(any(
+            row['action'] == creation_action
+            for row in self.data_manager.events[event_id].event_logs
+        ))
+
+        self.data_manager.migrate_event_logs_from_system_logs()
+        self.assertTrue(any(
+            log.action == creation_action for log in self.data_manager.logs
+        ))
 
         response = self.client.put(f'/api/events/{event_id}', json={
             'name': 'New assigned event',
@@ -556,6 +656,12 @@ class TransferWorkspaceSourceTests(unittest.TestCase):
             'grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);',
             self.template,
         )
+        self.assertIn('function renderTransferTargetSubprojects(', self.source)
+        self.assertIn('function transferChooseTargetSubproject(', self.source)
+        self.assertIn('toSubprojectId: transferSelectedTargetSubproject()?.id', self.source)
+        self.assertIn('subprojectId: transferSelectedTargetSubproject()?.id', self.source)
+        self.assertIn('&toSubprojectId=${encodeURIComponent(toSubprojectId)}', self.source)
+        self.assertIn('.transfer-target-subproject-tabs {', self.template)
 
 
 if __name__ == '__main__':

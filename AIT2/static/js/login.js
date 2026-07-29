@@ -10,7 +10,11 @@ function loginMessage(id, message, type = 'error') {
 async function loginFetch(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || payload.message || 'Please try again.');
+  if (!response.ok) {
+    const error = new Error(payload.error || payload.message || 'Please try again.');
+    error.payload = payload;
+    throw error;
+  }
   return payload;
 }
 
@@ -174,11 +178,23 @@ loginById('loginForm').addEventListener('submit', async event => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: loginById('username').value,
-        password: loginById('password').value
+        password: loginById('password').value,
+        companyCode: loginById('loginCompany')?.value || ''
       })
     });
     window.location.href = response.redirect || '/';
   } catch (error) {
+    if (error.payload?.requiresCompany) {
+      const field = loginById('loginCompanyField');
+      const select = loginById('loginCompany');
+      select.replaceChildren(...(error.payload.companies || []).map(company => {
+        const option = document.createElement('option');
+        option.value = company.code || '';
+        option.textContent = company.name || company.code || '';
+        return option;
+      }));
+      field.hidden = false;
+    }
     loginMessage('adminMessage', error.message);
   } finally {
     button.disabled = false;

@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,EventLogs,Notes
-152,Dry Hire: Avery Events,20260702,20260719,[],"[""[MODEL]STG|Global Truss|F34 Corner Block (Silver)|4|Corner Block (silver)""]",[],Planning,[],[],[],dry hire,False,"[{""timestamp"": ""2026/06/26 23:30:29"", ""user"": ""bnjm2000"", ""action"": ""Created event 152: Dry Hire: Avery Events via web interface""}]",

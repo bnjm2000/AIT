@@ -1,3 +1,4 @@
+import base64
 import io
 import os
 import tempfile
@@ -10,6 +11,7 @@ from pypdf import PdfReader
 import app as app_module
 from data_manager import DataManager
 from models import Container, Event, InventoryItem, User, hash_password
+from workforce import save_workforce
 
 
 class FinanceFeatureTests(unittest.TestCase):
@@ -29,7 +31,10 @@ class FinanceFeatureTests(unittest.TestCase):
             'companies': {'SHOWBASE': company},
             'userCompanies': {
                 username: 'SHOWBASE'
-                for username in ('bnjm2000', 'alice', 'bob', 'no-sales', 'manager-no-sales')
+                for username in (
+                    'bnjm2000', 'alice', 'bob', 'sales-admin',
+                    'sales-manager', 'no-sales', 'manager-no-sales',
+                )
             },
             'superAdmins': ['bnjm2000'],
         })
@@ -40,6 +45,8 @@ class FinanceFeatureTests(unittest.TestCase):
             'bnjm2000': self.make_user('bnjm2000', 'owner', True),
             'alice': self.make_user('alice', 'user', True, name='Alice Lim'),
             'bob': self.make_user('bob', 'user', True),
+            'sales-admin': self.make_user('sales-admin', 'admin', True),
+            'sales-manager': self.make_user('sales-manager', 'manager', True),
             'no-sales': self.make_user('no-sales', 'user', False),
             'manager-no-sales': self.make_user('manager-no-sales', 'manager', False),
         }
@@ -128,11 +135,27 @@ class FinanceFeatureTests(unittest.TestCase):
             quotation = response.get_json()['data']
         return quotation
 
+    def test_draft_quotation_detail_autosaves_do_not_fill_system_logs(self):
+        quotation = self.create_quote(project='')
+        self.data_manager.logs = []
+        self.data_manager.save_logs()
+        quotation['projectName'] = 'Autosaved project'
+        quotation['title'] = 'Autosaved project'
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.logs, [])
+
     def test_ownership_visibility_and_unique_global_numbers(self):
         alice_quote = self.create_quote('Alice Project')
         self.assertRegex(alice_quote['number'], r'^QT-\d{4}-001-01$')
         self.assertEqual(alice_quote['createdBy'], 'alice')
         self.assertEqual(alice_quote['salesperson'], 'Alice Lim')
+        self.assertEqual(alice_quote['salespersonUsername'], 'alice')
 
         self.login('bob')
         self.assertEqual(self.client.get('/api/quotations').get_json()['data'], [])
@@ -153,10 +176,103 @@ class FinanceFeatureTests(unittest.TestCase):
 
         with open(os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js'), encoding='utf-8') as source_file:
             source = source_file.read()
-        self.assertIn("ownerView ? '<th>Salesperson</th>'", source)
+        self.assertIn("showSalesperson ? '<th>Salesperson</th>'", source)
         self.assertIn(
             'financeEscape(document.salespersonUsername || document.createdBy)',
             source,
+        )
+
+    def test_sales_admin_can_manage_all_quotations_but_sales_manager_only_their_own(self):
+        alice_quote = self.create_quote('Alice Project')
+
+        self.login('sales-manager')
+        manager_quote = self.create_quote('Manager Project')
+        manager_visible = self.client.get('/api/quotations').get_json()['data']
+        self.assertEqual([row['id'] for row in manager_visible], [manager_quote['id']])
+        self.assertEqual(
+            self.client.get(f"/api/quotations/{alice_quote['id']}").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.put(
+                f"/api/quotations/{alice_quote['id']}",
+                json={'projectName': 'Manager should not change this'},
+            ).status_code,
+            404,
+        )
+
+        self.login('sales-admin')
+        admin_visible = self.client.get('/api/quotations').get_json()['data']
+        self.assertEqual(
+            {row['id'] for row in admin_visible},
+            {alice_quote['id'], manager_quote['id']},
+        )
+        admin_own = self.client.get(
+            '/api/quotations',
+            query_string={'mine': '1'},
+        ).get_json()['data']
+        self.assertEqual(admin_own, [])
+        edit_response = self.client.put(
+            f"/api/quotations/{alice_quote['id']}",
+            json={
+                'projectName': 'Updated by sales admin',
+                'salesperson': 'Sales Admin',
+                'salespersonUsername': 'sales-admin',
+            },
+        )
+        self.assertEqual(edit_response.status_code, 200, edit_response.get_data(as_text=True))
+        self.assertEqual(
+            edit_response.get_json()['data']['projectName'],
+            'Updated by sales admin',
+        )
+        admin_own = self.client.get(
+            '/api/quotations',
+            query_string={'mine': '1'},
+        ).get_json()['data']
+        self.assertEqual([row['id'] for row in admin_own], [alice_quote['id']])
+        with open(
+            os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css'),
+            encoding='utf-8',
+        ) as source_file:
+            stylesheet = source_file.read()
+        self.assertIn('mineOnly: true', source)
+        self.assertIn("return role === 'admin';", source)
+        self.assertIn("params.set('mine', '1')", source)
+        self.assertIn('finance-list-mine-toggle', source)
+        self.assertIn('My quotations</button>', source)
+        self.assertIn('finance-toolbar-title-line', source)
+        self.assertIn(
+            '.finance-toolbar-title-line .finance-list-mine-toggle {',
+            stylesheet,
+        )
+        self.assertIn('flex: none;', stylesheet)
+
+    def test_selected_salesperson_account_controls_quotation_ownership(self):
+        quotation = self.create_quote('Reassigned Project')
+        reassigned = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={
+                'salesperson': 'bob',
+                'salespersonUsername': 'bob',
+            },
+        )
+        self.assertEqual(reassigned.status_code, 200, reassigned.get_data(as_text=True))
+
+        self.assertEqual(
+            self.client.get(f"/api/quotations/{quotation['id']}").status_code,
+            404,
+        )
+        self.login('bob')
+        visible = self.client.get('/api/quotations').get_json()['data']
+        self.assertEqual([row['id'] for row in visible], [quotation['id']])
+        self.assertEqual(
+            self.client.get(f"/api/quotations/{quotation['id']}").status_code,
+            200,
         )
 
     def test_sent_snapshot_revision_expiry_and_statuses(self):
@@ -214,6 +330,35 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertEqual(paid['status'], 'paid')
         self.assertTrue(paid['paidAt'])
+
+    def test_accepting_a_draft_creates_a_saved_version(self):
+        quotation = self.create_quote('Direct Acceptance Project')
+        self.assertEqual(quotation['status'], 'draft')
+        self.assertEqual(quotation['revisions'], [])
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={'status': 'accepted'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        accepted = response.get_json()['data']
+        self.assertEqual(accepted['status'], 'accepted')
+        self.assertEqual(accepted['revision'], 1)
+        self.assertEqual(len(accepted['revisions']), 1)
+        saved_version = accepted['revisions'][0]
+        self.assertEqual(saved_version['revision'], 1)
+        self.assertEqual(saved_version['number'], accepted['number'])
+        self.assertEqual(saved_version['acceptedAt'], accepted['acceptedAt'])
+        self.assertEqual(
+            saved_version['snapshot']['projectName'],
+            'Direct Acceptance Project',
+        )
+
+        archived_pdf = self.client.get(
+            f"/api/quotations/{quotation['id']}/pdf?revision=1"
+        )
+        self.assertEqual(archived_pdf.status_code, 200)
 
     def test_invoiced_status_records_due_date_and_becomes_overdue(self):
         quotation = self.create_quote('Payment Timeline Project')
@@ -274,6 +419,7 @@ class FinanceFeatureTests(unittest.TestCase):
             json={'status': 'accepted'},
         ).get_json()['data']
         event_id = accepted['eventId']
+        self.login('sales-admin')
         expense_response = self.client.post(
             f'/api/finance/profit-loss/{event_id}/expenses',
             json={
@@ -535,7 +681,7 @@ class FinanceFeatureTests(unittest.TestCase):
 
     def test_custom_quotation_number_keeps_two_digit_revision_suffix(self):
         quotation = self.create_quote('Custom Number')
-        quotation['number'] = 'CLIENT-PROPOSAL'
+        quotation['number'] = 'CLIENT-PROPOSAL-77'
         quotation['customNumber'] = True
         saved = self.client.put(
             f"/api/quotations/{quotation['id']}", json=quotation
@@ -571,6 +717,186 @@ class FinanceFeatureTests(unittest.TestCase):
             set(app_module.FINANCE_QUOTATION_STATUSES),
             {'draft', 'sent', 'accepted', 'expired', 'cancelled', 'invoiced', 'overdue', 'paid'},
         )
+
+    def test_accounting_page_and_api_are_owner_only(self):
+        page = self.client.get('/accounting')
+        self.assertEqual(page.status_code, 302)
+        self.assertTrue(page.headers['Location'].endswith('/events'))
+        self.assertEqual(self.client.get('/api/finance/accounting').status_code, 403)
+
+        self.login('bnjm2000')
+        page = self.client.get('/accounting')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'accounting.js', page.data)
+        response = self.client.get('/api/finance/accounting')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        data = response.get_json()['data']
+        self.assertEqual(data['settings']['gstRate'], 9.0)
+        self.assertTrue(any(row['code'] == '4000' for row in data['accounts']))
+
+    def test_accounting_balanced_journal_gst_reports_and_reversal(self):
+        self.login('bnjm2000')
+        settings = self.client.put('/api/finance/accounting/settings', json={
+            'gstRegistered': True,
+            'gstRegistrationNumber': 'M21234567K',
+            'gstRate': 9,
+            'filingFrequency': 'quarterly',
+            'financialYearStartMonth': 1,
+            'recordRetentionYears': 5,
+            'accountingBasis': 'accrual',
+            'periodLockDate': '',
+        })
+        self.assertEqual(settings.status_code, 200, settings.get_data(as_text=True))
+
+        unbalanced = self.client.post('/api/finance/accounting/journals', json={
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'description': 'Unbalanced sale',
+            'status': 'posted',
+            'lines': [
+                {'accountCode': '1100', 'debit': 109, 'credit': 0},
+                {'accountCode': '4000', 'debit': 0, 'credit': 100},
+            ],
+        })
+        self.assertEqual(unbalanced.status_code, 400)
+
+        posted = self.client.post('/api/finance/accounting/journals', json={
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'description': 'GST sale',
+            'reference': 'INV-TEST-001',
+            'status': 'posted',
+            'lines': [
+                {'accountCode': '1100', 'debit': 109, 'credit': 0},
+                {
+                    'accountCode': '4000',
+                    'debit': 0,
+                    'credit': 100,
+                    'taxCode': 'SR9',
+                    'taxBase': 100,
+                    'gstAmount': 9,
+                },
+                {'accountCode': '2100', 'debit': 0, 'credit': 9},
+            ],
+        })
+        self.assertEqual(posted.status_code, 201, posted.get_data(as_text=True))
+        posted_data = posted.get_json()['data']
+        self.assertEqual(posted_data['summary']['receivables'], 109)
+        self.assertEqual(posted_data['summary']['revenue'], 100)
+        self.assertEqual(posted_data['gst']['box1'], 100)
+        self.assertEqual(posted_data['gst']['box6'], 9)
+        self.assertEqual(posted_data['gst']['box8'], 9)
+        journal_id = posted.get_json()['journal']['id']
+
+        edit_posted = self.client.put(
+            f'/api/finance/accounting/journals/{journal_id}',
+            json={'description': 'Changed'},
+        )
+        self.assertEqual(edit_posted.status_code, 409)
+
+        reversed_response = self.client.post(
+            f'/api/finance/accounting/journals/{journal_id}/reverse',
+            json={},
+        )
+        self.assertEqual(
+            reversed_response.status_code,
+            200,
+            reversed_response.get_data(as_text=True),
+        )
+        reversed_data = reversed_response.get_json()['data']
+        self.assertEqual(reversed_data['summary']['receivables'], 0)
+        self.assertEqual(reversed_data['summary']['revenue'], 0)
+        self.assertEqual(reversed_data['gst']['box1'], 0)
+        self.assertEqual(reversed_data['gst']['box6'], 0)
+
+    def test_accounting_source_document_can_only_be_posted_once(self):
+        self.login('bnjm2000')
+        quotation = self.create_quote('Accounting Source')
+        quotation['taxRate'] = 9
+        quotation['lineItems'] = [{
+            'id': 'source-line',
+            'department': 'Audio Department',
+            'description': 'Production services',
+            'quantity': 1,
+            'days': 1,
+            'unitPrice': 100,
+            'discountPercent': 0,
+            'uom': 'lot',
+        }]
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+        invoice = self.client.post(
+            f"/api/quotations/{quotation['id']}/convert-to-invoice"
+        ).get_json()['data']
+        source_key = f"sales-invoice:{invoice['id']}"
+
+        posted = self.client.post('/api/finance/accounting/sources/post', json={
+            'sourceKey': source_key,
+        })
+        self.assertEqual(posted.status_code, 201, posted.get_data(as_text=True))
+        self.assertEqual(posted.get_json()['journal']['debitTotal'], 109)
+        repeated = self.client.post('/api/finance/accounting/sources/post', json={
+            'sourceKey': source_key,
+        })
+        self.assertEqual(repeated.status_code, 400)
+        self.assertIn('already been posted', repeated.get_json()['error'])
+
+    def test_accounting_bank_import_matching_and_duplicate_detection(self):
+        self.login('bnjm2000')
+        self.client.put('/api/finance/accounting/settings', json={
+            'gstRegistered': True,
+            'gstRegistrationNumber': 'M21234567K',
+            'gstRate': 9,
+            'filingFrequency': 'quarterly',
+            'financialYearStartMonth': 1,
+            'recordRetentionYears': 5,
+            'accountingBasis': 'accrual',
+            'periodLockDate': '',
+        })
+        today = datetime.now().strftime('%Y-%m-%d')
+        csv_data = (
+            'Date,Description,Reference,Debit,Credit\n'
+            f'{today},Equipment repair,R-100,109.00,\n'
+        ).encode('utf-8')
+        imported = self.client.post(
+            '/api/finance/accounting/bank-transactions/import',
+            data={
+                'file': (io.BytesIO(csv_data), 'bank.csv'),
+                'bankAccount': '1000',
+            },
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(imported.status_code, 200, imported.get_data(as_text=True))
+        imported_json = imported.get_json()
+        self.assertEqual(imported_json['imported'], 1)
+        transaction = imported_json['data']['bankTransactions'][0]
+        self.assertEqual(transaction['amount'], -109)
+        self.assertEqual(imported_json['data']['bankSummary']['difference'], -109)
+
+        duplicate = self.client.post(
+            '/api/finance/accounting/bank-transactions/import',
+            data={
+                'file': (io.BytesIO(csv_data), 'bank.csv'),
+                'bankAccount': '1000',
+            },
+            content_type='multipart/form-data',
+        ).get_json()
+        self.assertEqual(duplicate['imported'], 0)
+        self.assertEqual(duplicate['duplicates'], 1)
+
+        matched = self.client.post(
+            f"/api/finance/accounting/bank-transactions/{transaction['id']}/match",
+            json={
+                'accountCode': '6300',
+                'taxCode': 'TX9',
+                'description': 'Equipment repair',
+            },
+        )
+        self.assertEqual(matched.status_code, 200, matched.get_data(as_text=True))
+        matched_data = matched.get_json()['data']
+        self.assertEqual(matched_data['bankSummary']['difference'], 0)
+        self.assertEqual(matched_data['gst']['box5'], 100)
+        self.assertEqual(matched_data['gst']['box7'], 9)
 
     def test_schedule_days_acceptance_creates_event_and_requirements(self):
         quotation = self.create_quote('Wedding Production')
@@ -933,6 +1259,87 @@ class FinanceFeatureTests(unittest.TestCase):
         catalog_row = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
         self.assertEqual(catalog_row['unitPrice'], 555)
 
+    def test_changed_line_price_is_remembered_without_mutating_or_reverting_other_quotes(self):
+        catalog_line = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        first = self.create_quote('First Rate Snapshot')
+        second = self.create_quote('Second Rate Snapshot')
+
+        for quotation, line_id in ((first, 'first-rate'), (second, 'second-rate')):
+            quotation['lineItems'] = [{
+                **catalog_line,
+                'id': line_id,
+                'days': 1,
+                'quantity': 1,
+                'uom': 'sqm',
+                'unitPrice': 100,
+                'discountPercent': 0,
+            }]
+            saved = self.client.put(
+                f"/api/quotations/{quotation['id']}",
+                json=quotation,
+            )
+            self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+            quotation.update(saved.get_json()['data'])
+
+        first['lineItems'][0]['unitPrice'] = 175
+        changed = self.client.put(
+            f"/api/quotations/{first['id']}",
+            json=first,
+        )
+        self.assertEqual(changed.status_code, 200, changed.get_data(as_text=True))
+
+        remembered = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        self.assertEqual(remembered['unitPrice'], 175)
+        self.assertEqual(remembered['uom'], 'sqm')
+
+        second['notes'] = 'An unrelated change to the older quotation'
+        unchanged_price_save = self.client.put(
+            f"/api/quotations/{second['id']}",
+            json=second,
+        )
+        self.assertEqual(
+            unchanged_price_save.status_code,
+            200,
+            unchanged_price_save.get_data(as_text=True),
+        )
+        self.assertEqual(
+            unchanged_price_save.get_json()['data']['lineItems'][0]['unitPrice'],
+            100,
+        )
+        remembered_after_autosave = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        self.assertEqual(remembered_after_autosave['unitPrice'], 175)
+
+    def test_uom_menu_and_add_item_reset_behaviour(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(project_root, 'static', 'css', 'finance.css'),
+            encoding='utf-8',
+        ) as source_file:
+            stylesheet = source_file.read()
+
+        self.assertIn("{ value: 'sqm', label: 'sqm' }", source)
+        self.assertIn("target.classList.add('open-up')", source)
+        self.assertIn('.finance-custom-menu.open-up', stylesheet)
+        select_catalog = source.split('function financeSelectCatalog(index)', 1)[1].split(
+            'async function financeAddCustomItem()', 1
+        )[0]
+        add_custom = source.split('async function financeAddCustomItem()', 1)[1].split(
+            'function financeAddItemKeydown(event)', 1
+        )[0]
+        self.assertIn("financeState.addDepartment = ''", select_catalog)
+        self.assertIn("financeState.addDepartment = ''", add_custom)
+
     def test_rate_card_migrates_legacy_asset_key_before_catalog_lookup(self):
         quotation = self.create_quote('Legacy Rate Card Asset')
         quotation['lineItems'] = [{
@@ -1035,6 +1442,7 @@ class FinanceFeatureTests(unittest.TestCase):
         line = response.get_json()['data']['lineItems'][0]
         self.assertEqual(line['department'], 'Lighting Department')
         self.assertEqual(line['departmentCode'], 'LX')
+        self.assertEqual(line['systemName'], 'Lighting System')
 
     def test_free_typed_department_name_remains_custom(self):
         quotation = self.create_quote('Custom Department')
@@ -1060,6 +1468,81 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['data']['lineItems'][0]['department'], 'lig')
 
+    def test_system_group_rename_preserves_inventory_asset_identity(self):
+        quotation = self.create_quote('System Grouping')
+        quotation['lineItems'] = [{
+            'id': 'linked-speaker',
+            'catalogKey': 'inventory:ax|l-acoustics|sb18 iii',
+            'sourceAssetIds': ['AX#01'],
+            'brand': 'L-Acoustics',
+            'model': 'SB18 III',
+            'description': 'Subwoofer',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'systemName': 'Main PA System',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 100,
+            'discountPercent': 0,
+        }]
+        quotation['adjustments'] = [{
+            'id': 'system-discount',
+            'scope': 'department',
+            'department': 'Main PA System',
+            'label': 'Package discount',
+            'amount': -10,
+            'percent': 10,
+            'kind': 'discount',
+            'calculationMode': 'percent',
+            'subprojectId': 'main',
+        }]
+
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+        line = saved['lineItems'][0]
+        self.assertEqual(line['systemName'], 'Main PA System')
+        self.assertEqual(line['department'], 'Audio Department')
+        self.assertEqual(line['departmentCode'], 'AX')
+        self.assertEqual(line['catalogKey'], 'inventory:ax|l-acoustics|sb18 iii')
+        self.assertEqual(line['sourceAssetIds'], ['AX#01'])
+
+        line['systemName'] = 'Front of House'
+        saved['adjustments'][0]['department'] = 'Front of House'
+        renamed = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=saved,
+        ).get_json()['data']
+        renamed_line = renamed['lineItems'][0]
+        self.assertEqual(renamed_line['systemName'], 'Front of House')
+        self.assertEqual(renamed_line['department'], 'Audio Department')
+        self.assertEqual(renamed_line['departmentCode'], 'AX')
+        self.assertEqual(
+            renamed_line['catalogKey'],
+            'inventory:ax|l-acoustics|sb18 iii',
+        )
+        self.assertEqual(renamed_line['sourceAssetIds'], ['AX#01'])
+        self.assertEqual(renamed['adjustments'][0]['department'], 'Front of House')
+
+        renamed_line['brand'] = 'Quotation-only brand'
+        renamed_line['model'] = 'Quotation-only model'
+        renamed_line['description'] = 'Quotation-only description'
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**renamed, 'status': 'accepted'},
+        ).get_json()['data']
+        event = self.data_manager.events[accepted['eventId']]
+        self.assertIn(
+            '[MODEL]AX|L-Acoustics|SB18 III|1|Subwoofer',
+            event.prepared_items,
+        )
+        inventory_asset = self.data_manager.inventory['AX#01']
+        self.assertEqual(inventory_asset.brand, 'L-Acoustics')
+        self.assertEqual(inventory_asset.model_number, 'SB18 III')
+        self.assertEqual(inventory_asset.description, 'Subwoofer')
+
     def test_department_suggestion_selection_suppresses_stale_change_event(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
@@ -1069,8 +1552,22 @@ class FinanceFeatureTests(unittest.TestCase):
             source = source_file.read()
 
         self.assertIn("input.dataset.departmentSelectionCommitted = 'true'", source)
-        self.assertIn("line.departmentCode = ''", source)
+        self.assertIn('line.systemName = value', source)
         self.assertIn('function financeCommitDepartmentInput(index, input)', source)
+        rename_source = source.split(
+            'async function financeRenameDepartment(encodedDepartment)',
+            1,
+        )[1].split('function financeDragLineStart', 1)[0]
+        drop_source = source.split(
+            'function financeDropDepartment(event, encodedTargetDepartment)',
+            1,
+        )[1].split('function financeDragDepartmentEnd', 1)[0]
+        self.assertIn('line.systemName = nextName', rename_source)
+        self.assertIn('line.systemName = targetDepartment', drop_source)
+        self.assertNotIn('line.department =', rename_source)
+        self.assertNotIn('line.departmentCode =', rename_source)
+        self.assertNotIn('line.department =', drop_source)
+        self.assertNotIn('line.departmentCode =', drop_source)
 
     def test_locked_pre_gst_total_applies_total_discount_and_exports(self):
         quotation = self.create_quote('Locked Total')
@@ -1183,14 +1680,14 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('10% department discount', hidden_text)
         self.assertLess(hidden_text.index('Edgar Tan'), hidden_text.index('Patricia & Edgar Pte Ltd'))
         self.assertGreaterEqual(len(hidden_reader.pages), 2)
-        self.assertIn('DEPARTMENT SUMMARY', hidden_last_page_text)
-        self.assertIn('Audio Department', hidden_last_page_text)
+        self.assertIn('SYSTEM SUMMARY', hidden_last_page_text)
+        self.assertIn('Audio System', hidden_last_page_text)
         self.assertIn('TOTAL', hidden_last_page_text)
         self.assertNotIn('Audio item 65', hidden_last_page_text)
         for page in hidden_reader.pages:
             page_text = page.extract_text() or ''
             if 'Audio item ' in page_text:
-                self.assertIn('Audio Department', page_text)
+                self.assertIn('Audio System', page_text)
                 self.assertIn('DESCRIPTION', page_text)
                 self.assertNotIn('DEPARTMENT', page_text)
 
@@ -1291,13 +1788,122 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('2 pax', invoice_text)
         self.assertEqual(len(reader.pages), 2)
         self.assertIn('LINE ITEMS', reader.pages[0].extract_text() or '')
-        self.assertIn('DEPARTMENT SUMMARY', reader.pages[1].extract_text() or '')
+        self.assertIn('SYSTEM SUMMARY', reader.pages[1].extract_text() or '')
         for page in reader.pages:
             text = page.extract_text() or ''
             self.assertTrue(any(marker in text for marker in (
                 'QUOTATION', 'LINE ITEMS', 'DESCRIPTION',
-                'DEPARTMENT SUMMARY', 'TERMS AND CONDITIONS',
+                'SYSTEM SUMMARY', 'TERMS AND CONDITIONS',
             )), text)
+
+    def test_quotation_pdf_exports_mandarin_characters(self):
+        from quotation_pdf import build_finance_pdf
+
+        quotation = self.create_quote('不着一字 : In Relation')
+        quotation.update({
+            'client': {
+                'name': '王小明',
+                'company': '华艺制作有限公司',
+            },
+            'eventLocation': '新加坡华族文化中心',
+            'quotationDate': '2026-07-28',
+            'lineItems': [{
+                'id': 'mandarin-line',
+                'description': '无线麦克风与音响系统',
+                'department': '音响部门',
+                'departmentCode': 'AX',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'total': 200,
+                'subprojectId': 'main',
+            }],
+            'notes': '包括安装、彩排及现场技术支持。',
+            'terms': '付款期限：活动结束后十四天。',
+        })
+        company = {
+            'companyName': '示范制作有限公司',
+            'billingAddress': '新加坡实龙岗路一号',
+            'footerText': '示范制作有限公司 | 新加坡',
+            'currency': 'SGD',
+            'taxLabel': 'GST',
+            'themeColor': '#0F766E',
+        }
+
+        pdf = build_finance_pdf(quotation, company)
+        text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+
+        for expected in (
+            '不着一字',
+            '王小明',
+            '华艺制作有限公司',
+            '无线麦克风与音响系统',
+            '音响部门',
+            '付款期限',
+        ):
+            self.assertIn(expected, text)
+        self.assertNotIn('■■', text)
+
+    def test_company_letterhead_can_be_disabled_and_restored(self):
+        from quotation_pdf import build_finance_pdf
+
+        self.login('bnjm2000')
+        with patch.object(app_module, '_mark_company_branding_setup_complete'):
+            disabled = self.client.put('/api/pdf-settings', json={
+                'companyName': 'No Header Company Pte Ltd',
+                'billingAddress': '1 Example Street',
+                'letterheadText': '',
+                'letterheadEnabled': False,
+            })
+        self.assertEqual(disabled.status_code, 200, disabled.get_data(as_text=True))
+        disabled_settings = disabled.get_json()['data']
+        self.assertEqual(disabled_settings['letterheadText'], '')
+        self.assertFalse(disabled_settings['letterheadEnabled'])
+
+        reloaded = self.client.get('/api/pdf-settings').get_json()['data']
+        self.assertEqual(reloaded['letterheadText'], '')
+        self.assertFalse(reloaded['letterheadEnabled'])
+
+        quotation = self.create_quote('Letterhead Test')
+        logo_path = os.path.join(self.tempdir.name, 'letterhead-logo.png')
+        with open(logo_path, 'wb') as logo_file:
+            logo_file.write(base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+                'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+            ))
+        pdf = build_finance_pdf(quotation, {
+            **disabled_settings,
+            'letterheadEnabled': False,
+        }, logo_path)
+        pdf_reader = PdfReader(io.BytesIO(pdf))
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in pdf_reader.pages
+        )
+        self.assertNotIn('No Header Company Pte Ltd', pdf_text)
+        self.assertNotIn('1 Example Street', pdf_text)
+        self.assertTrue(any(page.images for page in pdf_reader.pages))
+
+        restored_text = (
+            'No Header Company Pte Ltd\n'
+            'UEN / Reg No: 202600001A\n'
+            '1 Example Street'
+        )
+        with patch.object(app_module, '_mark_company_branding_setup_complete'):
+            restored = self.client.put('/api/pdf-settings', json={
+                'registrationNumber': '202600001A',
+                'letterheadText': restored_text,
+                'letterheadEnabled': True,
+            })
+        self.assertEqual(restored.status_code, 200, restored.get_data(as_text=True))
+        restored_settings = restored.get_json()['data']
+        self.assertTrue(restored_settings['letterheadEnabled'])
+        self.assertEqual(restored_settings['letterheadText'], restored_text)
 
     def test_incomplete_draft_default_departments_and_permissions(self):
         blank = self.create_quote(project='')
@@ -1335,7 +1941,7 @@ class FinanceFeatureTests(unittest.TestCase):
             f"/api/quotations/{quote['id']}",
             json=quote,
         ).get_json()['data']
-        self.assertEqual(cleaned['departments'], ['Audio Department'])
+        self.assertEqual(cleaned['departments'], ['Audio System'])
 
         with self.client.session_transaction() as session:
             session.clear()
@@ -1347,6 +1953,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Sales access required', response.get_json()['error'])
 
     def test_profit_loss_expense_upload_extracts_amount_and_date(self):
+        self.login('sales-admin')
         event = Event(
             event_id=131,
             name='Wedding of Patricia & Edgar',
@@ -1398,7 +2005,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         payload = response.get_json()['data']
         self.assertEqual(payload['summary']['revenue'], 1000)
-        self.assertEqual(payload['summary']['manualOtherExpenses'], 123.45)
+        self.assertEqual(payload['summary']['manualMealExpenses'], 123.45)
+        self.assertEqual(payload['summary']['manpowerCost'], 123.45)
+        self.assertEqual(payload['summary']['manualOtherExpenses'], 0)
         expense = payload['expenses'][0]
         self.assertEqual(expense['amount'], 123.45)
         self.assertEqual(expense['expenseDate'], '2026-05-29')
@@ -1409,9 +2018,10 @@ class FinanceFeatureTests(unittest.TestCase):
     def test_repeatable_schedule_rows_extend_event_and_pdf(self):
         quotation = self.create_quote('Multi-day Show')
         quotation.update({
-            'setupDate': '2026-08-01',
-            'showDate': '2026-08-02',
-            'teardownDate': '2026-08-03',
+            'setupDate': '2026-08-02',
+            'additionalSetups': [{'id': 'setup-2', 'date': '2026-08-01', 'time': '09:00'}],
+            'showDate': '2026-08-03',
+            'teardownDate': '2026-08-04',
             'additionalShows': [{'id': 'show-2', 'date': '2026-08-04', 'time': '19:30'}],
             'additionalTeardowns': [{'id': 'tear-2', 'date': '2026-08-05', 'time': '23:00'}],
         })
@@ -1419,10 +2029,13 @@ class FinanceFeatureTests(unittest.TestCase):
             f"/api/quotations/{quotation['id']}", json=quotation,
         ).get_json()['data']
         self.assertEqual(saved['eventDays'], 5)
+        self.assertEqual(saved['additionalSetups'][0]['date'], '2026-08-01')
         self.assertEqual(saved['additionalShows'][0]['date'], '2026-08-04')
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+        self.assertIn('Set-up:', text)
+        self.assertNotIn('Set-up 2:', text)
         self.assertIn('Show:', text)
         self.assertNotIn('Show 2:', text)
         self.assertIn('Teardown:', text)
@@ -1553,19 +2166,33 @@ class FinanceFeatureTests(unittest.TestCase):
         ) as source_file:
             source = source_file.read()
 
-        setup = source.index("financeSchedulePair('Set-up', 'setup')")
-        teardown = source.index("financeSchedulePair('Teardown', 'teardown')")
-        rehearsal = source.index("financeSchedulePair('Rehearsal', 'rehearsal')")
-        show = source.index("financeSchedulePair('Show', 'show')")
-        self.assertLess(setup, teardown)
+        schedule_start = source.index('<h3>Event schedule</h3>')
+        schedule_source = source[schedule_start:source.index('</section>', schedule_start)]
+        setup = schedule_source.index("financeSchedulePair('Set-up', 'setup')")
+        additional_setups = schedule_source.index("financeAdditionalScheduleRows('setup', document)")
+        teardown = schedule_source.index("financeSchedulePair('Teardown', 'teardown')")
+        additional_teardowns = schedule_source.index("financeAdditionalScheduleRows('teardown', document)")
+        rehearsal = schedule_source.index("financeSchedulePair('Rehearsal', 'rehearsal')")
+        additional_rehearsals = schedule_source.index("financeAdditionalScheduleRows('rehearsal', document)")
+        show = schedule_source.index("financeSchedulePair('Show', 'show')")
+        additional_shows = schedule_source.index("financeAdditionalScheduleRows('show', document)")
+        self.assertLess(setup, additional_setups)
+        self.assertLess(additional_setups, teardown)
+        self.assertLess(teardown, additional_teardowns)
         self.assertLess(teardown, rehearsal)
-        self.assertLess(rehearsal, show)
-        self.assertNotIn("financeAddScheduleRow('teardown')", source)
-        self.assertIn("!['rehearsal', 'show'].includes(kind)", source)
+        self.assertLess(rehearsal, additional_rehearsals)
+        self.assertLess(additional_rehearsals, show)
+        self.assertLess(show, additional_shows)
+        self.assertIn('finance-schedule-stack', schedule_source)
+        self.assertIn("financeAddScheduleRow('setup')", schedule_source)
+        self.assertIn("financeAddScheduleRow('teardown')", schedule_source)
+        self.assertIn("!['setup', 'rehearsal', 'show', 'teardown'].includes(kind)", source)
 
     def test_pdf_groups_consecutive_rehearsal_show_and_teardown_dates(self):
         quotation = self.create_quote('Consecutive Schedule')
         quotation.update({
+            'setupDate': '2026-07-05',
+            'additionalSetups': [{'id': 'setup-2', 'date': '2026-07-06', 'time': ''}],
             'rehearsalDate': '2026-07-07',
             'additionalRehearsals': [{'id': 'reh-2', 'date': '2026-07-08', 'time': ''}],
             'showDate': '2026-07-09',
@@ -1579,19 +2206,49 @@ class FinanceFeatureTests(unittest.TestCase):
         saved = self.client.put(
             f"/api/quotations/{quotation['id']}", json=quotation,
         ).get_json()['data']
+        self.assertEqual(saved['additionalSetups'][0]['date'], '2026-07-06')
         self.assertEqual(saved['additionalRehearsals'][0]['date'], '2026-07-08')
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
 
+        setup_position = text.index('Set-up:')
         rehearsal_position = text.index('Rehearsal:')
         show_position = text.index('Show:')
         teardown_position = text.index('Teardown:')
+        self.assertLess(setup_position, rehearsal_position)
         self.assertLess(rehearsal_position, show_position)
         self.assertLess(show_position, teardown_position)
+        self.assertIn('5-6 July 2026', text)
         self.assertIn('7-8 July 2026', text)
         self.assertIn('9-11 July 2026', text)
         self.assertIn('12-13 July 2026', text)
+
+    def test_pdf_keeps_multiple_show_times_on_the_same_date(self):
+        quotation = self.create_quote('Multiple Shows Per Day')
+        quotation.update({
+            'showDate': '2026-10-07',
+            'showTime': '10:00',
+            'additionalShows': [
+                {'id': 'show-2', 'date': '2026-10-07', 'time': '14:00'},
+                {'id': 'show-3', 'date': '2026-10-08', 'time': '20:00'},
+            ],
+        })
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.assertEqual(len(saved['additionalShows']), 2)
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+
+        self.assertIn('7 October 2026, 10:00hrs', text)
+        self.assertIn('7 October 2026, 14:00hrs', text)
+        self.assertIn('8 October 2026, 20:00hrs', text)
+        self.assertIn(
+            '7 October 2026, 10:00hrs; 7 October 2026, 14:00hrs; 8 October 2026, 20:00hrs',
+            text,
+        )
 
     def test_department_discount_remembers_amount_or_percentage_mode(self):
         quotation = self.create_quote('Discount Modes')
@@ -1627,6 +2284,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(percent_mode['adjustments'][0]['amount'], -300)
 
     def test_profit_loss_supports_multiple_commission_rows(self):
+        self.login('sales-admin')
         event = Event(
             event_id=132, name='Commission Event', location='Studio',
             start_date='20260810', end_date='20260810', asset_models=[],
@@ -1657,7 +2315,199 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual([row['recipient'] for row in payload['commissions']], ['Alice', 'Partner'])
         self.assertEqual(app_module._finance_profit_loss_category_label('Parking', 'worker-claim'), 'Parking')
 
+    def test_profit_loss_budgets_and_worker_claims_stay_under_manpower(self):
+        self.login('sales-admin')
+        event = Event(
+            event_id=136, name='Budgeted Event', location='Studio',
+            start_date='20260818', end_date='20260818', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['alice'],
+        )
+        self.data_manager.events[136] = event
+        quotation = self.create_quote('Budgeted Event')
+        quotation['eventId'] = 136
+        quotation['lineItems'] = [
+            {
+                'id': 'manpower', 'catalogKey': '', 'description': 'Crew',
+                'department': 'Manpower', 'departmentCode': 'MANPOWER',
+                'days': 1, 'quantity': 1, 'uom': 'pax', 'unitPrice': 1000,
+                'discountPercent': 0, 'isCustom': True,
+            },
+            {
+                'id': 'transport', 'catalogKey': '', 'description': 'Lorry',
+                'department': 'Transportation', 'departmentCode': 'TRANSPORT',
+                'days': 1, 'quantity': 1, 'uom': 'trip', 'unitPrice': 500,
+                'discountPercent': 0, 'isCustom': True,
+            },
+            {
+                'id': 'equipment', 'catalogKey': '', 'description': 'Equipment',
+                'department': 'Audio System', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 200,
+                'discountPercent': 0, 'isCustom': True,
+            },
+        ]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(saved_quote.status_code, 200, saved_quote.get_data(as_text=True))
+
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['freelancers'] = [{
+            'id': 'worker-1',
+            'name': 'Wesley Tan',
+            'active': True,
+        }]
+        workforce['assignments'] = {
+            '136': [{
+                'freelancerId': 'worker-1',
+                'department': 'AX',
+                'dailyRate': 600,
+                'days': 1,
+            }],
+        }
+        workforce['submissions'] = {
+            '136': {
+                'worker-1': {
+                    'invoices': [{
+                        'id': 'invoice-1',
+                        'amount': 700,
+                        'status': 'Approved',
+                        'submittedAt': '2026-08-18T12:00:00',
+                    }],
+                    'claims': [
+                        {
+                            'id': 'claim-cab',
+                            'amount': 50,
+                            'category': 'Cab transport',
+                            'status': 'Approved',
+                            'detailsComplete': True,
+                        },
+                        {
+                            'id': 'claim-meal',
+                            'amount': 30,
+                            'category': 'Meal',
+                            'status': 'Approved',
+                            'detailsComplete': True,
+                        },
+                        {
+                            'id': 'claim-purchase',
+                            'amount': 20,
+                            'category': 'Consumables',
+                            'status': 'Approved',
+                            'detailsComplete': True,
+                        },
+                    ],
+                },
+            },
+        }
+        workforce['transportBookings'] = {
+            '136': [{'id': 'trip-1', 'cost': 100, 'status': 'Approved'}],
+        }
+        save_workforce(app_module._workforce_folder(), workforce)
+
+        for expense in (
+            {'description': 'Crew dinner', 'category': 'Meal', 'amount': 40},
+            {'description': 'External van', 'category': 'Transport', 'amount': 60},
+            {'description': 'Tape', 'category': 'Consumables', 'amount': 25},
+        ):
+            response = self.client.post(
+                '/api/finance/profit-loss/136/expenses',
+                json=expense,
+            )
+            self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+
+        payload = self.client.get('/api/finance/profit-loss/136').get_json()['data']
+        summary = payload['summary']
+        self.assertEqual(summary['manpowerCost'], 820)
+        self.assertEqual(summary['crewTransportClaimsCost'], 50)
+        self.assertEqual(summary['transportCost'], 160)
+        self.assertEqual(summary['otherExpenses'], 45)
+        self.assertEqual(summary['manpowerBudget'], 1000)
+        self.assertEqual(summary['manpowerBudgetVariance'], 180)
+        self.assertEqual(summary['transportBudget'], 500)
+        self.assertEqual(summary['transportBudgetVariance'], 340)
+
+        descriptions = {row['description'] for row in payload['expenses']}
+        self.assertIn('Wesley Tan - Invoice', descriptions)
+        self.assertIn('Wesley Tan - Meal claim', descriptions)
+        self.assertIn('Wesley Tan - Transport claim', descriptions)
+        department_costs = {
+            row['department']: row['amount']
+            for row in payload['manpowerDepartments']
+        }
+        self.assertEqual(department_costs['AX'], 780)
+        self.assertEqual(department_costs['Unallocated'], 40)
+        self.assertFalse(any(
+            row['label'] == 'Transport claims'
+            for row in payload['profitChart']
+        ))
+        self.assertTrue(any(
+            row.get('department') == 'AX'
+            and row.get('group') == 'manpower'
+            for row in payload['profitChart']
+        ))
+        self.assertIn(
+            {'group': 'transport', 'amount': 160},
+            [
+                {'group': row['group'], 'amount': row['amount']}
+                for row in payload['profitChart']
+            ],
+        )
+
+    def test_profit_loss_censors_non_owner_manager_and_regular_users(self):
+        event = Event(
+            event_id=137, name='Restricted Event', location='Studio',
+            start_date='20260819', end_date='20260819', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['alice', 'no-sales'],
+        )
+        self.data_manager.events[137] = event
+        self.login('sales-manager')
+        quotation = self.create_quote('Restricted Event')
+        quotation['eventId'] = 137
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        manager_payload = self.client.get(
+            '/api/finance/profit-loss/137'
+        ).get_json()['data']
+        self.assertTrue(manager_payload['permissions']['canViewFinancials'])
+        self.assertIn('summary', manager_payload)
+
+        self.login('manager-no-sales')
+        other_manager = self.client.get(
+            '/api/finance/profit-loss/137'
+        ).get_json()['data']
+        self.assertTrue(other_manager['censored'])
+        self.assertNotIn('summary', other_manager)
+        reason = other_manager['permissions']['reason']
+        self.assertIn('administrators', reason)
+        self.assertNotIn('owner', reason.lower())
+
+        self.login('alice')
+        regular_user = self.client.get(
+            '/api/finance/profit-loss/137'
+        ).get_json()['data']
+        self.assertTrue(regular_user['permissions']['isCensored'])
+        self.assertNotIn('expenses', regular_user)
+        denied = self.client.post(
+            '/api/finance/profit-loss/137/expenses',
+            json={'description': 'Hidden', 'category': 'Other', 'amount': 10},
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        self.login('sales-admin')
+        admin_payload = self.client.get(
+            '/api/finance/profit-loss/137'
+        ).get_json()['data']
+        self.assertTrue(admin_payload['permissions']['canViewFinancials'])
+        self.assertIn('summary', admin_payload)
+
     def test_profit_loss_can_pair_quotation_or_save_event_manual_revenue(self):
+        self.login('sales-admin')
         manual_event = Event(
             event_id=134, name='Manual Revenue Event', location='Studio',
             start_date='20260815', end_date='20260815', asset_models=[],
@@ -1921,6 +2771,67 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(line['description'], 'Robe Spiider LED wash fixture')
         self.assertEqual(line['unitPrice'], 444)
 
+    def test_compare_preserves_custom_item_types_for_visibility_filters(self):
+        self.login('bnjm2000')
+        event = Event(
+            event_id=203,
+            name='Custom Item Comparison',
+            location='Studio D',
+            start_date='20260722',
+            end_date='20260722',
+            asset_models=[],
+            prepared_items=[
+                app_module._make_custom_marker(
+                    'MISC', 'Lectern signage', 1, 'STAGING'
+                ),
+                app_module._make_custom_marker(
+                    'LOAN', 'LED processor', 2, 'VIDEO', 'Rental Partner'
+                ),
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['bnjm2000'],
+        )
+        self.data_manager.events[203] = event
+        target = self.create_quote('Custom Item Comparison')
+        target['eventId'] = 203
+        target = self.client.put(
+            f"/api/quotations/{target['id']}", json=target
+        ).get_json()['data']
+
+        comparison = self.client.get(
+            f"/api/finance/compare?eventId=203{chr(38)}quotationId={target['id']}"
+        ).get_json()['data']
+        rows_by_type = {
+            row['eventItem']['identity'].get('type'): row
+            for row in comparison['rows']
+        }
+        self.assertIn('MISC', rows_by_type)
+        self.assertIn('LOAN', rows_by_type)
+
+        response = self.client.post(
+            '/api/finance/compare/203/add-to-quotation',
+            json={
+                'quotationId': target['id'],
+                'key': rows_by_type['LOAN']['key'],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        updated = self.client.get(f"/api/quotations/{target['id']}").get_json()['data']
+        self.assertEqual(updated['lineItems'][0]['customType'], 'LOAN')
+        self.assertEqual(updated['lineItems'][0]['customCompany'], 'Rental Partner')
+
+        with open(
+            os.path.join(
+                os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js'
+            ),
+            encoding='utf-8',
+        ) as source_file:
+            finance_source = source_file.read()
+        self.assertIn('showMisc: false', finance_source)
+        self.assertIn('showLoans: true', finance_source)
+
     def test_compare_bulk_adds_event_items_and_repairs_existing_asset_identity(self):
         self.login('bnjm2000')
         lighting = self.client.get('/api/finance/catalog?query=Spiider').get_json()['data'][0]
@@ -2026,7 +2937,29 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('MAIN ROOM', text)
         self.assertIn('BREAKOUT A', text)
         self.assertIn('SUB-PROJECT SUMMARY', text)
+        self.assertTrue(saved['summaryBySubproject'])
         self.assertIn(f'Page {len(reader.pages)} of {len(reader.pages)}', reader.pages[-1].extract_text() or '')
+
+        department_summary = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**saved, 'summaryBySubproject': False},
+        )
+        self.assertEqual(
+            department_summary.status_code,
+            200,
+            department_summary.get_data(as_text=True),
+        )
+        department_pdf = self.client.get(
+            f"/api/quotations/{quotation['id']}/pdf"
+        ).data
+        department_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(department_pdf)).pages
+        )
+        self.assertIn('SYSTEM SUMMARY', department_text)
+        self.assertNotIn('SUB-PROJECT SUMMARY', department_text)
+        self.assertIn('Audio System', department_text)
+        self.assertIn('Lighting System', department_text)
 
         accepted = self.client.put(
             f"/api/quotations/{quotation['id']}",
@@ -2059,7 +2992,7 @@ class FinanceFeatureTests(unittest.TestCase):
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(exported)).pages)
 
         self.assertNotIn('MAIN ROOM', text)
-        self.assertIn('Audio Department', text)
+        self.assertIn('Audio System', text)
 
     def test_quotation_ui_has_no_native_selects(self):
         path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js')
@@ -2075,7 +3008,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-drag-handle\" draggable=\"true', source)
         self.assertNotIn('class=\"finance-line-row\" draggable=\"true', source)
         self.assertIn('show unit prices', source)
-        self.assertIn('show department subtotals', source)
+        self.assertIn('show system subtotals', source)
+        self.assertIn('group summary by sub-project', source)
+        self.assertIn('financesubprojects(document).length > 1', source)
         self.assertIn('finance_salutations', source)
         self.assertIn("financetoggledocumentflag('showsignoff')", source)
         self.assertIn("function financedefaultuom(department, preferred = '')", source)
@@ -2131,6 +3066,21 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('profit &amp; loss', source)
         self.assertIn('financeopencomparepage', source)
         self.assertIn('/api/finance/profit-loss/', source)
+        self.assertIn('profitlossshowcharttooltip', source)
+        self.assertIn('pnl-chart-tooltip', source)
+        self.assertIn('profitlosspreviewattachment', source)
+        self.assertIn('previeweventfile(', source)
+        self.assertIn('profitlossexpensecategorymarkup', source)
+        self.assertIn('profitlossdepartmentmeta', source)
+        self.assertIn('profitlosssolidcolour', source)
+        self.assertIn("profitlosschartcolour(group, colourindex, row)", source)
+        self.assertIn('pnl-budget-variance', source)
+        self.assertIn('.pnl-budget-variance.is-under', css_source)
+        self.assertIn('.pnl-budget-variance.is-over', css_source)
+        self.assertNotIn('<th>department</th>', source)
+        self.assertNotIn('>view in manpower</button>', source)
+        self.assertIn('aria-label="open manpower and transport"', source)
+        self.assertNotIn('<h3>expense categories</h3>', source)
         self.assertIn('/api/finance/compare', source)
         self.assertIn('financeopenclientpicker', source)
         self.assertIn('financeopeneventpicker', source)
@@ -2169,7 +3119,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-department-drag-handle\" draggable=\"true', source)
         self.assertIn("closest('.finance-department-row')", source)
         self.assertIn("financeaddschedulerow('show')", source)
-        self.assertNotIn("financeaddschedulerow('teardown')", source)
+        self.assertIn("financeaddschedulerow('setup')", source)
+        self.assertIn("financeaddschedulerow('teardown')", source)
         self.assertIn('financelocationresults', source)
         self.assertIn('financesetdepartmentadjustmentpercent', source)
         self.assertIn('financesetdepartmentadjustmentamount', source)

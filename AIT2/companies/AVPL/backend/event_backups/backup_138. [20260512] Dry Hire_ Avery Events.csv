@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,EventLogs,Notes
-138,Dry Hire: Avery Events,20260512,20260512,[],"[""[MODEL]STG|Custom|Sandbag|20|Sandbag - 6kg""]","[""[BULK]BULK-0015|20""]",Returning,"[""[BULK]BULK-0015|20""]",[],[],dry hire,False,[],

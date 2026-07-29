@@ -170,6 +170,14 @@ class PlanningTemplateTests(unittest.TestCase):
             'planAvailableModelSearchText(group).includes(search)',
             script,
         )
+        self.assertNotIn(
+            'max="${Math.max(1, availability.physical)}"',
+            script,
+        )
+        self.assertIn(
+            'above the total inventory of ${availability.physical}',
+            script,
+        )
 
     def test_event_workspaces_offer_consolidated_room_drag_and_delete_controls(self):
         script_path = os.path.join(
@@ -188,10 +196,13 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("/subprojects/move`,", script)
         self.assertIn('function planOpenDeleteSubproject(', script)
         self.assertIn("mode: state.mode", script)
-        self.assertIn(
-            "{ allowAdd: true, allowDelete: true, allowRename: true }",
-            script,
-        )
+        self.assertIn('allowReorder: true', script)
+        self.assertIn('showImplicitMain: true', script)
+        self.assertIn("name: 'Main Room', items: [], isImplicit: true", script)
+        self.assertIn('allowRename && !room.isImplicit', script)
+        self.assertIn('function eventSubprojectOrderDragStart(', script)
+        self.assertIn('function eventSubprojectOrderDrop(', script)
+        self.assertIn('/subprojects/reorder`', script)
         self.assertIn('function planRenameSubproject(', script)
         self.assertIn("'PATCH',\n      { name: cleanName }", script)
         self.assertIn('function planSubprojectHasAssignedAssets(', script)
@@ -206,6 +217,150 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("kind: 'asset', assetRef: id", script)
         self.assertIn("`Event #${event.id || ''}: ${event.name || 'Unnamed event'}`", script)
         self.assertIn("room ? `Room: ${room.name || 'Unnamed room'}`", script)
+        self.assertIn('function prepareNewSubprojectNeedsAttention(', script)
+        self.assertIn('function returnSubprojectNeedsAttention(', script)
+        self.assertIn(
+            'roomNeedsAttention: prepareNewSubprojectNeedsAttention',
+            script,
+        )
+        self.assertIn(
+            'roomNeedsAttention: returnSubprojectNeedsAttention',
+            script,
+        )
+        self.assertIn('event-subproject-attention', script)
+        self.assertIn('function planRequirementRoomAllocations(', script)
+        self.assertIn("'Assigned to sub-projects:'", script)
+        self.assertIn('allocatedRequired', script)
+        self.assertIn('function planShowAvailabilityReason(', script)
+        self.assertIn('function planAvailabilityDetail(', script)
+        self.assertIn('class="plan-availability-count"', script)
+        self.assertIn('Used by overlapping events', script)
+        self.assertIn('`#${eventId}: ${eventName}`', script)
+        self.assertIn('viewEvent(eventId, { updateHistory: false })', script)
+        self.assertIn('function planSubprojectWarning(', script)
+        self.assertIn('roomWarning: planSubprojectWarning', script)
+        self.assertIn('function eventScopedCustomAssets(', script)
+        self.assertIn('function groupEventCustomAssets(', script)
+        self.assertIn('function prepareNewCollectCustomMany(', script)
+        self.assertIn('function prepareNewUncollectCustomMany(', script)
+        self.assertIn('prepare-new-consolidated-loan-action', script)
+        self.assertIn('>Collect</button>', script)
+        self.assertIn('>Uncollect</button>', script)
+        self.assertIn('>Unprepare</button>', script)
+
+    def test_matching_loans_remain_owned_by_their_rooms_and_collect_together(self):
+        self.login('admin')
+        source_item = {
+            'departmentCode': 'AX',
+            'department': 'Audio Department',
+            'brand': 'TestBrand',
+            'model': 'ModelA',
+            'description': 'ModelA description',
+            'quantity': 1,
+            'isCustom': False,
+        }
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{**source_item, 'lineId': 'main-a'}],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{**source_item, 'lineId': 'breakout-a'}],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|2|ModelA description'
+        ]
+
+        for room_id in ('main', 'breakout'):
+            response = self.client.post(
+                f'/api/events/{self.event.event_id}/models/loan',
+                json={
+                    'source': {
+                        'department': 'AX',
+                        'brand': 'TestBrand',
+                        'model': 'ModelA',
+                        'description': 'ModelA description',
+                    },
+                    'quantity': 1,
+                    'company': 'Rental Co',
+                    'subprojectId': room_id,
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        loan_ids = [
+            ref for ref in self.event.prepared_items
+            if (app_module._parse_custom_marker(ref) or {}).get('type') == 'LOAN'
+        ]
+        self.assertEqual(len(loan_ids), 2)
+        self.assertNotEqual(loan_ids[0], loan_ids[1])
+        self.assertEqual(self.event.subprojects[0]['items'][0]['assetRefs'], [loan_ids[0]])
+        self.assertEqual(self.event.subprojects[1]['items'][0]['assetRefs'], [loan_ids[1]])
+
+        collected = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets/collect',
+            json={'assetIds': loan_ids},
+        )
+        self.assertEqual(collected.status_code, 200, collected.get_data(as_text=True))
+        self.assertEqual(collected.get_json()['data']['collectedCount'], 2)
+        self.assertEqual(set(self.event.custom_collected), set(loan_ids))
+
+    def test_loan_collection_and_preparation_are_separate_reversible_steps(self):
+        self.login('admin')
+        loan_id = app_module._make_custom_marker(
+            'LOAN',
+            'Rental Receiver',
+            1,
+            'AX',
+            company='Rental Co',
+        )
+        self.event.prepared_items = [loan_id]
+        self.data_manager.save_event(self.event)
+
+        collected = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets/collect',
+            json={'assetId': loan_id},
+        )
+        self.assertEqual(collected.status_code, 200, collected.get_data(as_text=True))
+        self.assertIn(loan_id, self.event.custom_collected)
+        self.assertNotIn(loan_id, self.event.actually_prepared)
+
+        prepared = self.client.post(
+            f'/api/events/{self.event.event_id}/prepare',
+            json={'assetId': loan_id},
+        )
+        self.assertEqual(prepared.status_code, 200, prepared.get_data(as_text=True))
+        self.assertIn(loan_id, self.event.custom_collected)
+        self.assertIn(loan_id, self.event.actually_prepared)
+
+        blocked_uncollect = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets/uncollect',
+            json={'assetId': loan_id},
+        )
+        self.assertEqual(blocked_uncollect.status_code, 400)
+        self.assertIn('Unprepare', blocked_uncollect.get_json()['error'])
+        self.assertIn(loan_id, self.event.custom_collected)
+        self.assertIn(loan_id, self.event.actually_prepared)
+
+        unprepared = self.client.post(
+            f'/api/events/{self.event.event_id}/unprepare',
+            json={'assetId': loan_id},
+        )
+        self.assertEqual(unprepared.status_code, 200, unprepared.get_data(as_text=True))
+        self.assertIn(loan_id, self.event.custom_collected)
+        self.assertNotIn(loan_id, self.event.actually_prepared)
+
+        uncollected = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets/uncollect',
+            json={'assetId': loan_id},
+        )
+        self.assertEqual(uncollected.status_code, 200, uncollected.get_data(as_text=True))
+        self.assertNotIn(loan_id, self.event.custom_collected)
+        self.assertNotIn(loan_id, self.event.actually_prepared)
 
     def test_event_asset_rows_use_visible_neutral_dividers(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
@@ -298,6 +453,50 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(self.event.subprojects[1]['name'], 'Ballroom')
         self.assertEqual(duplicate.status_code, 409)
         self.assertEqual(self.event.subprojects[1]['name'], 'Ballroom')
+
+    def test_plan_subprojects_can_be_reordered(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {'id': 'main', 'name': 'Main Room', 'items': []},
+            {'id': 'breakout', 'name': 'Breakout', 'items': []},
+            {'id': 'stage', 'name': 'Stage', 'items': []},
+        ]
+
+        reordered = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects/reorder',
+            json={
+                'orderedSubprojectIds': ['stage', 'main', 'breakout'],
+            },
+        )
+
+        self.assertEqual(reordered.status_code, 200, reordered.get_data(as_text=True))
+        self.assertEqual(
+            [room['id'] for room in self.event.subprojects],
+            ['stage', 'main', 'breakout'],
+        )
+
+    def test_plan_subproject_reorder_requires_every_room_once(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {'id': 'main', 'name': 'Main Room', 'items': []},
+            {'id': 'breakout', 'name': 'Breakout', 'items': []},
+        ]
+
+        missing = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects/reorder',
+            json={'orderedSubprojectIds': ['main']},
+        )
+        duplicate = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects/reorder',
+            json={'orderedSubprojectIds': ['main', 'main']},
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(
+            [room['id'] for room in self.event.subprojects],
+            ['main', 'breakout'],
+        )
 
     def test_subproject_delete_can_merge_requirements_and_assignments(self):
         self.login('admin')
@@ -490,6 +689,8 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("planShowRequirementWarning(", script)
         self.assertIn("healthyCapacityForThisEvent", script)
         self.assertIn('capacityForThisEvent', script)
+        self.assertIn('function planDegradedReasonDetail(availability)', script)
+        self.assertIn('Why the degraded assets are degraded:', script)
         self.assertIn('Math.max(0, usable)', script)
         self.assertIn("onclick=\"assignAllEventAssignees('${context}')\"", script)
         self.assertIn('user?.isActive !== false', script)
@@ -735,6 +936,24 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(custom[0]['name'], 'Rental Receiver')
         self.assertEqual(custom[0]['company'], 'Rental Co')
 
+    def test_template_can_take_plan_beyond_physical_inventory(self):
+        self.login('admin')
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|6|ModelA description',
+        ]
+        template = self.create_template()
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/apply-planning-template',
+            json={'templateId': template['id'], 'mode': 'merge'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertTrue(any(
+            ref.startswith('[MODEL]AX|TestBrand|ModelA|8|')
+            for ref in self.event.prepared_items
+        ))
+
     def test_custom_item_description_round_trips_and_can_be_edited(self):
         self.login('admin')
         created = self.client.post(
@@ -775,6 +994,11 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(parsed['company'], 'Backdrop Rental Co')
         self.assertNotIn(old_marker, self.event.prepared_items)
         self.assertIn(new_marker, self.event.prepared_items)
+        action = self.event.event_logs[-1]['action']
+        self.assertNotIn('[CUSTOM]', action)
+        self.assertIn('Printed backdrop (Black fabric with client artwork)', action)
+        self.assertIn('Name: Printed backdrop -> Printed stage backdrop', action)
+        self.assertIn('Company / source: - -> Backdrop Rental Co', action)
 
     def test_merge_adds_quantities_and_replace_preserves_physical_assets(self):
         self.login('admin')
@@ -1018,6 +1242,127 @@ class PlanningTemplateTests(unittest.TestCase):
             app_module._parse_prepared_model_marker(ref)
             for ref in self.event.actually_prepared
         ))
+
+    def test_room_extras_are_scoped_and_promoted_when_requirement_increases(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-a',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+                'extraRefs': [],
+            },
+            {
+                'id': 'room-2',
+                'name': 'Room 2',
+                'items': [{
+                    'lineId': 'room-b',
+                    'departmentCode': 'LX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelB',
+                    'description': 'ModelB description',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+                'extraRefs': [],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|2|ModelA description',
+            '[MODEL]LX|TestBrand|ModelB|1|ModelB description',
+        ]
+
+        for asset_id in ('A#01', 'A#02'):
+            response = self.client.post(
+                f'/api/events/{self.event.event_id}/assign-specific',
+                json={'assetId': asset_id, 'subprojectId': 'room-2'},
+            )
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+            self.assertTrue(response.get_json()['data']['isExtra'])
+
+        main_item = self.event.subprojects[0]['items'][0]
+        room_two = self.event.subprojects[1]
+        self.assertEqual(main_item['assetRefs'], [])
+        self.assertEqual(room_two['extraRefs'], ['A#01', 'A#02'])
+        self.assertEqual(self.event.extra_assets, ['A#01', 'A#02'])
+
+        add_requirement = self.client.post(
+            f'/api/events/{self.event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'quantity': 1,
+                'subprojectId': 'room-2',
+            },
+        )
+        self.assertEqual(
+            add_requirement.status_code,
+            200,
+            add_requirement.get_data(as_text=True),
+        )
+        room_model = next(
+            item for item in room_two['items']
+            if item.get('model') == 'ModelA'
+        )
+        self.assertEqual(room_model['assetRefs'], ['A#01'])
+        self.assertEqual(room_two['extraRefs'], ['A#02'])
+        self.assertEqual(self.event.extra_assets, ['A#02'])
+        self.assertNotIn('A#01', self.event.prepared_items)
+
+        increase_requirement = self.client.put(
+            f'/api/events/{self.event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'quantity': 2,
+                'subprojectId': 'room-2',
+            },
+        )
+        self.assertEqual(
+            increase_requirement.status_code,
+            200,
+            increase_requirement.get_data(as_text=True),
+        )
+        self.assertEqual(room_model['assetRefs'], ['A#01', 'A#02'])
+        self.assertEqual(room_two['extraRefs'], [])
+        self.assertEqual(self.event.extra_assets, [])
+        self.assertNotIn('A#02', self.event.prepared_items)
+        self.assertEqual(main_item['assetRefs'], [])
+
+        reduce_requirement = self.client.put(
+            f'/api/events/{self.event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'quantity': 1,
+                'subprojectId': 'room-2',
+            },
+        )
+        self.assertEqual(
+            reduce_requirement.status_code,
+            200,
+            reduce_requirement.get_data(as_text=True),
+        )
+        self.assertEqual(room_model['assetRefs'], ['A#01'])
+        self.assertEqual(room_two['extraRefs'], ['A#02'])
+        self.assertEqual(self.event.extra_assets, ['A#02'])
+        self.assertEqual(main_item['assetRefs'], [])
 
 
 if __name__ == '__main__':

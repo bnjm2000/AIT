@@ -460,30 +460,34 @@
   color: var(--wf-brand-dark);
 }
 
-.wf-document-filter.status-to-review.active,
-.wf-status-button.status-to-review,
-.wf-document-status-menu .status-to-review {
-  border-color: #ddd6fe;
-  background: #f5f3ff;
-  color: #6d28d9;
+.wf-document-filter.status-pending-review {
+  border-color: #fde68a;
+  background: #fef3c7;
+  color: #92400e;
 }
 
-.wf-document-filter.status-awaiting-upload.active,
+.wf-document-filter.status-awaiting-upload,
 .wf-status-button.status-awaiting-upload {
   border-color: #bfdbfe;
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-.wf-document-filter.status-to-pay.active,
+.wf-document-filter.status-to-pay,
 .wf-status-button.status-to-pay,
 .wf-document-status-menu .status-to-pay {
-  border-color: #fed7aa;
-  background: #fff7ed;
-  color: #c2410c;
+  border-color: #bbf7d0;
+  background: #dcfce7;
+  color: #166534;
 }
 
-.wf-document-filter.status-awaiting-confirmation.active,
+.wf-document-filter.status-paid {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.wf-document-filter.status-awaiting-confirmation,
 .wf-status-button.status-awaiting-confirmation,
 .wf-document-status-menu .status-awaiting-confirmation {
   border-color: #e2e8f0;
@@ -491,29 +495,33 @@
   color: #475569;
 }
 
-.wf-document-filter.status-payment-confirmed.active {
+.wf-document-filter.status-payment-confirmed {
   border-color: #d9d0ff;
   background: #f0edff;
   color: #5b3fc6;
 }
 
-.wf-document-filter.status-denied.active {
+.wf-document-filter.status-denied {
   border-color: #fecaca;
   background: #fee2e2;
   color: #991b1b;
 }
 
-.wf-document-filter.status-queued.active,
-.wf-document-filter.status-processing.active {
+.wf-document-filter.status-queued,
+.wf-document-filter.status-processing {
   border-color: #bae6fd;
   background: #e0f2fe;
   color: #0369a1;
 }
 
-.wf-document-filter.status-details-required.active {
+.wf-document-filter.status-details-required {
   border-color: #fed7aa;
   background: #fff7ed;
   color: #c2410c;
+}
+
+.wf-document-filter.active {
+  box-shadow: inset 0 0 0 1px currentColor;
 }
 
 .wf-documents-list-head,
@@ -826,7 +834,10 @@
 
 .wf-department > summary {
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) repeat(3, minmax(105px, auto));
+  grid-template-columns:
+    minmax(280px, 1fr)
+    auto
+    repeat(3, minmax(90px, auto));
   gap: 14px;
   align-items: center;
   cursor: pointer;
@@ -872,6 +883,20 @@
 
 .wf-department[open] .wf-department-title::before {
   transform: rotate(90deg);
+}
+
+.wf-department-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.wf-department-header-actions .wf-button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .wf-dept-total span {
@@ -1011,6 +1036,36 @@
 
 .wf-assignment-chip .wf-assignment-edit:hover {
   text-decoration: underline;
+}
+
+.wf-room-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  border: 1px solid color-mix(in srgb, var(--wf-brand) 28%, #d7dee8);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--wf-brand-soft) 65%, #fff);
+  color: var(--wf-brand-dark);
+  padding: 2px 5px;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+
+.wf-vehicle-heading > small {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.wf-vehicle-heading > small .wf-room-badge {
+  margin-right: 0;
+}
+
+.wf-room-field[hidden] {
+  display: none;
 }
 
 .wf-work-date-grid {
@@ -1735,25 +1790,91 @@ button.wf-calendar-day.selected {
 .wf-driver-heading span { color: var(--wf-muted); font-size: 10px; white-space: nowrap; }
 
 .wf-trip-card .wf-route > strong {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  overflow: visible;
+  margin-top: 7px;
 }
 
 .wf-location-badge {
   display: grid;
   min-width: 0;
-  flex: 1;
-  gap: 2px;
+  align-self: stretch;
+  align-content: start;
+  gap: 4px;
   border: 1px solid #dbe2ea;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 7px 8px;
+  border-radius: 7px;
+  background: #fff;
+  padding: 9px 10px;
 }
 
-.wf-location-badge small { color: #64748b; font-size: 8px; text-transform: uppercase; }
-.wf-location-badge b { overflow: hidden; font-size: 10px; text-overflow: ellipsis; }
-.wf-location-badge em { color: #64748b; font-size: 8px; font-style: normal; line-height: 1.35; }
+.wf-location-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-location-badge .wf-location-direction {
+  width: fit-content;
+  border-radius: 4px;
+  background: #e8f5f2;
+  color: #0f766e;
+  padding: 2px 5px;
+  font-size: 8px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.wf-location-badge b {
+  min-width: 0;
+  overflow: hidden;
+  color: #263b35;
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+
+.wf-location-badge em {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  border-top: 1px solid #e8eeeb;
+  padding-top: 7px;
+  color: #64748b;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.wf-route-arrow {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfe0da;
+  border-radius: 50%;
+  background: #eef7f4;
+  color: #0f766e;
+  line-height: 1;
+}
+
+.wf-route-arrow svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
 
 .wf-transport-heading h4 {
   margin: 0 0 3px;
@@ -1774,7 +1895,7 @@ button.wf-calendar-day.selected {
   min-width: 0;
 }
 
-.wf-transport-meta span {
+.wf-transport-meta > div > span {
   display: block;
   color: var(--wf-muted);
   font-size: 10px;
@@ -2239,6 +2360,12 @@ button.wf-calendar-day.selected {
     grid-column: 1 / -1;
   }
 
+  .wf-department-header-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
   .wf-worker {
     grid-template-columns: 1fr 1fr;
   }
@@ -2447,7 +2574,7 @@ button.wf-calendar-day.selected {
 .wf-plan-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto auto auto;
   gap: 10px;
   align-items: start;
   min-width: 0;
@@ -2463,15 +2590,65 @@ button.wf-calendar-day.selected {
   grid-row: 1;
 }
 
-.wf-manpower-panel {
+.wf-room-tabs {
+  display: flex;
   grid-column: 1 / -1;
   grid-row: 2;
+  gap: 7px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 1px 1px;
+  scrollbar-width: thin;
+}
+
+.wf-room-tabs button {
+  display: grid;
+  min-width: max-content;
+  gap: 2px;
+  border: 1px solid #d7dee8;
+  border-radius: 7px;
+  background: #fff;
+  padding: 8px 11px;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.wf-room-tabs button:hover {
+  border-color: color-mix(in srgb, var(--wf-brand) 42%, #d7dee8);
+  background: color-mix(in srgb, var(--wf-brand-soft) 45%, #fff);
+}
+
+.wf-room-tabs button.active {
+  border-color: var(--wf-brand);
+  background: var(--wf-brand);
+  color: #fff;
+}
+
+.wf-room-tabs span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wf-room-tabs small {
+  color: #718096;
+  font-size: 9px;
+}
+
+.wf-room-tabs button.active small {
+  color: rgba(255, 255, 255, .8);
+}
+
+.wf-manpower-panel {
+  grid-column: 1 / -1;
+  grid-row: 3;
   margin-top: 0;
 }
 
 .wf-plan-aside .wf-transport-panel {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 4;
   min-width: 0;
   margin-bottom: 0;
 }
@@ -2629,15 +2806,6 @@ button.wf-calendar-day.selected {
 
 .wf-transport-list {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.wf-department-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 18px;
-  border-top: 1px solid #edf0f5;
-  background: #fff;
 }
 
 .wf-dept-status-summary {
@@ -2819,6 +2987,22 @@ button.wf-calendar-day.selected {
   border-radius: 8px;
   padding: 10px 11px;
   font-size: 11px;
+}
+
+.wf-details-required-note {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 10px 11px;
+  font-size: 11px;
+}
+
+.wf-details-required-note strong {
+  color: #7c2d12;
+  font-size: 12px;
 }
 
 .wf-verified-note {
@@ -3178,7 +3362,7 @@ button.wf-directory-row {
 @media (max-width: 1080px) {
   .wf-plan-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
   }
 
   .wf-plan-primary > .plan-event-bar {
@@ -3186,14 +3370,19 @@ button.wf-directory-row {
     grid-row: 1;
   }
 
-  .wf-manpower-panel {
+  .wf-room-tabs {
     grid-column: 1;
     grid-row: 2;
   }
 
-  .wf-plan-aside .wf-transport-panel {
+  .wf-manpower-panel {
     grid-column: 1;
     grid-row: 3;
+  }
+
+  .wf-plan-aside .wf-transport-panel {
+    grid-column: 1;
+    grid-row: 4;
   }
 }
 
@@ -3201,6 +3390,10 @@ button.wf-directory-row {
   .workforce-page {
     margin: 0;
     padding: 14px;
+  }
+
+  .wf-room-tabs button {
+    padding: 7px 9px;
   }
 
   .wf-header-totals {
@@ -3245,12 +3438,8 @@ button.wf-directory-row {
     grid-template-columns: 1fr 1fr;
   }
 
-  .wf-department-actions {
-    justify-content: stretch;
-  }
-
-  .wf-department-actions .wf-button {
-    flex: 1;
+  .wf-department-header-actions .wf-button {
+    flex: 1 1 auto;
   }
 
   .wf-manpower-page-heading,
@@ -3476,6 +3665,17 @@ button.wf-directory-row {
   font-size: 10px;
 }
 
+.wf-booking-selection-summary {
+  width: fit-content;
+  margin-top: 10px;
+  border-radius: 4px;
+  background: #eef7f4;
+  color: #0f766e;
+  padding: 4px 7px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .wf-booking-source-group {
   margin-top: 14px;
 }
@@ -3598,6 +3798,69 @@ button.wf-directory-row {
   font-size: 10px;
 }
 
+.wf-booking-drivers {
+  margin-top: 16px;
+  border-top: 2px solid #dce7e3;
+  padding-top: 14px;
+}
+
+.wf-booking-drivers-heading h5,
+.wf-booking-drivers-heading p {
+  margin: 0;
+}
+
+.wf-booking-drivers-heading h5 {
+  color: #1d352e;
+  font-size: 13px;
+}
+
+.wf-booking-drivers-heading p {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.wf-booking-driver-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wf-booking-driver-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .9fr) repeat(2, minmax(170px, 1fr));
+  gap: 10px;
+  align-items: end;
+  border: 1px solid #dbe5e1;
+  border-radius: 7px;
+  background: #f9fbfa;
+  padding: 10px;
+}
+
+.wf-booking-driver-row > div {
+  align-self: center;
+  min-width: 0;
+}
+
+.wf-booking-driver-row > div strong,
+.wf-booking-driver-row > div small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-booking-driver-row > div strong {
+  color: #263e36;
+  font-size: 11px;
+}
+
+.wf-booking-driver-row > div small {
+  margin-top: 3px;
+  color: #71817b;
+  font-size: 9px;
+}
+
 @media (max-width: 620px) {
   .wf-transport-choice-row {
     grid-template-columns: 1fr;
@@ -3618,5 +3881,20 @@ button.wf-directory-row {
   .wf-booking-vehicle-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .wf-booking-driver-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .wf-trip-card .wf-route > strong {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .wf-route-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 }

@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-32,Dry Hire: Vision Display,20250717,20250718,[],"[""[MISC]TV stand""]","[""[MISC]TV stand""]",Planning,[],[],dry hire,False

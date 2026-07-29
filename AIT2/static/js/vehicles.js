@@ -4,6 +4,8 @@ const vehiclePageState = {
   search: '',
   editingVehicleId: null,
   editingBookingId: null,
+  bookingAvailabilityTimer: null,
+  bookingAvailabilityRequest: 0,
   drag: null,
   suppressClickUntil: 0,
   loading: false
@@ -45,6 +47,14 @@ function vehicleFormatDateLabel(value) {
     month: 'short',
     year: 'numeric'
   });
+}
+
+function vehicleEventStateSlug(value) {
+  return String(value || 'unknown')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'unknown';
 }
 
 async function loadVehiclesPage(options = {}) {
@@ -106,9 +116,19 @@ function renderVehiclesPage() {
     <section class="vehicle-timeline-section">
       <div class="vehicle-section-heading">
         <div><h3>Daily vehicle timeline</h3><p>Drag a booking to move it. Use either edge to adjust its duration.</p></div>
-        <label class="vehicle-date-control"><span>Date</span>
-          <input type="date" value="${vehicleAttr(vehiclePageState.date)}" onchange="changeVehicleTimelineDate(this.value)">
-        </label>
+        <div class="vehicle-date-control">
+          <label for="vehicleTimelineDate">Date</label>
+          <div class="vehicle-date-navigation">
+            <button class="vehicle-date-step vehicle-date-today ${vehiclePageState.date === vehicleToday() ? 'is-current' : ''}"
+                    type="button" title="Go to today" onclick="showVehicleTimelineToday()">Today</button>
+            <button class="vehicle-date-step" type="button" title="Previous day"
+                    aria-label="Previous day" onclick="shiftVehicleTimelineDate(-1)">&#8249;</button>
+            <input id="vehicleTimelineDate" type="date" value="${vehicleAttr(vehiclePageState.date)}"
+                   onchange="changeVehicleTimelineDate(this.value)">
+            <button class="vehicle-date-step" type="button" title="Next day"
+                    aria-label="Next day" onclick="shiftVehicleTimelineDate(1)">&#8250;</button>
+          </div>
+        </div>
       </div>
       ${vehicleTimelineHtml(active, data.bookings || [])}
     </section>
@@ -168,10 +188,16 @@ function vehicleBookingBar(booking) {
   const label = booking.eventId
     ? `#${booking.eventId} ${booking.eventName || booking.purpose}`
     : booking.purpose;
-  return `<div class="vehicle-booking ${booking.kind === 'event' ? 'event-booking' : 'standalone-booking'}"
+  const statusClass = booking.kind === 'event'
+    ? `event-booking event-status-${vehicleEventStateSlug(booking.eventState)}`
+    : 'standalone-booking';
+  const statusLabel = booking.kind === 'event' && booking.eventState
+    ? ` | ${booking.eventState}`
+    : '';
+  return `<div class="vehicle-booking ${statusClass}"
       data-vehicle-booking="${vehicleAttr(booking.id)}"
       style="left:${left}%;width:${width}%"
-      title="${vehicleAttr(`${label} | ${vehicleFormatTime(booking.start)}-${vehicleFormatTime(booking.end)}`)}"
+      title="${vehicleAttr(`${label} | ${vehicleFormatTime(booking.start)}-${vehicleFormatTime(booking.end)}${statusLabel}`)}"
       onpointerdown="vehicleTimelinePointerDown(event,'${vehicleAttr(booking.id)}','move')"
       onclick="openVehicleTimelineBooking('${vehicleAttr(booking.id)}')">
     <button class="vehicle-resize-handle start" type="button" aria-label="Adjust start time"
@@ -211,6 +237,26 @@ function changeVehicleTimelineDate(value) {
   loadVehiclesPage();
 }
 
+function showVehicleTimelineToday() {
+  const today = vehicleToday();
+  if (vehiclePageState.date === today) return;
+  changeVehicleTimelineDate(today);
+}
+
+function shiftVehicleTimelineDate(days) {
+  const parts = String(vehiclePageState.date || vehicleToday())
+    .split('-')
+    .map(Number);
+  if (parts.length !== 3 || parts.some(value => !Number.isFinite(value))) return;
+  const date = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0, 0);
+  date.setDate(date.getDate() + Number(days || 0));
+  changeVehicleTimelineDate([
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-'));
+}
+
 function searchVehicles(value) {
   vehiclePageState.search = value;
   renderVehiclesPage();
@@ -244,23 +290,30 @@ function ensureVehicleModals() {
       </div>
     </div>
     <div class="vehicle-modal" id="vehicleBookingModal" aria-hidden="true">
-      <div class="vehicle-modal-panel" role="dialog" aria-modal="true" aria-labelledby="vehicleBookingTitle">
+      <div class="vehicle-modal-panel vehicle-booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="vehicleBookingTitle">
         <header><div><p>Standalone fleet use</p><h3 id="vehicleBookingTitle">Book vehicle</h3></div>
           <button type="button" class="vehicle-close" aria-label="Close" onclick="closeVehicleModal('vehicleBookingModal')">&times;</button></header>
         <form id="vehicleBookingForm" onsubmit="saveVehicleBooking(event)">
           <div class="vehicle-form-grid">
-            <label class="full"><span>Vehicle *</span><select id="vehicleBookingVehicle" required></select></label>
             <label class="full"><span>Purpose *</span><input id="vehicleBookingPurpose" required maxlength="120" placeholder="Warehouse collection"></label>
-            <label><span>Start date *</span><input id="vehicleBookingDate" type="date" required></label>
-            <label><span>Start time *</span><input id="vehicleBookingStart" type="time" required></label>
-            <label><span>Return date *</span><input id="vehicleBookingEndDate" type="date" required></label>
-            <label><span>Return time *</span><input id="vehicleBookingEnd" type="time" required></label>
+            <label><span>Start date *</span><input id="vehicleBookingDate" type="date" required onchange="syncVehicleBookingEndDate()"></label>
+            <label><span>Start time *</span><input id="vehicleBookingStart" type="time" required onchange="scheduleVehicleBookingAvailability()"></label>
+            <label><span>Return date *</span><input id="vehicleBookingEndDate" type="date" required onchange="scheduleVehicleBookingAvailability()"></label>
+            <label><span>Return time *</span><input id="vehicleBookingEnd" type="time" required onchange="scheduleVehicleBookingAvailability()"></label>
             <label class="full"><span>Notes</span><textarea id="vehicleBookingNotes" maxlength="500"></textarea></label>
           </div>
+          <section class="vehicle-booking-choice-section">
+            <div class="vehicle-booking-choice-heading">
+              <div><h4>Choose vehicle</h4><p>Availability is based on the complete usage period above.</p></div>
+              <button class="vehicle-button" type="button" onclick="openVehicleModal()">Add vehicle</button>
+            </div>
+            <input id="vehicleBookingVehicle" type="hidden">
+            <div class="vehicle-booking-choice-grid" id="vehicleBookingChoices"></div>
+          </section>
           <p class="vehicle-form-error" id="vehicleBookingError"></p>
           <footer><button class="vehicle-button danger" id="vehicleBookingDeleteButton" type="button" onclick="deleteVehicleBooking()" hidden>Delete booking</button>
             <span></span><button class="vehicle-button" type="button" onclick="closeVehicleModal('vehicleBookingModal')">Cancel</button>
-            <button class="vehicle-button primary" type="submit">Save booking</button></footer>
+            <button class="vehicle-button primary" id="vehicleBookingSubmit" type="submit">Book vehicle</button></footer>
         </form>
       </div>
     </div>`);
@@ -298,6 +351,9 @@ async function saveVehicle(event) {
       });
     closeVehicleModal('vehicleEditorModal');
     await loadVehiclesPage({ quiet: true });
+    if (document.getElementById('vehicleBookingModal')?.classList.contains('open')) {
+      scheduleVehicleBookingAvailability(true);
+    }
     showNotification('success', id ? 'Vehicle updated' : 'Vehicle added');
   } catch (error) {
     document.getElementById('vehicleEditorError').textContent = error.message;
@@ -344,34 +400,169 @@ function openVehicleBookingModal(id = '', preferredVehicleId = '') {
   document.getElementById('vehicleBookingForm').reset();
   document.getElementById('vehicleBookingTitle').textContent =
     booking ? 'Edit booking' : 'Book vehicle';
-  document.getElementById('vehicleBookingVehicle').innerHTML = vehicles.map(row =>
-    `<option value="${vehicleAttr(row.id)}">${vehicleEscape(row.registrationNumber)} - ${vehicleEscape(row.name || row.vehicleType)}</option>`
-  ).join('');
   document.getElementById('vehicleBookingVehicle').value =
-    booking?.vehicleId || preferredVehicleId || vehicles[0].id;
+    booking?.vehicleId || preferredVehicleId || '';
   document.getElementById('vehicleBookingPurpose').value = booking?.purpose || '';
-  document.getElementById('vehicleBookingDate').value =
-    booking?.start?.slice(0, 10) || vehiclePageState.date;
+  const startDate = booking?.start?.slice(0, 10) || vehiclePageState.date;
+  document.getElementById('vehicleBookingDate').value = startDate;
+  document.getElementById('vehicleBookingDate').dataset.previousValue = startDate;
   document.getElementById('vehicleBookingStart').value =
-    vehicleFormatTime(booking?.start) || '09:00';
+    booking ? vehicleFormatTime(booking.start) : '';
   document.getElementById('vehicleBookingEndDate').value =
     booking?.end?.slice(0, 10) || vehiclePageState.date;
   document.getElementById('vehicleBookingEnd').value =
-    vehicleFormatTime(booking?.end) || '10:00';
+    booking ? vehicleFormatTime(booking.end) : '';
   document.getElementById('vehicleBookingNotes').value = booking?.notes || '';
   document.getElementById('vehicleBookingDeleteButton').hidden = !booking;
+  document.getElementById('vehicleBookingSubmit').textContent =
+    booking ? 'Save changes' : 'Book vehicle';
   document.getElementById('vehicleBookingError').textContent = '';
+  renderVehicleBookingChoices(vehicles, false, booking?.vehicleId || preferredVehicleId || '');
   openVehicleModalElement('vehicleBookingModal');
+  scheduleVehicleBookingAvailability(true);
+}
+
+function vehicleBookingWindowValues() {
+  const date = document.getElementById('vehicleBookingDate')?.value || '';
+  const startTime = document.getElementById('vehicleBookingStart')?.value || '';
+  const endDate = document.getElementById('vehicleBookingEndDate')?.value || date;
+  const endTime = document.getElementById('vehicleBookingEnd')?.value || '';
+  const start = Date.parse(`${date}T${startTime || '00:00'}:00`);
+  const end = Date.parse(`${endDate}T${endTime || '00:00'}:00`);
+  return {
+    date,
+    startTime,
+    endDate,
+    endTime,
+    complete: Boolean(
+      date &&
+      startTime &&
+      endDate &&
+      endTime &&
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      end > start
+    )
+  };
+}
+
+function renderVehicleBookingChoices(vehicles, complete, selectedId = '') {
+  const root = document.getElementById('vehicleBookingChoices');
+  if (!root) return;
+  const rows = (vehicles || []).filter(vehicle =>
+    vehicle.active !== false || String(vehicle.id) === String(selectedId)
+  );
+  root.innerHTML = rows.length ? rows.map(vehicle => {
+    const available = complete ? Boolean(vehicle.available) : null;
+    const selected = String(vehicle.id) === String(selectedId);
+    const stateLabel = available === null
+      ? 'Enter full usage time'
+      : (available ? 'Available' : 'Unavailable');
+    return `<button class="vehicle-booking-choice ${selected ? 'selected' : ''} ${available === false ? 'unavailable' : ''}"
+        type="button" data-vehicle-id="${vehicleAttr(vehicle.id)}"
+        ${available === false || available === null ? 'disabled' : ''}
+        title="${vehicleAttr(vehicle.conflict || stateLabel)}"
+        onclick="selectVehicleBookingChoice('${vehicleAttr(vehicle.id)}')">
+      <span><strong>${vehicleEscape(vehicle.registrationNumber || 'Vehicle')}</strong>
+        <small>${vehicleEscape(vehicle.name || vehicle.vehicleType || 'Company vehicle')}</small></span>
+      <em class="${available === false ? 'unavailable' : (available ? 'available' : 'pending')}">${vehicleEscape(stateLabel)}</em>
+      ${vehicle.conflict ? `<small class="vehicle-booking-conflict">${vehicleEscape(vehicle.conflict)}</small>` : ''}
+    </button>`;
+  }).join('') : '<div class="vehicle-booking-choice-empty">No active fleet vehicles. Add a vehicle to continue.</div>';
+  updateVehicleBookingSubmitState();
+}
+
+function selectVehicleBookingChoice(vehicleId) {
+  const input = document.getElementById('vehicleBookingVehicle');
+  if (!input || !vehicleId) return;
+  input.value = vehicleId;
+  document.querySelectorAll('#vehicleBookingChoices .vehicle-booking-choice')
+    .forEach(option => option.classList.toggle(
+      'selected',
+      String(option.dataset.vehicleId) === String(vehicleId)
+    ));
+  updateVehicleBookingSubmitState();
+}
+
+function updateVehicleBookingSubmitState() {
+  const submit = document.getElementById('vehicleBookingSubmit');
+  if (!submit) return;
+  submit.disabled = !document.getElementById('vehicleBookingVehicle')?.value;
+}
+
+function syncVehicleBookingEndDate() {
+  const startDate = document.getElementById('vehicleBookingDate');
+  const endDate = document.getElementById('vehicleBookingEndDate');
+  if (!startDate || !endDate) return;
+  const previousStart = startDate.dataset.previousValue || '';
+  if (!endDate.value || endDate.value === previousStart) {
+    endDate.value = startDate.value;
+  }
+  startDate.dataset.previousValue = startDate.value;
+  scheduleVehicleBookingAvailability();
+}
+
+function scheduleVehicleBookingAvailability(immediate = false) {
+  clearTimeout(vehiclePageState.bookingAvailabilityTimer);
+  vehiclePageState.bookingAvailabilityTimer = setTimeout(
+    loadVehicleBookingAvailability,
+    immediate ? 0 : 180
+  );
+}
+
+async function loadVehicleBookingAvailability() {
+  const values = vehicleBookingWindowValues();
+  const allVehicles = (vehiclePageState.data?.vehicles || [])
+    .filter(row => row.active !== false);
+  const selectedId = document.getElementById('vehicleBookingVehicle')?.value || '';
+  if (!values.complete) {
+    document.getElementById('vehicleBookingVehicle').value = '';
+    renderVehicleBookingChoices(allVehicles, false);
+    return;
+  }
+
+  const requestId = ++vehiclePageState.bookingAvailabilityRequest;
+  const params = new URLSearchParams({
+    date: values.date,
+    startTime: values.startTime,
+    endDate: values.endDate,
+    endTime: values.endTime
+  });
+  if (vehiclePageState.editingBookingId) {
+    params.set('excludeBookingId', vehiclePageState.editingBookingId);
+  }
+
+  try {
+    const response = await apiCall(`/api/vehicles/availability?${params}`);
+    if (requestId !== vehiclePageState.bookingAvailabilityRequest) return;
+    const vehicles = response.data?.vehicles || [];
+    const selected = vehicles.find(row => String(row.id) === String(selectedId));
+    const nextSelectedId = selected?.available ? selectedId : '';
+    document.getElementById('vehicleBookingVehicle').value = nextSelectedId;
+    renderVehicleBookingChoices(vehicles, true, nextSelectedId);
+  } catch (error) {
+    if (requestId !== vehiclePageState.bookingAvailabilityRequest) return;
+    document.getElementById('vehicleBookingVehicle').value = '';
+    renderVehicleBookingChoices(allVehicles, false);
+    document.getElementById('vehicleBookingError').textContent =
+      'Vehicle availability could not be checked. Try again.';
+  }
 }
 
 async function saveVehicleBooking(event) {
   event.preventDefault();
   const id = vehiclePageState.editingBookingId;
+  const vehicleId = document.getElementById('vehicleBookingVehicle').value;
+  if (!vehicleId) {
+    document.getElementById('vehicleBookingError').textContent =
+      'Choose an available fleet vehicle.';
+    return;
+  }
   try {
     await apiCall(id
       ? `/api/vehicles/bookings/${encodeURIComponent(id)}`
       : '/api/vehicles/bookings', id ? 'PUT' : 'POST', {
-        vehicleId: document.getElementById('vehicleBookingVehicle').value,
+        vehicleId,
         purpose: document.getElementById('vehicleBookingPurpose').value,
         date: document.getElementById('vehicleBookingDate').value,
         startTime: document.getElementById('vehicleBookingStart').value,
@@ -422,7 +613,7 @@ function openVehicleTimelineBooking(id) {
     .find(row => String(row.id) === String(id));
   if (!booking) return;
   if (booking.eventId) {
-    viewEvent(booking.eventId);
+    viewEvent(Number(booking.eventId), { updateHistory: false });
     return;
   }
   openVehicleBookingModal(booking.id);

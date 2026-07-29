@@ -29,6 +29,12 @@ const workforcePageState = {
   returnToTransportBooking: false,
   transportAvailabilityTimer: null,
   transportAvailabilityRequest: 0,
+  transportVehicleSelections: {
+    fleet: new Set(),
+    external: new Set()
+  },
+  transportDriverDetails: new Map(),
+  activeSubprojectId: 'all',
   focusTarget: ''
 };
 
@@ -36,7 +42,8 @@ const workforceEventChooserState = {
   search: '',
   filter: 'ALL',
   page: 1,
-  pageSize: 8
+  pageSize: 8,
+  requestId: 0
 };
 
 const workforceDocumentsState = {
@@ -68,6 +75,96 @@ function wfEscape(value) {
 
 function wfAttr(value) {
   return wfEscape(value).replace(/"/g, '&quot;');
+}
+
+function wfSubprojects() {
+  return workforcePageState.data?.subprojects ||
+    workforcePageState.data?.event?.subprojects || [];
+}
+
+function wfEffectiveSubprojectId(row) {
+  return String(row?.subprojectId || wfSubprojects()[0]?.id || '');
+}
+
+function wfSubprojectName(row) {
+  const roomId = wfEffectiveSubprojectId(row);
+  return String(
+    row?.subprojectName ||
+    wfSubprojects().find(room => String(room.id) === roomId)?.name ||
+    ''
+  );
+}
+
+function wfDefaultSubprojectId(existingId = '') {
+  const rooms = wfSubprojects();
+  const existing = String(existingId || '');
+  if (rooms.some(room => String(room.id) === existing)) return existing;
+  if (
+    workforcePageState.activeSubprojectId !== 'all' &&
+    rooms.some(room =>
+      String(room.id) === String(workforcePageState.activeSubprojectId)
+    )
+  ) {
+    return String(workforcePageState.activeSubprojectId);
+  }
+  return String(rooms[0]?.id || '');
+}
+
+function wfPopulateSubprojectSelect(selectId, existingId = '') {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const rooms = wfSubprojects();
+  const field = select.closest('.wf-room-field');
+  if (field) field.hidden = rooms.length === 0;
+  select.required = rooms.length > 0;
+  select.innerHTML = rooms.map(room =>
+    `<option value="${wfAttr(room.id)}">${wfEscape(room.name)}</option>`
+  ).join('');
+  select.value = wfDefaultSubprojectId(existingId);
+}
+
+function wfRoomBadge(row) {
+  const name = wfSubprojectName(row);
+  return name && wfSubprojects().length > 1
+    ? `<span class="wf-room-badge">${wfEscape(name)}</span>`
+    : '';
+}
+
+function wfSubprojectTabsHtml() {
+  const rooms = wfSubprojects();
+  if (rooms.length < 2) return '';
+  const assignments = workforcePageState.data?.assignments || [];
+  const bookings = workforcePageState.data?.transportBookings || [];
+  const tabs = [
+    {
+      id: 'all',
+      name: 'All Rooms',
+      assignmentCount: assignments.length,
+      bookingCount: bookings.length
+    },
+    ...rooms.map(room => ({
+      id: String(room.id),
+      name: room.name,
+      assignmentCount: assignments.filter(row =>
+        wfEffectiveSubprojectId(row) === String(room.id)
+      ).length,
+      bookingCount: bookings.filter(row =>
+        wfEffectiveSubprojectId(row) === String(room.id)
+      ).length
+    }))
+  ];
+  return `<nav class="wf-room-tabs" aria-label="Event rooms">${tabs.map(tab => `
+    <button type="button"
+      class="${String(workforcePageState.activeSubprojectId) === tab.id ? 'active' : ''}"
+      onclick="setWorkforceSubproject('${wfAttr(tab.id)}')">
+      <span>${wfEscape(tab.name)}</span>
+      <small>${tab.assignmentCount} crew &middot; ${tab.bookingCount} transport</small>
+    </button>`).join('')}</nav>`;
+}
+
+function setWorkforceSubproject(subprojectId) {
+  workforcePageState.activeSubprojectId = String(subprojectId || 'all');
+  renderWorkforcePage();
 }
 
 function wfMoney(value) {
@@ -208,6 +305,7 @@ function openEventWorkforce(eventId, focus = '') {
   }
   workforcePageState.eventId = Number(eventId);
   workforcePageState.data = null;
+  workforcePageState.activeSubprojectId = 'all';
   workforcePageState.focusTarget = String(focus || '');
   showSection('workforce');
 }
@@ -267,26 +365,26 @@ async function changeWorkforceEvent(eventId) {
   closeModal('workforceEventChooserModal');
   workforcePageState.eventId = id;
   workforcePageState.data = null;
+  workforcePageState.activeSubprojectId = 'all';
   await loadWorkforcePage();
 }
 
 const WF_DOCUMENT_STATUS_FILTERS = [
   ['awaiting-upload', 'Awaiting upload'],
-  ['to-review', 'To review'],
-  ['to-pay', 'To pay'],
+  ['to-review', 'Pending Review'],
+  ['to-pay', 'Approved / To pay'],
+  ['paid', 'Paid'],
   ['awaiting-confirmation', 'Awaiting confirmation'],
-  ['payment-confirmed', 'Payment confirmed'],
-  ['denied', 'Denied'],
-  ['queued', 'Queued'],
-  ['processing', 'Processing'],
-  ['details-required', 'Details required']
+  ['payment-confirmed', 'Confirmed'],
+  ['denied', 'Denied']
 ];
 
 function wfDocumentStatusClass(statusKey) {
   return {
     'awaiting-upload': 'status-awaiting-upload',
-    'to-review': 'status-to-review',
+    'to-review': 'status-pending-review',
     'to-pay': 'status-to-pay',
+    paid: 'status-paid',
     'awaiting-confirmation': 'status-awaiting-confirmation',
     'payment-confirmed': 'status-payment-confirmed',
     denied: 'status-denied',
@@ -442,12 +540,15 @@ function renderWorkforceDocumentsPage() {
 
   const allActive = workforceDocumentsState.statuses.size === 0;
   statusFilters.innerHTML = `<button type="button" class="wf-document-filter ${allActive ? 'active' : ''}"
-      onclick="wfDocumentsToggleStatus('all')">All statuses <span>${Number(workforceDocumentsState.totalItems || 0)}</span></button>` +
-    WF_DOCUMENT_STATUS_FILTERS.filter(([key]) => Number(counts[key] || 0) > 0).map(([key, label]) => `
-      <button type="button" class="wf-document-filter ${wfDocumentStatusClass(key)} ${workforceDocumentsState.statuses.has(key) ? 'active' : ''}"
-        aria-pressed="${workforceDocumentsState.statuses.has(key)}" onclick="wfDocumentsToggleStatus('${key}')">
+      onclick="wfDocumentsToggleStatus('all')">All <span>${Number(workforceDocumentsState.totalItems || 0)}</span></button>` +
+    WF_DOCUMENT_STATUS_FILTERS.filter(([key]) => Number(counts[key] || 0) > 0).map(([key, label]) => {
+      const active = workforceDocumentsState.statuses.has(key);
+      return `
+      <button type="button" class="wf-document-filter ${active ? `${wfDocumentStatusClass(key)} active` : ''}"
+        aria-pressed="${active}" onclick="wfDocumentsToggleStatus('${key}')">
         ${label} <span>${Number(counts[key] || 0)}</span>
-      </button>`).join('');
+      </button>`;
+    }).join('');
 
   list.innerHTML = `<div class="wf-documents-list-head">
       <span>Event</span><span>Uploader</span><span>File</span><span>Submitted</span><span>Amount</span><span>Status</span><span>Download</span>
@@ -574,7 +675,7 @@ async function openWorkforceDocumentSubmission(id) {
   const record = wfFindDocumentSubmission(id);
   if (!record || record.isAwaitingUpload) return;
   const statusKey = record.statusKey || wfDocumentStatusKeyFromRecord(record);
-  if (['queued', 'processing', 'details-required'].includes(statusKey)) {
+  if (['queued', 'processing'].includes(statusKey)) {
     window.open(record.previewUrl, '_blank', 'noopener');
     return;
   }
@@ -675,7 +776,10 @@ function wfStatusMenu(record) {
     return `<span class="wf-status-button ${wfStatusClass('Processing')}">Processing</span>`;
   }
   if (record.submissionStage === 'Details Required') {
-    return `<span class="wf-status-button ${wfStatusClass('Details Required')}">Details required</span>`;
+    return `<button class="wf-status-button ${wfStatusClass('Details Required')}" type="button"
+      onclick="event.stopPropagation();openWorkforceReview('${wfAttr(record.id)}')">
+      Details required
+    </button>`;
   }
   const displayStatus = record.paymentConfirmedAt
     ? 'Payment Confirmed'
@@ -734,7 +838,7 @@ function wfWorkerHtml(freelancerId, assignments) {
   const roles = assignments.map(row => `<span class="wf-assignment-chip">
     <button class="wf-assignment-edit" type="button" title="Edit assignment"
       onclick="openFreelancerAssignment('${wfAttr(freelancer.id)}','${wfAttr(row.department)}','${wfAttr(row.id)}')">
-      ${wfEscape(row.roleName)} &middot; ${row.days} day${Number(row.days) === 1 ? '' : 's'} &middot; ${wfMoney(row.dailyRate)}/day
+      ${wfRoomBadge(row)}${wfEscape(row.roleName || 'Role not set')} &middot; ${row.days} day${Number(row.days) === 1 ? '' : 's'} &middot; ${row.dailyRate == null ? 'Rate not set' : `${wfMoney(row.dailyRate)}/day`}
     </button>
     <button type="button" title="Remove role" onclick="event.stopPropagation();deleteWorkforceAssignment('${wfAttr(row.id)}')">&times;</button>
   </span>`).join('');
@@ -777,7 +881,7 @@ function wfVendorHtml(vendorId, assignments) {
     return `<span class="wf-assignment-chip">
       <button class="wf-assignment-edit" type="button" title="Edit vendor assignment"
         onclick="openVendorAssignment('${wfAttr(vendor.id)}','${wfAttr(row.department)}','${wfAttr(row.id)}')">
-        ${description} · ${Number(row.days || 0)} day${Number(row.days) === 1 ? '' : 's'}
+        ${wfRoomBadge(row)}${description} · ${Number(row.days || 0)} day${Number(row.days) === 1 ? '' : 's'}
       </button>
       <button type="button" title="Remove assignment" onclick="event.stopPropagation();deleteWorkforceAssignment('${wfAttr(row.id)}')">&times;</button>
     </span>`;
@@ -836,17 +940,24 @@ function wfDepartmentHtml(department, assignments) {
     .map(status =>
     `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
   ).join('');
+  const canRemoveDepartment = !(workforcePageState.data.assignments || [])
+    .some(row => row.department === department);
   return `<details class="wf-department" data-department="${wfAttr(department)}" style="${wfDepartmentStyle(department)}">
     <summary><span class="wf-department-title"><span class="wf-department-label">${wfEscape(department)} <small>${count} crew</small></span>
         <span class="wf-dept-status-summary">${statusBadges}</span></span>
+      <span class="wf-department-header-actions">
+        <button class="wf-button primary" type="button"
+          onclick="event.preventDefault();event.stopPropagation();openFreelancerDirectory('assign','${wfAttr(department)}')">+ Add worker</button>
+        <button class="wf-button" type="button"
+          onclick="event.preventDefault();event.stopPropagation();openVendorDirectory('${wfAttr(department)}')">+ Add Vendor</button>
+        ${canRemoveDepartment
+          ? `<button class="wf-button danger" type="button"
+              onclick="event.preventDefault();event.stopPropagation();deleteWorkforceDepartment('${wfAttr(department)}')">Remove department</button>`
+          : ''}
+      </span>
       <span class="wf-dept-total"><span>Invoices</span><strong>${wfMoney(totals.invoice)}</strong></span>
       <span class="wf-dept-total"><span>Claims</span><strong>${wfMoney(totals.claims)}</strong></span>
       <span class="wf-dept-total"><span>Combined</span><strong>${wfMoney(totals.combined)}</strong></span></summary>
-    <div class="wf-department-actions">
-      <button class="wf-button primary" type="button" onclick="openFreelancerDirectory('assign','${wfAttr(department)}')">+ Add worker</button>
-      <button class="wf-button" type="button" onclick="openVendorDirectory('${wfAttr(department)}')">+ Add Vendor</button>
-      ${assignments.length === 0 ? `<button class="wf-button danger" type="button" onclick="deleteWorkforceDepartment('${wfAttr(department)}')">Remove department</button>` : ''}
-    </div>
     <div>${assignments.length ? Object.entries(bySubject).map(([id, rows]) =>
       rows.some(row => row.vendorId || row.subjectType === 'vendor')
         ? wfVendorHtml(id, rows)
@@ -893,7 +1004,7 @@ function wfTransportTripCard(booking, direction) {
       <div class="wf-vehicle-heading">
         <span class="wf-trip-direction">${directionLabel}</span>
         <h4>${wfEscape(booking.vehicleType || 'Transport')}${booking.vehicleNumber ? ` &middot; ${wfEscape(booking.vehicleNumber)}` : ''}</h4>
-        <small>${isFleet ? '<span class="wf-fleet-badge">Own fleet</span>' : wfEscape(booking.company || '')}</small>
+        <small>${wfRoomBadge(booking)}${isFleet ? '<span class="wf-fleet-badge">Own fleet</span>' : wfEscape(booking.company || '')}</small>
       </div>
       <div class="wf-driver-heading">
         <strong>${wfEscape(booking.driver || booking.companyDriver || 'Driver TBC')}</strong>
@@ -901,7 +1012,7 @@ function wfTransportTripCard(booking, direction) {
       </div>
     </div>
     <div class="wf-transport-meta">
-      <div class="wf-route"><span>Route</span><strong>${wfLocationBadge(routeFrom, 'From')}<b>&rarr;</b>${wfLocationBadge(routeTo, 'To')}</strong></div>
+      <div class="wf-route"><span>Route</span><strong class="wf-route-path">${wfLocationBadge(routeFrom, 'From')}<span class="wf-route-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span>${wfLocationBadge(routeTo, 'To')}</strong></div>
       <div class="wf-trip-datetime"><span>Date &amp; Time</span><strong>${wfEscape([tripDate, tripTime].filter(Boolean).join(' · ') || '—')}</strong></div>
       ${isFleet ? `<div><span>Vehicle use</span><strong>${wfEscape([
         [booking.departDate, booking.departTime].filter(Boolean).join(' '),
@@ -940,8 +1051,8 @@ function wfLocationBadge(value, label) {
   const match = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
   const name = match ? match[1] : raw;
   const address = match ? match[2] : '';
-  return `<span class="wf-location-badge"><small>${label}</small><b>${wfEscape(name || '—')}</b>
-    ${address ? `<em>(${wfEscape(address)})</em>` : ''}</span>`;
+  return `<span class="wf-location-badge"><span class="wf-location-heading"><small class="wf-location-direction">${label}</small><b>${wfEscape(name || '—')}</b></span>
+    ${address ? `<em>${wfEscape(address)}</em>` : ''}</span>`;
 }
 
 function wfTransportCard(booking) {
@@ -1043,10 +1154,28 @@ function renderWorkforcePage() {
   const data = workforcePageState.data;
   if (!root || !data) return;
   const viewState = captureWorkforceViewState(root);
+  const validSubprojectIds = new Set([
+    'all',
+    ...wfSubprojects().map(room => String(room.id))
+  ]);
+  if (!validSubprojectIds.has(String(workforcePageState.activeSubprojectId))) {
+    workforcePageState.activeSubprojectId = 'all';
+  }
+  const activeSubprojectId = String(workforcePageState.activeSubprojectId);
+  const visibleAssignments = activeSubprojectId === 'all'
+    ? data.assignments
+    : data.assignments.filter(row =>
+      wfEffectiveSubprojectId(row) === activeSubprojectId
+    );
+  const visibleBookings = activeSubprojectId === 'all'
+    ? data.transportBookings
+    : data.transportBookings.filter(row =>
+      wfEffectiveSubprojectId(row) === activeSubprojectId
+    );
   const grouped = Object.fromEntries(
     (data.departments || []).map(row => [row.code, []])
   );
-  data.assignments.forEach(row => {
+  visibleAssignments.forEach(row => {
     (grouped[row.department || 'Unassigned'] ||= []).push(row);
   });
   const departments = Object.entries(grouped)
@@ -1112,6 +1241,8 @@ function renderWorkforcePage() {
           </div>
         </div>
 
+        ${wfSubprojectTabsHtml()}
+
         <section class="wf-panel wf-manpower-panel">
           <header class="wf-panel-header">
             <div>
@@ -1137,9 +1268,9 @@ function renderWorkforcePage() {
               <button class="wf-button primary" type="button" onclick="openTransportBooking()">Book transport</button></div>
           </header>
           <div class="wf-transport-list">
-            ${data.transportBookings.length
-              ? data.transportBookings.map(wfTransportCard).join('')
-              : '<div class="wf-empty">No transport booked for this event.</div>'}
+            ${visibleBookings.length
+              ? visibleBookings.map(wfTransportCard).join('')
+              : `<div class="wf-empty">No transport booked${activeSubprojectId === 'all' ? ' for this event' : ' for this room'}.</div>`}
           </div>
         </section>
       </aside>
@@ -1203,10 +1334,11 @@ function ensureWorkforceModals() {
         <button class="wf-button primary" type="submit">Save Worker</button></footer></form>`) +
     wfModal('wfAssignmentModal', 'Event Assignment', `<form id="wfAssignmentForm">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAssignmentFreelancerName"></p><div class="wf-form-grid">
+        <label class="wf-field wf-room-field full"><span>Room / Sub-project *</span><select id="wfAssignmentSubproject"></select></label>
         <label class="wf-field"><span>Department *</span><select id="wfAssignmentDepartment" required></select></label>
-        <label class="wf-field"><span>Role / Position *</span><input id="wfAssignmentRole" required maxlength="100"></label>
+        <label class="wf-field"><span>Role / Position</span><input id="wfAssignmentRole" maxlength="100"></label>
         <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfAssignmentDates"></div></div>
-        <label class="wf-field"><span>Daily rate ($) *</span><input id="wfAssignmentRate" type="number" min="0" step=".01" required></label>
+        <label class="wf-field"><span>Daily rate ($)</span><input id="wfAssignmentRate" type="number" min="0" step=".01"></label>
       </div><div class="wf-error" id="wfAssignmentError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfAssignmentModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Add Assignment</button></footer></form>`, '', true) +
@@ -1237,6 +1369,7 @@ function ensureWorkforceModals() {
         <button class="wf-button primary" type="submit">Add Personnel</button></footer></form>`) +
     wfModal('wfVendorAssignmentModal', 'Vendor Event Assignment', `<form id="wfVendorAssignmentForm">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfVendorAssignmentName"></p><div class="wf-form-grid">
+        <label class="wf-field wf-room-field full"><span>Room / Sub-project *</span><select id="wfVendorAssignmentSubproject"></select></label>
         <label class="wf-field"><span>Department *</span><select id="wfVendorAssignmentDepartment" required></select></label>
         <div class="wf-field"><span>Providing *</span><div class="wf-provider-choice">
           <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Manpower</label>
@@ -1290,8 +1423,11 @@ function ensureWorkforceModals() {
       <input id="wfTransportTripType" type="hidden" value="depart">
       <input id="wfTransportSourceType" type="hidden" value="">
       <div class="wf-form-grid">
-        <label class="wf-field"><span>Driver</span><input id="wfTransportDriver" placeholder="Driver name"></label>
-        <label class="wf-field"><span>Driver phone</span><input id="wfTransportDriverContact" type="tel" placeholder="+65 9123 4567"></label>
+        <label class="wf-field wf-room-field full"><span>Room / Sub-project *</span><select id="wfTransportSubproject"></select></label>
+        <div class="wf-form-grid wf-single-driver-fields full" id="wfSingleDriverFields">
+          <label class="wf-field"><span>Driver</span><input id="wfTransportDriver" placeholder="Driver name"></label>
+          <label class="wf-field"><span>Driver phone</span><input id="wfTransportDriverContact" type="tel" placeholder="+65 9123 4567"></label>
+        </div>
         <label class="wf-field"><span>Trip Date *</span><input id="wfDepartDate" type="date" required oninput="syncTransportUsageDate()"></label>
         <label class="wf-field"><span>Depart Time *</span><input id="wfDepartTime" type="time" required oninput="scheduleTransportAvailability()"></label>
         <div class="wf-return-fields wf-fleet-window full" id="wfFleetUsageFields">
@@ -1306,8 +1442,9 @@ function ensureWorkforceModals() {
         <label class="wf-field full"><span>Cost (per trip, $)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
       </div>
       <section class="wf-booking-vehicle-section">
-        <div class="wf-booking-vehicle-heading"><div><h4>Choose vehicle</h4><p>Availability is based on the trip and vehicle return times above.</p></div>
+        <div class="wf-booking-vehicle-heading"><div><h4>Choose one or more vehicles</h4><p>Selected vehicles will share the trip details above.</p></div>
           <button class="wf-button" type="button" onclick="openTransportProfileForBooking()">+ Add transport</button></div>
+        <div class="wf-booking-selection-summary" id="wfBookingSelectionSummary">No vehicles selected</div>
         <input id="wfBookingVendor" type="hidden">
         <input id="wfBookingFleetVehicle" type="hidden">
         <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Own fleet</strong>
@@ -1315,10 +1452,11 @@ function ensureWorkforceModals() {
           <div id="wfFleetVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
         <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Known external vehicles</strong></div>
           <div id="wfExternalVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
+        <section class="wf-booking-drivers" id="wfBookingDrivers" hidden></section>
       </section>
       <div class="wf-error" id="wfTransportBookingError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfTransportBookingModal')">Cancel</button>
-        <button class="wf-button primary" type="submit">Add to Event</button></footer></form>`) +
+        <button class="wf-button primary" id="wfTransportBookingSubmit" type="submit">Add to Event</button></footer></form>`) +
     wfModal('wfAdminUploadModal', 'Upload for Crew', `<form id="wfAdminUploadForm">
       <input id="wfAdminUploadFreelancerId" type="hidden"><input id="wfAdminUploadKind" name="kind" type="hidden">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAdminUploadSubtitle"></p>
@@ -1449,6 +1587,32 @@ function openWorkforceEventChooser() {
   if (search) search.value = '';
   renderWorkforceEventChooser();
   openModal('workforceEventChooserModal');
+  refreshWorkforceEventChooserOptions();
+}
+
+async function refreshWorkforceEventChooserOptions() {
+  const requestId = ++workforceEventChooserState.requestId;
+  try {
+    const eventOptionsLoad = await startProgressiveEventOptions(
+      workforcePageState.eventId,
+      loaded => {
+        if (requestId !== workforceEventChooserState.requestId) return;
+        workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+        renderWorkforceEventChooser();
+      }
+    );
+    if (requestId !== workforceEventChooserState.requestId) return;
+    workforcePageState.eventOptions = eventOptionsLoad.first
+      .slice()
+      .sort(planCompareEventsByStartDate);
+    renderWorkforceEventChooser();
+    const loaded = await eventOptionsLoad.completion;
+    if (requestId !== workforceEventChooserState.requestId) return;
+    workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+    renderWorkforceEventChooser();
+  } catch (error) {
+    console.warn('Unable to refresh event options:', error);
+  }
 }
 
 function workforceEventChooserFilteredEvents() {
@@ -2189,6 +2353,7 @@ async function changeFreelancerHistoryUploadSlots(eventId, freelancerId, kind, d
 }
 
 async function deleteFreelancerHistorySubmission(submissionId, freelancerId) {
+  if (!await confirmWorkforceSubmissionDeletion(submissionId)) return;
   try {
     await apiCall(`/api/workforce/submissions/${encodeURIComponent(submissionId)}`, 'DELETE');
     await openFreelancerHistory(freelancerId);
@@ -2409,6 +2574,9 @@ function openFreelancerAssignment(freelancerId, department = '', assignmentId = 
   workforcePageState.editingAssignmentId = assignment?.id || null;
   document.getElementById('wfAssignmentForm').reset();
   document.getElementById('wfAssignmentFreelancerName').textContent = freelancer.name;
+  wfPopulateSubprojectSelect(
+    'wfAssignmentSubproject', assignment?.subprojectId
+  );
   const departmentSelect = document.getElementById('wfAssignmentDepartment');
   departmentSelect.innerHTML = wfDepartmentOptions(assignment?.department || department);
   wfTintDepartmentSelect(departmentSelect);
@@ -2445,6 +2613,7 @@ async function saveFreelancerAssignment(event) {
       : `/api/events/${workforcePageState.eventId}/workforce/assignments`;
     const response = await apiCall(url, assignmentId ? 'PUT' : 'POST', {
       freelancerId: workforcePageState.selectedFreelancerId,
+      subprojectId: document.getElementById('wfAssignmentSubproject').value,
       department: document.getElementById('wfAssignmentDepartment').value,
       customRole: document.getElementById('wfAssignmentRole').value,
       saveRole: false,
@@ -2471,6 +2640,9 @@ function openVendorAssignment(vendorId, department = '', assignmentId = '') {
   workforcePageState.editingVendorAssignmentId = assignment?.id || null;
   document.getElementById('wfVendorAssignmentForm').reset();
   document.getElementById('wfVendorAssignmentName').textContent = vendor.name;
+  wfPopulateSubprojectSelect(
+    'wfVendorAssignmentSubproject', assignment?.subprojectId
+  );
   const departmentSelect = document.getElementById('wfVendorAssignmentDepartment');
   departmentSelect.innerHTML = wfDepartmentOptions(assignment?.department || department);
   wfTintDepartmentSelect(departmentSelect);
@@ -2524,6 +2696,7 @@ async function saveVendorAssignment(event) {
   try {
     const response = await apiCall(url, assignmentId ? 'PUT' : 'POST', {
       vendorId: workforcePageState.selectedVendorId,
+      subprojectId: document.getElementById('wfVendorAssignmentSubproject').value,
       department: document.getElementById('wfVendorAssignmentDepartment').value,
       providerType,
       workDates,
@@ -2840,29 +3013,150 @@ async function deleteTransportLocation(id) {
   renderTransportLocations();
 }
 
-function setTransportTripType(type) {
+function wfTransportDepartureForReturn() {
+  const editingId = String(workforcePageState.editingTransportId || '');
+  const selectedVehicleIds = workforcePageState.transportVehicleSelections.fleet;
+  const selectedVendorIds = workforcePageState.transportVehicleSelections.external;
+  const departures = (workforcePageState.data?.transportBookings || [])
+    .filter(booking => (
+      String(booking.id || '') !== editingId &&
+      booking.tripType !== 'return' &&
+      booking.locationFrom &&
+      booking.locationTo
+    ))
+    .map((booking, index) => {
+      const sameVehicle = selectedVehicleIds.has(String(booking.vehicleId || ''));
+      const sameVendor = selectedVendorIds.has(String(booking.vendorId || ''));
+      return { booking, index, preferred: sameVehicle || sameVendor };
+    })
+    .sort((left, right) => (
+      Number(right.preferred) - Number(left.preferred) ||
+      right.index - left.index
+    ));
+  return departures[0]?.booking || null;
+}
+
+function applyTransportReturnDefaults() {
+  const tripDate = document.getElementById('wfDepartDate');
+  const eventEndDate = workforcePageState.data?.event?.endDateValue || '';
+  if (tripDate && eventEndDate) {
+    tripDate.value = eventEndDate;
+    syncTransportUsageDate();
+  }
+
+  const departure = wfTransportDepartureForReturn();
+  if (!departure) return;
+  document.getElementById('wfLocationFrom').value = departure.locationTo || '';
+  document.getElementById('wfLocationTo').value = departure.locationFrom || '';
+}
+
+function setTransportTripType(type, applyDefaults = true) {
   const value = type === 'return' ? 'return' : 'depart';
   document.getElementById('wfTransportTripType').value = value;
   document.getElementById('wfTripDepart').classList.toggle('active', value === 'depart');
   document.getElementById('wfTripReturn').classList.toggle('active', value === 'return');
+  if (value === 'return' && applyDefaults) applyTransportReturnDefaults();
+}
+
+function wfSelectedTransportVehicles() {
+  const selections = workforcePageState.transportVehicleSelections;
+  return [
+    ...[...selections.fleet].map(id => ({ sourceType: 'fleet', id })),
+    ...[...selections.external].map(id => ({ sourceType: 'external', id }))
+  ];
+}
+
+function wfTransportSelectionKey(sourceType, id) {
+  return `${sourceType}:${id}`;
+}
+
+function wfTransportSelectionLabel(selection) {
+  if (selection.sourceType === 'fleet') {
+    const vehicle = (workforcePageState.data?.vehicles || [])
+      .find(row => String(row.id) === String(selection.id));
+    return {
+      title: vehicle?.registrationNumber || vehicle?.name || 'Company vehicle',
+      subtitle: vehicle?.name || vehicle?.vehicleType || 'Own fleet'
+    };
+  }
+  const profile = (workforcePageState.data?.transportVendors || [])
+    .find(row => String(row.id) === String(selection.id));
+  return {
+    title: [profile?.vehicleType, profile?.vehicleNumber].filter(Boolean).join(' - ') || 'External transport',
+    subtitle: profile?.company || 'External vehicle'
+  };
+}
+
+function updateTransportVehicleDriver(encodedKey, field, value) {
+  const key = decodeURIComponent(encodedKey);
+  const details = workforcePageState.transportDriverDetails.get(key) || {};
+  details[field === 'contact' ? 'contact' : 'driver'] = value;
+  workforcePageState.transportDriverDetails.set(key, details);
+}
+
+function renderTransportVehicleDrivers() {
+  const root = document.getElementById('wfBookingDrivers');
+  const singleFields = document.getElementById('wfSingleDriverFields');
+  if (!root || !singleFields) return;
+  const selections = wfSelectedTransportVehicles();
+  const usesIndividualDrivers = selections.length > 1;
+  root.hidden = !usesIndividualDrivers;
+  singleFields.hidden = usesIndividualDrivers;
+  if (!usesIndividualDrivers) {
+    if (selections.length === 1) {
+      const selection = selections[0];
+      const details = workforcePageState.transportDriverDetails.get(
+        wfTransportSelectionKey(selection.sourceType, selection.id)
+      ) || {};
+      document.getElementById('wfTransportDriver').value = details.driver || '';
+      document.getElementById('wfTransportDriverContact').value = details.contact || '';
+    }
+    root.innerHTML = '';
+    return;
+  }
+  root.innerHTML = `<div class="wf-booking-drivers-heading"><h5>Drivers</h5><p>Assign a different driver to each selected vehicle.</p></div>
+    <div class="wf-booking-driver-list">${selections.map(selection => {
+      const key = wfTransportSelectionKey(selection.sourceType, selection.id);
+      const details = workforcePageState.transportDriverDetails.get(key) || {};
+      const label = wfTransportSelectionLabel(selection);
+      const encodedKey = encodeURIComponent(key);
+      return `<article class="wf-booking-driver-row">
+        <div><strong>${wfEscape(label.title)}</strong><small>${wfEscape(label.subtitle)}</small></div>
+        <label class="wf-field"><span>Driver *</span><input required value="${wfAttr(details.driver || '')}" placeholder="Driver name" oninput="updateTransportVehicleDriver('${wfAttr(encodedKey)}','driver',this.value)"></label>
+        <label class="wf-field"><span>Driver phone</span><input type="tel" value="${wfAttr(details.contact || '')}" placeholder="+65 9123 4567" oninput="updateTransportVehicleDriver('${wfAttr(encodedKey)}','contact',this.value)"></label>
+      </article>`;
+    }).join('')}</div>`;
 }
 
 function setTransportBookingSource(source) {
-  const value = ['fleet', 'external'].includes(source) ? source : '';
-  const isFleet = value === 'fleet';
+  const selections = workforcePageState.transportVehicleSelections;
+  const selectedSources = [
+    selections.fleet.size ? 'fleet' : '',
+    selections.external.size ? 'external' : ''
+  ].filter(Boolean);
+  const value = selectedSources.length === 1 ? selectedSources[0] : (selectedSources.length ? 'multiple' : '');
+  const isFleet = selections.fleet.size > 0;
   document.getElementById('wfTransportSourceType').value = value;
+  document.getElementById('wfBookingFleetVehicle').value = [...selections.fleet].join(',');
+  document.getElementById('wfBookingVendor').value = [...selections.external].join(',');
   document.getElementById('wfVehicleUseEndDate').required = isFleet;
   document.getElementById('wfVehicleUseEndTime').required = isFleet;
   document.querySelectorAll('.wf-booking-vehicle-option').forEach(option => {
-    const selectedId = value === 'fleet'
-      ? document.getElementById('wfBookingFleetVehicle').value
-      : document.getElementById('wfBookingVendor').value;
     option.classList.toggle(
       'selected',
-      option.dataset.source === value &&
-      String(option.dataset.id) === String(selectedId)
+      selections[option.dataset.source]?.has(String(option.dataset.id))
     );
   });
+  const count = selections.fleet.size + selections.external.size;
+  const summary = document.getElementById('wfBookingSelectionSummary');
+  if (summary) summary.textContent = count
+    ? `${count} vehicle${count === 1 ? '' : 's'} selected`
+    : 'No vehicles selected';
+  const submit = document.getElementById('wfTransportBookingSubmit');
+  if (submit && !workforcePageState.editingTransportId) {
+    submit.textContent = count > 1 ? `Add ${count} to Event` : 'Add to Event';
+  }
+  renderTransportVehicleDrivers();
 }
 
 function openTransportBooking(profileId = '', bookingId = '', preferredSource = '') {
@@ -2879,9 +3173,29 @@ function openTransportBooking(profileId = '', bookingId = '', preferredSource = 
   workforcePageState.selectedTransportProfileId = profile?.id || null;
   workforcePageState.selectedFleetVehicleId = vehicle?.id || null;
   workforcePageState.editingTransportId = booking?.id || null;
+  workforcePageState.transportVehicleSelections = {
+    fleet: new Set(vehicle?.id ? [String(vehicle.id)] : []),
+    external: new Set(profile?.id ? [String(profile.id)] : [])
+  };
+  workforcePageState.transportDriverDetails = new Map();
+  const initialSelection = vehicle?.id
+    ? { sourceType: 'fleet', id: String(vehicle.id) }
+    : (profile?.id ? { sourceType: 'external', id: String(profile.id) } : null);
+  if (initialSelection) {
+    workforcePageState.transportDriverDetails.set(
+      wfTransportSelectionKey(initialSelection.sourceType, initialSelection.id),
+      {
+        driver: booking?.driver || '',
+        contact: booking?.driverContact || booking?.contactNumber || ''
+      }
+    );
+  }
   document.getElementById('wfTransportBookingForm').reset();
   document.getElementById('wfTransportBookingModalTitle').textContent =
     booking ? 'Edit Event Transport' : 'Add Transport to Event';
+  wfPopulateSubprojectSelect(
+    'wfTransportSubproject', booking?.subprojectId
+  );
   document.getElementById('wfBookingVendor').value = profile?.id || '';
   document.getElementById('wfBookingFleetVehicle').value = vehicle?.id || '';
   document.getElementById('wfSavedLocations').innerHTML =
@@ -2907,7 +3221,7 @@ function openTransportBooking(profileId = '', bookingId = '', preferredSource = 
   document.getElementById('wfVehicleUseEndTime').value = booking?.useEndTime || '';
   document.getElementById('wfTransportCost').value = booking?.cost ?? 0;
   document.getElementById('wfSaveBookingLocations').checked = true;
-  setTransportTripType(tripType);
+  setTransportTripType(tripType, false);
   renderExternalTransportChoices(profile?.id || '');
   renderFleetTransportChoices(
     vehicles.filter(row => row.active !== false),
@@ -2932,13 +3246,47 @@ function openTransportProfileForBooking() {
 }
 
 function selectTransportVehicle(source, id) {
-  if (!id) return;
-  if (source === 'fleet') {
-    document.getElementById('wfBookingFleetVehicle').value = id;
-    document.getElementById('wfBookingVendor').value = '';
+  if (!id || !['fleet', 'external'].includes(source)) return;
+  const selections = workforcePageState.transportVehicleSelections;
+  const selected = selections[source];
+  const selectionKey = wfTransportSelectionKey(source, String(id));
+  const wasSelected = selected.has(String(id));
+  const previousCount = selections.fleet.size + selections.external.size;
+  if (workforcePageState.editingTransportId) {
+    selections.fleet.clear();
+    selections.external.clear();
+    workforcePageState.transportDriverDetails.clear();
+    selected.add(String(id));
+    workforcePageState.transportDriverDetails.set(selectionKey, {
+      driver: document.getElementById('wfTransportDriver')?.value || '',
+      contact: document.getElementById('wfTransportDriverContact')?.value || ''
+    });
+  } else if (wasSelected) {
+    selected.delete(String(id));
+    workforcePageState.transportDriverDetails.delete(selectionKey);
   } else {
-    document.getElementById('wfBookingVendor').value = id;
-    document.getElementById('wfBookingFleetVehicle').value = '';
+    if (previousCount === 1) {
+      const existingSelection = wfSelectedTransportVehicles()[0];
+      const existingKey = wfTransportSelectionKey(
+        existingSelection.sourceType,
+        existingSelection.id
+      );
+      workforcePageState.transportDriverDetails.set(existingKey, {
+        driver: document.getElementById('wfTransportDriver')?.value || '',
+        contact: document.getElementById('wfTransportDriverContact')?.value || ''
+      });
+    }
+    selected.add(String(id));
+    workforcePageState.transportDriverDetails.set(selectionKey, {
+      driver: previousCount === 0
+        ? document.getElementById('wfTransportDriver')?.value || ''
+        : '',
+      contact: previousCount === 0
+        ? document.getElementById('wfTransportDriverContact')?.value || ''
+        : ''
+    });
+  }
+  if (source === 'external' && !wasSelected && previousCount === 0) {
     const profile = (workforcePageState.data?.transportVendors || [])
       .find(row => String(row.id) === String(id));
     if (profile?.lastCost !== null && profile?.lastCost !== undefined) {
@@ -2947,6 +3295,9 @@ function selectTransportVehicle(source, id) {
     }
   }
   setTransportBookingSource(source);
+  if (document.getElementById('wfTransportTripType')?.value === 'return') {
+    applyTransportReturnDefaults();
+  }
 }
 
 function renderExternalTransportChoices(selectedId = '') {
@@ -2970,9 +3321,7 @@ function renderExternalTransportChoices(selectedId = '') {
     </button>`;
   }).join('') : `<div class="wf-vehicle-choice-empty">No known external vehicles yet.
     <button class="wf-link-button" type="button" onclick="openTransportProfileForBooking()">Add transport</button></div>`;
-  if (selectedId) {
-    document.getElementById('wfBookingVendor').value = selectedId;
-  }
+  setTransportBookingSource('external');
 }
 
 function renderFleetTransportChoices(vehicles, complete, selectedId = '') {
@@ -2995,9 +3344,6 @@ function renderFleetTransportChoices(vehicles, complete, selectedId = '') {
     </button>`;
   }).join('') : `<div class="wf-vehicle-choice-empty">No active company vehicles.
     <button class="wf-link-button" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button></div>`;
-  if (selectedId) {
-    document.getElementById('wfBookingFleetVehicle').value = selectedId;
-  }
   setTransportBookingSource(
     document.getElementById('wfTransportSourceType')?.value || ''
   );
@@ -3031,9 +3377,9 @@ async function loadTransportFleetAvailability() {
   const endTime = document.getElementById('wfVehicleUseEndTime')?.value || '';
   const allVehicles = (workforcePageState.data?.vehicles || [])
     .filter(row => row.active !== false);
-  const selectedId = document.getElementById('wfBookingFleetVehicle')?.value || '';
+  const selectedIds = workforcePageState.transportVehicleSelections.fleet;
   if (!date || !startTime || !endTime) {
-    renderFleetTransportChoices(allVehicles, false, selectedId);
+    renderFleetTransportChoices(allVehicles, false);
     return;
   }
   if (endDateInput && !endDateInput.value) {
@@ -3043,7 +3389,7 @@ async function loadTransportFleetAvailability() {
     new Date(`${endDate}T${endTime}:00`).getTime() <=
     new Date(`${date}T${startTime}:00`).getTime()
   ) {
-    renderFleetTransportChoices(allVehicles, false, selectedId);
+    renderFleetTransportChoices(allVehicles, false);
     return;
   }
   const requestId = ++workforcePageState.transportAvailabilityRequest;
@@ -3060,17 +3406,16 @@ async function loadTransportFleetAvailability() {
     const response = await apiCall(`/api/vehicles/availability?${params}`);
     if (requestId !== workforcePageState.transportAvailabilityRequest) return;
     const vehicles = response.data?.vehicles || [];
-    const selected = vehicles.find(row => String(row.id) === String(selectedId));
-    if (selected && selected.available === false) {
-      document.getElementById('wfBookingFleetVehicle').value = '';
-      if (document.getElementById('wfTransportSourceType').value === 'fleet') {
-        setTransportBookingSource('');
-      }
-    }
-    renderFleetTransportChoices(vehicles, true, selected?.available ? selectedId : '');
+    const unavailableIds = new Set(
+      vehicles.filter(row => row.available === false).map(row => String(row.id))
+    );
+    [...selectedIds].forEach(id => {
+      if (unavailableIds.has(id)) selectedIds.delete(id);
+    });
+    renderFleetTransportChoices(vehicles, true);
   } catch (error) {
     if (requestId !== workforcePageState.transportAvailabilityRequest) return;
-    renderFleetTransportChoices(allVehicles, false, selectedId);
+    renderFleetTransportChoices(allVehicles, false);
   }
 }
 
@@ -3079,53 +3424,74 @@ async function saveTransportBooking(event) {
   const id = workforcePageState.editingTransportId;
   const currentBooking = workforcePageState.data.transportBookings
     .find(row => String(row.id) === String(id));
-  const sourceType = document.getElementById('wfTransportSourceType').value;
   const tripType = document.getElementById('wfTransportTripType').value;
-  if (!sourceType) {
-    wfError('wfTransportBookingError', 'Choose an own-fleet or known external vehicle.');
+  const selections = wfSelectedTransportVehicles();
+  if (!selections.length) {
+    wfError('wfTransportBookingError', 'Choose at least one own-fleet or known external vehicle.');
     return;
   }
-  try {
-    const response = await apiCall(id
-      ? `/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}`
-      : `/api/events/${workforcePageState.eventId}/workforce/transport`, id ? 'PUT' : 'POST', {
-      sourceType,
-      tripType,
-      vendorId: sourceType === 'external'
-        ? document.getElementById('wfBookingVendor').value
-        : '',
-      vehicleId: sourceType === 'fleet'
-        ? document.getElementById('wfBookingFleetVehicle').value
-        : '',
-      driver: document.getElementById('wfTransportDriver').value,
-      driverContact: document.getElementById('wfTransportDriverContact').value,
-      locationFrom: document.getElementById('wfLocationFrom').value,
-      locationTo: document.getElementById('wfLocationTo').value,
-      saveLocations: document.getElementById('wfSaveBookingLocations').checked,
-      departDate: document.getElementById('wfDepartDate').value,
-      departTime: document.getElementById('wfDepartTime').value,
-      useEndDate: sourceType === 'fleet'
-        ? document.getElementById('wfVehicleUseEndDate').value
-        : '',
-      useEndTime: sourceType === 'fleet'
-        ? document.getElementById('wfVehicleUseEndTime').value
-        : '',
-      cost: document.getElementById('wfTransportCost').value,
-      twoWay: Boolean(currentBooking?.twoWay),
-      returnDate: currentBooking?.twoWay
-        ? currentBooking.returnDate
-        : '',
-      returnTime: currentBooking?.twoWay
-        ? currentBooking.returnTime
-        : '',
-      status: currentBooking?.status || 'Pending Review'
+  if (selections.length > 1) {
+    const missingDriver = selections.some(selection => {
+      const details = workforcePageState.transportDriverDetails.get(
+        wfTransportSelectionKey(selection.sourceType, selection.id)
+      );
+      return !String(details?.driver || '').trim();
     });
-    workforcePageState.data = response.data;
+    if (missingDriver) {
+      wfError('wfTransportBookingError', 'Assign a driver to every selected vehicle.');
+      return;
+    }
+  }
+  const submit = document.getElementById('wfTransportBookingSubmit');
+  if (submit) submit.disabled = true;
+  try {
+    let latestResponse = null;
+    for (const selection of selections) {
+      const individualDriver = workforcePageState.transportDriverDetails.get(
+        wfTransportSelectionKey(selection.sourceType, selection.id)
+      ) || {};
+      latestResponse = await apiCall(id
+        ? `/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}`
+        : `/api/events/${workforcePageState.eventId}/workforce/transport`, id ? 'PUT' : 'POST', {
+        sourceType: selection.sourceType,
+        subprojectId: document.getElementById('wfTransportSubproject').value,
+        tripType,
+        vendorId: selection.sourceType === 'external' ? selection.id : '',
+        vehicleId: selection.sourceType === 'fleet' ? selection.id : '',
+        driver: selections.length > 1
+          ? individualDriver.driver
+          : document.getElementById('wfTransportDriver').value,
+        driverContact: selections.length > 1
+          ? individualDriver.contact
+          : document.getElementById('wfTransportDriverContact').value,
+        locationFrom: document.getElementById('wfLocationFrom').value,
+        locationTo: document.getElementById('wfLocationTo').value,
+        saveLocations: document.getElementById('wfSaveBookingLocations').checked,
+        departDate: document.getElementById('wfDepartDate').value,
+        departTime: document.getElementById('wfDepartTime').value,
+        useEndDate: selection.sourceType === 'fleet'
+          ? document.getElementById('wfVehicleUseEndDate').value
+          : '',
+        useEndTime: selection.sourceType === 'fleet'
+          ? document.getElementById('wfVehicleUseEndTime').value
+          : '',
+        cost: document.getElementById('wfTransportCost').value,
+        twoWay: Boolean(currentBooking?.twoWay),
+        returnDate: currentBooking?.twoWay ? currentBooking.returnDate : '',
+        returnTime: currentBooking?.twoWay ? currentBooking.returnTime : '',
+        status: currentBooking?.status || 'Pending Review'
+      });
+      workforcePageState.data = latestResponse.data;
+    }
     closeWorkforceModal('wfTransportBookingModal');
     renderWorkforcePage();
-    showNotification('success', `${tripType === 'return' ? 'Return' : 'Depart'} transport saved`);
+    showNotification('success', selections.length > 1
+      ? `${selections.length} ${tripType === 'return' ? 'return' : 'depart'} transport bookings saved`
+      : `${tripType === 'return' ? 'Return' : 'Depart'} transport saved`);
   } catch (error) {
     wfError('wfTransportBookingError', error.message);
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -3382,7 +3748,7 @@ function wfReviewExpectedAmountHtml(record) {
   const breakdown = (record.expectedAmountBreakdown || []).map(row => `
     <span><strong>${wfEscape(row.role || 'Assigned role')}</strong>
       ${row.department ? ` <b>${wfEscape(row.department)}</b>` : ''}
-      <small>${wfEscape(row.calculation || '')} = ${wfMoney(row.amount)}</small></span>
+      <small>${wfEscape(row.calculation || '')}${row.amount == null ? '' : ` = ${wfMoney(row.amount)}`}</small></span>
   `).join('');
   return `<section class="wf-amount-check ${hasExpected ? '' : 'is-unavailable'}" id="wfReviewAmountCheck"
       data-expected="${hasExpected ? Number(expected) : ''}">
@@ -3436,10 +3802,6 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     showNotification('info', 'This file is still being processed. It will update automatically.');
     return;
   }
-  if (found.record.submissionStage === 'Details Required') {
-    showNotification('info', 'The worker still needs to complete this claim’s details.');
-    return;
-  }
   if (
     found.kind === 'invoice' &&
     found.record.amount == null &&
@@ -3461,6 +3823,8 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   if (!found) return;
   workforcePageState.reviewSubmissionId = id;
   const { record, freelancerId, kind } = found;
+  const detailsRequired =
+    kind === 'claim' && record.submissionStage === 'Details Required';
   const freelancer = wfFindFreelancer(freelancerId) || wfFindVendor(freelancerId) || {};
   const departments = wfDepartmentsForFreelancer(freelancerId);
   const verified = Boolean(record.verifiedAt);
@@ -3478,6 +3842,8 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     <div class="wf-preview">${pdf ? `<iframe src="${wfAttr(record.previewUrl)}#toolbar=1" title="Uploaded PDF"></iframe>`
       : `<img src="${wfAttr(record.previewUrl)}" alt="Uploaded claim">`}</div>
     <form class="wf-review-form" id="wfReviewForm"><p class="wf-form-intro">${wfEscape(freelancer.name || '')} &middot; ${wfEscape(record.originalName || '')}</p>
+      ${detailsRequired ? `<div class="wf-details-required-note"><strong>Claim details required</strong>
+        <span>Complete the missing information below on behalf of the worker before saving or approving this claim.</span></div>` : ''}
       ${wfReviewExpectedAmountHtml(record)}
       ${kind === 'invoice' ? `<div class="wf-ocr-card"><strong>Document scan</strong><br>
         Confidence: ${wfEscape(record.ocrConfidence || 'Low')} &middot; ${wfEscape(record.ocrSource || 'No extractor result')}</div>`
@@ -3486,6 +3852,9 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
       <div class="wf-form-grid">
         <label class="wf-field"><span>Verified amount ($) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required></label>
         ${kind === 'claim' ? wfReviewClaimCategoryFields(record, false) : ''}
+        ${kind === 'claim' ? `<label class="wf-field full"><span>Notes</span>
+          <textarea id="wfReviewClaimNotes" placeholder="Add a description or note for this claim">${wfEscape(record.notes || record.description || '')}</textarea>
+        </label>` : ''}
       </div>
       ${kind === 'invoice' ? `<div class="wf-section-card"><h4>Department allocation</h4>
         ${departments.map(code => `<label class="wf-allocation-row"><span>${wfEscape(code)}</span>
@@ -3531,7 +3900,9 @@ function denyWorkforceReview() {
   openWorkforceDenialReason(found.record.id, true);
 }
 
-function wfReviewDetailsChanged(record, amount, allocations, claimDate, category) {
+function wfReviewDetailsChanged(
+  record, amount, allocations, claimDate, category, notes
+) {
   const originalAmount = record.amount === null || record.amount === undefined
     ? null
     : Number(record.amount);
@@ -3545,7 +3916,8 @@ function wfReviewDetailsChanged(record, amount, allocations, claimDate, category
     .join('|');
   if (normalizeAllocations(record.allocations) !== normalizeAllocations(allocations)) return true;
   if (String(record.claimDate || '') !== String(claimDate || '')) return true;
-  return String(record.category || '') !== String(category || '');
+  if (String(record.category || '') !== String(category || '')) return true;
+  return String(record.notes || record.description || '') !== String(notes || '');
 }
 
 async function submitWorkforceReview(status, denialReason = '') {
@@ -3561,8 +3933,9 @@ async function submitWorkforceReview(status, denialReason = '') {
     }
     const amount = document.getElementById('wfReviewAmount').value;
     const claimDate = document.getElementById('wfReviewClaimDate')?.value || '';
+    const notes = document.getElementById('wfReviewClaimNotes')?.value || '';
     const detailsChanged = wfReviewDetailsChanged(
-      found.record, amount, allocations, claimDate, category
+      found.record, amount, allocations, claimDate, category, notes
     );
     const response = await apiCall(`/api/workforce/submissions/${encodeURIComponent(found.record.id)}`, 'PUT', {
       amount,
@@ -3571,6 +3944,7 @@ async function submitWorkforceReview(status, denialReason = '') {
       allocations,
       claimDate,
       category,
+      notes,
       confirmReview: true,
       clearPaymentConfirmation: Boolean(found.record.paymentConfirmedAt) && detailsChanged
     });
@@ -3585,9 +3959,28 @@ async function submitWorkforceReview(status, denialReason = '') {
 }
 
 async function deleteWorkforceSubmission(id, fromReview = false) {
+  if (!await confirmWorkforceSubmissionDeletion(id)) return false;
   const response = await apiCall(`/api/workforce/submissions/${encodeURIComponent(id)}`, 'DELETE');
   if (fromReview) closeWorkforceModal('wfReviewModal');
   await refreshAfterWorkforceSubmissionMutation(response.data);
+  return true;
+}
+
+async function confirmWorkforceSubmissionDeletion(id) {
+  const found = wfFindSubmission(id);
+  const documentRecord = wfFindDocumentSubmission(id);
+  const record = found?.record || documentRecord || {};
+  const kind = found?.kind || record.kind || 'upload';
+  const kindLabel = kind === 'invoice' ? 'invoice' : (kind === 'claim' ? 'claim' : 'upload');
+  const fileName = String(record.originalName || '').trim();
+  return showAppConfirm({
+    title: `Delete ${kindLabel}?`,
+    message: fileName
+      ? `This will permanently delete "${fileName}". This action cannot be undone.`
+      : `This will permanently delete this ${kindLabel}. This action cannot be undone.`,
+    confirmText: `Delete ${kindLabel.charAt(0).toUpperCase()}${kindLabel.slice(1)}`,
+    variant: 'danger'
+  });
 }
 
 document.addEventListener('click', () => {

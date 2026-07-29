@@ -28,6 +28,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.data_manager.inventory = {
             'A#01': self.make_asset('A#01'),
             'A#02': self.make_asset('A#02'),
+            'A#03': self.make_asset('A#03'),
             'B#01': self.make_asset('B#01', department='LX'),
         }
         self.data_manager.containers = {
@@ -130,6 +131,74 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(body['data']['addedRequirementUnits'], 1)
         self.assertNotIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|2|Matching item', event.prepared_items)
+
+    def test_quick_add_creates_room_requirement_without_consuming_matching_extras(self):
+        event = self.make_event(
+            event_id=124,
+            prepared=[
+                '[MODEL]AX|TestBrand|TestModel|1|Matching item',
+                'A#01',
+                'A#02',
+            ],
+            actual=['A#01', 'A#02'],
+            extra=['A#01', 'A#02'],
+        )
+        event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-model',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'TestModel',
+                    'description': 'Matching item',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+                'extraRefs': [],
+            },
+            {
+                'id': 'room-2',
+                'name': 'Room 2',
+                'items': [],
+                'extraRefs': ['A#01', 'A#02'],
+            },
+        ]
+
+        response = self.post_assign(
+            event.event_id,
+            asset_id='A#03',
+            quickAdd=True,
+            subprojectId='room-2',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['addedRequirementUnits'], 1)
+        self.assertFalse(response.get_json()['data']['isExtra'])
+        self.assertEqual(event.extra_assets, ['A#01', 'A#02'])
+        self.assertIn(
+            '[MODEL]AX|TestBrand|TestModel|2|Matching item',
+            event.prepared_items,
+        )
+        room = event.subprojects[1]
+        self.assertEqual(room['extraRefs'], ['A#01', 'A#02'])
+        self.assertEqual(len(room['items']), 1)
+        self.assertEqual(room['items'][0]['quantity'], 1)
+        self.assertEqual(room['items'][0]['assetRefs'], ['A#03'])
+
+        detail_response = self.client.get(f'/api/events/{event.event_id}')
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+            detail_response.get_data(as_text=True),
+        )
+        group = next(iter(detail_response.get_json()['data']['modelGroups'].values()))
+        assets = {asset['id']: asset for asset in group['assignedAssets']}
+        self.assertFalse(assets['A#03']['isExtra'])
+        self.assertTrue(assets['A#01']['isExtra'])
+        self.assertTrue(assets['A#02']['isExtra'])
 
     def test_consecutive_assignments_are_grouped_with_item_details(self):
         event = self.make_event(
@@ -557,7 +626,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(event_details['totalAssets'], 4)
         self.assertEqual(event_details['totalPrepared'], 4)
 
-    def test_removing_prepared_bulk_model_unprepares_deployment(self):
+    def test_removing_prepared_bulk_model_keeps_deployment_as_extra(self):
         self.data_manager.inventory['BULK-0001'] = self.make_asset(
             'BULK-0001',
             department='STG',
@@ -584,12 +653,24 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 5)
+        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 0)
+        self.assertEqual(response.get_json()['data']['extraQuantity'], 5)
         self.assertEqual(event.prepared_items, [])
-        self.assertEqual(event.actually_prepared, [])
-        self.assertEqual(app_module._bulk_deployments_for_asset('BULK-0001'), [])
+        self.assertEqual(event.actually_prepared, [marker])
+        self.assertEqual(event.extra_assets, [marker])
+        self.assertEqual(
+            app_module._bulk_deployments_for_asset('BULK-0001')[0]['quantity'],
+            5,
+        )
 
-    def test_removing_prepared_model_releases_specific_asset(self):
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['requiredQuantity'], 0)
+        self.assertEqual(group['preparedQuantity'], 5)
+        self.assertEqual(group['extraPreparedQuantity'], 5)
+        self.assertTrue(group['assignedAssets'][0]['isExtra'])
+
+    def test_removing_prepared_model_keeps_specific_asset_as_extra(self):
         event = self.make_event(
             event_id=110,
             prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
@@ -612,9 +693,10 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(event.prepared_items, [])
-        self.assertEqual(event.actually_prepared, [])
-        self.assertEqual(event.returned_items, [])
-        self.assertEqual(self.data_manager.inventory['A#01'].current_location, 'Store')
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertEqual(event.returned_items, ['A#01'])
+        self.assertEqual(event.extra_assets, ['A#01'])
+        self.assertEqual(self.data_manager.inventory['A#01'].current_location, event.name)
 
     def test_reducing_model_quantity_keeps_prepared_specific_assets(self):
         event = self.make_event(
@@ -643,7 +725,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         )
         self.assertEqual(event.actually_prepared, ['A#01', 'A#02'])
         self.assertEqual(event.returned_items, [])
-        self.assertEqual(event.extra_assets, [])
+        self.assertEqual(event.extra_assets, ['A#02'])
 
         details_response = self.client.get(f'/api/events/{event.event_id}')
         self.assertEqual(
@@ -656,7 +738,14 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         )
         self.assertEqual(model_group['requiredQuantity'], 1)
         self.assertEqual(model_group['preparedQuantity'], 2)
+        self.assertEqual(model_group['countablePreparedQuantity'], 1)
         self.assertEqual(model_group['extraPreparedQuantity'], 1)
+        self.assertTrue(
+            next(
+                asset for asset in model_group['assignedAssets']
+                if asset['id'] == 'A#02'
+            )['isExtra']
+        )
 
     def test_reducing_model_quantity_keeps_prepared_bulk_quantity(self):
         self.data_manager.inventory['BULK-0001'] = self.make_asset(
@@ -691,10 +780,180 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             ['[MODEL]STG|TestBrand|TestModel|3|Matching item'],
         )
         self.assertEqual(event.actually_prepared, [prepared_marker])
+        self.assertEqual(event.extra_assets, [])
         self.assertEqual(
             app_module._bulk_deployments_for_asset('BULK-0001')[0]['quantity'],
             5,
         )
+
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['requiredQuantity'], 3)
+        self.assertEqual(group['preparedQuantity'], 5)
+        self.assertEqual(group['countablePreparedQuantity'], 3)
+        self.assertEqual(group['extraPreparedQuantity'], 2)
+
+    def test_reducing_model_quantity_marks_anonymous_prepared_slots_extra(self):
+        prepared_marker = app_module._prepared_model_marker({
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Matching item',
+        }, 2)
+        event = self.make_event(
+            event_id=116,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=[prepared_marker],
+            extra=[],
+        )
+
+        self.login_as('admin', True)
+        response = self.client.put(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.actually_prepared, [prepared_marker])
+        self.assertEqual(event.extra_assets, [])
+
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['requiredQuantity'], 1)
+        self.assertEqual(group['preparedQuantity'], 2)
+        self.assertEqual(group['countablePreparedQuantity'], 1)
+        self.assertEqual(group['extraPreparedQuantity'], 1)
+
+    def test_removing_room_requirement_retains_prepared_room_row_as_extra(self):
+        event = self.make_event(
+            event_id=114,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=['A#01'],
+            extra=[],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+                'preparedQuantity': 0,
+                'assetRefs': ['A#01'],
+            }],
+        }]
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'subprojectId': 'main',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        room_item = event.subprojects[0]['items'][0]
+        self.assertEqual(room_item['quantity'], 0)
+        self.assertEqual(room_item['assetRefs'], [])
+        self.assertEqual(event.subprojects[0]['extraRefs'], ['A#01'])
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertEqual(event.extra_assets, ['A#01'])
+        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 0)
+
+    def test_room_reconciliation_repairs_stale_global_extra_classification(self):
+        event = self.make_event(
+            event_id=117,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item', 'A#02'],
+            actual=['A#01', 'A#02'],
+            extra=['A#02'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 2,
+                'preparedQuantity': 0,
+                'assetRefs': ['A#01', 'A#02'],
+            }],
+            'extraRefs': [],
+        }]
+
+        result = app_module._reconcile_event_subproject_extras(event)
+
+        self.assertTrue(result['changed'])
+        self.assertEqual(event.subprojects[0]['items'][0]['assetRefs'], ['A#01', 'A#02'])
+        self.assertEqual(event.subprojects[0]['extraRefs'], [])
+        self.assertEqual(event.extra_assets, [])
+        self.assertNotIn('A#02', event.prepared_items)
+
+    def test_partial_bulk_room_surplus_stays_attached_and_rebalances(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            department='STG',
+            is_bulk=True,
+            quantity=10,
+        )
+        marker = app_module._bulk_marker('BULK-0001', 2, 'main')
+        event = self.make_event(
+            event_id=118,
+            prepared=['[MODEL]STG|TestBrand|TestModel|1|Matching item'],
+            actual=[marker],
+            extra=[],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_1',
+                'department': 'STG',
+                'departmentCode': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+                'preparedQuantity': 0,
+                'assetRefs': [marker],
+            }],
+            'extraRefs': [],
+        }]
+
+        app_module._reconcile_event_subproject_extras(event)
+        room = event.subprojects[0]
+        self.assertEqual(room['items'][0]['assetRefs'], [marker])
+        self.assertEqual(room['extraRefs'], [])
+        self.assertEqual(event.extra_assets, [])
+
+        room['items'][0]['quantity'] = 0
+        app_module._reconcile_event_subproject_extras(event)
+        self.assertEqual(room['items'][0]['assetRefs'], [])
+        self.assertEqual(room['extraRefs'], [marker])
+        self.assertEqual(event.extra_assets, [marker])
+
+        room['items'][0]['quantity'] = 1
+        app_module._reconcile_event_subproject_extras(event)
+        self.assertEqual(room['items'][0]['assetRefs'], [marker])
+        self.assertEqual(room['extraRefs'], [])
+        self.assertEqual(event.extra_assets, [])
 
     def test_quick_add_false_overrides_container_auto_add(self):
         event = self.make_event(event_id=104)

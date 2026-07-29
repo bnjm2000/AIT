@@ -192,6 +192,50 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertEqual(self.data_manager.users['normal'].role, 'manager')
         self.assertTrue(self.data_manager.users['normal'].has_sales_access)
 
+    def test_last_company_admin_cannot_demote_self_until_another_admin_exists(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['role'] = 'admin'
+            session['is_active'] = True
+
+        blocked = self.client.put('/api/users/admin', json={'role': 'manager'})
+
+        self.assertEqual(blocked.status_code, 409, blocked.get_data(as_text=True))
+        self.assertIn('another admin', blocked.get_json()['error'])
+        self.assertEqual(self.data_manager.users['admin'].role, 'admin')
+
+        replacement = User(
+            'replacement-admin',
+            hash_password('pw', 'replacement-salt'),
+            'replacement-salt',
+            True,
+            True,
+            role='admin',
+        )
+        self.data_manager.users[replacement.username] = replacement
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies'][replacement.username] = registry['defaultCompany']
+        app_module._company_registry_cache = registry
+
+        allowed = self.client.put('/api/users/admin', json={'role': 'manager'})
+
+        self.assertEqual(allowed.status_code, 200, allowed.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['admin'].role, 'manager')
+
+    def test_last_company_admin_cannot_deactivate_self(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['role'] = 'admin'
+            session['is_active'] = True
+
+        response = self.client.put('/api/users/admin', json={'isActive': False})
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertTrue(self.data_manager.users['admin'].is_active)
+
 
 if __name__ == '__main__':
     unittest.main()

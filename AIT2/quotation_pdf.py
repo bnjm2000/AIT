@@ -5,6 +5,134 @@ from html import escape
 from datetime import datetime, timedelta
 import os
 import re
+import threading
+
+
+_CJK_TEXT_RE = re.compile(
+    r'[\u2E80-\u2EFF\u3000-\u303F\u31C0-\u31EF'
+    r'\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]+'
+)
+_CJK_FONT_LOCK = threading.Lock()
+_CJK_FONT_NAMES = {}
+
+
+def _line_system_name(line):
+    custom = re.sub(r'\s+', ' ', str((line or {}).get('systemName') or '').strip())
+    if custom:
+        return custom
+    department = re.sub(
+        r'\s+',
+        ' ',
+        str((line or {}).get('department') or '').strip(),
+    )
+    base_department = re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        department,
+        flags=re.IGNORECASE,
+    ).strip()
+    if base_department.lower() == 'manpower':
+        return 'Manpower'
+    if base_department.lower() in {'transport', 'transportation'}:
+        return 'Transportation'
+    return f'{base_department} System' if base_department else 'Unknown System'
+
+
+def _ensure_cjk_font(bold=False):
+    """Register an embedded CJK font when available, with a CID fallback."""
+    weight = 'bold' if bold else 'regular'
+    if _CJK_FONT_NAMES.get(weight):
+        return _CJK_FONT_NAMES[weight]
+
+    from reportlab.pdfbase import pdfmetrics
+
+    with _CJK_FONT_LOCK:
+        if _CJK_FONT_NAMES.get(weight):
+            return _CJK_FONT_NAMES[weight]
+
+        configured_regular = str(
+            os.environ.get('SHOWBASE_CJK_FONT') or ''
+        ).strip()
+        configured_bold = str(
+            os.environ.get('SHOWBASE_CJK_BOLD_FONT') or ''
+        ).strip()
+        regular_candidates = [
+            configured_regular,
+            os.path.join(
+                os.path.dirname(__file__),
+                'static',
+                'fonts',
+                'NotoSansSC-Regular.ttf',
+            ),
+            r'C:\Windows\Fonts\Deng.ttf',
+            r'C:\Windows\Fonts\NotoSansSC-VF.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf',
+        ]
+        bold_candidates = [
+            configured_bold,
+            os.path.join(
+                os.path.dirname(__file__),
+                'static',
+                'fonts',
+                'NotoSansSC-Bold.ttf',
+            ),
+            r'C:\Windows\Fonts\Dengb.ttf',
+            configured_regular,
+            r'C:\Windows\Fonts\Deng.ttf',
+            r'C:\Windows\Fonts\NotoSansSC-VF.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansSC-Bold.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf',
+        ]
+        font_name = 'ShowbaseCJKBold' if bold else 'ShowbaseCJK'
+        candidates = bold_candidates if bold else regular_candidates
+        for font_path in candidates:
+            if not font_path or not os.path.isfile(font_path):
+                continue
+            try:
+                from reportlab.pdfbase.ttfonts import TTFont
+
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+                _CJK_FONT_NAMES[weight] = font_name
+                return font_name
+            except Exception:
+                continue
+
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        try:
+            pdfmetrics.getFont('STSong-Light')
+        except KeyError:
+            pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        _CJK_FONT_NAMES[weight] = 'STSong-Light'
+        return _CJK_FONT_NAMES[weight]
+
+
+def _has_cjk(value):
+    return bool(_CJK_TEXT_RE.search(str(value or '')))
+
+
+def _cjk_markup(value, bold=False):
+    value = str(value or '')
+    if not _has_cjk(value):
+        return value
+    font_name = _ensure_cjk_font(bold=bold)
+    return _CJK_TEXT_RE.sub(
+        lambda match: (
+            f'<font name="{font_name}">{match.group(0)}</font>'
+        ),
+        value,
+    )
+
+
+def _canvas_font(value, latin_font):
+    return (
+        _ensure_cjk_font(bold='bold' in latin_font.casefold())
+        if _has_cjk(value)
+        else latin_font
+    )
 
 
 def _text(value):
@@ -28,7 +156,13 @@ def _paragraph(value, style):
     from reportlab.platypus import Paragraph
 
     safe = escape(_text(value)).replace('\n', '<br/>')
-    return Paragraph(safe, style)
+    return Paragraph(
+        _cjk_markup(
+            safe,
+            bold='bold' in str(getattr(style, 'fontName', '')).casefold(),
+        ),
+        style,
+    )
 
 
 def _money(value, currency='SGD'):
@@ -56,18 +190,29 @@ def _schedule_date_summary(rows):
         if not isinstance(row, dict):
             continue
         raw = str(row.get('date') or '').strip()
-        if not raw or raw in seen:
+        time_value = str(row.get('time') or '').strip()
+        identity = (raw, time_value.casefold())
+        if not raw or identity in seen:
             continue
-        seen.add(raw)
+        seen.add(identity)
         try:
-            parsed.append((datetime.strptime(raw, '%Y-%m-%d').date(), str(row.get('time') or '').strip()))
+            parsed.append((datetime.strptime(raw, '%Y-%m-%d').date(), time_value))
         except ValueError:
-            unparsed.append((_date(raw), str(row.get('time') or '').strip()))
+            unparsed.append((_date(raw), time_value))
 
     parsed.sort(key=lambda item: item[0])
+    date_counts = {}
+    for value, _time_value in parsed:
+        date_counts[value] = date_counts.get(value, 0) + 1
     groups = []
     for value, time_value in parsed:
-        if groups and value == groups[-1][-1][0] + timedelta(days=1):
+        previous_date = groups[-1][-1][0] if groups else None
+        if (
+            groups
+            and value == previous_date + timedelta(days=1)
+            and date_counts.get(previous_date) == 1
+            and date_counts.get(value) == 1
+        ):
             groups[-1].append((value, time_value))
         else:
             groups.append([(value, time_value)])
@@ -106,7 +251,7 @@ def _schedule_date_summary(rows):
         f"{date_label}{f', {format_time(time_value)}' if time_value else ''}"
         for date_label, time_value in unparsed
     ]
-    return ', '.join([*(format_group(group) for group in groups), *unparsed_labels])
+    return '; '.join([*(format_group(group) for group in groups), *unparsed_labels])
 
 
 def _validity_label(document):
@@ -278,8 +423,9 @@ def build_finance_pdf(document, company, logo_path=''):
         for line in str(company.get('letterheadText') or '').splitlines()
         if _text(line).strip()
     ]
+    letterhead_enabled = company.get('letterheadEnabled', True) is not False
     company_name = _text(company.get('companyName')).strip()
-    company_lines = letterhead_lines or [
+    company_lines = (letterhead_lines or [
         company_name,
         f"UEN / Reg No: {_text(company.get('registrationNumber'))}" if company.get('registrationNumber') else '',
         _text(company.get('billingAddress')),
@@ -290,7 +436,7 @@ def build_finance_pdf(document, company, logo_path=''):
                 _text(company.get('website')),
             ) if value
         ),
-    ]
+    ]) if letterhead_enabled else []
     company_lines = [line for line in company_lines if line]
     company_detail_lines = [
         line for line in company_lines
@@ -320,29 +466,33 @@ def build_finance_pdf(document, company, logo_path=''):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if not logo_drawn:
-            canvas.setFont('Helvetica-Bold', 15)
+        if letterhead_enabled and not logo_drawn:
+            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 15)
             canvas.setFillColor(ink)
             canvas.drawString(margin, page_height - 14 * mm, company_name[:34])
 
-        if logo_drawn and company_name:
+        if letterhead_enabled and logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont('Helvetica-Bold', 8.8)
+            canvas.setFont(
+                _canvas_font(company_name, 'Helvetica-Bold'),
+                8.8,
+            )
             canvas.drawRightString(page_width - margin, page_height - 9.5 * mm, company_name[:72])
 
-        canvas.setFillColor(muted)
-        canvas.setFont('Helvetica', 6.4)
-        y = page_height - 12.8 * mm if logo_drawn and company_name else page_height - 10 * mm
-        for line in company_detail_lines[:4]:
-            canvas.drawRightString(page_width - margin, y, line[:100])
-            y -= 3 * mm
+        if letterhead_enabled:
+            canvas.setFillColor(muted)
+            y = page_height - 12.8 * mm if logo_drawn and company_name else page_height - 10 * mm
+            for line in company_detail_lines[:4]:
+                canvas.setFont(_canvas_font(line, 'Helvetica'), 6.4)
+                canvas.drawRightString(page_width - margin, y, line[:100])
+                y -= 3 * mm
 
         canvas.setStrokeColor(rule)
         canvas.setLineWidth(0.5)
         canvas.line(margin, 14 * mm, page_width - margin, 14 * mm)
         canvas.setFillColor(muted)
-        canvas.setFont('Helvetica', 6.2)
         footer_line = footer_text.replace('\n', ' | ') if footer_text else company_lines[0] if company_lines else ''
+        canvas.setFont(_canvas_font(footer_line, 'Helvetica'), 6.2)
         canvas.drawString(margin, 9 * mm, footer_line[:125])
         canvas.restoreState()
 
@@ -471,7 +621,7 @@ def build_finance_pdf(document, company, logo_path=''):
         if document.get(key):
             event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(document[key]))}")
     for event_label, date_key, time_key, additional_key in (
-        ('Set-up', 'setupDate', 'setupTime', None),
+        ('Set-up', 'setupDate', 'setupTime', 'additionalSetups'),
         ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals'),
         ('Show', 'showDate', 'showTime', 'additionalShows'),
         ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns'),
@@ -490,7 +640,9 @@ def build_finance_pdf(document, company, logo_path=''):
             if document_type == 'invoice' and document.get('sourceQuotationNumber')
             else ''
         )
-        event_panel_cells = [Paragraph('<br/>'.join(event_bits), body)]
+        event_panel_cells = [
+            Paragraph(_cjk_markup('<br/>'.join(event_bits)), body)
+        ]
         event_panel_widths = [doc.width]
         if quotation_reference:
             event_panel_cells.append(_paragraph(quotation_reference, project_reference_style))
@@ -511,12 +663,8 @@ def build_finance_pdf(document, company, logo_path=''):
         story.extend([event_panel, Spacer(1, 4 * mm)])
 
     departments = []
-    for department in document.get('departments') or []:
-        department = str(department or '').strip()
-        if department and department not in departments:
-            departments.append(department)
     for line in lines:
-        department = str(line.get('department') or 'General').strip() or 'General'
+        department = _line_system_name(line)
         if department not in departments:
             departments.append(department)
 
@@ -545,7 +693,7 @@ def build_finance_pdf(document, company, logo_path=''):
             for line in lines:
                 if str(line.get('subprojectId') or 'main') != subproject_id:
                     continue
-                department = str(line.get('department') or 'General').strip() or 'General'
+                department = _line_system_name(line)
                 if department not in subproject_departments:
                     subproject_departments.append(department)
             export_groups.extend(
@@ -557,7 +705,7 @@ def build_finance_pdf(document, company, logo_path=''):
         subproject_id = str(subproject.get('id') or 'main')
         department_lines = [
             line for line in lines
-            if (str(line.get('department') or 'General').strip() or 'General') == department
+            if _line_system_name(line) == department
             and str(line.get('subprojectId') or 'main') == subproject_id
         ]
         if not department_lines:
@@ -571,6 +719,7 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         department_summaries.append({
             'name': department,
+            'department': department,
             'subprojectId': subproject_id,
             'subprojectName': str(subproject.get('name') or 'Room'),
             'lineCount': len(department_lines),
@@ -600,7 +749,7 @@ def build_finance_pdf(document, company, logo_path=''):
                 ])
         department_lines = [
             line for line in lines
-            if (str(line.get('department') or 'General').strip() or 'General') == department
+            if _line_system_name(line) == department
             and str(line.get('subprojectId') or 'main') == subproject_id
         ]
         if not department_lines:
@@ -674,7 +823,7 @@ def build_finance_pdf(document, company, logo_path=''):
                 adjustment_index = len(table_rows)
                 table_rows.append([
                     '',
-                    _paragraph(adjustment.get('label') or 'Department discount', body),
+                    _paragraph(adjustment.get('label') or 'System discount', body),
                     '', '', '', '',
                     _paragraph(_money(adjustment.get('amount'), currency), right),
                 ])
@@ -719,9 +868,12 @@ def build_finance_pdf(document, company, logo_path=''):
 
     tax_label = _text(company.get('taxLabel') or 'Tax')
     tax_rate = float(document.get('taxRate') or 0)
-    use_subproject_summary = len(subprojects) > 1
+    use_subproject_summary = (
+        len(subprojects) > 1
+        and document.get('summaryBySubproject', True) is not False
+    )
     story.append(_paragraph(
-        'SUB-PROJECT SUMMARY' if use_subproject_summary else 'DEPARTMENT SUMMARY',
+        'SUB-PROJECT SUMMARY' if use_subproject_summary else 'SYSTEM SUMMARY',
         section_title,
     ))
     if department_summaries:
@@ -737,9 +889,23 @@ def build_finance_pdf(document, company, logo_path=''):
                         'total': sum(row['total'] for row in rows),
                     })
         else:
-            summary_source = department_summaries
+            summary_source = []
+            summaries_by_department = {}
+            for row in department_summaries:
+                department = row['department']
+                summary = summaries_by_department.get(department)
+                if summary is None:
+                    summary = {
+                        'name': department,
+                        'lineCount': 0,
+                        'total': 0,
+                    }
+                    summaries_by_department[department] = summary
+                    summary_source.append(summary)
+                summary['lineCount'] += row['lineCount']
+                summary['total'] += row['total']
         department_summary_rows = [[
-            _paragraph('SUB-PROJECT' if use_subproject_summary else 'DEPARTMENT', table_header_label),
+            _paragraph('SUB-PROJECT' if use_subproject_summary else 'SYSTEM', table_header_label),
             _paragraph('LINE ITEMS', table_header_center),
             _paragraph('SUBTOTAL', table_header_right),
         ]]
@@ -826,7 +992,7 @@ def build_finance_pdf(document, company, logo_path=''):
     if document_type == 'invoice' and payment_lines:
         story.append(KeepTogether([
             _paragraph('PAYMENT DETAILS', section_title),
-            Paragraph('<br/>'.join(payment_lines), body),
+            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
         ]))
     if terms:
         story.append(KeepTogether([

@@ -1,5 +1,6 @@
-#vehicles-section {
-  --vehicle-green: var(--primary-color, #0f766e);
+#vehicles-section,
+.vehicle-modal {
+  --vehicle-green: var(--theme-primary, var(--brand-main, #0f766e));
   --vehicle-green-dark: #0b5f58;
   --vehicle-green-soft: #e7f5f1;
   --vehicle-blue: #236b9b;
@@ -82,9 +83,22 @@
 }
 
 .vehicle-button.primary {
-  border-color: var(--vehicle-green);
-  background: var(--vehicle-green);
+  border-color: var(--vehicle-green, #0f766e);
+  background: var(--vehicle-green, #0f766e);
   color: #fff;
+}
+
+.vehicle-button.primary:hover {
+  border-color: var(--vehicle-green-dark, #0b5f58);
+  background: var(--vehicle-green-dark, #0b5f58);
+  color: #fff;
+}
+
+.vehicle-button:disabled,
+.vehicle-icon-button:disabled {
+  opacity: .52;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .vehicle-button.secondary {
@@ -170,6 +184,55 @@
   color: #486158;
   font-size: 11px;
   font-weight: 750;
+}
+
+.vehicle-date-navigation {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vehicle-date-step {
+  display: grid;
+  width: 36px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #cbd9d4;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--vehicle-green-dark);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.vehicle-date-step:hover {
+  border-color: var(--vehicle-green);
+  background: var(--vehicle-green-soft);
+  color: var(--vehicle-green-dark);
+}
+
+.vehicle-date-step:focus-visible {
+  outline: 2px solid var(--vehicle-green);
+  outline-offset: 2px;
+}
+
+.vehicle-date-today {
+  width: auto;
+  min-width: 54px;
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.vehicle-date-today.is-current {
+  border-color: var(--vehicle-green);
+  background: var(--vehicle-green-soft);
+  color: var(--vehicle-green-dark);
 }
 
 .vehicle-date-control input,
@@ -312,6 +375,51 @@
   cursor: grab;
   touch-action: none;
   transition: box-shadow 120ms ease, filter 120ms ease;
+}
+
+.vehicle-booking.event-booking {
+  border-color: color-mix(in srgb, var(--vehicle-booking-color, #0f766e) 78%, #172b26);
+  background: var(--vehicle-booking-color, #0f766e);
+  color: #fff;
+}
+
+.vehicle-booking.event-status-new,
+.vehicle-booking.event-status-added {
+  --vehicle-booking-color: #ec407a;
+}
+
+.vehicle-booking.event-status-planning {
+  --vehicle-booking-color: #6d28d9;
+}
+
+.vehicle-booking.event-status-preparing {
+  --vehicle-booking-color: #0877e8;
+}
+
+.vehicle-booking.event-status-ready {
+  --vehicle-booking-color: #16a34a;
+}
+
+.vehicle-booking.event-status-ongoing,
+.vehicle-booking.event-status-last-day {
+  --vehicle-booking-color: #0b97a4;
+}
+
+.vehicle-booking.event-status-returning {
+  --vehicle-booking-color: #f97316;
+}
+
+.vehicle-booking.event-status-pending-closure {
+  --vehicle-booking-color: #334155;
+}
+
+.vehicle-booking.event-status-overdue {
+  --vehicle-booking-color: #ef3340;
+}
+
+.vehicle-booking.event-status-closed,
+.vehicle-booking.event-status-cancelled {
+  --vehicle-booking-color: #64748b;
 }
 
 .vehicle-booking.standalone-booking {
@@ -487,6 +595,14 @@
   animation: vehiclePanelIn 170ms ease-out;
 }
 
+.vehicle-booking-modal-panel {
+  width: min(760px, 100%);
+}
+
+#vehicleEditorModal.open {
+  z-index: 11002;
+}
+
 .vehicle-modal-panel > header {
   display: flex;
   align-items: flex-start;
@@ -594,6 +710,138 @@
   font-size: 11px;
 }
 
+.vehicle-booking-choice-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 2px solid var(--vehicle-line);
+}
+
+.vehicle-booking-choice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.vehicle-booking-choice-heading h4,
+.vehicle-booking-choice-heading p {
+  margin: 0;
+}
+
+.vehicle-booking-choice-heading h4 {
+  font-size: 13px;
+}
+
+.vehicle-booking-choice-heading p {
+  margin-top: 3px;
+  color: var(--vehicle-muted);
+  font-size: 10px;
+}
+
+.vehicle-booking-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.vehicle-booking-choice {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 10px;
+  padding: 10px 11px;
+  border: 1px solid #d5e1dd;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--vehicle-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 130ms ease, background-color 130ms ease, box-shadow 130ms ease;
+}
+
+.vehicle-booking-choice:not(:disabled):hover,
+.vehicle-booking-choice.selected {
+  border-color: var(--vehicle-green);
+  background: var(--vehicle-green-soft);
+}
+
+.vehicle-booking-choice.selected {
+  box-shadow: inset 0 0 0 1px var(--vehicle-green);
+}
+
+.vehicle-booking-choice:disabled {
+  cursor: not-allowed;
+}
+
+.vehicle-booking-choice.unavailable {
+  background: #f5f7f6;
+  color: #7b8984;
+}
+
+.vehicle-booking-choice > span,
+.vehicle-booking-choice strong,
+.vehicle-booking-choice small {
+  min-width: 0;
+}
+
+.vehicle-booking-choice strong,
+.vehicle-booking-choice small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehicle-booking-choice strong {
+  font-size: 11px;
+}
+
+.vehicle-booking-choice small {
+  margin-top: 2px;
+  color: var(--vehicle-muted);
+  font-size: 9px;
+}
+
+.vehicle-booking-choice em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #edf1ef;
+  color: #687771;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.vehicle-booking-choice em.available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.vehicle-booking-choice em.unavailable {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.vehicle-booking-choice .vehicle-booking-conflict {
+  grid-column: 1 / -1;
+  white-space: normal;
+}
+
+.vehicle-booking-choice-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed #cbd9d4;
+  border-radius: 6px;
+  background: #f7faf9;
+  color: var(--vehicle-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
 .vehicle-modal footer {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
@@ -652,6 +900,16 @@
     width: 100%;
   }
 
+  .vehicle-date-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vehicle-date-navigation input {
+    min-width: 0;
+    flex: 1;
+  }
+
   .vehicle-metric {
     padding: 11px;
   }
@@ -685,6 +943,15 @@
 
   .vehicle-form-grid .full {
     grid-column: auto;
+  }
+
+  .vehicle-booking-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-booking-choice-heading {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .vehicle-modal {

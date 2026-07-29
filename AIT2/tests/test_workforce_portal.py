@@ -125,6 +125,19 @@ class WorkforcePortalTests(unittest.TestCase):
         result = _amount_from_text("TotaI (SGD) INCL.GST 11.85")
         self.assertEqual(result["amount"], 11.85)
 
+        result = _amount_from_text(
+            """
+            Engineer 01 400 1 400 -
+            Total amount payable: 400 -
+            Payment is to be made within three(3) months upon receipt of this invoice.
+            Late fees are charged at zero point five (0.5) percent (%) of the
+            Total amount payable after three(3) months of no payment.
+            """
+        )
+        self.assertEqual(result["amount"], 400.00)
+        self.assertEqual(result["confidence"], "High")
+        self.assertEqual(result["matchedText"], "Total amount payable: 400 -")
+
     def test_admin_submission_queue_defaults_to_attention_and_sorts_by_event_then_name(self):
         later_event = Event(
             144,
@@ -223,6 +236,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(data["attentionTotal"], 3)
         self.assertEqual(data["statusCounts"]["awaiting-upload"], 1)
         self.assertEqual(data["statusCounts"]["awaiting-confirmation"], 1)
+        self.assertEqual(data["statusCounts"]["paid"], 1)
         self.assertEqual(data["rows"][0]["event"]["startDateValue"], "2026-07-20")
         self.assertEqual(data["rows"][0]["event"]["state"], "New")
         self.assertEqual(data["rows"][0]["departmentDetails"][0]["code"], "AU")
@@ -247,11 +261,68 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertTrue(awaiting["rows"][0]["isAwaitingUpload"])
         self.assertNotIn("downloadUrl", awaiting["rows"][0])
 
+        paid = self.client.get(
+            "/api/workforce/submissions?status=paid"
+        ).get_json()["data"]
+        self.assertEqual(
+            [row["id"] for row in paid["rows"]],
+            ["claim-paid"],
+        )
+
         self.login("normal", False)
         self.assertEqual(
             self.client.get("/api/workforce/submissions").status_code,
             403,
         )
+
+    def test_submission_queue_uses_status_filters_and_delete_confirmation(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        filter_source = source.split(
+            "const WF_DOCUMENT_STATUS_FILTERS", 1
+        )[1].split("function wfDocumentStatusClass", 1)[0]
+        for label in (
+            "Pending Review",
+            "Awaiting upload",
+            "Approved / To pay",
+            "Paid",
+            "Awaiting confirmation",
+            "Confirmed",
+            "Denied",
+        ):
+            self.assertIn(label, filter_source)
+        self.assertIn(
+            "statuses: new Set(['to-review', 'to-pay'])",
+            source,
+        )
+        self.assertIn(
+            "active ? `${wfDocumentStatusClass(key)} active` : ''",
+            source,
+        )
+        self.assertLess(
+            filter_source.index("Awaiting upload"),
+            filter_source.index("Pending Review"),
+        )
+        self.assertIn(
+            "'to-review': 'status-pending-review'",
+            source,
+        )
+        self.assertIn(
+            "confirmWorkforceSubmissionDeletion(submissionId)",
+            source,
+        )
+        self.assertIn(
+            "confirmWorkforceSubmissionDeletion(id)",
+            source,
+        )
+        self.assertIn("This action cannot be undone.", source)
 
     def test_event_overview_exposes_operations_without_financial_data(self):
         event = self.manager.events[143]
@@ -666,6 +737,94 @@ class WorkforcePortalTests(unittest.TestCase):
         app_module.update_event_state(event)
         self.assertEqual(event.state, "Pending Closure")
 
+    def test_manpower_only_event_closes_when_every_invoice_is_paid(self):
+        freelancer_id = self.create_worker_assignment()
+        event = self.manager.events[143]
+        event.prepared_items = []
+        event.actually_prepared = []
+        event.returned_items = []
+        event.extra_assets = []
+        event.start_date = "20260701"
+        event.end_date = "20260702"
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Pending Closure")
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce.setdefault("submissions", {}).setdefault(
+                "143", {}
+            )[freelancer_id] = {
+                "invoices": [{
+                    "id": "invoice-paid",
+                    "status": "Paid",
+                }],
+                "claims": [],
+            }
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Closed")
+
+    def test_worker_assignment_allows_role_and_rate_to_be_added_later(self):
+        self.login("admin", True)
+        worker_response = self.client.post(
+            "/api/workforce/freelancers",
+            json={"name": "Unrated Worker", "phone": "9333 2211"},
+        )
+        self.assertEqual(worker_response.status_code, 200)
+        freelancer_id = worker_response.get_json()["data"]["id"]
+
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "freelancerId": freelancer_id,
+                "department": "AU",
+                "days": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assignment = response.get_json()["data"]["assignments"][0]
+        self.assertEqual(assignment["roleName"], "")
+        self.assertIsNone(assignment["dailyRate"])
+
+        expectation = app_module._workforce_submission_expectation(
+            load_workforce(self.manager.data_folder),
+            143,
+            freelancer_id,
+        )
+        self.assertIsNone(expectation["expectedAmount"])
+        self.assertEqual(
+            expectation["expectedAmountBreakdown"][0]["calculation"],
+            "Rate not set",
+        )
+
+        response = self.client.put(
+            f"/api/events/143/workforce/assignments/{assignment['id']}",
+            json={
+                "department": "AU",
+                "days": 1,
+                "customRole": "",
+                "dailyRate": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+    def test_workforce_event_picker_refreshes_options_when_opened(self):
+        static_root = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "static"
+        )
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+
+        chooser = source[
+            source.index("function openWorkforceEventChooser()"):
+            source.index("function workforceEventChooserFilteredEvents()")
+        ]
+        self.assertIn("refreshWorkforceEventChooserOptions()", chooser)
+        self.assertIn("startProgressiveEventOptions(", chooser)
+
     def test_event_departments_come_from_assets_and_allow_manual_additions(self):
         self.login("admin", True)
         response = self.client.get("/api/events/143/workforce")
@@ -1064,6 +1223,70 @@ class WorkforcePortalTests(unittest.TestCase):
             {row["kind"] for row in timeline_data["bookings"]},
             {"standalone", "event"},
         )
+        event_rows = [
+            row for row in timeline_data["bookings"]
+            if row["kind"] == "event"
+        ]
+        self.assertTrue(event_rows)
+        self.assertEqual(
+            {row["eventState"] for row in event_rows},
+            {self.manager.events[143].state},
+        )
+
+    def test_vehicle_booking_ui_is_details_first_and_status_coloured(self):
+        root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(root, "static", "js", "vehicles.js"),
+            encoding="utf-8",
+        ) as script_file:
+            script = script_file.read()
+        with open(
+            os.path.join(root, "static", "css", "vehicles.css"),
+            encoding="utf-8",
+        ) as css_file:
+            stylesheet = css_file.read()
+
+        self.assertLess(
+            script.index('id="vehicleBookingPurpose"'),
+            script.index('id="vehicleBookingChoices"'),
+        )
+        self.assertIn("/api/vehicles/availability?${params}", script)
+        self.assertIn("renderVehicleBookingChoices(vehicles, true", script)
+        self.assertIn("event-status-${vehicleEventStateSlug(booking.eventState)}", script)
+        self.assertIn('aria-label="Previous day"', script)
+        self.assertIn('aria-label="Next day"', script)
+        self.assertIn("function shiftVehicleTimelineDate(days)", script)
+        self.assertIn('onclick="showVehicleTimelineToday()"', script)
+        self.assertIn("function showVehicleTimelineToday()", script)
+        self.assertIn(
+            "viewEvent(Number(booking.eventId), { updateHistory: false })",
+            script,
+        )
+        self.assertIn(".vehicle-modal {", stylesheet)
+        self.assertIn(".vehicle-date-step", stylesheet)
+        self.assertIn(".vehicle-date-today", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-planning", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-preparing", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-ready", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-ongoing", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-returning", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-pending-closure", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-overdue", stylesheet)
+        self.assertIn(".vehicle-booking.event-status-closed", stylesheet)
+
+    def test_successful_mutation_without_endpoint_log_gets_a_system_audit_entry(self):
+        self.login("admin", True)
+
+        response = self.client.post(
+            "/api/workforce/roles",
+            json={"name": "RF Technician", "department": "AX"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            self.manager.logs[-1].action,
+            "Created a workforce role",
+        )
 
     def test_external_trip_does_not_require_a_vehicle_return_time(self):
         self.login("admin", True)
@@ -1376,6 +1599,96 @@ class WorkforcePortalTests(unittest.TestCase):
         saved_claim = saved["submissions"]["143"][freelancer_id]["claims"][0]
         self.assertTrue(saved_claim["detailsComplete"])
 
+    def test_admin_can_complete_and_review_claim_details_for_worker(self):
+        freelancer_id = self.create_worker_assignment()
+        with mutate_workforce(self.tempdir.name) as workforce:
+            workforce["submissions"] = {
+                "143": {
+                    freelancer_id: {
+                        "invoices": [],
+                        "claims": [{
+                            "id": "claim-details-required",
+                            "originalName": "taxi-receipt.png",
+                            "storedPath": "placeholder/taxi-receipt.png",
+                            "contentType": "image/png",
+                            "submittedAt": now_iso(),
+                            "status": "Pending Review",
+                            "amount": 18.75,
+                            "claimDate": "",
+                            "category": "",
+                            "description": "",
+                            "notes": "",
+                            "department": "AU",
+                            "detailsComplete": False,
+                            "submissionStage": "Details Required",
+                            "processingState": "Complete",
+                            "reviewHistory": [],
+                        }],
+                    }
+                }
+            }
+
+        self.login("admin", True)
+        incomplete = self.client.put(
+            "/api/workforce/submissions/claim-details-required",
+            json={
+                "amount": "18.75",
+                "status": "Pending Review",
+                "claimDate": "2026-07-10",
+                "category": "",
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(incomplete.status_code, 400)
+        self.assertIn("date and category", incomplete.get_json()["error"])
+
+        completed = self.client.put(
+            "/api/workforce/submissions/claim-details-required",
+            json={
+                "amount": "18.75",
+                "status": "Pending Review",
+                "claimDate": "2026-07-10",
+                "category": "Transport",
+                "notes": "Taxi to the event venue",
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(
+            completed.status_code, 200, completed.get_data(as_text=True)
+        )
+        payload = completed.get_json()["data"]
+        claim = payload["submissions"][freelancer_id]["claims"][0]
+        self.assertTrue(claim["detailsComplete"])
+        self.assertEqual(claim["submissionStage"], "Submitted")
+        self.assertEqual(claim["claimDate"], "2026-07-10")
+        self.assertEqual(claim["category"], "Transport")
+        self.assertEqual(claim["notes"], "Taxi to the event venue")
+        self.assertEqual(claim["detailsCompletedByAdmin"], "admin")
+        self.assertEqual(payload["totals"]["claims"], 18.75)
+
+    def test_admin_review_ui_opens_details_required_claims(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        review_source = source.split(
+            "async function openWorkforceReview", 1
+        )[1].split("function updateAllocationProgress", 1)[0]
+        document_source = source.split(
+            "async function openWorkforceDocumentSubmission", 1
+        )[1].split("function toggleWorkforceDocumentStatusMenu", 1)[0]
+        self.assertNotIn("worker still needs to complete", review_source)
+        self.assertIn("Claim details required", review_source)
+        self.assertIn('id="wfReviewClaimNotes"', review_source)
+        self.assertNotIn(
+            "'details-required'].includes(statusKey)", document_source
+        )
+
     def test_admin_can_confirm_payment_for_worker(self):
         freelancer_id = self.create_worker_assignment()
         token = self.worker_token()
@@ -1640,6 +1953,35 @@ class WorkforcePortalTests(unittest.TestCase):
         approved = response.get_json()["data"]["transportBookings"][0]
         self.assertEqual(approved["status"], "Approved")
 
+    def test_return_transport_defaults_reverse_departure_and_use_event_end_date(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            styles = source_file.read()
+
+        self.assertIn("function applyTransportReturnDefaults()", source)
+        self.assertIn("tripDate.value = eventEndDate", source)
+        self.assertIn("departure.locationTo", source)
+        self.assertIn("departure.locationFrom", source)
+        self.assertIn("setTransportTripType(tripType, false)", source)
+        self.assertIn('class="wf-route-arrow"', source)
+        self.assertIn(".wf-location-direction", styles)
+        self.assertIn(".wf-route-arrow", styles)
+        self.assertIn(".wf-transport-meta > div > span", styles)
+        self.assertIn("function wfSelectedTransportVehicles()", source)
+        self.assertIn("Choose one or more vehicles", source)
+        self.assertIn("for (const selection of selections)", source)
+        self.assertIn("Assign a driver to every selected vehicle", source)
+        self.assertNotIn("duplicate driver", source.lower())
+        self.assertIn(".wf-booking-driver-row", styles)
+
     def test_saved_transport_locations_keep_venue_and_address(self):
         self.login("admin", True)
         response = self.client.post(
@@ -1691,6 +2033,157 @@ class WorkforcePortalTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_workforce_assignments_support_the_same_person_in_multiple_rooms(self):
+        event = self.manager.events[143]
+        event.subprojects = [
+            {"id": "room-main", "name": "Main Room", "items": []},
+            {"id": "room-breakout", "name": "Breakout Room", "items": []},
+        ]
+        self.manager.save_event(event)
+        self.login("admin", True)
+        worker = self.client.post(
+            "/api/workforce/freelancers",
+            json={"name": "Alex Multiroom", "phone": "9888 1122"},
+        ).get_json()["data"]
+
+        for room_id, role in (
+            ("room-main", "Audio Engineer"),
+            ("room-breakout", "Breakout Technician"),
+        ):
+            response = self.client.post(
+                "/api/events/143/workforce/assignments",
+                json={
+                    "freelancerId": worker["id"],
+                    "subprojectId": room_id,
+                    "department": "AU",
+                    "customRole": role,
+                    "workDates": ["2026-07-10"],
+                    "dailyRate": 280,
+                },
+            )
+            self.assertEqual(
+                response.status_code, 200, response.get_data(as_text=True)
+            )
+
+        payload = self.client.get(
+            "/api/events/143/workforce"
+        ).get_json()["data"]
+        assignments = [
+            row for row in payload["assignments"]
+            if row["freelancerId"] == worker["id"]
+        ]
+        self.assertEqual(len(assignments), 2)
+        self.assertEqual(
+            {row["subprojectId"] for row in assignments},
+            {"room-main", "room-breakout"},
+        )
+        self.assertEqual(
+            {row["subprojectName"] for row in assignments},
+            {"Main Room", "Breakout Room"},
+        )
+        self.assertEqual(
+            [row["name"] for row in payload["subprojects"]],
+            ["Main Room", "Breakout Room"],
+        )
+
+        invalid = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "freelancerId": worker["id"],
+                "subprojectId": "missing-room",
+                "department": "AU",
+                "customRole": "Invalid",
+                "workDates": ["2026-07-10"],
+                "dailyRate": 100,
+            },
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("valid event room", invalid.get_json()["error"])
+
+    def test_fleet_vehicle_conflicts_remain_global_across_event_rooms(self):
+        event = self.manager.events[143]
+        event.subprojects = [
+            {"id": "room-main", "name": "Main Room", "items": []},
+            {"id": "room-breakout", "name": "Breakout Room", "items": []},
+        ]
+        self.manager.save_event(event)
+        self.login("admin", True)
+
+        vehicle_ids = []
+        for registration in ("GBD 1001A", "GBD 1002B"):
+            response = self.client.post(
+                "/api/vehicles",
+                json={
+                    "registrationNumber": registration,
+                    "vehicleType": "14ft Lorry",
+                    "name": registration,
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+            vehicle_ids.append(response.get_json()["data"]["id"])
+
+        def book(vehicle_id, room_id, start_time, end_time):
+            return self.client.post(
+                "/api/events/143/workforce/transport",
+                json={
+                    "sourceType": "fleet",
+                    "tripType": "depart",
+                    "subprojectId": room_id,
+                    "vehicleId": vehicle_id,
+                    "driver": "Test Driver",
+                    "locationFrom": "Warehouse",
+                    "locationTo": "Test Venue",
+                    "departDate": "2026-07-10",
+                    "departTime": start_time,
+                    "useEndDate": "2026-07-10",
+                    "useEndTime": end_time,
+                },
+            )
+
+        main_booking = book(
+            vehicle_ids[0], "room-main", "09:00", "12:00"
+        )
+        self.assertEqual(main_booking.status_code, 200)
+        self.assertEqual(
+            main_booking.get_json()["data"]["transportBookings"][0][
+                "subprojectName"
+            ],
+            "Main Room",
+        )
+
+        conflict = book(
+            vehicle_ids[0], "room-breakout", "10:00", "11:00"
+        )
+        self.assertEqual(conflict.status_code, 409)
+        self.assertIn("already booked", conflict.get_json()["error"])
+
+        breakout_booking = book(
+            vehicle_ids[1], "room-breakout", "10:00", "11:00"
+        )
+        self.assertEqual(breakout_booking.status_code, 200)
+        bookings = breakout_booking.get_json()["data"]["transportBookings"]
+        self.assertEqual(
+            {row["subprojectId"] for row in bookings},
+            {"room-main", "room-breakout"},
+        )
+
+    def test_workforce_page_exposes_room_tabs_and_room_selectors(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("function wfSubprojectTabsHtml()", source)
+        self.assertIn("All Rooms", source)
+        self.assertIn('id="wfAssignmentSubproject"', source)
+        self.assertIn('id="wfVendorAssignmentSubproject"', source)
+        self.assertIn('id="wfTransportSubproject"', source)
+        self.assertIn("subprojectId: document.getElementById", source)
 
     def test_admin_can_upload_multiple_claims_in_one_request(self):
         freelancer_id = self.create_worker_assignment()
@@ -2147,6 +2640,35 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("new DataTransfer()", admin_source)
         self.assertIn("event-dropzone", worker_source)
         self.assertIn("dataTransfer.files", worker_source)
+
+    def test_department_assignment_actions_are_in_the_collapsed_header(self):
+        static_root = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+        )
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            styles = source_file.read()
+
+        department_renderer = source.split(
+            "function wfDepartmentHtml", 1
+        )[1].split("function wfTransportCardLegacy", 1)[0]
+        summary = department_renderer.split("<summary>", 1)[1].split(
+            "</summary>", 1
+        )[0]
+        for label in ("+ Add worker", "+ Add Vendor", "Remove department"):
+            self.assertIn(label, summary)
+        self.assertIn("wf-department-header-actions", summary)
+        self.assertIn("event.preventDefault();event.stopPropagation()", summary)
+        self.assertNotIn("wf-department-actions", department_renderer)
+        self.assertIn(".wf-department-header-actions", styles)
 
     def test_manage_vendor_card_opens_history_and_keeps_edit_separate(self):
         source_path = os.path.join(

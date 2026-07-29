@@ -390,29 +390,28 @@ function isAdminUser() {
 }
 
 function currentUserRole() {
-  return String(currentUser?.role || (currentUser?.isOwner || currentUser?.isSuperAdmin ? 'owner' : currentUser?.isAdmin ? 'admin' : 'user')).toLowerCase();
+  return String(currentUser?.role || (currentUser?.isSuperAdmin || currentUser?.isAdmin ? 'admin' : 'user')).toLowerCase();
 }
 
-function isOwnerUser() {
-  return !!(currentUser && (currentUser.isOwner || currentUser.isSuperAdmin || currentUserRole() === 'owner'));
+function isPlatformAdminUser() {
+  return !!(currentUser && currentUser.isSuperAdmin);
 }
 
 function isSuperAdminUser() {
-  return isOwnerUser();
+  return isPlatformAdminUser();
 }
 
 function canCurrentUserManageRoles() {
-  return !!(currentUser && (currentUser.canManageRoles || ['owner', 'admin'].includes(currentUserRole())));
+  return !!(currentUser && (currentUser.canManageRoles || currentUserRole() === 'admin'));
 }
 
 function currentUserHasSalesAccess() {
-  return !!(currentUser && (isOwnerUser() || currentUser.hasSalesAccess || currentUser.isSales));
+  return !!(currentUser && (isPlatformAdminUser() || currentUser.hasSalesAccess || currentUser.isSales));
 }
 
 function userRoleLabel(role = currentUserRole()) {
   const value = String(role || 'user').toLowerCase();
   return ({
-    owner: 'Owner',
     admin: 'Admin',
     manager: 'Manager',
     user: 'User'
@@ -426,7 +425,8 @@ function userInitials(username) {
 }
 
 function roleBadgeMarkup(role, extraClass = '') {
-  const safeRole = ['owner', 'admin', 'manager', 'user'].includes(String(role || '').toLowerCase())
+  const rawRole = String(role || '').toLowerCase();
+  const safeRole = ['admin', 'manager', 'user'].includes(rawRole)
     ? String(role || '').toLowerCase()
     : 'user';
   return `<span class="user-role-badge user-role-badge-${safeRole} ${extraClass}">${escapeHtml(userRoleLabel(safeRole))}</span>`;
@@ -500,7 +500,6 @@ function ensureSidebarUserMenuStyles() {
       color: #344054;
     }
 
-    .user-role-badge-owner { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
     .user-role-badge-admin { background: #eef4ff; color: #3538cd; border-color: #c7d7fe; }
     .user-role-badge-manager { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
     .user-role-badge-user { background: #f8fafc; color: #475467; border-color: #d0d5dd; }
@@ -529,8 +528,8 @@ function applyPermissionUi() {
     });
   });
 
-  document.querySelectorAll(".owner-only, [data-owner-only='true'], .super-admin-only, [data-super-admin-only='true']").forEach(el => {
-    el.style.display = isOwnerUser() ? (el.dataset.ownerDisplay || el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
+  document.querySelectorAll(".platform-admin-only, [data-platform-admin-only='true'], .super-admin-only, [data-super-admin-only='true']").forEach(el => {
+    el.style.display = isPlatformAdminUser() ? (el.dataset.platformAdminDisplay || el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
   });
 
   document.querySelectorAll(".sales-only, [data-sales-only='true']").forEach(el => {
@@ -3125,6 +3124,7 @@ function sectionFromSidebarLabel(item) {
     'quotations': 'quotations',
     'profit & loss': 'profit-loss',
     'profit and loss': 'profit-loss',
+    'accounting': 'accounting',
     'company details': 'pdf-settings',
     'pdf settings': 'pdf-settings',
     'companies': 'companies',
@@ -3139,6 +3139,7 @@ function sectionFromSidebarLabel(item) {
     ['change password', 'change-password'],
     ['profit & loss', 'profit-loss'],
     ['profit and loss', 'profit-loss'],
+    ['accounting', 'accounting'],
     ['quotations', 'quotations'],
     ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
@@ -3203,6 +3204,7 @@ function navWireIconSvg(section) {
     logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
     quotations: '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 12h6M9 16h6"></path>',
     'profit-loss': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path><path d="m4 6 5-3 6 4 6-5"></path>',
+    accounting: '<path d="M4 7h16M6 3h12l2 4H4zM6 11h3v7H6zM11 11h3v7h-3zM16 11h3v7h-3zM4 21h16"></path>',
     users: '<circle cx="9" cy="8" r="3"></circle><path d="M4 20a5 5 0 0 1 10 0"></path><path d="M17 11h4M19 9v4"></path>',
     'pdf-settings': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6"></path><path d="M9 17h2"></path>',
     companies: '<path d="M4 20V7l8-4 8 4v13"></path><path d="M8 20v-4h8v4M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01"></path>',
@@ -3229,6 +3231,7 @@ function navLabelForSection(section, fallback = '') {
     logs: 'System Logs',
     quotations: 'Quotations',
     'profit-loss': 'Profit & Loss',
+    accounting: 'Accounting',
     users: 'User Management',
     'pdf-settings': 'Company Details',
     companies: 'Companies',
@@ -3328,6 +3331,7 @@ const APP_SECTION_PATHS = Object.freeze({
   logs: '/logs',
   quotations: '/quotations',
   'profit-loss': '/profit-loss',
+  accounting: '/accounting',
   compare: '/compare',
   users: '/users',
   'pdf-settings': '/company-details',
@@ -3374,15 +3378,15 @@ function updateAppSectionHistory(sectionName, replace = false) {
 
 function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
-  const ownerOnlySections = new Set(["companies"]);
-  const salesOnlySections = new Set(["quotations", "profit-loss"]);
+  const platformAdminOnlySections = new Set(["companies", "accounting"]);
+  const salesOnlySections = new Set(["quotations"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
-  if (ownerOnlySections.has(sectionName) && !isOwnerUser()) {
+  if (platformAdminOnlySections.has(sectionName) && !isPlatformAdminUser()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
   if (salesOnlySections.has(sectionName) && !currentUserHasSalesAccess()) {
@@ -3521,6 +3525,9 @@ function showSection(sectionName, options = {}) {
       break;
     case "profit-loss":
       if (typeof loadProfitLoss === "function") loadProfitLoss();
+      break;
+    case "accounting":
+      if (typeof loadAccounting === "function") loadAccounting();
       break;
     case "compare":
       if (typeof loadComparePage === "function") loadComparePage();
@@ -3842,9 +3849,13 @@ function showAppDialog(options = {}) {
     content.dataset.variant = variant;
     titleEl.textContent = options.title || (isAlert ? 'Notice' : 'Confirm Action');
     messageEl.textContent = '';
-    const messageText = document.createElement('div');
-    messageText.textContent = options.message || '';
-    messageEl.appendChild(messageText);
+    if (typeof options.buildMessage === 'function') {
+      options.buildMessage(messageEl);
+    } else {
+      const messageText = document.createElement('div');
+      messageText.textContent = options.message || '';
+      messageEl.appendChild(messageText);
+    }
     let promptInput = null;
     let confirmationCheckbox = null;
     if (isPrompt) {
@@ -4055,7 +4066,10 @@ async function apiCall(endpoint, method = "GET", data = null) {
     return result;
   } catch (error) {
     console.error("API Error:", error);
-    if (!error.payload?.requiresModelGroupMergeConfirmation) {
+    if (
+      !error.payload?.requiresModelGroupMergeConfirmation
+      && !error.payload?.requiresHistoryInheritanceConfirmation
+    ) {
       showNotification("error", error.message);
     }
     throw error;
@@ -4135,6 +4149,62 @@ function formatEventFileModified(value) {
   });
 }
 
+const EVENT_FILES_TOTAL_LIMIT_BYTES = 20 * 1024 * 1024;
+
+function closeEventFilePreview() {
+  const body = document.getElementById('eventFilePreviewBody');
+  if (body) body.replaceChildren();
+  closeModal('eventFilePreviewModal');
+}
+
+function previewEventFile(eventId, filename, previewUrl, previewKind, downloadUrl) {
+  const title = document.getElementById('eventFilePreviewTitle');
+  const body = document.getElementById('eventFilePreviewBody');
+  const download = document.getElementById('eventFilePreviewDownload');
+  if (!title || !body || !download) return;
+
+  const safeName = String(filename || 'Event file');
+  const fileUrl = String(
+    downloadUrl ||
+    `/api/events/${Number(eventId)}/files/${encodeURIComponent(safeName)}`
+  );
+  const inlineUrl = String(previewUrl || '');
+  const kind = String(previewKind || '');
+
+  title.textContent = safeName;
+  download.href = fileUrl;
+  download.setAttribute('download', safeName);
+  body.replaceChildren();
+
+  let preview;
+  if (kind === 'image' && inlineUrl) {
+    preview = document.createElement('img');
+    preview.alt = safeName;
+  } else if (kind === 'video' && inlineUrl) {
+    preview = document.createElement('video');
+    preview.controls = true;
+  } else if (kind === 'audio' && inlineUrl) {
+    preview = document.createElement('audio');
+    preview.controls = true;
+  } else if ((kind === 'pdf' || kind === 'text') && inlineUrl) {
+    preview = document.createElement('iframe');
+    preview.title = `Preview of ${safeName}`;
+    preview.referrerPolicy = 'no-referrer';
+  }
+
+  if (preview) {
+    preview.src = inlineUrl;
+    body.appendChild(preview);
+  } else {
+    const unavailable = document.createElement('div');
+    unavailable.className = 'event-file-preview-unavailable';
+    unavailable.textContent = 'A browser preview is not available for this file type. Download the file to open it.';
+    body.appendChild(unavailable);
+  }
+
+  openModal('eventFilePreviewModal');
+}
+
 function renderEventFilesList(eventId, files) {
   const list = Array.isArray(files) ? files : [];
 
@@ -4145,6 +4215,8 @@ function renderEventFilesList(eventId, files) {
   return list.map(file => {
     const name = String(file.name || '');
     const downloadUrl = file.downloadUrl || `/api/events/${eventId}/files/${encodeURIComponent(name)}`;
+    const previewUrl = String(file.previewUrl || '');
+    const previewKind = String(file.previewKind || '');
     const modified = formatEventFileModified(file.modifiedAt);
     const deleteButton = isAdminUser()
       ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteEventFile(${eventId}, '${escapeJs(name)}')" style="padding: 6px 10px;">Delete</button>`
@@ -4153,7 +4225,7 @@ function renderEventFilesList(eventId, files) {
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e9ecef; border-radius: 8px; background: #fff; margin-bottom: 8px;">
         <div style="min-width: 0; flex: 1;">
-          <div style="font-weight: 600; color: #344054; overflow-wrap: anywhere;">${escapeHtml(name)}</div>
+          <button type="button" onclick="previewEventFile(${eventId}, '${escapeJs(name)}', '${escapeJs(previewUrl)}', '${escapeJs(previewKind)}', '${escapeJs(downloadUrl)}')" style="display:block;width:100%;padding:0;border:0;background:transparent;color:#344054;font:inherit;font-weight:600;text-align:left;overflow-wrap:anywhere;cursor:pointer;">${escapeHtml(name)}</button>
           <div style="font-size: 12px; color: #667085; margin-top: 2px;">
             ${formatEventFileSize(file.size)}${modified ? ` · ${escapeHtml(modified)}` : ''}
           </div>
@@ -4247,6 +4319,15 @@ async function uploadEventFileSelection(eventId, fileList) {
 
   if (!files.length) {
     showNotification("warning", "Choose at least one file first");
+    return false;
+  }
+
+  const selectedSize = files.reduce(
+    (total, file) => total + Math.max(0, Number(file.size || 0)),
+    0
+  );
+  if (selectedSize > EVENT_FILES_TOTAL_LIMIT_BYTES) {
+    showNotification("error", "Selected files exceed the 20 MB total event limit");
     return false;
   }
 
@@ -4354,7 +4435,8 @@ function normalisePdfSettings(settings = {}) {
     defaultValidityDays: Number(settings.defaultValidityDays || 30),
     defaultTerms: settings.defaultTerms || "",
     themeColor: /^#[0-9A-Fa-f]{6}$/.test(settings.themeColor || '') ? settings.themeColor : "#0f766e",
-    letterheadText: settings.letterheadText || "",
+    letterheadText: typeof settings.letterheadText === 'string' ? settings.letterheadText : "",
+    letterheadEnabled: settings.letterheadEnabled !== false,
     updatedAt: settings.updatedAt || ""
   };
 }
@@ -4504,6 +4586,11 @@ function ensurePdfSettingsSection() {
   section.className = 'content-section';
 
   section.innerHTML = `
+    <style>
+      #pdf-settings-section .company-letterhead-heading { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px; }
+      #pdf-settings-section .company-letterhead-heading .form-label { margin:0; }
+      #pdf-settings-section .company-letterhead-default { min-height:27px;padding:4px 9px;font-size:10px; }
+    </style>
     <div class="content-header">
       <div>
         <h2 class="content-title">Company Details</h2>
@@ -4537,7 +4624,13 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
               <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
               <label class="form-group company-details-wide"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Letterhead</span><textarea id="companyDetailsLetterhead" class="form-input" rows="3"></textarea></label>
+              <div class="form-group company-details-wide">
+                <div class="company-letterhead-heading">
+                  <label class="form-label" for="companyDetailsLetterhead">Letterhead</label>
+                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyLetterhead()">Default</button>
+                </div>
+                <textarea id="companyDetailsLetterhead" class="form-input" rows="3"></textarea>
+              </div>
             </div>
           </section>
 
@@ -4619,7 +4712,9 @@ function renderPdfSettingsForm() {
     companyDetailsPhone: pdfSettings.phone,
     companyDetailsEmail: pdfSettings.email,
     companyDetailsWebsite: pdfSettings.website,
-    companyDetailsLetterhead: pdfSettings.letterheadText || [pdfSettings.companyName, pdfSettings.billingAddress].filter(Boolean).join('\n'),
+    companyDetailsLetterhead: pdfSettings.letterheadEnabled === false
+      ? ''
+      : (pdfSettings.letterheadText || defaultCompanyLetterheadText()),
     companyDetailsBank: pdfSettings.bankName,
     companyDetailsAccountName: pdfSettings.bankAccountName,
     companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
@@ -4642,6 +4737,40 @@ function renderPdfSettingsForm() {
   if (themePicker && /^#[0-9A-Fa-f]{6}$/.test(pdfSettings.themeColor || '')) {
     themePicker.value = pdfSettings.themeColor;
   }
+}
+
+function defaultCompanyLetterheadText(useFormValues = false) {
+  const settingValue = (fieldId, settingKey) => {
+    if (useFormValues) {
+      const field = document.getElementById(fieldId);
+      if (field) return field.value;
+    }
+    return pdfSettings?.[settingKey];
+  };
+  const companyName = settingValue('companyDetailsName', 'companyName');
+  const registrationNumber = settingValue('companyDetailsRegistration', 'registrationNumber');
+  const billingAddress = settingValue('companyDetailsAddress', 'billingAddress');
+  const contactLine = [
+    settingValue('companyDetailsPhone', 'phone'),
+    settingValue('companyDetailsEmail', 'email'),
+    settingValue('companyDetailsWebsite', 'website'),
+  ]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' | ');
+  return [
+    companyName,
+    registrationNumber ? `UEN / Reg No: ${registrationNumber}` : '',
+    billingAddress,
+    contactLine,
+  ].map(value => String(value || '').trim()).filter(Boolean).join('\n');
+}
+
+function populateDefaultCompanyLetterhead() {
+  const textarea = document.getElementById('companyDetailsLetterhead');
+  if (!textarea) return;
+  textarea.value = defaultCompanyLetterheadText(true);
+  textarea.focus();
 }
 
 async function loadPdfSettingsSection() {
@@ -4765,7 +4894,8 @@ async function saveCompanyDetails() {
     defaultValidityDays: Number(value('companyDetailsValidity') || 30),
     defaultTerms: value('companyDetailsTerms'),
     themeColor: value('companyDetailsThemeColor') || '#0f766e',
-    letterheadText: value('companyDetailsLetterhead')
+    letterheadText: value('companyDetailsLetterhead'),
+    letterheadEnabled: Boolean(value('companyDetailsLetterhead').trim())
   };
 
   try {
@@ -4995,8 +5125,9 @@ function ensureCompanyActionModals() {
                 <input id="userNewCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
               </div>
               <div class="form-group">
-                <label class="form-label" for="userNewCompanyFirstAdmin">First Admin</label>
-                <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username" autocomplete="off">
+                <label class="form-label" for="userNewCompanyFirstAdmin">First Admin *</label>
+                <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username" autocomplete="off" required>
+                <small class="form-help">Every company must retain at least one active admin.</small>
               </div>
               <div class="form-group">
                 <label class="form-label" for="userNewCompanyFirstAdminPassword">Password</label>
@@ -5053,7 +5184,7 @@ function ensureCompanyActionModals() {
             <label class="form-label" for="userDeleteCompanyCode">Company</label>
             <select id="userDeleteCompanyCode" class="form-input"></select>
           </div>
-          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned non-owner users.</p>
+          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned company users.</p>
         </div>
         <div class="modal-footer modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal('deleteCompanyModal')">Cancel</button>
@@ -5252,7 +5383,7 @@ function ensureCompanyManagementNavItem() {
 
   const companiesTab = document.createElement('button');
   companiesTab.type = 'button';
-  companiesTab.className = 'nav-item nav-item-inline owner-only';
+  companiesTab.className = 'nav-item nav-item-inline platform-admin-only';
   companiesTab.dataset.section = 'companies';
   companiesTab.dataset.label = 'Companies';
   companiesTab.textContent = 'Companies';
@@ -5321,7 +5452,7 @@ function renderCompanySwitchControl() {
 
 async function loadCompaniesAdmin() {
   if (!isSuperAdminUser()) {
-    showNotification('error', 'Owner privileges required');
+    showNotification('error', 'Administrative access required');
     showSection('events');
     return;
   }
@@ -5392,7 +5523,7 @@ async function loadCompaniesAdmin() {
 
 async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
   if (!isSuperAdminUser()) {
-    showNotification('error', 'Owner privileges required');
+    showNotification('error', 'Administrative access required');
     return false;
   }
 
@@ -6177,16 +6308,14 @@ function ensureUsersNavItem() {
 
 function userRoleOptionsMarkup(selectedRole = 'user') {
   const selected = String(selectedRole || 'user').toLowerCase();
-  const roles = isOwnerUser()
-    ? ['owner', 'admin', 'manager', 'user']
-    : ['admin', 'manager', 'user'];
+  const roles = ['admin', 'manager', 'user'];
   return roles.map(role => `
     <option value="${role}" ${role === selected ? 'selected' : ''}>${escapeHtml(userRoleLabel(role))}</option>
   `).join('');
 }
 
 function userRoleSummaryMarkup() {
-  return ['owner', 'admin', 'manager', 'user'].map(role => `
+  return ['admin', 'manager', 'user'].map(role => `
     <span class="user-role-chip user-role-chip-${role}">
       <strong>${escapeHtml(userRoleLabel(role))}</strong>
     </span>
@@ -6317,7 +6446,7 @@ function ensureCreateUserModal() {
             <span class="user-admin-switch-text">Active</span>
           </label>
 
-          <div class="form-group owner-only" id="newUserCompanyGroup" data-owner-display="block">
+          <div class="form-group platform-admin-only" id="newUserCompanyGroup" data-platform-admin-display="block">
             <label class="form-label" for="newUserCompanyCode">Company</label>
             <select id="newUserCompanyCode" class="form-input"></select>
           </div>
@@ -6407,17 +6536,22 @@ function formatUserLastOnline(value) {
 
 function usersAdminRowMarkup(user, index) {
   const rowId = `userrow-${index}`;
-  const isSelf = currentUser && currentUser.username === user.username;
-  const role = String(user.role || (user.isOwner || user.isSuperAdmin ? 'owner' : user.isAdmin ? 'admin' : 'user')).toLowerCase();
-  const protectedOwner = role === 'owner' && !isOwnerUser();
-  const canEditRole = canCurrentUserManageRoles() && !protectedOwner;
-  const canEditUser = !protectedOwner;
+  const isSelf = Boolean(
+    currentUser
+    && currentUser.username === user.username
+    && String(currentUser.company?.code || currentUser.companyCode || '').toUpperCase()
+      === String(user.companyCode || '').toUpperCase()
+  );
+  const role = String(user.role || (user.isSuperAdmin || user.isAdmin ? 'admin' : 'user')).toLowerCase();
+  const isProtectedAccount = Boolean(user.isSuperAdmin);
+  const canEditRole = canCurrentUserManageRoles() && !isProtectedAccount;
+  const canEditUser = !isProtectedAccount || isPlatformAdminUser();
   const rawLastOnline = String(user.lastOnline || '-');
   const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
   const displayName = String(user.name || '').trim();
 
   return `
-    <tr data-user-admin-row data-original-username="${escapeHtmlAttr(user.username)}">
+    <tr data-user-admin-row data-original-username="${escapeHtmlAttr(user.username)}" data-original-company-code="${escapeHtmlAttr(user.companyCode || '')}">
       <td>
         <input
           type="text"
@@ -6487,8 +6621,8 @@ function usersAdminRowMarkup(user, index) {
       <td class="users-admin-actions">
         <span class="user-admin-save-status is-saved" data-user-admin-save-status role="status" aria-live="polite"><span class="user-admin-save-mark" aria-hidden="true"></span><span data-user-admin-save-label>Saved</span></span>
         <span class="users-admin-action-buttons">
-          <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+          <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername), this.closest('[data-user-admin-row]').dataset.originalCompanyCode)" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername), this.closest('[data-user-admin-row]').dataset.originalCompanyCode)" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
         </span>
       </td>
     </tr>
@@ -6518,7 +6652,7 @@ function renderUsersAdminTables() {
   const inactiveWasOpen = document.getElementById('inactiveUsersDropdown')?.open || false;
   const filtered = usersAdminUsers.filter(user => {
     if (!search) return true;
-    return [user.name, user.username, user.phone, user.companyCode, user.companyName, user.role, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
+    return [user.name, user.username, user.phone, user.companyCode, user.companyName, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
       .some(value => String(value || '').toLocaleLowerCase().includes(search));
   });
   const sorted = isSuperAdminUser() ? sortedUsersAdmin(filtered) : filtered;
@@ -6563,6 +6697,7 @@ function collectUserAdminRowPayload(row) {
     phone: field('phone')?.value.trim() || '',
     username: field('username')?.value.trim() || '',
     isActive: Boolean(field('active')?.checked),
+    sourceCompanyCode: row.dataset.originalCompanyCode || '',
   };
   const role = field('role')?.value || '';
   if (canCurrentUserManageRoles() && role) {
@@ -6598,7 +6733,17 @@ function scheduleUserAdminAutosave(row, delay = USERS_ADMIN_AUTOSAVE_DELAY) {
 function applyUserAdminSavedData(row, endpointUsername, submittedPayload, responseData) {
   const saved = responseData || {};
   const savedUsername = String(saved.username || submittedPayload.username || endpointUsername);
-  const userIndex = usersAdminUsers.findIndex(user => user.username === endpointUsername || user.username === savedUsername);
+  const sourceCompanyCode = String(row.dataset.originalCompanyCode || '').toUpperCase();
+  const savedCompanyCode = String(saved.companyCode || submittedPayload.companyCode || sourceCompanyCode).toUpperCase();
+  const userIndex = usersAdminUsers.findIndex(user => {
+    const usernameMatches = user.username === endpointUsername || user.username === savedUsername;
+    const userCompanyCode = String(user.companyCode || '').toUpperCase();
+    return usernameMatches && (
+      !sourceCompanyCode
+      || userCompanyCode === sourceCompanyCode
+      || userCompanyCode === savedCompanyCode
+    );
+  });
   const companyCode = saved.companyCode || submittedPayload.companyCode || usersAdminUsers[userIndex]?.companyCode || '';
   const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(companyCode).toUpperCase());
   const merged = {
@@ -6611,11 +6756,15 @@ function applyUserAdminSavedData(row, endpointUsername, submittedPayload, respon
   };
   if (userIndex >= 0) usersAdminUsers[userIndex] = merged;
   row.dataset.originalUsername = savedUsername;
+  row.dataset.originalCompanyCode = companyCode;
   const activeMeta = row.querySelector('.users-admin-inline-meta');
   if (activeMeta) activeMeta.innerHTML = userActiveBadgeMarkup(merged);
   updateUsersAdminSummary();
 
-  if (currentUser?.username === endpointUsername) {
+  if (
+    currentUser?.username === endpointUsername
+    && String(currentUser.company?.code || currentUser.companyCode || '').toUpperCase() === sourceCompanyCode
+  ) {
     currentUser = { ...currentUser, ...saved, username: savedUsername };
     refreshSidebarUserMenu();
   }
@@ -6677,7 +6826,19 @@ async function flushUserAdminAutosave(row) {
       updateResult?.data?.selfChangesPending ? 'Saved; re-login required' : 'Saved'
     );
   } catch (error) {
+    const unchangedSinceRequest = userAdminPayloadFingerprint(collectUserAdminRowPayload(row)) === requestFingerprint;
+    if (unchangedSinceRequest) {
+      try {
+        applyUserAdminResponseToUnchangedRow(
+          row,
+          JSON.parse(state.lastSavedFingerprint),
+        );
+      } catch (_parseError) {
+        // Keep the row editable if an older cached fingerprint cannot be restored.
+      }
+    }
     setUserAdminSaveStatus(row, 'error', 'Not saved', error.message || 'Unable to save this user');
+    showNotification('warning', error.message || 'Unable to save this user');
   } finally {
     state.inFlight = false;
     if (!row.isConnected) return;
@@ -6780,7 +6941,25 @@ async function createUserAdmin() {
       payload.companyCode = companyCode;
     }
 
-    await apiCall('/api/users', 'POST', payload);
+    let createResponse;
+    try {
+      createResponse = await apiCall('/api/users', 'POST', payload);
+    } catch (error) {
+      if (!error.payload?.requiresHistoryInheritanceConfirmation) throw error;
+      const counts = error.payload.historyCounts || {};
+      const confirmed = await showAppConfirm({
+        title: 'Inherit prior records?',
+        message: `${error.message}\n\nFound ${counts.systemLogs || 0} system log(s), ${counts.eventLogs || 0} event log(s), ${counts.maintenanceLogs || 0} maintenance log(s), and ${counts.quotes || 0} quotation(s).`,
+        confirmText: 'Create and inherit',
+        cancelText: 'Cancel',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+      createResponse = await apiCall('/api/users', 'POST', {
+        ...payload,
+        inheritHistory: true,
+      });
+    }
 
     showNotification('success', `User ${username} created`);
 
@@ -6815,6 +6994,10 @@ async function createCompanyFromUsersAdmin() {
 
   if (!code && !name) {
     showNotification('warning', 'Company code or name is required');
+    return;
+  }
+  if (!firstAdminUsername) {
+    showNotification('warning', 'A first admin username is required');
     return;
   }
 
@@ -6890,7 +7073,7 @@ async function deleteCompanyFromUsersAdmin() {
   await deleteCompanyAdmin(code, Boolean(company?.isActive), companyOptions.length);
 }
 
-async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword) {
+async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword, companyCode = '') {
   const originalUsername = decodeURIComponent(encodedOriginalUsername);
 
   if (!newPassword) {
@@ -6899,7 +7082,7 @@ async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword) {
   }
 
   try {
-    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}/password`, 'PUT', {
+    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}/password?companyCode=${encodeURIComponent(companyCode)}`, 'PUT', {
       password: newPassword
     });
 
@@ -6951,7 +7134,7 @@ function ensureResetPasswordModal() {
   document.body.appendChild(modal);
 }
 
-function openResetPasswordModal(encodedOriginalUsername) {
+function openResetPasswordModal(encodedOriginalUsername, companyCode = '') {
   ensureResetPasswordModal();
 
   const username = decodeURIComponent(encodedOriginalUsername);
@@ -6961,6 +7144,7 @@ function openResetPasswordModal(encodedOriginalUsername) {
 
   const modal = document.getElementById('resetUserPasswordModal');
   modal.dataset.encodedUsername = encodedOriginalUsername;
+  modal.dataset.companyCode = companyCode;
 
   openModal('resetUserPasswordModal');
 
@@ -6974,10 +7158,10 @@ function confirmResetPasswordModal() {
   const encodedOriginalUsername = modal.dataset.encodedUsername;
   const newPassword = document.getElementById('resetUserPasswordInput')?.value || '';
 
-  resetUserPasswordAdmin(encodedOriginalUsername, newPassword);
+  resetUserPasswordAdmin(encodedOriginalUsername, newPassword, modal.dataset.companyCode || '');
 }
 
-async function deleteUserAdmin(encodedOriginalUsername) {
+async function deleteUserAdmin(encodedOriginalUsername, companyCode = '') {
   const username = decodeURIComponent(encodedOriginalUsername);
 
   if (currentUser && currentUser.username === username) {
@@ -6995,7 +7179,7 @@ async function deleteUserAdmin(encodedOriginalUsername) {
   if (!confirmed) return;
 
   try {
-    await apiCall(`/api/users/${encodeURIComponent(username)}`, 'DELETE');
+    await apiCall(`/api/users/${encodeURIComponent(username)}?companyCode=${encodeURIComponent(companyCode)}`, 'DELETE');
 
     showNotification('success', `Deleted user ${username}`);
     await loadUsersAdmin();
@@ -7091,7 +7275,6 @@ function ensureUserAdminStyles() {
       font-weight: 700;
     }
 
-    .user-role-chip-owner { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
     .user-role-chip-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
     .user-role-chip-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
     .user-role-chip-sales { border-color: #fcceee; background: #fdf2fa; color: #c11574; }
@@ -8156,7 +8339,14 @@ function ensureInventoryBulkEditControls() {
       'flex-wrap:wrap'
     ].join(';');
     group.innerHTML = `
-      <span id="inventory-selected-count" style="color:#495057;font-size:14px;font-weight:700;">0 selected</span>
+      <button
+        type="button"
+        id="inventory-selected-count"
+        class="inventory-selected-count-button"
+        title="Clear selected assets"
+        aria-label="No assets selected"
+        disabled
+      >0 selected</button>
       <button type="button" id="inventory-bulk-maintenance-button" class="btn btn-primary" style="padding:8px 16px;font-size:14px;" disabled>Log Maintenance</button>
       <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
       <button type="button" id="inventory-bulk-delete-button" class="btn btn-danger" style="padding:8px 16px;font-size:14px;" disabled>Delete Selected</button>
@@ -8174,6 +8364,7 @@ function ensureInventoryBulkEditControls() {
     document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
     document.getElementById('inventory-bulk-delete-button')?.addEventListener('click', openBulkAssetDeleteModal);
     document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
+    document.getElementById('inventory-selected-count')?.addEventListener('click', clearInventorySelection);
   }
 
   group.style.display = 'flex';
@@ -8733,7 +8924,16 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   const deleteButton = document.getElementById('inventory-bulk-delete-button');
   const clearButton = document.getElementById('inventory-clear-selection-button');
 
-  if (countEl) countEl.textContent = `${selectedCount} selected`;
+  if (countEl) {
+    countEl.textContent = `${selectedCount} selected`;
+    countEl.disabled = selectedCount === 0;
+    countEl.setAttribute(
+      'aria-label',
+      selectedCount
+        ? `Clear ${selectedCount} selected asset${selectedCount === 1 ? '' : 's'}`
+        : 'No assets selected',
+    );
+  }
   if (maintenanceButton) maintenanceButton.disabled = selectedCount === 0;
   if (editButton) editButton.disabled = selectedCount === 0;
   if (deleteButton) deleteButton.disabled = selectedCount === 0;
@@ -8811,6 +9011,25 @@ function clearInventorySelection() {
   displayFilteredInventory();
 }
 
+async function loadAssetUsageDays(assetId) {
+  const content = document.getElementById('assetDetailsContent');
+  const value = document.getElementById('assetDetailsUsageDays');
+  if (!content || !value) return;
+
+  try {
+    const response = await apiCall(
+      `/api/assets/${encodeURIComponent(assetId)}/usage-summary`
+    );
+    if (content.dataset.assetId !== String(assetId || '')) return;
+    const days = Math.max(0, Number(response.data?.usageDays || 0));
+    value.textContent = `${days} day${days === 1 ? '' : 's'}`;
+  } catch (error) {
+    if (content.dataset.assetId === String(assetId || '')) {
+      value.textContent = '-';
+    }
+  }
+}
+
 function openAssetDetailsModal(encodedAssetId) {
   let assetId = String(encodedAssetId || '');
   try {
@@ -8833,6 +9052,7 @@ function openAssetDetailsModal(encodedAssetId) {
   const apiId = getAssetIdentifierForApi(asset);
   const encodedApiId = encodeURIComponent(apiId);
   const displayId = asset.isBulk ? 'Bulk Item' : (asset.id || apiId);
+  content.dataset.assetId = apiId;
   const notes = String(asset.notes || '').trim();
   const degradedReasons = [
     ...(Array.isArray(asset.degradedReasons) ? asset.degradedReasons : []),
@@ -8876,6 +9096,7 @@ function openAssetDetailsModal(encodedAssetId) {
           <div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || '-')}</strong></div>
           <div class="asset-details-field"><span>Date added</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || '') || '-')}</strong></div>
           <div class="asset-details-field"><span>Last modified</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateModified || '') || '-')}</strong></div>
+          <div class="asset-details-field"><span>Days used</span><strong id="assetDetailsUsageDays" aria-live="polite">Calculating...</strong></div>
         </div>
       </section>
 
@@ -8915,6 +9136,7 @@ function openAssetDetailsModal(encodedAssetId) {
   `;
 
   openModal('assetDetailsModal');
+  loadAssetUsageDays(apiId);
 }
 
 function inventoryVirtualRowHtml(asset, isAdmin) {
@@ -9288,7 +9510,7 @@ function renderInventorySummary() {
   const modelCount = groupInventoryByModel(sourceAssets).length;
   const attentionDetails = [
     conditionCounts.untagged > 0 ? `${conditionCounts.untagged} untagged` : '',
-    conditionCounts.degraded > 0 ? `${conditionCounts.degraded} degraded total` : '',
+    conditionCounts.degraded > 0 ? `${conditionCounts.degraded} degraded` : '',
     conditionCounts.ooc > 0 ? `${conditionCounts.ooc} OOC` : '',
     conditionCounts.missing > 0 ? `${conditionCounts.missing} missing` : ''
   ].filter(Boolean).join(', ');
@@ -11360,6 +11582,7 @@ async function openContainerMaintenanceModal(containerId) {
             <div class="form-group">
               <label class="form-label" for="containerMaintenanceMedia">Photos / Videos (optional)</label>
               <input id="containerMaintenanceMedia" type="file" class="form-input" accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov" multiple>
+              ${maintenanceUploadLimitHtml()}
               <div id="containerMaintenanceMediaList" class="maintenance-media-selection"></div>
             </div>
 
@@ -12283,7 +12506,7 @@ function renderSystemLogs() {
   ensureSystemLogStyles();
 
   const allLogs = Array.isArray(logs) ? logs : [];
-  const showCompany = isOwnerUser();
+  const showCompany = isPlatformAdminUser();
   const search = String(systemLogViewState.search || '').trim().toLowerCase();
   const userSearch = String(systemLogViewState.user || '').trim().toLowerCase();
   const now = new Date();
@@ -13599,12 +13822,11 @@ async function openPrepareEventModal(eventId) {
                                 if (isPrepared) {
                                     actionButton = `
                                         <button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="unprepare" style="padding: 4px 8px; font-size: 11px;">Unprepare</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Uncollect</button>
                                     `;
                                 } else if (isCollected) {
                                     actionButton = `
-                                        <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>
                                         <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Uncollect</button>
+                                        <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>
                                     `;
                                 } else {
                                     actionButton = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Collect</button>`;
@@ -14135,12 +14357,11 @@ function createCustomPreparationSection(eventId, customAssets, event) {
             if (isPrepared) {
                 actionButtons = `
                     <button class="btn btn-warning btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px; font-size:11px;">Unprepare</button>
-                    <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Uncollect</button>
                 `;
             } else if (isCollected) {
                 actionButtons = `
-                    <button class="btn btn-success btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px; font-size:11px;">Prepare</button>
                     <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Uncollect</button>
+                    <button class="btn btn-success btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px; font-size:11px;">Prepare</button>
                 `;
             } else {
                 actionButtons = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Collect</button>`;
@@ -14207,14 +14428,14 @@ function updateCustomCollectionUi(eventId, encodedAssetId, isCollected) {
     actionContainers.forEach(container => {
         container.innerHTML = isCollected
             ? `
+                <button class="btn btn-secondary btn-sm"
+                        onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedAssetId)}')"
+                        style="padding:4px 8px; font-size:11px;">Uncollect</button>
                 <button class="btn btn-success btn-sm asset-action-btn"
                         data-event-id="${eventId}"
                         data-asset-id="${escapeHtmlAttr(encodedAssetId)}"
                         data-action="prepare"
                         style="padding:4px 8px; font-size:11px;">Prepare</button>
-                <button class="btn btn-secondary btn-sm"
-                        onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedAssetId)}')"
-                        style="padding:4px 8px; font-size:11px;">Uncollect</button>
               `
             : `<button class="btn btn-primary btn-sm"
                        onclick="collectCustomAsset(${eventId}, '${escapeJs(encodedAssetId)}')"
@@ -14794,12 +15015,11 @@ function updateAllAssetsSection(event, eventId) {
           if (isPrepared) {
             actionButton = `
               <button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px;font-size:11px;">Unprepare</button>
-              <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Uncollect</button>
             `;
           } else if (isCollected) {
             actionButton = `
-              <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>
               <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Uncollect</button>
+              <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>
             `;
           } else {
             actionButton = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Collect</button>`;
@@ -15073,7 +15293,7 @@ function returnPageUpsertEventSummary(event) {
   events = events.map(item => Number(item.id) === Number(event.id) ? { ...item, ...event } : item);
 }
 
-function returnPageAssets(event = returnPageState.event) {
+function returnPageAssets(event = returnPageState.event, state = returnPageState) {
   if (!event) return [];
   const returned = new Set(event.returnedItems || []);
   const rows = new Map();
@@ -15099,7 +15319,7 @@ function returnPageAssets(event = returnPageState.event) {
   });
 
   let assets = Array.from(rows.values());
-  const room = eventActiveSubproject(returnPageState, event);
+  const room = eventActiveSubproject(state, event);
   if (room && eventSubprojects(event).length > 1) {
     const allocated = eventSubprojectAssetAllocations(event).get(String(room.id)) || new Set();
     const customItems = (room.items || []).filter(item => item?.isCustom);
@@ -15116,6 +15336,28 @@ function returnPageAssets(event = returnPageState.event) {
     ));
   }
 
+  eventSubprojectModelGroups(event, state).forEach(group => {
+    const outstandingQuantity = Math.max(0, Number(group?.preparedSlotQuantity || 0));
+    const returnedQuantity = Math.max(0, Number(group?.returnedPreparedSlotQuantity || 0));
+    const quantity = outstandingQuantity + returnedQuantity;
+    if (quantity <= 0) return;
+    const modelKey = eventSubprojectGroupKey(group);
+    assets.push({
+      id: `prepared-model:${modelKey}`,
+      department: normalizeDepartmentCode(group?.department || 'UN'),
+      brand: String(group?.brand || ''),
+      model: String(group?.model || ''),
+      description: String(group?.description || ''),
+      location: '',
+      quantity,
+      outstandingQuantity,
+      returnedPreparedQuantity: returnedQuantity,
+      isReturned: outstandingQuantity <= 0,
+      isPreparedModelQuantity: true,
+      modelGroup: group,
+    });
+  });
+
   return assets.sort((a, b) => (
     compareByDisplayName(a.department, b.department) ||
     Number(a.isReturned) - Number(b.isReturned) ||
@@ -15123,15 +15365,14 @@ function returnPageAssets(event = returnPageState.event) {
   ));
 }
 
+function returnSubprojectNeedsAttention(room, event = returnPageState.event) {
+  if (!room || !event) return false;
+  const roomState = { ...returnPageState, activeSubprojectId: String(room.id || '') };
+  return returnPageAssets(event, roomState).some(asset => !asset.isReturned);
+}
+
 function returnPageHasAssignedAssets(event = returnPageState.event) {
-  if (eventSubprojects(event).length > 1) {
-    return returnPageAssets(event).length > 0;
-  }
-  return Object.values(event?.assetsByDepartment || {}).some(departmentAssets => (
-    (departmentAssets || []).some(asset => (
-      asset?.id && !String(asset.id).startsWith('[MODEL]')
-    ))
-  ));
+  return returnPageAssets(event).length > 0;
 }
 
 function returnPageAssetTitle(asset) {
@@ -15140,12 +15381,21 @@ function returnPageAssetTitle(asset) {
   if (asset?.isBulk || String(asset?.id || '').startsWith('[BULK]')) {
     return `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk Item';
   }
+  if (asset?.isPreparedModelQuantity) {
+    return `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Prepared item';
+  }
   const model = `${asset?.brand || ''} ${asset?.model || ''}`.trim();
   return [asset?.id || 'Asset', model].filter(Boolean).join(' · ');
 }
 
 function returnPageAssetSubtitle(asset) {
   const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
+  if (asset?.isPreparedModelQuantity) {
+    return [
+      asset.description || 'Prepared without an assigned asset ID',
+      `Qty: ${Math.max(1, Number(asset.quantity || 1))}`,
+    ].filter(Boolean).join(' / ');
+  }
   if (custom) {
     return [
       customAssetDetailText(custom),
@@ -15172,7 +15422,9 @@ function returnPageMetrics(event = returnPageState.event) {
     : Math.max(getEventReturnTotalCount(event), getEventReturnableCount(event));
   const returned = roomScoped
     ? assetRows.reduce((sum, asset) => (
-        sum + (asset.isReturned ? Math.max(1, Number(asset.quantity || 1)) : 0)
+        sum + (asset.isPreparedModelQuantity
+          ? Math.max(0, Number(asset.returnedPreparedQuantity || 0))
+          : (asset.isReturned ? Math.max(1, Number(asset.quantity || 1)) : 0))
       ), 0)
     : Math.max(0, total - Math.max(0, getEventReturnableCount(event)));
   const remaining = Math.max(0, total - returned);
@@ -15427,7 +15679,10 @@ async function returnChooseEvent(eventId) {
 function returnPageDepartmentChipsHtml(assets) {
   const counts = new Map();
   assets.forEach(asset => {
-    counts.set(asset.department, (counts.get(asset.department) || 0) + asset.quantity);
+    const quantity = returnPageState.outstandingOnly
+      ? returnPageOutstandingQuantity(asset)
+      : Number(asset.quantity || 0);
+    counts.set(asset.department, (counts.get(asset.department) || 0) + quantity);
   });
   const chips = Array.from(counts.entries())
     .sort((a, b) => compareByDisplayName(planDepartmentLabel(a[0]), planDepartmentLabel(b[0])))
@@ -15440,7 +15695,11 @@ function returnPageDepartmentChipsHtml(assets) {
         ${escapeHtml(planDepartmentLabel(code))} · ${quantity}
       </button>
     `).join('');
-  const total = assets.reduce((sum, asset) => sum + asset.quantity, 0);
+  const total = assets.reduce((sum, asset) => (
+    sum + (returnPageState.outstandingOnly
+      ? returnPageOutstandingQuantity(asset)
+      : Number(asset.quantity || 0))
+  ), 0);
   return `
     <button type="button"
             class="return-chip return-chip-all ${returnPageState.department === 'ALL' ? 'active' : ''}"
@@ -15479,9 +15738,19 @@ function returnPageFilteredAssets() {
   });
 }
 
+function returnPageOutstandingQuantity(asset) {
+  if (asset?.isPreparedModelQuantity) {
+    return Math.max(0, Number(asset.outstandingQuantity || 0));
+  }
+  return asset?.isReturned ? 0 : Math.max(1, Number(asset?.quantity || 1));
+}
+
 function returnPageCanLogFault(asset) {
   const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
-  return Boolean(asset?.id && !custom && !asset?.isLoanOrMisc);
+  return Boolean(
+    asset?.id && !custom && !asset?.isLoanOrMisc
+    && !asset?.isPreparedModelQuantity
+  );
 }
 
 async function returnPageLogFault(encodedAssetId) {
@@ -15521,6 +15790,9 @@ async function returnPageLogFault(encodedAssetId) {
 }
 
 function returnPageAssetRowHtml(asset) {
+  if (asset?.isPreparedModelQuantity) {
+    return returnPagePreparedModelRowHtml(asset);
+  }
   const encodedId = returnPageEncode(asset.id);
   const pendingKey = `${asset.isReturned ? 'unreturn' : 'return'}:${asset.id}`;
   const pending = returnPageState.pendingActions.has(pendingKey);
@@ -15565,6 +15837,53 @@ function returnPageAssetRowHtml(asset) {
   `;
 }
 
+function returnPagePreparedModelRowHtml(asset) {
+  const encodedId = returnPageEncode(asset.id);
+  const outstanding = Math.max(0, Number(asset.outstandingQuantity || 0));
+  const returned = Math.max(0, Number(asset.returnedPreparedQuantity || 0));
+  const pending = returnPageState.pendingActions.has(`prepared-model:${asset.id}`);
+  const statusText = outstanding > 0
+    ? (returned > 0 ? `${returned} returned / ${outstanding} outstanding` : `${outstanding} outstanding`)
+    : `${returned} returned`;
+  return `
+    <div class="return-asset-row ${outstanding <= 0 ? 'is-returned' : ''}"
+         data-return-row-id="${escapeHtmlAttr(encodedId)}">
+      <div>
+        <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+        <div class="return-asset-subtitle">${escapeHtml(returnPageAssetSubtitle(asset))}</div>
+      </div>
+      <div class="return-asset-department">
+        ${planDepartmentCodeBadgeHtml(asset.department)}
+        <div class="return-asset-location">Prepared without asset IDs</div>
+      </div>
+      <div class="return-status ${outstanding <= 0 ? 'is-returned' : ''}">
+        ${escapeHtml(statusText)}
+      </div>
+      <div class="return-row-actions return-row-action">
+        ${outstanding > 0 ? `
+          <button type="button"
+                  class="return-button return-button-primary"
+                  ${pending ? 'disabled' : ''}
+                  onclick="returnPageChangePreparedQuantity('return', '${escapeHtmlAttr(encodedId)}', ${outstanding}, this)">
+            ${pending ? 'Returning...' : 'Return all'}
+          </button>
+        ` : '<span class="return-prepared-complete">Returned</span>'}
+        <details class="return-quantity-menu">
+          <summary class="return-button return-more-button" aria-label="More return actions">...</summary>
+          <div class="return-quantity-menu-popover">
+            ${outstanding > 0 ? `
+              <button type="button" onclick="returnPagePromptPreparedQuantity('return', '${escapeHtmlAttr(encodedId)}', this)">Return qty</button>
+            ` : ''}
+            ${returned > 0 ? `
+              <button type="button" onclick="returnPagePromptPreparedQuantity('unreturn', '${escapeHtmlAttr(encodedId)}', this)">Unreturn qty</button>
+            ` : ''}
+          </div>
+        </details>
+      </div>
+    </div>
+  `;
+}
+
 function returnPageRenderFilteredAssets(options = {}) {
   const scroller = document.getElementById('returnAssetsScroll');
   if (!scroller) return;
@@ -15580,8 +15899,7 @@ function returnPageRenderFilteredAssets(options = {}) {
     .sort((a, b) => compareByDisplayName(planDepartmentLabel(a[0]), planDepartmentLabel(b[0])))
     .map(([department, departmentAssets]) => {
       const outstanding = departmentAssets
-        .filter(asset => !asset.isReturned)
-        .reduce((sum, asset) => sum + asset.quantity, 0);
+        .reduce((sum, asset) => sum + returnPageOutstandingQuantity(asset), 0);
       return `
         <section class="return-department-section">
           <div class="return-department-summary">
@@ -15867,7 +16185,7 @@ function returnPageQuickReturnHtml(metrics) {
                   title="Scan an asset"
                   aria-label="Scan an asset"
                   ${disabled}
-                  onclick="scanForReturn()">⌗</button>
+                  onclick="scanForReturn()">&#128247;</button>
         </div>
         <button type="button"
                 class="return-button return-button-primary return-quick-submit"
@@ -15969,7 +16287,16 @@ function renderReturnPage(options = {}) {
             <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
           </div>
         </div>
-        ${renderEventSubprojectTabs('returnPageState', event, 'renderReturnPage', 'Return sub-projects')}
+        ${renderEventSubprojectTabs(
+          'returnPageState',
+          event,
+          'renderReturnPage',
+          'Return sub-projects',
+          {
+            roomNeedsAttention: returnSubprojectNeedsAttention,
+            attentionLabel: 'Has unreturned items'
+          }
+        )}
         ${consolidated ? eventConsolidatedNotice({ interactive: true }) : ''}
         <section class="return-assets-card return-surface">
           <div class="return-card-header">
@@ -16209,6 +16536,65 @@ function returnPageUnreturnAsset(encodedAssetId, button) {
   return returnPageRunAssetAction('unreturn', encodedAssetId, button);
 }
 
+async function returnPageChangePreparedQuantity(action, encodedAssetId, quantity, button) {
+  const assetId = returnPageDecode(encodedAssetId);
+  const asset = returnPageAssets().find(row => row.id === assetId && row.isPreparedModelQuantity);
+  const eventId = Number(returnPageState.eventId);
+  const safeQuantity = Math.max(0, Number.parseInt(quantity, 10) || 0);
+  const key = `prepared-model:${assetId}`;
+  if (!eventId || !asset || safeQuantity <= 0 || returnPageState.pendingActions.has(key)) return;
+
+  returnPageState.pendingActions.add(key);
+  if (button) button.disabled = true;
+  try {
+    const path = action === 'unreturn'
+      ? `/api/events/${eventId}/unreturn-prepared-quantity`
+      : `/api/events/${eventId}/return-prepared-quantity`;
+    const response = await apiCall(path, 'POST', {
+      department: asset.department,
+      brand: asset.brand,
+      model: asset.model,
+      description: asset.description,
+      quantity: safeQuantity,
+      subprojectId: eventActiveSubproject(returnPageState, returnPageState.event)?.id || '',
+    });
+    await returnPageRefreshSelected();
+    showNotification('success', response.message || (
+      action === 'unreturn' ? 'Returned quantity restored' : 'Prepared quantity returned'
+    ));
+  } catch (error) {
+    showNotification('error', `${action === 'unreturn' ? 'Unreturn' : 'Return'} failed: ${error.message}`);
+    try {
+      await returnPageRefreshSelected();
+    } catch (refreshError) {
+      console.warn('Return workspace reconciliation failed:', refreshError);
+    }
+  } finally {
+    returnPageState.pendingActions.delete(key);
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function returnPagePromptPreparedQuantity(action, encodedAssetId, button) {
+  const assetId = returnPageDecode(encodedAssetId);
+  const asset = returnPageAssets().find(row => row.id === assetId && row.isPreparedModelQuantity);
+  if (!asset) return;
+  const max = action === 'unreturn'
+    ? Math.max(0, Number(asset.returnedPreparedQuantity || 0))
+    : Math.max(0, Number(asset.outstandingQuantity || 0));
+  if (max <= 0) return;
+  button?.closest('details')?.removeAttribute('open');
+  const quantity = await prepareNewPromptQuantity({
+    title: action === 'unreturn' ? 'Unreturn Qty' : 'Return Qty',
+    message: `How many ${returnPageAssetTitle(asset)} unit(s) would you like to ${action === 'unreturn' ? 'unreturn' : 'return'}?`,
+    confirmText: action === 'unreturn' ? 'Unreturn' : 'Return',
+    max,
+  });
+  if (quantity > 0) {
+    await returnPageChangePreparedQuantity(action, encodedAssetId, quantity, button);
+  }
+}
+
 async function returnPageReturnDepartment(encodedDepartment, button) {
   const eventId = Number(returnPageState.eventId);
   const department = normalizeDepartmentCode(returnPageDecode(encodedDepartment));
@@ -16225,7 +16611,18 @@ async function returnPageReturnDepartment(encodedDepartment, button) {
         asset.department === department && !asset.isReturned
       ));
       for (const asset of targets) {
-        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: asset.id });
+        if (asset.isPreparedModelQuantity) {
+          await apiCall(`/api/events/${eventId}/return-prepared-quantity`, 'POST', {
+            department: asset.department,
+            brand: asset.brand,
+            model: asset.model,
+            description: asset.description,
+            quantity: asset.outstandingQuantity,
+            subprojectId: eventActiveSubproject(returnPageState, returnPageState.event)?.id || '',
+          });
+        } else {
+          await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: asset.id });
+        }
       }
       await returnPageRefreshSelected();
       showNotification('success', `${targets.length} item(s) returned for ${department}`);
@@ -16663,7 +17060,8 @@ let transferOptionsCache = null;
 let transferCandidateCache = [];
 let transferPageState = {
   sourceEventId: null,
-  targetEventId: null
+  targetEventId: null,
+  targetSubprojectId: ''
 };
 
 async function loadTransferHistory() {
@@ -16724,6 +17122,7 @@ async function loadTransferHistory() {
     }
     if (transferPageState.targetEventId && !availableIds.has(String(transferPageState.targetEventId))) {
       transferPageState.targetEventId = null;
+      transferPageState.targetSubprojectId = '';
       selectionChanged = true;
     }
     if (selectionChanged) {
@@ -16764,6 +17163,7 @@ function eventOverviewIcon(kind) {
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path>',
     location: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"></path><circle cx="12" cy="10" r="2.5"></circle>',
     assets: '<path d="M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10"></path>',
+    rooms: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M12 4v16M3 11h9M12 14h9"></path>',
     people: '<circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-4 2-7 6-7s6 3 6 7M16 4a3 3 0 0 1 0 6M17 13c2.7.5 4 2.8 4 6"></path>',
     truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
     note: '<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path>',
@@ -16847,6 +17247,57 @@ function eventOverviewAssets(event) {
   return sections || '<div class="event-overview-empty">No assets have been planned for this event.</div>';
 }
 
+function eventOverviewSubprojectRows(event) {
+  const rooms = Array.isArray(event?.subprojects)
+    ? event.subprojects.filter(Boolean).map(room => ({
+        ...room,
+        items: Array.isArray(room.items) ? room.items : []
+      }))
+    : [];
+  if (rooms.length) return rooms;
+
+  const modelItems = Object.values(event?.modelGroups || {})
+    .filter(group => Number(group?.requiredQuantity || 0) > 0)
+    .map(group => ({
+      brand: group.brand || '',
+      model: group.model || '',
+      description: group.description || '',
+      quantity: Number(group.requiredQuantity || 0)
+    }));
+  const customItems = groupEventCustomAssets(getCustomAssetsFromEvent(event)).map(row => ({
+    brand: '',
+    model: '',
+    description: customAssetDisplayName(row.parsedCustom, false),
+    quantity: Number(row.parsedCustom?.quantity || 0)
+  }));
+
+  return [{
+    id: 'main',
+    name: 'Main Room',
+    items: [...modelItems, ...customItems]
+  }];
+}
+
+function eventOverviewSubprojects(event) {
+  const rooms = eventOverviewSubprojectRows(event);
+  return `<div class="event-overview-subprojects">${rooms.map(room => {
+    const items = (room.items || []).filter(item => item && Number(item.quantity || 0) > 0);
+    const quantity = items.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
+    const labels = items.map(item => (
+      [item.brand, item.model].filter(Boolean).join(' ') ||
+      item.description ||
+      'Custom item'
+    ));
+    return `<article class="event-overview-subproject">
+      <div><strong>${escapeHtml(room.name || 'Unnamed room')}</strong><span>${items.length} line${items.length === 1 ? '' : 's'} · ${quantity} required</span></div>
+      ${labels.length ? `<div class="event-overview-subproject-items">${labels.slice(0, 6).map(label => `<span>${escapeHtml(label)}</span>`).join('')}${labels.length > 6 ? `<span>+${labels.length - 6} more</span>` : ''}</div>` : '<small>No asset requirements</small>'}
+    </article>`;
+  }).join('')}</div>`;
+}
+
 function eventOverviewCrew(crew) {
   if (!crew.length) return '<div class="event-overview-empty">No manpower or vendors assigned.</div>';
   return `<div class="event-overview-crew">${crew.map(row => {
@@ -16873,10 +17324,12 @@ function eventOverviewFiles(event) {
   return files.map(file => {
     const name = String(file.name || 'Event file');
     const url = file.downloadUrl || `/api/events/${event.id}/files/${encodeURIComponent(name)}`;
+    const previewUrl = String(file.previewUrl || '');
+    const previewKind = String(file.previewKind || '');
     const deleteButton = isAdminUser()
       ? `<button type="button" class="event-overview-file-delete" title="Delete file" aria-label="Delete ${escapeHtmlAttr(name)}" onclick="deleteEventFile(${Number(event.id)}, '${escapeJs(name)}')">&times;</button>`
       : '';
-    return `<div class="event-overview-file"><div><strong>${escapeHtml(name)}</strong><span>${formatEventFileSize(file.size || 0)}${file.modifiedAt ? ` · ${escapeHtml(formatEventFileModified(file.modifiedAt))}` : ''}</span></div><div class="event-overview-file-actions"><a href="${escapeHtmlAttr(url)}">Download</a>${deleteButton}</div></div>`;
+    return `<div class="event-overview-file"><div><button type="button" class="event-overview-file-preview" onclick="previewEventFile(${Number(event.id)}, '${escapeJs(name)}', '${escapeJs(previewUrl)}', '${escapeJs(previewKind)}', '${escapeJs(url)}')"><strong>${escapeHtml(name)}</strong><span>${formatEventFileSize(file.size || 0)}${file.modifiedAt ? ` · ${escapeHtml(formatEventFileModified(file.modifiedAt))}` : ''}</span></button></div><div class="event-overview-file-actions"><a href="${escapeHtmlAttr(url)}">Download</a>${deleteButton}</div></div>`;
   }).join('');
 }
 
@@ -16904,7 +17357,7 @@ function eventOverviewFilesPanel(event) {
     <label id="eventOverviewFileDropzone-${eventId}" class="event-overview-file-dropzone"
            for="eventOverviewFileInput-${eventId}">
       <span class="event-overview-file-drop-icon">${eventOverviewIcon('file')}</span>
-      <span><strong>Drop files here</strong><small id="eventOverviewUploadState-${eventId}">or choose files</small></span>
+      <span><strong>Drop files here</strong><small id="eventOverviewUploadState-${eventId}">or choose files · 20 MB total</small></span>
     </label>
     <div id="eventOverviewFilesList-${eventId}" class="event-overview-files-list">
       ${eventOverviewFiles(event)}
@@ -17065,7 +17518,7 @@ async function refreshEventOverviewNotesAndFiles(eventId, topics) {
 function eventOverviewInternalUsers(event) {
   const rows = event.assignedUsers || [];
   if (!rows.length) return '<div class="event-overview-empty">No internal users assigned.</div>';
-  return `<div class="event-overview-internal-users">${rows.map(row => `<span class="event-overview-pill">${escapeHtml(eventAssigneeDisplayName(row) || row.username || 'User')} · ${escapeHtml(row.roleLabel || row.role || 'User')}</span>`).join('')}</div>`;
+  return `<div class="event-overview-internal-users">${rows.map(row => `<span class="event-overview-pill">${escapeHtml(eventAssigneeDisplayName(row) || row.username || 'User')} · ${escapeHtml(row.roleLabel || userRoleLabel(row.role))}</span>`).join('')}</div>`;
 }
 
 function eventOverviewNavigate(kind, eventId) {
@@ -17109,6 +17562,7 @@ async function viewEvent(eventId, options = {}) {
     const prepared = Number(event.totalPrepared || 0);
     const returned = Number(event.totalReturned || 0);
     const progress = required ? Math.min(100, Math.round((prepared / required) * 100)) : 0;
+    const subprojectCount = eventOverviewSubprojectRows(event).length;
     const links = [
       isAdminUser() ? ['plan', 'Plan'] : null,
       ['prepare', 'Prepare'],
@@ -17124,6 +17578,7 @@ async function viewEvent(eventId, options = {}) {
     </div>
     <nav class="event-overview-links" aria-label="Event workspaces">${links.map(([kind, label]) => `<button type="button" class="event-overview-link" onclick="eventOverviewNavigate('${kind}',${Number(event.id)})">${eventOverviewIcon(kind === 'manpower' ? 'people' : kind)}<span>${escapeHtml(label)}</span></button>`).join('')}</nav>
     <div class="event-overview-grid"><div class="event-overview-column">
+      ${subprojectCount ? eventOverviewSection('rooms', 'Sub-projects', `${subprojectCount} ${subprojectCount === 1 ? 'room' : 'rooms'}`, eventOverviewSubprojects(event)) : ''}
       ${eventOverviewSection('assets', 'Assets', `${prepared} of ${required} prepared`, eventOverviewAssets(event))}
       ${eventOverviewSection('people', 'Manpower and vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
       ${eventOverviewSection('truck', 'Transport', `${operations.transport?.length || 0} booking(s)`, eventOverviewTransport(operations.transport || []))}
@@ -17612,6 +18067,18 @@ function maintenanceLogTypeSelectHtml(id, selectedType = DEFAULT_MAINTENANCE_LOG
       `).join('')}
     </select>
   `;
+}
+
+function maintenanceUploadLimitText() {
+  const configured = window.__MAINTENANCE_UPLOAD_LIMITS__ || {};
+  const imageMb = Math.max(1, Number(configured.imageMb || 50));
+  const videoMb = Math.max(1, Number(configured.videoMb || 250));
+  const requestMb = Math.max(1, Number(configured.requestMb || 256));
+  return `Images: ${imageMb} MB max each · Videos: ${videoMb} MB max each · ${requestMb} MB total per submission`;
+}
+
+function maintenanceUploadLimitHtml() {
+  return `<small class="maintenance-upload-limit">${escapeHtml(maintenanceUploadLimitText())}</small>`;
 }
 
 function maintenanceLogTypeMeta(type) {
@@ -19705,55 +20172,6 @@ async function addModelToEvent(eventId, brand, model, department, description = 
     const qtyInput = document.getElementById(qtyInputId);
     const requestedQuantity = Math.max(1, parseInt(qtyInput?.value, 10) || 1);
 
-    const availableAssets = window.currentEditAvailableAssets || [];
-    const availabilityList = window.currentEditAvailabilityList || [];
-
-    let eventData = window.currentEditEvent;
-
-    if (!eventData || Number(eventData.id) !== Number(eventId)) {
-      const eventResponse = await apiCall(`/api/events/${eventId}`);
-      eventData = eventResponse.data;
-      window.currentEditEvent = eventData;
-    }
-
-    const availabilityEntry = availabilityList.find(entry =>
-      entry.department === department &&
-      entry.brand === brand &&
-      entry.model === model
-    );
-
-    const physicalCount = availabilityEntry
-      ? Number(availabilityEntry.physical || 0)
-      : availableAssets.filter(asset =>
-          asset.department === department &&
-          asset.brand === brand &&
-          asset.model === model
-        ).length;
-
-    const currentGroup = Object.values(eventData.modelGroups || {}).find(group =>
-      group.department === department &&
-      group.brand === brand &&
-      group.model === model
-    );
-
-    const currentlyRequestedHere = Number(currentGroup?.requiredQuantity || 0);
-
-    if (physicalCount <= 0) {
-      showNotification(
-        'error',
-        `No inventory found for ${brand} ${model}${cleanDescription ? ` (${cleanDescription})` : ''}.`
-      );
-      return;
-    }
-
-    if (currentlyRequestedHere + requestedQuantity > physicalCount) {
-      showNotification(
-        'error',
-        `Cannot add ${requestedQuantity}. You only have ${physicalCount} total ${brand} ${model}${cleanDescription ? ` (${cleanDescription})` : ''} in inventory, and this event already requests ${currentlyRequestedHere}.`
-      );
-      return;
-    }
-
     await apiCall(`/api/events/${eventId}/models`, 'POST', {
       brand,
       model,
@@ -20005,30 +20423,12 @@ function editModelQuantity(eventId, brand, model, department, description = "") 
 }
 
 function populateEditQuantityModal(eventId, brand, model, department, currentQuantity, description) {
-  const cleanDescription = description || '';
-  const availableAssets = window.currentEditAvailableAssets || [];
-  const availabilityList = window.currentEditAvailabilityList || [];
-
-  const availabilityEntry = availabilityList.find(entry =>
-    entry.department === department &&
-    entry.brand === brand &&
-    entry.model === model
-  );
-
-  const maxQuantity = availabilityEntry
-    ? Number(availabilityEntry.physical || 0)
-    : availableAssets.filter(asset =>
-        asset.department === department &&
-        asset.brand === brand &&
-        asset.model === model
-      ).length;
-
   // Populate modal
   document.getElementById("editQuantityTitle").textContent = `Edit Quantity - ${brand} ${model}`;
   document.getElementById("editQuantityLabel").textContent = `Current quantity: ${currentQuantity}`;
   document.getElementById("editQuantityInput").value = currentQuantity;
   document.getElementById("editQuantityInput").min = 1;
-  document.getElementById("editQuantityInput").max = maxQuantity;
+  document.getElementById("editQuantityInput").removeAttribute("max");
   document.getElementById("editQuantityEventId").value = eventId;
   document.getElementById("editQuantityBrand").value = brand;
   document.getElementById("editQuantityModel").value = model;
@@ -20047,16 +20447,6 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
 
 async function updateModelQuantity(eventId, brand, model, department, newQuantity, description = "") {
   try {
-    const maxQuantity = parseInt(document.getElementById("editQuantityInput")?.max || "0", 10);
-
-    if (newQuantity > maxQuantity) {
-      showNotification(
-        "error",
-        `Cannot set quantity to ${newQuantity}. Only ${maxQuantity} total units exist in inventory.`
-      );
-      return;
-    }
-
     // Update the planning quantity atomically. Prepared assets stay attached,
     // including when the new requirement is smaller than the prepared amount.
     await apiCall(`/api/events/${eventId}/models`, "PUT", {
@@ -20081,21 +20471,10 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
 
 function validateEditQuantityInput() {
   const input = document.getElementById("editQuantityInput");
-  const maxQty = parseInt(input.max);
-  const currentQty = parseInt(
-    document.getElementById("editQuantityCurrentQty").value
-  );
-  let value = parseInt(input.value);
+  const value = parseInt(input.value);
 
   if (isNaN(value) || value < 1) {
     input.style.borderColor = "#dc3545";
-    return false;
-  }
-
-  if (value > maxQty) {
-    input.style.borderColor = "#dc3545";
-    input.value = maxQty;
-    showNotification("warning", `Maximum ${maxQty} available`);
     return false;
   }
 
@@ -20106,7 +20485,7 @@ function validateEditQuantityInput() {
 // Filter available assets for simple interface
 
 
-function validateQuantityInput(inputId, maxAvailable) {
+function validateQuantityInput(inputId) {
   const input = document.getElementById(inputId);
   if (!input) return;
 
@@ -20129,22 +20508,13 @@ function validateQuantityInput(inputId, maxAvailable) {
     return;
   }
 
-  // Check if value exceeds maximum
-  if (numValue > maxAvailable) {
-    input.value = maxAvailable;
-    input.style.borderColor = "#dc3545";
-    input.style.backgroundColor = "#fff5f5";
-    showNotification("warning", `Maximum ${maxAvailable} available`);
-    return;
-  }
-
   // Valid value
   input.style.borderColor = "#28a745";
   input.style.backgroundColor = "white";
 }
 
 // Handle when user clicks out of quantity input (blur event)
-function handleQuantityBlur(inputId, maxAvailable) {
+function handleQuantityBlur(inputId) {
   const input = document.getElementById(inputId);
   if (!input) return;
 
@@ -20158,15 +20528,8 @@ function handleQuantityBlur(inputId, maxAvailable) {
     return;
   }
 
-  // If value exceeds maximum, set to maximum
-  const numValue = parseInt(value);
-  if (numValue > maxAvailable) {
-    input.value = maxAvailable;
-    showNotification("warning", `Maximum ${maxAvailable} available`);
-  }
-
   // Final validation
-  validateQuantityInput(inputId, maxAvailable);
+  validateQuantityInput(inputId);
 }
 
 // Handle special key behaviors for quantity input
@@ -20485,7 +20848,9 @@ function modelAvailabilityReasonTooltip(available, physical, reasons = {}) {
   const overlapQty = Math.max(0, Number(reasons.overlap || 0));
   if (overlappingEvents.length > 0) {
     overlappingEvents.forEach(event => {
+      const eventId = Number(event?.eventId || 0);
       const eventName = String(event?.eventName || `Event ${event?.eventId || ''}`).trim();
+      const eventLabel = eventId ? `#${eventId}: ${eventName}` : eventName;
       const startDate = String(event?.startDate || '').trim();
       const endDate = String(event?.endDate || '').trim();
       const dateRange = startDate && endDate
@@ -20493,7 +20858,7 @@ function modelAvailabilityReasonTooltip(available, physical, reasons = {}) {
         : (startDate || endDate);
       const quantity = Math.max(0, Number(event?.quantity || 0));
       rows.push(
-        `${quantity} ${quantity === 1 ? 'asset is' : 'assets are'} used by ${eventName}` +
+        `${quantity} ${quantity === 1 ? 'asset is' : 'assets are'} used by ${eventLabel}` +
         `${dateRange ? ` (${dateRange})` : ''}`
       );
     });
@@ -21069,11 +21434,10 @@ function filterAvailableModels(searchTerm) {
           <div id="${qtyInputId}-availability" data-available="${displayCount}" data-physical="${physical}" data-availability-tooltip="${escapeHtmlAttr(encodeURIComponent(reasonTooltip))}" style="font-size: 12px; color: ${color};">${availabilityText}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
-          <!-- The maximum stays bound to physical availability so adjusted counts below 1 can still be requested. -->
-          <input type="number" id="${qtyInputId}" min="1" max="${physical}" value="1"
+          <input type="number" id="${qtyInputId}" min="1" value="1"
               style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
-              oninput="validateQuantityInput('${qtyInputId}', ${physical}); updateModelAvailabilityLabel('${qtyInputId}')"
-              onblur="handleQuantityBlur('${qtyInputId}', ${physical}); updateModelAvailabilityLabel('${qtyInputId}')"
+              oninput="validateQuantityInput('${qtyInputId}'); updateModelAvailabilityLabel('${qtyInputId}')"
+              onblur="handleQuantityBlur('${qtyInputId}'); updateModelAvailabilityLabel('${qtyInputId}')"
               onkeydown="handleQuantityKeydown(event)">
         <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;"
                 data-event-id="${eventId}"
@@ -21140,6 +21504,73 @@ function eventIsConsolidated(state, event) {
   );
 }
 
+function eventCustomAssetIdentity(custom) {
+  if (!custom) return '';
+  return [
+    normalizeCustomType(custom.type),
+    normalizeDepartmentCode(custom.department || 'UN'),
+    custom.name,
+    custom.company,
+    custom.description
+  ].map(value => String(value || '').trim().toLowerCase()).join('\u001f');
+}
+
+function eventCustomItemMatchesAsset(item, custom) {
+  return (
+    normalizeDepartmentCode(item?.departmentCode || item?.department || 'UN') ===
+      normalizeDepartmentCode(custom?.department || 'UN') &&
+    String(item?.description || '').trim().toLowerCase() ===
+      String(custom?.name || '').trim().toLowerCase()
+  );
+}
+
+function eventScopedCustomAssets(event, state, assets) {
+  const rooms = eventSubprojects(event);
+  const room = eventActiveSubproject(state, event);
+  if (rooms.length <= 1 || !room) return assets;
+
+  const roomItems = (room.items || []).filter(item => item?.isCustom);
+  const roomRefs = new Set(roomItems.flatMap(item => (item.assetRefs || []).map(String)));
+  const allocatedRefs = new Set(rooms.flatMap(subproject => (
+    (subproject.items || [])
+      .filter(item => item?.isCustom)
+      .flatMap(item => (item.assetRefs || []).map(String))
+  )));
+  const legacyItems = roomItems.filter(item => !(item.assetRefs || []).length);
+
+  return assets.filter(asset => {
+    const assetId = String(asset?.id || '');
+    if (roomRefs.has(assetId)) return true;
+    if (allocatedRefs.has(assetId)) return false;
+    const custom = asset?.parsedCustom || parseCustomAsset(assetId, asset);
+    return !!custom && legacyItems.some(item => eventCustomItemMatchesAsset(item, custom));
+  });
+}
+
+function groupEventCustomAssets(assets) {
+  const grouped = new Map();
+  (assets || []).forEach(asset => {
+    const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
+    if (!custom) return;
+    const key = eventCustomAssetIdentity(custom);
+    let row = grouped.get(key);
+    if (!row) {
+      row = {
+        ...asset,
+        id: String(asset.id || custom.id || ''),
+        assetIds: [],
+        members: [],
+        parsedCustom: { ...custom, quantity: 0 }
+      };
+      grouped.set(key, row);
+    }
+    row.assetIds.push(String(asset.id || custom.id || ''));
+    row.members.push(asset);
+    row.parsedCustom.quantity += Math.max(1, Number(custom.quantity || 1));
+  });
+  return Array.from(grouped.values());
+}
+
 function eventConsolidatedNotice(options = {}) {
   const interactive = options.interactive === true;
   return `
@@ -21170,13 +21601,25 @@ function eventSelectSubproject(stateName, subprojectId, renderFunction) {
 }
 
 function renderEventSubprojectTabs(stateName, event, renderFunction, label, options = {}) {
-  const rooms = eventSubprojects(event);
+  const storedRooms = eventSubprojects(event);
+  const showImplicitMain = options.showImplicitMain === true && storedRooms.length === 0;
+  const rooms = showImplicitMain
+    ? [{ id: '', name: 'Main Room', items: [], isImplicit: true }]
+    : storedRooms;
   const allowAdd = options.allowAdd === true;
   const allowDelete = options.allowDelete === true && rooms.length > 1;
   const allowRename = options.allowRename === true;
+  const allowReorder = options.allowReorder === true && rooms.length > 1;
+  const roomNeedsAttention = typeof options.roomNeedsAttention === 'function'
+    ? options.roomNeedsAttention
+    : null;
+  const roomWarning = typeof options.roomWarning === 'function'
+    ? options.roomWarning
+    : null;
+  const attentionLabel = String(options.attentionLabel || 'Items need attention');
   if (rooms.length <= 1 && !allowAdd) return '';
   const state = eventSubprojectStateByName(stateName);
-  const active = eventActiveSubproject(state, event);
+  const active = showImplicitMain ? rooms[0] : eventActiveSubproject(state, event);
   const consolidated = eventIsConsolidated(state, event);
   return `
     <div class="event-subproject-tabs" role="tablist" aria-label="${escapeHtmlAttr(label || 'Event sub-projects')}">
@@ -21188,34 +21631,52 @@ function renderEventSubprojectTabs(stateName, event, renderFunction, label, opti
           All requirements
         </button>
       ` : ''}
-      ${rooms.map(room => `
-        <span class="event-subproject-tab-wrap ${room === active ? 'active' : ''}"
+      ${rooms.map(room => {
+        const warning = roomWarning?.(room, event) || null;
+        const warningType = warning?.type === 'shortage' ? 'shortage' : 'degraded';
+        const warningLabel = String(warning?.label || attentionLabel);
+        const needsAttention = Boolean(warning) || roomNeedsAttention?.(room, event) === true;
+        const roomName = String(room.name || 'Room');
+        return `
+        <span class="event-subproject-tab-wrap ${room === active ? 'active' : ''} ${allowReorder ? 'is-reorderable' : ''} ${warning ? `has-warning has-warning-${warningType}` : ''}"
               data-subproject-drop-id="${escapeHtmlAttr(String(room.id || ''))}"
+              ${allowReorder ? `
+                draggable="true"
+                ondragstart="eventSubprojectOrderDragStart(event,${Number(event?.id || 0)},'${planEncode(room.id)}')"
+                ondragend="eventSubprojectOrderDragEnd(event)"
+              ` : ''}
               ondragover="eventSubprojectDragOver(event)"
               ondragleave="eventSubprojectDragLeave(event)"
               ondrop="eventSubprojectDrop(event,'${stateName}','${planEncode(room.id)}')">
           <button type="button" role="tab"
                   class="event-subproject-tab ${room === active ? 'active' : ''}"
                   aria-selected="${room === active}"
+                  aria-label="${escapeHtmlAttr(`${roomName}${needsAttention ? `, ${warningLabel}` : ''}`)}"
                   onclick="eventSelectSubproject('${stateName}','${planEncode(room.id)}','${renderFunction}')">
-            ${escapeHtml(room.name || 'Room')}
+            ${escapeHtml(roomName)}
+            ${needsAttention ? `
+              <span class="event-subproject-attention ${warning ? `event-subproject-attention-${warningType}` : ''}"
+                    aria-hidden="true"
+                    title="${escapeHtmlAttr(warningLabel)}">!</span>
+            ` : ''}
           </button>
-          ${allowRename ? `
+          ${allowRename && !room.isImplicit ? `
             <button type="button" class="event-subproject-rename"
-                    title="Rename ${escapeHtmlAttr(room.name || 'room')}"
-                    aria-label="Rename ${escapeHtmlAttr(room.name || 'room')}"
+                    title="Rename ${escapeHtmlAttr(roomName)}"
+                    aria-label="Rename ${escapeHtmlAttr(roomName)}"
                     onclick="event.stopPropagation();planRenameSubproject('${planEncode(room.id)}')">
               ${eventDetailsActionIconSvg('edit')}
             </button>
           ` : ''}
           ${allowDelete ? `
             <button type="button" class="event-subproject-delete"
-                    title="Delete ${escapeHtmlAttr(room.name || 'room')}"
-                    aria-label="Delete ${escapeHtmlAttr(room.name || 'room')}"
+                    title="Delete ${escapeHtmlAttr(roomName)}"
+                    aria-label="Delete ${escapeHtmlAttr(roomName)}"
                     onclick="event.stopPropagation();planOpenDeleteSubproject('${planEncode(room.id)}')">&times;</button>
           ` : ''}
         </span>
-      `).join('')}
+      `;
+      }).join('')}
       ${allowAdd ? `
         <button type="button" class="event-subproject-add" onclick="planAddSubproject()">
           <span aria-hidden="true">+</span> Sub-project
@@ -21238,12 +21699,60 @@ function eventSubprojectDragStart(event, encodedPayload) {
 
 function eventSubprojectDragEnd(event) {
   event.currentTarget?.classList.remove('is-dragging');
-  document.querySelectorAll('.event-subproject-tab-wrap.is-drop-target')
-    .forEach(element => element.classList.remove('is-drop-target'));
+  eventSubprojectClearDropTargets();
+}
+
+function eventSubprojectClearDropTargets() {
+  document.querySelectorAll(
+    '.event-subproject-tab-wrap.is-drop-target, ' +
+    '.event-subproject-tab-wrap.is-reorder-before, ' +
+    '.event-subproject-tab-wrap.is-reorder-after'
+  ).forEach(element => {
+    element.classList.remove(
+      'is-drop-target',
+      'is-reorder-before',
+      'is-reorder-after'
+    );
+    delete element.dataset.reorderPosition;
+  });
+}
+
+function eventSubprojectOrderDragStart(event, eventId, encodedSubprojectId) {
+  if (!event?.dataTransfer) return;
+  if (event.target?.closest?.('.event-subproject-rename, .event-subproject-delete')) {
+    event.preventDefault();
+    return;
+  }
+  const subprojectId = planDecode(encodedSubprojectId);
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData(
+    'application/x-showbase-subproject-order',
+    JSON.stringify({ eventId: Number(eventId || 0), subprojectId })
+  );
+  event.currentTarget?.classList.add('is-reordering');
+}
+
+function eventSubprojectOrderDragEnd(event) {
+  event.currentTarget?.classList.remove('is-reordering');
+  eventSubprojectClearDropTargets();
 }
 
 function eventSubprojectDragOver(event) {
-  if (!Array.from(event?.dataTransfer?.types || []).includes('application/x-showbase-subproject')) return;
+  const types = Array.from(event?.dataTransfer?.types || []);
+  if (types.includes('application/x-showbase-subproject-order')) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position = event.clientX < rect.left + (rect.width / 2)
+      ? 'before'
+      : 'after';
+    event.currentTarget.classList.toggle('is-reorder-before', position === 'before');
+    event.currentTarget.classList.toggle('is-reorder-after', position === 'after');
+    event.currentTarget.classList.remove('is-drop-target');
+    event.currentTarget.dataset.reorderPosition = position;
+    return;
+  }
+  if (!types.includes('application/x-showbase-subproject')) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
   event.currentTarget?.classList.add('is-drop-target');
@@ -21251,12 +21760,29 @@ function eventSubprojectDragOver(event) {
 
 function eventSubprojectDragLeave(event) {
   if (!event.currentTarget?.contains(event.relatedTarget)) {
-    event.currentTarget?.classList.remove('is-drop-target');
+    event.currentTarget?.classList.remove(
+      'is-drop-target',
+      'is-reorder-before',
+      'is-reorder-after'
+    );
+    if (event.currentTarget?.dataset) delete event.currentTarget.dataset.reorderPosition;
   }
 }
 
 async function eventSubprojectDrop(event, stateName, encodedTargetId) {
   event.preventDefault();
+  const orderPayload = event.dataTransfer?.getData(
+    'application/x-showbase-subproject-order'
+  );
+  if (orderPayload) {
+    await eventSubprojectOrderDrop(
+      event,
+      stateName,
+      planDecode(encodedTargetId),
+      orderPayload
+    );
+    return;
+  }
   event.currentTarget?.classList.remove('is-drop-target');
   let payload;
   try {
@@ -21288,6 +21814,57 @@ async function eventSubprojectDrop(event, stateName, encodedTargetId) {
       await returnPageRefreshSelected();
     }
   } catch (error) {}
+}
+
+async function eventSubprojectOrderDrop(event, stateName, targetSubprojectId, rawPayload) {
+  const position = event.currentTarget?.dataset?.reorderPosition === 'after'
+    ? 'after'
+    : 'before';
+  eventSubprojectClearDropTargets();
+  if (stateName !== 'planPageState') return;
+
+  let payload;
+  try {
+    payload = JSON.parse(rawPayload || '');
+  } catch (error) {
+    return;
+  }
+  const currentEvent = planPageState.event;
+  const sourceSubprojectId = String(payload?.subprojectId || '');
+  if (
+    !currentEvent?.id ||
+    Number(payload?.eventId) !== Number(currentEvent.id) ||
+    !sourceSubprojectId ||
+    sourceSubprojectId === String(targetSubprojectId)
+  ) return;
+
+  const rooms = eventSubprojects(currentEvent);
+  const source = rooms.find(room => String(room.id) === sourceSubprojectId);
+  const target = rooms.find(room => String(room.id) === String(targetSubprojectId));
+  if (!source || !target) return;
+
+  const reordered = rooms.filter(room => room !== source);
+  const targetIndex = reordered.indexOf(target);
+  reordered.splice(targetIndex + (position === 'after' ? 1 : 0), 0, source);
+  const orderedSubprojectIds = reordered.map(room => String(room.id || ''));
+  if (orderedSubprojectIds.every((id, index) => id === String(rooms[index]?.id || ''))) {
+    return;
+  }
+
+  planPageState.event.subprojects = reordered;
+  renderPlanPage();
+  try {
+    const response = await apiCall(
+      `/api/events/${currentEvent.id}/subprojects/reorder`,
+      'POST',
+      { orderedSubprojectIds }
+    );
+    planPageState.event.subprojects = response.data?.subprojects || reordered;
+    renderPlanPage();
+    showNotification('success', response.message || 'Sub-project order updated');
+  } catch (error) {
+    await refreshPlanSelectedEvent();
+  }
 }
 
 function eventSubprojectDragPayload(state, event, payload) {
@@ -21580,7 +22157,7 @@ function eventSubprojectAssetAllocations(event) {
   globalGroups.forEach(group => {
     const groupKey = eventSubprojectGroupKey(group);
     const candidates = (group.assignedAssets || []).filter(asset => (
-      asset?.id && !claimed.has(String(asset.id))
+      asset?.id && !asset?.isExtra && !claimed.has(String(asset.id))
     ));
     let cursor = 0;
     rooms.forEach(room => {
@@ -21602,29 +22179,72 @@ function eventSubprojectAssetAllocations(event) {
       const asset = candidates[cursor++];
       allocations.get(String(rooms[0].id))?.add(String(asset.id));
     }
+
+    (group.assignedAssets || []).filter(asset => (
+      asset?.id && asset?.isExtra && !claimed.has(String(asset.id))
+    )).forEach(asset => {
+      if (!rooms.length) return;
+      allocations.get(String(rooms[0].id))?.add(String(asset.id));
+      claimed.add(String(asset.id));
+    });
   });
   return allocations;
 }
 
 function eventSubprojectModelGroups(event, state) {
-  if (eventSubprojects(event).length <= 1) {
-    return Object.values(event?.modelGroups || {});
-  }
+  const rooms = eventSubprojects(event);
+  if (!rooms.length) return Object.values(event?.modelGroups || {});
   const room = eventActiveSubproject(state, event);
-  if (!room) return Object.values(event?.modelGroups || {});
+  if (!room) {
+    const roomExtraRefs = new Set(rooms.flatMap(row => (row.extraRefs || []).map(String)));
+    const roomOwnedRefs = new Set(rooms.flatMap(row => [
+      ...(row.extraRefs || []),
+      ...(row.items || []).flatMap(item => item?.assetRefs || [])
+    ].map(String)));
+    return Object.values(event?.modelGroups || {}).map(group => ({
+      ...group,
+      assignedAssets: (group.assignedAssets || []).map(asset => {
+        const assetId = String(asset?.id || '');
+        return {
+          ...asset,
+          isExtra: roomExtraRefs.has(assetId) || (
+            !roomOwnedRefs.has(assetId) && !!asset?.isExtra
+          )
+        };
+      })
+    }));
+  }
   const roomItems = eventSubprojectModelItems(room);
   const globalGroups = Object.values(event?.modelGroups || {});
   const globalByKey = new Map(globalGroups.map(group => [eventSubprojectGroupKey(group), group]));
   const allocations = eventSubprojectAssetAllocations(event).get(String(room.id)) || new Set();
-  const rooms = eventSubprojects(event);
+  const roomExtraRefs = new Set((room.extraRefs || []).map(String));
+  const explicitRoomRefs = new Set([
+    ...(room.extraRefs || []),
+    ...(room.items || []).flatMap(item => item?.assetRefs || [])
+  ].map(String));
 
   return Array.from(roomItems.entries()).map(([key, item]) => {
     const source = globalByKey.get(key) || item;
-    const assignedAssets = (source.assignedAssets || []).filter(asset => allocations.has(String(asset?.id || '')));
+    const assignedAssets = (source.assignedAssets || [])
+      .filter(asset => allocations.has(String(asset?.id || '')))
+      .map(asset => {
+        const assetId = String(asset?.id || '');
+        return {
+          ...asset,
+          isExtra: roomExtraRefs.has(assetId) || (
+            !explicitRoomRefs.has(assetId) && !!asset?.isExtra
+          )
+        };
+      });
     const hasTrackedSlots = (room.items || []).some(row => (
       eventSubprojectGroupKey(row) === key && Object.prototype.hasOwnProperty.call(row, 'preparedQuantity')
     ));
+    const hasTrackedReturnedSlots = (room.items || []).some(row => (
+      eventSubprojectGroupKey(row) === key && Object.prototype.hasOwnProperty.call(row, 'returnedPreparedQuantity')
+    ));
     let preparedSlots = Math.max(0, Number(item.preparedQuantity || 0));
+    let returnedPreparedSlots = Math.max(0, Number(item.returnedPreparedQuantity || 0));
     if (!hasTrackedSlots) {
       const sourceSlots = Math.max(0, Number(source.preparedSlotQuantity || 0));
       let priorRequired = 0;
@@ -21637,16 +22257,53 @@ function eventSubprojectModelGroups(event, state) {
         Math.max(0, sourceSlots - priorRequired)
       );
     }
+    if (!hasTrackedReturnedSlots) {
+      const sourceSlots = Math.max(0, Number(source.returnedPreparedSlotQuantity || 0));
+      let priorRequired = 0;
+      for (const otherRoom of rooms) {
+        if (otherRoom === room) break;
+        priorRequired += eventSubprojectModelItems(otherRoom).get(key)?.requiredQuantity || 0;
+      }
+      returnedPreparedSlots = Math.min(
+        item.requiredQuantity,
+        Math.max(0, sourceSlots - priorRequired)
+      );
+    }
     const assignedSpecific = assignedAssets.reduce(
       (total, asset) => total + Math.max(1, Number(asset?.quantity || 1)),
       0
     );
-    const returned = assignedAssets.reduce(
+    const countableAssignedSpecific = assignedAssets.reduce(
+      (total, asset) => total + (asset?.isExtra ? 0 : Math.max(1, Number(asset?.quantity || 1))),
+      0
+    );
+    const returnedSpecific = assignedAssets.reduce(
       (total, asset) => total + (asset?.status === 'returned' ? Math.max(1, Number(asset?.quantity || 1)) : 0),
       0
     );
-    const prepared = Math.max(0, assignedSpecific + preparedSlots - returned);
+    const countableReturnedSpecific = assignedAssets.reduce(
+      (total, asset) => total + (
+        !asset?.isExtra && asset?.status === 'returned'
+          ? Math.max(1, Number(asset?.quantity || 1))
+          : 0
+      ),
+      0
+    );
+    const activeExtraSpecific = assignedAssets.reduce(
+      (total, asset) => total + (
+        asset?.isExtra && asset?.status !== 'returned'
+          ? Math.max(1, Number(asset?.quantity || 1))
+          : 0
+      ),
+      0
+    );
+    const returned = returnedSpecific + returnedPreparedSlots;
+    const assigned = assignedSpecific + preparedSlots + returnedPreparedSlots;
+    const prepared = Math.max(0, assigned - returned);
     const required = Math.max(0, Number(item.requiredQuantity || 0));
+    const countableAssigned = countableAssignedSpecific + preparedSlots + returnedPreparedSlots;
+    const countableReturned = countableReturnedSpecific + returnedPreparedSlots;
+    const countablePrepared = Math.max(0, countableAssigned - countableReturned);
     return {
       ...source,
       department: item.department,
@@ -21656,15 +22313,16 @@ function eventSubprojectModelGroups(event, state) {
       requiredQuantity: required,
       assignedAssets,
       assignedSpecificQuantity: assignedSpecific,
-      assignedQuantity: assignedSpecific + preparedSlots,
+      assignedQuantity: assigned,
       returnedQuantity: returned,
       preparedSlotQuantity: preparedSlots,
+      returnedPreparedSlotQuantity: returnedPreparedSlots,
       openPreparedSlots: preparedSlots,
       preparedQuantity: prepared,
-      countableAssignedQuantity: Math.min(required, assignedSpecific + preparedSlots),
-      countableReturnedQuantity: Math.min(required, returned),
-      countablePreparedQuantity: Math.min(required, prepared),
-      extraPreparedQuantity: Math.max(0, prepared - required)
+      countableAssignedQuantity: Math.min(required, countableAssigned),
+      countableReturnedQuantity: Math.min(required, countableReturned),
+      countablePreparedQuantity: Math.min(required, countablePrepared),
+      extraPreparedQuantity: activeExtraSpecific + Math.max(0, countablePrepared - required)
     };
   });
 }
@@ -21700,42 +22358,25 @@ function planDecode(value) {
 }
 
 function planCustomAssets(eventData = planPageState.event) {
-  const customAssets = [];
-  const seen = new Set();
-
-  Object.values(eventData?.assetsByDepartment || {}).forEach(assets => {
-    (assets || []).forEach(asset => {
-      const custom = parseCustomAsset(asset.id, asset);
-      if (!custom || seen.has(custom.id)) return;
-      seen.add(custom.id);
-      customAssets.push({ ...custom, status: asset.status || 'assigned' });
-    });
-  });
-
-  const room = eventActiveSubproject(planPageState, eventData);
-  const roomCustomItems = (room?.items || []).filter(item => item?.isCustom);
-  const visibleAssets = room && eventSubprojects(eventData).length > 1
-    ? customAssets.filter(asset => roomCustomItems.some(item => (
-        (item.assetRefs || []).map(String).includes(String(asset.id)) ||
-        (
-          normalizeDepartmentCode(item.departmentCode || item.department || 'UN') ===
-            normalizeDepartmentCode(asset.department || 'UN') &&
-          String(item.description || '').trim().toLowerCase() ===
-            String(asset.name || '').trim().toLowerCase()
-        )
-      )))
-    : customAssets;
-
-  return visibleAssets.sort((a, b) =>
+  const customAssets = getCustomAssetsFromEvent(eventData || {});
+  const visibleAssets = eventScopedCustomAssets(eventData, planPageState, customAssets);
+  return groupEventCustomAssets(visibleAssets).map(asset => ({
+    ...asset.parsedCustom,
+    id: asset.id,
+    assetIds: asset.assetIds,
+    status: asset.status || 'assigned'
+  })).sort((a, b) =>
     compareByDisplayName(customAssetSortName(a), customAssetSortName(b))
   );
 }
 
 function planModelGroups(eventData = planPageState.event) {
-  return eventSubprojectModelGroups(eventData, planPageState).sort((a, b) => (
-    compareByDisplayName(a.department, b.department) ||
-    compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
-  ));
+  return eventSubprojectModelGroups(eventData, planPageState)
+    .filter(group => Number(group?.requiredQuantity || 0) > 0)
+    .sort((a, b) => (
+      compareByDisplayName(a.department, b.department) ||
+      compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
+    ));
 }
 
 function planEventSnapshot() {
@@ -22282,8 +22923,155 @@ function planAvailabilityFor(group) {
     assetOOC: Number(entry?.assetOOC || 0),
     assetMissing: Number(entry?.assetMissing || 0),
     bulkMaintenanceOOC: Number(entry?.bulkMaintenanceOOC || 0),
-    bulkMaintenanceMissing: Number(entry?.bulkMaintenanceMissing || 0)
+    bulkMaintenanceMissing: Number(entry?.bulkMaintenanceMissing || 0),
+    degradedDetails: Array.isArray(entry?.degradedDetails) ? entry.degradedDetails : []
   };
+}
+
+function planDegradedReasonDetail(availability) {
+  const details = Array.isArray(availability?.degradedDetails)
+    ? availability.degradedDetails
+    : [];
+  if (details.length === 0) {
+    return '\n\nDegradation reason: No reason recorded.';
+  }
+
+  const rows = details.map(detail => {
+    const quantity = Math.max(1, Number(detail?.quantity || 1));
+    const assetId = String(detail?.assetId || '').trim();
+    const label = detail?.isBulk
+      ? `${quantity} bulk unit${quantity === 1 ? '' : 's'}`
+      : (assetId || `${quantity} asset${quantity === 1 ? '' : 's'}`);
+    const reasons = [...new Set(
+      (Array.isArray(detail?.reasons) ? detail.reasons : [])
+        .map(reason => String(reason || '').trim())
+        .filter(Boolean)
+    )];
+    return `${label}: ${reasons.join('; ') || 'No reason recorded'}`;
+  });
+
+  return `\n\nWhy the degraded assets are degraded:\n- ${rows.join('\n- ')}`;
+}
+
+function planShowAvailabilityReason(encodedReason) {
+  let detail;
+  try {
+    detail = JSON.parse(planDecode(encodedReason));
+  } catch (error) {
+    detail = { summary: planDecode(encodedReason) };
+  }
+  showAppAlert({
+    title: 'Asset Availability',
+    buildMessage: container => {
+      container.classList.add('plan-availability-dialog');
+      const summary = document.createElement('div');
+      summary.className = 'plan-availability-dialog-summary';
+      summary.textContent = detail.summary || 'No unavailable assets were detected.';
+      container.appendChild(summary);
+
+      const overlappingEvents = Array.isArray(detail.overlappingEvents)
+        ? detail.overlappingEvents
+        : [];
+      if (!overlappingEvents.length) return;
+      const heading = document.createElement('strong');
+      heading.className = 'plan-availability-dialog-heading';
+      heading.textContent = 'Used by overlapping events';
+      container.appendChild(heading);
+
+      const list = document.createElement('div');
+      list.className = 'plan-availability-event-list';
+      overlappingEvents.forEach(event => {
+        const eventId = Number(event?.eventId || 0);
+        const eventName = String(event?.eventName || `Event ${eventId || ''}`).trim();
+        const quantity = Math.max(0, Number(event?.quantity || 0));
+        const startDate = String(event?.startDate || '').trim();
+        const endDate = String(event?.endDate || '').trim();
+        const dates = startDate && endDate && startDate !== endDate
+          ? `${startDate} - ${endDate}`
+          : (startDate || endDate);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'plan-availability-event-link';
+        button.innerHTML = `
+          <span><strong>${escapeHtml(eventId ? `#${eventId}: ${eventName}` : eventName)}</strong>
+          <small>${escapeHtml([
+            `${quantity} asset${quantity === 1 ? '' : 's'}`,
+            dates
+          ].filter(Boolean).join(' · '))}</small></span>
+          <span aria-hidden="true">View</span>
+        `;
+        button.addEventListener('click', () => {
+          document.querySelector('#appDialogModal [data-dialog-confirm]')?.click();
+          if (eventId) setTimeout(() => viewEvent(eventId, { updateHistory: false }), 0);
+        });
+        list.appendChild(button);
+      });
+      container.appendChild(list);
+    },
+    variant: 'warning'
+  });
+}
+
+function planAvailabilityDetail(group, availability, reasonTooltip = '') {
+  const allocations = planRequirementRoomAllocations(group, planPageState.event || {});
+  const allocatedQuantity = allocations.reduce(
+    (sum, allocation) => sum + allocation.quantity,
+    0
+  );
+  const usedHere = Math.max(0, Number(availability?.usedHere || 0));
+  const available = Math.max(0, Number(availability?.available || 0));
+  const physical = Math.max(0, Number(availability?.physical || 0));
+  const assetName = [group?.brand, group?.model].filter(Boolean).join(' ') || 'Asset';
+  const details = [
+    `Asset: ${assetName}`,
+    `Available: ${available} of ${physical}`,
+    `Assigned to this event: ${usedHere}`
+  ];
+
+  if (allocations.length > 0) {
+    details.push('', 'Sub-project breakdown:');
+    allocations.forEach(allocation => {
+      details.push(`- ${allocation.name}: ${allocation.quantity}`);
+    });
+    const unallocated = Math.max(usedHere - allocatedQuantity, 0);
+    if (unallocated > 0) details.push(`- Event-level or unallocated: ${unallocated}`);
+  } else if (usedHere > 0) {
+    details.push('', `- Main event plan: ${usedHere}`);
+  }
+
+  const factors = String(reasonTooltip || '')
+    .split('\n')
+    .slice(1)
+    .map(line => line.replace(/^\s*-\s*/, '').trim())
+    .filter(line => (
+      line &&
+      !line.includes('already requested for this event') &&
+      !line.includes(' used by #')
+    ));
+  if (factors.length > 0) {
+    details.push('', 'Other availability factors:');
+    factors.forEach(factor => details.push(`- ${factor}`));
+  }
+  return {
+    summary: details.join('\n'),
+    overlappingEvents: availability?.overlapEvents || []
+  };
+}
+
+function planAvailabilityLabelHtml(group, availability, reasonTooltip = '') {
+  const available = Math.max(0, Number(availability?.available || 0));
+  const physical = Math.max(0, Number(availability?.physical || 0));
+  const countText = `${available}/${physical || available} available`;
+  if (!reasonTooltip || available >= physical) return escapeHtml(countText);
+  return `
+    <button type="button"
+            class="plan-availability-count"
+            title="${escapeHtmlAttr(reasonTooltip)}"
+            aria-label="Show why only ${escapeHtmlAttr(countText)}"
+            onclick="planShowAvailabilityReason('${planEncode(JSON.stringify(planAvailabilityDetail(group, availability, reasonTooltip)))}')">
+      ${escapeHtml(countText)}
+    </button>
+  `;
 }
 
 function renderPlanAvailableResults() {
@@ -22321,15 +23109,10 @@ function renderPlanAvailableResults() {
           <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
         </div>
         <div class="plan-result-side">
-          ${modelAvailabilityLabelHtml(
-            availability.available,
-            availability.physical,
-            availabilityTooltip
-          )}
+          ${planAvailabilityLabelHtml(group, availability, availabilityTooltip)}
         </div>
         <div class="plan-inline-actions">
-          <input class="plan-search-input" id="${inputId}" type="number" min="1"
-                 max="${Math.max(1, availability.physical)}" value="1"
+          <input class="plan-search-input" id="${inputId}" type="number" min="1" value="1"
                  style="width:56px;min-height:30px;padding:5px 7px;">
           <button type="button" class="plan-button plan-button-small"
                   onclick="planAddModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}','${inputId}')">
@@ -22521,11 +23304,28 @@ function planCustomQuantityControl(custom) {
   `;
 }
 
+function planRequirementRoomAllocations(group, event = planPageState.event) {
+  const groupKey = eventSubprojectGroupKey(group);
+  return eventSubprojects(event)
+    .map(room => {
+      const item = eventSubprojectModelItems(room).get(groupKey);
+      return {
+        id: String(room.id || ''),
+        name: String(room.name || 'Unnamed room'),
+        quantity: Math.max(0, Number(item?.requiredQuantity || 0))
+      };
+    })
+    .filter(room => room.quantity > 0);
+}
+
 function planRequirementWarning(group) {
-  const required = Math.max(1, Number(group?.requiredQuantity || 1));
+  return planRequirementWarningForState(group, planPageState);
+}
+
+function planRequirementWarningForState(group, state = planPageState) {
+  const visibleRequired = Math.max(1, Number(group?.requiredQuantity || 1));
   const availability = planAvailabilityFor(group);
   const fulfillableForThisEvent = Math.max(0, Number(availability.capacity || 0));
-  const shortage = Math.max(required - fulfillableForThisEvent, 0);
   const availabilityDetail = availability.hasEntry
     ? modelAvailabilityReasonTooltip(
         availability.available,
@@ -22533,35 +23333,84 @@ function planRequirementWarning(group) {
         availability
       )
     : 'This asset model is not present in the current inventory.';
-  const event = planPageState.event || {};
+  const event = state?.event || planPageState.event || {};
   const rooms = eventSubprojects(event);
-  const room = eventActiveSubproject(planPageState, event);
+  const room = eventActiveSubproject(state, event);
+  const roomAllocations = planRequirementRoomAllocations(group, event);
+  const allocatedRequired = roomAllocations.reduce(
+    (sum, allocation) => sum + allocation.quantity,
+    0
+  );
+  const required = Math.max(
+    visibleRequired,
+    allocatedRequired > 0 ? allocatedRequired : visibleRequired
+  );
+  const shortage = Math.max(required - fulfillableForThisEvent, 0);
   const context = [
     `Event #${event.id || ''}: ${event.name || 'Unnamed event'}`,
     rooms.length > 1
       ? (room ? `Room: ${room.name || 'Unnamed room'}` : `Consolidated across ${rooms.length} rooms`)
       : ''
   ].filter(Boolean).join('\n');
+  const roomAllocationDetail = roomAllocations.length > 0 && rooms.length > 1
+    ? [
+        'Assigned to sub-projects:',
+        ...roomAllocations.map(allocation => (
+          `${allocation.name}: ${allocation.quantity}`
+        ))
+      ].join('\n')
+    : '';
   if (shortage > 0) {
+    const inventoryOverage = Math.max(required - availability.physical, 0);
+    const inventoryDetail = inventoryOverage > 0
+      ? `Required quantity is ${inventoryOverage} above the total inventory of ${availability.physical}.`
+      : '';
     return {
       type: 'shortage',
       quantity: shortage,
       availability,
       reason: `${context}\n\n${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
-        `Usable capacity for this event is ${fulfillableForThisEvent}.\n\n${availabilityDetail}`
+        `Usable capacity for this event is ${fulfillableForThisEvent}.` +
+        `${inventoryDetail ? `\n${inventoryDetail}` : ''}` +
+        `${roomAllocationDetail ? `\n\n${roomAllocationDetail}` : ''}\n\n${availabilityDetail}`
     };
   }
 
   const healthyCapacity = Math.max(0, Number(availability.healthyCapacity || 0));
   const degradedRequired = Math.max(required - healthyCapacity, 0);
   if (degradedRequired <= 0) return null;
+  const degradedReasonDetail = planDegradedReasonDetail(availability);
   return {
     type: 'degraded',
     quantity: degradedRequired,
     availability,
     reason: `${context}\n\n${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
-      `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.\n\n${availabilityDetail}`
+      `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.` +
+      `${degradedReasonDetail}` +
+      `${roomAllocationDetail ? `\n\n${roomAllocationDetail}` : ''}\n\n${availabilityDetail}`
   };
+}
+
+function planSubprojectWarning(room, event = planPageState.event) {
+  if (!room || !event) return null;
+  const roomState = {
+    ...planPageState,
+    event,
+    activeSubprojectId: String(room.id || '')
+  };
+  const groups = eventSubprojectModelGroups(event, roomState)
+    .filter(group => Number(group?.requiredQuantity || 0) > 0);
+  let degradedWarning = null;
+  for (const group of groups) {
+    const warning = planRequirementWarningForState(group, roomState);
+    if (warning?.type === 'shortage') {
+      return { type: 'shortage', label: 'Has asset shortage' };
+    }
+    if (warning?.type === 'degraded') degradedWarning = warning;
+  }
+  return degradedWarning
+    ? { type: 'degraded', label: 'Requires degraded assets' }
+    : null;
 }
 
 function planShowRequirementWarning(encodedReason, warningType = 'shortage') {
@@ -23217,7 +24066,14 @@ function renderPlanPage() {
           event,
           'renderPlanPage',
           'Planning sub-projects',
-          { allowAdd: true, allowDelete: true, allowRename: true }
+          {
+            allowAdd: true,
+            allowDelete: true,
+            allowRename: true,
+            allowReorder: true,
+            showImplicitMain: true,
+            roomWarning: planSubprojectWarning
+          }
         )}
         ${consolidated ? eventConsolidatedNotice() : ''}
         <div class="plan-workspace">
@@ -23366,7 +24222,7 @@ async function planRemoveModel(encodedDepartment, encodedBrand, encodedModel, en
   const model = planDecode(encodedModel);
   const confirmed = await showAppConfirm({
     title: 'Remove Requirement',
-    message: `Remove ${brand} ${model} from this event? Any specifically prepared units for this model will also be unprepared.`,
+    message: `Remove ${brand} ${model} from this event? Prepared units will remain attached and be shown as extra.`,
     confirmText: 'Remove',
     cancelText: 'Cancel',
     variant: 'danger'
@@ -23880,9 +24736,13 @@ function prepareNewEventDates(event) {
   return !end || start === end ? (start || end) : `${start} \u2013 ${end}`;
 }
 
-function prepareNewModelGroups(event = prepareNewPageState.event) {
-  return eventSubprojectModelGroups(event, prepareNewPageState)
-    .filter(group => Number(group?.requiredQuantity || 0) > 0)
+function prepareNewModelGroups(event = prepareNewPageState.event, state = prepareNewPageState) {
+  return eventSubprojectModelGroups(event, state)
+    .filter(group => (
+      Number(group?.requiredQuantity || 0) > 0
+      || Number(group?.extraPreparedQuantity || 0) > 0
+      || (group?.assignedAssets || []).some(asset => asset?.isExtra)
+    ))
     .sort((a, b) => {
       const departmentCompare = normalizeDepartmentCode(a.department || 'UN').localeCompare(
         normalizeDepartmentCode(b.department || 'UN'),
@@ -23906,9 +24766,9 @@ function prepareNewIsComplete(event = prepareNewPageState.event) {
   return totals.lineCount > 0 && totals.prepared >= totals.required;
 }
 
-function prepareNewTotals(event = prepareNewPageState.event) {
-  const groups = prepareNewModelGroups(event);
-  const customAssets = prepareNewCustomAssets(event);
+function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewPageState) {
+  const groups = prepareNewModelGroups(event, state);
+  const customAssets = prepareNewCustomAssets(event, state);
   const departmentsInUse = new Set(
     [
       ...groups.map(row => normalizeDepartmentCode(row.department || 'UN')),
@@ -23930,6 +24790,13 @@ function prepareNewTotals(event = prepareNewPageState.event) {
     extra: groups.reduce((sum, row) => sum + Number(row.extraPreparedQuantity || 0), 0),
     departments: departmentsInUse.size
   };
+}
+
+function prepareNewSubprojectNeedsAttention(room, event = prepareNewPageState.event) {
+  if (!room || !event) return false;
+  const roomState = { ...prepareNewPageState, activeSubprojectId: String(room.id || '') };
+  const totals = prepareNewTotals(event, roomState);
+  return totals.lineCount > 0 && totals.prepared < totals.required;
 }
 
 function prepareNewStatusBadge(status, label = '') {
@@ -24176,6 +25043,7 @@ function prepareNewModelSection(group) {
   ).filter(asset => !asset?.isBulk);
   const key = prepareNewModelKey(group);
   const complete = countablePrepared >= required;
+  const hasReturnedAnonymousSlots = Number(group.returnedPreparedSlotQuantity || 0) > 0;
   const isOpen = !isBulk && prepareNewPageState.expandedModels.has(key);
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
   const canAssignExactAssets = !isBulk;
@@ -24195,7 +25063,7 @@ function prepareNewModelSection(group) {
       ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
       : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
                  onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`)
-    : (complete
+    : (complete || hasReturnedAnonymousSlots
       ? `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
                  onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
       : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
@@ -24322,9 +25190,50 @@ function prepareNewStandaloneExtras() {
       if (asset?.isExtra && asset?.id) extrasShownInRequirements.add(String(asset.id));
     });
   });
-  return (prepareNewSnapshot().extras || []).filter(
-    asset => !extrasShownInRequirements.has(String(asset?.id || ''))
+  const event = prepareNewPageState.event || {};
+  const rooms = eventSubprojects(event);
+  const snapshotExtras = prepareNewSnapshot().extras || [];
+  if (!rooms.length) {
+    return snapshotExtras.filter(
+      asset => !extrasShownInRequirements.has(String(asset?.id || ''))
+    );
+  }
+
+  const consolidated = eventIsConsolidated(prepareNewPageState, event);
+  const activeRoom = eventActiveSubproject(prepareNewPageState, event);
+  const scopedExtraRefs = new Set(
+    consolidated
+      ? rooms.flatMap(room => (room.extraRefs || []).map(String))
+      : (activeRoom?.extraRefs || []).map(String)
   );
+  if (rooms.length === 1) {
+    snapshotExtras.forEach(asset => scopedExtraRefs.add(String(asset?.id || '')));
+  }
+
+  const assetsById = new Map();
+  Object.values(event?.modelGroups || {}).forEach(group => {
+    (group.assignedAssets || []).forEach(asset => {
+      if (asset?.id) assetsById.set(String(asset.id), asset);
+    });
+  });
+  Object.values(event?.assetsByDepartment || {}).forEach(assets => {
+    (assets || []).forEach(asset => {
+      if (asset?.id && !assetsById.has(String(asset.id))) {
+        assetsById.set(String(asset.id), asset);
+      }
+    });
+  });
+  snapshotExtras.forEach(asset => {
+    if (asset?.id && !assetsById.has(String(asset.id))) {
+      assetsById.set(String(asset.id), asset);
+    }
+  });
+
+  return Array.from(scopedExtraRefs)
+    .filter(assetId => !extrasShownInRequirements.has(assetId))
+    .map(assetId => assetsById.get(assetId))
+    .filter(Boolean)
+    .map(asset => ({ ...asset, isExtra: true }));
 }
 
 function prepareNewExtrasSection() {
@@ -24412,7 +25321,7 @@ function renderPrepareNewAssignment() {
   return departments + prepareNewExtrasSection();
 }
 
-function prepareNewCustomAssets(event = prepareNewPageState.event) {
+function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepareNewPageState) {
   const assets = getCustomAssetsFromEvent(event || {})
     .map(asset => ({
       ...asset,
@@ -24424,18 +25333,7 @@ function prepareNewCustomAssets(event = prepareNewPageState.event) {
       undefined,
       { numeric: true, sensitivity: 'base' }
     ));
-  const room = eventActiveSubproject(prepareNewPageState, event);
-  if (!room || eventSubprojects(event).length <= 1) return assets;
-  const customItems = (room.items || []).filter(item => item?.isCustom);
-  return assets.filter(asset => customItems.some(item => (
-    (item.assetRefs || []).map(String).includes(String(asset.id)) ||
-    (
-      normalizeDepartmentCode(item.departmentCode || item.department || 'UN') ===
-        normalizeDepartmentCode(asset.parsedCustom?.department || 'UN') &&
-      String(item.description || '').trim().toLowerCase() ===
-        String(asset.parsedCustom?.name || '').trim().toLowerCase()
-    )
-  )));
+  return groupEventCustomAssets(eventScopedCustomAssets(event, state, assets));
 }
 
 function renderPrepareNewCustomList() {
@@ -24444,16 +25342,22 @@ function renderPrepareNewCustomList() {
     return '<div class="prepare-new-empty">No miscellaneous or loan items.</div>';
   }
   const event = prepareNewPageState.event || {};
+  const consolidated = eventIsConsolidated(prepareNewPageState, event);
   const prepared = new Set(event.actuallyPrepared || []);
   const collected = new Set(event.customCollected || []);
   const returned = new Set(event.returnedItems || []);
   return customAssets.map(asset => {
     const custom = asset.parsedCustom;
-    const id = String(asset.id || '');
+    const ids = (asset.assetIds || [asset.id]).map(String).filter(Boolean);
+    const id = ids[0] || '';
     const encodedId = planEncode(id);
-    const isPrepared = prepared.has(id);
-    const isCollected = collected.has(id);
-    const isReturned = returned.has(id);
+    const preparedCount = ids.filter(assetId => prepared.has(assetId)).length;
+    const collectedCount = ids.filter(assetId => collected.has(assetId)).length;
+    const returnedCount = ids.filter(assetId => returned.has(assetId)).length;
+    const isPrepared = preparedCount === ids.length;
+    const isCollected = collectedCount === ids.length;
+    const isReturned = returnedCount === ids.length;
+    const collectedIds = ids.filter(assetId => collected.has(assetId) && !prepared.has(assetId));
     const dragPayload = eventSubprojectDragPayload(
       prepareNewPageState,
       prepareNewPageState.event,
@@ -24461,19 +25365,51 @@ function renderPrepareNewCustomList() {
     );
     let status = prepareNewStatusBadge('pending', 'Pending');
     let action = '';
-    if (isReturned) {
+    if (consolidated) {
+      if (isReturned) {
+        status = prepareNewStatusBadge('returned', 'Returned');
+      } else if (isPrepared) {
+        status = prepareNewStatusBadge('complete', 'Prepared');
+      } else if (custom.type === 'LOAN') {
+        if (isCollected) {
+          status = prepareNewStatusBadge('collected', 'Collected');
+          action = `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
+                            onclick="prepareNewUncollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(collectedIds))}')">Uncollect</button>`;
+        } else {
+          if (collectedCount > 0) {
+            status = prepareNewStatusBadge('collected', `${collectedCount} / ${ids.length} collected`);
+          }
+          const pendingIds = ids.filter(assetId => !collected.has(assetId) && !returned.has(assetId));
+          const consolidatedActions = [];
+          if (collectedIds.length) consolidatedActions.push(
+            `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
+                     onclick="prepareNewUncollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(collectedIds))}')">Uncollect</button>`
+          );
+          if (pendingIds.length) consolidatedActions.push(
+            `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
+                     onclick="prepareNewCollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(pendingIds))}')">Collect</button>`
+          );
+          action = consolidatedActions.join('');
+        }
+      }
+    } else if (isReturned) {
       status = prepareNewStatusBadge('returned', 'Returned');
     } else if (isPrepared) {
       status = prepareNewStatusBadge('complete', 'Prepared');
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}')">Undo</button>`;
+                        onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}')">Unprepare</button>`;
     } else if (custom.type === 'LOAN' && !isCollected) {
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collection</button>`;
+                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collect</button>`;
     } else {
       if (isCollected) status = prepareNewStatusBadge('collected', 'Collected');
-      action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepared</button>`;
+      action = custom.type === 'LOAN'
+        ? `<button type="button" class="plan-button plan-button-small plan-button-secondary"
+                   onclick="prepareNewUncollectCustom(${Number(event.id)}, '${encodedId}')">Uncollect</button>
+           <button type="button" class="plan-button plan-button-small"
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`
+        : `<button type="button" class="plan-button plan-button-small"
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepared</button>`;
     }
     const detail = custom.type === 'LOAN'
       ? (custom.company ? `From ${custom.company}` : '')
@@ -24489,7 +25425,7 @@ function renderPrepareNewCustomList() {
           ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
           <div style="margin-top:4px;">${status}</div>
         </div>
-        ${action}
+        ${action ? `<div class="prepare-new-custom-actions">${action}</div>` : ''}
       </div>
     `;
   }).join('');
@@ -24659,7 +25595,16 @@ function renderPrepareNewPage() {
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departments}</strong><span>Active Departments</span></div></div>
       </div>
     </div>
-    ${renderEventSubprojectTabs('prepareNewPageState', event, 'renderPrepareNewPage', 'Preparation sub-projects')}
+    ${renderEventSubprojectTabs(
+      'prepareNewPageState',
+      event,
+      'renderPrepareNewPage',
+      'Preparation sub-projects',
+      {
+        roomNeedsAttention: prepareNewSubprojectNeedsAttention,
+        attentionLabel: 'Has unprepared items'
+      }
+    )}
     ${consolidated ? eventConsolidatedNotice() : ''}
     <div class="prepare-new-workspace">
       <div class="prepare-new-column prepare-new-left">
@@ -24971,7 +25916,50 @@ async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey 
 }
 
 async function prepareNewCollectCustom(eventId, encodedAssetId) {
-  await collectCustomAsset(eventId, encodeURIComponent(planDecode(encodedAssetId)));
+  await prepareNewCollectCustomMany(eventId, planEncode(JSON.stringify([planDecode(encodedAssetId)])));
+}
+
+async function prepareNewCollectCustomMany(eventId, encodedAssetIds) {
+  let assetIds = [];
+  try {
+    assetIds = JSON.parse(planDecode(encodedAssetIds));
+  } catch (error) {
+    assetIds = [];
+  }
+  assetIds = Array.isArray(assetIds) ? assetIds.map(String).filter(Boolean) : [];
+  if (!assetIds.length) return;
+  try {
+    const response = await apiCall(`/api/events/${eventId}/custom-assets/collect`, 'POST', { assetIds });
+    const collectedCount = Number(response?.data?.collectedCount || assetIds.length);
+    showNotification('success', `${collectedCount} loan item${collectedCount === 1 ? '' : 's'} collected`);
+  } catch (error) {
+    showNotification('error', `Failed to collect item: ${error.message}`);
+    return;
+  }
+  await refreshPrepareNewSelectedEvent({ preserve: true });
+}
+
+async function prepareNewUncollectCustom(eventId, encodedAssetId) {
+  await prepareNewUncollectCustomMany(eventId, planEncode(JSON.stringify([planDecode(encodedAssetId)])));
+}
+
+async function prepareNewUncollectCustomMany(eventId, encodedAssetIds) {
+  let assetIds = [];
+  try {
+    assetIds = JSON.parse(planDecode(encodedAssetIds));
+  } catch (error) {
+    assetIds = [];
+  }
+  assetIds = Array.isArray(assetIds) ? assetIds.map(String).filter(Boolean) : [];
+  if (!assetIds.length) return;
+  try {
+    const response = await apiCall(`/api/events/${eventId}/custom-assets/uncollect`, 'POST', { assetIds });
+    const uncollectedCount = Number(response?.data?.uncollectedCount || assetIds.length);
+    showNotification('success', `${uncollectedCount} loan item${uncollectedCount === 1 ? '' : 's'} uncollected`);
+  } catch (error) {
+    showNotification('error', `Failed to uncollect item: ${error.message}`);
+    return;
+  }
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
@@ -27044,6 +28032,7 @@ function openBulkMaintenanceFaultModal(assetId) {
           <div class="form-group">
             <label class="form-label" for="bulkFaultMediaFiles">Photos / Videos</label>
             <input type="file" class="form-input" id="bulkFaultMediaFiles" multiple accept="image/*,video/*">
+            ${maintenanceUploadLimitHtml()}
             <div id="bulkFaultMediaFileList" class="maintenance-media-selection"></div>
           </div>
           <div class="form-group">
@@ -27167,6 +28156,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
           <div class="form-group">
             <label class="form-label" for="bulkFaultEditMediaFiles">Add Photos / Videos</label>
             <input type="file" class="form-input" id="bulkFaultEditMediaFiles" multiple accept="image/*,video/*">
+            ${maintenanceUploadLimitHtml()}
             <div id="bulkFaultEditMediaFileList" class="maintenance-media-selection"></div>
           </div>
           <div class="form-group">
@@ -27439,6 +28429,7 @@ function openBulkMaintenanceResolutionModal(assetId, faultKey, logNumber) {
           <div class="form-group">
             <label class="form-label" for="bulkResolutionMediaFiles">Photos / Videos</label>
             <input type="file" class="form-input" id="bulkResolutionMediaFiles" multiple accept="image/*,video/*">
+            ${maintenanceUploadLimitHtml()}
             <div id="bulkResolutionMediaFileList" class="maintenance-media-selection"></div>
           </div>
           <div class="modal-actions">
@@ -28704,6 +29695,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
                 multiple
               />
+              ${maintenanceUploadLimitHtml()}
               <div id="editMaintenanceMediaFileList" class="maintenance-media-selection"></div>
             </div>
 
@@ -30873,6 +31865,14 @@ function deliveryOrderPdfThemeColor() {
 function renderDeliveryOrderLetterheadHtml() {
     const safe = value => escapeHtml(String(value ?? ''));
     const logoUrl = getPdfLogoUrl();
+    const letterheadEnabled = pdfSettings?.letterheadEnabled !== false;
+    if (!letterheadEnabled) {
+        return logoUrl ? `
+            <div class="do-letterhead">
+                <div class="do-letterhead-brand"><img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo"></div>
+            </div>
+        ` : '';
+    }
     const companyName = String(pdfSettings?.companyName || '').trim();
     const customLines = String(pdfSettings?.letterheadText || '')
         .split(/\r?\n/)
@@ -32270,7 +33270,7 @@ function exportLogs() {
   }
 
   const csvCell = value => `"${String(value || '').replace(/"/g, '""')}"`;
-  const includeCompany = isOwnerUser();
+  const includeCompany = isPlatformAdminUser();
   const header = includeCompany
     ? ['Timestamp', 'Company Code', 'Company Name', 'User', 'Action']
     : ['Timestamp', 'User', 'Action'];
@@ -34147,7 +35147,10 @@ function eventOverviewNotice(event, progress) {
         ? `In progress  ·  Ends in ${days} day${days === 1 ? '' : 's'}`
         : 'In progress  ·  Ends today';
     }
-    case 'Returning': return `${Math.max(0, Number(event.returnableCount || 0))} still out`;
+    case 'Returning': {
+      const returnable = Math.max(0, Number(event.returnableCount || 0));
+      return `${returnable} asset${returnable === 1 ? '' : 's'} still out`;
+    }
     case 'Overdue': return 'Overdue return';
     case 'Closed': {
       const remaining = Math.max(progress.total - progress.done, 0);
@@ -35960,6 +36963,64 @@ function transferEventById(eventId) {
   return transferSelectableEvents().find(event => String(event.id || '') === id) || null;
 }
 
+function transferTargetSubprojects(event) {
+  return Array.isArray(event?.subprojects)
+    ? event.subprojects.filter(room => room && String(room.id || '').trim())
+    : [];
+}
+
+function transferEnsureTargetSubproject(event) {
+  const rooms = transferTargetSubprojects(event);
+  if (!rooms.length) {
+    transferPageState.targetSubprojectId = '';
+    return null;
+  }
+  const selected = rooms.find(room => (
+    String(room.id) === String(transferPageState.targetSubprojectId)
+  ));
+  if (selected) return selected;
+  transferPageState.targetSubprojectId = String(rooms[0].id || '');
+  return rooms[0];
+}
+
+function transferSelectedTargetSubproject() {
+  return transferEnsureTargetSubproject(
+    transferEventById(transferPageState.targetEventId)
+  );
+}
+
+function renderTransferTargetSubprojects(event) {
+  const rooms = transferTargetSubprojects(event);
+  if (!rooms.length) return '';
+  const selected = transferEnsureTargetSubproject(event);
+  return `
+    <div class="transfer-target-subprojects">
+      <span class="transfer-target-subprojects-label">Prepare for</span>
+      <div class="transfer-target-subproject-tabs" role="tablist" aria-label="Destination sub-project">
+        ${rooms.map(room => `
+          <button type="button" role="tab"
+                  class="transfer-target-subproject-tab ${room === selected ? 'active' : ''}"
+                  aria-selected="${room === selected}"
+                  onclick="transferChooseTargetSubproject('${planEncode(room.id)}')">
+            ${escapeHtml(room.name || 'Unnamed room')}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function transferChooseTargetSubproject(encodedSubprojectId) {
+  const subprojectId = planDecode(encodedSubprojectId);
+  if (!subprojectId || subprojectId === String(transferPageState.targetSubprojectId)) return;
+  transferPageState.targetSubprojectId = subprojectId;
+  resetTransferActionState();
+  renderTransferWorkspace();
+  if (transferPageState.sourceEventId && transferPageState.targetEventId) {
+    await loadTransferCandidates();
+  }
+}
+
 function transferUpdateCachedEventSummary(summary) {
   if (!summary?.id || !transferOptionsCache) return;
   ['events', 'sourceEvents', 'targetEvents'].forEach(listName => {
@@ -36057,14 +37118,17 @@ async function transferChooseEvent(role, eventId) {
     transferPageState.sourceEventId = id;
     if (Number(transferPageState.targetEventId) === id) {
       transferPageState.targetEventId = null;
+      transferPageState.targetSubprojectId = '';
       showNotification('info', 'Choose a different To Event for this transfer');
     }
   } else {
     transferPageState.targetEventId = id;
+    transferPageState.targetSubprojectId = '';
     if (Number(transferPageState.sourceEventId) === id) {
       transferPageState.sourceEventId = null;
       showNotification('info', 'Choose a different From Event for this transfer');
     }
+    transferEnsureTargetSubproject(transferEventById(id));
   }
 
   renderTransferWorkspace();
@@ -36079,6 +37143,7 @@ function renderTransferWorkspace() {
 
   const selectedSource = transferEventById(transferPageState.sourceEventId);
   const selectedTarget = transferEventById(transferPageState.targetEventId);
+  transferEnsureTargetSubproject(selectedTarget);
 
   container.innerHTML = `
     <div class="transfer-page">
@@ -36101,6 +37166,7 @@ function renderTransferWorkspace() {
         </div>
         ${renderTransferEventPickerCard('target', selectedTarget)}
       </div>
+      ${renderTransferTargetSubprojects(selectedTarget)}
 
       <div id="transfer-candidates-panel">
         ${renderTransferInitialMessage()}
@@ -36430,7 +37496,12 @@ async function transferDropdownAsset(encodedAssetId) {
   if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'transfer')) return;
   renderTransferCandidatesInPlace();
   try {
-    const response = await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    const response = await apiCall('/api/transfers/execute', 'POST', {
+      fromEventId: Number(fromEventId),
+      toEventId: Number(toEventId),
+      toSubprojectId: transferSelectedTargetSubproject()?.id || '',
+      assetIds: [assetId]
+    });
     setTransferCachedItemState(assetId, 'transferred');
     adjustTransferCandidateRequirement(assetId, -1, 1);
     updateTransferSummaryAfterMove(1, response.data);
@@ -36511,6 +37582,7 @@ async function executeSelectedTransfers() {
     const response = await apiCall('/api/transfers/execute', 'POST', {
       fromEventId: Number(fromEventId),
       toEventId: Number(toEventId),
+      toSubprojectId: transferSelectedTargetSubproject()?.id || '',
       assetIds
     });
     getTransferSelections('transfer').clear();
@@ -36564,7 +37636,10 @@ async function executeSelectedOfficePrepares() {
   try {
     for (const assetId of assetIds) {
       try {
-        await apiCall(`/api/events/${toEventId}/prepare`, 'POST', { assetId });
+        await apiCall(`/api/events/${toEventId}/prepare`, 'POST', {
+          assetId,
+          subprojectId: transferSelectedTargetSubproject()?.id || ''
+        });
         prepared.push(assetId);
       } catch (error) {
         failed.push({ assetId, error });
@@ -36641,7 +37716,8 @@ async function loadTransferCandidates(options = {}) {
 
   const fromEventId = sourceSelect.value;
   const toEventId = targetSelect.value;
-  const pairKey = `${fromEventId || ''}|${toEventId || ''}`;
+  const toSubprojectId = transferSelectedTargetSubproject()?.id || '';
+  const pairKey = `${fromEventId || ''}|${toEventId || ''}|${toSubprojectId}`;
   const pairChanged = window.__lastTransferPairKey !== pairKey;
   const openDropdowns = pairChanged
     ? []
@@ -36666,7 +37742,11 @@ async function loadTransferCandidates(options = {}) {
   }
 
   try {
-    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    const response = await apiCall(
+      `/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}` +
+      `&toEventId=${encodeURIComponent(toEventId)}` +
+      `&toSubprojectId=${encodeURIComponent(toSubprojectId)}`
+    );
     transferUpdateCachedEventSummary(response.data?.fromEvent);
     transferUpdateCachedEventSummary(response.data?.toEvent);
     transferCandidateCache = response.data?.candidates || [];
@@ -37022,7 +38102,7 @@ function renderTransferTargetPanel(data, commonGroups) {
     <section class="transfer-panel transfer-panel-target">
       <div class="transfer-panel-heading">
         <h3>To Event</h3>
-        <p>#${escapeHtml(data.toEvent?.id || '')} · ${escapeHtml(data.toEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.toEvent))}</p>
+        <p>#${escapeHtml(data.toEvent?.id || '')} · ${escapeHtml(data.toEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.toEvent))}${data.targetSubproject?.name ? `<br>${escapeHtml(data.targetSubproject.name)}` : ''}</p>
       </div>
       <div class="transfer-target-list">${rows}</div>
     </section>
@@ -37501,15 +38581,16 @@ function buildTransferPdfPagesV2(sections, context) {
     eventStateDisplayLabel(event.state || '')
   ].filter(Boolean).map(safe).join(' &middot; ');
 
-  const letterheadHtml = `
+  const showLetterheadText = pdfSettings?.letterheadEnabled !== false;
+  const letterheadHtml = (showLetterheadText || logoHtml) ? `
     <div class="transfer-report-letterhead">
-      <div>
+      ${showLetterheadText ? `<div>
         <strong>${safe(context.companyName || 'Showbase')}</strong>
         <span>Asset Operations</span>
-      </div>
+      </div>` : '<div></div>'}
       ${logoHtml}
     </div>
-  `;
+  ` : '';
   const reportHeaderHtml = `
     ${letterheadHtml}
     <div class="transfer-report-header">
@@ -37532,7 +38613,7 @@ function buildTransferPdfPagesV2(sections, context) {
       <div class="transfer-report-event to">
         <span>TO EVENT</span>
         <strong>#${safe(context.toEvent.id || context.toEventId)} ${safe(context.toEvent.name || '')}</strong>
-        <small>${eventMeta(context.toEvent)}</small>
+        <small>${eventMeta(context.toEvent)}${context.targetSubproject?.name ? ` &middot; ${safe(context.targetSubproject.name)}` : ''}</small>
       </div>
     </div>
   `;
@@ -37688,6 +38769,7 @@ async function generateTransferPdf(selectedModes = ['common']) {
       toEvent,
       fromEventId,
       toEventId,
+      targetSubproject: transferSelectedTargetSubproject(),
       companyName: pdfSettings?.companyName || currentUser?.company?.name || '',
       generatedBy,
       generatedAt: reportGeneratedAt(),

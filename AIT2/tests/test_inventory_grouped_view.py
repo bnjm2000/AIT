@@ -32,6 +32,9 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "withQuantity(counts.degradedAvailable, 'Degraded')" in script
     assert "statusBadgeHtml('deployed'" in script
     assert "conditionCounts.ooc, 'Out of commission'" in script
+    assert "`${conditionCounts.degraded} degraded`" in script
+    assert "degraded total" not in script
+    assert "`${availability.degradedAvailable} degraded available`" in script
 
 
 def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():
@@ -261,6 +264,8 @@ def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
     assert 'id="addEventModal" class="modal">\n      <div class="modal-content asset-details-shell">' not in template
     assert "<span>Date added</span>" in script
     assert "<span>Last modified</span>" in script
+    assert "<span>Days used</span>" in script
+    assert "/usage-summary" in script
     assert "asset.serial || '-'" in script
     assert "asset.serial2 || '-'" in script
     assert '<span>Version</span>' in script
@@ -407,6 +412,21 @@ def test_event_overview_notes_autosave_and_files_support_drag_and_drop():
     assert "eventOverviewUpdateFiles(eventId, files || [])" in script
     assert ".event-overview-file-dropzone.drag-active" in template
     assert "topic === 'event-notes' || topic === 'event-files'" in script
+
+
+def test_maintenance_upload_forms_show_configured_file_size_limits():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "'imageMb': max(1, MAINTENANCE_IMAGE_MAX_BYTES // MEBIBYTE)" in app_source
+    assert "'videoMb': max(1, MAINTENANCE_VIDEO_MAX_BYTES // MEBIBYTE)" in app_source
+    assert "os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 20 * MEBIBYTE)" in app_source
+    assert "os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 100 * MEBIBYTE)" in app_source
+    assert "window.__MAINTENANCE_UPLOAD_LIMITS__" in template
+    assert "MB max each" in template
+    assert "function maintenanceUploadLimitText()" in script
+    assert script.count("${maintenanceUploadLimitHtml()}") >= 5
 
 
 def test_prepare_extras_stay_in_matching_requirement_rows():
@@ -566,6 +586,20 @@ def test_inventory_selection_can_open_bulk_maintenance_workflow():
     assert "openMaintenanceModal(selectedAssets.map(inventoryAssetIdentifier))" in script
     assert "function addAssetsToMaintenanceSelection(assetIds, { replace = false } = {})" in script
     assert "function replaceMaintenanceAssetSelection(assetIds = [])" in script
+
+
+def test_inventory_selected_count_clears_the_current_selection():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="inventory-selected-count"' in script
+    assert 'class="inventory-selected-count-button"' in script
+    assert (
+        "document.getElementById('inventory-selected-count')?.addEventListener("
+        "'click', clearInventorySelection)"
+    ) in script
+    assert "countEl.disabled = selectedCount === 0" in script
+    assert ".inventory-selected-count-button:hover:not(:disabled)" in template
 
 
 def test_maintenance_preselection_is_part_of_modal_initialisation():

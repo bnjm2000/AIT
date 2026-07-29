@@ -3867,6 +3867,7 @@
       .maintenance-media-dropzone svg { width: 22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
       .maintenance-media-dropzone strong { font-size: 12px; }
       .maintenance-media-dropzone span { color:#64748b;font-size:10px; }
+      .maintenance-upload-limit { display:block;margin-top:5px;color:#667085;font-size:10px;line-height:1.4; }
       .maintenance-media-input { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
 
       .maintenance-event-reference-field {
@@ -5066,6 +5067,22 @@
         box-shadow: inset 0 0 0 2px var(--brand-main);
       }
 
+      .event-subproject-tab-wrap.is-reorderable .event-subproject-tab {
+        cursor: grab;
+      }
+
+      .event-subproject-tab-wrap.is-reordering {
+        opacity: .5;
+      }
+
+      .event-subproject-tab-wrap.is-reorder-before {
+        box-shadow: -3px 0 0 var(--brand-main);
+      }
+
+      .event-subproject-tab-wrap.is-reorder-after {
+        box-shadow: 3px 0 0 var(--brand-main);
+      }
+
       .event-subproject-tab-wrap .event-subproject-tab {
         padding-right: 9px;
       }
@@ -5074,6 +5091,9 @@
         min-height: 40px;
         padding: 7px 13px;
         flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
         border: 0;
         border-bottom: 3px solid transparent;
         color: #667085;
@@ -5093,6 +5113,44 @@
       .event-subproject-tab.active {
         color: var(--brand-main);
         border-bottom-color: var(--brand-main);
+      }
+
+      .event-subproject-attention {
+        display: inline-grid;
+        place-items: center;
+        width: 17px;
+        height: 17px;
+        flex: 0 0 17px;
+        border: 1px solid #fda29b;
+        border-radius: 50%;
+        background: #fff1f0;
+        color: #b42318;
+        font-size: 11px;
+        font-weight: 850;
+        line-height: 1;
+      }
+
+      .event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab {
+        color: #b42318;
+        background: #fff1f0;
+        border-bottom-color: #d92d20;
+      }
+
+      .event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab {
+        color: #b54708;
+        background: #fffaeb;
+        border-bottom-color: #f79009;
+      }
+
+      .event-subproject-attention-degraded {
+        border-color: #fec84b;
+        background: #fffaeb;
+        color: #b54708;
+      }
+
+      .event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab:hover,
+      .event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab:hover {
+        background: color-mix(in srgb, currentColor 9%, #fff);
       }
 
       .event-subproject-consolidated {
@@ -5218,6 +5276,10 @@
       #prepare-new-page-root.event-consolidated-mode .prepare-new-asset-controls button,
       #prepare-new-page-root.event-consolidated-mode .prepare-new-custom-row button {
         display: none !important;
+      }
+
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-custom-row .prepare-new-consolidated-loan-action {
+        display: inline-flex !important;
       }
 
       .event-subproject-delete-modal {
@@ -5870,6 +5932,77 @@
         font-size: 11px;
         text-align: right;
         white-space: nowrap;
+      }
+
+      .plan-availability-count {
+        padding: 0;
+        border: 0;
+        border-bottom: 1px dotted currentColor;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .plan-availability-count:hover,
+      .plan-availability-count:focus-visible {
+        color: var(--brand-main);
+        border-bottom-style: solid;
+      }
+
+      .plan-availability-dialog-summary {
+        white-space: pre-line;
+      }
+
+      .plan-availability-dialog-heading {
+        display: block;
+        margin-top: 16px;
+        color: #344054;
+        font-size: 12px;
+      }
+
+      .plan-availability-event-list {
+        display: grid;
+        gap: 7px;
+        margin-top: 7px;
+      }
+
+      .plan-availability-event-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 9px 10px;
+        border: 1px solid #d9e4e0;
+        border-radius: 6px;
+        background: #f8fbfa;
+        color: #29443c;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .plan-availability-event-link:hover,
+      .plan-availability-event-link:focus-visible {
+        border-color: var(--brand-main);
+        background: #edf8f5;
+      }
+
+      .plan-availability-event-link strong,
+      .plan-availability-event-link small {
+        display: block;
+      }
+
+      .plan-availability-event-link small {
+        margin-top: 2px;
+        color: #667085;
+        font-size: 10px;
+      }
+
+      .plan-availability-event-link > span:last-child {
+        color: var(--brand-main);
+        font-size: 10px;
+        font-weight: 750;
       }
 
       .plan-qty-control {
@@ -7298,11 +7431,16 @@
       }
 
       .prepare-new-custom-title,
+      .prepare-new-custom-actions,
       .plan-custom-form-actions {
         display: flex;
         align-items: center;
         gap: 7px;
         flex-wrap: wrap;
+      }
+
+      .prepare-new-custom-actions {
+        justify-content: flex-end;
       }
 
       .prepare-new-custom-title .department-badge {
@@ -8245,7 +8383,7 @@
       .return-assets-table-head,
       .return-asset-row {
         display: grid;
-        grid-template-columns: minmax(220px, 1.3fr) minmax(135px, 0.8fr) 78px minmax(150px, auto);
+        grid-template-columns: minmax(220px, 1.3fr) minmax(135px, 0.8fr) minmax(110px, auto) minmax(150px, auto);
         align-items: center;
         gap: 9px;
       }
@@ -8412,6 +8550,64 @@
         justify-content: flex-end;
         gap: 5px;
         min-width: 0;
+      }
+
+      .return-prepared-complete {
+        color: #15803d;
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .return-quantity-menu {
+        position: relative;
+      }
+
+      .return-quantity-menu > summary {
+        list-style: none;
+      }
+
+      .return-quantity-menu > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .return-more-button {
+        width: 30px;
+        padding: 5px;
+      }
+
+      .return-quantity-menu-popover {
+        position: absolute;
+        z-index: 30;
+        top: calc(100% + 5px);
+        right: 0;
+        display: grid;
+        min-width: 122px;
+        overflow: hidden;
+        border: 1px solid #d9deea;
+        border-radius: 7px;
+        background: #fff;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+      }
+
+      .return-quantity-menu-popover button {
+        border: 0;
+        border-bottom: 1px solid #edf0f5;
+        background: #fff;
+        color: #24324b;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 10px;
+        font-weight: 700;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .return-quantity-menu-popover button:last-child {
+        border-bottom: 0;
+      }
+
+      .return-quantity-menu-popover button:hover {
+        background: #f6f8fb;
       }
 
       .return-empty {
@@ -8780,6 +8976,59 @@
         border: 1px solid var(--transfer-line);
         border-radius: 8px;
         background: #f8faf9;
+      }
+
+      .transfer-target-subprojects {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: -4px 0 14px;
+        padding: 9px 12px;
+        border: 1px solid var(--transfer-line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .transfer-target-subprojects-label {
+        flex: 0 0 auto;
+        color: #53617a;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .transfer-target-subproject-tabs {
+        display: flex;
+        min-width: 0;
+        gap: 5px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+
+      .transfer-target-subproject-tab {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: 6px 11px;
+        border: 1px solid #d8e2df;
+        border-radius: 6px;
+        background: #f8faf9;
+        color: #536761;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .transfer-target-subproject-tab:hover,
+      .transfer-target-subproject-tab:focus-visible {
+        border-color: var(--transfer-violet);
+        color: var(--transfer-violet);
+      }
+
+      .transfer-target-subproject-tab.active {
+        border-color: var(--transfer-violet);
+        background: var(--transfer-brand-soft);
+        color: var(--transfer-violet);
       }
 
       .transfer-event-card {
@@ -9690,6 +9939,16 @@
           grid-template-columns: 1fr;
         }
 
+        .transfer-target-subprojects {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .transfer-target-subproject-tabs {
+          width: 100%;
+        }
+
         .transfer-direction {
           min-height: 32px;
           transform: rotate(90deg);
@@ -9761,6 +10020,10 @@
       }
 
     </style>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/accounting.css', v=accounting_css_version) }}"
+    />
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/split-screen.css', v=split_screen_css_version) }}"
@@ -10223,6 +10486,10 @@
               #inventory-section .inventory-control-footer { display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #e3ece9; }
               #inventory-section .inventory-control-footer .btn { min-height:34px;padding:6px 11px;font-size:11px; }
               #inventory-section #asset-count { margin-left:auto;color:var(--inventory-muted);font-size:11px;font-weight:700; }
+              #inventory-section .inventory-selected-count-button { padding:5px 7px;border:1px solid transparent;border-radius:5px;background:transparent;color:#495057;font:700 14px/1.2 inherit;cursor:pointer;transition:background-color .14s ease,border-color .14s ease,color .14s ease; }
+              #inventory-section .inventory-selected-count-button:hover:not(:disabled) { border-color:#b9d8cf;background:var(--inventory-green-soft);color:var(--inventory-green); }
+              #inventory-section .inventory-selected-count-button:focus-visible { outline:2px solid var(--inventory-green);outline-offset:2px; }
+              #inventory-section .inventory-selected-count-button:disabled { cursor:default;opacity:.72; }
               .inventory-catalogue { border:1px solid var(--inventory-line);border-radius:7px;background:#fff;overflow:visible; }
               .inventory-model-head,.inventory-model-summary { display:grid;grid-template-columns:minmax(190px,1.15fr) minmax(180px,1.25fr) minmax(105px,.55fr) minmax(110px,.55fr) minmax(120px,.6fr) 28px;gap:12px;align-items:center; }
               .inventory-model-head { padding:7px 12px;background:#f2f7f5;border-bottom:1px solid var(--inventory-line);color:#62756f;font-size:10px;font-weight:800;text-transform:uppercase; }
@@ -11262,6 +11529,7 @@
       .event-overview-asset-name { min-width:0; }.event-overview-asset-name strong,.event-overview-asset-name small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.event-overview-asset-name strong { color:#263b35;font-size:12px; }.event-overview-asset-name small { margin-top:2px;color:var(--eo-muted);font-size:10px; }
       .event-overview-count { text-align:right; }.event-overview-count strong,.event-overview-count span { display:block; }.event-overview-count strong { color:#2c413b;font-size:12px; }.event-overview-count span { color:#81908b;font-size:8px;text-transform:uppercase; }
       .event-overview-pills,.event-overview-internal-users { display:flex;flex-wrap:wrap;gap:5px; }.event-overview-pill { display:inline-flex;align-items:center;min-height:21px;padding:3px 7px;border:1px solid #dce6e2;border-radius:999px;background:#f8faf9;color:#465b55;font-size:9px; }
+      .event-overview-subprojects { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.event-overview-subproject { min-width:0;padding:10px;border:1px solid #e2e9e7;border-radius:6px;background:#fbfcfc; }.event-overview-subproject>div:first-child { display:flex;align-items:flex-start;justify-content:space-between;gap:8px; }.event-overview-subproject strong { color:#2b403a;font-size:11px; }.event-overview-subproject>div:first-child span,.event-overview-subproject>small { color:var(--eo-muted);font-size:9px; }.event-overview-subproject-items { display:flex;flex-wrap:wrap;gap:4px;margin-top:8px; }.event-overview-subproject-items span { padding:3px 6px;border-radius:4px;background:#edf4f1;color:#486159;font-size:9px; }
       .event-overview-crew { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.event-overview-person,.event-overview-trip,.event-overview-file { padding:10px;border:1px solid #e2e9e7;border-radius:6px;background:#fbfcfc; }
       .event-overview-person strong,.event-overview-trip strong,.event-overview-file strong { display:block;color:#2b403a;font-size:11px; }.event-overview-person span,.event-overview-trip span,.event-overview-file span { display:block;margin-top:3px;color:var(--eo-muted);font-size:10px; }
       .event-overview-trip+.event-overview-trip,.event-overview-file+.event-overview-file { margin-top:8px; }
@@ -11277,10 +11545,17 @@
       .event-overview-file-dropzone strong,.event-overview-file-dropzone small { display:block; }.event-overview-file-dropzone strong { font-size:10px; }.event-overview-file-dropzone small { margin-top:2px;color:var(--eo-muted);font-size:9px; }
       .event-overview-files-list { margin-top:9px; }.event-overview-file { display:flex;align-items:center;justify-content:space-between;gap:10px; }
       .event-overview-file>div:first-child { min-width:0; }.event-overview-file strong { overflow-wrap:anywhere; }.event-overview-file-actions { display:flex;align-items:center;gap:7px;flex:none; }
+      .event-overview-file-preview { display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer; }.event-overview-file-preview:hover strong { color:var(--eo-accent);text-decoration:underline; }
       .event-overview-file a { color:var(--eo-accent);font-size:10px;font-weight:700;text-decoration:none; }.event-overview-file-delete { display:grid;place-items:center;width:24px;height:24px;padding:0;border:1px solid #ead5d5;border-radius:5px;background:#fff;color:#a43f3f;font-size:17px;line-height:1;cursor:pointer; }
       .event-overview-file-delete:hover { border-color:#c96767;background:#fff4f4; }.event-overview-empty { padding:18px 10px;color:#7c8c87;font-size:11px;text-align:center; }
+      #eventFilePreviewModal .event-file-preview-shell { width:min(1040px,calc(100vw - 28px));height:min(820px,calc(100vh - 28px));max-width:none;max-height:none;padding:0;overflow:hidden;border-radius:8px; }
+      .event-file-preview-header { min-height:58px;padding:12px 16px;border-bottom:1px solid #dce6e2; }.event-file-preview-header>div { min-width:0; }.event-file-preview-header h3 { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+      .event-file-preview-body { display:grid;place-items:center;height:calc(100% - 112px);padding:14px;background:#eef3f1;overflow:auto; }
+      .event-file-preview-body iframe,.event-file-preview-body img,.event-file-preview-body video { display:block;width:100%;height:100%;border:0;border-radius:6px;background:#fff;object-fit:contain; }
+      .event-file-preview-body audio { width:min(620px,100%); }.event-file-preview-unavailable { max-width:460px;color:#667872;text-align:center; }
+      .event-file-preview-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:54px;padding:9px 14px;border-top:1px solid #dce6e2;background:#fff; }
       @media(max-width:980px){.event-overview-hero,.event-overview-grid{grid-template-columns:1fr}.event-overview-links{grid-template-columns:repeat(3,minmax(0,1fr))}}
-      @media(max-width:620px){ #eventDetailsModal .event-overview-shell{width:100vw;height:100vh;border:0;border-radius:0} #eventDetailsModal .event-overview-body{padding:10px}.event-overview-title-row{gap:8px}.event-overview-identity h1{font-size:19px}.event-overview-links{grid-template-columns:repeat(2,minmax(0,1fr))}.event-overview-metric{min-height:88px;padding:8px}.event-overview-metric strong{font-size:20px}.event-overview-crew{grid-template-columns:1fr}.event-overview-asset-row{grid-template-columns:minmax(0,1fr) 46px 46px 46px;gap:4px}}
+      @media(max-width:620px){ #eventDetailsModal .event-overview-shell,#eventFilePreviewModal .event-file-preview-shell{width:100vw;height:100vh;border:0;border-radius:0} #eventDetailsModal .event-overview-body{padding:10px}.event-overview-title-row{gap:8px}.event-overview-identity h1{font-size:19px}.event-overview-links{grid-template-columns:repeat(2,minmax(0,1fr))}.event-overview-metric{min-height:88px;padding:8px}.event-overview-metric strong{font-size:20px}.event-overview-crew,.event-overview-subprojects{grid-template-columns:1fr}.event-overview-asset-row{grid-template-columns:minmax(0,1fr) 46px 46px 46px;gap:4px}}
     </style>
 
     <!-- Event Details Modal -->
@@ -11292,6 +11567,21 @@
         </div>
         <div id="eventDetailsContent" class="modal-body event-overview-body">
           <!-- Event details will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Event File Preview Modal -->
+    <div id="eventFilePreviewModal" class="modal" onclick="if(event.target===this) closeEventFilePreview()">
+      <div class="modal-content event-file-preview-shell">
+        <div class="modal-header event-file-preview-header">
+          <div><h3 class="modal-title" id="eventFilePreviewTitle">File preview</h3></div>
+          <button type="button" class="close-btn" aria-label="Close file preview" onclick="closeEventFilePreview()">&times;</button>
+        </div>
+        <div id="eventFilePreviewBody" class="event-file-preview-body"></div>
+        <div class="event-file-preview-actions">
+          <a id="eventFilePreviewDownload" class="btn btn-secondary" href="#">Download</a>
+          <button type="button" class="btn btn-primary" onclick="closeEventFilePreview()">Close</button>
         </div>
       </div>
     </div>
@@ -11500,6 +11790,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 14v5h16v-5"/></svg>
               <strong>Photos and videos</strong>
               <span>Drop files here or choose files</span>
+              <span class="maintenance-upload-limit">Images: {{ maintenance_upload_limits.imageMb }} MB max each · Videos: {{ maintenance_upload_limits.videoMb }} MB max each · {{ maintenance_upload_limits.requestMb }} MB total per submission</span>
             </label>
             <input
               type="file"
@@ -11620,9 +11911,13 @@
 
       </main>
 
-    <script>window.__INITIAL_APP_SECTION__ = {{ initial_section|tojson }};</script>
+    <script>
+      window.__INITIAL_APP_SECTION__ = {{ initial_section|tojson }};
+      window.__MAINTENANCE_UPLOAD_LIMITS__ = {{ maintenance_upload_limits|tojson }};
+    </script>
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/finance.js', v=app_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/accounting.js', v=accounting_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/vehicles.js', v=vehicles_js_version) }}"></script>
   </body>

@@ -485,7 +485,7 @@ def _ocr_image(path: str) -> str:
 _AMOUNT_RE = re.compile(
     r"(?<![A-Za-z0-9])"
     r"(?P<currency>SGD|S\$|\$)?\s*"
-    r"(?P<amount>(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[\.,]\d{2})?)"
+    r"(?P<amount>(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[\.,]\d{1,2})?)"
     r"(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
@@ -551,8 +551,14 @@ def _amount_from_text(text: str) -> dict:
             raw_amount = match.group("amount")
             amount = _invoice_amount_number(raw_amount)
             has_currency = bool(match.group("currency"))
-            has_decimal = bool(re.search(r"[\.,]\d{2}$", raw_amount))
+            has_decimal = bool(re.search(r"[\.,]\d{1,2}$", raw_amount))
             if amount is None or amount <= 0:
+                continue
+            if re.match(
+                r"\s*[)\]]?\s*(?:%|percent\b)",
+                line[match.end():],
+                re.IGNORECASE,
+            ):
                 continue
             score = 15
             positive_distances = []
@@ -630,6 +636,17 @@ def _amount_from_text(text: str) -> dict:
                 )
             ):
                 score -= 45
+            if any(
+                phrase in lowered
+                for phrase in (
+                    "late fee",
+                    "late charge",
+                    "payment term",
+                    "upon receipt",
+                    "months of no payment",
+                )
+            ):
+                score -= 120
             if has_currency or "sgd" in lowered or "s$" in lowered:
                 score += 5
             if has_decimal:

@@ -194,6 +194,95 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         self.assertEqual(event.state, 'Closed')
         self.assertFalse(event.force_state_override)
 
+    def test_anonymous_prepared_quantity_supports_partial_return_and_unreturn(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Return test item',
+        }
+        event = self.make_event(
+            prepared_items=['[MODEL]AX|TestBrand|TestModel|5|Return test item'],
+            actually_prepared=[app_module._prepared_model_marker(group, 5)],
+        )
+
+        returned = self.client.post(
+            f'/api/events/{event.event_id}/return-prepared-quantity',
+            json={**group, 'quantity': 2},
+        )
+
+        self.assertEqual(returned.status_code, 200, returned.get_data(as_text=True))
+        event = self.data_manager.events[event.event_id]
+        self.assertEqual(app_module._event_prepared_slot_quantity(event, group), 3)
+        self.assertEqual(app_module._event_returned_prepared_slot_quantity(event, group), 2)
+        self.assertEqual(app_module._event_returnable_counts(event)['returnable'], 3)
+        self.assertEqual(app_module._event_returnable_counts(event)['total'], 5)
+
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        model_group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(model_group['preparedSlotQuantity'], 3)
+        self.assertEqual(model_group['returnedPreparedSlotQuantity'], 2)
+        self.assertEqual(model_group['returnedQuantity'], 2)
+
+        restored = self.client.post(
+            f'/api/events/{event.event_id}/unreturn-prepared-quantity',
+            json={**group, 'quantity': 1},
+        )
+        self.assertEqual(restored.status_code, 200, restored.get_data(as_text=True))
+        event = self.data_manager.events[event.event_id]
+        self.assertEqual(app_module._event_prepared_slot_quantity(event, group), 4)
+        self.assertEqual(app_module._event_returned_prepared_slot_quantity(event, group), 1)
+
+        too_many = self.client.post(
+            f'/api/events/{event.event_id}/unreturn-prepared-quantity',
+            json={**group, 'quantity': 2},
+        )
+        self.assertEqual(too_many.status_code, 409)
+
+    def test_specific_asset_can_reconcile_anonymous_slot_after_return(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Return test item',
+        }
+        event = self.make_event(
+            prepared_items=['[MODEL]AX|TestBrand|TestModel|1|Return test item'],
+            actually_prepared=[app_module._prepared_model_marker(group, 1)],
+        )
+        returned = self.client.post(
+            f'/api/events/{event.event_id}/return-prepared-quantity',
+            json={**group, 'quantity': 1},
+        )
+        self.assertEqual(returned.status_code, 200, returned.get_data(as_text=True))
+
+        # A later deployment must not prevent recording which asset had already
+        # returned from this event.
+        self.make_event(
+            event_id=2,
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+        available = self.client.get(
+            f'/api/assets/available-for-event/{event.event_id}'
+        )
+        self.assertEqual(available.status_code, 200, available.get_data(as_text=True))
+        self.assertIn('A-001', [row['id'] for row in available.get_json()['data']])
+
+        assigned = self.client.post(
+            f'/api/events/{event.event_id}/assign-specific',
+            json={'assetId': 'A-001'},
+        )
+
+        self.assertEqual(assigned.status_code, 200, assigned.get_data(as_text=True))
+        event = self.data_manager.events[event.event_id]
+        self.assertEqual(app_module._event_returned_prepared_slot_quantity(event, group), 0)
+        self.assertNotIn('A-001', event.actually_prepared)
+        self.assertIn('A-001', event.returned_items)
+        self.assertEqual(self.data_manager.inventory['A-001'].current_location, 'Store')
+        self.assertEqual(app_module._event_returnable_counts(event)['returnable'], 0)
+        self.assertEqual(app_module._event_returnable_counts(event)['returned'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

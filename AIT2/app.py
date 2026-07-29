@@ -207,6 +207,7 @@ _inventory_action_lock = threading.RLock()
 _planning_templates_lock = threading.RLock()
 _finance_lock = threading.RLock()
 _event_creation_lock = threading.RLock()
+_event_file_action_locks = defaultdict(threading.RLock)
 _upload_processing_executor = ThreadPoolExecutor(
     max_workers=max(1, int(os.environ.get('UPLOAD_PROCESSING_WORKERS', '1'))),
     thread_name_prefix='upload-processing',
@@ -219,13 +220,13 @@ _realtime_sequence = 0
 
 MEBIBYTE = 1024 * 1024
 EVENT_FILE_MAX_BYTES = int(
-    os.environ.get('EVENT_FILE_MAX_BYTES', 50 * MEBIBYTE)
+    os.environ.get('EVENT_FILE_MAX_BYTES', 20 * MEBIBYTE)
 )
 MAINTENANCE_IMAGE_MAX_BYTES = int(
-    os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 50 * MEBIBYTE)
+    os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 20 * MEBIBYTE)
 )
 MAINTENANCE_VIDEO_MAX_BYTES = int(
-    os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 250 * MEBIBYTE)
+    os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 100 * MEBIBYTE)
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -239,7 +240,7 @@ SYSTEM_LOG_COMPANY_CODE = 'SYSTEM'
 SYSTEM_LOG_COMPANY_NAME = 'System'
 SUPER_ADMIN_USERNAME = 'bnjm2000'
 ROLE_LABELS = {
-    'owner': 'Owner',
+    'owner': 'Admin',
     'admin': 'Admin',
     'manager': 'Manager',
     'user': 'User',
@@ -409,7 +410,6 @@ def _company_record_frontend_folder(record):
 _COMPANY_STORAGE_CATEGORIES = (
     ('uploads', 'Invoices, claims & expense uploads'),
     ('events', 'Events & event files'),
-    ('event_backups', 'Event backups'),
     ('maintenance', 'Maintenance files'),
     ('inventory', 'Inventory & asset data'),
     ('workforce', 'Manpower & transport data'),
@@ -439,8 +439,6 @@ def _company_storage_category(root_kind, relative_path):
         return 'branding'
     if relative_path.startswith('workforce_uploads/'):
         return 'uploads'
-    if relative_path.startswith('event_backups/'):
-        return 'event_backups'
     if relative_path.startswith('maintenance_media/') or stem.startswith('maintenance'):
         return 'maintenance'
     if relative_path.startswith('events/'):
@@ -696,6 +694,11 @@ def _normalise_company_registry(registry):
 
     companies = registry.get('companies') if isinstance(registry.get('companies'), dict) else {}
     user_companies = registry.get('userCompanies') if isinstance(registry.get('userCompanies'), dict) else {}
+    user_company_memberships = (
+        registry.get('userCompanyMemberships')
+        if isinstance(registry.get('userCompanyMemberships'), dict)
+        else {}
+    )
     raw_super_admins = registry.get('superAdmins')
 
     default_record = _new_company_record(DEFAULT_COMPANY_CODE, DEFAULT_COMPANY_NAME)
@@ -739,6 +742,20 @@ def _normalise_company_registry(registry):
         if username and code in normalised_companies:
             normalised_users[username] = code
 
+    normalised_memberships = {}
+    for username, raw_codes in user_company_memberships.items():
+        username = str(username or '').strip()
+        if not username:
+            continue
+        codes = raw_codes if isinstance(raw_codes, list) else [raw_codes]
+        valid_codes = []
+        for raw_code in codes:
+            code = _normalise_company_code(raw_code)
+            if code in normalised_companies and code not in valid_codes:
+                valid_codes.append(code)
+        if valid_codes:
+            normalised_memberships[username] = valid_codes
+
     if isinstance(raw_super_admins, list):
         super_admins = [
             str(username or '').strip()
@@ -771,6 +788,7 @@ def _normalise_company_registry(registry):
         'defaultCompany': default_company,
         'companies': normalised_companies,
         'userCompanies': normalised_users,
+        'userCompanyMemberships': normalised_memberships,
         'superAdmins': deduped_super_admins,
         'updatedAt': str(registry.get('updatedAt') or '').strip(),
     }
@@ -835,10 +853,33 @@ def _all_company_records():
     return _load_company_registry()['companies']
 
 
-def _user_assigned_company_code(username):
+def _user_company_codes(username):
     registry = _load_company_registry()
     username = str(username or '').strip()
-    return registry.get('userCompanies', {}).get(username) or registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+    codes = list(registry.get('userCompanyMemberships', {}).get(username) or [])
+    legacy_code = registry.get('userCompanies', {}).get(username)
+    if not codes and legacy_code:
+        codes.append(legacy_code)
+    return [
+        code for code in codes
+        if code in registry.get('companies', {})
+    ]
+
+
+def _user_assigned_company_code(username, preferred_company=None):
+    registry = _load_company_registry()
+    codes = _user_company_codes(username)
+    preferred = _normalise_company_code(
+        preferred_company or (session.get('company_code') if has_request_context() else None)
+    )
+    if preferred in codes:
+        return preferred
+    if len(codes) == 1:
+        return codes[0]
+    legacy = registry.get('userCompanies', {}).get(str(username or '').strip())
+    if legacy in codes:
+        return legacy
+    return registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
 
 
 def _assign_user_to_company(username, company_code):
@@ -849,7 +890,43 @@ def _assign_user_to_company(username, company_code):
         return registry
     if code not in registry['companies']:
         raise ValueError('Company not found')
-    registry['userCompanies'][username] = code
+    memberships = registry.setdefault('userCompanyMemberships', {})
+    codes = list(memberships.get(username) or [])
+    legacy_code = registry.get('userCompanies', {}).get(username)
+    if not codes and legacy_code:
+        codes.append(legacy_code)
+    if code not in codes:
+        codes.append(code)
+    memberships[username] = codes
+    if len(codes) == 1:
+        registry['userCompanies'][username] = code
+        memberships.pop(username, None)
+    else:
+        # The legacy map can only represent one company. Removing an
+        # ambiguous entry prevents one company from hijacking another.
+        registry['userCompanies'].pop(username, None)
+    return _save_company_registry(registry)
+
+
+def _unassign_user_from_company(username, company_code):
+    registry = _load_company_registry()
+    username = str(username or '').strip()
+    code = _normalise_company_code(company_code)
+    memberships = registry.setdefault('userCompanyMemberships', {})
+    existing_codes = list(memberships.get(username) or [])
+    legacy_code = registry.get('userCompanies', {}).get(username)
+    if not existing_codes and legacy_code:
+        existing_codes.append(legacy_code)
+    codes = [item for item in existing_codes if item != code]
+    if codes:
+        memberships[username] = codes
+    else:
+        memberships.pop(username, None)
+    if len(codes) == 1:
+        registry['userCompanies'][username] = codes[0]
+        memberships.pop(username, None)
+    else:
+        registry['userCompanies'].pop(username, None)
     return _save_company_registry(registry)
 
 
@@ -875,6 +952,82 @@ def _update_username_history_references(old_username, new_username, company_code
             manager.release_write_request()
 
 
+def _username_history_reference_counts(manager, username):
+    """Count company-scoped history that a recreated username would inherit."""
+    username = str(username or '').strip()
+    counts = {
+        'systemLogs': 0,
+        'eventLogs': 0,
+        'maintenanceLogs': 0,
+        'quotes': 0,
+    }
+    if not username or manager is None:
+        return counts
+
+    counts['systemLogs'] = sum(
+        1 for log in getattr(manager, 'logs', []) or []
+        if getattr(log, 'user', '') == username
+    )
+    for event in getattr(manager, 'events', {}).values():
+        counts['eventLogs'] += sum(
+            1 for record in manager.normalize_event_logs(
+                getattr(event, 'event_logs', []) or []
+            )
+            if record.get('user') == username
+        )
+    for item in getattr(manager, 'inventory', {}).values():
+        counts['maintenanceLogs'] += sum(
+            1 for record in getattr(item, 'maintenance_logs', []) or []
+            if (
+                normalize_maintenance_log(record).get('user') == username
+                or (normalize_maintenance_log(record).get('source') or {}).get('recordedBy') == username
+            )
+        )
+    for container in getattr(manager, 'containers', {}).values():
+        counts['maintenanceLogs'] += sum(
+            1 for record in getattr(container, 'maintenance_logs', []) or []
+            if (
+                normalize_maintenance_log(record).get('user') == username
+                or (normalize_maintenance_log(record).get('source') or {}).get('recordedBy') == username
+            )
+        )
+
+    finance_data = None
+    if hasattr(manager, 'load_company_document'):
+        finance_data = manager.load_company_document('finance', None)
+    else:
+        finance_path = manager._data_path('Finance.json')
+        if os.path.isfile(finance_path):
+            try:
+                with open(finance_path, 'r', encoding='utf-8') as finance_file:
+                    finance_data = json.load(finance_file)
+            except (OSError, ValueError, TypeError):
+                finance_data = None
+
+    owner_keys = {'createdBy', 'updatedBy', 'salesperson', 'salespersonUsername'}
+
+    def contains_username(value):
+        if isinstance(value, list):
+            return any(contains_username(item) for item in value)
+        if isinstance(value, dict):
+            return any(
+                (key in owner_keys and item == username)
+                or (isinstance(item, (dict, list)) and contains_username(item))
+                for key, item in value.items()
+            )
+        return False
+
+    if isinstance(finance_data, dict):
+        counts['quotes'] = sum(
+            1 for document in finance_data.get('documents', []) or []
+            if isinstance(document, dict)
+            and str(document.get('type') or '').lower() in {'quotation', 'quote'}
+            and contains_username(document)
+        )
+    counts['total'] = sum(counts.values())
+    return counts
+
+
 def _user_is_assigned_to_current_company(username):
     current_company = _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
     user_company = _normalise_company_code(_user_assigned_company_code(username), DEFAULT_COMPANY_CODE)
@@ -885,6 +1038,40 @@ def _current_admin_can_manage_user(username):
     if _current_user_is_super_admin():
         return True
     return _user_is_assigned_to_current_company(username)
+
+
+def _active_company_admin_usernames(company_code):
+    """Return active company admins, excluding the global Showbase owner."""
+    code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    registry = _load_company_registry()
+    usernames = []
+    for username, user in data_manager.users.items():
+        assigned_code = _normalise_company_code(
+            registry.get('userCompanies', {}).get(username)
+            or registry.get('defaultCompany'),
+            DEFAULT_COMPANY_CODE,
+        )
+        if assigned_code != code or _is_owner_username(username):
+            continue
+        if (
+            getattr(user, 'is_active', True)
+            and _effective_user_role(user) == 'admin'
+        ):
+            usernames.append(username)
+    return usernames
+
+
+def _last_company_admin_error(company_code, self_update=False):
+    company_name = _company_payload(company_code).get('name') or company_code
+    if self_update:
+        return (
+            f'{company_name} must have at least one active admin. '
+            'Promote or activate another admin before changing your own admin account.'
+        )
+    return (
+        f'{company_name} must have at least one active admin. '
+        'Promote or activate another admin before changing this account.'
+    )
 
 
 def _role_label(role):
@@ -1009,18 +1196,19 @@ def _requested_role_from_payload(data, fallback=None):
 
 def _user_payload(user):
     role = _effective_user_role(user)
+    is_platform_admin = role == 'owner'
+    public_role = 'admin' if is_platform_admin else role
     company = _company_payload(_user_assigned_company_code(user.username))
     has_sales_access = _user_has_sales_access(user)
     return {
         'username': user.username,
         'name': getattr(user, 'name', '') or '',
         'phone': getattr(user, 'phone', '') or '',
-        'role': role,
-        'roleLabel': _role_label(role),
+        'role': public_role,
+        'roleLabel': _role_label(public_role),
         'isAdmin': user_role_is_adminish(role),
         'isManager': role == 'manager',
-        'isOwner': role == 'owner',
-        'isSuperAdmin': role == 'owner',
+        'isSuperAdmin': is_platform_admin,
         'canManageRoles': role in {'owner', 'admin'},
         'hasSalesAccess': has_sales_access,
         'isSales': has_sales_access,
@@ -1059,7 +1247,7 @@ def _set_user_super_admin(username, enabled):
     else:
         existing = [super_admin for super_admin in existing if super_admin.lower() != username.lower()]
         if not existing:
-            raise ValueError('At least one owner is required')
+            raise ValueError('This protected administrator account is required')
 
     registry['superAdmins'] = existing
     return _save_company_registry(registry)
@@ -1157,12 +1345,13 @@ def _event_assignee_payloads(event):
     rows = []
     for username in _event_assigned_usernames(event):
         user = data_manager.users.get(username) if data_manager else None
-        role = _effective_user_role(user or username)
+        internal_role = _effective_user_role(user or username)
+        public_role = 'admin' if internal_role == 'owner' else internal_role
         rows.append({
             'username': username,
             'name': getattr(user, 'name', '') if user else '',
-            'role': role,
-            'roleLabel': _role_label(role),
+            'role': public_role,
+            'roleLabel': _role_label(public_role),
             'isActive': bool(getattr(user, 'is_active', True)) if user else False,
         })
     return rows
@@ -1344,7 +1533,13 @@ def _user_management_company_for_request(default_company_code):
     if endpoint == 'login' and request.method == 'POST':
         payload = request.get_json(silent=True) or {}
         username = str(payload.get('username') or '').strip()
+        requested = _normalise_company_code(payload.get('companyCode'))
         registry = _load_company_registry()
+        if requested in registry.get('companies', {}) and requested in _user_company_codes(username):
+            return requested
+        memberships = _user_company_codes(username)
+        if len(memberships) == 1:
+            return memberships[0]
         assigned = _normalise_company_code(
             registry.get('userCompanies', {}).get(username)
         )
@@ -1365,6 +1560,13 @@ def _user_management_company_for_request(default_company_code):
 
     if endpoint in {'update_user', 'reset_user_password', 'delete_user'}:
         username = unquote_plus(str((request.view_args or {}).get('username') or ''))
+        payload = request.get_json(silent=True) or {}
+        requested = _normalise_company_code(
+            payload.get('sourceCompanyCode')
+            or request.args.get('companyCode')
+        )
+        if requested in _user_company_codes(username):
+            return requested
         registry = _load_company_registry()
         assigned = _normalise_company_code(
             registry.get('userCompanies', {}).get(username)
@@ -1815,9 +2017,67 @@ def _event_asset_realtime_change_for_request():
     return details
 
 
+_MUTATION_AUDIT_EXCLUDED_ENDPOINTS = {
+    '_finance_get_update_delete',
+    'asset_check_group',
+    'preview_asset_serial_ids',
+    'quotation_item',
+    'update_all_event_states',
+    'worker_company_status',
+    'worker_lookup',
+}
+
+_MUTATION_AUDIT_LABELS = {
+    'complete_company_branding_setup': 'Completed company branding setup',
+    'create_transport_location': 'Created a saved transport location',
+    'create_workforce_role': 'Created a workforce role',
+    'delete_transport_location': 'Deleted a saved transport location',
+    'delete_transport_profile': 'Deleted a saved transport profile',
+    'update_worker_profile': 'Updated worker profile',
+    'worker_access': 'Accessed the worker portal',
+    'worker_delete_submission': 'Deleted a worker submission',
+    'worker_setup_credentials': 'Set up worker portal credentials',
+    'worker_submission_details': 'Updated worker submission details',
+}
+
+
+def _fallback_mutation_audit_action():
+    """Return a readable audit entry for successful mutations with no explicit log."""
+    endpoint = str(request.endpoint or '').strip()
+    if (
+        request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}
+        or endpoint in _MUTATION_AUDIT_EXCLUDED_ENDPOINTS
+        or getattr(g, 'action_logged', False)
+        or 'user' not in session
+        or _current_user_is_owner()
+    ):
+        return ''
+
+    action = _MUTATION_AUDIT_LABELS.get(endpoint)
+    if not action:
+        words = endpoint.replace('_', ' ').strip()
+        verb = {
+            'POST': 'Completed',
+            'PUT': 'Updated',
+            'PATCH': 'Updated',
+            'DELETE': 'Deleted',
+        }.get(request.method, 'Completed')
+        action = words.capitalize() if words.startswith(verb.lower()) else f'{verb} {words}'
+
+    view_args = request.view_args or {}
+    if view_args.get('event_id') is not None and not re.search(r'\bevent\s+\d+\b', action, re.IGNORECASE):
+        action += f" for event {view_args['event_id']}"
+    elif view_args.get('asset_id') and 'asset' not in action.lower():
+        action += f" for asset {unquote_plus(str(view_args['asset_id']))}"
+    return action
+
+
 @app.after_request
 def publish_marked_realtime_changes(response):
     if response.status_code < 400:
+        fallback_action = _fallback_mutation_audit_action()
+        if fallback_action:
+            log_action(fallback_action)
         event_asset_change = _event_asset_realtime_change_for_request()
         if event_asset_change:
             changes = getattr(g, 'realtime_changes', [])
@@ -2228,6 +2488,7 @@ def _pdf_settings_defaults():
         'defaultTerms': DEFAULT_FINANCE_TERMS,
         'themeColor': DEFAULT_PDF_THEME_COLOR,
         'letterheadText': '',
+        'letterheadEnabled': True,
         'updatedAt': '',
     }
 
@@ -2290,6 +2551,12 @@ def _normalise_pdf_settings(settings, company_code=None):
     merged['invoicePrefix'] = re.sub(r'[^A-Z0-9_-]+', '', merged['invoicePrefix'].upper())[:12] or 'INV'
     merged['taxRate'] = max(0, min(100, _safe_float(merged.get('taxRate'), 0)))
     merged['defaultValidityDays'] = max(1, min(365, _safe_int(merged.get('defaultValidityDays'), 30)))
+    letterhead_enabled = merged.get('letterheadEnabled', True)
+    if isinstance(letterhead_enabled, str):
+        letterhead_enabled = letterhead_enabled.strip().lower() not in {
+            '', '0', 'false', 'no', 'off'
+        }
+    merged['letterheadEnabled'] = bool(letterhead_enabled)
     if not re.fullmatch(r'#[0-9A-Fa-f]{6}', merged.get('themeColor') or ''):
         merged['themeColor'] = DEFAULT_PDF_THEME_COLOR
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
@@ -2390,6 +2657,7 @@ def _pdf_settings_payload(settings=None):
         'defaultTerms': settings.get('defaultTerms', DEFAULT_FINANCE_TERMS),
         'themeColor': settings.get('themeColor', DEFAULT_PDF_THEME_COLOR),
         'letterheadText': settings.get('letterheadText', ''),
+        'letterheadEnabled': settings.get('letterheadEnabled', True),
         'updatedAt': settings.get('updatedAt', ''),
     }
 
@@ -2856,6 +3124,41 @@ def _asset_audit_changes(before, after, fields=None):
         })
 
     return changes
+
+
+def _asset_audit_log_value(value):
+    if isinstance(value, list):
+        text = ', '.join(str(item) for item in value if str(item or '').strip())
+    else:
+        text = str(value or '').strip()
+    return text or '-'
+
+
+def _asset_audit_log_summary(records, limit=8):
+    """Describe exact per-asset edits using the inventory audit snapshots."""
+    entries = []
+    for before, after in records or []:
+        changes = _asset_audit_changes(before, after)
+        if not changes:
+            continue
+        old_id = str(before.get('asset_id') or '').strip()
+        new_id = str(after.get('asset_id') or '').strip()
+        asset_label = (
+            f'{old_id} -> {new_id}'
+            if old_id and new_id and old_id != new_id
+            else new_id or old_id or 'Asset'
+        )
+        detail = '; '.join(
+            f"{change['label']}: {_asset_audit_log_value(change['old'])} -> "
+            f"{_asset_audit_log_value(change['new'])}"
+            for change in changes
+        )
+        entries.append(f'{asset_label}: {detail}')
+
+    visible = entries[:limit]
+    if len(entries) > limit:
+        visible.append(f'+{len(entries) - limit} more asset(s)')
+    return ' | '.join(visible)
 
 
 def _append_asset_change_history(asset, changes, timestamp=None, user=None, action='updated'):
@@ -3887,22 +4190,6 @@ def _event_planning_template_contents(event):
     return {'models': models, 'customAssets': custom_assets}
 
 
-def _planning_model_inventory_quantity(row):
-    group_key = _model_key_from_parts(
-        row['department'],
-        row['brand'],
-        row['model'],
-    )
-    return sum(
-        _asset_inventory_quantity(asset)
-        for asset in data_manager.inventory.values()
-        if asset
-        and not getattr(asset, 'is_missing', False)
-        and not _is_disposed(asset)
-        and _asset_group_key(asset) == group_key
-    )
-
-
 def _apply_planning_template_to_event(event, template, mode):
     replace = mode == 'replace'
     current_models = {}
@@ -3945,14 +4232,6 @@ def _apply_planning_template_to_event(event, template, mode):
                 current_models[key]['description'] = row['description']
         else:
             current_models[key] = dict(row)
-
-    for row in current_models.values():
-        physical = _planning_model_inventory_quantity(row)
-        if row['quantity'] > physical:
-            raise ValueError(
-                f"{row['brand']} {row['model']} would require "
-                f"{row['quantity']} unit(s), but only {physical} are in inventory"
-            )
 
     prepared_items = []
     for ref in getattr(event, 'prepared_items', []) or []:
@@ -4029,12 +4308,18 @@ def _event_returnable_counts(event):
     """
     _ensure_event_custom_lists(event)
 
-    returned_values = set(getattr(event, 'returned_items', []) or [])
+    returned_items = list(getattr(event, 'returned_items', []) or [])
+    returned_values = set(returned_items)
     active_refs = []
     seen_active = set()
 
     def add_active(ref):
-        if not isinstance(ref, str) or not ref or ref in returned_values or ref in seen_active:
+        if not isinstance(ref, str) or not ref or ref in seen_active:
+            return
+        # Anonymous prepared model quantities move between the active and
+        # returned lists in partial amounts. Their marker text is not an ID,
+        # so an equal marker in returned_items must not hide the active units.
+        if ref in returned_values and not _parse_prepared_model_marker(ref):
             return
         active_refs.append(ref)
         seen_active.add(ref)
@@ -4060,10 +4345,14 @@ def _event_returnable_counts(event):
         if bulk:
             return max(1, _safe_int(bulk.get('quantity'), 1))
 
+        prepared_model = _parse_prepared_model_marker(ref)
+        if prepared_model:
+            return max(1, _safe_int(prepared_model.get('quantity'), 1))
+
         return 1
 
     active_quantity = sum(ref_quantity(ref) for ref in active_refs)
-    returned_quantity = sum(ref_quantity(ref) for ref in returned_values)
+    returned_quantity = sum(ref_quantity(ref) for ref in returned_items)
 
     return {
         'returnable': active_quantity,
@@ -4716,13 +5005,31 @@ def _event_subproject_set_group_quantity(subproject, group, quantity):
         return
 
     primary = matches[0]
+    for duplicate in matches[1:]:
+        for field in ('preparedQuantity', 'returnedPreparedQuantity'):
+            if field in duplicate:
+                primary[field] = (
+                    max(0, _safe_int(primary.get(field), 0))
+                    + max(0, _safe_int(duplicate.get(field), 0))
+                )
+        primary_refs = primary.setdefault('assetRefs', [])
+        for ref in duplicate.get('assetRefs') or []:
+            if ref not in primary_refs:
+                primary_refs.append(ref)
+
     primary['quantity'] = quantity
     if group.get('description') and not primary.get('description'):
         primary['description'] = group['description']
     duplicate_ids = {id(item) for item in matches[1:]}
+    retain_zero_quantity_row = any((
+        max(0, _safe_int(primary.get('preparedQuantity'), 0)) > 0,
+        max(0, _safe_int(primary.get('returnedPreparedQuantity'), 0)) > 0,
+        bool(primary.get('assetRefs')),
+    ))
     subproject['items'] = [
         item for item in subproject.get('items') or []
-        if id(item) not in duplicate_ids and (item is not primary or quantity > 0)
+        if id(item) not in duplicate_ids
+        and (item is not primary or quantity > 0 or retain_zero_quantity_row)
     ]
 
 
@@ -4766,9 +5073,27 @@ def _event_subproject_adjust_prepared(subproject, group, delta):
     return updated
 
 
+def _event_subproject_adjust_returned_prepared(subproject, group, delta):
+    matches = _event_subproject_group_items(subproject, group)
+    if not matches:
+        return 0
+    item = matches[0]
+    current = max(0, _safe_int(item.get('returnedPreparedQuantity'), 0))
+    updated = max(0, current + _safe_int(delta, 0))
+    item['returnedPreparedQuantity'] = updated
+    return updated
+
+
 def _event_subproject_anonymous_prepared_quantity(subproject, group):
     return sum(
         max(0, _safe_int(item.get('preparedQuantity'), 0))
+        for item in _event_subproject_group_items(subproject, group)
+    )
+
+
+def _event_subproject_returned_prepared_quantity(subproject, group):
+    return sum(
+        max(0, _safe_int(item.get('returnedPreparedQuantity'), 0))
         for item in _event_subproject_group_items(subproject, group)
     )
 
@@ -4777,10 +5102,12 @@ def _event_subproject_prepared_quantity(event, subproject, group):
     total = _event_subproject_anonymous_prepared_quantity(subproject, group)
     returned = set(getattr(event, 'returned_items', []) or [])
     active = set(getattr(event, 'actually_prepared', []) or [])
+    extra_refs = set(getattr(event, 'extra_assets', []) or [])
+    extra_refs.update(subproject.get('extraRefs') or [])
     seen = set()
     for item in _event_subproject_group_items(subproject, group):
         for ref in item.get('assetRefs') or []:
-            if ref in seen or ref in returned or ref not in active:
+            if ref in seen or ref in returned or ref not in active or ref in extra_refs:
                 continue
             seen.add(ref)
             bulk = _parse_bulk_marker(ref)
@@ -4799,6 +5126,168 @@ def _event_subproject_assign_ref(subproject, group, asset_ref, consume_slot=Fals
     if consume_slot:
         _event_subproject_adjust_prepared(subproject, group, -1)
     return True
+
+
+def _event_subproject_ref_quantity(ref):
+    bulk = _parse_bulk_marker(ref)
+    if bulk:
+        return max(1, _safe_int(bulk.get('quantity'), 1))
+    prepared = _parse_prepared_model_marker(ref)
+    if prepared:
+        return max(1, _safe_int(prepared.get('quantity'), 1))
+    custom = _parse_custom_marker(ref)
+    if custom:
+        return max(1, _safe_int(custom.get('quantity'), 1))
+    return 1
+
+
+def _reconcile_event_subproject_extras(event):
+    """Make normal/extra preparation ownership authoritative per room.
+
+    Exact references that fit a room requirement live on that requirement's
+    ``assetRefs``. Surplus or unmatched references live in the same room's
+    ``extraRefs`` and are mirrored into the event-wide ``extra_assets`` list for
+    consolidated/legacy consumers. Increasing a requirement promotes matching
+    room extras in their existing order; reducing it demotes the latest refs.
+    """
+    rooms = [
+        room for room in (getattr(event, 'subprojects', []) or [])
+        if isinstance(room, dict)
+    ]
+    if not rooms:
+        return {'changed': False, 'promoted': [], 'demoted': []}
+
+    _ensure_event_custom_lists(event)
+    original_rooms = copy.deepcopy(rooms)
+    original_extras = list(event.extra_assets)
+    original_prepared_items = list(event.prepared_items)
+    active_physical = set(getattr(event, 'actually_prepared', []) or [])
+    active_physical.update(getattr(event, 'returned_items', []) or [])
+    valid_refs = set(active_physical)
+    valid_refs.update(getattr(event, 'prepared_items', []) or [])
+    valid_refs.update(getattr(event, 'custom_collected', []) or [])
+
+    promoted = []
+    demoted = []
+    claimed = set()
+
+    for room in rooms:
+        candidate_extras = []
+        for ref in room.get('extraRefs') or []:
+            if ref in valid_refs and ref not in candidate_extras and ref not in claimed:
+                candidate_extras.append(ref)
+
+        for item in room.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+
+            if item.get('isCustom'):
+                custom_refs = []
+                for ref in item.get('assetRefs') or []:
+                    if ref in valid_refs and ref not in claimed and ref not in custom_refs:
+                        custom_refs.append(ref)
+                        claimed.add(ref)
+                item['assetRefs'] = custom_refs
+                continue
+
+            group = _event_subproject_item_group(item)
+            if not group:
+                continue
+            group_key = _event_model_group_key(group)
+            required = max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+            anonymous = (
+                max(0, _safe_int(item.get('preparedQuantity'), 0))
+                + max(0, _safe_int(item.get('returnedPreparedQuantity'), 0))
+            )
+            remaining = max(0, required - anonymous)
+            normal_refs = []
+
+            for ref in item.get('assetRefs') or []:
+                if ref not in active_physical or ref in claimed or ref in normal_refs:
+                    continue
+                if _event_physical_ref_group_key(ref) != group_key:
+                    if ref not in candidate_extras:
+                        candidate_extras.append(ref)
+                    continue
+                quantity = _event_subproject_ref_quantity(ref)
+                partially_fills_bulk_requirement = bool(
+                    remaining > 0 and _parse_bulk_marker(ref)
+                )
+                if quantity <= remaining or partially_fills_bulk_requirement:
+                    normal_refs.append(ref)
+                    claimed.add(ref)
+                    remaining = max(0, remaining - quantity)
+                else:
+                    if ref not in candidate_extras:
+                        candidate_extras.append(ref)
+                    if ref not in demoted:
+                        demoted.append(ref)
+
+            for ref in list(candidate_extras):
+                if ref not in active_physical or ref in claimed:
+                    continue
+                if _event_physical_ref_group_key(ref) != group_key:
+                    continue
+                quantity = _event_subproject_ref_quantity(ref)
+                partially_fills_bulk_requirement = bool(
+                    remaining > 0 and _parse_bulk_marker(ref)
+                )
+                if quantity > remaining and not partially_fills_bulk_requirement:
+                    continue
+                normal_refs.append(ref)
+                claimed.add(ref)
+                remaining = max(0, remaining - quantity)
+                candidate_extras.remove(ref)
+                if ref not in promoted:
+                    promoted.append(ref)
+
+            item['assetRefs'] = normal_refs
+
+        room_extras = []
+        for ref in candidate_extras:
+            if ref not in valid_refs or ref in claimed or ref in room_extras:
+                continue
+            room_extras.append(ref)
+            claimed.add(ref)
+        room['extraRefs'] = room_extras
+
+    room_owned_refs = set()
+    room_extra_refs = []
+    for room in rooms:
+        for ref in room.get('extraRefs') or []:
+            room_owned_refs.add(ref)
+            if ref not in room_extra_refs:
+                room_extra_refs.append(ref)
+        for item in room.get('items') or []:
+            room_owned_refs.update(item.get('assetRefs') or [])
+
+    room_extra_ref_set = set(room_extra_refs)
+    promoted = [ref for ref in promoted if ref not in room_extra_ref_set]
+    demoted = [ref for ref in demoted if ref in room_extra_ref_set]
+
+    preserved_global_extras = [
+        ref for ref in event.extra_assets
+        if ref not in room_owned_refs and ref in valid_refs
+    ]
+    event.extra_assets = list(dict.fromkeys([
+        *preserved_global_extras,
+        *room_extra_refs,
+    ]))
+
+    normal_room_refs = room_owned_refs - room_extra_ref_set
+    for ref in normal_room_refs:
+        if _is_real_asset_ref(ref) and not _is_bulk_ref(ref):
+            _remove_direct_asset_ref_from_prepared_items(event, ref)
+
+    return {
+        'changed': (
+            original_rooms != rooms
+            or original_extras != event.extra_assets
+            or original_prepared_items != event.prepared_items
+        ),
+        'promoted': promoted,
+        'demoted': demoted,
+    }
 
 
 def _event_subproject_assign_custom_ref(subproject, custom, asset_ref):
@@ -4840,6 +5329,19 @@ def _event_prepared_slot_quantity(event, group):
     group_key = _event_model_group_key(group)
     total = 0
     for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker:
+            continue
+        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        if marker_key == group_key:
+            total += marker['quantity']
+    return total
+
+
+def _event_returned_prepared_slot_quantity(event, group):
+    group_key = _event_model_group_key(group)
+    total = 0
+    for ref in getattr(event, 'returned_items', []) or []:
         marker = _parse_prepared_model_marker(ref)
         if not marker:
             continue
@@ -4902,12 +5404,12 @@ def _event_prepared_open_slots(event, group):
     return max(0, prepared_slots)
 
 
-def _decrement_prepared_model_slot(event, group, quantity=1):
+def _decrement_prepared_model_marker_list(event, list_name, group, quantity=1):
     remaining = max(1, _safe_int(quantity, 1))
     removed = 0
     group_key = _event_model_group_key(group)
     rebuilt = []
-    for ref in getattr(event, 'actually_prepared', []) or []:
+    for ref in getattr(event, list_name, []) or []:
         marker = _parse_prepared_model_marker(ref)
         if not marker:
             rebuilt.append(ref)
@@ -4922,16 +5424,16 @@ def _decrement_prepared_model_slot(event, group, quantity=1):
         remaining -= take
         if left > 0:
             rebuilt.append(_prepared_model_marker(marker, left))
-    event.actually_prepared = rebuilt
+    setattr(event, list_name, rebuilt)
     return removed
 
 
-def _increment_prepared_model_slot(event, group, quantity):
+def _increment_prepared_model_marker_list(event, list_name, group, quantity):
     quantity = max(1, _safe_int(quantity, 1))
     group_key = _event_model_group_key(group)
     rebuilt = []
     added = False
-    for ref in getattr(event, 'actually_prepared', []) or []:
+    for ref in getattr(event, list_name, []) or []:
         marker = _parse_prepared_model_marker(ref)
         if not marker:
             rebuilt.append(ref)
@@ -4947,8 +5449,32 @@ def _increment_prepared_model_slot(event, group, quantity):
             rebuilt.append(ref)
     if not added:
         rebuilt.append(_prepared_model_marker(group, quantity))
-    event.actually_prepared = rebuilt
+    setattr(event, list_name, rebuilt)
     return quantity
+
+
+def _decrement_prepared_model_slot(event, group, quantity=1):
+    return _decrement_prepared_model_marker_list(
+        event, 'actually_prepared', group, quantity
+    )
+
+
+def _increment_prepared_model_slot(event, group, quantity):
+    return _increment_prepared_model_marker_list(
+        event, 'actually_prepared', group, quantity
+    )
+
+
+def _decrement_returned_prepared_model_slot(event, group, quantity=1):
+    return _decrement_prepared_model_marker_list(
+        event, 'returned_items', group, quantity
+    )
+
+
+def _increment_returned_prepared_model_slot(event, group, quantity):
+    return _increment_prepared_model_marker_list(
+        event, 'returned_items', group, quantity
+    )
 
 
 def _matching_bulk_assets_for_group(group):
@@ -5096,59 +5622,55 @@ def _remove_bulk_prepared_quantity(event, group, quantity, subproject_id=None):
 
 
 
-def _unprepare_event_model_group(event, group_key):
-    """Detach all prepared/returned physical refs for one model from an event."""
+def _reclassify_event_model_surplus(event, group_key, required_quantity):
+    """Keep over-prepared model units attached to the event as explicit extras."""
     _ensure_event_custom_lists(event)
+    required_quantity = max(0, _safe_int(required_quantity, 0))
+    existing_extras = set(event.extra_assets)
+    candidates = []
+    seen = set()
 
-    prepared_units = 0
-    references_removed = 0
-    inventory_changed = False
-
-    for ref in getattr(event, 'actually_prepared', []) or []:
-        if _event_physical_ref_group_key(ref) != group_key:
-            continue
-        marker = _parse_bulk_marker(ref)
-        prepared_marker = _parse_prepared_model_marker(ref)
-        prepared_units += (
-            marker['quantity']
-            if marker else prepared_marker['quantity']
-            if prepared_marker else 1
-        )
-
-    for list_name in ('prepared_items', 'actually_prepared', 'returned_items', 'extra_assets'):
-        values = getattr(event, list_name, []) or []
-        kept = []
+    for values in (
+        getattr(event, 'actually_prepared', []) or [],
+        getattr(event, 'returned_items', []) or [],
+    ):
         for ref in values:
-            # Model requirement rows are removed separately, after their physical
-            # assets have been unprepared.
-            if list_name == 'prepared_items' and isinstance(ref, str) and ref.startswith('[MODEL]'):
-                kept.append(ref)
+            if ref in seen or ref in existing_extras:
                 continue
-
             if _event_physical_ref_group_key(ref) != group_key:
-                kept.append(ref)
                 continue
+            seen.add(ref)
+            bulk = _parse_bulk_marker(ref)
+            prepared = _parse_prepared_model_marker(ref)
+            quantity = (
+                bulk['quantity'] if bulk
+                else prepared['quantity'] if prepared
+                else 1
+            )
+            candidates.append((ref, quantity))
 
-            references_removed += 1
-            marker = _parse_bulk_marker(ref)
-            if marker or _parse_prepared_model_marker(ref):
-                continue
+    surplus = max(0, sum(quantity for _ref, quantity in candidates) - required_quantity)
+    marked_units = 0
+    marked_refs = 0
 
-            asset = data_manager.inventory.get(ref)
-            if asset and not _is_bulk_asset(asset):
-                default_location = asset.default_location or ''
-                if asset.current_location != default_location:
-                    asset.current_location = default_location
-                    inventory_changed = True
-
-        setattr(event, list_name, kept)
-
-    if inventory_changed:
-        data_manager.save_inventory()
+    # The most recently prepared/assigned references become spare first.
+    for ref, quantity in reversed(candidates):
+        if surplus <= 0:
+            break
+        # Aggregate bulk/anonymous markers stay intact when only part of their
+        # quantity is surplus. Their extra count is derived from prepared minus
+        # required; splitting equal markers would make their identity ambiguous.
+        if quantity > surplus:
+            continue
+        if ref not in event.extra_assets:
+            event.extra_assets.append(ref)
+        marked_units += quantity
+        marked_refs += 1
+        surplus -= quantity
 
     return {
-        'preparedUnits': prepared_units,
-        'referencesRemoved': references_removed,
+        'extraUnits': marked_units,
+        'referencesMarked': marked_refs,
     }
 
 
@@ -5223,6 +5745,71 @@ def _bulk_deployments_for_asset(bulk_id):
         row.pop('_sortEndDate', None)
 
     return deployments
+
+
+def _asset_usage_days(asset_id, events=None, today=None):
+    """Return unique elapsed event days on which an asset was deployed."""
+    manager = _current_data_manager_object()
+    asset = (getattr(manager, 'inventory', {}) or {}).get(str(asset_id or ''))
+    if not asset:
+        return 0
+
+    is_bulk = _is_bulk_asset(asset)
+    today = today or datetime.now().date()
+    intervals = []
+
+    source_events = (
+        events
+        if events is not None
+        else (getattr(manager, 'events', {}) or {}).values()
+    )
+    for event in source_events:
+        if str(getattr(event, 'state', '') or '').strip().casefold() == 'cancelled':
+            continue
+
+        deployed = False
+        event_refs = (
+            list(getattr(event, 'actually_prepared', []) or [])
+            + list(getattr(event, 'returned_items', []) or [])
+        )
+        for ref in event_refs:
+            if is_bulk:
+                marker = _parse_bulk_marker(ref)
+                if marker and marker.get('bulkId') == asset.asset_id:
+                    deployed = True
+                    break
+            elif str(ref or '').strip() == asset.asset_id:
+                deployed = True
+                break
+        if not deployed:
+            continue
+
+        start_value = _event_date_for_input(getattr(event, 'start_date', ''))
+        end_value = _event_date_for_input(
+            getattr(event, 'end_date', '') or getattr(event, 'start_date', '')
+        )
+        if not start_value or not end_value:
+            continue
+        start_date = datetime.strptime(start_value, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_value, '%Y-%m-%d').date()
+        if end_date < start_date:
+            start_date, end_date = end_date, start_date
+        if start_date > today:
+            continue
+        intervals.append((start_date, min(end_date, today)))
+
+    if not intervals:
+        return 0
+
+    intervals.sort()
+    merged = []
+    for start_date, end_date in intervals:
+        if not merged or start_date > merged[-1][1] + timedelta(days=1):
+            merged.append([start_date, end_date])
+            continue
+        merged[-1][1] = max(merged[-1][1], end_date)
+
+    return sum((end_date - start_date).days + 1 for start_date, end_date in merged)
 
 
 def _event_model_quantities_by_key(event):
@@ -5381,30 +5968,66 @@ def _refresh_model_group_statuses(model_groups):
     for group in (model_groups or {}).values():
         required = max(0, _safe_int(group.get('requiredQuantity', 0), 0))
         prepared_slots = max(0, _safe_int(group.get('preparedSlotQuantity', 0), 0))
+        returned_prepared_slots = max(
+            0,
+            _safe_int(group.get('returnedPreparedSlotQuantity', 0), 0),
+        )
+        extra_prepared_slots = max(
+            0,
+            _safe_int(group.get('extraPreparedSlotQuantity', 0), 0),
+        )
+        extra_returned_prepared_slots = max(
+            0,
+            _safe_int(group.get('extraReturnedPreparedSlotQuantity', 0), 0),
+        )
 
         # Display quantities include extras so each model section can show
         # "5/3 assigned (+2 extra)" and list the extra assets under Assigned Assets.
         assigned_specific = _sum_assigned_quantity(group, include_extra=True)
-        returned = _sum_returned_quantity(group, include_extra=True)
-        assigned = assigned_specific + prepared_slots
+        returned = (
+            _sum_returned_quantity(group, include_extra=True)
+            + returned_prepared_slots
+            + extra_returned_prepared_slots
+        )
+        assigned = (
+            assigned_specific
+            + prepared_slots
+            + returned_prepared_slots
+            + extra_prepared_slots
+            + extra_returned_prepared_slots
+        )
         prepared = max(assigned - returned, 0)
 
         # Countable quantities exclude manual extras. These drive readiness,
         # event totals, and department progress totals.
-        countable_assigned = _sum_assigned_quantity(group, include_extra=False) + prepared_slots
-        countable_returned = _sum_returned_quantity(group, include_extra=False)
+        countable_assigned = (
+            _sum_assigned_quantity(group, include_extra=False)
+            + prepared_slots
+            + returned_prepared_slots
+        )
+        countable_returned = (
+            _sum_returned_quantity(group, include_extra=False)
+            + returned_prepared_slots
+        )
         countable_prepared = max(countable_assigned - countable_returned, 0)
 
         group['assignedQuantity'] = assigned
         group['assignedSpecificQuantity'] = assigned_specific
         group['preparedSlotQuantity'] = prepared_slots
+        group['returnedPreparedSlotQuantity'] = returned_prepared_slots
+        group['extraPreparedSlotQuantity'] = extra_prepared_slots
+        group['extraReturnedPreparedSlotQuantity'] = extra_returned_prepared_slots
         group['isBulkQuantity'] = _event_group_is_bulk_quantity(group)
         group['returnedQuantity'] = returned
         group['preparedQuantity'] = prepared
         group['countableAssignedQuantity'] = countable_assigned
         group['countableReturnedQuantity'] = countable_returned
         group['countablePreparedQuantity'] = min(countable_prepared, required) if required > 0 else countable_prepared
-        group['extraPreparedQuantity'] = _sum_extra_prepared_quantity(group) + max(0, countable_prepared - required)
+        group['extraPreparedQuantity'] = (
+            _sum_extra_prepared_quantity(group)
+            + extra_prepared_slots
+            + max(0, countable_prepared - required)
+        )
         group['openPreparedSlots'] = prepared_slots
 
         # Status must be based only on required/countable assets. Extras should
@@ -5420,10 +6043,11 @@ def _refresh_model_group_statuses(model_groups):
 
 
 def _append_bulk_assignments_to_model_groups(model_groups, event):
-    if not model_groups:
+    if model_groups is None:
         return
 
     returned_values = set(getattr(event, 'returned_items', []) or [])
+    extra_values = set(getattr(event, 'extra_assets', []) or [])
     seen = set()
 
     for value in getattr(event, 'actually_prepared', []) or []:
@@ -5437,7 +6061,15 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
 
         group_key = '|'.join(_asset_group_key(bulk_asset))
         if group_key not in model_groups:
-            continue
+            model_groups[group_key] = {
+                'department': bulk_asset.department_code,
+                'brand': bulk_asset.brand,
+                'model': bulk_asset.model_number,
+                'description': bulk_asset.description or '',
+                'requiredQuantity': 0,
+                'assignedAssets': [],
+                'status': 'pending',
+            }
 
         unique_key = (value, group_key)
         if unique_key in seen:
@@ -5453,42 +6085,56 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
             'tags': normalize_asset_tags(getattr(bulk_asset, 'tags', [])),
             'quantity': marker['quantity'],
             'isBulk': True,
+            'isExtra': value in extra_values,
             'displayId': '',
             'name': f"{bulk_asset.brand} {bulk_asset.model_number} {bulk_asset.description}".strip()
         })
 
 
 def _append_prepared_slots_to_model_groups(model_groups, event):
-    if not model_groups:
+    if model_groups is None:
         return
 
-    for value in getattr(event, 'actually_prepared', []) or []:
-        marker = _parse_prepared_model_marker(value)
-        if not marker:
-            continue
+    extra_values = set(getattr(event, 'extra_assets', []) or [])
+    sources = (
+        ('preparedSlotQuantity', getattr(event, 'actually_prepared', []) or []),
+        ('returnedPreparedSlotQuantity', getattr(event, 'returned_items', []) or []),
+    )
+    for quantity_field, values in sources:
+        for value in values:
+            marker = _parse_prepared_model_marker(value)
+            if not marker:
+                continue
 
-        group_key = '|'.join(_model_key_from_parts(
-            marker['department'],
-            marker['brand'],
-            marker['model'],
-        ))
-        if group_key not in model_groups:
-            model_groups[group_key] = {
-                'department': marker['department'],
-                'brand': marker['brand'],
-                'model': marker['model'],
-                'description': marker.get('description') or '',
-                'requiredQuantity': 0,
-                'assignedAssets': [],
-                'status': 'pending',
-            }
-        elif not model_groups[group_key].get('description') and marker.get('description'):
-            model_groups[group_key]['description'] = marker['description']
+            group_key = '|'.join(_model_key_from_parts(
+                marker['department'],
+                marker['brand'],
+                marker['model'],
+            ))
+            if group_key not in model_groups:
+                model_groups[group_key] = {
+                    'department': marker['department'],
+                    'brand': marker['brand'],
+                    'model': marker['model'],
+                    'description': marker.get('description') or '',
+                    'requiredQuantity': 0,
+                    'assignedAssets': [],
+                    'status': 'pending',
+                }
+            elif not model_groups[group_key].get('description') and marker.get('description'):
+                model_groups[group_key]['description'] = marker['description']
 
-        model_groups[group_key]['preparedSlotQuantity'] = (
-            max(0, _safe_int(model_groups[group_key].get('preparedSlotQuantity', 0), 0))
-            + marker['quantity']
-        )
+            target_field = quantity_field
+            if value in extra_values:
+                target_field = (
+                    'extraPreparedSlotQuantity'
+                    if quantity_field == 'preparedSlotQuantity'
+                    else 'extraReturnedPreparedSlotQuantity'
+                )
+            model_groups[group_key][target_field] = (
+                max(0, _safe_int(model_groups[group_key].get(target_field, 0), 0))
+                + marker['quantity']
+            )
 
 
 def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
@@ -5749,8 +6395,7 @@ def require_auth(f):
                 return jsonify({'error': 'Not authenticated'}), 401
             return redirect(url_for('login'))
 
-        username = session.get('user')
-        user = data_manager.users.get(username) if data_manager else None
+        user = _current_user_obj()
 
         # If the user was deleted or deactivated after login by someone else,
         # force logout. Self-deactivation waits until the next login.
@@ -5789,6 +6434,20 @@ def get_available_assets_for_event(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         current_event_refs = _active_physical_asset_refs_for_event(event)
+        returned_event_refs = {
+            ref for ref in (getattr(event, 'returned_items', []) or [])
+            if isinstance(ref, str) and _is_real_asset_ref(ref)
+        }
+        returned_anonymous_group_keys = {
+            _model_key_from_parts(
+                marker['department'],
+                marker['brand'],
+                marker['model'],
+            )
+            for ref in (getattr(event, 'returned_items', []) or [])
+            for marker in [_parse_prepared_model_marker(ref)]
+            if marker
+        }
         busy_elsewhere = set()
 
         for other in data_manager.events.values():
@@ -5816,7 +6475,14 @@ def get_available_assets_for_event(event_id):
                 final_list.append(_bulk_asset_to_available_dict(asset, event))
                 continue
 
-            if _is_disposed(asset) or getattr(asset, 'is_ooc', False):
+            is_returned_reconciliation_candidate = (
+                _asset_group_key(asset) in returned_anonymous_group_keys
+                and asset_id not in returned_event_refs
+            )
+
+            if _is_disposed(asset):
+                continue
+            if getattr(asset, 'is_ooc', False) and not is_returned_reconciliation_candidate:
                 continue
 
             is_missing = bool(getattr(asset, 'is_missing', False))
@@ -5824,7 +6490,11 @@ def get_available_assets_for_event(event_id):
             if asset_id in current_event_refs:
                 continue
 
-            if not is_missing and asset_id in busy_elsewhere:
+            if (
+                not is_returned_reconciliation_candidate
+                and not is_missing
+                and asset_id in busy_elsewhere
+            ):
                 continue
 
             final_list.append({
@@ -5868,8 +6538,7 @@ def require_admin(f):
         if 'user' not in session:
             return jsonify({'error': 'Not authenticated'}), 401
 
-        username = session.get('user')
-        user = data_manager.users.get(username) if data_manager else None
+        user = _current_user_obj()
 
         if not user or not _current_user_effective_is_active():
             session.clear()
@@ -5890,15 +6559,14 @@ def require_super_admin(f):
         if 'user' not in session:
             return jsonify({'error': 'Not authenticated'}), 401
 
-        username = session.get('user')
-        user = data_manager.users.get(username) if data_manager else None
+        user = _current_user_obj()
 
         if not user or not _current_user_effective_is_active():
             session.clear()
             return jsonify({'error': 'Account inactive'}), 401
 
         if not _current_user_is_owner():
-            return jsonify({'error': 'Owner privileges required'}), 403
+            return jsonify({'error': 'Administrative access required'}), 403
 
         return f(*args, **kwargs)
 
@@ -5912,8 +6580,7 @@ def require_sales(f):
         if 'user' not in session:
             return jsonify({'error': 'Not authenticated'}), 401
 
-        username = session.get('user')
-        user = data_manager.users.get(username) if data_manager else None
+        user = _current_user_obj()
 
         if not user or not _current_user_effective_is_active():
             session.clear()
@@ -5928,11 +6595,23 @@ def require_sales(f):
 
 
 def _current_user_obj():
-    """Return the logged-in User object, or None if the session is stale."""
+    """Return the signed-in account even when a request targets another company."""
     username = session.get('user')
     if not username or not data_manager:
         return None
-    return data_manager.users.get(username)
+    user = data_manager.users.get(username)
+    if user:
+        return user
+
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None:
+        return test_manager.users.get(username)
+
+    assigned_company = _user_assigned_company_code(username)
+    authentication_manager = _get_company_data_manager(assigned_company)
+    if authentication_manager is _current_data_manager_object():
+        return None
+    return authentication_manager.users.get(username)
 
 
 def _current_user_is_admin():
@@ -6269,9 +6948,13 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
         event = manager.events.get(event_id)
         if not event:
             continue
+        subproject_options = _workforce_subproject_options(event)
         departments = []
         assignment_payload = []
         for assignment in assignments:
+            assignment_with_room = _workforce_row_with_subproject(
+                assignment, event, subproject_options
+            )
             department = str(assignment.get('department') or 'Unassigned')
             department_details = (
                 departments_by_code.get(_normalise_department_code(department))
@@ -6281,6 +6964,8 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
                 departments.append(department)
             assignment_payload.append({
                 'id': str(assignment.get('id') or ''),
+                'subprojectId': assignment_with_room['subprojectId'],
+                'subprojectName': assignment_with_room['subprojectName'],
                 'department': department,
                 'departmentName': department_details['name'],
                 'departmentColor': department_details['color'],
@@ -6339,6 +7024,7 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
             'invoiceTotal': invoice_total,
             'claimTotal': claim_total,
             'assignments': assignment_payload,
+            'subprojects': subproject_options,
             'departments': departments,
             'submissions': public_rows,
             'canUploadInvoice': limits['invoiceSlotsRemaining'] > 0,
@@ -6627,6 +7313,7 @@ def _event_workforce_departments(event_id, event, manager, workforce):
 
 def _workforce_submission_expectation(workforce, event_id, subject_id):
     breakdown = []
+    estimate_complete = True
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
@@ -6647,7 +7334,7 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
         role_name = str(
             assignment.get('serviceName')
             or assignment.get('roleName')
-            or 'Assigned role'
+            or 'Role not set'
         ).strip()
         if provider_type == 'service':
             rate = money(assignment.get('serviceCost'), 0.0) or 0.0
@@ -6667,9 +7354,14 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
             calculation = f'{pax} pax x {days} day(s) x ${rate:,.2f}'
         else:
             pax = None
-            rate = money(assignment.get('dailyRate'), 0.0) or 0.0
-            amount = round(rate * days, 2)
-            calculation = f'{days} day(s) x ${rate:,.2f}'
+            rate = money(assignment.get('dailyRate'))
+            if rate is None:
+                amount = None
+                calculation = 'Rate not set'
+                estimate_complete = False
+            else:
+                amount = round(rate * days, 2)
+                calculation = f'{days} day(s) x ${rate:,.2f}'
         breakdown.append({
             'assignmentId': str(assignment.get('id') or ''),
             'role': role_name,
@@ -6677,14 +7369,14 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
             'providerType': provider_type or 'worker',
             'days': days,
             'pax': pax,
-            'rate': round(rate, 2),
+            'rate': round(rate, 2) if rate is not None else None,
             'amount': amount,
             'calculation': calculation,
         })
     return {
         'expectedAmount': (
             round(sum(row['amount'] for row in breakdown), 2)
-            if breakdown else None
+            if breakdown and estimate_complete else None
         ),
         'expectedAmountBreakdown': breakdown,
     }
@@ -7072,6 +7764,59 @@ def _transport_profiles_for_response(workforce):
     return profiles
 
 
+def _workforce_subproject_options(event):
+    """Return the event rooms available to workforce and transport records."""
+    options = []
+    for row in getattr(event, 'subprojects', []) or []:
+        if not isinstance(row, dict):
+            continue
+        subproject_id = str(row.get('id') or '').strip()
+        if not subproject_id:
+            continue
+        options.append({
+            'id': subproject_id,
+            'name': str(row.get('name') or 'Room').strip() or 'Room',
+        })
+    return options
+
+
+def _workforce_subproject_details(event, requested_id=None):
+    """Validate a room ID and return its canonical ID and display name."""
+    options = _workforce_subproject_options(event)
+    requested = str(requested_id or '').strip()
+    if not options:
+        if requested:
+            raise ValueError('This event does not have sub-projects')
+        return '', ''
+    if not requested:
+        return options[0]['id'], options[0]['name']
+    selected = next(
+        (row for row in options if row['id'] == requested),
+        None,
+    )
+    if not selected:
+        raise ValueError('Choose a valid event room')
+    return selected['id'], selected['name']
+
+
+def _workforce_row_with_subproject(row, event, options=None):
+    """Add effective room details without mutating legacy stored records."""
+    payload = dict(row)
+    options = options if isinstance(options, list) else (
+        _workforce_subproject_options(event)
+    )
+    room_id = str(payload.get('subprojectId') or '').strip()
+    selected = next(
+        (option for option in options if option['id'] == room_id),
+        None,
+    )
+    if selected is None and options:
+        selected = options[0]
+    payload['subprojectId'] = selected['id'] if selected else ''
+    payload['subprojectName'] = selected['name'] if selected else ''
+    return payload
+
+
 def _admin_workforce_payload(event_id, manager=None):
     manager = manager or _current_data_manager_object()
     event = manager.events.get(int(event_id))
@@ -7107,11 +7852,19 @@ def _admin_workforce_payload(event_id, manager=None):
             ],
         }
 
+    subprojects = _workforce_subproject_options(event)
+    assignments = [
+        _workforce_row_with_subproject(row, event, subprojects)
+        for row in event_assignments(workforce, event_id)
+        if isinstance(row, dict)
+    ]
     bookings = []
     for booking in event_bookings(workforce, event_id):
         if not isinstance(booking, dict):
             continue
-        row = dict(booking)
+        row = _workforce_row_with_subproject(
+            booking, event, subprojects
+        )
         invoice = row.get('invoice')
         if isinstance(invoice, dict) and invoice.get('id'):
             submission_id = quote(str(invoice['id']))
@@ -7124,7 +7877,7 @@ def _admin_workforce_payload(event_id, manager=None):
     upload_allowances = {}
     freelancer_ids = {
         str(row.get('freelancerId') or row.get('vendorId') or '')
-        for row in event_assignments(workforce, event_id)
+        for row in assignments
         if (
             isinstance(row, dict)
             and (row.get('freelancerId') or row.get('vendorId'))
@@ -7148,6 +7901,7 @@ def _admin_workforce_payload(event_id, manager=None):
             'endDateValue': _event_date_for_input(event.end_date),
             'state': event.state,
             'tag': getattr(event, 'tag', 'events'),
+            'subprojects': subprojects,
         },
         'freelancers': [
             _admin_freelancer_with_summary(row, workforce)
@@ -7160,7 +7914,8 @@ def _admin_workforce_payload(event_id, manager=None):
             if isinstance(row, dict)
         ],
         'roles': workforce.get('roles', []),
-        'assignments': event_assignments(workforce, event_id),
+        'assignments': assignments,
+        'subprojects': subprojects,
         'transportVendors': _transport_profiles_for_response(workforce),
         'transportLocations': workforce.get('transportLocations', []),
         'vehicles': workforce.get('vehicles', []),
@@ -7217,11 +7972,7 @@ def _workforce_financial_closure_complete(
             for row in rows.get('claims', [])
             if isinstance(row, dict) and row.get('status') != 'Denied'
         ]
-        if any(
-            row.get('status') != 'Paid'
-            or not row.get('paymentConfirmedAt')
-            for row in payable_rows
-        ):
+        if any(row.get('status') != 'Paid' for row in payable_rows):
             return False
     return True
 
@@ -8871,6 +9622,12 @@ def create_workforce_assignment(event_id):
             'error': 'Worker or vendor, department and working dates are required'
         }), 400
     event = data_manager.events[event_id]
+    try:
+        subproject_id, subproject_name = _workforce_subproject_details(
+            event, payload.get('subprojectId')
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     start_date = _event_date_for_input(event.start_date)
     end_date = _event_date_for_input(event.end_date)
     if work_dates and any(
@@ -8907,6 +9664,7 @@ def create_workforce_assignment(event_id):
                 'vendorId': freelancer_id,
                 'subjectType': 'vendor',
                 'department': department,
+                'subprojectId': subproject_id,
                 'providerType': provider_type,
                 'days': days,
                 'workDates': sorted(set(work_dates)),
@@ -8950,16 +9708,13 @@ def create_workforce_assignment(event_id):
             log_message = (
                 f"Assigned vendor {subject_name} to event {event_id} "
                 f"as {provider_type}"
+                f"{f' in {subproject_name}' if subproject_name else ''}"
             )
         else:
             if not freelancer:
                 return jsonify({'error': 'Worker not found'}), 404
-            if daily_rate is None:
-                return jsonify({'error': 'Daily rate is required'}), 400
             role = find_by_id(workforce.get('roles'), role_id) if role_id else None
             role_name = custom_role or (str(role.get('name')) if role else '')
-            if not role_name:
-                return jsonify({'error': 'Choose or enter a role'}), 400
             if custom_role and bool(payload.get('saveRole', True)):
                 duplicate = next(
                     (
@@ -8986,6 +9741,7 @@ def create_workforce_assignment(event_id):
                 'freelancerId': freelancer_id,
                 'subjectType': 'worker',
                 'department': department,
+                'subprojectId': subproject_id,
                 'roleId': role_id,
                 'roleName': role_name,
                 'days': days,
@@ -8999,8 +9755,9 @@ def create_workforce_assignment(event_id):
             ).append(assignment)
             subject_name = freelancer.get('name')
             log_message = (
-                f"Assigned worker {subject_name} to event {event_id} "
-                f"as {role_name}"
+                f"Assigned worker {subject_name} to event {event_id}"
+                f"{f' as {role_name}' if role_name else ''}"
+                f"{f' in {subproject_name}' if subproject_name else ''}"
             )
     log_action(log_message)
     _workforce_changed(event_id, 'assignment-created')
@@ -9033,6 +9790,12 @@ def update_workforce_assignment(event_id, assignment_id):
     event = data_manager.events.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
+    try:
+        subproject_id, subproject_name = _workforce_subproject_details(
+            event, payload.get('subprojectId')
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     start_date = _event_date_for_input(event.start_date)
     end_date = _event_date_for_input(event.end_date)
     if work_dates and any(
@@ -9057,6 +9820,7 @@ def update_workforce_assignment(event_id, assignment_id):
                 }), 400
             updates = {
                 'department': department,
+                'subprojectId': subproject_id,
                 'providerType': provider_type,
                 'days': days,
                 'workDates': sorted(set(work_dates)),
@@ -9099,19 +9863,19 @@ def update_workforce_assignment(event_id, assignment_id):
                 })
             assignment.update(updates)
         else:
-            if not role_name or daily_rate is None:
-                return jsonify({
-                    'error': 'Role and daily rate are required'
-                }), 400
             assignment.update({
                 'department': department,
+                'subprojectId': subproject_id,
                 'roleName': role_name,
                 'days': days,
                 'workDates': sorted(set(work_dates)),
                 'dailyRate': daily_rate,
                 'updatedAt': now_iso(),
             })
-    log_action(f"Updated workforce assignment for event {event_id}")
+    log_action(
+        f"Updated workforce assignment for event {event_id}"
+        f"{f' in {subproject_name}' if subproject_name else ''}"
+    )
     _workforce_changed(event_id, 'assignment-updated')
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
@@ -9417,6 +10181,7 @@ def _transport_payload(raw):
     if trip_type not in {'depart', 'return'}:
         trip_type = 'depart'
     return {
+        'subprojectId': str(payload.get('subprojectId') or '').strip(),
         'vendorId': str(payload.get('vendorId') or '').strip(),
         'vehicleId': str(payload.get('vehicleId') or '').strip(),
         'sourceType': source_type,
@@ -9611,6 +10376,7 @@ def _vehicle_day_payload(workforce, selected_date):
             'kind': entry['kind'],
             'eventId': event_id,
             'eventName': getattr(event, 'name', '') if event else '',
+            'eventState': getattr(event, 'state', '') if event else '',
             'purpose': (
                 f"{str(row.get('tripType') or 'depart').title()} trip"
                 if event_id else str(row.get('purpose') or '')
@@ -10107,6 +10873,13 @@ def create_transport_booking(event_id):
         return jsonify({'error': 'Event not found'}), 404
     payload = request.get_json(silent=True) or {}
     booking_data = _transport_payload(payload)
+    try:
+        subproject_id, subproject_name = _workforce_subproject_details(
+            data_manager.events[event_id], booking_data.get('subprojectId')
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    booking_data['subprojectId'] = subproject_id
     legacy_profile = _transport_vendor_payload({
         'vehicleType': payload.get('vehicleType'),
         'company': payload.get('company') or payload.get('companyDriver'),
@@ -10261,6 +11034,7 @@ def create_transport_booking(event_id):
         f"{'fleet' if booking_data['sourceType'] == 'fleet' else 'external'} "
         f"transport {booking.get('vehicleNumber') or booking.get('vehicleType')} "
         f"to event {event_id}"
+        f"{f' in {subproject_name}' if subproject_name else ''}"
     )
     _workforce_changed(event_id, 'transport-created')
     if booking_data['sourceType'] == 'fleet':
@@ -10280,6 +11054,16 @@ def create_transport_booking(event_id):
 def update_transport_booking(event_id, booking_id):
     payload = request.get_json(silent=True) or {}
     booking_data = _transport_payload(payload)
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    try:
+        subproject_id, subproject_name = _workforce_subproject_details(
+            event, booking_data.get('subprojectId')
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    booking_data['subprojectId'] = subproject_id
     with mutate_workforce(_workforce_folder()) as workforce:
         booking = find_by_id(event_bookings(workforce, event_id), booking_id)
         if not booking:
@@ -10388,6 +11172,7 @@ def update_transport_booking(event_id, booking_id):
         f"{'fleet' if booking_data['sourceType'] == 'fleet' else 'external'} "
         f"transport {booking.get('vehicleNumber') or booking.get('vehicleType')} "
         f"for event {event_id}"
+        f"{f' in {subproject_name}' if subproject_name else ''}"
     )
     _workforce_changed(event_id, 'transport-updated')
     if (
@@ -10537,7 +11322,7 @@ def list_workforce_submissions():
     status_counts = {
         key: 0 for key in (
             'awaiting-upload', 'to-review', 'to-pay', 'awaiting-confirmation',
-            'payment-confirmed', 'denied', 'queued', 'processing',
+            'paid', 'payment-confirmed', 'denied', 'queued', 'processing',
             'details-required',
         )
     }
@@ -10546,6 +11331,8 @@ def list_workforce_submissions():
         status_key = row.get('statusKey')
         if status_key:
             status_counts[status_key] = status_counts.get(status_key, 0) + 1
+        if str(row.get('status') or '') == 'Paid':
+            status_counts['paid'] += 1
         kind = row.get('kind')
         if kind in kind_counts and not row.get('isAwaitingUpload'):
             kind_counts[kind] += 1
@@ -10568,8 +11355,12 @@ def list_workforce_submissions():
     for row in rows:
         if event_id and int(row['event']['id']) != event_id:
             continue
-        if not show_all_statuses and row.get('statusKey') not in requested_statuses:
-            continue
+        if not show_all_statuses:
+            filter_keys = {str(row.get('statusKey') or '')}
+            if str(row.get('status') or '') == 'Paid':
+                filter_keys.add('paid')
+            if filter_keys.isdisjoint(requested_statuses):
+                continue
         if row.get('kind') not in requested_kinds:
             continue
         if search:
@@ -10774,6 +11565,15 @@ def review_workforce_submission(submission_id):
                 record['claimDate'] = claim_date
             if category:
                 record['category'] = category
+            if payload.get('notes') is not None:
+                notes = str(payload.get('notes') or '').strip()
+                record['description'] = notes
+                record['notes'] = notes
+            if confirming_review and status != 'Denied':
+                record['detailsComplete'] = True
+                record['submissionStage'] = 'Submitted'
+                record['detailsCompletedAt'] = now_iso()
+                record['detailsCompletedByAdmin'] = session.get('user', '')
         record.update({
             'amount': amount,
             'status': status,
@@ -10993,9 +11793,17 @@ def _user_presence_realtime_details_from_log_action(action):
     }
 
 
-def log_action(action, user=None, event_meta=None):
+def log_action(
+    action,
+    user=None,
+    event_meta=None,
+    include_system_log=False,
+    system_log_only=False,
+):
     """Helper function to log actions."""
     try:
+        if has_request_context():
+            g.action_logged = True
         actor = (
             str(user).strip()
             if user is not None and str(user).strip()
@@ -11014,7 +11822,11 @@ def log_action(action, user=None, event_meta=None):
         )
 
         event_ids = []
-        if data_manager and hasattr(data_manager, 'event_ids_from_log_action'):
+        if (
+            not system_log_only
+            and data_manager
+            and hasattr(data_manager, 'event_ids_from_log_action')
+        ):
             event_ids = [
                 event_id
                 for event_id in data_manager.event_ids_from_log_action(action)
@@ -11036,7 +11848,7 @@ def log_action(action, user=None, event_meta=None):
                 data_manager.append_event_log(event, event_record)
                 data_manager.save_event(event)
             mark_realtime_change('event-log', {'eventIds': event_ids, 'action': action})
-        else:
+        if system_log_only or not event_ids or include_system_log:
             data_manager.logs.append(log_entry)
             data_manager.save_logs()
             presence_details = _user_presence_realtime_details_from_log_action(action)
@@ -11064,6 +11876,20 @@ def _asset_log_label(asset):
         if value and value.lower() not in {part.lower() for part in parts}:
             parts.append(value)
     return ' - '.join(parts)
+
+
+def _custom_asset_log_label(custom):
+    if not isinstance(custom, dict):
+        return 'Custom item'
+    name = str(custom.get('name') or 'Custom item').strip()
+    item_type = _normalise_custom_type(custom.get('type'))
+    company = str(custom.get('company') or '').strip()
+    description = str(custom.get('description') or '').strip()
+    if item_type == 'LOAN' and company:
+        return f'{name} (loan from {company})'
+    if description:
+        return f'{name} ({description})'
+    return f"{name} ({item_type.lower()} item)"
 
 
 def _event_asset_log_item(asset_ref='', quantity=None, group=None):
@@ -11097,7 +11923,7 @@ def _event_asset_log_item(asset_ref='', quantity=None, group=None):
     if custom:
         return {
             'assetId': '',
-            'label': str(custom.get('name') or 'Custom item'),
+            'label': _custom_asset_log_label(custom),
             'quantity': max(1, _safe_int(quantity, custom.get('quantity') or 1)),
             'itemType': 'custom',
         }
@@ -11114,8 +11940,10 @@ def _event_asset_log_item(asset_ref='', quantity=None, group=None):
 _EVENT_ASSET_LOG_ACTIONS = {
     'prepare': ('Prepared', 'for'),
     'assign': ('Assigned', 'to'),
+    'collect': ('Collected', 'for'),
     'unprepare': ('Unprepared', 'from'),
     'unassign': ('Unassigned and unprepared', 'from'),
+    'uncollect': ('Uncollected', 'from'),
     'return': ('Returned', 'from'),
     'restore': ('Restored', 'to'),
     'remove': ('Removed', 'from'),
@@ -11555,7 +12383,13 @@ def _event_model_requirement_remaining_for_asset(event, asset):
 
 def _promote_matching_extra_assets(event):
     """Use matching extras to fill model slots opened by an asset removal."""
-    if not event or not getattr(event, 'extra_assets', None):
+    if not event:
+        return []
+
+    if getattr(event, 'subprojects', []) or []:
+        return _reconcile_event_subproject_extras(event)['promoted']
+
+    if not getattr(event, 'extra_assets', None):
         return []
 
     assigned_refs = set(getattr(event, 'actually_prepared', []) or [])
@@ -11602,6 +12436,45 @@ def _ensure_event_model_requirement_covers_asset(event, asset, additional_quanti
     delta = minimum_required - current_required
     _add_or_increment_model_marker(event.prepared_items, group, delta)
     _add_or_increment_asset_model_row(event.asset_models, group, delta)
+    return delta
+
+
+def _ensure_quick_add_model_requirement(event, subproject, asset, additional_quantity=1):
+    """Add scanned demand to the active room without consuming its extras.
+
+    Event-wide demand can include an unfilled requirement in another room. Use
+    the active room's own prepared count so that quick-add still creates demand
+    where the asset was scanned. Existing room extras are deliberately excluded
+    by ``_event_subproject_prepared_quantity`` and remain extras.
+    """
+    if not subproject:
+        return _ensure_event_model_requirement_covers_asset(
+            event,
+            asset,
+            additional_quantity,
+        )
+
+    group = _asset_group_from_item(asset)
+    current_required = _event_subproject_required_quantity(subproject, group)
+    prepared_quantity = _event_subproject_prepared_quantity(
+        event,
+        subproject,
+        group,
+    )
+    minimum_required = prepared_quantity + max(
+        1,
+        _safe_int(additional_quantity, 1),
+    )
+    if current_required >= minimum_required:
+        return 0
+
+    delta = minimum_required - current_required
+    _event_subproject_set_group_quantity(
+        subproject,
+        group,
+        current_required + delta,
+    )
+    _sync_event_model_markers_from_subprojects(event)
     return delta
 
 
@@ -11913,14 +12786,31 @@ def update_event_state(event, workforce=None):
 
                     required_total += required_quantity
 
-                    assigned_to_this_model = _bulk_quantity_in_values_for_key(event.actually_prepared, group_key)
-                    returned_for_this_model = _bulk_quantity_in_values_for_key(event.returned_items, group_key)
+                    prepared_group = {
+                        'department': dept,
+                        'brand': brand,
+                        'model': model,
+                        'description': description,
+                    }
+                    assigned_to_this_model = (
+                        _bulk_quantity_in_values_for_key(event.actually_prepared, group_key)
+                        + _event_prepared_slot_quantity(event, prepared_group)
+                        + _event_returned_prepared_slot_quantity(event, prepared_group)
+                    )
+                    returned_for_this_model = (
+                        _bulk_quantity_in_values_for_key(event.returned_items, group_key)
+                        + _event_returned_prepared_slot_quantity(event, prepared_group)
+                    )
 
                     all_assigned_assets = set(event.actually_prepared + event.returned_items)
                     for specific_asset_id in all_assigned_assets:
                         if specific_asset_id in extra_asset_ids:
                             continue
-                        if _is_bulk_ref(specific_asset_id) or _is_custom_ref(specific_asset_id):
+                        if (
+                            _is_bulk_ref(specific_asset_id)
+                            or _is_prepared_model_ref(specific_asset_id)
+                            or _is_custom_ref(specific_asset_id)
+                        ):
                             continue
 
                         specific_asset = data_manager.inventory.get(specific_asset_id)
@@ -11959,7 +12849,12 @@ def update_event_state(event, workforce=None):
 
         returned_refs = set(getattr(event, 'returned_items', []) or [])
         has_active_prepared_item = any(
-            isinstance(ref, str) and ref and ref not in returned_refs
+            isinstance(ref, str)
+            and ref
+            and (
+                _is_prepared_model_ref(ref)
+                or ref not in returned_refs
+            )
             for ref in (getattr(event, 'actually_prepared', []) or [])
         )
 
@@ -11979,6 +12874,19 @@ def update_event_state(event, workforce=None):
         )
         is_ready = required_total > 0 and prepared_active_total >= required_total
         is_active_event_day = event.start_date <= current_date <= event.end_date
+        closure_workforce = workforce if isinstance(workforce, dict) else None
+        has_workforce_assignments = False
+        if (
+            required_total == 0
+            and not has_active_prepared_item
+            and current_date > event.end_date
+        ):
+            closure_workforce = (
+                closure_workforce or load_workforce(_workforce_folder())
+            )
+            has_workforce_assignments = bool(
+                event_assignments(closure_workforce, event.event_id)
+            )
 
         # 1. Every returnable asset is back, and required items were fully prepared.
         if all_returnable_assets_returned:
@@ -12002,20 +12910,37 @@ def update_event_state(event, workforce=None):
         elif prepared_ever_total > returned_total and current_date > event.end_date:
             event.state = 'Overdue'
 
-        # 5. No requirements at all. A prepared extra still starts preparation,
+        # 5. Manpower-only events enter financial closure after the event ends.
+        elif (
+            required_total == 0
+            and not has_active_prepared_item
+            and current_date > event.end_date
+            and has_workforce_assignments
+        ):
+            event.state = (
+                'Closed'
+                if _workforce_financial_closure_complete(
+                    event.event_id,
+                    event=event,
+                    workforce=closure_workforce,
+                )
+                else 'Pending Closure'
+            )
+
+        # 6. No requirements at all. A prepared extra still starts preparation,
         # without counting towards completion of any requirement.
         elif required_total == 0:
             event.state = 'Preparing' if has_active_prepared_item else 'New'
 
-        # 6. Requirements exist, but nothing has been collected/prepared yet.
+        # 7. Requirements exist, but nothing has been collected/prepared yet.
         elif started_total == 0 and not has_active_prepared_item:
             event.state = 'Planning'
 
-        # 7. Some collection/preparation happened, but requirements are not fully prepared.
+        # 8. Some collection/preparation happened, but requirements are not fully prepared.
         elif prepared_active_total < required_total and returned_total == 0:
             event.state = 'Preparing'
 
-        # 8. Required quantity is fully prepared and none returned yet.
+        # 9. Required quantity is fully prepared and none returned yet.
         elif is_ready and returned_total == 0:
             if is_active_event_day:
                 event.state = 'Ongoing'
@@ -12264,6 +13189,7 @@ APP_PAGE_SECTIONS = {
     '/logs': 'logs',
     '/quotations': 'quotations',
     '/profit-loss': 'profit-loss',
+    '/accounting': 'accounting',
     '/compare': 'compare',
     '/users': 'users',
     '/company-details': 'pdf-settings',
@@ -12275,20 +13201,27 @@ APP_ADMIN_PAGE_SECTIONS = {
     'plan', 'compare', 'workforce', 'invoice-claims', 'vehicles', 'logs', 'maintenance-report',
     'users', 'pdf-settings',
 }
-APP_OWNER_PAGE_SECTIONS = {'companies'}
-APP_SALES_PAGE_SECTIONS = {'quotations', 'profit-loss'}
+APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting'}
+APP_SALES_PAGE_SECTIONS = {'quotations'}
 
 
 def _render_app_page(section):
     return render_template(
         'index.html',
         initial_section=section,
+        maintenance_upload_limits={
+            'imageMb': max(1, MAINTENANCE_IMAGE_MAX_BYTES // MEBIBYTE),
+            'videoMb': max(1, MAINTENANCE_VIDEO_MAX_BYTES // MEBIBYTE),
+            'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
+        },
         app_js_version=_static_asset_version('js/app.js'),
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
         vehicles_js_version=_static_asset_version('js/vehicles.js'),
         vehicles_css_version=_static_asset_version('css/vehicles.css'),
+        accounting_js_version=_static_asset_version('js/accounting.js'),
+        accounting_css_version=_static_asset_version('css/accounting.css'),
     )
 
 
@@ -12316,6 +13249,7 @@ def index():
 @app.route('/logs')
 @app.route('/quotations')
 @app.route('/profit-loss')
+@app.route('/accounting')
 @app.route('/compare')
 @app.route('/users')
 @app.route('/company-details')
@@ -12397,6 +13331,22 @@ def login():
 
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
+
+        requested_company = _normalise_company_code(data.get('companyCode'))
+        matching_companies = _user_company_codes(username)
+        if len(matching_companies) > 1 and requested_company not in matching_companies:
+            return jsonify({
+                'success': False,
+                'message': 'This username exists in more than one company. Select your company.',
+                'requiresCompany': True,
+                'companies': [
+                    {
+                        'code': code,
+                        'name': _company_payload(code).get('name') or code,
+                    }
+                    for code in matching_companies
+                ],
+            }), 409
 
         login_scope = _user_management_company_for_request(_current_company_code())
         if login_scope == SYSTEM_LOG_COMPANY_CODE:
@@ -12537,17 +13487,21 @@ def realtime_stream():
 @require_auth
 def get_current_user():
     """Get the currently logged-in user"""
-    username = session.get('user')
-    user = data_manager.users.get(username)
+    user = _current_user_obj()
 
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
     payload = _user_payload(user)
+    internal_role = (
+        session.get('role', _effective_user_role(user))
+        if session.get('self_user_changes_pending')
+        else _effective_user_role(user)
+    )
+    public_role = 'admin' if internal_role == 'owner' else internal_role
     payload.update({
-        'role': session.get('role', payload['role']) if session.get('self_user_changes_pending') else payload['role'],
+        'role': public_role,
         'isAdmin': _current_user_effective_is_admin(),
-        'isOwner': _current_user_is_owner(),
         'isSuperAdmin': _current_user_is_owner(),
         'hasSalesAccess': _current_user_has_sales_access(),
         'isSales': _current_user_has_sales_access(),
@@ -12557,7 +13511,7 @@ def get_current_user():
         'canManageRoles': _current_user_can_manage_roles(),
         'hasPendingSelfChanges': bool(session.get('self_user_changes_pending')),
     })
-    payload['roleLabel'] = _role_label(payload['role'])
+    payload['roleLabel'] = _role_label(public_role)
 
     return jsonify({'success': True, 'data': payload})
 
@@ -12701,12 +13655,35 @@ def create_company():
         if not name:
             name = code
 
+        if not first_admin_username:
+            return jsonify({
+                'error': 'A first admin username is required for every company'
+            }), 400
+
         registry = _load_company_registry()
         if code in registry['companies']:
             return jsonify({'error': f'Company {code} already exists'}), 409
 
-        if first_admin_username and first_admin_username not in data_manager.users and not first_admin_password:
+        existing_first_admin = data_manager.users.get(first_admin_username)
+        if _is_owner_username(first_admin_username):
+            return jsonify({
+                'error': 'This protected account cannot be assigned as a company admin'
+            }), 400
+        if not existing_first_admin and not first_admin_password:
             return jsonify({'error': 'First admin user does not exist. Provide a password to create it.'}), 400
+        if existing_first_admin:
+            source_company = _normalise_company_code(
+                _user_assigned_company_code(first_admin_username),
+                DEFAULT_COMPANY_CODE,
+            )
+            if (
+                _effective_user_role(existing_first_admin) == 'admin'
+                and getattr(existing_first_admin, 'is_active', True)
+                and len(_active_company_admin_usernames(source_company)) <= 1
+            ):
+                return jsonify({
+                    'error': _last_company_admin_error(source_company)
+                }), 409
 
         record = _new_company_record(
             code,
@@ -12717,14 +13694,14 @@ def create_company():
         registry['companies'][code] = record
         registry = _save_company_registry(registry)
 
-        _get_company_data_manager(code)
+        company_manager = _get_company_data_manager(code)
         settings_path = os.path.join(_company_record_backend_folder(record), 'PdfSettings.json')
         if not os.path.exists(settings_path):
             with open(settings_path, 'w', encoding='utf-8') as f:
                 json.dump(_pdf_settings_defaults(), f, ensure_ascii=False, indent=2)
 
         if first_admin_username:
-            user = data_manager.users.get(first_admin_username)
+            user = existing_first_admin
             if not user:
                 salt = secrets.token_hex(16)
                 user = User(
@@ -12735,12 +13712,15 @@ def create_company():
                     is_active=True,
                     role='admin',
                 )
-                data_manager.users[first_admin_username] = user
+                company_manager.users[first_admin_username] = user
 
             user.is_admin = True
             user.role = 'admin'
             user.is_active = True
-            data_manager.save_users()
+            if first_admin_username in company_manager.users:
+                company_manager.save_users()
+            else:
+                data_manager.save_users()
             _reload_users_for_all_company_managers()
             _assign_user_to_company(first_admin_username, code)
 
@@ -12811,6 +13791,13 @@ def update_company(company_code):
             for username, assigned_company in list(registry.get('userCompanies', {}).items()):
                 if _normalise_company_code(assigned_company, DEFAULT_COMPANY_CODE) == code:
                     registry['userCompanies'][username] = new_code
+            for username, memberships in list(
+                registry.get('userCompanyMemberships', {}).items()
+            ):
+                registry['userCompanyMemberships'][username] = [
+                    new_code if _normalise_company_code(item) == code else item
+                    for item in memberships
+                ]
 
             _company_data_managers.pop(code, None)
             _company_data_managers.pop(new_code, None)
@@ -12884,7 +13871,7 @@ def delete_company(company_code):
             new_default_company = remaining_codes[0]
 
         removed_users = []
-        reassigned_owners = []
+        reassigned_protected_users = []
         users_changed = False
         for username, assigned_company in list(registry.get('userCompanies', {}).items()):
             if _normalise_company_code(assigned_company, DEFAULT_COMPANY_CODE) != code:
@@ -12892,13 +13879,29 @@ def delete_company(company_code):
 
             if _is_owner_username(username):
                 registry['userCompanies'][username] = new_default_company
-                reassigned_owners.append(username)
+                reassigned_protected_users.append(username)
             else:
                 registry['userCompanies'].pop(username, None)
                 if username in data_manager.users:
                     data_manager.users.pop(username, None)
                     removed_users.append(username)
                     users_changed = True
+
+        for username, memberships in list(
+            registry.get('userCompanyMemberships', {}).items()
+        ):
+            remaining_memberships = [
+                item for item in memberships
+                if _normalise_company_code(item) != code
+            ]
+            if len(remaining_memberships) > 1:
+                registry['userCompanyMemberships'][username] = remaining_memberships
+                continue
+            registry['userCompanyMemberships'].pop(username, None)
+            if remaining_memberships:
+                registry['userCompanies'][username] = remaining_memberships[0]
+            else:
+                registry['userCompanies'].pop(username, None)
 
         company_manager = _company_data_managers.get(code)
         database_url = _database_url_for_runtime()
@@ -12933,8 +13936,10 @@ def delete_company(company_code):
                 'deletedCompanyCode': code,
                 'newDefaultCompany': new_default_company,
                 'removedUsers': sorted(removed_users, key=lambda value: value.lower()),
-                'reassignedOwners': sorted(reassigned_owners, key=lambda value: value.lower()),
-                'reassignedSuperAdmins': sorted(reassigned_owners, key=lambda value: value.lower()),
+                'reassignedSuperAdmins': sorted(
+                    reassigned_protected_users,
+                    key=lambda value: value.lower(),
+                ),
             }
         })
     except ValueError as e:
@@ -13017,6 +14022,13 @@ def update_pdf_settings():
             if len(value) > max_length:
                 return jsonify({'error': f'{key} is too long'}), 400
             settings[key] = value
+
+        if 'letterheadText' in data:
+            settings['letterheadEnabled'] = bool(
+                str(data.get('letterheadText') or '').strip()
+            )
+        if 'letterheadEnabled' in data:
+            settings['letterheadEnabled'] = bool(data.get('letterheadEnabled'))
 
         if 'taxRate' in data:
             settings['taxRate'] = _safe_float(data.get('taxRate'), 0)
@@ -13402,13 +14414,7 @@ def get_users():
                 username = str(user.username or '').strip()
                 if not username:
                     continue
-                assigned_code = _normalise_company_code(
-                    registry.get('userCompanies', {}).get(username),
-                    company_code,
-                )
-                previous = global_users.get(username)
-                if previous is None or company_code == assigned_code:
-                    global_users[username] = (user, assigned_code)
+                global_users[(company_code, username)] = (user, company_code)
         user_rows = global_users.values()
     else:
         user_rows = (
@@ -13468,17 +14474,43 @@ def create_user():
         if username in data_manager.users:
             return jsonify({'error': 'User already exists'}), 409
 
+        history_counts = _username_history_reference_counts(data_manager, username)
+        if history_counts.get('total', 0) and not bool(data.get('inheritHistory')):
+            return jsonify({
+                'error': (
+                    f'Prior logs or quotations exist for {username} in this company. '
+                    'Creating the account will transfer ownership of those records to it.'
+                ),
+                'requiresHistoryInheritanceConfirmation': True,
+                'historyCounts': history_counts,
+            }), 409
+
         if role_payload_present and not _current_user_can_manage_roles():
-            return jsonify({'error': 'Only owners and admins can change role permissions'}), 403
+            return jsonify({'error': 'Only administrators can change role permissions'}), 403
 
         if data.get('companyCode') and not _current_user_is_owner():
-            return jsonify({'error': 'Only the owner can assign users to companies'}), 403
+            return jsonify({'error': 'You do not have permission to assign users to companies'}), 403
 
         if requested_role == 'owner' and not _current_user_is_owner():
-            return jsonify({'error': 'Only the owner can grant owner access'}), 403
+            return jsonify({'error': 'You do not have permission to grant this access level'}), 403
 
         if requested_company not in _all_company_records():
             return jsonify({'error': 'Company not found'}), 404
+
+        if (
+            not _active_company_admin_usernames(requested_company)
+            and (
+                requested_role != 'admin'
+                or not is_active
+                or _is_owner_username(username)
+            )
+        ):
+            return jsonify({
+                'error': (
+                    f'{_company_payload(requested_company).get("name") or requested_company} '
+                    'does not have an active admin. Create this user as an active admin first.'
+                )
+            }), 409
 
         salt = secrets.token_hex(16)
         password_hash = hash_password(password, salt)
@@ -13502,7 +14534,11 @@ def create_user():
         _assign_user_to_company(username, requested_company)
         log_action(f"Created user {username}")
 
-        return jsonify({'success': True, 'message': 'User created successfully'})
+        return jsonify({
+            'success': True,
+            'message': 'User created successfully',
+            'inheritedHistory': history_counts,
+        })
 
     except Exception as e:
         logger.error(f"Error creating user: {e}")
@@ -13526,13 +14562,18 @@ def update_user(username):
 
         target_role = _effective_user_role(user)
         if target_role == 'owner' and not _current_user_is_owner():
-            return jsonify({'error': 'Only the owner can change another owner'}), 403
+            return jsonify({'error': 'This protected account cannot be changed'}), 403
 
         data = request.get_json() or {}
         username_changed = False
         renamed_from = old_username
         renamed_to = old_username
-        history_company_code = _user_assigned_company_code(old_username)
+        history_company_code = _normalise_company_code(
+            data.get('sourceCompanyCode')
+            or getattr(data_manager, 'company_code', None)
+            or _user_assigned_company_code(old_username),
+            DEFAULT_COMPANY_CODE,
+        )
         rename_counts = None
         requested_company = None
         requested_role = None
@@ -13541,11 +14582,11 @@ def update_user(username):
         role_payload_present = any(field in data for field in role_fields)
 
         if role_payload_present and not _current_user_can_manage_roles():
-            return jsonify({'error': 'Only owners and admins can change role permissions'}), 403
+            return jsonify({'error': 'Only administrators can change role permissions'}), 403
 
         if 'companyCode' in data:
             if not _current_user_is_owner():
-                return jsonify({'error': 'Only the owner can assign users to companies'}), 403
+                return jsonify({'error': 'You do not have permission to assign users to companies'}), 403
             requested_company = _normalise_company_code(data.get('companyCode'), DEFAULT_COMPANY_CODE)
             if requested_company not in _all_company_records():
                 return jsonify({'error': 'Company not found'}), 404
@@ -13553,9 +14594,43 @@ def update_user(username):
         if role_payload_present:
             requested_role = _requested_role_from_payload(data, target_role)
             if requested_role == 'owner' and not _current_user_is_owner():
-                return jsonify({'error': 'Only the owner can grant owner access'}), 403
+                return jsonify({'error': 'You do not have permission to grant this access level'}), 403
             if 'hasSalesAccess' in data or 'isSales' in data:
                 requested_sales_access = bool(data.get('hasSalesAccess', data.get('isSales', False)))
+
+        source_company = _normalise_company_code(
+            history_company_code,
+            DEFAULT_COMPANY_CODE,
+        )
+        proposed_company = _normalise_company_code(
+            requested_company or source_company,
+            DEFAULT_COMPANY_CODE,
+        )
+        proposed_role = requested_role or target_role
+        proposed_active = (
+            bool(data.get('isActive'))
+            if 'isActive' in data
+            else getattr(user, 'is_active', True)
+        )
+        removes_active_admin = (
+            target_role == 'admin'
+            and getattr(user, 'is_active', True)
+            and (
+                proposed_role != 'admin'
+                or not proposed_active
+                or proposed_company != source_company
+            )
+        )
+        if (
+            removes_active_admin
+            and len(_active_company_admin_usernames(source_company)) <= 1
+        ):
+            return jsonify({
+                'error': _last_company_admin_error(
+                    source_company,
+                    self_update=was_self_update,
+                )
+            }), 409
 
         if 'name' in data:
             user.name = (data.get('name') or '').strip()
@@ -13608,11 +14683,8 @@ def update_user(username):
             user.is_active = new_is_active
 
         if username_changed:
-            registry = _load_company_registry()
-            assigned_company = registry.get('userCompanies', {}).pop(renamed_from, None)
-            if assigned_company:
-                registry['userCompanies'][renamed_to] = assigned_company
-                _save_company_registry(registry)
+            _unassign_user_from_company(renamed_from, history_company_code)
+            _assign_user_to_company(renamed_to, history_company_code)
             _rename_super_admin_reference(renamed_from, renamed_to)
 
         try:
@@ -13646,6 +14718,7 @@ def update_user(username):
                         move_user(user.username, target_company, user)
                     except ValueError as error:
                         return jsonify({'error': str(error)}), 409
+                _unassign_user_from_company(user.username, source_company)
             _assign_user_to_company(user.username, target_company)
 
         _reload_users_for_all_company_managers()
@@ -13672,23 +14745,12 @@ def update_user(username):
         else:
             log_action(f"Updated user {user.username}")
 
+        response_user = _user_payload(user)
         return jsonify({
             'success': True,
             'message': 'User updated successfully',
             'data': {
-                'username': user.username,
-                'name': getattr(user, 'name', '') or '',
-                'phone': getattr(user, 'phone', '') or '',
-                'role': _effective_user_role(user),
-                'roleLabel': _role_label(_effective_user_role(user)),
-                'isAdmin': user_role_is_adminish(_effective_user_role(user)),
-                'isOwner': _effective_user_role(user) == 'owner',
-                'isSuperAdmin': _effective_user_role(user) == 'owner',
-                'canManageRoles': _effective_user_role(user) in {'owner', 'admin'},
-                'hasSalesAccess': _user_has_sales_access(user),
-                'isSales': _user_has_sales_access(user),
-                'isActive': getattr(user, 'is_active', True),
-                'companyCode': _user_assigned_company_code(user.username),
+                **response_user,
                 'selfChangesPending': was_self_update,
             }
         })
@@ -13713,7 +14775,7 @@ def reset_user_password(username):
             return jsonify({'error': 'You can only manage users assigned to your company'}), 403
 
         if _is_owner_username(username) and not _current_user_is_owner():
-            return jsonify({'error': 'Only the owner can reset another owner password'}), 403
+            return jsonify({'error': 'This protected account cannot be managed'}), 403
 
         data = request.get_json() or {}
         new_password = data.get('password') or ''
@@ -13753,7 +14815,20 @@ def delete_user(username):
             return jsonify({'error': 'You can only manage users assigned to your company'}), 403
 
         if _is_owner_username(username) and not _current_user_is_owner():
-            return jsonify({'error': 'Only the owner can delete another owner'}), 403
+            return jsonify({'error': 'This protected account cannot be deleted'}), 403
+
+        company_code = _normalise_company_code(
+            _user_assigned_company_code(username),
+            DEFAULT_COMPANY_CODE,
+        )
+        if (
+            _effective_user_role(user) == 'admin'
+            and getattr(user, 'is_active', True)
+            and len(_active_company_admin_usernames(company_code)) <= 1
+        ):
+            return jsonify({
+                'error': _last_company_admin_error(company_code)
+            }), 409
 
         try:
             if _is_owner_username(username):
@@ -13765,9 +14840,7 @@ def delete_user(username):
         data_manager.save_users()
         _reload_users_for_all_company_managers()
         registry = _load_company_registry()
-        if username in registry.get('userCompanies', {}):
-            registry['userCompanies'].pop(username, None)
-            _save_company_registry(registry)
+        _unassign_user_from_company(username, company_code)
 
         log_action(f"Deleted user {username}")
 
@@ -13850,11 +14923,19 @@ def _event_files_for_response(event_id):
                 except OSError:
                     continue
 
+                mime_type, preview_kind = _event_file_preview_details(entry.name)
+                encoded_name = quote(entry.name)
                 files.append({
                     'name': entry.name,
                     'size': stat.st_size,
                     'modifiedAt': datetime.fromtimestamp(stat.st_mtime).isoformat(timespec='seconds'),
-                    'downloadUrl': f"/api/events/{event_id}/files/{quote(entry.name)}"
+                    'downloadUrl': f"/api/events/{event_id}/files/{encoded_name}",
+                    'previewUrl': (
+                        f"/api/events/{event_id}/files/{encoded_name}?preview=1"
+                        if preview_kind else ''
+                    ),
+                    'previewKind': preview_kind,
+                    'mimeType': mime_type,
                 })
     except OSError as e:
         logger.warning("Failed to list files for event %s: %s", event_id, e)
@@ -13862,6 +14943,28 @@ def _event_files_for_response(event_id):
 
     files.sort(key=lambda item: item['name'].lower())
     return files
+
+
+def _event_file_preview_details(filename):
+    mime_type = str(mimetypes.guess_type(str(filename or ''))[0] or '')
+    if mime_type == 'application/pdf':
+        return mime_type, 'pdf'
+    if mime_type in {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'}:
+        return mime_type, 'image'
+    if mime_type.startswith('video/'):
+        return mime_type, 'video'
+    if mime_type.startswith('audio/'):
+        return mime_type, 'audio'
+    if mime_type in {'text/plain', 'text/csv', 'application/json'}:
+        return mime_type, 'text'
+    return mime_type or 'application/octet-stream', ''
+
+
+def _event_files_total_size(event_id):
+    return sum(
+        max(0, _safe_int(file_info.get('size'), 0))
+        for file_info in _event_files_for_response(event_id)
+    )
 
 
 def _event_file_path(event_id, filename):
@@ -15068,23 +16171,45 @@ def upload_event_files(event_id):
             for uploaded_file in incoming_files
             if uploaded_file and uploaded_file.filename
         ]
+        incoming_size = 0
         for uploaded_file in valid_files:
             _validate_uploaded_file_size(
                 uploaded_file,
                 EVENT_FILE_MAX_BYTES,
                 'Event file',
             )
+            incoming_size += max(0, _uploaded_file_size(uploaded_file) or 0)
 
-        folder = data_manager.get_event_folder(event_id, create=True)
-        if not folder:
-            return jsonify({'error': 'Event folder could not be created'}), 500
+        with _event_file_action_locks[event_id]:
+            existing_size = _event_files_total_size(event_id)
+            if existing_size + incoming_size > EVENT_FILE_MAX_BYTES:
+                limit_mb = EVENT_FILE_MAX_BYTES // MEBIBYTE
+                used_mb = existing_size / MEBIBYTE
+                raise ValueError(
+                    f'Event files cannot exceed {limit_mb} MB in total '
+                    f'({used_mb:.1f} MB currently used)'
+                )
 
-        saved_files = []
-        for uploaded_file in valid_files:
-            filename = _safe_event_upload_filename(uploaded_file.filename)
-            target_path = _unique_event_upload_path(folder, filename)
-            uploaded_file.save(target_path)
-            saved_files.append(os.path.basename(target_path))
+            folder = data_manager.get_event_folder(event_id, create=True)
+            if not folder:
+                return jsonify({'error': 'Event folder could not be created'}), 500
+
+            saved_files = []
+            saved_paths = []
+            try:
+                for uploaded_file in valid_files:
+                    filename = _safe_event_upload_filename(uploaded_file.filename)
+                    target_path = _unique_event_upload_path(folder, filename)
+                    uploaded_file.save(target_path)
+                    saved_paths.append(target_path)
+                    saved_files.append(os.path.basename(target_path))
+            except Exception:
+                for saved_path in saved_paths:
+                    try:
+                        os.remove(saved_path)
+                    except OSError:
+                        pass
+                raise
 
         if not saved_files:
             return jsonify({'error': 'No valid files were uploaded'}), 400
@@ -15108,7 +16233,7 @@ def upload_event_files(event_id):
 @require_auth
 @require_event_access
 def download_event_file(event_id, filename):
-    """Download a file attached to an event."""
+    """Download or safely preview a file attached to an event."""
     try:
         if event_id not in data_manager.events:
             return jsonify({'error': 'Event not found'}), 404
@@ -15117,11 +16242,23 @@ def download_event_file(event_id, filename):
         if not target_path or not os.path.exists(target_path) or not os.path.isfile(target_path):
             return jsonify({'error': 'File not found'}), 404
 
-        return send_file(
+        preview_requested = request.args.get('preview', '').strip() == '1'
+        mime_type, preview_kind = _event_file_preview_details(target_path)
+        if preview_requested and not preview_kind:
+            return jsonify({'error': 'Preview is not available for this file type'}), 415
+
+        response = send_file(
             target_path,
-            as_attachment=True,
-            download_name=os.path.basename(target_path)
+            as_attachment=not preview_requested,
+            download_name=os.path.basename(target_path),
+            mimetype=mime_type,
         )
+        if preview_requested:
+            response.headers['Content-Disposition'] = (
+                f"inline; filename*=UTF-8''{quote(os.path.basename(target_path))}"
+            )
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
     except Exception as e:
         logger.error(f"Error downloading file {filename} for event {event_id}: {e}")
         return jsonify({'error': 'Failed to download event file'}), 500
@@ -15140,7 +16277,9 @@ def delete_event_file_upload(event_id, filename):
         if not target_path or not os.path.exists(target_path) or not os.path.isfile(target_path):
             return jsonify({'error': 'File not found'}), 404
 
-        os.remove(target_path)
+        with _event_file_action_locks[event_id]:
+            os.remove(target_path)
+            updated_files = _event_files_for_response(event_id)
 
         log_action(f"Deleted file '{os.path.basename(target_path)}' from event {event_id}: {event.name}")
         mark_realtime_change('event-files', {'eventId': event_id})
@@ -15148,7 +16287,7 @@ def delete_event_file_upload(event_id, filename):
         return jsonify({
             'success': True,
             'message': 'Event file deleted',
-            'data': _event_files_for_response(event_id)
+            'data': updated_files
         })
     except Exception as e:
         logger.error(f"Error deleting file {filename} for event {event_id}: {e}")
@@ -15183,6 +16322,7 @@ def get_event_model_availability(event_id):
         maintenance_ooc_by_key = defaultdict(int)
         maintenance_missing_by_key = defaultdict(int)
         maintenance_degraded_by_key = defaultdict(int)
+        degraded_details_by_key = defaultdict(list)
 
         # Physical inventory: exclude decommissioned assets. Missing and OOC
         # units stay in the denominator so the UI can explain why the available
@@ -15221,8 +16361,21 @@ def get_event_model_availability(event_id):
                         max(_asset_inventory_quantity(asset) - counts['ooc'] - counts['missing'], 0)
                     )
                 maintenance_degraded_by_key[key] += degraded_quantity
+                if degraded_quantity > 0:
+                    degraded_details_by_key[key].append({
+                        'assetId': '',
+                        'isBulk': True,
+                        'quantity': degraded_quantity,
+                        'reasons': _bulk_degraded_reasons(asset),
+                    })
             elif _is_degraded(asset):
                 asset_degraded_by_key[key] += inventory_quantity
+                degraded_details_by_key[key].append({
+                    'assetId': str(getattr(asset, 'asset_id', '') or '').strip(),
+                    'isBulk': False,
+                    'quantity': inventory_quantity,
+                    'reasons': _asset_degraded_reasons(asset),
+                })
 
         # Quantity already reserved/requested in this same event.  This includes
         # normal model rows plus any specific prepared bulk/individual assets.
@@ -15316,6 +16469,7 @@ def get_event_model_availability(event_id):
                 'bulkMaintenanceMissing': maintenance_missing,
                 'bulkMaintenanceDegraded': maintenance_degraded,
                 'degraded': degraded_capacity,
+                'degradedDetails': degraded_details_by_key.get(key, []),
                 'adjustedGlobal': available
             })
 
@@ -15379,7 +16533,12 @@ def create_event():
         mark_realtime_change('events', {'eventId': event_id, 'action': 'created'})
 
         log_action(
-            f"Created event {event_id}: {data['name']} via web interface")
+            f"Created event {event_id}: {event.name}; "
+            f"location={event.location or '-'}; "
+            f"dates={format_date_output(event.start_date)} to {format_date_output(event.end_date)}; "
+            f"type={event.tag}; assigned users={len(assigned_users)}",
+            include_system_log=True,
+        )
 
         return jsonify({'success': True, 'message': 'Event created successfully', 'eventId': event_id})
     except ValueError as e:
@@ -15532,7 +16691,11 @@ def delete_maintenance_log(asset_id, log_index):
         
         # Log the action
         media_text = f" and {deleted_media_count} media file(s)" if deleted_media_count else ""
-        log_action(f"Deleted maintenance log{media_text} for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
+        log_action(
+            f"Deleted maintenance log{media_text} for asset {asset_id}: "
+            f"'{deleted_description}' (deleted by {session['user']})",
+            system_log_only=True,
+        )
         
         logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
         return jsonify({'success': True, 'message': 'Maintenance log deleted successfully'})
@@ -15631,9 +16794,6 @@ def delete_event(event_id):
                     'error': message,
                     'requiresPassword': True,
                 }), 403
-
-        # Backup event file
-        data_manager.backup_event_file(event_id)
 
         # Return all assets to their default locations
         assets_reset = []
@@ -15898,6 +17058,7 @@ def add_event_subproject(event_id):
             'items': [],
         })
         event.subprojects = subprojects
+        _reconcile_event_subproject_extras(event)
         data_manager.save_event(event)
         invalidate_cache()
         log_action(
@@ -16003,6 +17164,7 @@ def manage_event_subproject(event_id, subproject_id):
 
         event.subprojects = [row for row in subprojects if row is not source]
         _sync_event_model_markers_from_subprojects(event)
+        _reconcile_event_subproject_extras(event)
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
@@ -16047,6 +17209,78 @@ def manage_event_subproject(event_id, subproject_id):
         return jsonify({'error': 'Failed to update sub-project'}), 500
 
 
+@app.route('/api/events/<int:event_id>/subprojects/reorder', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def reorder_event_subprojects(event_id):
+    """Persist the display order of every sub-project in an event."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        subprojects = [
+            row for row in (getattr(event, 'subprojects', []) or [])
+            if isinstance(row, dict)
+        ]
+        data = request.get_json(silent=True) or {}
+        ordered_ids = data.get('orderedSubprojectIds')
+        if not isinstance(ordered_ids, list):
+            return jsonify({'error': 'Sub-project order must be a list'}), 400
+
+        ordered_ids = [str(value or '').strip() for value in ordered_ids]
+        current_ids = [str(row.get('id') or '').strip() for row in subprojects]
+        if (
+            any(not value for value in ordered_ids)
+            or len(ordered_ids) != len(current_ids)
+            or len(set(ordered_ids)) != len(ordered_ids)
+            or set(ordered_ids) != set(current_ids)
+        ):
+            return jsonify({
+                'error': 'Sub-project order must contain every room exactly once'
+            }), 400
+
+        by_id = {
+            str(row.get('id') or '').strip(): row
+            for row in subprojects
+        }
+        event.subprojects = [by_id[subproject_id] for subproject_id in ordered_ids]
+        if ordered_ids != current_ids:
+            data_manager.save_event(event)
+            invalidate_cache()
+            ordered_names = [
+                str(row.get('name') or 'Room')
+                for row in event.subprojects
+            ]
+            log_action(
+                f"Reordered sub-projects for event {event_id}: "
+                f"{', '.join(ordered_names)}",
+                event_meta={
+                    'eventId': event_id,
+                    'actionLabel': 'Reordered sub-projects',
+                    'subprojectOrder': ordered_ids,
+                },
+            )
+            mark_realtime_change('event-assets', {
+                'eventId': event_id,
+                'action': 'subprojects-reordered',
+                'subprojectOrder': ordered_ids,
+            })
+
+        return jsonify({
+            'success': True,
+            'message': 'Sub-project order updated',
+            'data': {'subprojects': event.subprojects},
+        })
+    except Exception as e:
+        logger.error(
+            "Error reordering sub-projects for event %s: %s",
+            event_id,
+            e,
+        )
+        return jsonify({'error': 'Failed to reorder sub-projects'}), 500
+
+
 @app.route('/api/events/<int:event_id>/subprojects/move', methods=['POST'])
 @require_admin
 @with_prepare_action_lock
@@ -16083,6 +17317,7 @@ def move_event_subproject_content(event_id):
             return jsonify({'error': 'Move kind must be requirement or asset'}), 400
 
         _sync_event_model_markers_from_subprojects(event)
+        _reconcile_event_subproject_extras(event)
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
@@ -16155,22 +17390,6 @@ def manage_event_models(event_id):
                     return jsonify({'error': 'Model assignment not found'}), 404
 
             projected_total = current_total - current_room_quantity + next_room_quantity
-            if request.method != 'DELETE':
-                inventory_quantity = sum(
-                    _asset_inventory_quantity(asset)
-                    for asset in data_manager.inventory.values()
-                    if asset
-                    and not _is_disposed(asset)
-                    and _asset_group_key(asset) == _event_model_group_key(group)
-                )
-                if projected_total > inventory_quantity:
-                    return jsonify({
-                        'error': (
-                            f"Quantity exceeds inventory for {group['brand']} {group['model']}: "
-                            f"you have {inventory_quantity} unit(s), requested across "
-                            f"sub-projects: {projected_total}."
-                        )
-                    }), 400
 
             _event_subproject_set_group_quantity(
                 subproject,
@@ -16178,13 +17397,11 @@ def manage_event_models(event_id):
                 next_room_quantity,
             )
             _sync_event_model_markers_from_subprojects(event)
-
-            unprepared = {'preparedUnits': 0, 'referencesRemoved': 0}
-            if request.method == 'DELETE' and projected_total <= 0:
-                unprepared = _unprepare_event_model_group(
-                    event,
-                    _event_model_group_key(group),
-                )
+            room_reconciliation = _reconcile_event_subproject_extras(event)
+            extra_units = sum(
+                _event_subproject_ref_quantity(ref)
+                for ref in room_reconciliation['demoted']
+            )
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -16208,7 +17425,9 @@ def manage_event_models(event_id):
                     'oldQuantity': current_room_quantity,
                     'newQuantity': next_room_quantity,
                     'eventQuantity': projected_total,
-                    'unpreparedQuantity': unprepared['preparedUnits'],
+                    'unpreparedQuantity': 0,
+                    'extraQuantity': extra_units,
+                    'promotedExtraAssets': room_reconciliation['promoted'],
                     'subprojectId': subproject.get('id'),
                 },
             })
@@ -16228,21 +17447,6 @@ def manage_event_models(event_id):
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
             group_key = _model_key_from_parts(department, brand, model)
-            inv_count = sum(
-                _asset_inventory_quantity(asset)
-                for asset in data_manager.inventory.values()
-                if asset
-                and not _is_disposed(asset)
-                and _asset_group_key(asset) == group_key
-            )
-
-            if new_quantity > inv_count:
-                return jsonify({
-                    'error': (
-                        f"Quantity exceeds inventory for {brand} {model}: "
-                        f"you have {inv_count} unit(s), requested: {new_quantity}."
-                    )
-                }), 400
 
             matching_indexes = []
             existing_quantity = 0
@@ -16281,6 +17485,13 @@ def manage_event_models(event_id):
                 if index not in matching_index_set or index == first_index
             ]
 
+            extras = _reclassify_event_model_surplus(
+                event,
+                group_key,
+                new_quantity,
+            )
+            promoted = _promote_matching_extra_assets(event)
+
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -16296,6 +17507,8 @@ def manage_event_models(event_id):
                 'data': {
                     'oldQuantity': existing_quantity,
                     'newQuantity': new_quantity,
+                    'extraQuantity': extras['extraUnits'],
+                    'promotedExtraAssets': promoted,
                 },
             })
 
@@ -16335,40 +17548,6 @@ def manage_event_models(event_id):
 
             logger.info(f"Final description for {brand} {model}: '{full_description}' (length: {len(full_description)})")
 
-            group_key = _model_key_from_parts(department, brand, model)
-
-            # Server-side hard cap:
-            # Users may overbook against clashing events, but they may not request
-            # more than the physical inventory for this model type.
-            # Missing and decommissioned assets are excluded. OOC and Degraded assets are included.
-            inv_count = sum(
-                _asset_inventory_quantity(asset)
-                for asset in data_manager.inventory.values()
-                if asset
-                and not _is_disposed(asset)
-                and _asset_group_key(asset) == group_key
-            )
-
-            current_total = 0
-
-            for item in getattr(event, 'prepared_items', []) or []:
-                existing_key, existing_quantity = _parse_model_assignment_key(item)
-
-                if existing_key == group_key:
-                    current_total += existing_quantity
-
-            requested_total = current_total + quantity
-
-            if requested_total > inv_count:
-                return jsonify({
-                    'error': (
-                        f"Quantity exceeds inventory for {brand} {model}"
-                        f"{f' ({full_description})' if full_description else ''}: "
-                        f"you have {inv_count} unit(s), already requested here: {current_total}, "
-                        f"requested additional: {quantity}."
-                    )
-                }), 400
-            
             # Log current prepared_items
             logger.info(f"Current prepared_items: {event.prepared_items}")
 
@@ -16421,6 +17600,8 @@ def manage_event_models(event_id):
             if not hasattr(event, 'actually_prepared'):
                 event.actually_prepared = []
 
+            promoted = _promote_matching_extra_assets(event)
+
             # Update event state if needed
             update_event_state(event)
 
@@ -16433,7 +17614,11 @@ def manage_event_models(event_id):
             log_action(
                 f"Added {quantity}x {brand} {model} model to event {event_id} (total: {new_quantity})")
 
-            return jsonify({'success': True, 'message': f'Added {quantity}x {brand} {model} to event (total: {new_quantity})'})
+            return jsonify({
+                'success': True,
+                'message': f'Added {quantity}x {brand} {model} to event (total: {new_quantity})',
+                'data': {'promotedExtraAssets': promoted},
+            })
 
         elif request.method == 'DELETE':
             # Remove model assignment completely
@@ -16474,15 +17659,12 @@ def manage_event_models(event_id):
             else:
                 items_to_remove = [it for (it, _desc) in candidates]
 
-            # A prepared physical item must be released before its planning row is
-            # removed. Otherwise bulk markers and specific asset IDs remain in
-            # actually_prepared and continue to appear deployed for this show.
             group_key = _model_key_from_parts(department, brand, model)
-            unprepared = _unprepare_event_model_group(event, group_key)
 
-            # Remove the model requirement only after its physical refs are clear.
             for item in items_to_remove:
                 event.prepared_items.remove(item)
+
+            extras = _reclassify_event_model_surplus(event, group_key, 0)
 
             # Update event state
             update_event_state(event)
@@ -16494,16 +17676,17 @@ def manage_event_models(event_id):
             invalidate_cache()
 
             log_action(
-                f"Unprepared {unprepared['preparedUnits']}x and removed "
-                f"{brand} {model} model from event {event_id}"
+                f"Removed {brand} {model} requirement from event {event_id}; "
+                f"kept {extras['extraUnits']} prepared unit(s) as extra"
             )
 
             return jsonify({
                 'success': True,
                 'message': f'Removed {brand} {model} from event',
                 'data': {
-                    'unpreparedQuantity': unprepared['preparedUnits'],
-                    'referencesRemoved': unprepared['referencesRemoved'],
+                    'unpreparedQuantity': 0,
+                    'extraQuantity': extras['extraUnits'],
+                    'referencesMarkedExtra': extras['referencesMarked'],
                 },
             })
 
@@ -17104,30 +18287,6 @@ def add_container_models_to_event(event_id):
                 'error': 'Container has no available model contents to add'
             }), 400
 
-        current = _event_planning_template_contents(event)['models']
-        current_by_key = {
-            _model_key_from_parts(
-                row['department'],
-                row['brand'],
-                row['model'],
-            ): row
-            for row in current
-        }
-        for key, row in grouped.items():
-            final_quantity = (
-                current_by_key.get(key, {}).get('quantity', 0)
-                + row['quantity']
-            )
-            physical = _planning_model_inventory_quantity(row)
-            if final_quantity > physical:
-                return jsonify({
-                    'error': (
-                        f"{row['brand']} {row['model']} would require "
-                        f"{final_quantity} unit(s), but only {physical} "
-                        "are in inventory"
-                    )
-                }), 400
-
         subproject = _event_subproject(event, data.get('subprojectId'))
         if subproject:
             for row in grouped.values():
@@ -17267,8 +18426,23 @@ def prepare_event_asset(event_id):
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                    if subproject and added_requirement_units:
+                        asset_group = _asset_group_from_item(asset)
+                        room_quantity = _event_subproject_required_quantity(
+                            subproject,
+                            asset_group,
+                        )
+                        _event_subproject_set_group_quantity(
+                            subproject,
+                            asset_group,
+                            room_quantity + added_requirement_units,
+                        )
+                        _sync_event_model_markers_from_subprojects(event)
                     _remove_direct_asset_ref_from_prepared_items(event, asset_id)
-                    event.extra_assets.remove(asset_id)
+                    if asset_id in event.extra_assets:
+                        event.extra_assets.remove(asset_id)
+                    if subproject:
+                        _reconcile_event_subproject_extras(event)
                     update_event_state(event)
                     data_manager.save_event(event)
                     invalidate_cache()
@@ -17328,27 +18502,34 @@ def prepare_event_asset(event_id):
                 }), 400
 
             if add_scanned_assets_to_event:
-                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                added_requirement_units = _ensure_quick_add_model_requirement(
+                    event,
+                    subproject,
+                    asset,
+                    1,
+                )
                 fulfills_model_requirement = True
-                if subproject and added_requirement_units:
-                    prepared_group = _asset_group_from_item(asset)
-                    room_quantity = _event_subproject_required_quantity(
-                        subproject,
-                        prepared_group,
-                    )
-                    _event_subproject_set_group_quantity(
-                        subproject,
-                        prepared_group,
-                        room_quantity + added_requirement_units,
-                    )
-                    _sync_event_model_markers_from_subprojects(event)
             else:
                 # A manual/individual prepare only fills an existing open model slot.
                 # If the matching model requirement is already full, or if this asset
                 # was not originally required, keep it as an extra asset instead of
                 # increasing the event requirement.
                 added_requirement_units = 0
-                fulfills_model_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
+                if subproject:
+                    prepared_group = _asset_group_from_item(asset)
+                    fulfills_model_requirement = (
+                        _event_subproject_required_quantity(
+                            subproject,
+                            prepared_group,
+                        )
+                        > _event_subproject_prepared_quantity(
+                            event,
+                            subproject,
+                            prepared_group,
+                        )
+                    )
+                else:
+                    fulfills_model_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
             logger.info(
                 f"Manual prepare {asset_id}: addToEvent={add_scanned_assets_to_event}; "
                 f"fillsExistingRequirement={fulfills_model_requirement}; addedUnits={added_requirement_units}"
@@ -17475,7 +18656,10 @@ def add_custom_asset_to_event(event_id):
         data_manager.save_event(event)
         invalidate_cache()
 
-        log_action(f"Added {asset_type} custom asset '{name}' ({quantity}x, dept {department}) to event {event_id}")
+        log_action(
+            f"Added {_custom_asset_log_label(_parse_custom_marker(custom_asset_id))} "
+            f"to event {event_id}; quantity={quantity}; department={department}"
+        )
         mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'custom-asset-added'})
 
         return jsonify({
@@ -17500,26 +18684,55 @@ def collect_custom_asset(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         data = request.get_json() or {}
-        asset_id = str(data.get('assetId', '')).strip()
-        custom = _parse_custom_marker(asset_id)
-        if not custom:
+        requested_ids = data.get('assetIds')
+        if not isinstance(requested_ids, list):
+            requested_ids = [data.get('assetId')]
+        asset_ids = list(dict.fromkeys(
+            str(asset_id or '').strip()
+            for asset_id in requested_ids
+            if str(asset_id or '').strip()
+        ))
+        if not asset_ids:
             return jsonify({'error': 'Custom asset not found'}), 400
-        if custom['type'] != 'LOAN':
-            return jsonify({'error': 'Only loan/rental items can be collected'}), 400
+
+        custom_assets = []
+        for asset_id in asset_ids:
+            custom = _parse_custom_marker(asset_id)
+            if not custom:
+                return jsonify({'error': 'Custom asset not found'}), 400
+            if custom['type'] != 'LOAN':
+                return jsonify({'error': 'Only loan/rental items can be collected'}), 400
+            custom_assets.append((asset_id, custom))
 
         _ensure_event_custom_lists(event)
-        if asset_id not in event.prepared_items:
-            return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
-        if asset_id in event.returned_items:
-            return jsonify({'error': 'Returned items cannot be collected'}), 400
-        if asset_id not in event.custom_collected:
-            event.custom_collected.append(asset_id)
+        for asset_id, _custom in custom_assets:
+            if asset_id not in event.prepared_items:
+                return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+            if asset_id in event.returned_items:
+                return jsonify({'error': 'Returned items cannot be collected'}), 400
+
+        newly_collected = []
+        for asset_id, custom in custom_assets:
+            if asset_id not in event.custom_collected:
+                event.custom_collected.append(asset_id)
+                newly_collected.append((asset_id, custom))
 
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
-        log_action(f"Collected loan/rental item {_custom_display_name(custom)} for event {event_id}")
-        return jsonify({'success': True, 'message': 'Loan/Rental item collected'})
+        _log_event_asset_action(
+            event_id,
+            'collect',
+            [_event_asset_log_item(asset_id) for asset_id, _custom in newly_collected],
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Loan/Rental item collected',
+            'data': {
+                'assetIds': [asset_id for asset_id, _custom in custom_assets],
+                'collectedCount': len(newly_collected),
+            },
+        })
     except Exception as e:
         logger.error(f"Error collecting custom asset for event {event_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to collect custom asset'}), 500
@@ -17529,33 +18742,64 @@ def collect_custom_asset(event_id):
 @require_event_access
 @with_prepare_action_lock
 def uncollect_custom_asset(event_id):
-    """Undo collection for a loan/rental custom item. This also unprepares it."""
+    """Undo collection for loan/rental items that have not been prepared."""
     try:
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
         data = request.get_json() or {}
-        asset_id = str(data.get('assetId', '')).strip()
-        custom = _parse_custom_marker(asset_id)
-        if not custom:
+        requested_ids = data.get('assetIds')
+        if not isinstance(requested_ids, list):
+            requested_ids = [data.get('assetId')]
+        asset_ids = list(dict.fromkeys(
+            str(asset_id or '').strip()
+            for asset_id in requested_ids
+            if str(asset_id or '').strip()
+        ))
+        if not asset_ids:
             return jsonify({'error': 'Custom asset not found'}), 400
-        if custom['type'] != 'LOAN':
-            return jsonify({'error': 'Only loan/rental items can be uncollected'}), 400
+
+        custom_assets = []
+        for asset_id in asset_ids:
+            custom = _parse_custom_marker(asset_id)
+            if not custom:
+                return jsonify({'error': 'Custom asset not found'}), 400
+            if custom['type'] != 'LOAN':
+                return jsonify({'error': 'Only loan/rental items can be uncollected'}), 400
+            custom_assets.append((asset_id, custom))
 
         _ensure_event_custom_lists(event)
-        if asset_id in event.custom_collected:
-            event.custom_collected.remove(asset_id)
-        if asset_id in event.actually_prepared:
-            event.actually_prepared.remove(asset_id)
-        if asset_id in event.returned_items:
-            event.returned_items.remove(asset_id)
+        for asset_id, _custom in custom_assets:
+            if asset_id not in event.prepared_items:
+                return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+            if asset_id in event.actually_prepared:
+                return jsonify({'error': 'Unprepare the loan/rental item before uncollecting it'}), 400
+            if asset_id in event.returned_items:
+                return jsonify({'error': 'Returned items cannot be uncollected'}), 400
+
+        newly_uncollected = []
+        for asset_id, custom in custom_assets:
+            if asset_id in event.custom_collected:
+                event.custom_collected.remove(asset_id)
+                newly_uncollected.append((asset_id, custom))
 
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
-        log_action(f"Uncollected loan/rental item {_custom_display_name(custom)} for event {event_id}")
-        return jsonify({'success': True, 'message': 'Loan/Rental item uncollected'})
+        _log_event_asset_action(
+            event_id,
+            'uncollect',
+            [_event_asset_log_item(asset_id) for asset_id, _custom in newly_uncollected],
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Loan/Rental item uncollected',
+            'data': {
+                'assetIds': [asset_id for asset_id, _custom in custom_assets],
+                'uncollectedCount': len(newly_uncollected),
+            },
+        })
     except Exception as e:
         logger.error(f"Error uncollecting custom asset for event {event_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to uncollect custom asset'}), 500
@@ -17687,6 +18931,140 @@ def unprepare_event_asset(event_id):
     except Exception as e:
         logger.error(f"Error removing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to remove asset'}), 500
+
+@app.route('/api/events/<int:event_id>/return-prepared-quantity', methods=['POST'])
+@require_auth
+@require_event_access
+@with_prepare_action_lock
+def return_event_prepared_quantity(event_id):
+    """Return part or all of an anonymously prepared model quantity."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        group = _group_from_request(data)
+        quantity = max(0, _safe_int(data.get('quantity'), 0))
+        if quantity <= 0:
+            return jsonify({'error': 'Quantity must be greater than 0'}), 400
+
+        subproject_id = str(data.get('subprojectId') or '').strip()
+        subproject = _event_subproject(event, subproject_id)
+        if subproject_id and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
+
+        available = _event_prepared_slot_quantity(event, group)
+        if subproject:
+            available = min(
+                available,
+                _event_subproject_anonymous_prepared_quantity(subproject, group),
+            )
+        if quantity > available:
+            return jsonify({
+                'error': f'Only {available} unassigned prepared unit(s) can be returned'
+            }), 409
+
+        removed = _decrement_prepared_model_slot(event, group, quantity)
+        if removed != quantity:
+            return jsonify({'error': 'Prepared quantity changed; please try again'}), 409
+        _increment_returned_prepared_model_slot(event, group, quantity)
+        if subproject:
+            _event_subproject_adjust_prepared(subproject, group, -quantity)
+            _event_subproject_adjust_returned_prepared(subproject, group, quantity)
+
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        _log_event_asset_action(
+            event_id,
+            'return',
+            [_event_asset_log_item(quantity=quantity, group=group)],
+        )
+        return jsonify({
+            'success': True,
+            'message': f'Returned {quantity}x {_asset_log_label(SimpleNamespace(brand=group["brand"], model_number=group["model"], description=group.get("description", "")))}',
+            'data': {
+                'returnedQuantity': _event_returned_prepared_slot_quantity(event, group),
+                'outstandingQuantity': _event_prepared_slot_quantity(event, group),
+            },
+        })
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        logger.error(
+            f'Error returning prepared model quantity for event {event_id}: {error}',
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to return prepared quantity'}), 500
+
+
+@app.route('/api/events/<int:event_id>/unreturn-prepared-quantity', methods=['POST'])
+@require_auth
+@require_event_access
+@with_prepare_action_lock
+def unreturn_event_prepared_quantity(event_id):
+    """Undo part or all of an anonymous prepared-model return."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        group = _group_from_request(data)
+        quantity = max(0, _safe_int(data.get('quantity'), 0))
+        if quantity <= 0:
+            return jsonify({'error': 'Quantity must be greater than 0'}), 400
+
+        subproject_id = str(data.get('subprojectId') or '').strip()
+        subproject = _event_subproject(event, subproject_id)
+        if subproject_id and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
+
+        available = _event_returned_prepared_slot_quantity(event, group)
+        if subproject:
+            available = min(
+                available,
+                _event_subproject_returned_prepared_quantity(subproject, group),
+            )
+        if quantity > available:
+            return jsonify({
+                'error': f'Only {available} returned unit(s) can be restored'
+            }), 409
+
+        removed = _decrement_returned_prepared_model_slot(event, group, quantity)
+        if removed != quantity:
+            return jsonify({'error': 'Returned quantity changed; please try again'}), 409
+        _increment_prepared_model_slot(event, group, quantity)
+        if subproject:
+            _event_subproject_adjust_returned_prepared(subproject, group, -quantity)
+            _event_subproject_adjust_prepared(subproject, group, quantity)
+
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        _log_event_asset_action(
+            event_id,
+            'restore',
+            [_event_asset_log_item(quantity=quantity, group=group)],
+        )
+        return jsonify({
+            'success': True,
+            'message': f'Restored {quantity} prepared unit(s) to the event',
+            'data': {
+                'returnedQuantity': _event_returned_prepared_slot_quantity(event, group),
+                'outstandingQuantity': _event_prepared_slot_quantity(event, group),
+            },
+        })
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        logger.error(
+            f'Error restoring prepared model quantity for event {event_id}: {error}',
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to restore prepared quantity'}), 500
+
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
@@ -17938,7 +19316,7 @@ def return_department_assets(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         data = request.get_json() or {}
-        department = (data.get('department') or '').strip()
+        department = _normalise_department_code(data.get('department')) or ''
         if not department:
             return jsonify({'error': 'Department is required'}), 400
 
@@ -17950,6 +19328,18 @@ def return_department_assets(event_id):
 
         already_returned = set(event.returned_items or [])
         targets = []
+        prepared_quantity_targets = {}
+
+        for ref in list(event.actually_prepared):
+            marker = _parse_prepared_model_marker(ref)
+            if not marker or marker['department'] != department:
+                continue
+            key = _event_model_group_key(marker)
+            row = prepared_quantity_targets.setdefault(
+                key,
+                {'group': marker, 'quantity': 0},
+            )
+            row['quantity'] += marker['quantity']
 
         # 1) Regular inventory assets (match department)
         specific_ids_in_prepared = [
@@ -17983,7 +19373,7 @@ def return_department_assets(event_id):
             if custom.get('department') == department and (is_prepared or is_collected_loan):
                 targets.append(item)
 
-        if not targets:
+        if not targets and not prepared_quantity_targets:
             return jsonify({'success': True, 'message': f'No pending items for department {department}', 'returned': []})
 
         returned_now = []
@@ -18010,6 +19400,21 @@ def return_department_assets(event_id):
 
             # For custom assets, DO NOT remove from actually_prepared (to match single-return semantics)
 
+        returned_log_items = [
+            _event_asset_log_item(asset_id) for asset_id in returned_now
+        ]
+        for target in prepared_quantity_targets.values():
+            group = target['group']
+            quantity = target['quantity']
+            removed = _decrement_prepared_model_slot(event, group, quantity)
+            if removed <= 0:
+                continue
+            _increment_returned_prepared_model_slot(event, group, removed)
+            returned_now.append(_prepared_model_marker(group, removed))
+            returned_log_items.append(
+                _event_asset_log_item(quantity=removed, group=group)
+            )
+
         # Persist
         data_manager.save_inventory()
         update_event_state(event)
@@ -18019,7 +19424,7 @@ def return_department_assets(event_id):
         _log_event_asset_action(
             event_id,
             'return',
-            [_event_asset_log_item(asset_id) for asset_id in returned_now],
+            returned_log_items,
         )
 
         return jsonify({'success': True, 'message': f'Returned {len(returned_now)} items for {department}', 'returned': returned_now})
@@ -18106,28 +19511,39 @@ def assign_specific_asset_to_model(event_id):
             if marker not in event.actually_prepared:
                 event.actually_prepared.append(marker)
 
-            if subproject:
-                _event_subproject_assign_ref(
-                    subproject,
-                    _asset_group_from_item(bulk_asset),
-                    marker,
-                )
-
             added_requirement_units = 0
             if add_scanned_assets_to_event:
-                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, bulk_asset, quantity)
-                if subproject and added_requirement_units:
-                    bulk_group = _asset_group_from_item(bulk_asset)
-                    room_quantity = _event_subproject_required_quantity(
+                added_requirement_units = _ensure_quick_add_model_requirement(
+                    event,
+                    subproject,
+                    bulk_asset,
+                    quantity,
+                )
+
+            if subproject:
+                bulk_group = _asset_group_from_item(bulk_asset)
+                room_required = _event_subproject_required_quantity(
+                    subproject,
+                    bulk_group,
+                )
+                room_prepared = _event_subproject_prepared_quantity(
+                    event,
+                    subproject,
+                    bulk_group,
+                )
+                assigned_to_requirement = bool(
+                    room_prepared < room_required
+                    and _event_subproject_assign_ref(
                         subproject,
                         bulk_group,
+                        marker,
                     )
-                    _event_subproject_set_group_quantity(
-                        subproject,
-                        bulk_group,
-                        room_quantity + added_requirement_units,
-                    )
-                    _sync_event_model_markers_from_subprojects(event)
+                )
+                if not assigned_to_requirement:
+                    room_extras = subproject.setdefault('extraRefs', [])
+                    if marker not in room_extras:
+                        room_extras.append(marker)
+                _reconcile_event_subproject_extras(event)
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -18142,7 +19558,7 @@ def assign_specific_asset_to_model(event_id):
                 'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}',
                 'data': {
                     'assetId': marker,
-                    'isExtra': False,
+                    'isExtra': marker in getattr(event, 'extra_assets', []),
                     'addedToEvent': add_scanned_assets_to_event,
                     'addedRequirementUnits': added_requirement_units,
                     'healthyQuantityUsed': min(quantity, healthy_quantity),
@@ -18191,12 +19607,36 @@ def assign_specific_asset_to_model(event_id):
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
         consumed_prepared_slot = False
+        consumed_returned_prepared_slot = False
+        reconciles_returned_slot = False
+        fills_existing_requirement = False
 
         # For regular assets, perform checks
         if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
+
+            if asset_id in event.returned_items:
+                return jsonify({'error': 'Asset is already assigned to this event'}), 400
+
+            asset_group = _asset_group_from_item(asset)
+            active_slot_quantity = _event_prepared_slot_quantity(event, asset_group)
+            returned_slot_quantity = _event_returned_prepared_slot_quantity(event, asset_group)
+            if subproject:
+                active_slot_quantity = min(
+                    active_slot_quantity,
+                    _event_subproject_anonymous_prepared_quantity(subproject, asset_group),
+                )
+                returned_slot_quantity = min(
+                    returned_slot_quantity,
+                    _event_subproject_returned_prepared_quantity(subproject, asset_group),
+                )
+            reconciles_returned_slot = bool(
+                not add_scanned_assets_to_event
+                and active_slot_quantity <= 0
+                and returned_slot_quantity > 0
+            )
 
             logger.info(f"Assigning asset {asset_id} - Brand: {asset.brand}, Model: {asset.model_number}, Dept: {asset.department_code}")
 
@@ -18225,11 +19665,14 @@ def assign_specific_asset_to_model(event_id):
                 if maintenance_changed:
                     log_action(f"Marked missing asset {asset_id} as found while preparing event {event_id}")
 
-            block_reason = _asset_prepare_block_reason(asset)
+            # A returned anonymous slot may be identified after the equipment is
+            # already back in inventory. This is historical reconciliation, not
+            # a new deployment, so current availability/condition must not block it.
+            block_reason = None if reconciles_returned_slot else _asset_prepare_block_reason(asset)
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            busy_event = _find_event_using_asset(asset_id, event)
+            busy_event = None if reconciles_returned_slot else _find_event_using_asset(asset_id, event)
             if busy_event:
                 return jsonify({
                     'error': f'Asset is already assigned to another event {busy_event.event_id}: {busy_event.name}'
@@ -18238,20 +19681,13 @@ def assign_specific_asset_to_model(event_id):
             if add_scanned_assets_to_event:
                 # Quick-add prepares are allowed to raise the requirement so the
                 # scanned asset becomes part of the event packing list.
-                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                added_requirement_units = _ensure_quick_add_model_requirement(
+                    event,
+                    subproject,
+                    asset,
+                    1,
+                )
                 fills_existing_requirement = True
-
-                if subproject and added_requirement_units:
-                    room_quantity = _event_subproject_required_quantity(
-                        subproject,
-                        _asset_group_from_item(asset),
-                    )
-                    _event_subproject_set_group_quantity(
-                        subproject,
-                        _asset_group_from_item(asset),
-                        room_quantity + added_requirement_units,
-                    )
-                    _sync_event_model_markers_from_subprojects(event)
 
                 if added_requirement_units:
                     logger.info(
@@ -18263,7 +19699,6 @@ def assign_specific_asset_to_model(event_id):
                 # prepared slots are optional; when present, the exact ID replaces
                 # one of them so the prepared count is not doubled.
                 added_requirement_units = 0
-                asset_group = _asset_group_from_item(asset)
                 required_for_group = _event_model_required_quantity(event, asset_group)
                 non_extra_specific = _event_specific_asset_quantity(
                     event,
@@ -18272,7 +19707,25 @@ def assign_specific_asset_to_model(event_id):
                     include_extra=False,
                 )
                 bulk_prepared = _event_bulk_quantity_for_group(event, asset_group, include_returned=False)
-                fills_existing_requirement = (non_extra_specific + bulk_prepared) < required_for_group
+                fills_existing_requirement = (
+                    reconciles_returned_slot
+                    or (non_extra_specific + bulk_prepared) < required_for_group
+                )
+                if subproject:
+                    room_required = _event_subproject_required_quantity(
+                        subproject,
+                        asset_group,
+                    )
+                    room_prepared = _event_subproject_prepared_quantity(
+                        event,
+                        subproject,
+                        asset_group,
+                    )
+                    fills_existing_requirement = (
+                        reconciles_returned_slot
+                        or active_slot_quantity > 0
+                        or room_prepared < room_required
+                    )
 
             logger.info(
                 f"Asset {asset_id}: fromContainer={scan_options['fromContainer']}; "
@@ -18285,6 +19738,10 @@ def assign_specific_asset_to_model(event_id):
                     consumed_prepared_slot = bool(
                         _decrement_prepared_model_slot(event, asset_group, 1)
                     )
+                    if not consumed_prepared_slot and reconciles_returned_slot:
+                        consumed_returned_prepared_slot = bool(
+                            _decrement_returned_prepared_model_slot(event, asset_group, 1)
+                        )
                 removed_refs = _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                 if removed_refs:
                     logger.info(f"Removed {asset_id} from prepared_items because it fulfills a model requirement")
@@ -18296,6 +19753,10 @@ def assign_specific_asset_to_model(event_id):
                     consumed_prepared_slot = bool(
                         _decrement_prepared_model_slot(event, asset_group, 1)
                     )
+                    if not consumed_prepared_slot and reconciles_returned_slot:
+                        consumed_returned_prepared_slot = bool(
+                            _decrement_returned_prepared_model_slot(event, asset_group, 1)
+                        )
                 # Loose extras and direct specific-asset events still need an
                 # explicit prepared_items row so they remain part of the packing list.
                 if asset_id not in event.prepared_items:
@@ -18305,11 +19766,16 @@ def assign_specific_asset_to_model(event_id):
                     event.extra_assets.append(asset_id)
                     logger.info(f"Added individual extra asset {asset_id}. Extra assets: {event.extra_assets}")
 
-            asset.current_location = event.name
-            data_manager.save_inventory()
+            if not consumed_returned_prepared_slot:
+                asset.current_location = event.name
+                data_manager.save_inventory()
 
-        # Add to actually_prepared if not already there
-        if asset_id not in event.actually_prepared:
+        # A late asset-ID assignment can replace an already-returned anonymous
+        # unit. Keep that exact asset returned instead of reopening the return.
+        if consumed_returned_prepared_slot:
+            if asset_id not in event.returned_items:
+                event.returned_items.append(asset_id)
+        elif asset_id not in event.actually_prepared:
             event.actually_prepared.append(asset_id)
             logger.info(f"Added {asset_id} to actually_prepared. List now: {event.actually_prepared}")
 
@@ -18318,15 +19784,27 @@ def assign_specific_asset_to_model(event_id):
             assigned_asset = data_manager.inventory.get(asset_id)
             if assigned_asset:
                 assigned_group = _asset_group_from_item(assigned_asset)
-            if assigned_group and not _event_subproject_assign_ref(
-                subproject,
-                assigned_group,
-                asset_id,
-                consume_slot=consumed_prepared_slot,
-            ):
+            assigned_to_requirement = bool(
+                assigned_group
+                and fills_existing_requirement
+                and _event_subproject_assign_ref(
+                    subproject,
+                    assigned_group,
+                    asset_id,
+                    consume_slot=consumed_prepared_slot,
+                )
+            )
+            if assigned_group and not assigned_to_requirement:
                 refs = subproject.setdefault('extraRefs', [])
                 if asset_id not in refs:
                     refs.append(asset_id)
+            if assigned_group and consumed_returned_prepared_slot:
+                _event_subproject_adjust_returned_prepared(
+                    subproject,
+                    assigned_group,
+                    -1,
+                )
+            _reconcile_event_subproject_extras(event)
 
         # Update event state
         update_event_state(event)
@@ -18599,6 +20077,8 @@ def unassign_specific_asset_from_model(event_id):
                 event.returned_items.remove(asset_id)
             if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
                 event.extra_assets.remove(asset_id)
+            _event_subproject_remove_ref(event, asset_id)
+            _reconcile_event_subproject_extras(event)
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -18778,7 +20258,15 @@ def _event_summary_for_transfer(event):
         'tag': getattr(event, 'tag', 'events'),
         'unreturnedCount': unreturned_count,
         'requiredCount': required_count,
-        'assetCount': len([x for x in event.prepared_items if isinstance(x, str) and not x.startswith('[MODEL]')])
+        'assetCount': len([x for x in event.prepared_items if isinstance(x, str) and not x.startswith('[MODEL]')]),
+        'subprojects': [
+            {
+                'id': str(row.get('id') or ''),
+                'name': str(row.get('name') or 'Unnamed room'),
+            }
+            for row in (getattr(event, 'subprojects', []) or [])
+            if isinstance(row, dict) and str(row.get('id') or '').strip()
+        ],
     }
 
 
@@ -18845,11 +20333,74 @@ def _get_unreturned_real_asset_ids(event):
     return candidates
 
 
-def _target_model_requirements(event):
+def _transfer_target_subproject(event, subproject_id):
+    rooms = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict) and str(row.get('id') or '').strip()
+    ]
+    if not rooms:
+        return None
+
+    clean_id = str(subproject_id or '').strip()
+    if clean_id:
+        room = _event_subproject(event, clean_id)
+        if room:
+            return room
+        raise ValueError('Destination sub-project was not found')
+    if len(rooms) == 1:
+        return rooms[0]
+    raise ValueError('Choose a destination sub-project')
+
+
+def _target_model_requirements(event, subproject=None):
     """Return target [MODEL] requirements with already-prepared counts and remaining counts."""
     _ensure_event_lists(event)
 
     requirements = {}
+    if subproject:
+        for item in subproject.get('items') or []:
+            group = _event_subproject_item_group(item)
+            if not group:
+                continue
+            quantity = max(0, _safe_int(item.get('quantity'), 0))
+            if quantity <= 0:
+                continue
+            key = (
+                _norm(group['department'], True),
+                _norm(group['brand']),
+                _norm(group['model']),
+                '',
+            )
+            if key not in requirements:
+                requirements[key] = {
+                    'department': group['department'],
+                    'brand': group['brand'],
+                    'model': group['model'],
+                    'description': group.get('description', ''),
+                    'required': 0,
+                    'prepared': 0,
+                    'remaining': 0,
+                }
+            requirements[key]['required'] += quantity
+
+        for key, requirement in requirements.items():
+            group = {
+                'department': requirement['department'],
+                'brand': requirement['brand'],
+                'model': requirement['model'],
+                'description': requirement['description'],
+            }
+            requirement['prepared'] = _event_subproject_prepared_quantity(
+                event,
+                subproject,
+                group,
+            )
+            requirement['remaining'] = max(
+                requirement['required'] - requirement['prepared'],
+                0,
+            )
+        return requirements
+
     for item in event.prepared_items:
         requirement = _model_marker_to_requirement(item)
         if not requirement:
@@ -18883,10 +20434,10 @@ def _target_model_requirements(event):
     return requirements
 
 
-def _destination_requirements_payload(event):
+def _destination_requirements_payload(event, subproject=None):
     """Return destination requirements in a frontend-friendly list."""
     requirements = []
-    for requirement in _target_model_requirements(event).values():
+    for requirement in _target_model_requirements(event, subproject).values():
         requirements.append({
             'department': requirement.get('department', ''),
             'brand': requirement.get('brand', ''),
@@ -18952,8 +20503,8 @@ def _get_available_office_candidates_for_transfer(to_event, requirement_key):
     return candidates
 
 
-def _asset_fulfills_event_model_requirement(event, asset):
-    requirements = _target_model_requirements(event)
+def _asset_fulfills_event_model_requirement(event, asset, subproject=None):
+    requirements = _target_model_requirements(event, subproject)
     return _asset_match_key(asset) in requirements
 
 
@@ -19010,15 +20561,18 @@ def _real_source_asset_ids_including_returned(event):
     return ids
 
 
-def _asset_is_active_on_destination(asset_id, to_event):
+def _asset_is_active_on_destination(asset_id, to_event, to_subproject=None):
     _ensure_event_lists(to_event)
-    return (
+    active = (
         asset_id in (getattr(to_event, 'actually_prepared', []) or [])
         and asset_id not in (getattr(to_event, 'returned_items', []) or [])
     )
+    if not active or not to_subproject:
+        return active
+    return asset_id in _event_subproject_refs(to_subproject)
 
 
-def _get_transfer_candidates(from_event, to_event):
+def _get_transfer_candidates(from_event, to_event, to_subproject=None):
     """
     Find source assets that can fill the destination event's remaining model
     requirements. Already-transferred assets are included too, marked with
@@ -19028,7 +20582,7 @@ def _get_transfer_candidates(from_event, to_event):
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
 
-    requirements = _target_model_requirements(to_event)
+    requirements = _target_model_requirements(to_event, to_subproject)
     remaining_by_key = {key: req['remaining'] for key, req in requirements.items() if req['remaining'] > 0}
 
     candidates = []
@@ -19065,7 +20619,7 @@ def _get_transfer_candidates(from_event, to_event):
             continue
         if asset_id not in (getattr(from_event, 'returned_items', []) or []):
             continue
-        if not _asset_is_active_on_destination(asset_id, to_event):
+        if not _asset_is_active_on_destination(asset_id, to_event, to_subproject):
             continue
 
         asset = data_manager.inventory.get(asset_id)
@@ -19093,7 +20647,7 @@ def _get_transfer_candidates(from_event, to_event):
 
 
 
-def _get_transfer_needed_from_office_assets(from_event, to_event):
+def _get_transfer_needed_from_office_assets(from_event, to_event, to_subproject=None):
     """Return destination event model quantities that still need to be packed from office.
 
     This compares the destination event's remaining model requirements against
@@ -19104,7 +20658,7 @@ def _get_transfer_needed_from_office_assets(from_event, to_event):
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
 
-    requirements = _target_model_requirements(to_event)
+    requirements = _target_model_requirements(to_event, to_subproject)
 
     # Count how many active, transferable source assets can still satisfy each
     # destination requirement. Already-transferred assets are not in this list,
@@ -19159,7 +20713,7 @@ def _get_transfer_needed_from_office_assets(from_event, to_event):
     return needed
 
 
-def _get_transfer_return_to_office_assets(from_event, to_event):
+def _get_transfer_return_to_office_assets(from_event, to_event, to_subproject=None):
     """Return source assets that should go back to office.
 
     This is quantity-based by asset type and server-state aware:
@@ -19173,7 +20727,7 @@ def _get_transfer_return_to_office_assets(from_event, to_event):
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
 
-    target_requirements = _target_model_requirements(to_event)
+    target_requirements = _target_model_requirements(to_event, to_subproject)
 
     source_groups = defaultdict(list)
     for asset_id in _real_source_asset_ids_including_returned(from_event):
@@ -19233,7 +20787,7 @@ def _get_transfer_return_to_office_assets(from_event, to_event):
     going_back.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
     return going_back
 
-def _transfer_one_asset(from_event, to_event, asset_id):
+def _transfer_one_asset(from_event, to_event, asset_id, to_subproject=None):
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
 
@@ -19259,7 +20813,7 @@ def _transfer_one_asset(from_event, to_event, asset_id):
     # Prepare it immediately for the destination event. If the destination did
     # not already have this asset type as a model requirement, add it so it shows
     # together with the rest of the event assets.
-    if not _asset_fulfills_event_model_requirement(to_event, asset):
+    if not _asset_fulfills_event_model_requirement(to_event, asset, to_subproject):
         _ensure_event_has_model_requirement_for_asset(to_event, asset, 1)
 
     _remove_direct_asset_ref_from_prepared_items(to_event, asset_id)
@@ -19267,6 +20821,14 @@ def _transfer_one_asset(from_event, to_event, asset_id):
         to_event.returned_items.remove(asset_id)
     if asset_id not in to_event.actually_prepared:
         to_event.actually_prepared.append(asset_id)
+
+    if to_subproject:
+        group = _asset_group_from_item(asset)
+        _event_subproject_remove_ref(to_event, asset_id)
+        if not _event_subproject_assign_ref(to_subproject, group, asset_id):
+            raise ValueError(
+                f'{asset_id} is not required by the selected destination sub-project'
+            )
 
     # The asset has a model row now, so it should not be displayed as a loose extra.
     if asset_id in to_event.extra_assets:
@@ -19340,6 +20902,7 @@ def get_transfer_candidates():
     try:
         from_event_id = request.args.get('fromEventId', type=int)
         to_event_id = request.args.get('toEventId', type=int)
+        to_subproject_id = request.args.get('toSubprojectId', type=str)
 
         if not from_event_id or not to_event_id:
             return jsonify({'error': 'Source and destination events are required'}), 400
@@ -19354,15 +20917,35 @@ def get_transfer_candidates():
         if not _current_user_can_access_event(from_event) or not _current_user_can_access_event(to_event):
             return _event_access_denied_response()
 
-        candidates = _get_transfer_candidates(from_event, to_event)
-        return_to_office = _get_transfer_return_to_office_assets(from_event, to_event)
-        needed_from_office = _get_transfer_needed_from_office_assets(from_event, to_event)
+        try:
+            to_subproject = _transfer_target_subproject(to_event, to_subproject_id)
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+
+        candidates = _get_transfer_candidates(from_event, to_event, to_subproject)
+        return_to_office = _get_transfer_return_to_office_assets(
+            from_event,
+            to_event,
+            to_subproject,
+        )
+        needed_from_office = _get_transfer_needed_from_office_assets(
+            from_event,
+            to_event,
+            to_subproject,
+        )
 
         return jsonify({
             'success': True,
             'data': {
                 'fromEvent': _event_summary_for_transfer(from_event),
                 'toEvent': _event_summary_for_transfer(to_event),
+                'targetSubproject': (
+                    {
+                        'id': str(to_subproject.get('id') or ''),
+                        'name': str(to_subproject.get('name') or 'Unnamed room'),
+                    }
+                    if to_subproject else None
+                ),
                 'candidates': candidates,
                 'candidateCount': len(candidates),
                 'returnToOffice': return_to_office,
@@ -19370,7 +20953,10 @@ def get_transfer_candidates():
                 'neededFromOffice': needed_from_office,
                 'neededFromOfficeCount': len(needed_from_office),
                 'neededFromOfficeQuantity': sum(int(item.get('officeQuantity', 0) or 0) for item in needed_from_office),
-                'destinationRequirements': _destination_requirements_payload(to_event),
+                'destinationRequirements': _destination_requirements_payload(
+                    to_event,
+                    to_subproject,
+                ),
             }
         })
     except Exception as e:
@@ -19387,6 +20973,7 @@ def execute_transfer_assets():
         data = request.get_json() or {}
         from_event_id = data.get('fromEventId')
         to_event_id = data.get('toEventId')
+        to_subproject_id = data.get('toSubprojectId')
         asset_ids = data.get('assetIds') or []
 
         if not from_event_id or not to_event_id:
@@ -19404,6 +20991,14 @@ def execute_transfer_assets():
         if not _current_user_can_access_event(from_event) or not _current_user_can_access_event(to_event):
             return _event_access_denied_response()
 
+        try:
+            to_subproject = _transfer_target_subproject(
+                to_event,
+                to_subproject_id,
+            )
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+
         transferred = []
         skipped = []
 
@@ -19417,14 +21012,19 @@ def execute_transfer_assets():
                 skipped.append({'assetId': asset_id, 'reason': 'Asset not found'})
                 continue
 
-            requirements = _target_model_requirements(to_event)
+            requirements = _target_model_requirements(to_event, to_subproject)
             requirement = requirements.get(_asset_match_key(asset))
             if not requirement or requirement.get('remaining', 0) <= 0:
                 skipped.append({'assetId': asset_id, 'reason': 'Destination event no longer needs this asset type'})
                 continue
 
             try:
-                transferred.append(_transfer_one_asset(from_event, to_event, asset_id))
+                transferred.append(_transfer_one_asset(
+                    from_event,
+                    to_event,
+                    asset_id,
+                    to_subproject,
+                ))
             except ValueError as e:
                 skipped.append({'assetId': asset_id, 'reason': str(e)})
 
@@ -19451,6 +21051,13 @@ def execute_transfer_assets():
                 'skipped': skipped,
                 'fromEvent': _event_summary_for_transfer(from_event),
                 'toEvent': _event_summary_for_transfer(to_event),
+                'targetSubproject': (
+                    {
+                        'id': str(to_subproject.get('id') or ''),
+                        'name': str(to_subproject.get('name') or 'Unnamed room'),
+                    }
+                    if to_subproject else None
+                ),
             }
         })
     except Exception as e:
@@ -19483,6 +21090,7 @@ def _undo_transfer_one_asset(from_event, to_event, asset_id):
         to_event.extra_assets.remove(asset_id)
     if asset_id in to_event.returned_items:
         to_event.returned_items.remove(asset_id)
+    _event_subproject_remove_ref(to_event, asset_id)
 
     # Put it back as active on the source event.
     if asset_id in from_event.returned_items:
@@ -19958,6 +21566,22 @@ def get_assets():
         return jsonify({'error': 'Failed to retrieve assets'}), 500
 
 
+@app.route('/api/assets/<path:asset_id>/usage-summary', methods=['GET'])
+@require_auth
+def get_asset_usage_summary(asset_id):
+    """Return calculated lifetime deployment days for one inventory asset."""
+    asset_id = unquote_plus(asset_id).strip()
+    if asset_id not in data_manager.inventory:
+        return jsonify({'error': 'Asset not found'}), 404
+    return jsonify({
+        'success': True,
+        'data': {
+            'assetId': asset_id,
+            'usageDays': _asset_usage_days(asset_id),
+        },
+    })
+
+
 def _asset_check_find_asset(identifier):
     """Find an asset by Asset ID or Serial Number for Asset Check."""
     return _find_inventory_asset_by_identifier(identifier)
@@ -20245,7 +21869,10 @@ def asset_check_sighting():
             ))
             data_manager.save_inventory()
             invalidate_cache()
-            log_action(f"Asset Check sighted asset {asset.asset_id}")
+            log_action(
+                f"Asset Check sighted asset {asset.asset_id}",
+                system_log_only=True,
+            )
 
             return jsonify({
                 'success': True,
@@ -20267,7 +21894,10 @@ def asset_check_sighting():
             asset.maintenance_logs.pop(remove_index)
             data_manager.save_inventory()
             invalidate_cache()
-            log_action(f"Asset Check sighting removed for asset {asset.asset_id}")
+            log_action(
+                f"Asset Check sighting removed for asset {asset.asset_id}",
+                system_log_only=True,
+            )
 
         return jsonify({
             'success': True,
@@ -20364,7 +21994,10 @@ def asset_check_mark_untagged():
         data_manager.save_inventory()
         invalidate_cache()
         if not already_untagged:
-            log_action(f"Asset Check marked asset {asset.asset_id} as Untagged")
+            log_action(
+                f"Asset Check marked asset {asset.asset_id} as Untagged",
+                system_log_only=True,
+            )
 
         return jsonify({
             'success': True,
@@ -20452,7 +22085,10 @@ def asset_check_mark_missing():
         if marked:
             data_manager.save_inventory()
             invalidate_cache()
-            log_action(f"Asset Check marked {len(marked)} asset(s) as Missing: {', '.join(marked)}")
+            log_action(
+                f"Asset Check marked {len(marked)} asset(s) as Missing: {', '.join(marked)}",
+                system_log_only=True,
+            )
 
         return jsonify({
             'success': True,
@@ -20713,11 +22349,39 @@ def create_asset():
         # Invalidate cache
         invalidate_cache()
 
+        created_log_assets = [
+            data_manager.inventory[created_id]
+            for created_id in created_asset_ids
+            if created_id in data_manager.inventory
+        ]
+        created_model = ' '.join(
+            value for value in (plan['brand'], plan['model']) if value
+        )
+        created_detail = (
+            f"{created_model or 'Unnamed model'}; department={plan['department']}; "
+            f"description={plan['description'] or '-'}"
+        )
+        if plan['isBulk']:
+            created_detail += f"; quantity={plan['quantity']}"
+        else:
+            serial_count = sum(
+                1 for item in created_log_assets
+                if str(getattr(item, 'serial_number', '') or '').strip()
+            )
+            created_detail += f"; serial numbers recorded={serial_count}/{len(created_asset_ids)}"
+
         if len(created_asset_ids) == 1:
-            log_action(f"Added asset {created_asset_ids[0]} via web interface")
+            log_action(
+                f"Created asset {created_asset_ids[0]}: {created_detail}",
+                system_log_only=True,
+            )
             message = 'Asset created successfully'
         else:
-            log_action(f"Added assets {created_asset_ids[0]} to {created_asset_ids[-1]} via web interface")
+            log_action(
+                f"Created {len(created_asset_ids)} assets "
+                f"{created_asset_ids[0]} to {created_asset_ids[-1]}: {created_detail}",
+                system_log_only=True,
+            )
             message = f'{len(created_asset_ids)} assets created successfully'
 
         return jsonify({
@@ -20897,6 +22561,11 @@ def bulk_delete_assets():
         if not asset_ids:
             return jsonify({'error': 'Select at least one asset to delete'}), 400
 
+        deleted_labels = {
+            asset_id: _asset_log_label(data_manager.inventory.get(asset_id))
+            for asset_id in asset_ids
+            if data_manager.inventory.get(asset_id)
+        }
         with _inventory_action_lock:
             delete_result = _delete_inventory_assets(asset_ids)
 
@@ -20907,13 +22576,18 @@ def bulk_delete_assets():
             }), 404
 
         invalidate_cache()
+        deleted_summary = '; '.join(
+            f"{asset_id} ({deleted_labels.get(asset_id) or 'details unavailable'})"
+            for asset_id in delete_result['deletedAssets'][:12]
+        )
+        if len(delete_result['deletedAssets']) > 12:
+            deleted_summary += f"; +{len(delete_result['deletedAssets']) - 12} more"
         log_action(
-            f"Bulk deleted {len(delete_result['deletedAssets'])} assets; "
-            f"eventsUpdated={delete_result['eventsUpdated']}; "
-            f"eventRefsRemoved={delete_result['eventRefsRemoved']}; "
-            f"containersUpdated={delete_result['containersUpdated']}; "
-            f"containerRefsRemoved={delete_result['containerRefsRemoved']}; "
-            f"mediaDeleted={delete_result['mediaDeleted']}"
+            f"Deleted {len(delete_result['deletedAssets'])} assets: {deleted_summary}. "
+            f"Removed {delete_result['eventRefsRemoved']} event reference(s), "
+            f"{delete_result['containerRefsRemoved']} container reference(s), and "
+            f"{delete_result['mediaDeleted']} maintenance media file(s)",
+            system_log_only=True,
         )
 
         return jsonify({
@@ -21077,7 +22751,8 @@ def bulk_renumber_assets():
         log_action(
             f"Enumerated {len(changed_mapping)} selected asset IDs starting at "
             f"{starting_asset_id}; eventsUpdated={events_updated}; "
-            f"containersUpdated={containers_updated}"
+            f"containersUpdated={containers_updated}",
+            system_log_only=True,
         )
 
         return jsonify({
@@ -21109,6 +22784,7 @@ def delete_asset(asset_id):
         if not verified:
             return jsonify({'error': password_error}), 400 if password_error == 'Admin password is required' else 403
 
+        asset_label = _asset_log_label(data_manager.inventory.get(decoded_asset_id))
         with _inventory_action_lock:
             delete_result = _delete_inventory_assets([decoded_asset_id])
             if not delete_result['deletedAssets']:
@@ -21116,11 +22792,11 @@ def delete_asset(asset_id):
 
         invalidate_cache()
         log_action(
-            f"Deleted asset {decoded_asset_id}; eventsUpdated={delete_result['eventsUpdated']}; "
-            f"eventRefsRemoved={delete_result['eventRefsRemoved']}; "
-            f"containersUpdated={delete_result['containersUpdated']}; "
-            f"containerRefsRemoved={delete_result['containerRefsRemoved']}; "
-            f"mediaDeleted={delete_result['mediaDeleted']}"
+            f"Deleted asset {decoded_asset_id} ({asset_label or 'details unavailable'}). "
+            f"Removed {delete_result['eventRefsRemoved']} event reference(s), "
+            f"{delete_result['containerRefsRemoved']} container reference(s), and "
+            f"{delete_result['mediaDeleted']} maintenance media file(s)",
+            system_log_only=True,
         )
 
         return jsonify({
@@ -21494,8 +23170,10 @@ def update_asset(asset_id):
 
         audit_updates = 0
         tag_audit_updates = 0
+        audit_log_records = []
         for target, before_snapshot in audit_before:
-            changes = _asset_audit_changes(before_snapshot, _asset_audit_snapshot(target))
+            after_snapshot = _asset_audit_snapshot(target)
+            changes = _asset_audit_changes(before_snapshot, after_snapshot)
             if _append_asset_change_history(
                 target,
                 changes,
@@ -21506,6 +23184,7 @@ def update_asset(asset_id):
                 audit_updates += 1
                 if any(change.get('field') == 'tags' for change in changes):
                     tag_audit_updates += 1
+                audit_log_records.append((before_snapshot, after_snapshot))
 
         data_manager.save_inventory(drop_asset_ids=[old_asset_id] if new_asset_id != old_asset_id else None)
 
@@ -21527,12 +23206,17 @@ def update_asset(asset_id):
 
         invalidate_cache()
 
-        log_action(
-            f"Updated asset {old_asset_id}"
-            f"{' -> ' + new_asset_id if new_asset_id != old_asset_id else ''}; "
-            f"applyTo={apply_to}; updatedAssets={len(target_assets)}; "
-            f"eventsUpdated={events_updated}; containersUpdated={containers_updated}"
-        )
+        change_summary = _asset_audit_log_summary(audit_log_records)
+        if change_summary:
+            log_action(
+                f"Edited asset inventory: {change_summary}",
+                system_log_only=True,
+            )
+        else:
+            log_action(
+                f"Saved asset {new_asset_id} without field changes",
+                system_log_only=True,
+            )
 
         return jsonify({
             'success': True,
@@ -21738,7 +23422,10 @@ def _maintain_bulk_asset(asset_id, asset, data):
             'assetIds': [asset_id],
             'action': 'maintenance-added',
         })
-        log_action(f"Cleared bulk asset status for asset {asset_id}: {log_entry_text}")
+        log_action(
+            f"Cleared bulk asset status for asset {asset_id}: {log_entry_text}",
+            system_log_only=True,
+        )
 
         return jsonify({'success': True, 'message': 'Bulk asset status cleared successfully'})
 
@@ -21776,10 +23463,16 @@ def _maintain_bulk_asset(asset_id, asset, data):
             'action': 'maintenance-added',
         })
         if new_version:
-            log_action(f"Updated bulk asset {asset_id} to version {new_version}")
+            log_action(
+                f"Updated bulk asset {asset_id} to version {new_version}",
+                system_log_only=True,
+            )
             message = 'Asset version updated successfully'
         else:
-            log_action(f"Maintenance logged for bulk asset {asset_id}: {log_entry_text}")
+            log_action(
+                f"Maintenance logged for bulk asset {asset_id}: {log_entry_text}",
+                system_log_only=True,
+            )
             message = 'Maintenance logged successfully'
         return jsonify({'success': True, 'message': message})
 
@@ -21843,7 +23536,8 @@ def _maintain_bulk_asset(asset_id, asset, data):
 
     log_action(
         f"Logged {affected_quantity} bulk maintenance {target_status.upper()} "
-        f"unit{'s' if affected_quantity != 1 else ''} for asset {asset_id}: {log_entry_text}"
+        f"unit{'s' if affected_quantity != 1 else ''} for asset {asset_id}: {log_entry_text}",
+        system_log_only=True,
     )
 
     return jsonify({
@@ -22009,7 +23703,8 @@ def maintain_assets_batch():
             })
             log_action(
                 f"Maintenance logged for {changed_count} asset"
-                f"{'s' if changed_count != 1 else ''}: {str(data.get('logEntry') or '').strip()}"
+                f"{'s' if changed_count != 1 else ''}: {str(data.get('logEntry') or '').strip()}",
+                system_log_only=True,
             )
 
         response = {
@@ -22073,8 +23768,14 @@ def maintain_asset(asset_id):
             current_status=None
         )
         if target_status:
-            log_action(f"Set asset {asset_id} status to {_status_action_label(target_status)}")
-        log_action(f"Maintenance logged for asset {asset_id}: {str(data.get('logEntry') or '').strip()}")
+            log_action(
+                f"Set asset {asset_id} status to {_status_action_label(target_status)}",
+                system_log_only=True,
+            )
+        log_action(
+            f"Maintenance logged for asset {asset_id}: {str(data.get('logEntry') or '').strip()}",
+            system_log_only=True,
+        )
         logger.info("Successfully logged maintenance for asset %s", asset_id)
         return jsonify(result), status_code
         
@@ -22185,7 +23886,8 @@ def update_bulk_maintenance_fault_log(asset_id, fault_log_id):
         })
         log_action(
             f"Updated bulk maintenance log #{fault_entry.get('logNumber')} "
-            f"for asset {asset_id}: {log_entry_text}"
+            f"for asset {asset_id}: {log_entry_text}",
+            system_log_only=True,
         )
 
         return jsonify({'success': True, 'message': 'Bulk maintenance log updated successfully'})
@@ -22279,7 +23981,8 @@ def resolve_bulk_maintenance_log(asset_id, fault_log_id):
             'action': 'maintenance-resolved',
         })
         log_action(
-            f"Resolved bulk maintenance log #{fault_entry.get('logNumber')} for asset {asset_id}: {log_entry_text}"
+            f"Resolved bulk maintenance log #{fault_entry.get('logNumber')} for asset {asset_id}: {log_entry_text}",
+            system_log_only=True,
         )
 
         return jsonify({'success': True, 'message': 'Bulk maintenance log resolved successfully'})
@@ -22535,7 +24238,12 @@ def update_maintenance_log_enhanced(asset_id, log_index):
 
         # Log the action
         changes_text = f" (also: {', '.join(change_labels)})" if change_labels else ""
-        log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}'{changes_text} (edited by {session['user']})")
+        log_action(
+            f"Updated maintenance log for asset {asset_id}: "
+            f"'{original_description}' -> '{new_description}'{changes_text} "
+            f"(edited by {session['user']})",
+            system_log_only=True,
+        )
         
         logger.info(f"Successfully updated enhanced maintenance log for asset {asset_id}")
         return jsonify({'success': True, 'message': 'Maintenance log updated successfully'})
@@ -23210,7 +24918,32 @@ def update_custom_asset_quantity(event_id):
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
-        log_action(f"Updated custom asset '{custom['name']}' to '{new_name}' ({new_quantity}x, dept {new_department}) for event {event_id}")
+        old_custom_details = {
+            'Name': custom.get('name', ''),
+            'Type': custom.get('type', ''),
+            'Quantity': custom.get('quantity', 1),
+            'Department': custom.get('department', ''),
+            'Company / source': custom.get('company', ''),
+            'Description': custom.get('description', ''),
+        }
+        new_custom_details = {
+            'Name': new_name,
+            'Type': new_type,
+            'Quantity': new_quantity,
+            'Department': new_department,
+            'Company / source': new_company,
+            'Description': new_description,
+        }
+        custom_changes = [
+            f"{label}: {_asset_audit_log_value(old_custom_details[label])} -> "
+            f"{_asset_audit_log_value(new_custom_details[label])}"
+            for label in old_custom_details
+            if old_custom_details[label] != new_custom_details[label]
+        ]
+        log_action(
+            f"Edited custom item {_custom_asset_log_label(custom)} for event {event_id}: "
+            f"{'; '.join(custom_changes) if custom_changes else 'saved without field changes'}"
+        )
         mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'custom-asset-updated'})
 
         return jsonify({
@@ -23298,9 +25031,15 @@ def remove_custom_asset_from_event(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Removed custom asset {asset_id} from event {event_id}")
+        custom = _parse_custom_marker(asset_id)
+        log_action(
+            f"Removed {_custom_asset_log_label(custom)} from event {event_id}"
+        )
 
-        return jsonify({'success': True, 'message': f'Custom asset {asset_id} removed from event'})
+        return jsonify({
+            'success': True,
+            'message': f"{_custom_asset_log_label(custom)} removed from event",
+        })
         
     except Exception as e:
         logger.error(f"Error removing custom asset from event {event_id}: {e}")
@@ -23514,12 +25253,76 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 9
+FINANCE_VERSION = 10
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
 )
 FINANCE_DEFAULT_DEPARTMENTS = ('Manpower', 'Transportation')
+ACCOUNTING_GST_RATE = 9.0
+
+
+def _accounting_default_accounts():
+    rows = (
+        ('1000', 'Cash at Bank', 'asset', 'Current Assets'),
+        ('1100', 'Accounts Receivable', 'asset', 'Current Assets'),
+        ('1200', 'GST Input Tax Recoverable', 'asset', 'Current Assets'),
+        ('1300', 'Prepayments', 'asset', 'Current Assets'),
+        ('1500', 'Equipment and Fixed Assets', 'asset', 'Non-current Assets'),
+        ('1590', 'Accumulated Depreciation', 'asset', 'Non-current Assets'),
+        ('2000', 'Accounts Payable', 'liability', 'Current Liabilities'),
+        ('2100', 'GST Output Tax Payable', 'liability', 'Current Liabilities'),
+        ('2200', 'GST Control', 'liability', 'Current Liabilities'),
+        ('2300', 'Accrued Expenses', 'liability', 'Current Liabilities'),
+        ('2400', 'Loans Payable', 'liability', 'Non-current Liabilities'),
+        ('3000', 'Share Capital', 'equity', 'Equity'),
+        ('3100', 'Retained Earnings', 'equity', 'Equity'),
+        ('4000', 'Sales Revenue', 'revenue', 'Operating Revenue'),
+        ('4100', 'Other Income', 'revenue', 'Other Income'),
+        ('5000', 'Cost of Sales', 'expense', 'Cost of Sales'),
+        ('6000', 'Manpower Expense', 'expense', 'Operating Expenses'),
+        ('6100', 'Transport Expense', 'expense', 'Operating Expenses'),
+        ('6200', 'Equipment Rental', 'expense', 'Operating Expenses'),
+        ('6300', 'Repairs and Maintenance', 'expense', 'Operating Expenses'),
+        ('6400', 'Office and Administration', 'expense', 'Operating Expenses'),
+        ('6500', 'Professional Fees', 'expense', 'Operating Expenses'),
+        ('6600', 'Marketing Expense', 'expense', 'Operating Expenses'),
+        ('6700', 'Bank Charges', 'expense', 'Operating Expenses'),
+        ('6800', 'Other Expenses', 'expense', 'Operating Expenses'),
+        ('6900', 'Commission Expense', 'expense', 'Operating Expenses'),
+    )
+    return [
+        {
+            'code': code,
+            'name': name,
+            'type': account_type,
+            'group': group,
+            'active': True,
+            'system': True,
+        }
+        for code, name, account_type, group in rows
+    ]
+
+
+def _accounting_defaults():
+    return {
+        'settings': {
+            'gstRegistered': False,
+            'gstRegistrationNumber': '',
+            'gstRate': ACCOUNTING_GST_RATE,
+            'filingFrequency': 'quarterly',
+            'financialYearStartMonth': 1,
+            'recordRetentionYears': 5,
+            'accountingBasis': 'accrual',
+            'periodLockDate': '',
+            'defaultBankAccount': '1000',
+            'defaultReceivableAccount': '1100',
+            'defaultPayableAccount': '2000',
+        },
+        'accounts': _accounting_default_accounts(),
+        'journals': [],
+        'bankTransactions': [],
+    }
 
 
 def _finance_path():
@@ -23537,6 +25340,7 @@ def _finance_defaults():
             'commissions': {},
             'manualRevenue': {},
         },
+        'accounting': _accounting_defaults(),
     }
 
 
@@ -23577,10 +25381,27 @@ def _finance_salesperson_phone(document):
     return getattr(user, 'phone', '') or '' if user else ''
 
 
+def _finance_document_owner_username(document):
+    """Resolve quotation ownership from its selected salesperson account."""
+    return str(
+        (document or {}).get('salespersonUsername')
+        or (document or {}).get('createdBy')
+        or ''
+    ).strip()
+
+
 def _finance_user_can_access(document):
     if _current_user_is_owner():
         return True
-    return str((document or {}).get('createdBy') or '').strip().lower() == _finance_current_username().lower()
+    if (
+        _effective_user_role(_finance_current_username()) == 'admin'
+        and _current_user_has_sales_access()
+    ):
+        return True
+    return (
+        _finance_document_owner_username(document).lower()
+        == _finance_current_username().lower()
+    )
 
 
 def _finance_department_details(value, code_hint=''):
@@ -23589,13 +25410,13 @@ def _finance_department_details(value, code_hint=''):
     hinted_code = _normalise_department_code(code_hint)
     raw_code = _normalise_department_code(raw)
     match = None
-    lowered = raw.lower().removesuffix(' department').strip()
+    lowered = re.sub(r'\s+(?:department|system)$', '', raw.lower()).strip()
     hinted = departments.get(hinted_code)
     hinted_name = str((hinted or {}).get('name') or '').strip().lower()
     if hinted and (
         not raw
         or raw.upper() == hinted_code
-        or lowered == hinted_name.removesuffix(' department').strip()
+        or lowered == re.sub(r'\s+(?:department|system)$', '', hinted_name).strip()
     ):
         match = hinted
     elif raw_code in departments and raw.upper() == raw_code:
@@ -23604,16 +25425,23 @@ def _finance_department_details(value, code_hint=''):
         match = next(
             (
                 row for row in departments.values()
-                if str(row.get('name') or '').strip().lower() == lowered
+                if re.sub(
+                    r'\s+(?:department|system)$',
+                    '',
+                    str(row.get('name') or '').strip().lower(),
+                ).strip() == lowered
             ),
             None,
         )
 
     if match:
         name = str(match.get('name') or match.get('code') or '').strip()
-        if name and not name.lower().endswith('department'):
-            name = f"{name} Department"
-        return name or 'Unknown Department', match.get('code') or 'UN'
+        name = re.sub(r'\s+(?:department|system)$', '', name, flags=re.IGNORECASE).strip()
+        if name.lower() == 'manpower':
+            return 'Manpower', 'MANPOWER'
+        if name.lower() in {'transport', 'transportation'}:
+            return 'Transportation', 'TRANSPORTATION'
+        return (f"{name} Department" if name else 'Unknown Department'), match.get('code') or 'UN'
 
     if not raw:
         return 'Unknown Department', 'UN'
@@ -23622,6 +25450,48 @@ def _finance_department_details(value, code_hint=''):
     if raw.lower() in {'transport', 'transportation'}:
         return 'Transportation', 'TRANSPORTATION'
     return raw, hinted_code or raw_code or 'UN'
+
+
+def _finance_system_name(department, value=''):
+    custom = re.sub(r'\s+', ' ', str(value or '').strip())
+    if custom:
+        return custom[:200]
+    name = re.sub(r'\s+', ' ', str(department or '').strip())
+    base_name = re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        name,
+        flags=re.IGNORECASE,
+    ).strip()
+    if base_name.lower() == 'manpower':
+        return 'Manpower'
+    if base_name.lower() in {'transport', 'transportation'}:
+        return 'Transportation'
+    return (f'{base_name} System' if base_name else 'Unknown System')[:200]
+
+
+def _finance_adjustment_system_name(value):
+    name = re.sub(r'\s+', ' ', str(value or '').strip())
+    if not name:
+        return 'Unknown System'
+    base_name = re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        name,
+        flags=re.IGNORECASE,
+    ).strip()
+    if base_name.lower() == 'manpower':
+        return 'Manpower'
+    if base_name.lower() in {'transport', 'transportation'}:
+        return 'Transportation'
+    if re.search(r'\s+department$', name, flags=re.IGNORECASE):
+        return re.sub(
+            r'\s+department$',
+            ' System',
+            name,
+            flags=re.IGNORECASE,
+        )[:200]
+    return name[:200]
 
 
 def _finance_format_number(prefix, year, sequence, revision):
@@ -23642,6 +25512,7 @@ def _finance_active_departments(lines):
             line.get('department'),
             line.get('departmentCode'),
         )
+        name = _finance_system_name(name, line.get('systemName'))
         if name and name not in departments:
             departments.append(name)
     return departments
@@ -23714,6 +25585,30 @@ def _migrate_finance_data(data):
         data['profitLoss']['manualRevenue'] = {}
         changed = True
 
+    accounting = data.get('accounting')
+    if not isinstance(accounting, dict):
+        data['accounting'] = _accounting_defaults()
+        changed = True
+    else:
+        defaults = _accounting_defaults()
+        if not isinstance(accounting.get('settings'), dict):
+            accounting['settings'] = defaults['settings']
+            changed = True
+        else:
+            for key, default in defaults['settings'].items():
+                if key not in accounting['settings']:
+                    accounting['settings'][key] = default
+                    changed = True
+        if not isinstance(accounting.get('accounts'), list):
+            accounting['accounts'] = defaults['accounts']
+            changed = True
+        if not isinstance(accounting.get('journals'), list):
+            accounting['journals'] = []
+            changed = True
+        if not isinstance(accounting.get('bankTransactions'), list):
+            accounting['bankTransactions'] = []
+            changed = True
+
     for index, document in enumerate(documents, start=1):
         if not isinstance(document, dict):
             continue
@@ -23781,12 +25676,14 @@ def _migrate_finance_data(data):
             ('showUnitPrices', bool(document.get('showUnitPrices', False))),
             ('showDepartmentDiscounts', bool(document.get('showDepartmentDiscounts', False))),
             ('showDepartmentSubtotals', document.get('showDepartmentSubtotals', True) is not False),
+            ('summaryBySubproject', document.get('summaryBySubproject', True) is not False),
             ('showSignOff', bool(document.get('showSignOff', False))),
             ('totalLocked', bool(document.get('totalLocked', False))),
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
             ('totalDiscountLabel', document.get('totalDiscountLabel') or ''),
             ('setupDate', document.get('setupDate') or ''),
             ('setupTime', document.get('setupTime') or ''),
+            ('additionalSetups', document.get('additionalSetups') or []),
             ('rehearsalDate', document.get('rehearsalDate') or ''),
             ('rehearsalTime', document.get('rehearsalTime') or ''),
             ('additionalRehearsals', document.get('additionalRehearsals') or []),
@@ -23823,11 +25720,15 @@ def _migrate_finance_data(data):
                 line['department'] = name
                 line['departmentCode'] = code
                 changed = True
+            system_name = _finance_system_name(name, line.get('systemName'))
+            if line.get('systemName') != system_name:
+                line['systemName'] = system_name
+                changed = True
             if line.get('uom') == 'pcs':
                 line['uom'] = 'units'
                 changed = True
-            if name not in department_names:
-                department_names.append(name)
+            if system_name not in department_names:
+                department_names.append(system_name)
 
         normalised_subprojects = _normalise_finance_subprojects(
             document.get('subprojects'),
@@ -23837,9 +25738,18 @@ def _migrate_finance_data(data):
             document['subprojects'] = normalised_subprojects
             changed = True
         for adjustment in document.get('adjustments') or []:
-            if isinstance(adjustment, dict) and not adjustment.get('subprojectId'):
+            if not isinstance(adjustment, dict):
+                continue
+            if not adjustment.get('subprojectId'):
                 adjustment['subprojectId'] = normalised_subprojects[0]['id']
                 changed = True
+            if adjustment.get('scope') == 'department':
+                system_name = _finance_adjustment_system_name(
+                    adjustment.get('department')
+                )
+                if adjustment.get('department') != system_name:
+                    adjustment['department'] = system_name
+                    changed = True
 
         if document.get('departments') != department_names:
             document['departments'] = department_names
@@ -23890,6 +25800,8 @@ def _load_finance_data():
             data['priceBook'] = loaded['priceBook']
         if isinstance(loaded.get('profitLoss'), dict):
             data['profitLoss'] = loaded['profitLoss']
+        if isinstance(loaded.get('accounting'), dict):
+            data['accounting'] = loaded['accounting']
         data['version'] = loaded.get('version', 1)
     if _migrate_finance_data(data):
         _save_finance_data(data)
@@ -23906,6 +25818,7 @@ def _save_finance_data(data):
             'commissions': {},
             'manualRevenue': {},
         },
+        'accounting': data.get('accounting') if isinstance(data.get('accounting'), dict) else _accounting_defaults(),
     }
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'save_company_document'):
@@ -24151,6 +26064,8 @@ def _normalise_finance_line(value):
         uom = 'pax'
     elif raw_uom in {'lot', 'lots'}:
         uom = 'lot'
+    elif raw_uom in {'sqm', 'm2', 'm²'}:
+        uom = 'sqm'
     else:
         uom = 'units'
     source_asset_ids = [
@@ -24171,6 +26086,7 @@ def _normalise_finance_line(value):
         'description': str(value.get('description') or '').strip()[:1000],
         'department': department[:200],
         'departmentCode': department_code,
+        'systemName': _finance_system_name(department, value.get('systemName')),
         'days': round(days, 4),
         'quantity': round(quantity, 4),
         'uom': uom,
@@ -24178,6 +26094,12 @@ def _normalise_finance_line(value):
         'discountPercent': round(discount, 4),
         'total': round(total, 2),
         'isCustom': bool(value.get('isCustom') or not catalog_key),
+        'customType': (
+            _normalise_custom_type(value.get('customType'))
+            if value.get('customType')
+            else ''
+        ),
+        'customCompany': str(value.get('customCompany') or '').strip()[:200],
         'subprojectId': re.sub(
             r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
         )[:80] or 'main',
@@ -24228,7 +26150,7 @@ def _normalise_finance_schedule_rows(value):
 def _normalise_finance_adjustment(value):
     value = value if isinstance(value, dict) else {}
     scope = 'department' if value.get('scope') == 'department' else 'total'
-    department, _department_code = _finance_department_details(value.get('department'))
+    department = _finance_adjustment_system_name(value.get('department'))
     adjustment_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6)
     locked_total_adjustment = (
         bool(value.get('lockedTotalAdjustment'))
@@ -24290,7 +26212,10 @@ def _recalculate_finance_adjustments(document):
             base = sum(
                 _safe_float(line.get('total'), 0)
                 for line in lines
-                if line.get('department') == department
+                if _finance_system_name(
+                    line.get('department'),
+                    line.get('systemName'),
+                ) == department
                 and (line.get('subprojectId') or 'main') == subproject_id
             )
         else:
@@ -24510,7 +26435,10 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'salespersonUsername': str(
             value.get('salespersonUsername')
             if 'salespersonUsername' in value
-            else existing.get('salespersonUsername') or ''
+            else (
+                existing.get('salespersonUsername')
+                or ('' if existing else _finance_current_username())
+            )
         ).strip()[:160],
         'paymentTerms': str(value.get('paymentTerms') if 'paymentTerms' in value else existing.get('paymentTerms') or settings.get('defaultPaymentTerms', '30 Days')).strip()[:300],
         'paymentTermDays': max(0, min(3650, _safe_int(
@@ -24539,6 +26467,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
         'setupDate': str(value.get('setupDate') if 'setupDate' in value else existing.get('setupDate') or '').strip()[:20],
         'setupTime': str(value.get('setupTime') if 'setupTime' in value else existing.get('setupTime') or '').strip()[:20],
+        'additionalSetups': _normalise_finance_schedule_rows(
+            value.get('additionalSetups') if 'additionalSetups' in value else existing.get('additionalSetups')
+        ),
         'rehearsalDate': str(value.get('rehearsalDate') if 'rehearsalDate' in value else existing.get('rehearsalDate') or '').strip()[:20],
         'rehearsalTime': str(value.get('rehearsalTime') if 'rehearsalTime' in value else existing.get('rehearsalTime') or '').strip()[:20],
         'additionalRehearsals': _normalise_finance_schedule_rows(
@@ -24568,6 +26499,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'showUnitPrices': bool(value.get('showUnitPrices') if 'showUnitPrices' in value else existing.get('showUnitPrices', False)),
         'showDepartmentDiscounts': bool(value.get('showDepartmentDiscounts') if 'showDepartmentDiscounts' in value else existing.get('showDepartmentDiscounts', False)),
         'showDepartmentSubtotals': (value.get('showDepartmentSubtotals') if 'showDepartmentSubtotals' in value else existing.get('showDepartmentSubtotals', True)) is not False,
+        'summaryBySubproject': (value.get('summaryBySubproject') if 'summaryBySubproject' in value else existing.get('summaryBySubproject', True)) is not False,
         'showLineNumbers': (value.get('showLineNumbers') if 'showLineNumbers' in value else existing.get('showLineNumbers', True)) is not False,
         'showSignOff': bool(value.get('showSignOff') if 'showSignOff' in value else existing.get('showSignOff', False)),
         'totalLocked': total_locked,
@@ -24716,12 +26648,13 @@ def _finance_snapshot_revision(document):
         'revision': revision,
         'number': document.get('number'),
         'sentAt': document.get('sentAt'),
+        'acceptedAt': document.get('acceptedAt'),
         'validUntil': document.get('validUntil'),
         'validityAmount': document.get('validityAmount'),
         'validityUnit': document.get('validityUnit'),
         'validityDays': document.get('validityDays'),
         'fingerprint': _finance_revision_fingerprint(document),
-        'snapshot': _finance_revision_payload(document),
+        'snapshot': copy.deepcopy(_finance_revision_payload(document)),
     }
     if existing:
         existing.update(snapshot)
@@ -24790,8 +26723,13 @@ def _finance_export_error(document):
 
 
 def _finance_event_date_range(document):
-    candidates = [
+    setup_dates = [
         document.get('setupDate'),
+        *[row.get('date') for row in document.get('additionalSetups') or [] if isinstance(row, dict)],
+    ]
+    setup_dates = [value for value in setup_dates if value]
+    candidates = [
+        *setup_dates,
         document.get('rehearsalDate'),
         *[row.get('date') for row in document.get('additionalRehearsals') or [] if isinstance(row, dict)],
         document.get('showDate'),
@@ -24803,7 +26741,7 @@ def _finance_event_date_range(document):
     if not candidates:
         fallback = document.get('quotationDate') or datetime.now().strftime('%Y-%m-%d')
         return fallback, fallback
-    start = document.get('setupDate') or min(candidates)
+    start = min(setup_dates) if setup_dates else min(candidates)
     end = max(candidates)
     if end < start:
         end = start
@@ -24838,6 +26776,33 @@ def _finance_inventory_group_from_line(line):
             'model': str(getattr(asset, 'model_number', '') or '').strip(),
             'description': str(getattr(asset, 'description', '') or '').strip(),
         }
+
+    catalog_key = str(line.get('catalogKey') or '').strip().lower()
+    if catalog_key:
+        for asset in data_manager.inventory.values():
+            if _is_disposed(asset):
+                continue
+            asset_department = (
+                _normalise_department_code(
+                    getattr(asset, 'department_code', 'UN')
+                )
+                or 'UN'
+            )
+            asset_brand = str(getattr(asset, 'brand', '') or '').strip()
+            asset_model = str(getattr(asset, 'model_number', '') or '').strip()
+            asset_description = str(getattr(asset, 'description', '') or '').strip()
+            if _finance_catalog_key(
+                asset_department,
+                asset_brand,
+                asset_model,
+                asset_description,
+            ).lower() == catalog_key:
+                return {
+                    'department': asset_department,
+                    'brand': asset_brand,
+                    'model': asset_model,
+                    'description': asset_description,
+                }
 
     if line.get('isCustom'):
         return None
@@ -24900,13 +26865,37 @@ def _finance_event_subprojects(document):
                 line,
                 max(1, _safe_int(round(quantity), 1)),
             )
+            inventory_group = _finance_inventory_group_from_line(line)
             item = {
                 'lineId': line.get('id'),
-                'department': line.get('department'),
-                'departmentCode': line.get('departmentCode'),
-                'brand': line.get('brand'),
-                'model': line.get('model'),
-                'description': line.get('description'),
+                'department': (
+                    line.get('department')
+                    if not inventory_group
+                    else _finance_department_details(
+                        inventory_group.get('department'),
+                        inventory_group.get('department'),
+                    )[0]
+                ),
+                'departmentCode': (
+                    line.get('departmentCode')
+                    if not inventory_group
+                    else inventory_group.get('department')
+                ),
+                'brand': (
+                    line.get('brand')
+                    if not inventory_group
+                    else inventory_group.get('brand')
+                ),
+                'model': (
+                    line.get('model')
+                    if not inventory_group
+                    else inventory_group.get('model')
+                ),
+                'description': (
+                    line.get('description')
+                    if not inventory_group
+                    else inventory_group.get('description')
+                ),
                 'quantity': quantity,
                 'isCustom': bool(line.get('isCustom')),
             }
@@ -25078,10 +27067,44 @@ def _finance_create_event(document):
     return event_id
 
 
-def _remember_finance_prices(finance_data, document):
+def _finance_line_price_signature(line):
+    return (
+        str((line or {}).get('catalogKey') or '').strip().casefold(),
+        str((line or {}).get('description') or '').strip().casefold(),
+        str((line or {}).get('brand') or '').strip().casefold(),
+        str((line or {}).get('model') or '').strip().casefold(),
+        str((line or {}).get('department') or '').strip().casefold(),
+        str((line or {}).get('departmentCode') or '').strip().casefold(),
+        str((line or {}).get('uom') or 'units').strip().casefold(),
+        round(_safe_float((line or {}).get('unitPrice'), 0), 2),
+        tuple(sorted(
+            str(asset_id or '').strip().casefold()
+            for asset_id in ((line or {}).get('sourceAssetIds') or [])
+            if str(asset_id or '').strip()
+        )),
+    )
+
+
+def _remember_finance_prices(finance_data, document, previous_document=None):
     price_book = finance_data.setdefault('priceBook', {})
-    owner = str(document.get('createdBy') or _finance_current_username()).strip().lower()
+    owner = (
+        _finance_document_owner_username(document)
+        or _finance_current_username()
+    ).lower()
+    previous_lines = {
+        str(line.get('id') or ''): line
+        for line in ((previous_document or {}).get('lineItems') or [])
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
     for line in document.get('lineItems') or []:
+        previous_line = previous_lines.get(str(line.get('id') or ''))
+        if (
+            previous_document is not None
+            and previous_line is not None
+            and _finance_line_price_signature(previous_line)
+            == _finance_line_price_signature(line)
+        ):
+            continue
         description = str(line.get('description') or '').strip()
         unit_price = _safe_float(line.get('unitPrice'), 0)
         if not description or unit_price <= 0:
@@ -25394,6 +27417,7 @@ def _normalise_profit_loss_expense(value, event_id):
         'eventId': int(event_id),
         'description': str(value.get('description') or 'Other expense').strip()[:300] or 'Other expense',
         'category': str(value.get('category') or 'Miscellaneous').strip()[:120] or 'Miscellaneous',
+        'department': str(value.get('department') or '').strip()[:120],
         'vendor': str(value.get('vendor') or value.get('payee') or '').strip()[:180],
         'amount': round(amount if amount is not None else 0.0, 2),
         'expenseDate': _finance_normalise_iso_date(value.get('expenseDate') or value.get('date')),
@@ -25410,7 +27434,9 @@ def _normalise_profit_loss_expense(value, event_id):
 def _profit_loss_expense_payload(expense):
     row = dict(expense or {})
     row.setdefault('source', 'manual')
+    row.setdefault('sourceLabel', 'Added expense')
     row.setdefault('readOnly', False)
+    row.setdefault('department', '')
     row['categoryKey'] = _finance_profit_loss_expense_bucket(row.get('category'))
     row['categoryLabel'] = _finance_profit_loss_category_label(row.get('category'), row.get('source'))
     attachment = row.get('attachment') if isinstance(row.get('attachment'), dict) else None
@@ -25452,6 +27478,96 @@ def _finance_quotations_for_event(finance_data, event_id, accessible_only=True):
     return rows
 
 
+def _finance_profit_loss_can_use_quotation(document):
+    role = _effective_user_role(session.get('user'))
+    if role in {'owner', 'admin'}:
+        return True
+    return (
+        role == 'manager'
+        and _finance_document_owner_username(document).casefold()
+        == str(session.get('user') or '').strip().casefold()
+    )
+
+
+def _finance_profit_loss_access(finance_data, event_id):
+    linked = [
+        row for row in finance_data.get('documents') or []
+        if isinstance(row, dict)
+        and row.get('type') == 'quotation'
+        and _safe_int(row.get('eventId'), 0) == int(event_id)
+    ]
+    role = _effective_user_role(session.get('user'))
+    can_view = (
+        role in {'owner', 'admin'}
+        or (
+            role == 'manager'
+            and any(_finance_profit_loss_can_use_quotation(row) for row in linked)
+        )
+    )
+    return {
+        'canViewFinancials': can_view,
+        'canEditFinancials': can_view,
+        'isCensored': not can_view,
+        'reason': (
+            ''
+            if can_view
+            else 'Financial details are restricted to administrators and the manager responsible for the linked quotation.'
+        ),
+    }
+
+
+def _finance_profit_loss_expense_access_denied():
+    return jsonify({'error': "You do not have access to this event's financial details"}), 403
+
+
+def _finance_profit_loss_line_bucket(line):
+    name, code = _finance_department_details(
+        (line or {}).get('department'),
+        (line or {}).get('departmentCode'),
+    )
+    clean_code = _normalise_department_code(code)
+    clean_name = re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        str(name or '').strip().casefold(),
+    )
+    if clean_code == 'MANPOWER' or clean_name == 'manpower':
+        return 'manpower'
+    if clean_code in {'TRANSPORT', 'TRANSPORTATION'} or clean_name in {
+        'transport',
+        'transportation',
+    }:
+        return 'transport'
+    return 'other'
+
+
+def _finance_profit_loss_quotation_budgets(quotation):
+    budgets = {'manpower': 0.0, 'transport': 0.0}
+    if not quotation:
+        return budgets
+    system_buckets = {}
+    for line in quotation.get('lineItems') or []:
+        bucket = _finance_profit_loss_line_bucket(line)
+        if bucket not in budgets:
+            continue
+        budgets[bucket] += _safe_float(line.get('total'), 0)
+        system_name = _finance_system_name(
+            line.get('department'),
+            line.get('systemName'),
+        )
+        system_buckets.setdefault(system_name, set()).add(bucket)
+    for adjustment in quotation.get('adjustments') or []:
+        if not isinstance(adjustment, dict) or adjustment.get('scope') != 'department':
+            continue
+        buckets = system_buckets.get(str(adjustment.get('department') or ''), set())
+        if len(buckets) == 1:
+            budgets[next(iter(buckets))] += _safe_float(adjustment.get('amount'), 0)
+    return {
+        key: round(max(0, value), 2)
+        for key, value in budgets.items()
+    }
+
+
 def _finance_profit_loss_assignment_estimate(assignment):
     if not isinstance(assignment, dict):
         return 0.0
@@ -25470,15 +27586,37 @@ def _finance_profit_loss_assignment_estimate(assignment):
 def _finance_profit_loss_workforce_costs(event_id):
     workforce = load_workforce(_workforce_folder())
     totals = submission_totals(workforce, event_id)
+    assignment_department_estimates = {}
+    for assignment in event_assignments(workforce, event_id):
+        if not isinstance(assignment, dict):
+            continue
+        department = str(assignment.get('department') or 'Unassigned')
+        assignment_department_estimates[department] = round(
+            assignment_department_estimates.get(department, 0)
+            + _finance_profit_loss_assignment_estimate(assignment),
+            2,
+        )
     assignment_estimate = round(
-        sum(_finance_profit_loss_assignment_estimate(row) for row in event_assignments(workforce, event_id)),
+        sum(assignment_department_estimates.values()),
         2,
     )
     invoice_total = round(_safe_float(totals.get('invoice'), 0), 2)
+    if invoice_total > 0:
+        manpower_departments = {
+            str(department or 'Unassigned'): round(
+                _safe_float((row or {}).get('invoice'), 0),
+                2,
+            )
+            for department, row in (totals.get('departments') or {}).items()
+            if _safe_float((row or {}).get('invoice'), 0) > 0
+        }
+    else:
+        manpower_departments = assignment_department_estimates
     return {
         'manpowerCost': invoice_total if invoice_total > 0 else assignment_estimate,
         'manpowerInvoiceCost': invoice_total,
         'manpowerEstimatedCost': assignment_estimate,
+        'manpowerDepartments': manpower_departments,
         'workerClaimsCost': round(_safe_float(totals.get('claims'), 0), 2),
         'transportCost': round(_safe_float(totals.get('transport'), 0), 2),
         'rawTotals': totals,
@@ -25506,19 +27644,101 @@ def _finance_profit_loss_subject_name(workforce, subject_id):
     return subject_id
 
 
-def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
+def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
     submissions = workforce.get('submissions') if isinstance(workforce, dict) else {}
     event_rows = (
         (submissions or {}).get(str(event_id), {})
         if isinstance(submissions, dict)
         else {}
     )
+    subject_departments = {}
+    for assignment in event_assignments(workforce, event_id):
+        if not isinstance(assignment, dict):
+            continue
+        subject_id = str(
+            assignment.get('freelancerId')
+            or assignment.get('vendorId')
+            or ''
+        )
+        department = str(assignment.get('department') or '').strip()
+        if not subject_id or not department:
+            continue
+        departments = subject_departments.setdefault(subject_id, [])
+        if department not in departments:
+            departments.append(department)
+
+    def resolved_department(subject_id, explicit=''):
+        explicit = str(explicit or '').strip()
+        if explicit:
+            return explicit
+        departments = subject_departments.get(str(subject_id), [])
+        return departments[0] if len(departments) == 1 else 'Unallocated'
+
     result = []
     event_items = event_rows.items() if isinstance(event_rows, dict) else []
     for subject_id, rows in event_items:
         if not isinstance(rows, dict):
             continue
         subject_name = _finance_profit_loss_subject_name(workforce, subject_id)
+        invoices = rows.get('invoices') if isinstance(rows.get('invoices'), list) else []
+        for invoice in invoices:
+            if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
+                continue
+            amount = money(invoice.get('amount'), 0.0) or 0.0
+            if amount <= 0:
+                continue
+            invoice_id = str(invoice.get('id') or '')
+            submission_id = quote(invoice_id)
+            original_name = str(invoice.get('originalName') or '').strip()
+            attachment = None
+            if original_name or invoice.get('storedPath'):
+                attachment = {
+                    'originalName': original_name or 'Invoice file',
+                    'contentType': str(invoice.get('contentType') or ''),
+                    'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
+                    'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
+                }
+            allocations = [
+                row for row in invoice.get('allocations') or []
+                if isinstance(row, dict) and str(row.get('department') or '').strip()
+            ]
+            departments = list(dict.fromkeys(
+                str(row.get('department') or '').strip()
+                for row in allocations
+                if str(row.get('department') or '').strip()
+            ))
+            if not departments:
+                departments = [resolved_department(subject_id)]
+            result.append({
+                'id': f'worker-invoice-{subject_id}-{invoice_id}'[:120],
+                'sourceId': invoice_id,
+                'source': 'worker-invoice',
+                'sourceLabel': 'Invoice',
+                'readOnly': True,
+                'eventId': int(event_id),
+                'description': f'{subject_name} - Invoice'[:300],
+                'category': 'Manpower',
+                'categoryKey': 'manpower',
+                'categoryLabel': 'Manpower',
+                'department': ', '.join(departments) or 'Unallocated',
+                'vendor': subject_name,
+                'amount': round(amount, 2),
+                'expenseDate': _finance_normalise_iso_date(
+                    invoice.get('invoiceDate')
+                    or invoice.get('date')
+                    or invoice.get('submittedAt')
+                ),
+                'attachment': attachment,
+                'status': str(invoice.get('status') or 'Pending Review'),
+                'createdAt': str(invoice.get('submittedAt') or ''),
+                'createdBy': subject_name,
+                'updatedAt': str(
+                    invoice.get('detailsCompletedAt')
+                    or invoice.get('submittedAt')
+                    or ''
+                ),
+                'updatedBy': subject_name,
+            })
         claims = rows.get('claims') if isinstance(rows.get('claims'), list) else []
         for claim in claims:
             if not isinstance(claim, dict) or claim.get('status') == 'Denied':
@@ -25535,29 +27755,43 @@ def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
             if original_name or claim.get('storedPath'):
                 attachment = {
                     'originalName': original_name or 'Claim file',
+                    'contentType': str(claim.get('contentType') or ''),
                     'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
                     'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
                 }
             category = str(claim.get('category') or 'Worker Claims').strip()
-            description = (
-                str(claim.get('description') or claim.get('notes') or '').strip()
-                or original_name
-                or 'Worker claim'
-            )
+            category_key = _finance_profit_loss_expense_bucket(category)
+            if category_key == 'meal':
+                claim_label = 'Meal claim'
+            elif category_key == 'transport':
+                claim_label = 'Transport claim'
+            else:
+                claim_label = _finance_profit_loss_category_label(
+                    category,
+                    'worker-claim',
+                )
+                if not re.search(r'\bclaims?$', claim_label, re.IGNORECASE):
+                    claim_label = f'{claim_label} claim'
             result.append({
                 'id': f'worker-claim-{subject_id}-{claim_id}'[:120],
                 'sourceId': claim_id,
                 'source': 'worker-claim',
+                'sourceLabel': 'Claim',
                 'readOnly': True,
                 'eventId': int(event_id),
-                'description': description[:300],
+                'description': f'{subject_name} - {claim_label}'[:300],
                 'category': category[:120],
-                'categoryKey': _finance_profit_loss_expense_bucket(category),
+                'categoryKey': category_key,
                 'categoryLabel': _finance_profit_loss_category_label(category, 'worker-claim'),
+                'department': resolved_department(
+                    subject_id,
+                    claim.get('department'),
+                ),
                 'vendor': subject_name,
                 'amount': round(amount, 2),
                 'expenseDate': _finance_normalise_iso_date(claim.get('claimDate') or claim.get('date')),
                 'attachment': attachment,
+                'status': str(claim.get('status') or 'Pending Review'),
                 'createdAt': str(claim.get('submittedAt') or ''),
                 'createdBy': subject_name,
                 'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
@@ -25567,9 +27801,26 @@ def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
     return result
 
 
+def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
+    return [
+        row for row in _finance_profit_loss_worker_submission_expenses(
+            workforce,
+            event_id,
+        )
+        if row.get('source') == 'worker-claim'
+    ]
+
+
 def _finance_profit_loss_payload(event, finance_data):
     event_id = int(event.event_id)
-    quotations = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
+    quotations = [
+        row for row in _finance_quotations_for_event(
+            finance_data,
+            event_id,
+            accessible_only=False,
+        )
+        if _finance_profit_loss_can_use_quotation(row)
+    ]
     quotation = quotations[0] if quotations else None
     manual_revenue = _finance_profit_loss_manual_revenue(finance_data, event_id)
     revenue = round(
@@ -25587,7 +27838,7 @@ def _finance_profit_loss_payload(event, finance_data):
             not isinstance(document, dict)
             or document.get('type') != 'quotation'
             or _safe_int(document.get('eventId'), 0)
-            or not _finance_user_can_access(document)
+            or not _finance_profit_loss_can_use_quotation(document)
         ):
             continue
         row = _normalise_finance_document(document, 'quotation', document)
@@ -25610,34 +27861,58 @@ def _finance_profit_loss_payload(event, finance_data):
         if isinstance(row, dict)
     ]
     workforce = load_workforce(_workforce_folder())
-    worker_claim_expenses = _finance_profit_loss_worker_claim_expenses(workforce, event_id)
+    worker_submission_expenses = _finance_profit_loss_worker_submission_expenses(
+        workforce,
+        event_id,
+    )
+    worker_claim_expenses = [
+        row for row in worker_submission_expenses
+        if row.get('source') == 'worker-claim'
+    ]
     manual_transport_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in expenses
         if _finance_profit_loss_expense_bucket(row.get('category')) == 'transport'
     ), 2)
+    manual_meal_expenses = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'meal'
+    ), 2)
     manual_other_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in expenses
-        if _finance_profit_loss_expense_bucket(row.get('category')) != 'transport'
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'other'
     ), 2)
     crew_transport_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
         if row.get('categoryKey') == 'transport'
     ), 2)
+    worker_meal_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in worker_claim_expenses
+        if row.get('categoryKey') == 'meal'
+    ), 2)
     worker_other_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
-        if row.get('categoryKey') != 'transport'
+        if row.get('categoryKey') == 'other'
     ), 2)
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
+    manpower_cost = round(
+        workforce_costs['manpowerCost']
+        + crew_transport_claims
+        + worker_meal_claims
+        + manual_meal_expenses,
+        2,
+    )
     transport_cost = round(
-        workforce_costs['transportCost'] + crew_transport_claims + manual_transport_expenses,
+        workforce_costs['transportCost'] + manual_transport_expenses,
         2,
     )
     other_expenses = round(worker_other_claims + manual_other_expenses, 2)
-    direct_costs = round(workforce_costs['manpowerCost'] + transport_cost, 2)
+    direct_costs = round(manpower_cost + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
     commissions = _finance_profit_loss_event_commissions(finance_data, event_id, revenue)
     commission = round(sum(_safe_float(row.get('amount'), 0) for row in commissions), 2)
@@ -25659,21 +27934,119 @@ def _finance_profit_loss_payload(event, finance_data):
         entry['amount'] = round(entry['amount'] + amount, 2)
 
     for row in worker_claim_expenses:
-        add_expense_category(row)
+        if row.get('categoryKey') == 'other':
+            add_expense_category(row)
     for row in expenses:
-        add_expense_category(_profit_loss_expense_payload(row))
+        payload_row = _profit_loss_expense_payload(row)
+        if payload_row.get('categoryKey') == 'other':
+            add_expense_category(payload_row)
 
     expense_categories = sorted(
         expense_category_totals.values(),
         key=lambda row: (-_safe_float(row.get('amount'), 0), str(row.get('label') or '')),
     )
+    quotation_budgets = _finance_profit_loss_quotation_budgets(quotation)
+    manpower_department_totals = {
+        str(department or 'Unallocated'): round(_safe_float(amount, 0), 2)
+        for department, amount in (workforce_costs.get('manpowerDepartments') or {}).items()
+        if _safe_float(amount, 0) > 0
+    }
+
+    def add_manpower_department_cost(department, amount):
+        amount = round(_safe_float(amount, 0), 2)
+        if amount <= 0:
+            return
+        department = str(department or '').strip() or 'Unallocated'
+        manpower_department_totals[department] = round(
+            manpower_department_totals.get(department, 0) + amount,
+            2,
+        )
+
+    for row in worker_claim_expenses:
+        if row.get('categoryKey') in {'transport', 'meal'}:
+            add_manpower_department_cost(row.get('department'), row.get('amount'))
+    for row in expenses:
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'meal':
+            add_manpower_department_cost(row.get('department'), row.get('amount'))
+
+    manpower_department_rows = []
+    for department, amount in sorted(
+        manpower_department_totals.items(),
+        key=lambda row: str(row[0]).casefold(),
+    ):
+        amount = round(_safe_float(amount, 0), 2)
+        if amount <= 0:
+            continue
+        code = _normalise_department_code(department)
+        label = (
+            _department_payload(code).get('name')
+            if code and code not in {'UNALLOCATED', 'UNASSIGNED'}
+            else str(department or 'Unallocated')
+        )
+        manpower_department_rows.append({
+            'department': str(department or 'Unallocated'),
+            'label': str(label or department or 'Unallocated'),
+            'amount': amount,
+        })
+
+    profit_chart = []
+    for row in manpower_department_rows:
+        profit_chart.append({
+            'key': f"manpower-{_normalise_department_code(row['department']).lower()}",
+            'group': 'manpower',
+            'department': row['department'],
+            'label': f"Manpower - {row['label']}",
+            'amount': row['amount'],
+        })
+    if transport_cost > 0:
+        profit_chart.append({
+            'key': 'transport',
+            'group': 'transport',
+            'label': 'Transport',
+            'amount': transport_cost,
+        })
+    for row in expense_categories:
+        category_key = re.sub(
+            r'[^a-z0-9]+',
+            '-',
+            str(row.get('label') or 'expense').casefold(),
+        ).strip('-') or 'expense'
+        profit_chart.append({
+            'key': f'other-{category_key}',
+            'group': 'other',
+            'label': str(row.get('label') or 'Other expense'),
+            'amount': round(_safe_float(row.get('amount'), 0), 2),
+        })
+    if commission > 0:
+        profit_chart.append({
+            'key': 'commission',
+            'group': 'commission',
+            'label': 'Commission',
+            'amount': commission,
+        })
+    if net_profit > 0:
+        profit_chart.append({
+            'key': 'net-profit',
+            'group': 'profit',
+            'label': 'Net Profit',
+            'amount': net_profit,
+        })
+
     breakdown = {
-        'manpower': workforce_costs['manpowerCost'],
+        'manpower': manpower_cost,
+        'manpowerInvoicesOrEstimate': workforce_costs['manpowerCost'],
+        'workerTransportClaims': crew_transport_claims,
+        'workerMealClaims': worker_meal_claims,
+        'manualMealExpenses': manual_meal_expenses,
         'transportBookings': workforce_costs['transportCost'],
         'crewTransportClaims': crew_transport_claims,
         'manualTransportExpenses': manual_transport_expenses,
         'transport': transport_cost,
-        'workerClaims': round(crew_transport_claims + worker_other_claims, 2),
+        'workerClaims': round(
+            crew_transport_claims + worker_meal_claims + worker_other_claims,
+            2,
+        ),
+        'workerMealClaims': worker_meal_claims,
         'workerOtherClaims': worker_other_claims,
         'manualOtherExpenses': manual_other_expenses,
         'commission': commission,
@@ -25701,14 +28074,29 @@ def _finance_profit_loss_payload(event, finance_data):
         'summary': {
             'revenue': revenue,
             'directCosts': direct_costs,
-            'manpowerCost': workforce_costs['manpowerCost'],
+            'manpowerCost': manpower_cost,
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
+            'workerMealClaimsCost': worker_meal_claims,
+            'manualMealExpenses': manual_meal_expenses,
+            'manpowerBudget': quotation_budgets['manpower'],
+            'manpowerBudgetVariance': round(
+                quotation_budgets['manpower'] - manpower_cost,
+                2,
+            ),
             'transportBookingCost': workforce_costs['transportCost'],
             'crewTransportClaimsCost': crew_transport_claims,
             'manualTransportExpenses': manual_transport_expenses,
             'transportCost': transport_cost,
-            'workerClaimsCost': round(crew_transport_claims + worker_other_claims, 2),
+            'transportBudget': quotation_budgets['transport'],
+            'transportBudgetVariance': round(
+                quotation_budgets['transport'] - transport_cost,
+                2,
+            ),
+            'workerClaimsCost': round(
+                crew_transport_claims + worker_meal_claims + worker_other_claims,
+                2,
+            ),
             'workerOtherClaimsCost': worker_other_claims,
             'manualOtherExpenses': manual_other_expenses,
             'otherExpenses': other_expenses,
@@ -25719,11 +28107,1095 @@ def _finance_profit_loss_payload(event, finance_data):
             'profitMargin': profit_margin,
         },
         'breakdown': breakdown,
-        'expenses': worker_claim_expenses + [_profit_loss_expense_payload(row) for row in expenses],
+        'manpowerDepartments': manpower_department_rows,
+        'expenses': worker_submission_expenses + [
+            _profit_loss_expense_payload(row)
+            for row in expenses
+        ],
         'commissions': commissions,
         'expenseCategories': expense_categories,
+        'profitChart': profit_chart,
         'activity': _event_activity_logs_for_response(event)[-8:][::-1],
     }
+
+
+ACCOUNTING_TAX_CODES = {
+    'SR9': {'name': 'Standard-rated supply 9%', 'kind': 'sale', 'rate': 9.0},
+    'ZR': {'name': 'Zero-rated supply', 'kind': 'sale', 'rate': 0.0},
+    'ES': {'name': 'Exempt supply', 'kind': 'sale', 'rate': 0.0},
+    'TX9': {'name': 'Taxable purchase 9%', 'kind': 'purchase', 'rate': 9.0},
+    'TX0': {'name': 'Zero-rated taxable purchase', 'kind': 'purchase', 'rate': 0.0},
+    'BL': {'name': 'Blocked input tax', 'kind': 'purchase', 'rate': 0.0},
+    'OP': {'name': 'Out of scope', 'kind': 'other', 'rate': 0.0},
+}
+ACCOUNTING_ACCOUNT_TYPES = {'asset', 'liability', 'equity', 'revenue', 'expense'}
+
+
+def _accounting_store(finance_data):
+    store = finance_data.get('accounting')
+    if not isinstance(store, dict):
+        store = _accounting_defaults()
+        finance_data['accounting'] = store
+    defaults = _accounting_defaults()
+    settings = store.get('settings')
+    if not isinstance(settings, dict):
+        settings = {}
+        store['settings'] = settings
+    for key, value in defaults['settings'].items():
+        settings.setdefault(key, value)
+    accounts = store.get('accounts')
+    if not isinstance(accounts, list):
+        accounts = []
+        store['accounts'] = accounts
+    existing_codes = {
+        str(row.get('code') or '').strip()
+        for row in accounts
+        if isinstance(row, dict)
+    }
+    for account in defaults['accounts']:
+        if account['code'] not in existing_codes:
+            accounts.append(account)
+    for account in accounts:
+        if (
+            isinstance(account, dict)
+            and str(account.get('code') or '') == '3000'
+            and str(account.get('name') or '').strip().casefold() == 'owner capital'
+        ):
+            account['name'] = 'Share Capital'
+    if not isinstance(store.get('journals'), list):
+        store['journals'] = []
+    if not isinstance(store.get('bankTransactions'), list):
+        store['bankTransactions'] = []
+    return store
+
+
+def _accounting_money(value, default=0.0):
+    return round(_safe_float(value, default), 2)
+
+
+def _accounting_date(value, fallback=None):
+    raw = str(value or '').strip()[:10]
+    try:
+        return datetime.strptime(raw, '%Y-%m-%d').strftime('%Y-%m-%d')
+    except ValueError:
+        return fallback if fallback is not None else datetime.now().strftime('%Y-%m-%d')
+
+
+def _accounting_account_map(store):
+    return {
+        str(row.get('code') or '').strip(): row
+        for row in store.get('accounts') or []
+        if isinstance(row, dict) and str(row.get('code') or '').strip()
+    }
+
+
+def _accounting_next_journal_number(store):
+    year = datetime.now().year
+    pattern = re.compile(rf'^JE-{year}-(\d+)$', re.IGNORECASE)
+    values = []
+    for row in store.get('journals') or []:
+        match = pattern.match(str((row or {}).get('number') or ''))
+        if match:
+            values.append(_safe_int(match.group(1), 0))
+    return f"JE-{year}-{max(values, default=0) + 1:05d}"
+
+
+def _accounting_normalise_line(value, account_map):
+    value = value if isinstance(value, dict) else {}
+    account_code = str(value.get('accountCode') or '').strip()[:30]
+    if account_code not in account_map:
+        raise ValueError(f'Unknown account code: {account_code or "blank"}')
+    debit = max(0.0, _accounting_money(value.get('debit')))
+    credit = max(0.0, _accounting_money(value.get('credit')))
+    if debit and credit:
+        raise ValueError('A journal line cannot contain both a debit and a credit')
+    if not debit and not credit:
+        raise ValueError('Each journal line requires a debit or credit amount')
+    tax_code = str(value.get('taxCode') or 'OP').strip().upper()
+    if tax_code not in ACCOUNTING_TAX_CODES:
+        raise ValueError(f'Unknown GST tax code: {tax_code}')
+    return {
+        'id': str(value.get('id') or secrets.token_hex(6))[:40],
+        'accountCode': account_code,
+        'description': str(value.get('description') or '').strip()[:500],
+        'debit': debit,
+        'credit': credit,
+        'taxCode': tax_code,
+        'taxBase': _accounting_money(value.get('taxBase')),
+        'gstAmount': _accounting_money(value.get('gstAmount')),
+        'contact': str(value.get('contact') or '').strip()[:200],
+        'eventId': _safe_int(value.get('eventId'), 0) or None,
+    }
+
+
+def _accounting_normalise_journal(value, store, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    account_map = _accounting_account_map(store)
+    raw_lines = value.get('lines') if 'lines' in value else existing.get('lines') or []
+    lines = [
+        _accounting_normalise_line(row, account_map)
+        for row in raw_lines
+        if isinstance(row, dict)
+    ]
+    if len(lines) < 2:
+        raise ValueError('A journal entry requires at least two lines')
+    debit_total = _accounting_money(sum(row['debit'] for row in lines))
+    credit_total = _accounting_money(sum(row['credit'] for row in lines))
+    status = str(value.get('status') or existing.get('status') or 'draft').strip().lower()
+    if status not in {'draft', 'posted'}:
+        status = 'draft'
+    if status == 'posted' and abs(debit_total - credit_total) >= 0.005:
+        raise ValueError('Posted journals must balance: total debits must equal total credits')
+    entry_date = _accounting_date(value.get('date') or existing.get('date'))
+    lock_date = _accounting_date(
+        store.get('settings', {}).get('periodLockDate'),
+        '',
+    )
+    if lock_date and entry_date <= lock_date and value.get('_allowLocked') is not True:
+        raise ValueError(f'The accounting period is locked through {lock_date}')
+    now_value = now_iso()
+    history = list(existing.get('history') or [])
+    if existing:
+        history.append({
+            'at': now_value,
+            'by': _finance_current_username(),
+            'action': 'updated',
+            'previousStatus': existing.get('status'),
+            'previousDebit': existing.get('debitTotal'),
+            'previousCredit': existing.get('creditTotal'),
+        })
+    return {
+        'id': str(existing.get('id') or value.get('id') or secrets.token_hex(12))[:80],
+        'number': str(existing.get('number') or value.get('number') or _accounting_next_journal_number(store)).strip()[:80],
+        'date': entry_date,
+        'description': str(value.get('description') if 'description' in value else existing.get('description') or '').strip()[:500],
+        'reference': str(value.get('reference') if 'reference' in value else existing.get('reference') or '').strip()[:200],
+        'status': status,
+        'sourceKey': str(existing.get('sourceKey') or value.get('sourceKey') or '').strip()[:200],
+        'sourceType': str(existing.get('sourceType') or value.get('sourceType') or 'manual').strip()[:80],
+        'lines': lines,
+        'debitTotal': debit_total,
+        'creditTotal': credit_total,
+        'createdAt': existing.get('createdAt') or now_value,
+        'createdBy': existing.get('createdBy') or _finance_current_username(),
+        'updatedAt': now_value,
+        'updatedBy': _finance_current_username(),
+        'postedAt': (
+            existing.get('postedAt')
+            or (now_value if status == 'posted' else '')
+        ),
+        'reversedJournalId': str(existing.get('reversedJournalId') or '')[:80],
+        'reversalOf': str(existing.get('reversalOf') or value.get('reversalOf') or '')[:80],
+        'history': history[-100:],
+    }
+
+
+def _accounting_expense_account(category):
+    lowered = str(category or '').strip().casefold()
+    mappings = (
+        (('manpower', 'crew', 'salary', 'wage'), '6000'),
+        (('transport', 'lorry', 'vehicle', 'taxi', 'parking'), '6100'),
+        (('rental', 'hire'), '6200'),
+        (('repair', 'maintenance'), '6300'),
+        (('office', 'admin', 'stationery'), '6400'),
+        (('professional', 'legal', 'accounting'), '6500'),
+        (('marketing', 'advertising'), '6600'),
+        (('bank', 'finance charge'), '6700'),
+        (('commission',), '6900'),
+    )
+    for keywords, code in mappings:
+        if any(keyword in lowered for keyword in keywords):
+            return code
+    return '6800'
+
+
+def _accounting_source_documents(finance_data):
+    sources = []
+    quotations = {
+        str(row.get('id')): row
+        for row in finance_data.get('documents') or []
+        if isinstance(row, dict) and row.get('type') == 'quotation'
+    }
+    for raw in finance_data.get('documents') or []:
+        if not isinstance(raw, dict) or raw.get('type') != 'invoice':
+            continue
+        invoice = _normalise_finance_document(raw, 'invoice', raw)
+        totals = invoice.get('totals') or _finance_totals(invoice)
+        client = invoice.get('client') or {}
+        source_key = f"sales-invoice:{invoice.get('id')}"
+        sources.append({
+            'key': source_key,
+            'kind': 'sales-invoice',
+            'date': _accounting_date(invoice.get('invoiceDate')),
+            'dueDate': _accounting_date(invoice.get('dueDate'), ''),
+            'number': invoice.get('number') or 'Invoice',
+            'contact': client.get('company') or client.get('name') or '',
+            'description': invoice.get('projectName') or invoice.get('number') or 'Sales invoice',
+            'status': invoice.get('status') or 'draft',
+            'net': _accounting_money(totals.get('netSubtotal')),
+            'gst': _accounting_money(totals.get('tax')),
+            'gross': _accounting_money(totals.get('total')),
+            'eventId': invoice.get('eventId'),
+            'accountCode': '4000',
+        })
+        quotation = quotations.get(str(invoice.get('sourceQuotationId') or ''))
+        paid_at = str((quotation or {}).get('paidAt') or invoice.get('paidAt') or '')
+        if paid_at or str((quotation or {}).get('status') or invoice.get('status')).lower() == 'paid':
+            sources.append({
+                'key': f"sales-payment:{invoice.get('id')}",
+                'kind': 'sales-payment',
+                'date': _accounting_date(paid_at),
+                'dueDate': '',
+                'number': f"Payment - {invoice.get('number') or 'Invoice'}",
+                'contact': client.get('company') or client.get('name') or '',
+                'description': f"Payment received for {invoice.get('number') or 'invoice'}",
+                'status': 'paid',
+                'net': _accounting_money(totals.get('total')),
+                'gst': 0.0,
+                'gross': _accounting_money(totals.get('total')),
+                'eventId': invoice.get('eventId'),
+                'accountCode': '1000',
+            })
+
+    expenses_store = _finance_profit_loss_store(finance_data).get('expenses') or {}
+    for event_id, rows in expenses_store.items():
+        for raw in rows if isinstance(rows, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            expense = _normalise_profit_loss_expense(raw, _safe_int(event_id, 0))
+            amount = _accounting_money(expense.get('amount'))
+            if amount <= 0:
+                continue
+            category = expense.get('category') or 'Other Expenses'
+            sources.append({
+                'key': f"expense:{expense.get('id')}",
+                'kind': 'expense',
+                'date': _accounting_date(expense.get('expenseDate') or expense.get('createdAt')),
+                'dueDate': '',
+                'number': expense.get('reference') or expense.get('id') or 'Expense',
+                'contact': expense.get('vendor') or '',
+                'description': expense.get('description') or category,
+                'status': 'recorded',
+                'net': amount,
+                'gst': 0.0,
+                'gross': amount,
+                'eventId': _safe_int(event_id, 0) or None,
+                'category': category,
+                'accountCode': _accounting_expense_account(category),
+            })
+
+    workforce = load_workforce(_workforce_folder())
+    submissions = workforce.get('submissions') if isinstance(workforce, dict) else {}
+    for event_id, event_rows in (submissions.items() if isinstance(submissions, dict) else []):
+        for subject_id, rows in (event_rows.items() if isinstance(event_rows, dict) else []):
+            if not isinstance(rows, dict):
+                continue
+            contact = _finance_profit_loss_subject_name(workforce, subject_id)
+            for kind, label, account_code in (
+                ('invoices', 'Manpower invoice', '6000'),
+                ('claims', 'Worker claim', '6800'),
+            ):
+                for record in rows.get(kind) if isinstance(rows.get(kind), list) else []:
+                    if not isinstance(record, dict) or record.get('status') == 'Denied':
+                        continue
+                    if kind == 'claims' and 'detailsComplete' in record and not record.get('detailsComplete'):
+                        continue
+                    amount = _accounting_money(record.get('amount'))
+                    if amount <= 0:
+                        continue
+                    record_id = str(record.get('id') or secrets.token_hex(6))
+                    category = record.get('category') or label
+                    sources.append({
+                        'key': f"workforce-{kind[:-1]}:{record_id}",
+                        'kind': f"workforce-{kind[:-1]}",
+                        'date': _accounting_date(record.get('claimDate') or record.get('submittedAt')),
+                        'dueDate': '',
+                        'number': record.get('originalName') or record_id,
+                        'contact': contact,
+                        'description': record.get('description') or category,
+                        'status': record.get('status') or 'recorded',
+                        'net': amount,
+                        'gst': 0.0,
+                        'gross': amount,
+                        'eventId': _safe_int(event_id, 0) or None,
+                        'category': category,
+                        'accountCode': account_code if kind == 'invoices' else _accounting_expense_account(category),
+                    })
+
+    posted_keys = {
+        str(row.get('sourceKey') or '')
+        for row in _accounting_store(finance_data).get('journals') or []
+        if isinstance(row, dict) and row.get('status') == 'posted'
+    }
+    for source in sources:
+        source['posted'] = source['key'] in posted_keys
+    sources.sort(key=lambda row: (row.get('date') or '', row.get('number') or ''), reverse=True)
+    return sources
+
+
+def _accounting_post_source(finance_data, source_key, options=None):
+    options = options if isinstance(options, dict) else {}
+    store = _accounting_store(finance_data)
+    if any(
+        row.get('sourceKey') == source_key and row.get('status') == 'posted'
+        for row in store.get('journals') or []
+        if isinstance(row, dict)
+    ):
+        raise ValueError('This source document has already been posted')
+    source = next(
+        (row for row in _accounting_source_documents(finance_data) if row['key'] == source_key),
+        None,
+    )
+    if not source:
+        raise ValueError('Source document not found')
+    settings = store.get('settings') or {}
+    description = source.get('description') or source.get('number') or 'Source document'
+    contact = source.get('contact') or ''
+    event_id = source.get('eventId')
+    if source['kind'] == 'sales-invoice':
+        gross = _accounting_money(source.get('gross'))
+        net = _accounting_money(source.get('net'))
+        gst = _accounting_money(source.get('gst'))
+        lines = [
+            {'accountCode': settings.get('defaultReceivableAccount', '1100'), 'debit': gross, 'credit': 0, 'description': description, 'contact': contact, 'eventId': event_id},
+            {'accountCode': source.get('accountCode') or '4000', 'debit': 0, 'credit': net, 'description': description, 'contact': contact, 'eventId': event_id, 'taxCode': 'SR9' if gst else 'OP', 'taxBase': net, 'gstAmount': gst},
+        ]
+        if gst:
+            lines.append({'accountCode': '2100', 'debit': 0, 'credit': gst, 'description': 'Output GST', 'taxCode': 'OP'})
+    elif source['kind'] == 'sales-payment':
+        gross = _accounting_money(source.get('gross'))
+        lines = [
+            {'accountCode': options.get('bankAccount') or settings.get('defaultBankAccount', '1000'), 'debit': gross, 'credit': 0, 'description': description, 'contact': contact, 'eventId': event_id},
+            {'accountCode': settings.get('defaultReceivableAccount', '1100'), 'debit': 0, 'credit': gross, 'description': description, 'contact': contact, 'eventId': event_id},
+        ]
+    else:
+        gross = _accounting_money(source.get('gross'))
+        tax_code = str(options.get('taxCode') or 'OP').upper()
+        if tax_code not in {'TX9', 'TX0', 'BL', 'OP'}:
+            tax_code = 'OP'
+        rate = _accounting_money(settings.get('gstRate'), ACCOUNTING_GST_RATE)
+        claim_gst = bool(settings.get('gstRegistered')) and tax_code == 'TX9'
+        net = _accounting_money(gross / (1 + rate / 100)) if claim_gst and rate else gross
+        gst = _accounting_money(gross - net) if claim_gst else 0.0
+        expense_account = str(options.get('accountCode') or source.get('accountCode') or '6800')
+        counter_account = str(options.get('counterAccount') or settings.get('defaultPayableAccount', '2000'))
+        lines = [
+            {'accountCode': expense_account, 'debit': net, 'credit': 0, 'description': description, 'contact': contact, 'eventId': event_id, 'taxCode': tax_code, 'taxBase': net if tax_code in {'TX9', 'TX0'} else 0, 'gstAmount': gst},
+            {'accountCode': counter_account, 'debit': 0, 'credit': gross, 'description': description, 'contact': contact, 'eventId': event_id},
+        ]
+        if gst:
+            lines.insert(1, {'accountCode': '1200', 'debit': gst, 'credit': 0, 'description': 'Input GST', 'taxCode': 'OP'})
+    journal = _accounting_normalise_journal({
+        'date': options.get('date') or source.get('date'),
+        'description': description,
+        'reference': source.get('number'),
+        'status': 'posted',
+        'sourceKey': source_key,
+        'sourceType': source.get('kind'),
+        'lines': lines,
+    }, store)
+    store['journals'].append(journal)
+    return journal
+
+
+def _accounting_bank_date(value):
+    raw = str(value or '').strip()
+    for date_format in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%d %b %Y', '%d %B %Y'):
+        try:
+            return datetime.strptime(raw, date_format).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+    raise ValueError(f'Invalid bank transaction date: {raw or "blank"}')
+
+
+def _accounting_bank_fingerprint(value):
+    raw = '|'.join((
+        str(value.get('date') or ''),
+        f"{_accounting_money(value.get('amount')):.2f}",
+        str(value.get('description') or '').strip().casefold(),
+        str(value.get('reference') or '').strip().casefold(),
+        str(value.get('bankAccount') or '1000'),
+    ))
+    return hashlib.sha1(raw.encode('utf-8')).hexdigest()
+
+
+def _accounting_normalise_bank_transaction(value, store):
+    value = value if isinstance(value, dict) else {}
+    bank_account = str(
+        value.get('bankAccount')
+        or store.get('settings', {}).get('defaultBankAccount')
+        or '1000'
+    )
+    if bank_account not in _accounting_account_map(store):
+        raise ValueError('Bank account is not in the chart of accounts')
+    transaction = {
+        'id': str(value.get('id') or secrets.token_hex(12))[:80],
+        'date': _accounting_bank_date(value.get('date')),
+        'description': str(value.get('description') or '').strip()[:500],
+        'reference': str(value.get('reference') or '').strip()[:200],
+        'amount': _accounting_money(value.get('amount')),
+        'bankAccount': bank_account,
+        'status': 'matched' if value.get('status') == 'matched' else 'unmatched',
+        'journalId': str(value.get('journalId') or '')[:80],
+        'importedAt': str(value.get('importedAt') or now_iso()),
+        'importedBy': str(value.get('importedBy') or _finance_current_username()),
+    }
+    if not transaction['description']:
+        transaction['description'] = transaction['reference'] or 'Bank transaction'
+    if not transaction['amount']:
+        raise ValueError('Bank transaction amount cannot be zero')
+    transaction['fingerprint'] = _accounting_bank_fingerprint(transaction)
+    return transaction
+
+
+def _accounting_match_bank_transaction(finance_data, transaction_id, options):
+    store = _accounting_store(finance_data)
+    transaction = next(
+        (row for row in store.get('bankTransactions') or [] if str((row or {}).get('id')) == str(transaction_id)),
+        None,
+    )
+    if not transaction:
+        raise ValueError('Bank transaction not found')
+    if transaction.get('status') == 'matched':
+        raise ValueError('Bank transaction is already matched')
+    account_map = _accounting_account_map(store)
+    counter_account = str(options.get('accountCode') or '')
+    if counter_account not in account_map:
+        raise ValueError('Choose a valid matching account')
+    amount = _accounting_money(transaction.get('amount'))
+    gross = abs(amount)
+    tax_code = str(options.get('taxCode') or 'OP').upper()
+    if tax_code not in ACCOUNTING_TAX_CODES:
+        tax_code = 'OP'
+    settings = store.get('settings') or {}
+    rate = _accounting_money(settings.get('gstRate'), ACCOUNTING_GST_RATE)
+    description = str(options.get('description') or transaction.get('description') or 'Bank transaction')[:500]
+    lines = []
+    if amount < 0 and tax_code == 'TX9' and settings.get('gstRegistered') and rate:
+        net = _accounting_money(gross / (1 + rate / 100))
+        gst = _accounting_money(gross - net)
+        lines.extend([
+            {'accountCode': counter_account, 'debit': net, 'credit': 0, 'description': description, 'taxCode': 'TX9', 'taxBase': net, 'gstAmount': gst},
+            {'accountCode': '1200', 'debit': gst, 'credit': 0, 'description': 'Input GST'},
+            {'accountCode': transaction.get('bankAccount') or '1000', 'debit': 0, 'credit': gross, 'description': description},
+        ])
+    elif amount > 0 and tax_code == 'SR9' and settings.get('gstRegistered') and rate:
+        net = _accounting_money(gross / (1 + rate / 100))
+        gst = _accounting_money(gross - net)
+        lines.extend([
+            {'accountCode': transaction.get('bankAccount') or '1000', 'debit': gross, 'credit': 0, 'description': description},
+            {'accountCode': counter_account, 'debit': 0, 'credit': net, 'description': description, 'taxCode': 'SR9', 'taxBase': net, 'gstAmount': gst},
+            {'accountCode': '2100', 'debit': 0, 'credit': gst, 'description': 'Output GST'},
+        ])
+    elif amount > 0:
+        lines.extend([
+            {'accountCode': transaction.get('bankAccount') or '1000', 'debit': gross, 'credit': 0, 'description': description},
+            {'accountCode': counter_account, 'debit': 0, 'credit': gross, 'description': description, 'taxCode': tax_code},
+        ])
+    else:
+        lines.extend([
+            {'accountCode': counter_account, 'debit': gross, 'credit': 0, 'description': description, 'taxCode': tax_code},
+            {'accountCode': transaction.get('bankAccount') or '1000', 'debit': 0, 'credit': gross, 'description': description},
+        ])
+    journal = _accounting_normalise_journal({
+        'date': transaction.get('date'),
+        'description': description,
+        'reference': transaction.get('reference'),
+        'status': 'posted',
+        'sourceKey': f"bank:{transaction.get('id')}",
+        'sourceType': 'bank-transaction',
+        'lines': lines,
+    }, store)
+    store['journals'].append(journal)
+    transaction['status'] = 'matched'
+    transaction['journalId'] = journal['id']
+    transaction['matchedAt'] = now_iso()
+    transaction['matchedBy'] = _finance_current_username()
+    return journal, transaction
+
+
+def _accounting_period(request_args):
+    today = datetime.now().date()
+    default_start = today.replace(month=1, day=1).strftime('%Y-%m-%d')
+    start = _accounting_date(request_args.get('from'), default_start)
+    end = _accounting_date(request_args.get('to'), today.strftime('%Y-%m-%d'))
+    if start > end:
+        start, end = end, start
+    return start, end
+
+
+def _accounting_reports(store, start, end):
+    account_map = _accounting_account_map(store)
+    posted = [
+        row for row in store.get('journals') or []
+        if isinstance(row, dict) and row.get('status') == 'posted' and row.get('date') <= end
+    ]
+    period_journals = [row for row in posted if start <= row.get('date', '') <= end]
+    balances = {code: 0.0 for code in account_map}
+    period_balances = {code: 0.0 for code in account_map}
+    transactions = []
+    for journal in posted:
+        for line in journal.get('lines') or []:
+            code = str(line.get('accountCode') or '')
+            net = _accounting_money(line.get('debit')) - _accounting_money(line.get('credit'))
+            balances[code] = _accounting_money(balances.get(code, 0) + net)
+            if start <= journal.get('date', '') <= end:
+                period_balances[code] = _accounting_money(period_balances.get(code, 0) + net)
+                transactions.append({
+                    'journalId': journal.get('id'),
+                    'number': journal.get('number'),
+                    'date': journal.get('date'),
+                    'description': line.get('description') or journal.get('description'),
+                    'reference': journal.get('reference'),
+                    'accountCode': code,
+                    'accountName': (account_map.get(code) or {}).get('name') or code,
+                    'debit': _accounting_money(line.get('debit')),
+                    'credit': _accounting_money(line.get('credit')),
+                    'taxCode': line.get('taxCode') or 'OP',
+                    'contact': line.get('contact') or '',
+                    'eventId': line.get('eventId'),
+                })
+    transactions.sort(key=lambda row: (row['date'], row['number'], row['accountCode']), reverse=True)
+    trial_balance = []
+    for code, account in sorted(account_map.items()):
+        balance = _accounting_money(balances.get(code))
+        if not balance:
+            continue
+        trial_balance.append({
+            'code': code,
+            'name': account.get('name'),
+            'type': account.get('type'),
+            'debit': balance if balance > 0 else 0.0,
+            'credit': abs(balance) if balance < 0 else 0.0,
+        })
+    pnl_rows = []
+    revenue_total = 0.0
+    expense_total = 0.0
+    for code, account in sorted(account_map.items()):
+        account_type = account.get('type')
+        raw = _accounting_money(period_balances.get(code))
+        if account_type == 'revenue':
+            amount = _accounting_money(-raw)
+            revenue_total = _accounting_money(revenue_total + amount)
+        elif account_type == 'expense':
+            amount = raw
+            expense_total = _accounting_money(expense_total + amount)
+        else:
+            continue
+        if amount:
+            pnl_rows.append({'code': code, 'name': account.get('name'), 'type': account_type, 'amount': amount})
+    balance_sheet = {'assets': [], 'liabilities': [], 'equity': []}
+    for code, account in sorted(account_map.items()):
+        account_type = account.get('type')
+        if account_type not in balance_sheet:
+            continue
+        raw = _accounting_money(balances.get(code))
+        amount = raw if account_type == 'asset' else -raw
+        if amount:
+            balance_sheet[account_type].append({'code': code, 'name': account.get('name'), 'amount': amount})
+    current_earnings = _accounting_money(revenue_total - expense_total)
+    if current_earnings:
+        balance_sheet['equity'].append({'code': 'CURRENT', 'name': 'Current period earnings', 'amount': current_earnings})
+    gst = {f'box{number}': 0.0 for number in range(1, 18)}
+    for journal in period_journals:
+        for line in journal.get('lines') or []:
+            code = str(line.get('taxCode') or 'OP').upper()
+            base = _accounting_money(line.get('taxBase'))
+            tax = _accounting_money(line.get('gstAmount'))
+            if code == 'SR9':
+                gst['box1'] = _accounting_money(gst['box1'] + base)
+                gst['box6'] = _accounting_money(gst['box6'] + tax)
+            elif code == 'ZR':
+                gst['box2'] = _accounting_money(gst['box2'] + base)
+            elif code == 'ES':
+                gst['box3'] = _accounting_money(gst['box3'] + base)
+            elif code in {'TX9', 'TX0'}:
+                gst['box5'] = _accounting_money(gst['box5'] + base)
+                if code == 'TX9':
+                    gst['box7'] = _accounting_money(gst['box7'] + tax)
+    gst['box4'] = _accounting_money(gst['box1'] + gst['box2'] + gst['box3'])
+    gst['box8'] = _accounting_money(gst['box6'] - gst['box7'])
+    gst['box13'] = revenue_total
+    return {
+        'transactions': transactions,
+        'trialBalance': trial_balance,
+        'profitLoss': {
+            'rows': pnl_rows,
+            'revenue': revenue_total,
+            'expenses': expense_total,
+            'netProfit': current_earnings,
+        },
+        'balanceSheet': balance_sheet,
+        'gst': gst,
+        'summary': {
+            'cash': _accounting_money(balances.get('1000')),
+            'receivables': _accounting_money(balances.get('1100')),
+            'payables': _accounting_money(-balances.get('2000', 0)),
+            'revenue': revenue_total,
+            'expenses': expense_total,
+            'netProfit': current_earnings,
+            'gstPayable': gst['box8'],
+        },
+    }
+
+
+def _accounting_payload(finance_data, request_args):
+    store = _accounting_store(finance_data)
+    start, end = _accounting_period(request_args)
+    reports = _accounting_reports(store, start, end)
+    sources = _accounting_source_documents(finance_data)
+    bank_transactions = sorted(
+        [row for row in store.get('bankTransactions') or [] if isinstance(row, dict)],
+        key=lambda row: (row.get('date') or '', row.get('importedAt') or ''),
+        reverse=True,
+    )
+    default_bank = str(store.get('settings', {}).get('defaultBankAccount') or '1000')
+    statement_total = _accounting_money(sum(
+        _accounting_money(row.get('amount'))
+        for row in bank_transactions
+        if row.get('bankAccount') == default_bank
+        and start <= str(row.get('date') or '') <= end
+    ))
+    ledger_total = _accounting_money(sum(
+        _accounting_money(row.get('debit')) - _accounting_money(row.get('credit'))
+        for row in reports['transactions']
+        if row.get('accountCode') == default_bank
+    ))
+    return {
+        'period': {'from': start, 'to': end},
+        'settings': store.get('settings') or {},
+        'taxCodes': [
+            {'code': code, **details}
+            for code, details in ACCOUNTING_TAX_CODES.items()
+        ],
+        'accounts': sorted(
+            [row for row in store.get('accounts') or [] if isinstance(row, dict)],
+            key=lambda row: str(row.get('code') or ''),
+        ),
+        'journals': sorted(
+            [row for row in store.get('journals') or [] if isinstance(row, dict)],
+            key=lambda row: (row.get('date') or '', row.get('number') or ''),
+            reverse=True,
+        ),
+        'sourceDocuments': sources,
+        'unpostedCount': sum(1 for row in sources if not row.get('posted')),
+        'bankTransactions': bank_transactions,
+        'bankSummary': {
+            'statementMovement': statement_total,
+            'ledgerMovement': ledger_total,
+            'difference': _accounting_money(statement_total - ledger_total),
+            'unmatchedCount': sum(1 for row in bank_transactions if row.get('status') != 'matched'),
+        },
+        **reports,
+    }
+
+
+@app.route('/api/finance/accounting', methods=['GET'])
+@require_super_admin
+def accounting_workspace():
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        return jsonify({'success': True, 'data': _accounting_payload(finance_data, request.args)})
+
+
+@app.route('/api/finance/accounting/settings', methods=['PUT'])
+@require_super_admin
+def accounting_settings_update():
+    value = request.get_json(silent=True) or {}
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        settings = store['settings']
+        settings['gstRegistered'] = bool(value.get('gstRegistered'))
+        settings['gstRegistrationNumber'] = str(value.get('gstRegistrationNumber') or '').strip()[:80]
+        settings['gstRate'] = round(max(0, min(100, _safe_float(value.get('gstRate'), ACCOUNTING_GST_RATE))), 2)
+        settings['filingFrequency'] = (
+            value.get('filingFrequency')
+            if value.get('filingFrequency') in {'monthly', 'quarterly'}
+            else settings.get('filingFrequency', 'quarterly')
+        )
+        settings['financialYearStartMonth'] = max(1, min(12, _safe_int(value.get('financialYearStartMonth'), 1)))
+        settings['recordRetentionYears'] = max(5, min(20, _safe_int(value.get('recordRetentionYears'), 5)))
+        settings['accountingBasis'] = value.get('accountingBasis') if value.get('accountingBasis') in {'accrual', 'cash'} else 'accrual'
+        settings['periodLockDate'] = _accounting_date(value.get('periodLockDate'), '')
+        account_map = _accounting_account_map(store)
+        for key, fallback in (
+            ('defaultBankAccount', '1000'),
+            ('defaultReceivableAccount', '1100'),
+            ('defaultPayableAccount', '2000'),
+        ):
+            code = str(value.get(key) or fallback)
+            settings[key] = code if code in account_map else fallback
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-settings-updated'})
+    return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/accounting/accounts', methods=['POST'])
+@require_super_admin
+def accounting_account_create():
+    value = request.get_json(silent=True) or {}
+    code = re.sub(r'[^A-Za-z0-9._-]+', '', str(value.get('code') or '').strip())[:30]
+    name = str(value.get('name') or '').strip()[:160]
+    account_type = str(value.get('type') or '').strip().lower()
+    if not code or not name or account_type not in ACCOUNTING_ACCOUNT_TYPES:
+        return jsonify({'error': 'Account code, name and a valid type are required'}), 400
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        if code in _accounting_account_map(store):
+            return jsonify({'error': 'An account with this code already exists'}), 409
+        account = {
+            'code': code,
+            'name': name,
+            'type': account_type,
+            'group': str(value.get('group') or account_type.title()).strip()[:120],
+            'active': value.get('active', True) is not False,
+            'system': False,
+        }
+        store['accounts'].append(account)
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-account-added', 'accountCode': code})
+    return jsonify({'success': True, 'data': payload, 'account': account}), 201
+
+
+@app.route('/api/finance/accounting/accounts/<account_code>', methods=['PUT'])
+@require_super_admin
+def accounting_account_update(account_code):
+    value = request.get_json(silent=True) or {}
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        account = _accounting_account_map(store).get(str(account_code))
+        if not account:
+            return jsonify({'error': 'Account not found'}), 404
+        name = str(value.get('name') if 'name' in value else account.get('name') or '').strip()[:160]
+        account_type = str(value.get('type') if 'type' in value else account.get('type') or '').strip().lower()
+        if not name or account_type not in ACCOUNTING_ACCOUNT_TYPES:
+            return jsonify({'error': 'Account name and a valid type are required'}), 400
+        account.update({
+            'name': name,
+            'type': account_type,
+            'group': str(value.get('group') if 'group' in value else account.get('group') or account_type.title()).strip()[:120],
+            'active': bool(value.get('active') if 'active' in value else account.get('active', True)),
+        })
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-account-updated', 'accountCode': account_code})
+    return jsonify({'success': True, 'data': payload, 'account': account})
+
+
+@app.route('/api/finance/accounting/journals', methods=['POST'])
+@require_super_admin
+def accounting_journal_create():
+    value = request.get_json(silent=True) or {}
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            store = _accounting_store(finance_data)
+            journal = _accounting_normalise_journal(value, store)
+            store['journals'].append(journal)
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-journal-added', 'journalId': journal['id']})
+    return jsonify({'success': True, 'data': payload, 'journal': journal}), 201
+
+
+@app.route('/api/finance/accounting/journals/<journal_id>', methods=['PUT', 'DELETE'])
+@require_super_admin
+def accounting_journal_item(journal_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        journals = store.get('journals') or []
+        index = next((index for index, row in enumerate(journals) if str((row or {}).get('id')) == str(journal_id)), None)
+        if index is None:
+            return jsonify({'error': 'Journal not found'}), 404
+        existing = journals[index]
+        if existing.get('status') == 'posted':
+            return jsonify({'error': 'Posted journals cannot be edited or deleted; reverse the entry instead'}), 409
+        if request.method == 'DELETE':
+            journals.pop(index)
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+            mark_realtime_change('finance', {'action': 'accounting-journal-deleted', 'journalId': journal_id})
+            return jsonify({'success': True, 'data': payload})
+        try:
+            journal = _accounting_normalise_journal(request.get_json(silent=True) or {}, store, existing)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        journals[index] = journal
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-journal-updated', 'journalId': journal_id})
+    return jsonify({'success': True, 'data': payload, 'journal': journal})
+
+
+@app.route('/api/finance/accounting/journals/<journal_id>/post', methods=['POST'])
+@require_super_admin
+def accounting_journal_post(journal_id):
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            store = _accounting_store(finance_data)
+            journals = store.get('journals') or []
+            index = next((index for index, row in enumerate(journals) if str((row or {}).get('id')) == str(journal_id)), None)
+            if index is None:
+                return jsonify({'error': 'Journal not found'}), 404
+            existing = journals[index]
+            if existing.get('status') == 'posted':
+                return jsonify({'success': True, 'data': _accounting_payload(finance_data, request.args), 'journal': existing})
+            journal = _accounting_normalise_journal({**existing, 'status': 'posted'}, store, existing)
+            journals[index] = journal
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-journal-posted', 'journalId': journal_id})
+    return jsonify({'success': True, 'data': payload, 'journal': journal})
+
+
+@app.route('/api/finance/accounting/journals/<journal_id>/reverse', methods=['POST'])
+@require_super_admin
+def accounting_journal_reverse(journal_id):
+    value = request.get_json(silent=True) or {}
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            store = _accounting_store(finance_data)
+            original = next((row for row in store.get('journals') or [] if str((row or {}).get('id')) == str(journal_id)), None)
+            if not original:
+                return jsonify({'error': 'Journal not found'}), 404
+            if original.get('status') != 'posted':
+                return jsonify({'error': 'Only posted journals can be reversed'}), 409
+            if original.get('reversedJournalId'):
+                return jsonify({'error': 'This journal has already been reversed'}), 409
+            reversal = _accounting_normalise_journal({
+                'date': value.get('date') or datetime.now().strftime('%Y-%m-%d'),
+                'description': str(value.get('description') or f"Reversal of {original.get('number')}")[:500],
+                'reference': original.get('number'),
+                'status': 'posted',
+                'sourceType': 'reversal',
+                'reversalOf': original.get('id'),
+                'lines': [
+                    {
+                        **line,
+                        'id': secrets.token_hex(6),
+                        'debit': line.get('credit', 0),
+                        'credit': line.get('debit', 0),
+                        'taxBase': -_accounting_money(line.get('taxBase')),
+                        'gstAmount': -_accounting_money(line.get('gstAmount')),
+                    }
+                    for line in original.get('lines') or []
+                ],
+            }, store)
+            original['reversedJournalId'] = reversal['id']
+            original['updatedAt'] = now_iso()
+            original['updatedBy'] = _finance_current_username()
+            store['journals'].append(reversal)
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-journal-reversed', 'journalId': journal_id})
+    return jsonify({'success': True, 'data': payload, 'journal': reversal})
+
+
+@app.route('/api/finance/accounting/sources/post', methods=['POST'])
+@require_super_admin
+def accounting_source_post():
+    value = request.get_json(silent=True) or {}
+    source_key = str(value.get('sourceKey') or '').strip()
+    if not source_key:
+        return jsonify({'error': 'Source document is required'}), 400
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            journal = _accounting_post_source(finance_data, source_key, value)
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-source-posted', 'sourceKey': source_key})
+    return jsonify({'success': True, 'data': payload, 'journal': journal}), 201
+
+
+@app.route('/api/finance/accounting/bank-transactions', methods=['POST'])
+@require_super_admin
+def accounting_bank_transaction_create():
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            store = _accounting_store(finance_data)
+            transaction = _accounting_normalise_bank_transaction(
+                request.get_json(silent=True) or {},
+                store,
+            )
+            if any(row.get('fingerprint') == transaction['fingerprint'] for row in store['bankTransactions'] if isinstance(row, dict)):
+                return jsonify({'error': 'This bank transaction already exists'}), 409
+            store['bankTransactions'].append(transaction)
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-bank-transaction-added', 'transactionId': transaction['id']})
+    return jsonify({'success': True, 'data': payload, 'transaction': transaction}), 201
+
+
+@app.route('/api/finance/accounting/bank-transactions/import', methods=['POST'])
+@require_super_admin
+def accounting_bank_transactions_import():
+    from io import StringIO
+
+    uploaded = request.files.get('file')
+    if not uploaded or not str(uploaded.filename or '').lower().endswith('.csv'):
+        return jsonify({'error': 'Choose a CSV bank statement'}), 400
+    try:
+        text_value = uploaded.read().decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return jsonify({'error': 'Bank statement CSV must use UTF-8 encoding'}), 400
+    reader = csv.DictReader(StringIO(text_value))
+    if not reader.fieldnames:
+        return jsonify({'error': 'The CSV does not contain a header row'}), 400
+
+    def clean_key(value):
+        return re.sub(r'[^a-z0-9]+', '', str(value or '').casefold())
+
+    def amount_value(value):
+        cleaned = re.sub(r'[^0-9.()\-]+', '', str(value or ''))
+        if cleaned.startswith('(') and cleaned.endswith(')'):
+            cleaned = f"-{cleaned[1:-1]}"
+        return _safe_float(cleaned, 0)
+
+    imported = 0
+    duplicates = 0
+    errors = []
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        fingerprints = {
+            str(row.get('fingerprint') or '')
+            for row in store.get('bankTransactions') or []
+            if isinstance(row, dict)
+        }
+        bank_account = str(request.form.get('bankAccount') or store.get('settings', {}).get('defaultBankAccount') or '1000')
+        for row_number, raw in enumerate(reader, start=2):
+            row = {clean_key(key): value for key, value in (raw or {}).items()}
+            date_value = next((row.get(key) for key in ('date', 'transactiondate', 'valuedate', 'postingdate') if row.get(key)), '')
+            description = next((row.get(key) for key in ('description', 'narration', 'details', 'transactiondescription', 'memo') if row.get(key)), '')
+            reference = next((row.get(key) for key in ('reference', 'referenceno', 'transactionid', 'chequeno') if row.get(key)), '')
+            if row.get('amount') not in (None, ''):
+                amount = amount_value(row.get('amount'))
+            else:
+                credit = amount_value(next((row.get(key) for key in ('credit', 'deposit', 'moneyin') if row.get(key)), 0))
+                debit = amount_value(next((row.get(key) for key in ('debit', 'withdrawal', 'moneyout') if row.get(key)), 0))
+                amount = credit - debit
+            try:
+                transaction = _accounting_normalise_bank_transaction({
+                    'date': date_value,
+                    'description': description,
+                    'reference': reference,
+                    'amount': amount,
+                    'bankAccount': bank_account,
+                }, store)
+            except ValueError as exc:
+                errors.append(f'Row {row_number}: {exc}')
+                continue
+            if transaction['fingerprint'] in fingerprints:
+                duplicates += 1
+                continue
+            fingerprints.add(transaction['fingerprint'])
+            store['bankTransactions'].append(transaction)
+            imported += 1
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-bank-imported', 'count': imported})
+    return jsonify({'success': True, 'data': payload, 'imported': imported, 'duplicates': duplicates, 'errors': errors[:20]})
+
+
+@app.route('/api/finance/accounting/bank-transactions/<transaction_id>', methods=['DELETE'])
+@require_super_admin
+def accounting_bank_transaction_delete(transaction_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        store = _accounting_store(finance_data)
+        rows = store.get('bankTransactions') or []
+        transaction = next((row for row in rows if str((row or {}).get('id')) == str(transaction_id)), None)
+        if not transaction:
+            return jsonify({'error': 'Bank transaction not found'}), 404
+        if transaction.get('status') == 'matched':
+            return jsonify({'error': 'Matched transactions cannot be deleted; reverse the linked journal first'}), 409
+        store['bankTransactions'] = [row for row in rows if str((row or {}).get('id')) != str(transaction_id)]
+        _save_finance_data(finance_data)
+        payload = _accounting_payload(finance_data, request.args)
+    mark_realtime_change('finance', {'action': 'accounting-bank-transaction-deleted', 'transactionId': transaction_id})
+    return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/accounting/bank-transactions/<transaction_id>/match', methods=['POST'])
+@require_super_admin
+def accounting_bank_transaction_match(transaction_id):
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            journal, transaction = _accounting_match_bank_transaction(
+                finance_data,
+                transaction_id,
+                request.get_json(silent=True) or {},
+            )
+            _save_finance_data(finance_data)
+            payload = _accounting_payload(finance_data, request.args)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    mark_realtime_change('finance', {'action': 'accounting-bank-transaction-matched', 'transactionId': transaction_id})
+    return jsonify({'success': True, 'data': payload, 'journal': journal, 'transaction': transaction})
+
+
+@app.route('/api/finance/accounting/export.csv', methods=['GET'])
+@require_super_admin
+def accounting_export_csv():
+    from io import StringIO
+
+    report_name = str(request.args.get('report') or 'transactions').strip().lower()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        payload = _accounting_payload(finance_data, request.args)
+    output = StringIO()
+    writer = csv.writer(output)
+    if report_name == 'trial-balance':
+        writer.writerow(['Account code', 'Account name', 'Type', 'Debit', 'Credit'])
+        for row in payload['trialBalance']:
+            writer.writerow([row['code'], row['name'], row['type'], row['debit'], row['credit']])
+    elif report_name == 'profit-loss':
+        writer.writerow(['Account code', 'Account name', 'Type', 'Amount'])
+        for row in payload['profitLoss']['rows']:
+            writer.writerow([row['code'], row['name'], row['type'], row['amount']])
+        writer.writerow([])
+        writer.writerow(['Net profit', payload['profitLoss']['netProfit']])
+    elif report_name == 'balance-sheet':
+        writer.writerow(['Section', 'Account code', 'Account name', 'Amount'])
+        for section in ('assets', 'liabilities', 'equity'):
+            for row in payload['balanceSheet'][section]:
+                writer.writerow([section.title(), row['code'], row['name'], row['amount']])
+    elif report_name == 'gst':
+        writer.writerow(['GST return box', 'Amount (SGD)'])
+        for number in range(1, 18):
+            writer.writerow([f'Box {number}', payload['gst'][f'box{number}']])
+    else:
+        writer.writerow(['Date', 'Journal', 'Reference', 'Account code', 'Account name', 'Description', 'Contact', 'Event', 'Debit', 'Credit', 'GST code'])
+        for row in payload['transactions']:
+            writer.writerow([row['date'], row['number'], row['reference'], row['accountCode'], row['accountName'], row['description'], row['contact'], row['eventId'] or '', row['debit'], row['credit'], row['taxCode']])
+    filename = f"accounting-{report_name}-{payload['period']['from']}-to-{payload['period']['to']}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 def _finance_compare_identity_key(identity):
@@ -25825,7 +29297,12 @@ def _finance_compare_item_from_line(line):
     if not description:
         return None
     department = _normalise_department_code(line.get('departmentCode')) or 'UN'
-    identity = _finance_compare_custom_identity('MISC', description, department)
+    identity = _finance_compare_custom_identity(
+        line.get('customType') or 'MISC',
+        description,
+        department,
+        line.get('customCompany') or '',
+    )
     return identity, quantity, {
         'title': description,
         'subtitle': 'Custom item',
@@ -26199,6 +29676,8 @@ def _finance_compare_line_from_event_item(event_item, quantity, event, finance_d
             'unitPrice': _safe_float(remembered.get('unitPrice'), 0),
             'discountPercent': 0,
             'isCustom': True,
+            'customType': identity.get('type') or 'MISC',
+            'customCompany': identity.get('company') or '',
         })
     brand = identity.get('brand') or ''
     model = identity.get('model') or ''
@@ -26284,9 +29763,10 @@ def _finance_compare_apply_to_quotation(finance_data, quotation, event, row):
 
 
 def _finance_compare_add_to_quotation(finance_data, quotation, event, row):
+    previous = copy.deepcopy(quotation)
     _finance_compare_apply_to_quotation(finance_data, quotation, event, row)
     updated = _normalise_finance_document(quotation, 'quotation', quotation)
-    _remember_finance_prices(finance_data, updated)
+    _remember_finance_prices(finance_data, updated, previous)
     for index, document in enumerate(finance_data.get('documents') or []):
         if str(document.get('id')) == str(updated.get('id')):
             finance_data['documents'][index] = updated
@@ -26301,6 +29781,9 @@ def _finance_list_or_create(document_type):
             _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().lower()
+            mine_only = str(request.args.get('mine') or '').strip().lower() in {
+                '1', 'true', 'yes', 'on',
+            }
             linked_invoices = {}
             for document in finance_data.get('documents') or []:
                 if document.get('type') != 'invoice':
@@ -26313,6 +29796,12 @@ def _finance_list_or_create(document_type):
                 for row in finance_data.get('documents') or []
                 if row.get('type') == document_type and _finance_user_can_access(row)
             ]
+            if mine_only:
+                current_username = _finance_current_username().lower()
+                rows = [
+                    row for row in rows
+                    if _finance_document_owner_username(row).lower() == current_username
+                ]
             if document_type == 'quotation':
                 for row in rows:
                     invoice = linked_invoices.get(str(row.get('id') or ''))
@@ -26390,6 +29879,11 @@ def _finance_get_update_delete(document_id, document_type):
         ):
             return jsonify({'error': 'Expired status is set automatically'}), 400
         updated = _normalise_finance_document(request_data, document_type, existing)
+        previous_document = _normalise_finance_document(
+            existing,
+            document_type,
+            existing,
+        )
         if any(
             str(row.get('id')) != str(document_id)
             and row.get('type') == document_type
@@ -26422,7 +29916,7 @@ def _finance_get_update_delete(document_id, document_type):
                 elif not _current_user_can_access_event(linked_event):
                     return jsonify({'error': 'You are not assigned to this event'}), 403
 
-            existing_normalised = _normalise_finance_document(existing, document_type, existing)
+            existing_normalised = previous_document
             content_changed = (
                 _finance_revision_fingerprint(updated)
                 != _finance_revision_fingerprint(existing_normalised)
@@ -26474,6 +29968,11 @@ def _finance_get_update_delete(document_id, document_type):
                     else datetime.now().isoformat(timespec='seconds')
                 )
                 updated['statusChangedAt'] = updated['acceptedAt']
+                if (
+                    existing_normalised.get('status') == 'draft'
+                    and not _finance_revision_is_snapshotted(updated)
+                ):
+                    _finance_snapshot_revision(updated)
                 if not missing_link_cleared:
                     _finance_create_event(updated)
             elif requested_status == 'invoiced' and updated.get('status') == 'invoiced':
@@ -26513,16 +30012,36 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
             elif updated.get('eventId'):
                 _finance_sync_managed_event(updated)
-            if requested_status in {'draft', 'sent'} and updated.get('eventId'):
+            if updated.get('status') in {'draft', 'sent'} and updated.get('eventId'):
                 _finance_sync_managed_event(updated)
 
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
                 finance_data['documents'][index] = updated
                 break
-        _remember_finance_prices(finance_data, updated)
+        _remember_finance_prices(finance_data, updated, previous_document)
         _save_finance_data(finance_data)
-        log_action(f"Updated {document_type} {updated['number']}")
+        if document_type == 'quotation':
+            previous_status = str(existing_normalised.get('status') or 'draft')
+            current_status = str(updated.get('status') or 'draft')
+            previous_revision = _safe_int(existing_normalised.get('revision'), 1)
+            current_revision = _safe_int(updated.get('revision'), 1)
+            significant_changes = []
+            if current_revision != previous_revision:
+                significant_changes.append(
+                    f"created version {current_revision:02d} from version {previous_revision:02d}"
+                )
+            if current_status != previous_status:
+                significant_changes.append(
+                    f"status changed from {previous_status.title()} to {current_status.title()}"
+                )
+            if significant_changes:
+                log_action(
+                    f"Updated quotation {updated['number']}: "
+                    f"{'; '.join(significant_changes)}"
+                )
+        else:
+            log_action(f"Updated {document_type} {updated['number']}")
         return jsonify({'success': True, 'data': updated})
 
 
@@ -26634,7 +30153,7 @@ def finance_catalog():
                 row['sourceAssetIds'],
             )
             row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
-            row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
+            row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
         grouped[f"container:{container_id.lower()}"] = {
             'catalogKey': f"container:{container_id}",
             'description': f"Container {container_id}",
@@ -26683,7 +30202,7 @@ def finance_catalog():
                 'availableQuantity': None,
                 'sourceAssetIds': [],
                 'unitPrice': _safe_float(source.get('unitPrice'), 0),
-                'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot') else 'units',
+                'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units',
                 'isCustom': True,
             }
 
@@ -26704,7 +30223,7 @@ def finance_catalog():
             row['sourceAssetIds'],
         )
         row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
-        row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
+        row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
     return jsonify({'success': True, 'data': rows})
 
 
@@ -26811,7 +30330,7 @@ def finance_rate_card():
             if unit_price <= 0:
                 return jsonify({'error': 'Rate must be greater than zero'}), 400
             uom = str(payload.get('uom') or 'units').strip().lower()
-            if uom not in {'units', 'pax', 'lot'}:
+            if uom not in {'units', 'pax', 'lot', 'sqm'}:
                 uom = 'units'
             department, department_code = _finance_department_details(
                 payload.get('department'), payload.get('departmentCode')
@@ -26865,7 +30384,7 @@ def finance_price_suggestion():
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>', methods=['GET'])
-@require_sales
+@require_auth
 def finance_profit_loss_event(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -26874,12 +30393,21 @@ def finance_profit_loss_event(event_id):
         return _event_access_denied_response()
     with _finance_lock:
         finance_data = _load_finance_data()
-        payload = _finance_profit_loss_payload(event, finance_data)
+        permissions = _finance_profit_loss_access(finance_data, event_id)
+        payload = (
+            _finance_profit_loss_payload(event, finance_data)
+            if permissions['canViewFinancials']
+            else {
+                'event': _finance_event_brief(event),
+                'censored': True,
+            }
+        )
+        payload['permissions'] = permissions
     return jsonify({'success': True, 'data': payload})
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/revenue', methods=['PUT'])
-@require_sales
+@require_auth
 def finance_profit_loss_update_revenue(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -26895,6 +30423,7 @@ def finance_profit_loss_update_revenue(event_id):
 
     with _finance_lock:
         finance_data = _load_finance_data()
+        permissions = _finance_profit_loss_access(finance_data, event_id)
         linked_quotations = _finance_quotations_for_event(
             finance_data,
             event_id,
@@ -26906,7 +30435,7 @@ def finance_profit_loss_update_revenue(event_id):
 
         if quotation_id:
             quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
-            if not quotation or not _finance_user_can_access(quotation):
+            if not quotation or not _finance_profit_loss_can_use_quotation(quotation):
                 return jsonify({'error': 'Quotation not found'}), 404
             linked_event_id = _safe_int(quotation.get('eventId'), 0)
             if linked_event_id and linked_event_id != event_id:
@@ -26928,6 +30457,8 @@ def finance_profit_loss_update_revenue(event_id):
             realtime_action = 'profit-loss-quotation-paired'
             realtime_quotation_id = quotation_id
         else:
+            if not permissions['canEditFinancials']:
+                return _finance_profit_loss_expense_access_denied()
             if linked_quotations:
                 return jsonify({'error': 'This event already has a paired quotation'}), 409
             amount = money(request_data.get('manualAmount'), None)
@@ -26944,6 +30475,10 @@ def finance_profit_loss_update_revenue(event_id):
 
         _save_finance_data(finance_data)
         response_payload = _finance_profit_loss_payload(event, finance_data)
+        response_payload['permissions'] = _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )
 
     log_action(action)
     mark_realtime_change('finance', {
@@ -26955,7 +30490,7 @@ def finance_profit_loss_update_revenue(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/commissions', methods=['PUT'])
-@require_sales
+@require_auth
 def finance_profit_loss_update_commissions(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -26969,7 +30504,20 @@ def finance_profit_loss_update_commissions(event_id):
 
     with _finance_lock:
         finance_data = _load_finance_data()
-        quotation_rows = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
+        if not _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )['canEditFinancials']:
+            return _finance_profit_loss_expense_access_denied()
+        quotation_rows = _finance_quotations_for_event(
+            finance_data,
+            event_id,
+            accessible_only=False,
+        )
+        quotation_rows = [
+            row for row in quotation_rows
+            if _finance_profit_loss_can_use_quotation(row)
+        ]
         revenue = round(_safe_float((quotation_rows[0] if quotation_rows else {}).get('totals', {}).get('netSubtotal'), 0), 2)
         normalised = [
             _normalise_profit_loss_commission(row, revenue)
@@ -26980,6 +30528,10 @@ def finance_profit_loss_update_commissions(event_id):
         store[str(event_id)] = normalised
         _save_finance_data(finance_data)
         response_payload = _finance_profit_loss_payload(event, finance_data)
+        response_payload['permissions'] = _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )
 
     log_action(f"Updated {len(normalised)} commission row(s) for event {event_id}")
     mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-commissions-updated'})
@@ -26987,13 +30539,20 @@ def finance_profit_loss_update_commissions(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses', methods=['POST'])
-@require_sales
+@require_auth
 def finance_profit_loss_add_expense(event_id):
     event = data_manager.events.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
     if not _current_user_can_access_event(event):
         return _event_access_denied_response()
+    with _finance_lock:
+        access_data = _load_finance_data()
+        if not _finance_profit_loss_access(
+            access_data,
+            event_id,
+        )['canEditFinancials']:
+            return _finance_profit_loss_expense_access_denied()
 
     is_multipart = request.content_type and request.content_type.startswith('multipart/form-data')
     payload = request.form.to_dict() if is_multipart else (request.get_json(silent=True) or {})
@@ -27049,16 +30608,27 @@ def finance_profit_loss_add_expense(event_id):
 
     with _finance_lock:
         finance_data = _load_finance_data()
+        if not _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )['canEditFinancials']:
+            if attachment:
+                delete_upload(_workforce_folder(), attachment)
+            return _finance_profit_loss_expense_access_denied()
         _finance_profit_loss_event_expenses(finance_data, event_id, create=True).append(expense)
         _save_finance_data(finance_data)
         payload = _finance_profit_loss_payload(event, finance_data)
+        payload['permissions'] = _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )
     log_action(f"Added Profit and Loss expense {expense['description']} to event {event_id}")
     mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-added'})
     return jsonify({'success': True, 'data': payload, 'expense': _profit_loss_expense_payload(expense)}), 201
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses/<expense_id>', methods=['PUT', 'DELETE'])
-@require_sales
+@require_auth
 def finance_profit_loss_update_expense(event_id, expense_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -27068,6 +30638,11 @@ def finance_profit_loss_update_expense(event_id, expense_id):
 
     with _finance_lock:
         finance_data = _load_finance_data()
+        if not _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )['canEditFinancials']:
+            return _finance_profit_loss_expense_access_denied()
         expenses = _finance_profit_loss_event_expenses(finance_data, event_id, create=True)
         existing = next((row for row in expenses if str(row.get('id')) == str(expense_id)), None)
         if not existing:
@@ -27078,6 +30653,10 @@ def finance_profit_loss_update_expense(event_id, expense_id):
             expenses[:] = [row for row in expenses if str(row.get('id')) != str(expense_id)]
             _save_finance_data(finance_data)
             payload = _finance_profit_loss_payload(event, finance_data)
+            payload['permissions'] = _finance_profit_loss_access(
+                finance_data,
+                event_id,
+            )
             log_action(f"Deleted Profit and Loss expense from event {event_id}")
             mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-deleted'})
             return jsonify({'success': True, 'data': payload})
@@ -27100,13 +30679,17 @@ def finance_profit_loss_update_expense(event_id, expense_id):
                 break
         _save_finance_data(finance_data)
         payload = _finance_profit_loss_payload(event, finance_data)
+        payload['permissions'] = _finance_profit_loss_access(
+            finance_data,
+            event_id,
+        )
     log_action(f"Updated Profit and Loss expense for event {event_id}")
     mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-updated'})
     return jsonify({'success': True, 'data': payload, 'expense': _profit_loss_expense_payload(updated)})
 
 
 @app.route('/api/finance/profit-loss/expenses/<expense_id>/file', methods=['GET'])
-@require_sales
+@require_auth
 def finance_profit_loss_expense_file(expense_id):
     found = None
     found_event_id = None
@@ -27130,6 +30713,11 @@ def finance_profit_loss_expense_file(expense_id):
         return jsonify({'error': 'Event not found'}), 404
     if not _current_user_can_access_event(event):
         return _event_access_denied_response()
+    if not _finance_profit_loss_access(
+        finance_data,
+        found_event_id,
+    )['canViewFinancials']:
+        return _finance_profit_loss_expense_access_denied()
     attachment = found.get('attachment') if isinstance(found.get('attachment'), dict) else None
     absolute_path = upload_absolute_path(_workforce_folder(), (attachment or {}).get('storedPath'))
     if not attachment or not absolute_path or not os.path.isfile(absolute_path):
@@ -27260,6 +30848,7 @@ def finance_compare_add_to_quotation(event_id):
         if not _finance_user_can_access(quotation):
             return jsonify({'error': 'Quotation access required'}), 403
         normalised = _normalise_finance_document(quotation, 'quotation', quotation)
+        previous = copy.deepcopy(normalised)
         rows, _counts, _quote_items, _event_items = _finance_compare_rows(event, normalised)
         rows_by_key = {row.get('key'): row for row in rows}
         selected_rows = []
@@ -27276,7 +30865,7 @@ def finance_compare_add_to_quotation(event_id):
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
         updated = _normalise_finance_document(normalised, 'quotation', normalised)
-        _remember_finance_prices(finance_data, updated)
+        _remember_finance_prices(finance_data, updated, previous)
         for index, document in enumerate(finance_data.get('documents') or []):
             if str(document.get('id')) == str(updated.get('id')):
                 finance_data['documents'][index] = updated
@@ -27301,6 +30890,7 @@ def finance_departments():
     values = []
     for row in _load_departments().values():
         name, _code = _finance_department_details(row.get('name'), row.get('code'))
+        name = _finance_system_name(name)
         if name not in values:
             values.append(name)
     for value in FINANCE_DEFAULT_DEPARTMENTS:
@@ -27311,8 +30901,10 @@ def finance_departments():
             if document.get('type') != 'quotation' or not _finance_user_can_access(document):
                 continue
             for line in document.get('lineItems') or []:
-                value = (line or {}).get('department')
-                name, _code = _finance_department_details(value)
+                name = _finance_system_name(
+                    (line or {}).get('department'),
+                    (line or {}).get('systemName'),
+                )
                 if name not in values:
                     values.append(name)
     if query:
@@ -27389,6 +30981,7 @@ def convert_quotation_to_invoice(document_id):
                     'showUnitPrices',
                     'showDepartmentDiscounts',
                     'showDepartmentSubtotals',
+                    'summaryBySubproject',
                     'showLineNumbers',
                     'showSignOff',
                 )

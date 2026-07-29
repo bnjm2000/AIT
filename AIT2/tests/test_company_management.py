@@ -120,6 +120,105 @@ class CompanyManagementTests(unittest.TestCase):
                 app_module.SYSTEM_LOG_COMPANY_CODE,
             )
 
+    def test_new_company_first_admin_is_saved_in_the_new_company(self):
+        self.login_super_admin()
+        target_manager = mock.Mock()
+        target_manager.users = {}
+
+        def target_company_manager(company_code):
+            record = app_module._load_company_registry()['companies'][company_code]
+            app_module._ensure_company_folders(record)
+            return target_manager
+
+        with (
+            mock.patch.object(
+                app_module,
+                '_get_company_data_manager',
+                side_effect=target_company_manager,
+            ),
+            mock.patch.object(app_module, '_reload_users_for_all_company_managers'),
+        ):
+            response = self.client.post('/api/companies', json={
+                'code': 'SP',
+                'name': 'SP',
+                'firstAdminUsername': 'new-sp-admin',
+                'firstAdminPassword': 'temporary-password',
+            })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('new-sp-admin', target_manager.users)
+        self.assertNotIn('new-sp-admin', self.data_manager.users)
+        self.assertEqual(target_manager.users['new-sp-admin'].role, 'admin')
+        target_manager.save_users.assert_called_once()
+
+    def test_new_company_requires_a_first_admin(self):
+        self.login_super_admin()
+
+        response = self.client.post('/api/companies', json={
+            'code': 'NOADMIN',
+            'name': 'No Admin Company',
+        })
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertIn('first admin', response.get_json()['error'].lower())
+        self.assertNotIn(
+            'NOADMIN',
+            app_module._load_company_registry()['companies'],
+        )
+
+    def test_last_admin_cannot_be_moved_to_a_new_company(self):
+        last_admin = User(
+            'last-avpl-admin',
+            hash_password('pw', 'last-admin-salt'),
+            'last-admin-salt',
+            True,
+            True,
+            role='admin',
+        )
+        self.data_manager.users[last_admin.username] = last_admin
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies'][last_admin.username] = 'AVPL'
+        app_module._save_company_registry(registry)
+        self.login_super_admin()
+
+        response = self.client.post('/api/companies', json={
+            'code': 'NEWCO',
+            'name': 'New Company',
+            'firstAdminUsername': last_admin.username,
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertEqual(
+            app_module._user_assigned_company_code(last_admin.username),
+            'AVPL',
+        )
+        self.assertNotIn(
+            'NEWCO',
+            app_module._load_company_registry()['companies'],
+        )
+
+    def test_owner_cannot_delete_a_company_last_admin(self):
+        last_admin = User(
+            'last-avpl-admin',
+            hash_password('pw', 'last-admin-salt'),
+            'last-admin-salt',
+            True,
+            True,
+            role='admin',
+        )
+        self.data_manager.users[last_admin.username] = last_admin
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies'][last_admin.username] = 'AVPL'
+        app_module._save_company_registry(registry)
+        self.login_super_admin()
+
+        response = self.client.delete(f'/api/users/{last_admin.username}')
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertIn(last_admin.username, self.data_manager.users)
+
     def test_failed_login_logs_follow_username_company_or_system_scope(self):
         unknown_response = self.client.post(
             '/login',
@@ -388,6 +487,56 @@ class CompanyManagementTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
 
+    def test_owner_current_user_resolves_while_viewing_another_company(self):
+        tsc_manager = DataManager(
+            app_module._company_record_backend_folder(
+                app_module._load_company_registry()['companies']['TSC']
+            ),
+            users_file=app_module.GLOBAL_USERS_FILE,
+        )
+        tsc_manager.users = {
+            'tech': self.data_manager.users['tech'],
+        }
+
+        with app_module.app.test_request_context('/api/current-user'):
+            app_module.session.update({
+                'user': 'bnjm2000',
+                'company_code': 'TSC',
+                'role': 'owner',
+                'is_admin': True,
+                'is_super_admin': True,
+                'is_active': True,
+            })
+            token = app_module._request_data_manager.set(tsc_manager)
+            try:
+                response = app_module.get_current_user()
+            finally:
+                app_module._request_data_manager.reset(token)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['username'], 'bnjm2000')
+        self.assertEqual(payload['company']['code'], 'TSC')
+        self.assertEqual(payload['assignedCompanyCode'], 'AVPL')
+        self.assertEqual(payload['role'], 'admin')
+        self.assertEqual(payload['roleLabel'], 'Admin')
+        self.assertTrue(payload['isSuperAdmin'])
+        self.assertNotIn('isOwner', payload)
+
+    def test_event_assignee_payload_hides_protected_internal_role(self):
+        event = mock.Mock(assigned_users=['bnjm2000'])
+
+        with app_module.app.test_request_context('/api/events/1'):
+            token = app_module._request_data_manager.set(self.data_manager)
+            try:
+                rows = app_module._event_assignee_payloads(event)
+            finally:
+                app_module._request_data_manager.reset(token)
+
+        self.assertEqual(rows[0]['role'], 'admin')
+        self.assertEqual(rows[0]['roleLabel'], 'Admin')
+        self.assertNotIn('owner', str(rows[0]).lower())
+
     def test_super_admin_cannot_delete_active_company(self):
         self.login_super_admin()
 
@@ -547,6 +696,67 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertEqual(registry['userCompanies']['tech-renamed'], 'TSC')
         self.assertNotIn('tech', registry['userCompanies'])
 
+    def test_same_username_memberships_are_company_scoped(self):
+        app_module._assign_user_to_company('shared-login', 'AVPL')
+        app_module._assign_user_to_company('shared-login', 'TSC')
+
+        registry = app_module._load_company_registry()
+        self.assertNotIn('shared-login', registry['userCompanies'])
+        self.assertEqual(
+            set(registry['userCompanyMemberships']['shared-login']),
+            {'AVPL', 'TSC'},
+        )
+        self.assertEqual(
+            app_module._user_assigned_company_code('shared-login', 'AVPL'),
+            'AVPL',
+        )
+        self.assertEqual(
+            app_module._user_assigned_company_code('shared-login', 'TSC'),
+            'TSC',
+        )
+
+    def test_recreated_user_requires_history_confirmation_and_rename_updates_it(self):
+        self.login_super_admin()
+        self.data_manager.logs = [
+            LogEntry(
+                '2026/07/29 10:00:00',
+                'returning-user',
+                'User returning-user created a quotation',
+            )
+        ]
+        self.data_manager.save_logs()
+
+        warning = self.client.post('/api/users', json={
+            'username': 'returning-user',
+            'password': 'pw',
+            'role': 'admin',
+            'isActive': True,
+        })
+
+        self.assertEqual(warning.status_code, 409, warning.get_data(as_text=True))
+        warning_data = warning.get_json()
+        self.assertTrue(warning_data['requiresHistoryInheritanceConfirmation'])
+        self.assertEqual(warning_data['historyCounts']['systemLogs'], 1)
+
+        created = self.client.post('/api/users', json={
+            'username': 'returning-user',
+            'password': 'pw',
+            'role': 'admin',
+            'isActive': True,
+            'inheritHistory': True,
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(created.get_json()['inheritedHistory']['systemLogs'], 1)
+
+        renamed = self.client.put('/api/users/returning-user', json={
+            'username': 'renamed-returning-user',
+            'sourceCompanyCode': 'AVPL',
+        })
+        self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
+        self.data_manager.load_logs()
+        self.assertEqual(self.data_manager.logs[0].user, 'renamed-returning-user')
+        self.assertIn('User renamed-returning-user', self.data_manager.logs[0].action)
+
     def test_user_management_hides_owners_from_non_owners(self):
         self.data_manager.users['admin-avpl'] = User(
             'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt', True, True
@@ -572,9 +782,15 @@ class CompanyManagementTests(unittest.TestCase):
         self.login_super_admin()
         owner_response = self.client.get('/api/users')
         self.assertEqual(owner_response.status_code, 200, owner_response.get_data(as_text=True))
-        owner_usernames = {row['username'] for row in owner_response.get_json()['data']}
+        owner_rows = owner_response.get_json()['data']
+        owner_usernames = {row['username'] for row in owner_rows}
         self.assertIn('bnjm2000', owner_usernames)
         self.assertIn('chief', owner_usernames)
+        protected_row = next(row for row in owner_rows if row['username'] == 'bnjm2000')
+        self.assertEqual(protected_row['role'], 'admin')
+        self.assertEqual(protected_row['roleLabel'], 'Admin')
+        self.assertTrue(protected_row['isSuperAdmin'])
+        self.assertNotIn('isOwner', protected_row)
 
     def test_owner_user_management_aggregates_company_scoped_users(self):
         tsc_record = app_module._load_company_registry()['companies']['TSC']
@@ -585,9 +801,6 @@ class CompanyManagementTests(unittest.TestCase):
         )
         tsc_manager.setup_data_folder()
         tsc_manager.users = {
-            'bnjm2000': User(
-                'bnjm2000', hash_password('pw', 'salt'), 'salt', True, True,
-            ),
             'tsc-only': User(
                 'tsc-only', hash_password('pw', 'tscsalt'), 'tscsalt', False, True,
             ),

@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
-6,Wedding @ Ritz Carlton,20241206,20241206,"[{'model_description': '[AX] Shure ULXD4D Dual Channel Receiver [L50]', 'quantity': 2}, {'model_description': '[AX] Yamaha DM7 Digital Mixer', 'quantity': 1}, {'model_description': '[AX] EV EVOLVE 50 Portable column system', 'quantity': 4}, {'model_description': '[MISC] Tapes', 'quantity': 4}, {'model_description': '[LOAN] ULXD Rack - NicheAV', 'quantity': 1}]",[],[],Added

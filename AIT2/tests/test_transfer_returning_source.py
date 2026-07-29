@@ -171,6 +171,100 @@ class ReturningSourceTransferTests(unittest.TestCase):
         self.assertEqual(after.status_code, 200, after.get_data(as_text=True))
         self.assertEqual(after.get_json()['data']['neededFromOffice'], [])
 
+    def test_transfer_targets_one_destination_subproject(self):
+        destination = self.data_manager.events[2]
+        destination.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-model',
+                    'departmentCode': 'AX',
+                    'department': 'Audio Department',
+                    'brand': 'Test Brand',
+                    'model': 'Test Model',
+                    'description': 'Test asset',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout Room',
+                'items': [{
+                    'lineId': 'breakout-model',
+                    'departmentCode': 'AX',
+                    'department': 'Audio Department',
+                    'brand': 'Test Brand',
+                    'model': 'Test Model',
+                    'description': 'Test asset',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+            },
+        ]
+        self.data_manager.save_event(destination)
+
+        options = self.client.get('/api/transfers/options')
+        target = next(
+            row for row in options.get_json()['data']['targetEvents']
+            if row['id'] == destination.event_id
+        )
+        self.assertEqual(
+            target['subprojects'],
+            [
+                {'id': 'main', 'name': 'Main Room'},
+                {'id': 'breakout', 'name': 'Breakout Room'},
+            ],
+        )
+
+        missing_room = self.client.get(
+            '/api/transfers/candidates?fromEventId=1&toEventId=2'
+        )
+        self.assertEqual(missing_room.status_code, 400)
+        self.assertIn('destination sub-project', missing_room.get_json()['error'])
+
+        candidates = self.client.get(
+            '/api/transfers/candidates?fromEventId=1&toEventId=2&toSubprojectId=breakout'
+        )
+        self.assertEqual(candidates.status_code, 200, candidates.get_data(as_text=True))
+        payload = candidates.get_json()['data']
+        self.assertEqual(payload['targetSubproject']['name'], 'Breakout Room')
+        self.assertEqual(payload['destinationRequirements'][0]['required'], 1)
+
+        transferred = self.client.post('/api/transfers/execute', json={
+            'fromEventId': 1,
+            'toEventId': 2,
+            'toSubprojectId': 'breakout',
+            'assetIds': ['TEST#01'],
+        })
+        self.assertEqual(transferred.status_code, 200, transferred.get_data(as_text=True))
+        self.assertEqual(destination.subprojects[0]['items'][0]['assetRefs'], [])
+        self.assertEqual(
+            destination.subprojects[1]['items'][0]['assetRefs'],
+            ['TEST#01'],
+        )
+        self.assertIn('TEST#01', destination.actually_prepared)
+
+        main_candidates = self.client.get(
+            '/api/transfers/candidates?fromEventId=1&toEventId=2&toSubprojectId=main'
+        )
+        self.assertEqual(main_candidates.status_code, 200)
+        self.assertEqual(
+            [row['assetId'] for row in main_candidates.get_json()['data']['candidates']],
+            ['TEST#02'],
+        )
+
+        undone = self.client.post('/api/transfers/undo', json={
+            'fromEventId': 1,
+            'toEventId': 2,
+            'assetIds': ['TEST#01'],
+        })
+        self.assertEqual(undone.status_code, 200, undone.get_data(as_text=True))
+        self.assertEqual(destination.subprojects[1]['items'][0]['assetRefs'], [])
+
 
 if __name__ == '__main__':
     unittest.main()

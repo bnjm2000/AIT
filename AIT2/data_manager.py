@@ -46,6 +46,50 @@ CLIENT_FIELDNAMES = [
     'Address1', 'Address2', 'Address3', 'PostalCode',
 ]
 
+
+def humanize_custom_asset_references(value):
+    """Replace encoded custom-asset markers with readable event-log labels."""
+    text = str(value or '')
+    marker = '[CUSTOM]'
+    decoder = json.JSONDecoder()
+    cursor = 0
+    parts = []
+
+    while True:
+        marker_index = text.find(marker, cursor)
+        if marker_index < 0:
+            parts.append(text[cursor:])
+            break
+
+        parts.append(text[cursor:marker_index])
+        payload_start = marker_index + len(marker)
+        try:
+            payload, consumed = decoder.raw_decode(text[payload_start:])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parts.append(marker)
+            cursor = payload_start
+            continue
+
+        if not isinstance(payload, dict):
+            parts.append(marker)
+            cursor = payload_start
+            continue
+
+        name = str(payload.get('name') or 'Custom item').strip()
+        item_type = str(payload.get('type') or 'custom').strip().lower()
+        company = str(payload.get('company') or '').strip()
+        description = str(payload.get('description') or '').strip()
+        if item_type == 'loan' and company:
+            label = f"{name} (loan from {company})"
+        elif description:
+            label = f"{name} ({description})"
+        else:
+            label = f"{name} ({item_type} item)"
+        parts.append(label)
+        cursor = payload_start + consumed
+
+    return ''.join(parts)
+
 logger = logging.getLogger(__name__)
 EVENT_LOG_EVENT_ID_RE = re.compile(r'\bevent\s+(\d+)\b', re.IGNORECASE)
 
@@ -312,7 +356,7 @@ class DataManager:
         record = {
             'timestamp': str(timestamp or ''),
             'user': str(user or ''),
-            'action': str(action or '')
+            'action': humanize_custom_asset_references(action)
         }
         if isinstance(log, dict):
             group_key = str(log.get('groupKey') or '').strip()
@@ -475,6 +519,8 @@ class DataManager:
             for event_id in event_ids:
                 self.append_event_log(self.events[event_id], log)
                 touched_event_ids.add(event_id)
+            if re.match(r'\s*created event\s+\d+\b', str(getattr(log, 'action', '') or ''), re.IGNORECASE):
+                system_logs.append(log)
             migrated += 1
 
         if not migrated:
@@ -1092,9 +1138,7 @@ class DataManager:
 
     def save_event(self, event):
         event.state = normalize_event_state(getattr(event, 'state', 'New'))
-        if hasattr(self, 'event_file_map') and event.event_id in self.event_file_map:
-            self.backup_event_file(event.event_id)
-        
+
         filename = self._event_filename(event)
         filepath = os.path.join(self.events_folder, filename)
         old_filename = self.event_file_map.get(event.event_id)
@@ -1241,26 +1285,6 @@ class DataManager:
             writer = csv.writer(f)
             for log in self.logs[-MAX_LOG_LINES:]:
                 writer.writerow([log.timestamp, log.user, log.action])
-
-    def backup_event_file(self, event_id):
-        if event_id in self.event_file_map:
-            filename = self.event_file_map[event_id]
-            filepath = os.path.join(self.events_folder, filename)
-            if os.path.exists(filepath):
-                backup_folder = os.path.join(self.data_folder, 'event_backups')
-                if not os.path.exists(backup_folder):
-                    os.makedirs(backup_folder)
-                backup_path = os.path.join(backup_folder, f"backup_{filename}")
-
-                # binary copy so encoding can never break backups
-                with open(filepath, 'rb') as original, open(backup_path, 'wb') as backup:
-                    backup.write(original.read())
-
-                logger.info("Backup created at %s.", backup_path)
-            else:
-                logger.warning("Event file %s does not exist. No backup created.", filename)
-        else:
-            logger.warning("No file mapping found for Event ID %s. Cannot create backup.", event_id)
 
     # ---------------- Clients ----------------
 

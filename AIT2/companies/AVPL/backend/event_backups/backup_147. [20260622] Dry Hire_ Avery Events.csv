@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,EventLogs,Notes
-147,Dry Hire: Avery Events,20260622,20260622,[],[],[],Added,[],[],[],events,False,"[{""timestamp"": ""2026/06/22 13:48:49"", ""user"": ""bnjm2000"", ""action"": ""Created event 147: Dry Hire: Avery Events via web interface""}]",

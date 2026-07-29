@@ -171,6 +171,15 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.make_event(100)
         self.data_manager.inventory['A#01'].is_degraded = True
         self.data_manager.inventory['A#02'].is_degraded = True
+        self.data_manager.inventory['A#01'].maintenance_logs.append(
+            app_module.make_maintenance_log(
+                '2026/05/20',
+                'normal',
+                'Intermittent audio dropout',
+                [app_module.make_change('degraded', action='marked')],
+                log_type='Fault',
+            )
+        )
 
         regular = self.availability_entry(100, 'RegularModel', 'Regular item')
 
@@ -180,6 +189,42 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(regular['assetDegraded'], 2)
         self.assertEqual(regular['degraded'], 2)
         self.assertEqual(regular['available'], 6)
+        self.assertEqual(regular['degradedDetails'], [
+            {
+                'assetId': 'A#01',
+                'isBulk': False,
+                'quantity': 1,
+                'reasons': ['Intermittent audio dropout'],
+            },
+            {
+                'assetId': 'A#02',
+                'isBulk': False,
+                'quantity': 1,
+                'reasons': [],
+            },
+        ])
+
+    def test_bulk_degraded_reason_is_included_in_availability_details(self):
+        self.make_event(100)
+        bulk_asset = self.data_manager.inventory['BULK-0001']
+        bulk_asset.is_degraded = True
+        bulk_asset.maintenance_logs.append(app_module.make_maintenance_log(
+            '2026/05/20',
+            'normal',
+            'Outer insulation is split near the connector',
+            [app_module.make_change('degraded', action='marked')],
+            log_type='Fault',
+        ))
+
+        bulk = self.availability_entry(100, 'BulkModel', 'Bulk item')
+
+        self.assertEqual(bulk['bulkMaintenanceDegraded'], 6)
+        self.assertEqual(bulk['degradedDetails'], [{
+            'assetId': '',
+            'isBulk': True,
+            'quantity': 6,
+            'reasons': ['Outer insulation is split near the connector'],
+        }])
 
     def test_plan_can_request_physical_total_despite_missing_ooc_and_overlap(self):
         event = self.make_event(100)
@@ -204,6 +249,79 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(availability['usedInThisEvent'], 6)
         self.assertEqual(availability['capacityForThisEvent'], 0)
         self.assertEqual(availability['available'], 0)
+
+    def test_plan_can_add_and_update_beyond_physical_inventory(self):
+        event = self.make_event(100)
+        self.login_as('admin', True)
+
+        added = self.client.post('/api/events/100/models', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 8,
+        })
+
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
+        self.assertIn(
+            '[MODEL]AX|TestBrand|RegularModel|8|Regular item',
+            event.prepared_items,
+        )
+
+        updated = self.client.put('/api/events/100/models', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 10,
+        })
+
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertIn(
+            '[MODEL]AX|TestBrand|RegularModel|10|Regular item',
+            event.prepared_items,
+        )
+        availability = self.availability_entry(100, 'RegularModel', 'Regular item')
+        self.assertEqual(availability['physical'], 6)
+        self.assertEqual(availability['usedInThisEvent'], 10)
+        self.assertEqual(availability['capacityForThisEvent'], 6)
+        self.assertEqual(availability['available'], 0)
+
+    def test_subproject_plan_can_exceed_physical_inventory(self):
+        event = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|1|Regular item'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'main-regular',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'RegularModel',
+                'description': 'Regular item',
+                'quantity': 1,
+                'isCustom': False,
+            }],
+        }]
+        self.login_as('admin', True)
+
+        response = self.client.put('/api/events/100/models', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 8,
+            'subprojectId': 'main',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 8)
+        self.assertIn(
+            '[MODEL]AX|TestBrand|RegularModel|8|Regular item',
+            event.prepared_items,
+        )
 
     def test_overplanned_requirement_reports_capacity_below_requested_quantity(self):
         self.make_event(

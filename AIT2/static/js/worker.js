@@ -253,7 +253,11 @@ function eventRequiresWorkerAction(event, invoices = [], claims = []) {
 function renderEvent(company, event, open = false) {
   const invoices = event.submissions.invoices || [];
   const claims = event.submissions.claims || [];
-  const roles = [...new Set(event.assignments.map(row => row.role))].join(', ');
+  const roles = [...new Set(event.assignments.map(row =>
+    row.subprojectName
+      ? `${row.role} · ${row.subprojectName}`
+      : row.role
+  ))].join(', ');
   const departmentRows = event.assignments.filter((row, index, rows) =>
     rows.findIndex(candidate => candidate.department === row.department) === index
   );

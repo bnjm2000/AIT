@@ -92,6 +92,16 @@ def test_all_events_title_uses_the_company_theme():
     assert 'color: var(--theme-primary, var(--brand-main, #0f766e));' in TEMPLATE
 
 
+def test_event_overview_includes_a_single_or_legacy_main_room():
+    room_rows = function_source('eventOverviewSubprojectRows', 'eventOverviewSubprojects')
+    overview = function_source('viewEvent', 'viewEventLegacy')
+
+    assert "name: 'Main Room'" in room_rows
+    assert 'Object.values(event?.modelGroups || {})' in room_rows
+    assert 'groupEventCustomAssets(getCustomAssetsFromEvent(event))' in room_rows
+    assert 'eventOverviewSubprojectRows(event).length' in overview
+
+
 def test_calendar_label_uses_the_visible_multi_day_span():
     render_calendar = function_source('renderCalendar', 'processEventsForCalendar')
     placement = function_source('processEventsForCalendar', 'showDayEvents')

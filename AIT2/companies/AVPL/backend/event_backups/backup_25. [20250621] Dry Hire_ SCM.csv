@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,Notes
-25,Dry Hire: SCM,20250621,20250626,[],"[""[MODEL]AX|Shure|AD3|2|Plug-on Transmitter"", ""AD3#03"", ""AD3#02""]","[""AD3#03"", ""AD3#02""]",Returning,[],[],[],dry hire,False,

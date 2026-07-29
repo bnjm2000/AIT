@@ -111,6 +111,21 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             },
         )
 
+    def test_asset_edit_system_log_lists_exact_field_changes(self):
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='Updated description',
+            notes='Keep with receiver rack',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        action = self.data_manager.logs[-1].action
+        self.assertIn('Edited asset inventory: A#01', action)
+        self.assertIn('Model: OldModel -> NewModel', action)
+        self.assertIn('Description: Old desc -> Updated description', action)
+        self.assertIn('Notes: - -> Keep with receiver rack', action)
+
     def test_single_asset_detail_change_updates_assigned_and_unassigned_model_events(self):
         assigned = self.make_event(
             100,

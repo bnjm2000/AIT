@@ -151,6 +151,8 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn('openPackingListPage(eventId)', source)
         self.assertIn("apiCall(`/api/events/${eventId}/overview`)", source)
         self.assertIn('function eventOverviewAssets(event)', source)
+        self.assertIn('function eventOverviewSubprojects(event)', source)
+        self.assertIn("eventOverviewSection('rooms', 'Sub-projects'", source)
         self.assertIn('function closeEventOverview(options = {})', source)
         self.assertNotIn('setTimeout(async () => {\n      const detailRoute = appDetailRouteFromPath();', source)
 

@@ -2,7 +2,8 @@ const FINANCE_STATUSES = ['draft', 'sent', 'accepted', 'cancelled', 'invoiced', 
 const FINANCE_UOMS = [
   { value: 'units', label: 'unit(s)' },
   { value: 'pax', label: 'pax' },
-  { value: 'lot', label: 'lot' }
+  { value: 'lot', label: 'lot' },
+  { value: 'sqm', label: 'sqm' }
 ];
 const FINANCE_SALUTATIONS = ['', 'Mr.', 'Ms.', 'Mrs.', 'Mdm.'];
 const FINANCE_VALIDITY_UNITS = [
@@ -39,7 +40,8 @@ const financeState = {
   rateCardSearch: '',
   rateCardUom: 'units',
   newClientSalutation: '',
-  editorDataLoadedAt: 0
+  editorDataLoadedAt: 0,
+  mineOnly: true
 };
 
 const profitLossState = {
@@ -58,6 +60,8 @@ const compareState = {
   data: null,
   search: '',
   filter: 'all',
+  showMisc: false,
+  showLoans: true,
   loading: false
 };
 
@@ -187,6 +191,7 @@ function financeChooseSalesperson(encodedUsername) {
 
 function financeAdditionalScheduleRows(kind, document = financeState.current) {
   const key = {
+    setup: 'additionalSetups',
     rehearsal: 'additionalRehearsals',
     show: 'additionalShows',
     teardown: 'additionalTeardowns'
@@ -195,8 +200,9 @@ function financeAdditionalScheduleRows(kind, document = financeState.current) {
 }
 
 function financeAddScheduleRow(kind) {
-  if (!financeState.current || !['rehearsal', 'show'].includes(kind)) return;
+  if (!financeState.current || !['setup', 'rehearsal', 'show', 'teardown'].includes(kind)) return;
   const key = {
+    setup: 'additionalSetups',
     rehearsal: 'additionalRehearsals',
     show: 'additionalShows',
     teardown: 'additionalTeardowns'
@@ -216,6 +222,7 @@ function financeAdditionalScheduleChange(kind, index, field, value) {
 
 function financeRemoveScheduleRow(kind, index) {
   const key = {
+    setup: 'additionalSetups',
     rehearsal: 'additionalRehearsals',
     show: 'additionalShows',
     teardown: 'additionalTeardowns'
@@ -238,7 +245,13 @@ function financeSchedulePair(label, key) {
 }
 
 function financeAdditionalSchedulePair(kind, row, index) {
-  const label = `${kind.charAt(0).toUpperCase()}${kind.slice(1)} ${index + 2}`;
+  const baseLabel = {
+    setup: 'Set-up',
+    rehearsal: 'Rehearsal',
+    show: 'Show',
+    teardown: 'Teardown'
+  }[kind] || kind;
+  const label = `${baseLabel} ${index + 2}`;
   return `
     <div class="finance-schedule-pair finance-schedule-extra">
       <strong>${financeEscape(label)}</strong>
@@ -258,6 +271,19 @@ function financeLineTotal(line) {
   return Math.round(gross * (1 - financeNumber(line.discountPercent) / 100) * 100) / 100;
 }
 
+function financeDefaultSystemName(department) {
+  const value = String(department || '').trim();
+  if (!value) return 'Unknown System';
+  const base = value.replace(/\s+(department|system)$/i, '').trim();
+  if (base.toLowerCase() === 'manpower') return 'Manpower';
+  if (['transport', 'transportation'].includes(base.toLowerCase())) return 'Transportation';
+  return base ? `${base} System` : 'Unknown System';
+}
+
+function financeLineSystem(line) {
+  return String(line?.systemName || '').trim() || financeDefaultSystemName(line?.department);
+}
+
 function financeRecalculateAdjustments(document) {
   const lines = document?.lineItems || [];
   const adjustments = document?.adjustments || [];
@@ -266,7 +292,7 @@ function financeRecalculateAdjustments(document) {
     const percent = Math.max(0, financeNumber(row.percent));
     if (!percent) return;
     const base = lines
-      .filter(line => (line.department || 'Unknown Department') === row.department)
+      .filter(line => financeLineSystem(line) === row.department)
       .reduce((sum, line) => sum + financeLineTotal(line), 0);
     row.amount = Math.round(base * percent / 100 * (row.kind === 'discount' ? -1 : 1) * 100) / 100;
   });
@@ -295,12 +321,16 @@ function financeTotals(document = financeState.current) {
 }
 
 function financeEventDays(document = financeState.current) {
+  const setupDates = [
+    document?.setupDate,
+    ...financeAdditionalScheduleRows('setup', document).map(row => row.date)
+  ].filter(Boolean).sort();
   const teardownDates = [
     document?.teardownDate,
     ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
   ].filter(Boolean).sort();
-  if (!document?.setupDate || !teardownDates.length) return 1;
-  const start = new Date(`${document.setupDate}T00:00:00`);
+  if (!setupDates.length || !teardownDates.length) return 1;
+  const start = new Date(`${setupDates[0]}T00:00:00`);
   const end = new Date(`${teardownDates[teardownDates.length - 1]}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
   return Math.max(1, Math.round((end - start) / 86400000) + 1);
@@ -374,7 +404,7 @@ function financeActiveDepartments(document = financeState.current, subprojectId 
   const departments = [];
   (document?.lineItems || []).forEach(line => {
     if (String(line.subprojectId || 'main') !== String(subprojectId || 'main')) return;
-    const department = String(line.department || 'Unknown Department').trim() || 'Unknown Department';
+    const department = financeLineSystem(line);
     if (!departments.includes(department)) departments.push(department);
   });
   return departments;
@@ -384,11 +414,12 @@ function financeSyncDocumentDepartments(document = financeState.current) {
   if (!document) return [];
   (document.lineItems || []).forEach(line => {
     line.department = String(line.department || 'Unknown Department').trim() || 'Unknown Department';
+    line.systemName = financeLineSystem(line);
     line.subprojectId = line.subprojectId || financeSubprojects(document)[0]?.id || 'main';
   });
-  const departments = [...new Set((document.lineItems || []).map(line => line.department))];
+  const departments = [...new Set((document.lineItems || []).map(line => financeLineSystem(line)))];
   document.departments = departments;
-  const active = new Set((document.lineItems || []).map(line => `${line.subprojectId || 'main'}::${line.department}`));
+  const active = new Set((document.lineItems || []).map(line => `${line.subprojectId || 'main'}::${financeLineSystem(line)}`));
   document.adjustments = (document.adjustments || []).filter(row => (
     row.scope !== 'department'
     || active.has(`${row.subprojectId || 'main'}::${row.department}`)
@@ -476,6 +507,7 @@ function financeDateOnly(value) {
 function financeEventDateSummary(document) {
   const rawDates = [
     document?.setupDate,
+    ...financeAdditionalScheduleRows('setup', document).map(row => row.date),
     document?.rehearsalDate,
     ...financeAdditionalScheduleRows('rehearsal', document).map(row => row.date),
     document?.showDate,
@@ -657,8 +689,10 @@ function financeListDateSummary(document) {
 
 function financeSnapshotValidity(snapshot) {
   const sent = financeDateOnly(snapshot?.sentAt);
+  const accepted = financeDateOnly(snapshot?.acceptedAt);
   const validityDays = financeNumber(snapshot?.validityDays ?? snapshot?.snapshot?.validityDays, 0);
   const validUntil = financeDateOnly(snapshot?.validUntil || snapshot?.snapshot?.validUntil);
+  if (!sent && accepted) return `Accepted ${accepted}`;
   return [
     sent ? `Sent ${sent}` : '',
     validityDays ? `${validityDays} days` : '',
@@ -671,8 +705,23 @@ function financeToggleMenu(menuId, event) {
   const target = document.getElementById(menuId);
   if (!target) return;
   const open = !target.classList.contains('open');
-  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
-  if (open) target.classList.add('open');
+  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => {
+    menu.classList.remove('open', 'open-up');
+  });
+  if (!open) return;
+  target.classList.add('open');
+  const scrollContainer = target.closest('.finance-lines-scroll');
+  const control = target.closest('.finance-custom-control');
+  if (!scrollContainer || !control) return;
+  const menuRect = target.getBoundingClientRect();
+  const scrollRect = scrollContainer.getBoundingClientRect();
+  const controlRect = control.getBoundingClientRect();
+  if (
+    menuRect.bottom > scrollRect.bottom - 4
+    && controlRect.top - menuRect.height >= scrollRect.top + 4
+  ) {
+    target.classList.add('open-up');
+  }
 }
 
 function financeValidityUnitControl(currentUnit, menuId, selectHandler) {
@@ -693,7 +742,9 @@ function financeValidityUnitControl(currentUnit, menuId, selectHandler) {
 }
 
 function financeCloseMenus() {
-  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
+  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => {
+    menu.classList.remove('open', 'open-up');
+  });
 }
 
 function financeSetSentValidityUnit(value) {
@@ -730,7 +781,7 @@ function financeStatusControl(document, context = 'list') {
 
 function financeSnapshotControl(document) {
   const revisions = (document.revisions || []).filter(row => row && row.snapshot);
-  if (!revisions.length) return '<span class="finance-muted-inline">No sent versions</span>';
+  if (!revisions.length) return '<span class="finance-muted-inline">No saved versions</span>';
   const menuId = `finance-snapshots-${document.id}`;
   return `
     <div class="finance-custom-control finance-snapshot-control" onclick="event.stopPropagation()">
@@ -744,7 +795,7 @@ function financeSnapshotControl(document) {
               <strong>${financeEscape(row.number || `Version ${row.revision}`)}</strong>
               <span>${financeEscape(financeSnapshotValidity(row))}</span>
             </button>
-            <button type="button" class="finance-snapshot-edit" title="Edit this sent version" aria-label="Edit ${financeEscapeAttr(row.number || `version ${row.revision}`)}" onclick="financeEditRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+            <button type="button" class="finance-snapshot-edit" title="Edit this saved version" aria-label="Edit ${financeEscapeAttr(row.number || `version ${row.revision}`)}" onclick="financeEditRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="m15 5 4 4"></path></svg>
             </button>
             <button type="button" class="finance-snapshot-delete" title="Delete this version" aria-label="Delete ${financeEscapeAttr(row.number || `version ${row.revision}`)}" onclick="financeDeleteRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
@@ -791,6 +842,7 @@ function ensureFinanceSections() {
   const sections = [
     ['quotations-section', '<div id="quotations-page-root" class="finance-page"><div class="loading">Loading...</div></div>'],
     ['profit-loss-section', '<div id="profit-loss-page-root" class="finance-page profit-loss-page"><div class="loading">Loading...</div></div>'],
+    ['accounting-section', '<div id="accounting-page-root" class="accounting-page"><div class="loading">Loading accounting...</div></div>'],
     ['compare-section', '<div id="compare-page-root" class="finance-page compare-page"><div class="loading">Loading...</div></div>']
   ];
   sections.forEach(([id, html]) => {
@@ -807,23 +859,19 @@ function setupFinanceNavigation() {
   ensureFinanceSections();
   const canUseFinance = typeof currentUserHasSalesAccess === 'function'
     ? currentUserHasSalesAccess()
-    : !!(window.currentUser && (window.currentUser.hasSalesAccess || window.currentUser.isSales || window.currentUser.isOwner || window.currentUser.isSuperAdmin));
+    : !!(window.currentUser && (window.currentUser.hasSalesAccess || window.currentUser.isSales || window.currentUser.isSuperAdmin));
   const sidebar = document.getElementById('appSidebar');
   if (!sidebar) return;
   const existing = sidebar.querySelector('[data-finance-navigation="true"]');
-  if (!canUseFinance) {
-    existing?.remove();
-    return;
-  }
   if (existing) return;
   const section = document.createElement('div');
-  section.className = 'nav-section sales-only';
-  section.dataset.salesDisplay = 'block';
+  section.className = 'nav-section';
   section.dataset.financeNavigation = 'true';
   section.innerHTML = `
     <h3>Finance</h3>
-    <button type="button" class="nav-item" data-section="quotations">Quotations</button>
+    ${canUseFinance ? '<button type="button" class="nav-item" data-section="quotations">Quotations</button>' : ''}
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
+    ${typeof isPlatformAdminUser === 'function' && isPlatformAdminUser() ? '<button type="button" class="nav-item platform-admin-only" data-section="accounting">Accounting</button>' : ''}
   `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
   const settings = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Settings');
@@ -854,7 +902,11 @@ async function financeLoadList(query = '') {
   if (!root) return;
   root.innerHTML = '<div class="loading">Loading quotations...</div>';
   try {
-    const response = await apiCall(`/api/quotations${query ? `?query=${encodeURIComponent(query)}` : ''}`);
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (financeListCanToggleMine() && financeState.mineOnly) params.set('mine', '1');
+    const queryString = params.toString();
+    const response = await apiCall(`/api/quotations${queryString ? `?${queryString}` : ''}`);
     financeState.documents = response.data || [];
     financeRenderList(query);
   } catch (error) {
@@ -863,10 +915,23 @@ async function financeLoadList(query = '') {
   }
 }
 
-function financeListOwnerView() {
-  return typeof isOwnerUser === 'function'
-    ? isOwnerUser()
-    : !!(window.currentUser?.isOwner || window.currentUser?.isSuperAdmin);
+function financeListShowsSalesperson() {
+  const role = typeof currentUserRole === 'function'
+    ? currentUserRole()
+    : String(window.currentUser?.role || '').toLowerCase();
+  return role === 'admin';
+}
+
+function financeListCanToggleMine() {
+  const role = typeof currentUserRole === 'function'
+    ? currentUserRole()
+    : String(window.currentUser?.role || '').toLowerCase();
+  return role === 'admin';
+}
+
+function financeToggleMineOnly() {
+  financeState.mineOnly = !financeState.mineOnly;
+  financeLoadList(document.querySelector('.finance-search')?.value || '');
 }
 
 function financePairedEventStatus(document) {
@@ -898,7 +963,7 @@ function financeHandleQuotationEventClick(domEvent, documentId, eventId) {
   if (typeof viewEvent === 'function') viewEvent(id, { updateHistory: false });
 }
 
-function financeRenderListRow(document, ownerView = financeListOwnerView()) {
+function financeRenderListRow(document, showSalesperson = financeListShowsSalesperson()) {
   const client = document.client || {};
   const total = document.totals?.total ?? financeTotals(document).total;
   const dateSummary = financeListDateSummary(document);
@@ -908,7 +973,7 @@ function financeRenderListRow(document, ownerView = financeListOwnerView()) {
       <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Ver ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
       <td><strong>${financeEscape(financeClientName(client) || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
       <td class="finance-project-cell"><strong>${financeEscape(document.projectName || 'Project name required')}</strong>${eventDates ? `<small class="finance-project-dates">${financeEscape(eventDates)}</small>` : ''}</td>
-      ${ownerView ? `<td><strong>${financeEscape(document.salesperson || document.createdByName || document.createdBy || 'Unassigned')}</strong>${document.salespersonUsername || document.createdBy ? `<br><small>${financeEscape(document.salespersonUsername || document.createdBy)}</small>` : ''}</td>` : ''}
+      ${showSalesperson ? `<td><strong>${financeEscape(document.salesperson || document.createdByName || document.createdBy || 'Unassigned')}</strong>${document.salespersonUsername || document.createdBy ? `<br><small>${financeEscape(document.salespersonUsername || document.createdBy)}</small>` : ''}</td>` : ''}
       <td>${financePairedEventStatus(document)}</td>
       <td><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
       <td>${financeSnapshotControl(document)}</td>
@@ -933,11 +998,26 @@ function financeUpdateListRow(updated) {
 function financeRenderList(query = '') {
   const root = financeRoot();
   if (!root) return;
-  const ownerView = financeListOwnerView();
-  const rows = financeState.documents.map(document => financeRenderListRow(document, ownerView)).join('');
+  const showSalesperson = financeListShowsSalesperson();
+  const showMineToggle = financeListCanToggleMine();
+  const rows = financeState.documents.map(document => financeRenderListRow(document, showSalesperson)).join('');
   root.innerHTML = `
     <div class="finance-toolbar">
-      <div><h2>Quotations</h2><p class="finance-subtitle">Your quotations, versions and client approvals.</p></div>
+      <div class="finance-toolbar-heading">
+        <div class="finance-toolbar-title-line">
+          <h2>Quotations</h2>
+          ${showMineToggle ? `
+            <button
+              type="button"
+              class="finance-switch finance-list-mine-toggle ${financeState.mineOnly ? 'on' : ''}"
+              role="switch"
+              aria-checked="${financeState.mineOnly ? 'true' : 'false'}"
+              onclick="financeToggleMineOnly()"
+            ><span aria-hidden="true"></span>My quotations</button>
+          ` : ''}
+        </div>
+        <p class="finance-subtitle">Your quotations, versions and client approvals.</p>
+      </div>
       <div class="finance-toolbar-actions">
         <input class="finance-search" type="search" value="${financeEscapeAttr(query)}" placeholder="Search quotations..." oninput="financeQueueListSearch(this.value)">
         <button type="button" class="btn btn-primary" onclick="financeCreateDocument()">+ New Quotation</button>
@@ -946,7 +1026,7 @@ function financeRenderList(query = '') {
     <div class="finance-card">
       ${rows ? `
         <table class="finance-list-table">
-          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${ownerView ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
+          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
@@ -1054,8 +1134,8 @@ async function financeEditRevision(documentId, revision) {
   const snapshotRow = (documentRow?.revisions || []).find(row => Number(row.revision) === Number(revision));
   if (!documentRow || !snapshotRow?.snapshot) return;
   const confirmed = await showAppConfirm({
-    title: 'Edit sent version?',
-    message: `${snapshotRow.number || `Version ${revision}`} has already been sent to the client. Changes will update this sent version and its archived PDF directly without creating a new version.`,
+    title: 'Edit saved version?',
+    message: `${snapshotRow.number || `Version ${revision}`} has already been saved as a quotation version. Changes will update this version and its archived PDF directly without creating a new version.`,
     confirmText: 'Edit Version',
     cancelText: 'Cancel'
   });
@@ -1410,8 +1490,7 @@ function financeChooseDepartment(index, encodedValue) {
     input.value = value;
     input.dataset.departmentSelectionCommitted = 'true';
   }
-  line.department = value;
-  line.departmentCode = '';
+  line.systemName = value;
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
@@ -1419,7 +1498,7 @@ function financeChooseDepartment(index, encodedValue) {
 
 function financeCommitDepartmentInput(index, input) {
   if (input?.dataset?.departmentSelectionCommitted === 'true') return;
-  financeLineChange(index, 'department', input?.value || '');
+  financeLineChange(index, 'systemName', input?.value || '');
 }
 
 function financeShowAddDepartmentSuggestions(query) {
@@ -1461,9 +1540,9 @@ function financeAdjustmentRows(department) {
     .map(row => `
       <tr class="finance-adjustment-row finance-adjustment-editor-row">
         <td></td>
-        <td colspan="3"><input class="finance-adjustment-label" value="${financeEscapeAttr(row.label || 'Department discount')}" aria-label="Discount name" onchange="financeSetAdjustmentLabel('${financeEscapeAttr(row.id)}',this.value)"></td>
-        <td colspan="2"><span class="finance-percent-input finance-adjustment-percent"><input type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(financeNumber(row.percent).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="Department discount percentage" onchange="financeSetDepartmentAdjustmentPercent('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"><span>%</span></span></td>
-        <td colspan="2"><div class="finance-money-input finance-adjustment-amount"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(Math.abs(financeNumber(row.amount)).toFixed(2))}" aria-label="Department discount amount" onchange="financeSetDepartmentAdjustmentAmount('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"></div></td>
+        <td colspan="3"><input class="finance-adjustment-label" value="${financeEscapeAttr(row.label || 'System discount')}" aria-label="Discount name" onchange="financeSetAdjustmentLabel('${financeEscapeAttr(row.id)}',this.value)"></td>
+        <td colspan="2"><span class="finance-percent-input finance-adjustment-percent"><input type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(financeNumber(row.percent).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="System discount percentage" onchange="financeSetDepartmentAdjustmentPercent('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"><span>%</span></span></td>
+        <td colspan="2"><div class="finance-money-input finance-adjustment-amount"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(Math.abs(financeNumber(row.amount)).toFixed(2))}" aria-label="System discount amount" onchange="financeSetDepartmentAdjustmentAmount('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"></div></td>
         <td></td>
         <td><button type="button" class="finance-delete-line" onclick="financeRemoveAdjustment('${financeEscapeAttr(row.id)}')">×</button></td>
       </tr>
@@ -1498,7 +1577,7 @@ function financeRenderLineGroups() {
   let displayIndex = 0;
   return configured.map(department => {
     const rows = (document.lineItems || []).map((line, index) => ({ line, index }))
-      .filter(row => (row.line.department || 'Unknown Department') === department && (row.line.subprojectId || 'main') === subprojectId);
+      .filter(row => financeLineSystem(row.line) === department && (row.line.subprojectId || 'main') === subprojectId);
     const base = rows.reduce((sum, row) => sum + financeLineTotal(row.line), 0);
     const adjustment = (document.adjustments || []).filter(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId)
       .reduce((sum, row) => sum + financeNumber(row.amount), 0);
@@ -1518,7 +1597,7 @@ function financeRenderLineGroups() {
           <td><input class="finance-line-input" value="${financeEscapeAttr(line.description)}" aria-label="Description" onchange="financeLineChange(${index},'description',this.value)"></td>
           <td>
             <div class="finance-inline-combobox">
-              <input class="finance-line-input" value="${financeEscapeAttr(line.department)}" aria-label="Department" autocomplete="off"
+              <input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(line))}" aria-label="System" autocomplete="off"
                 data-finance-department-index="${index}"
                 onfocus="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
                 oninput="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
@@ -1546,6 +1625,7 @@ function financeRenderLineGroups() {
           <span class="finance-department-drag-handle" draggable="true" title="Drag department" ondragstart="financeDragDepartmentStart(event,'${financeEscapeAttr(encoded)}')" ondragend="financeDragDepartmentEnd()">&#9776;</span>
           <button type="button" class="finance-collapse-button" onclick="financeToggleDepartmentCollapse('${financeEscapeAttr(encoded)}')">${collapsed ? '+' : '-'}</button>
           <span>${financeEscape(department)}</span>
+          <button type="button" class="finance-department-rename" title="Rename header" aria-label="Rename ${financeEscapeAttr(department)} header" onclick="financeRenameDepartment('${financeEscapeAttr(encoded)}')">&#9998;</button>
           <small>${rows.length} item${rows.length === 1 ? '' : 's'} · ${financeEscape(financeMoney(subtotal))}</small>
         </td>
       </tr>
@@ -1643,11 +1723,11 @@ function financeRenderRateCard() {
   if (!root) return;
   const query = String(financeState.rateCardSearch || '').trim().toLowerCase();
   const filtered = (financeState.rateCard || []).filter(row => !query || [
-    row.department, row.brand, row.model, row.description, ...(row.searchTags || [])
+    financeLineSystem(row), row.department, row.brand, row.model, row.description, ...(row.searchTags || [])
   ].join(' ').toLowerCase().includes(query));
   const departments = new Map();
   filtered.forEach(row => {
-    const department = String(row.department || 'Unknown Department');
+    const department = financeLineSystem(row);
     if (!departments.has(department)) departments.set(department, []);
     departments.get(department).push(row);
   });
@@ -1838,6 +1918,49 @@ function financeToggleDepartmentCollapse(encodedDepartment) {
   financeRenderEditor();
 }
 
+async function financeRenameDepartment(encodedDepartment) {
+  const currentName = decodeURIComponent(encodedDepartment);
+  const document = financeState.current;
+  const subprojectId = financeCurrentSubprojectId(document);
+  if (!document || !currentName) return;
+  const name = await showAppPrompt({
+    title: 'Rename header',
+    message: 'This changes the header for every matching line item in this header.',
+    inputLabel: 'Header name',
+    defaultValue: currentName,
+    confirmText: 'Rename'
+  });
+  const nextName = String(name || '').trim();
+  if (!nextName || nextName === currentName) return;
+  (document.lineItems || []).forEach(line => {
+    if (
+      String(line.subprojectId || 'main') === String(subprojectId)
+      && financeLineSystem(line) === currentName
+    ) {
+      line.systemName = nextName;
+      line.uom = financeDefaultUom(nextName, line.uom);
+    }
+  });
+  (document.adjustments || []).forEach(row => {
+    if (
+      row.scope === 'department'
+      && String(row.subprojectId || 'main') === String(subprojectId)
+      && row.department === currentName
+    ) {
+      row.department = nextName;
+    }
+  });
+  const oldCollapseKey = financeDepartmentCollapseKey(currentName, document);
+  const nextCollapseKey = financeDepartmentCollapseKey(nextName, document);
+  if (Object.prototype.hasOwnProperty.call(financeState.collapsedDepartments, oldCollapseKey)) {
+    financeState.collapsedDepartments[nextCollapseKey] = financeState.collapsedDepartments[oldCollapseKey];
+    delete financeState.collapsedDepartments[oldCollapseKey];
+  }
+  financeSyncDocumentDepartments(document);
+  financeQueueSave();
+  financeRenderEditor();
+}
+
 function financeDragLineStart(event, index) {
   financeState.dragLineIndex = index;
   event.dataTransfer.effectAllowed = 'move';
@@ -1866,7 +1989,10 @@ function financeDropLine(event, targetIndex) {
     return;
   }
   const [moved] = lines.splice(sourceIndex, 1);
-  lines.splice(targetIndex, 0, moved);
+  const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  const target = lines[adjustedTargetIndex];
+  if (target) moved.systemName = financeLineSystem(target);
+  lines.splice(adjustedTargetIndex, 0, moved);
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
@@ -1889,6 +2015,12 @@ function financeDragDepartmentStart(event, encodedDepartment) {
 
 function financeDragDepartmentOver(event, encodedDepartment) {
   const department = decodeURIComponent(encodedDepartment);
+  if (financeState.dragLineIndex !== null) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    event.currentTarget.classList.add('drag-over');
+    return;
+  }
   if (!financeState.dragDepartment || financeState.dragDepartment === department) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
@@ -1902,6 +2034,19 @@ function financeDragDepartmentLeave(event) {
 function financeDropDepartment(event, encodedTargetDepartment) {
   event.preventDefault();
   const targetDepartment = decodeURIComponent(encodedTargetDepartment);
+  if (financeState.dragLineIndex !== null) {
+    const line = financeState.current?.lineItems?.[financeState.dragLineIndex];
+    if (line) {
+      line.systemName = targetDepartment;
+      line.uom = financeDefaultUom(targetDepartment, line.uom);
+      financeSyncDocumentDepartments();
+      financeQueueSave();
+      financeRenderEditor();
+    }
+    financeDragLineEnd();
+    financeDragDepartmentEnd();
+    return;
+  }
   const sourceDepartment = financeState.dragDepartment || event.dataTransfer.getData('text/plain');
   if (!sourceDepartment || sourceDepartment === targetDepartment || !financeState.current) {
     financeDragDepartmentEnd();
@@ -1910,7 +2055,7 @@ function financeDropDepartment(event, encodedTargetDepartment) {
   const groups = new Map();
   financeActiveDepartments(financeState.current).forEach(department => groups.set(department, []));
   (financeState.current.lineItems || []).forEach(line => {
-    const department = String(line.department || 'Unknown Department').trim() || 'Unknown Department';
+    const department = financeLineSystem(line);
     if (!groups.has(department)) groups.set(department, []);
     groups.get(department).push(line);
   });
@@ -1964,6 +2109,7 @@ function financeRenderEditor() {
   const editingSentRevision = Number(document._editingSentRevision || 0);
   const validityUnit = financeValidityUnit(document);
   const validityAmount = financeValidityAmount(document);
+  const quotationNumber = financeQuotationNumberParts(document.number, document.revision);
   root.innerHTML = `
     <div class="finance-editor-header">
       <div class="finance-editor-identity">
@@ -1971,11 +2117,14 @@ function financeRenderEditor() {
         <div class="finance-editor-title-row">
           <label class="finance-number-field">
             <span>Quotation number</span>
-            <input id="financeDocumentNumber" class="finance-number-input" value="${financeEscapeAttr(document.number || '')}" onchange="financeSetQuotationNumber(this.value)">
+            <span class="finance-number-control">
+              <input id="financeDocumentNumber" class="finance-number-input" value="${financeEscapeAttr(quotationNumber.base)}" oninput="financeResizeQuotationNumberInput(this)" onchange="financeSetQuotationNumber(this.value)" aria-label="Quotation number">
+              <span class="finance-number-suffix" aria-label="Version suffix ${financeEscapeAttr(quotationNumber.suffix)}" title="The version suffix is managed automatically">${financeEscape(quotationNumber.suffix)}</span>
+            </span>
           </label>
           ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Version view</span>' : `
             <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
-            ${editingSentRevision ? `<span class="finance-readonly-pill">Editing sent version ${String(editingSentRevision).padStart(2, '0')}</span>` : `
+            ${editingSentRevision ? `<span class="finance-readonly-pill">Editing saved version ${String(editingSentRevision).padStart(2, '0')}</span>` : `
               ${financeStatusControl(document, 'editor')}
               ${financePaymentCountdownText(document) ? `<span class="finance-payment-countdown">${financeEscape(financePaymentCountdownText(document))}</span>` : ''}
               ${financeExportQuotationButton(document)}
@@ -2026,17 +2175,26 @@ function financeRenderEditor() {
         <section class="finance-card finance-section">
           <div class="finance-section-heading"><div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div></div>
           <div class="finance-schedule-grid">
-            ${financeSchedulePair('Set-up', 'setup')}
-            ${financeSchedulePair('Teardown', 'teardown')}
-            ${financeSchedulePair('Rehearsal', 'rehearsal')}
-            ${financeSchedulePair('Show', 'show')}
-            ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
-            ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
-            ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
-          </div>
-          <div class="finance-schedule-actions">
-            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
-            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('show')">+ Add show</button>
+            <div class="finance-schedule-stack">
+              ${financeSchedulePair('Set-up', 'setup')}
+              ${financeAdditionalScheduleRows('setup', document).map((row, index) => financeAdditionalSchedulePair('setup', row, index)).join('')}
+              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('setup')">+ Add set-up</button>
+            </div>
+            <div class="finance-schedule-stack">
+              ${financeSchedulePair('Teardown', 'teardown')}
+              ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
+              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('teardown')">+ Add teardown</button>
+            </div>
+            <div class="finance-schedule-stack">
+              ${financeSchedulePair('Rehearsal', 'rehearsal')}
+              ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
+              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
+            </div>
+            <div class="finance-schedule-stack">
+              ${financeSchedulePair('Show', 'show')}
+              ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
+              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('show')">+ Add show</button>
+            </div>
           </div>
         </section>
 
@@ -2052,7 +2210,7 @@ function financeRenderEditor() {
           <div class="finance-lines-scroll">
             <table class="finance-lines-table">
               <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:72px"><col style="width:88px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
-              <thead><tr><th>${document.showLineNumbers === false ? '' : '#'}</th><th>Description</th><th>Department</th><th>
+              <thead><tr><th>${document.showLineNumbers === false ? '' : '#'}</th><th>Description</th><th>System</th><th>
                 <div class="finance-custom-control finance-header-control">
                   <button type="button" class="finance-header-button" onclick="financeToggleMenu('${allDaysMenu}',event)">Days</button>
                   <div class="finance-custom-menu finance-days-menu" id="${allDaysMenu}">
@@ -2108,8 +2266,9 @@ function financeRenderEditor() {
         <section class="finance-card finance-section">
           <h3>PDF options</h3>
           ${financeSwitch('Show unit prices', !!document.showUnitPrices, "financeToggleDocumentFlag('showUnitPrices')")}
-          ${financeSwitch('Show department discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
-          ${financeSwitch('Show department subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
+          ${financeSwitch('Show system discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
+          ${financeSwitch('Show system subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
+          ${financeSubprojects(document).length > 1 ? financeSwitch('Group summary by sub-project', document.summaryBySubproject !== false, "financeToggleDocumentFlag('summaryBySubproject')") : ''}
           ${financeSwitch('Show line item numbers', document.showLineNumbers !== false, "financeToggleDocumentFlag('showLineNumbers')")}
           ${financeSwitch('Show sign-off', !!document.showSignOff, "financeToggleDocumentFlag('showSignOff')")}
           <button type="button" class="btn btn-primary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
@@ -2131,12 +2290,13 @@ function financeRenderEditor() {
         <section class="finance-card finance-section">
           <h3>Version</h3>
           <div class="finance-summary-row"><span>Current version</span><strong>${String(document.revision || 1).padStart(2, '0')}</strong></div>
-          <div class="finance-summary-row"><span>Sent versions</span><strong>${(document.revisions || []).length}</strong></div>
+          <div class="finance-summary-row"><span>Saved versions</span><strong>${(document.revisions || []).length}</strong></div>
           ${document.eventId ? `<div class="finance-summary-row"><span>Linked event</span><strong>#${document.eventId}</strong></div>` : ''}
         </section>
       </aside>
     </div>
   `;
+  financeResizeQuotationNumberInput(globalThis.document.getElementById('financeDocumentNumber'));
   if (snapshotMode) financeApplySnapshotReadOnly(root);
 }
 
@@ -2178,19 +2338,44 @@ async function financeSaveAndExit() {
   }
 }
 
+function financeQuotationNumberParts(number, revision) {
+  const safeRevision = Math.max(1, Math.min(99, financeNumber(revision, 1)));
+  const suffix = `-${String(safeRevision).padStart(2, '0')}`;
+  const clean = String(number || '').trim();
+  return {
+    base: clean.replace(/-\d{2}$/, ''),
+    suffix
+  };
+}
+
+function financeResizeQuotationNumberInput(input) {
+  if (!input) return;
+  const canvas = financeResizeQuotationNumberInput.canvas
+    || (financeResizeQuotationNumberInput.canvas = document.createElement('canvas'));
+  const context = canvas.getContext('2d');
+  const styles = window.getComputedStyle(input);
+  context.font = styles.font;
+  const contentWidth = Math.ceil(context.measureText(input.value || 'QT').width);
+  input.style.width = `${Math.max(28, contentWidth + 2)}px`;
+}
+
 function financeSetQuotationNumber(value) {
   if (!financeState.current) return;
-  const clean = String(value || '').trim();
-  if (!clean) {
+  const currentParts = financeQuotationNumberParts(
+    financeState.current.number,
+    financeState.current.revision
+  );
+  const base = String(value || '').trim().replace(/-\d{2}$/, '').trim();
+  if (!base) {
     const input = document.getElementById('financeDocumentNumber');
-    if (input) input.value = financeState.current.number || '';
+    if (input) {
+      input.value = currentParts.base;
+      financeResizeQuotationNumberInput(input);
+    }
     showNotification('warning', 'Quotation number cannot be blank');
     return;
   }
-  const revision = Math.max(1, Math.min(99, financeNumber(financeState.current.revision, 1)));
-  financeState.current.number = /-\d{2}$/.test(clean)
-    ? clean.replace(/-\d{2}$/, `-${String(revision).padStart(2, '0')}`)
-    : `${clean}-${String(revision).padStart(2, '0')}`;
+  financeState.current.number = `${base}${currentParts.suffix}`;
   financeState.current.customNumber = true;
   financeQueueSave();
 }
@@ -2273,6 +2458,10 @@ function financeLineChange(index, field, value) {
     line.departmentCode = '';
     line.uom = financeDefaultUom(value, line.uom);
   }
+  if (field === 'systemName') {
+    line.systemName = String(value || '').trim() || financeDefaultSystemName(line.department);
+    line.uom = financeDefaultUom(line.systemName, line.uom);
+  }
   line.total = financeLineTotal(line);
   financeSyncDocumentDepartments();
   financeQueueSave();
@@ -2323,7 +2512,7 @@ function financeDepartmentAdjustment(id, encodedDepartment, create = false) {
       id: id || `adjustment_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       scope: 'department',
       department,
-      label: 'Department discount',
+      label: 'System discount',
       amount: 0,
       percent: 0,
       kind: 'discount',
@@ -2344,7 +2533,7 @@ function financeAddDepartmentDiscount(encodedDepartment) {
 function financeSetAdjustmentLabel(id, value) {
   const row = (financeState.current?.adjustments || []).find(adjustment => adjustment.id === id);
   if (!row) return;
-  row.label = String(value || '').trim() || (row.scope === 'department' ? 'Department discount' : 'Total discount');
+  row.label = String(value || '').trim() || (row.scope === 'department' ? 'System discount' : 'Total discount');
   financeQueueSave();
 }
 
@@ -2361,7 +2550,7 @@ function financeSetDepartmentAdjustmentAmount(id, encodedDepartment, value) {
   const row = financeDepartmentAdjustment(id, encodedDepartment, true);
   const department = decodeURIComponent(encodedDepartment);
   const base = (financeState.current?.lineItems || [])
-    .filter(line => line.department === department && (line.subprojectId || 'main') === (row.subprojectId || 'main'))
+    .filter(line => financeLineSystem(line) === department && (line.subprojectId || 'main') === (row.subprojectId || 'main'))
     .reduce((sum, line) => sum + financeLineTotal(line), 0);
   const amount = Math.max(0, financeCurrencyNumber(value));
   row.kind = 'discount';
@@ -2375,7 +2564,7 @@ function financeSetDepartmentAdjustmentAmount(id, encodedDepartment, value) {
 function financeOverrideDepartmentSubtotal(department, rawTarget) {
   const target = Math.max(0, financeNumber(rawTarget));
   const subprojectId = financeCurrentSubprojectId();
-  const base = financeState.current.lineItems.filter(line => line.department === department && (line.subprojectId || 'main') === subprojectId).reduce((sum, line) => sum + financeLineTotal(line), 0);
+  const base = financeState.current.lineItems.filter(line => financeLineSystem(line) === department && (line.subprojectId || 'main') === subprojectId).reduce((sum, line) => sum + financeLineTotal(line), 0);
   const difference = target - base;
   const percent = base ? Math.abs(difference) / base * 100 : 0;
   const adjustments = financeState.current.adjustments || (financeState.current.adjustments = []);
@@ -2428,7 +2617,7 @@ function financeSetLockedPreTax(value) {
 }
 
 function financeToggleDocumentFlag(field) {
-  const current = field === 'showDepartmentSubtotals'
+  const current = ['showDepartmentSubtotals', 'summaryBySubproject'].includes(field)
     ? financeState.current[field] !== false
     : !!financeState.current[field];
   financeState.current[field] = !current;
@@ -2461,6 +2650,7 @@ function financeQuotationIsBlank(document) {
     document.teardownDate,
     document.notes
   ].some(value => String(value || '').trim()) || [
+    ...(document.additionalSetups || []),
     ...(document.additionalRehearsals || []),
     ...(document.additionalShows || []),
     ...(document.additionalTeardowns || [])
@@ -2637,7 +2827,7 @@ function financeRenderCatalog() {
   if (!results) return;
   results.innerHTML = financeState.catalog.map((row, index) => `
     <button type="button" class="finance-catalog-option" onclick="financeSelectCatalog(${index})">
-      <span><strong>${financeCatalogDescription(row)}</strong><br><small>${financeEscape(row.department)} &middot; ${financeCatalogAvailability(row)}</small></span>
+      <span><strong>${financeCatalogDescription(row)}</strong><br><small>${financeEscape(financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">Press Add to create a custom item</div>';
@@ -2685,6 +2875,7 @@ function financeSelectCatalog(index) {
     financeAddLineFromCatalog(selected);
   }
   financeSyncDocumentDepartments();
+  financeState.addDepartment = '';
   financeState.catalog = [];
   financeQueueSave();
   financeRenderEditor();
@@ -2699,7 +2890,8 @@ async function financeAddCustomItem() {
   const exactLoaded = (financeState.catalog || []).find(row =>
     row.isCustom && String(row.description || '').trim().toLowerCase() === description.toLowerCase()
   ) || {};
-  const department = financeAddDepartmentOverride() || exactLoaded.department || 'General';
+  const departmentOverride = financeAddDepartmentOverride();
+  const department = departmentOverride || exactLoaded.department || 'General';
   const lineId = `line_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   financeState.current.lineItems.push({
     id: lineId,
@@ -2720,6 +2912,7 @@ async function financeAddCustomItem() {
     subprojectId: financeCurrentSubprojectId()
   });
   financeSyncDocumentDepartments();
+  financeState.addDepartment = '';
   financeState.catalog = [];
   financeState.catalogQuery = '';
   financeQueueSave();
@@ -2728,7 +2921,7 @@ async function financeAddCustomItem() {
     const remembered = (await apiCall(`/api/finance/price-suggestion?description=${encodeURIComponent(description)}`)).data || {};
     const line = financeState.current?.lineItems?.find(row => row.id === lineId);
     if (!line || financeNumber(line.unitPrice) > 0 || !financeNumber(remembered.unitPrice)) return;
-    line.department = financeAddDepartmentOverride() || remembered.department || line.department;
+    line.department = departmentOverride || remembered.department || line.department;
     line.departmentCode = remembered.departmentCode || line.departmentCode || '';
     line.uom = remembered.uom || line.uom || 'units';
     line.unitPrice = financeNumber(remembered.unitPrice);
@@ -3059,10 +3252,6 @@ async function loadProfitLoss(options = {}) {
   ensureFinanceSections();
   const root = profitLossRoot();
   if (!root || profitLossState.loading) return;
-  if (typeof currentUserHasSalesAccess === 'function' && !currentUserHasSalesAccess()) {
-    root.innerHTML = '<div class="finance-empty">Sales access is required for Profit & Loss.</div>';
-    return;
-  }
   profitLossState.loading = true;
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading Profit & Loss...</div>';
   try {
@@ -3239,46 +3428,347 @@ function profitLossOpenManpower(eventId, focus = '') {
   }
 }
 
-function profitLossPieStyle(summary) {
-  const direct = Math.max(0, financeNumber(summary.directCosts));
-  const other = Math.max(0, financeNumber(summary.otherExpenses));
-  const commission = Math.max(0, financeNumber(summary.commission));
-  const net = Math.max(0, financeNumber(summary.netProfit));
-  const total = direct + other + commission + net || 1;
-  const directEnd = direct / total * 100;
-  const otherEnd = directEnd + other / total * 100;
-  const commissionEnd = otherEnd + commission / total * 100;
-  return `background:conic-gradient(#2563eb 0 ${directEnd}%, #10b981 ${directEnd}% ${otherEnd}%, #4f46e5 ${otherEnd}% ${commissionEnd}%, #f97316 ${commissionEnd}% 100%);`;
+function profitLossAttachmentPreviewKind(attachment) {
+  const contentType = String(attachment?.contentType || '').toLowerCase();
+  const filename = String(attachment?.originalName || '').toLowerCase();
+  if (contentType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(filename)) return 'image';
+  if (contentType.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/.test(filename)) return 'video';
+  if (contentType.startsWith('audio/') || /\.(mp3|wav|m4a|ogg)$/.test(filename)) return 'audio';
+  if (contentType === 'application/pdf' || filename.endsWith('.pdf')) return 'pdf';
+  if (contentType.startsWith('text/') || /\.(txt|csv|log)$/.test(filename)) return 'text';
+  return '';
 }
 
-function profitLossExpensePieStyle(categories) {
-  const rows = Array.isArray(categories) ? categories : [];
-  const colours = ['#0f766e', '#2563eb', '#f97316', '#7c3aed', '#64748b', '#dc2626'];
-  const total = rows.reduce((sum, row) => sum + Math.max(0, financeNumber(row.amount)), 0);
-  if (!total) return 'background:#eef2f7;';
-  let cursor = 0;
-  const stops = rows.map((row, index) => {
-    const start = cursor;
-    cursor += Math.max(0, financeNumber(row.amount)) / total * 100;
-    const colour = colours[index % colours.length];
-    return `${colour} ${start}% ${cursor}%`;
+function profitLossPreviewAttachment(expenseId) {
+  const expense = (profitLossState.data?.expenses || [])
+    .find(row => String(row.id) === String(expenseId));
+  const attachment = expense?.attachment;
+  if (!attachment || typeof previewEventFile !== 'function') {
+    showNotification('error', 'This attachment cannot be previewed');
+    return;
+  }
+  previewEventFile(
+    Number(profitLossState.data?.event?.id) || 0,
+    attachment.originalName || 'Attachment',
+    attachment.previewUrl || '',
+    profitLossAttachmentPreviewKind(attachment),
+    attachment.downloadUrl || attachment.previewUrl || ''
+  );
+}
+
+function profitLossDepartmentMeta(value) {
+  const department = String(value || '').trim();
+  if (!department || department.toLowerCase() === 'unallocated') return null;
+  const normalized = typeof normalizeDepartmentCode === 'function'
+    ? normalizeDepartmentCode(department)
+    : department.toUpperCase();
+  const rows = Object.values(
+    typeof departments === 'object' && departments ? departments : {}
+  );
+  const matched = rows.find(row => (
+    String(row?.code || '').toLowerCase() === department.toLowerCase()
+    || String(row?.name || '').toLowerCase() === department.toLowerCase()
+  ));
+  if (matched) return matched;
+  return typeof getDepartmentMeta === 'function'
+    ? getDepartmentMeta(normalized)
+    : { code: normalized, name: normalized, color: '#e2e8f0', textColor: '#334155' };
+}
+
+function profitLossSolidColour(value) {
+  const hex = String(value || '').trim();
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#2563eb';
+  const channels = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255);
+  const [red, green, blue] = channels;
+  const maximum = Math.max(...channels);
+  const minimum = Math.min(...channels);
+  const delta = maximum - minimum;
+  let hue = 0;
+  if (delta) {
+    if (maximum === red) hue = ((green - blue) / delta) % 6;
+    else if (maximum === green) hue = (blue - red) / delta + 2;
+    else hue = (red - green) / delta + 4;
+    hue = ((hue * 60) + 360) % 360;
+  }
+  let lightness = (maximum + minimum) / 2;
+  let saturation = delta
+    ? delta / (1 - Math.abs(2 * lightness - 1))
+    : 0;
+  if (saturation < 0.08) {
+    lightness = Math.min(Math.max(lightness, 0.34), 0.5);
+  } else {
+    saturation = Math.max(saturation, 0.68);
+    lightness = Math.min(Math.max(lightness, 0.4), 0.52);
+  }
+
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs((hue / 60) % 2 - 1));
+  const offset = lightness - chroma / 2;
+  let rgb = [0, 0, 0];
+  if (hue < 60) rgb = [chroma, secondary, 0];
+  else if (hue < 120) rgb = [secondary, chroma, 0];
+  else if (hue < 180) rgb = [0, chroma, secondary];
+  else if (hue < 240) rgb = [0, secondary, chroma];
+  else if (hue < 300) rgb = [secondary, 0, chroma];
+  else rgb = [chroma, 0, secondary];
+  return `#${rgb.map(channel => (
+    Math.round((channel + offset) * 255).toString(16).padStart(2, '0')
+  )).join('')}`;
+}
+
+function profitLossContrastColour(value) {
+  const hex = String(value || '').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#ffffff';
+  const [red, green, blue] = [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16));
+  const luminance = (red * 299 + green * 587 + blue * 114) / 255000;
+  return luminance > 0.58 ? '#172033' : '#ffffff';
+}
+
+function profitLossExpenseCategoryMarkup(expense) {
+  const source = String(expense?.source || 'manual');
+  const categoryKey = String(expense?.categoryKey || '');
+  let category = String(expense?.categoryLabel || expense?.category || 'Other expense');
+  if (
+    source === 'worker-invoice'
+    || (source === 'worker-claim' && ['meal', 'transport'].includes(categoryKey))
+    || (source === 'manual' && categoryKey === 'meal')
+  ) {
+    category = 'Manpower';
+  } else if (source === 'manual' && categoryKey === 'transport') {
+    category = 'Transport';
+  }
+
+  const department = String(expense?.department || '').trim();
+  const departmentMeta = profitLossDepartmentMeta(department);
+  const departmentCode = String(departmentMeta?.code || '');
+  const departmentColour = departmentMeta
+    ? profitLossSolidColour(departmentMeta.color)
+    : '';
+
+  const suffix = department
+    ? ` - ${departmentCode || department}`
+    : '';
+  const title = departmentMeta
+    ? departmentMeta.name || departmentCode
+    : department;
+  const style = departmentColour
+    ? ` style="--pnl-category-colour:${departmentColour};--pnl-category-text:${profitLossContrastColour(departmentColour)}"`
+    : '';
+  return `<span class="pnl-category-badge"${style}${title ? ` title="${financeEscapeAttr(title)}"` : ''}>${financeEscape(`${category}${suffix}`)}</span>`;
+}
+
+function profitLossChartColour(group, index, row = {}) {
+  const departmentMeta = group === 'manpower'
+    ? profitLossDepartmentMeta(row.department)
+    : null;
+  if (departmentMeta?.color && /^#[0-9a-f]{6}$/i.test(departmentMeta.color)) {
+    return profitLossSolidColour(departmentMeta.color);
+  }
+  const palettes = {
+    manpower: ['#2563eb', '#0ea5e9', '#06b6d4', '#6366f1', '#0284c7'],
+    transport: ['#f59e0b'],
+    other: ['#64748b', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'],
+    commission: ['#8b5cf6'],
+    profit: ['#10b981']
+  };
+  const palette = palettes[group] || palettes.other;
+  return palette[index % palette.length];
+}
+
+function profitLossChartRows(rows) {
+  const groupIndexes = {};
+  const visible = (Array.isArray(rows) ? rows : [])
+    .map(row => ({ ...row, amount: Math.max(0, financeNumber(row.amount)) }))
+    .filter(row => row.amount > 0);
+  const total = visible.reduce((sum, row) => sum + row.amount, 0);
+  let offset = 0;
+  return visible.map(row => {
+    const group = row.group || 'other';
+    const colourIndex = groupIndexes[group] || 0;
+    groupIndexes[group] = colourIndex + 1;
+    const percent = total ? row.amount / total * 100 : 0;
+    const result = {
+      ...row,
+      colour: profitLossChartColour(group, colourIndex, row),
+      percent,
+      offset
+    };
+    offset += percent;
+    return result;
   });
-  return `background:conic-gradient(${stops.join(', ')});`;
 }
 
-function profitLossCategoryColour(index) {
-  return ['#0f766e', '#2563eb', '#f97316', '#7c3aed', '#64748b', '#dc2626'][index % 6];
+function profitLossPositionChartTooltip(event, segment) {
+  const visual = segment?.closest('.pnl-chart-visual');
+  const tooltip = visual?.querySelector('.pnl-chart-tooltip');
+  if (!visual || !tooltip) return;
+  const visualRect = visual.getBoundingClientRect();
+  const segmentRect = segment.getBoundingClientRect();
+  const clientX = Number.isFinite(event?.clientX) && event.clientX
+    ? event.clientX
+    : segmentRect.left + segmentRect.width / 2;
+  const clientY = Number.isFinite(event?.clientY) && event.clientY
+    ? event.clientY
+    : segmentRect.top + segmentRect.height / 2;
+  const x = Math.min(Math.max(clientX - visualRect.left, 18), visualRect.width - 18);
+  const y = Math.min(Math.max(clientY - visualRect.top, 18), visualRect.height - 18);
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${y}px`;
+  tooltip.classList.toggle('is-below', y < 72);
+}
+
+function profitLossShowChartTooltip(event, segment) {
+  const tooltip = segment?.closest('.pnl-chart-visual')?.querySelector('.pnl-chart-tooltip');
+  if (!tooltip) return;
+  const label = tooltip.querySelector('strong');
+  const detail = tooltip.querySelector('span');
+  if (label) label.textContent = segment.dataset.label || '';
+  if (detail) {
+    detail.textContent = `${segment.dataset.amount || '$0.00'} | ${segment.dataset.percent || '0%'}`;
+  }
+  tooltip.style.setProperty('--tooltip-colour', segment.dataset.colour || '#334155');
+  profitLossPositionChartTooltip(event, segment);
+  tooltip.classList.add('is-visible');
+}
+
+function profitLossHideChartTooltip(segment) {
+  const tooltip = segment?.closest('.pnl-chart-visual')?.querySelector('.pnl-chart-tooltip');
+  if (tooltip) tooltip.classList.remove('is-visible', 'is-below');
+}
+
+function profitLossChartMarkup(rows, summary) {
+  const segments = profitLossChartRows(rows);
+  if (!segments.length) {
+    return '<div class="pnl-chart-empty">No costs or profit to chart yet.</div>';
+  }
+  return `
+    <div class="pnl-profit-chart">
+      <div class="pnl-chart-visual">
+        <svg class="pnl-chart-svg" viewBox="0 0 120 120" role="img" aria-label="Profit and loss breakdown">
+          <circle class="pnl-chart-track" cx="60" cy="60" r="46" pathLength="100"></circle>
+          ${segments.map(row => `
+            <circle class="pnl-chart-segment" cx="60" cy="60" r="46" pathLength="100"
+              style="--segment-colour:${row.colour}"
+              stroke-dasharray="${row.percent} ${100 - row.percent}"
+              stroke-dashoffset="${-row.offset}"
+              data-label="${financeEscapeAttr(row.label)}"
+              data-amount="${financeEscapeAttr(financeSgd(row.amount))}"
+              data-percent="${financeEscapeAttr(financePercentDisplay(row.percent))}"
+              data-colour="${row.colour}"
+              aria-label="${financeEscapeAttr(`${row.label}: ${financeSgd(row.amount)}, ${financePercentDisplay(row.percent)}`)}"
+              onpointerenter="profitLossShowChartTooltip(event, this)"
+              onpointermove="profitLossPositionChartTooltip(event, this)"
+              onpointerleave="profitLossHideChartTooltip(this)"
+              onfocus="profitLossShowChartTooltip(event, this)"
+              onblur="profitLossHideChartTooltip(this)"
+              tabindex="0">
+            </circle>
+          `).join('')}
+        </svg>
+        <div class="pnl-chart-tooltip" role="status" aria-live="polite">
+          <i aria-hidden="true"></i>
+          <div>
+            <strong></strong>
+            <span></span>
+          </div>
+        </div>
+        <div class="pnl-chart-centre">
+          <span>Net Profit</span>
+          <strong>${financeSignedSgd(summary.netProfit)}</strong>
+          <small>${financePercentDisplay(summary.profitMargin)}</small>
+        </div>
+      </div>
+      <div class="pnl-legend pnl-profit-legend">
+        ${segments.map(row => `
+          <span>
+            <i class="pnl-dot" style="background:${row.colour}"></i>
+            <b>${financeEscape(row.label)}</b>
+            <em>${financeSgd(row.amount)} · ${financePercentDisplay(row.percent)}</em>
+          </span>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function profitLossBudgetNote(summary, kind, hasQuotation) {
+  if (!hasQuotation) return '';
+  const budget = financeNumber(summary[`${kind}Budget`]);
+  const variance = financeNumber(summary[`${kind}BudgetVariance`]);
+  const isOver = variance < 0;
+  return {
+    label: `Budget ${financeSgd(budget)}`,
+    text: `${financeSgd(Math.abs(variance))} ${isOver ? 'over' : variance ? 'under' : 'on target'}`,
+    className: `pnl-budget-variance ${isOver ? 'is-over' : 'is-under'}`,
+  };
 }
 
 function profitLossKpi(title, value, note, extraClass = '', action = '') {
   const tag = action ? 'button' : 'article';
   const attrs = action ? `type="button" onclick="${action}"` : '';
+  const noteObject = note && typeof note === 'object' ? note : null;
+  const noteText = noteObject ? noteObject.text : note;
+  const noteLabel = noteObject ? noteObject.label : '';
+  const noteClass = noteObject ? noteObject.className : '';
+  const noteTitle = noteObject ? noteObject.title : '';
   return `
     <${tag} class="pnl-kpi ${extraClass}" ${attrs}>
       <span>${financeEscape(title)}</span>
       <strong>${financeEscape(value)}</strong>
-      ${note ? `<small>${financeEscape(note)}</small>` : ''}
+      ${noteText ? (
+        noteObject
+          ? `<small class="pnl-budget-note"${noteTitle ? ` title="${financeEscapeAttr(noteTitle)}"` : ''}><span>${financeEscape(noteLabel)}</span><b class="${financeEscapeAttr(noteClass)}">${financeEscape(noteText)}</b></small>`
+          : `<small>${financeEscape(noteText)}</small>`
+      ) : ''}
     </${tag}>
+  `;
+}
+
+function profitLossRenderCensored(root, data) {
+  const event = data.event || {};
+  const selectedEvent = profitLossState.events.find(
+    row => Number(row.id) === Number(event.id)
+  ) || event;
+  root.innerHTML = `
+    <div class="pnl-heading">
+      <div>
+        <h2>Profit &amp; Loss</h2>
+        <p class="finance-subtitle">Financial details for this event are restricted.</p>
+      </div>
+    </div>
+    <div class="plan-event-bar pnl-event-bar">
+      <button type="button" class="plan-event-select-wrap"
+              aria-haspopup="dialog" aria-label="Choose a Profit and Loss event"
+              onclick="planOpenEventChooser('profit-loss')">
+        <div class="plan-event-icon" aria-hidden="true">${typeof planMetricIconSvg === 'function' ? planMetricIconSvg('calendar') : ''}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="plan-event-title-row">
+            <span class="plan-event-id">#${financeEscape(String(event.id || ''))}</span>
+            <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+          </div>
+          <div class="plan-event-meta">
+            <span>${financeEscape([event.startDate, event.endDate].filter(Boolean).join(' - '))}</span>
+            ${event.location ? `<span aria-hidden="true">-</span><span>${financeEscape(event.location)}</span>` : ''}
+            ${event.state ? `<span class="plan-badge">${financeEscape(event.state)}</span>` : ''}
+          </div>
+        </div>
+        <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+      </button>
+    </div>
+    <section class="finance-card pnl-censored">
+      <div class="pnl-censored-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      </div>
+      <div>
+        <h3>Financial information hidden</h3>
+        <p>${financeEscape(data.permissions?.reason || 'You do not have access to this event’s financial details.')}</p>
+      </div>
+    </section>
+    <div class="pnl-kpis pnl-kpis-censored" aria-label="Restricted financial summary">
+      ${['Revenue', 'Manpower Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
+        .map(label => profitLossKpi(label, 'Restricted', ''))
+        .join('')}
+    </div>
   `;
 }
 
@@ -3286,22 +3776,30 @@ function renderProfitLossPage() {
   const root = profitLossRoot();
   const data = profitLossState.data;
   if (!root || !data) return;
+  if (data.censored || data.permissions?.isCensored) {
+    profitLossRenderCensored(root, data);
+    return;
+  }
   const event = data.event || {};
   const quote = data.quotation || null;
   const summary = data.summary || {};
-  const expenses = data.expenses || [];
-  const expenseCategories = data.expenseCategories || [];
+  const expenses = (data.expenses || []).slice().sort((left, right) => (
+    String(right.expenseDate || right.createdAt || '').localeCompare(
+      String(left.expenseDate || left.createdAt || '')
+    )
+  ));
   const listedExpenseTotal = expenses.reduce((sum, row) => sum + financeNumber(row.amount), 0);
   const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
   const activity = data.activity || [];
-  const directPercent = summary.revenue ? summary.directCosts / summary.revenue * 100 : 0;
-  const otherPercent = summary.revenue ? summary.otherExpenses / summary.revenue * 100 : 0;
-  const commissionPercent = summary.revenue ? summary.commission / summary.revenue * 100 : 0;
-  const netPercent = summary.revenue ? summary.netProfit / summary.revenue * 100 : 0;
   const transportNoteParts = [
-    financeNumber(summary.crewTransportClaimsCost) > 0 ? `Crew transport ${financeSgd(summary.crewTransportClaimsCost)}` : '',
     financeNumber(summary.transportBookingCost) > 0 ? `Bookings ${financeSgd(summary.transportBookingCost)}` : '',
     financeNumber(summary.manualTransportExpenses) > 0 ? `Added ${financeSgd(summary.manualTransportExpenses)}` : ''
+  ].filter(Boolean);
+  const manpowerNoteParts = [
+    financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`,
+    financeNumber(summary.crewTransportClaimsCost) > 0 ? `Transport claims ${financeSgd(summary.crewTransportClaimsCost)}` : '',
+    financeNumber(summary.workerMealClaimsCost) > 0 ? `Meal claims ${financeSgd(summary.workerMealClaimsCost)}` : '',
+    financeNumber(summary.manualMealExpenses) > 0 ? `Added meals ${financeSgd(summary.manualMealExpenses)}` : ''
   ].filter(Boolean);
   const otherNoteParts = [
     financeNumber(summary.workerOtherClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerOtherClaimsCost)}` : '',
@@ -3317,6 +3815,12 @@ function renderProfitLossPage() {
   const revenueAction = quote
     ? `profitLossOpenQuotation('${financeEscapeAttr(quote.id)}')`
     : 'profitLossOpenRevenueModal()';
+  const manpowerNote = quote
+    ? profitLossBudgetNote(summary, 'manpower', true)
+    : manpowerNoteParts.join(' · ') || 'No manpower costs';
+  const transportNote = quote
+    ? profitLossBudgetNote(summary, 'transport', true)
+    : transportNoteParts.join(' · ') || 'No transport costs';
   const activityRows = activity.map(row => {
     const category = typeof eventActivityCategory === 'function'
       ? eventActivityCategory(row)
@@ -3378,9 +3882,9 @@ function renderProfitLossPage() {
 
     <div class="pnl-kpis">
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
-      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), summary.manpowerInvoiceCost > 0 ? 'From manpower invoices' : 'From manpower assignments', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
-      ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNoteParts.join(' | ') || 'No transport costs', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
-      ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' | ') || 'No other expenses')}
+      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
+      ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
       ${profitLossKpi('Net Profit', financeSignedSgd(summary.netProfit), '')}
       ${profitLossKpi('Profit Margin', financePercentDisplay(summary.profitMargin), 'of revenue')}
@@ -3411,26 +3915,34 @@ function renderProfitLossPage() {
             <button type="button" class="btn btn-secondary" onclick="profitLossOpenExpenseModal()">Add Expense</button>
           </div>
         </div>
-        <div class="pnl-breakdown-strip">
-          <div><span>Manpower</span><strong>${financeSgd(summary.manpowerCost)}</strong></div>
-          <div><span>Transport</span><strong>${financeSgd(summary.transportCost)}</strong></div>
-          <div><span>Worker Claims</span><strong>${financeSgd(summary.workerClaimsCost)}</strong></div>
-          <div><span>Other Added</span><strong>${financeSgd(summary.manualOtherExpenses)}</strong></div>
-          <div><span>Commission</span><strong>${financeSgd(summary.commission)}</strong></div>
-        </div>
         <div class="pnl-table-wrap">
           <table class="pnl-table">
-            <thead><tr><th>Description</th><th>Category</th><th>Vendor / Payee</th><th>Date</th><th>Amount</th><th>Attachment</th><th></th></tr></thead>
+            <thead><tr><th>Description</th><th>Type</th><th>Category</th><th>Vendor / Payee</th><th>Date</th><th>Amount</th><th>Attachment</th><th></th></tr></thead>
             <tbody>
               ${expenses.map(row => `
                 <tr>
                   <td><strong>${financeEscape(row.description)}</strong></td>
-                  <td>${financeEscape(row.category)}</td>
+                  <td><span class="pnl-source-pill pnl-source-${financeEscapeAttr(row.source || 'manual')}">${financeEscape(row.sourceLabel || (row.readOnly ? 'Claim' : 'Added expense'))}</span></td>
+                  <td>${profitLossExpenseCategoryMarkup(row)}</td>
                   <td>${financeEscape(row.vendor || '-')}</td>
                   <td>${financeEscape(row.expenseDate || '-')}</td>
                   <td><strong>${financeSgd(row.amount)}</strong></td>
-                  <td>${row.attachment ? `<a href="${financeEscapeAttr(row.attachment.previewUrl)}" target="_blank" rel="noopener">${financeEscape(row.attachment.originalName || 'Receipt')}</a>` : '-'}</td>
-                  <td>${row.readOnly ? '<span class="pnl-source-pill">Claim</span>' : `
+                  <td>${row.attachment ? `
+                    <span class="pnl-attachment-actions">
+                      <button type="button" class="pnl-attachment-preview" onclick="profitLossPreviewAttachment('${financeEscapeAttr(row.id)}')">${financeEscape(row.attachment.originalName || 'Attachment')}</button>
+                      <a class="pnl-attachment-download" href="${financeEscapeAttr(row.attachment.downloadUrl || row.attachment.previewUrl)}" download>Download</a>
+                    </span>
+                  ` : '-'}</td>
+                  <td>${row.readOnly ? `
+                    <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Manpower and Transport" title="Open Manpower and Transport">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="8" cy="8" r="3"></circle>
+                        <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
+                        <circle cx="17" cy="18" r="1.5"></circle>
+                        <circle cx="21" cy="18" r="1.5"></circle>
+                      </svg>
+                    </button>
+                  ` : `
                     <span class="pnl-expense-actions">
                       <button type="button" class="pnl-expense-edit" onclick="profitLossOpenExpenseModal('${financeEscapeAttr(row.id)}')" aria-label="Edit expense" title="Edit expense">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
@@ -3438,36 +3950,17 @@ function renderProfitLossPage() {
                       <button type="button" class="finance-delete-line" onclick="profitLossDeleteExpense('${financeEscapeAttr(row.id)}')" aria-label="Delete expense">&times;</button>
                     </span>`}</td>
                 </tr>
-              `).join('') || '<tr><td colspan="7" class="pnl-empty-row">No claims or expenses have been added.</td></tr>'}
+              `).join('') || '<tr><td colspan="8" class="pnl-empty-row">No invoices, claims, or additional expenses have been added.</td></tr>'}
             </tbody>
           </table>
         </div>
-        <div class="pnl-total-line"><span>Total Claims &amp; Added Expenses</span><strong>${financeSgd(listedExpenseTotal)}</strong></div>
+        <div class="pnl-total-line"><span>Total listed expenses</span><strong>${financeSgd(listedExpenseTotal)}</strong></div>
       </section>
 
       <aside class="pnl-side">
         <section class="finance-card pnl-summary-card">
           <h3>Profit Summary</h3>
-          <div class="pnl-pie-wrap">
-            <div class="pnl-pie" style="${profitLossPieStyle(summary)}"><div><span>Net Profit</span><strong>${financeSgd(summary.netProfit)}</strong><span>${financePercentDisplay(summary.profitMargin)}</span></div></div>
-            <div class="pnl-legend">
-              <span><i class="pnl-dot direct"></i>Direct Costs <strong>${financePercentDisplay(directPercent)}</strong></span>
-              <span><i class="pnl-dot other"></i>Other Expenses <strong>${financePercentDisplay(otherPercent)}</strong></span>
-              <span><i class="pnl-dot commission"></i>Commission <strong>${financePercentDisplay(commissionPercent)}</strong></span>
-              <span><i class="pnl-dot net"></i>Net Profit <strong>${financePercentDisplay(netPercent)}</strong></span>
-            </div>
-          </div>
-        </section>
-        <section class="finance-card pnl-summary-card">
-          <h3>Expense Categories</h3>
-          <div class="pnl-expense-pie-wrap">
-            <div class="pnl-pie pnl-expense-pie" style="${profitLossExpensePieStyle(expenseCategories)}"></div>
-            <div class="pnl-legend pnl-category-legend">
-              ${expenseCategories.map((row, index) => `
-                <span><i class="pnl-dot" style="background:${profitLossCategoryColour(index)}"></i>${financeEscape(row.label || 'Expense')} <strong>${financeSgd(row.amount)}</strong></span>
-              `).join('') || '<span>No expenses yet</span>'}
-            </div>
-          </div>
+          ${profitLossChartMarkup(data.profitChart || [], summary)}
         </section>
         <section class="finance-card pnl-activity">
           <div class="pnl-section-head"><h3>Recent Activity</h3></div>
@@ -3786,6 +4279,12 @@ function compareSetSearch(value) {
   renderComparePage();
 }
 
+function compareSetItemVisibility(type, visible) {
+  if (type === 'misc') compareState.showMisc = Boolean(visible);
+  if (type === 'loan') compareState.showLoans = Boolean(visible);
+  renderComparePage();
+}
+
 function compareStatusLabel(status) {
   return ({
     matched: 'Matched',
@@ -3795,8 +4294,28 @@ function compareStatusLabel(status) {
   })[status] || status;
 }
 
-function compareVisibleRows() {
+function compareRowCustomType(row) {
+  const identities = [
+    row?.eventItem?.identity,
+    row?.quotationItem?.identity
+  ];
+  const custom = identities.find(identity => identity?.kind === 'custom');
+  if (!custom) return '';
+  return String(custom.type || 'MISC').toUpperCase() === 'LOAN' ? 'LOAN' : 'MISC';
+}
+
+function compareRowsAllowedByItemVisibility() {
   const rows = compareState.data?.rows || [];
+  return rows.filter(row => {
+    const customType = compareRowCustomType(row);
+    if (customType === 'MISC') return compareState.showMisc;
+    if (customType === 'LOAN') return compareState.showLoans;
+    return true;
+  });
+}
+
+function compareVisibleRows() {
+  const rows = compareRowsAllowedByItemVisibility();
   const search = String(compareState.search || '').trim().toLowerCase();
   const filter = compareState.filter || 'all';
   return rows.filter(row => {
@@ -3809,6 +4328,25 @@ function compareVisibleRows() {
       row.status
     ].join(' ').toLowerCase();
     return matchesFilter && (!search || text.includes(search));
+  });
+}
+
+function compareCountsForRows(rows) {
+  return (rows || []).reduce((counts, row) => {
+    if (row.status === 'matched') counts.matched += 1;
+    if (row.status === 'missing_in_event') counts.missingInEvent += 1;
+    if (row.status === 'extra_in_event') counts.extraInEvent += 1;
+    if (row.status === 'qty_mismatch') counts.qtyMismatch += 1;
+    if (financeNumber(row.quotationItem?.quantity) > 0) counts.quotationItems += 1;
+    if (financeNumber(row.eventItem?.quantity) > 0) counts.eventItems += 1;
+    return counts;
+  }, {
+    matched: 0,
+    missingInEvent: 0,
+    extraInEvent: 0,
+    qtyMismatch: 0,
+    quotationItems: 0,
+    eventItems: 0
   });
 }
 
@@ -3851,7 +4389,8 @@ function renderComparePage() {
   if (!root || !data) return;
   const event = data.event || {};
   const quote = data.quotation || null;
-  const counts = data.counts || {};
+  const actionableRows = compareRowsAllowedByItemVisibility();
+  const counts = compareCountsForRows(actionableRows);
   const rows = compareVisibleRows();
   const canOpenQuotation = Boolean(quote?.id && data.permissions?.canEditQuotation);
   root.innerHTML = `
@@ -3880,8 +4419,8 @@ function renderComparePage() {
       <div class="compare-stat mismatch"><strong>${Number(counts.qtyMismatch || 0)}</strong><span>Qty Mismatch</span></div>
     </div>
 
-    <div class="compare-layout">
-      <section class="finance-card compare-table-card">
+    <section class="finance-card compare-table-card">
+      <div class="compare-toolbar">
         <div class="compare-tabs">
           ${[
             ['all', 'All'],
@@ -3893,6 +4432,18 @@ function renderComparePage() {
             <button type="button" class="${compareState.filter === key ? 'active' : ''}" onclick="compareSetFilter('${key}')">${label}</button>
           `).join('')}
         </div>
+        <div class="compare-item-toggles" aria-label="Item visibility">
+          ${financeSwitch('Misc items', compareState.showMisc, "compareSetItemVisibility('misc', !compareState.showMisc)")}
+          ${financeSwitch('Loan items', compareState.showLoans, "compareSetItemVisibility('loan', !compareState.showLoans)")}
+        </div>
+      </div>
+      <div class="compare-bulk-actions">
+        <span>Suggested actions</span>
+        <button type="button" onclick="compareBulkAction('add-event')" ${counts.missingInEvent ? '' : 'disabled'}>Add Missing <strong>${Number(counts.missingInEvent || 0)}</strong></button>
+        <button type="button" onclick="compareBulkAction('remove-extra')" ${counts.extraInEvent ? '' : 'disabled'}>Remove Extras <strong>${Number(counts.extraInEvent || 0)}</strong></button>
+        ${data.permissions?.canEditQuotation ? `<button type="button" onclick="compareBulkAction('add-quote')" ${counts.extraInEvent ? '' : 'disabled'}>Add to Quotation <strong>${Number(counts.extraInEvent || 0)}</strong></button>` : ''}
+        <button type="button" onclick="compareBulkAction('resolve-mismatch')" ${counts.qtyMismatch ? '' : 'disabled'}>Resolve Quantities <strong>${Number(counts.qtyMismatch || 0)}</strong></button>
+      </div>
         <div class="compare-table">
           <div class="compare-table-head">
             <span>Quotation Items<br><small>${Number(counts.quotationItems || 0)} items</small></span>
@@ -3916,28 +4467,7 @@ function renderComparePage() {
             </article>
           `).join('') || '<div class="finance-empty">No comparison rows match this view.</div>'}
         </div>
-      </section>
-
-      <aside class="compare-side-panel">
-        <section class="finance-card compare-summary">
-          <h3>Comparison Summary</h3>
-          <div><span>Quotation Items</span><strong>${Number(counts.quotationItems || 0)}</strong></div>
-          <div><span>Event Items</span><strong>${Number(counts.eventItems || 0)}</strong></div>
-          <hr>
-          <div class="matched"><span>Matched</span><strong>${Number(counts.matched || 0)}</strong></div>
-          <div class="missing"><span>Missing in Event</span><strong>${Number(counts.missingInEvent || 0)}</strong></div>
-          <div class="extra"><span>Extra in Event</span><strong>${Number(counts.extraInEvent || 0)}</strong></div>
-          <div class="mismatch"><span>Qty Mismatch</span><strong>${Number(counts.qtyMismatch || 0)}</strong></div>
-        </section>
-        <section class="finance-card compare-suggestions">
-          <h3>Suggested Actions</h3>
-          <button type="button" onclick="compareBulkAction('add-event')" ${counts.missingInEvent ? '' : 'disabled'}>Add Missing to Event <strong>${Number(counts.missingInEvent || 0)}</strong></button>
-          <button type="button" onclick="compareBulkAction('remove-extra')" ${counts.extraInEvent ? '' : 'disabled'}>Remove Extras from Event <strong>${Number(counts.extraInEvent || 0)}</strong></button>
-          ${data.permissions?.canEditQuotation ? `<button type="button" onclick="compareBulkAction('add-quote')" ${counts.extraInEvent ? '' : 'disabled'}>Add Extras to Quotation <strong>${Number(counts.extraInEvent || 0)}</strong></button>` : ''}
-          <button type="button" onclick="compareBulkAction('resolve-mismatch')" ${counts.qtyMismatch ? '' : 'disabled'}>Resolve Qty Mismatches <strong>${Number(counts.qtyMismatch || 0)}</strong></button>
-        </section>
-      </aside>
-    </div>
+    </section>
   `;
 }
 
@@ -3966,7 +4496,7 @@ async function compareRunRowAction(action, key, options = {}) {
 }
 
 async function compareBulkAction(action) {
-  const rows = compareState.data?.rows || [];
+  const rows = compareRowsAllowedByItemVisibility();
   const targets = rows.filter(row => {
     const quoteQty = financeNumber(row.quotationItem?.quantity);
     const eventQty = financeNumber(row.eventItem?.quantity);
