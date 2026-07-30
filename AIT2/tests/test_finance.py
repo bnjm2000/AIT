@@ -1315,6 +1315,85 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data'][0]
         self.assertEqual(remembered_after_autosave['unitPrice'], 175)
 
+    def test_changed_line_price_propagates_across_subprojects_in_same_quote_only(self):
+        catalog_line = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        quotation = self.create_quote('Subproject Rate Sync')
+        quotation['subprojects'] = [
+            {'id': 'main', 'name': 'Main Room'},
+            {'id': 'breakout', 'name': 'Breakout Room'},
+        ]
+        quotation['lineItems'] = [
+            {
+                **catalog_line,
+                'id': 'main-rate',
+                'days': 1,
+                'quantity': 1,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+            {
+                **catalog_line,
+                'id': 'breakout-rate',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'breakout',
+            },
+        ]
+        saved_response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(saved_response.status_code, 200, saved_response.get_data(as_text=True))
+        saved = saved_response.get_json()['data']
+
+        separate = self.create_quote('Separate Rate')
+        separate['lineItems'] = [{
+            **catalog_line,
+            'id': 'separate-rate',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 90,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        separate_response = self.client.put(
+            f"/api/quotations/{separate['id']}",
+            json=separate,
+        )
+        self.assertEqual(separate_response.status_code, 200, separate_response.get_data(as_text=True))
+
+        saved['lineItems'][0]['unitPrice'] = 175
+        changed_response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=saved,
+        )
+        self.assertEqual(changed_response.status_code, 200, changed_response.get_data(as_text=True))
+        changed_lines = changed_response.get_json()['data']['lineItems']
+        self.assertEqual([line['unitPrice'] for line in changed_lines], [175, 175])
+        self.assertEqual([line['total'] for line in changed_lines], [175, 350])
+
+        separate_after = self.client.get(
+            f"/api/quotations/{separate['id']}"
+        ).get_json()['data']
+        self.assertEqual(separate_after['lineItems'][0]['unitPrice'], 90)
+
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+        self.assertIn('function financePropagateLineUnitPrice(sourceLine)', source)
+        self.assertIn("if (field === 'unitPrice') financePropagateLineUnitPrice(line)", source)
+
     def test_uom_menu_and_add_item_reset_behaviour(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
@@ -1680,7 +1759,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('10% department discount', hidden_text)
         self.assertLess(hidden_text.index('Edgar Tan'), hidden_text.index('Patricia & Edgar Pte Ltd'))
         self.assertGreaterEqual(len(hidden_reader.pages), 2)
-        self.assertIn('SYSTEM SUMMARY', hidden_last_page_text)
+        self.assertIn('Summary', hidden_last_page_text)
         self.assertIn('Audio System', hidden_last_page_text)
         self.assertIn('TOTAL', hidden_last_page_text)
         self.assertNotIn('Audio item 65', hidden_last_page_text)
@@ -1788,12 +1867,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('2 pax', invoice_text)
         self.assertEqual(len(reader.pages), 2)
         self.assertIn('LINE ITEMS', reader.pages[0].extract_text() or '')
-        self.assertIn('SYSTEM SUMMARY', reader.pages[1].extract_text() or '')
+        self.assertIn('Summary', reader.pages[1].extract_text() or '')
         for page in reader.pages:
             text = page.extract_text() or ''
             self.assertTrue(any(marker in text for marker in (
                 'QUOTATION', 'LINE ITEMS', 'DESCRIPTION',
-                'SYSTEM SUMMARY', 'TERMS AND CONDITIONS',
+                'Summary', 'TERMS AND CONDITIONS',
             )), text)
 
     def test_quotation_pdf_exports_mandarin_characters(self):
@@ -2231,7 +2310,7 @@ class FinanceFeatureTests(unittest.TestCase):
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
-        self.assertIn('Every Friday, 7-28 August 2026, 19:00hrs', text)
+        self.assertIn('Every Friday, 7 - 28 August 2026, 19:00hrs', text)
 
     def test_bulk_schedule_pdf_lists_recurring_exceptions(self):
         quotation = self.create_quote('Long-running Show With Exception')
@@ -2269,7 +2348,7 @@ class FinanceFeatureTests(unittest.TestCase):
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
-        self.assertIn('Every Friday, 7-28 August 2026, 19:00hrs', text)
+        self.assertIn('Every Friday, 7 - 28 August 2026, 19:00hrs', text)
         self.assertIn('except 14 August 2026', text)
 
     def test_bulk_schedule_without_weekdays_repeats_every_day(self):
@@ -2310,7 +2389,7 @@ class FinanceFeatureTests(unittest.TestCase):
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
-        self.assertIn('7-9 August 2026, 19:00hrs', text)
+        self.assertIn('7 - 9 August 2026, 19:00hrs', text)
         self.assertNotIn('Every day', text)
 
     def test_bulk_schedule_builder_includes_recurring_paste_and_batch_actions(self):
@@ -2328,6 +2407,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('duplicate', source)
         self.assertIn('financebulkschedulecandidates', source)
         self.assertIn('financeparsebulkscheduleline', source)
+        self.assertIn('financeparseclientbriefline', source)
+        self.assertIn('financebriefstarttime', source)
+        self.assertIn('dates, times or client brief', source)
+        self.assertIn('restrictpastekind', source)
         self.assertIn('financetoggleschedulebatch', source)
         self.assertIn('financeduplicateschedulebatch', source)
         self.assertIn('financedeleteschedulebatch', source)
@@ -2363,10 +2446,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertLess(setup_position, rehearsal_position)
         self.assertLess(rehearsal_position, show_position)
         self.assertLess(show_position, teardown_position)
-        self.assertIn('5-6 July 2026', text)
-        self.assertIn('7-8 July 2026', text)
-        self.assertIn('9-11 July 2026', text)
-        self.assertIn('12-13 July 2026', text)
+        self.assertIn('5 - 6 July 2026', text)
+        self.assertIn('7 - 8 July 2026', text)
+        self.assertIn('9 - 11 July 2026', text)
+        self.assertIn('12 - 13 July 2026', text)
 
     def test_pdf_keeps_multiple_show_times_on_the_same_date(self):
         quotation = self.create_quote('Multiple Shows Per Day')
@@ -3065,6 +3148,13 @@ class FinanceFeatureTests(unittest.TestCase):
                 'discountPercent': 0, 'subprojectId': 'main',
             },
             {
+                'id': 'main-video', 'catalogKey': 'inventory:vx|test|screen',
+                'brand': 'Test', 'model': 'Screen', 'description': 'Projection screen',
+                'department': 'Video Department', 'departmentCode': 'VX',
+                'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 150,
+                'discountPercent': 0, 'subprojectId': 'main',
+            },
+            {
                 'id': 'breakout-light', 'catalogKey': 'inventory:lx|robe|spiider',
                 'brand': 'Robe', 'model': 'Spiider', 'description': 'LED wash fixture',
                 'department': 'Lighting Department', 'departmentCode': 'LX',
@@ -3078,9 +3168,13 @@ class FinanceFeatureTests(unittest.TestCase):
         exported = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         reader = PdfReader(io.BytesIO(exported))
         text = '\n'.join(page.extract_text() or '' for page in reader.pages)
-        self.assertIn('MAIN ROOM', text)
-        self.assertIn('BREAKOUT A', text)
-        self.assertIn('SUB-PROJECT SUMMARY', text)
+        self.assertIn('Main Room', text)
+        self.assertIn('Breakout A', text)
+        self.assertIn('1.01', text)
+        self.assertIn('1.02', text)
+        self.assertIn('2.01', text)
+        self.assertIn('Summary', text)
+        self.assertIn('PROJECT', text)
         self.assertTrue(saved['summaryBySubproject'])
         self.assertIn(f'Page {len(reader.pages)} of {len(reader.pages)}', reader.pages[-1].extract_text() or '')
 
@@ -3100,8 +3194,8 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(department_pdf)).pages
         )
-        self.assertIn('SYSTEM SUMMARY', department_text)
-        self.assertNotIn('SUB-PROJECT SUMMARY', department_text)
+        self.assertIn('Summary', department_text)
+        self.assertIn('CATEGORY', department_text)
         self.assertIn('Audio System', department_text)
         self.assertIn('Lighting System', department_text)
 
@@ -3116,6 +3210,88 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(
             [row['name'] for row in reloaded.events[accepted['eventId']].subprojects],
             ['Main Room', 'Breakout A'],
+        )
+
+    def test_optional_categories_are_visible_but_excluded_from_totals(self):
+        quotation = self.create_quote('Optional Systems')
+        quotation.update({
+            'taxRate': 9,
+            'summaryBySubproject': False,
+            'showDepartmentSubtotals': True,
+            'lineItems': [
+                {
+                    'id': 'required-audio',
+                    'description': 'Main PA',
+                    'department': 'Audio Department',
+                    'systemName': 'Audio System',
+                    'days': 1,
+                    'quantity': 1,
+                    'uom': 'units',
+                    'unitPrice': 100,
+                    'discountPercent': 0,
+                    'subprojectId': 'main',
+                },
+                {
+                    'id': 'optional-lighting',
+                    'description': 'Decorative wash',
+                    'department': 'Lighting Department',
+                    'systemName': 'oPtIoNaL Lighting System',
+                    'days': 1,
+                    'quantity': 1,
+                    'uom': 'units',
+                    'unitPrice': 200,
+                    'discountPercent': 0,
+                    'subprojectId': 'main',
+                },
+            ],
+            'adjustments': [
+                {
+                    'id': 'required-discount',
+                    'scope': 'department',
+                    'department': 'Audio System',
+                    'label': 'Required discount',
+                    'amount': -10,
+                    'calculationMode': 'amount',
+                    'kind': 'discount',
+                    'subprojectId': 'main',
+                },
+                {
+                    'id': 'optional-discount',
+                    'scope': 'department',
+                    'department': 'oPtIoNaL Lighting System',
+                    'label': 'Optional discount',
+                    'amount': -20,
+                    'calculationMode': 'amount',
+                    'kind': 'discount',
+                    'subprojectId': 'main',
+                },
+            ],
+        })
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['totals']['subtotal'], 100)
+        self.assertEqual(saved['totals']['adjustments'], -10)
+        self.assertEqual(saved['totals']['netSubtotal'], 90)
+        self.assertEqual(saved['totals']['tax'], 8.1)
+        self.assertEqual(saved['totals']['total'], 98.1)
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertIn('Summary', text)
+        self.assertIn('CATEGORY', text)
+        self.assertIn('oPtIoNaL Lighting System', text)
+        self.assertIn('$180.00', text)
+        self.assertIn('$98.10', text)
+        self.assertTrue(
+            app_module._finance_is_optional_category('OPTIONAL Audio System')
         )
 
     def test_single_project_pdf_omits_project_header(self):
@@ -3152,9 +3328,21 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-drag-handle\" draggable=\"true', source)
         self.assertNotIn('class=\"finance-line-row\" draggable=\"true', source)
         self.assertIn('show unit prices', source)
-        self.assertIn('show system subtotals', source)
-        self.assertIn('group summary by sub-project', source)
+        self.assertIn('show category subtotals', source)
+        self.assertIn('group summary by', source)
+        self.assertIn('financesetsummarygrouping', source)
+        self.assertIn('role="radiogroup"', source)
+        pdf_options = source.split('<h3>pdf options</h3>', 1)[1].split(
+            'export pdf', 1
+        )[0]
+        self.assertLess(
+            pdf_options.index('financesummarygroupingcontrol'),
+            pdf_options.index('show unit prices'),
+        )
         self.assertIn('financesubprojects(document).length > 1', source)
+        self.assertIn('<th>category</th>', source)
+        self.assertIn('aria-label="category"', source)
+        self.assertNotIn('<th>system</th>', source)
         self.assertIn('finance_salutations', source)
         self.assertIn("financetoggledocumentflag('showsignoff')", source)
         self.assertIn("function financedefaultuom(department, preferred = '')", source)

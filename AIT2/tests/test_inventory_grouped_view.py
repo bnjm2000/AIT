@@ -608,6 +608,7 @@ def test_inventory_selected_count_clears_the_current_selection():
 
 
 def test_maintenance_preselection_is_part_of_modal_initialisation():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
     assert "function openMaintenanceModal(initialAssetIds = [])" in script
@@ -615,8 +616,13 @@ def test_maintenance_preselection_is_part_of_modal_initialisation():
     assert "function openMaintenanceModalForAsset(assetId)" in script
     assert "openMaintenanceModal([assetId]);" in script
     assert "window.openMaintenanceModalForAsset = openMaintenanceModalForAsset;" in script
-    assert "const selectionResult = addAssetsToMaintenanceSelection(container.assetIds || []);" in script
+    assert "const selectionResult = addAssetsToMaintenanceSelection(assetIds);" in script
     assert "setTimeout(() => {\n    if (assets && assets.length > 0)" not in script
+    assert "Search assets or key in a container ID / serial number..." in template
+    assert "function maintenanceContainerSearchText(container)" in script
+    assert "async function selectContainerForMaintenance(encodedContainerId)" in script
+    assert "addContainerToMaintenanceSelection(container);" in script
+    assert "No matching assets or containers found." in script
 
 
 def test_inventory_search_supports_plus_separated_or_terms():

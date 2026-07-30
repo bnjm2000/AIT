@@ -25470,6 +25470,25 @@ def _finance_system_name(department, value=''):
     return (f'{base_name} System' if base_name else 'Unknown System')[:200]
 
 
+def _finance_is_optional_category(value):
+    return bool(re.search(r'\boptional\b', str(value or ''), flags=re.IGNORECASE))
+
+
+def _finance_line_is_optional(line):
+    line = line if isinstance(line, dict) else {}
+    return _finance_is_optional_category(
+        _finance_system_name(line.get('department'), line.get('systemName'))
+    )
+
+
+def _finance_adjustment_counts_toward_total(adjustment):
+    adjustment = adjustment if isinstance(adjustment, dict) else {}
+    return (
+        adjustment.get('scope') != 'department'
+        or not _finance_is_optional_category(adjustment.get('department'))
+    )
+
+
 def _finance_adjustment_system_name(value):
     name = re.sub(r'\s+', ' ', str(value or '').strip())
     if not name:
@@ -26107,6 +26126,67 @@ def _normalise_finance_line(value):
     }
 
 
+def _finance_line_item_match_key(line):
+    line = line if isinstance(line, dict) else {}
+    catalog_key = str(line.get('catalogKey') or '').strip().casefold()
+    if catalog_key:
+        return ('catalog', catalog_key)
+    source_asset_ids = tuple(sorted({
+        str(asset_id or '').strip().casefold()
+        for asset_id in line.get('sourceAssetIds') or []
+        if str(asset_id or '').strip()
+    }))
+    if source_asset_ids:
+        return ('assets', source_asset_ids)
+    brand = str(line.get('brand') or '').strip().casefold()
+    model = str(line.get('model') or '').strip().casefold()
+    description = str(line.get('description') or '').strip().casefold()
+    if not brand and not model and not description:
+        return None
+    return (
+        'item',
+        brand,
+        model,
+        description,
+        str(line.get('uom') or 'units').strip().casefold(),
+    )
+
+
+def _propagate_finance_quotation_price_changes(lines, existing_lines):
+    previous_by_id = {
+        str(line.get('id') or ''): line
+        for line in existing_lines or []
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    changed_prices = {}
+    for line in lines:
+        previous = previous_by_id.get(str(line.get('id') or ''))
+        if previous is None:
+            continue
+        new_price = round(_safe_float(line.get('unitPrice'), 0), 2)
+        old_price = round(_safe_float(previous.get('unitPrice'), 0), 2)
+        match_key = _finance_line_item_match_key(line)
+        if match_key and new_price != old_price:
+            changed_prices[match_key] = new_price
+
+    if not changed_prices:
+        return
+    for line in lines:
+        unit_price = changed_prices.get(_finance_line_item_match_key(line))
+        if unit_price is None:
+            continue
+        line['unitPrice'] = unit_price
+        gross = (
+            _safe_float(line.get('quantity'), 1)
+            * _safe_float(line.get('days'), 1)
+            * unit_price
+        )
+        line['total'] = round(
+            gross * (1 - _safe_float(line.get('discountPercent'), 0) / 100),
+            2,
+        )
+
+
 def _normalise_finance_subprojects(value, lines):
     rows = value if isinstance(value, list) else []
     result = []
@@ -26260,11 +26340,16 @@ def _recalculate_finance_adjustments(document):
                 and (line.get('subprojectId') or 'main') == subproject_id
             )
         else:
-            base = sum(_safe_float(line.get('total'), 0) for line in lines)
+            base = sum(
+                _safe_float(line.get('total'), 0)
+                for line in lines
+                if not _finance_line_is_optional(line)
+            )
             base += sum(
                 _safe_float(row.get('amount'), 0)
                 for row in adjustments
                 if row.get('scope') == 'department'
+                and _finance_adjustment_counts_toward_total(row)
             )
         sign = -1 if adjustment.get('kind') == 'discount' else 1
         adjustment['amount'] = round(sign * base * percent / 100, 2)
@@ -26282,11 +26367,19 @@ def _apply_locked_total_adjustment(document):
         return
 
     subtotal = round(
-        sum(_safe_float(line.get('total'), 0) for line in document.get('lineItems') or []),
+        sum(
+            _safe_float(line.get('total'), 0)
+            for line in document.get('lineItems') or []
+            if not _finance_line_is_optional(line)
+        ),
         2,
     )
     adjustment_base = round(
-        subtotal + sum(_safe_float(row.get('amount'), 0) for row in unlocked_adjustments),
+        subtotal + sum(
+            _safe_float(row.get('amount'), 0)
+            for row in unlocked_adjustments
+            if _finance_adjustment_counts_toward_total(row)
+        ),
         2,
     )
     locked_raw = document.get('lockedPreTaxTotal')
@@ -26322,8 +26415,22 @@ def _apply_locked_total_adjustment(document):
 
 
 def _finance_totals(document):
-    subtotal = round(sum(_safe_float(line.get('total'), 0) for line in document.get('lineItems') or []), 2)
-    adjustment_total = round(sum(_safe_float(row.get('amount'), 0) for row in document.get('adjustments') or []), 2)
+    included_lines = [
+        line for line in document.get('lineItems') or []
+        if not _finance_line_is_optional(line)
+    ]
+    included_adjustments = [
+        row for row in document.get('adjustments') or []
+        if _finance_adjustment_counts_toward_total(row)
+    ]
+    subtotal = round(
+        sum(_safe_float(line.get('total'), 0) for line in included_lines),
+        2,
+    )
+    adjustment_total = round(
+        sum(_safe_float(row.get('amount'), 0) for row in included_adjustments),
+        2,
+    )
     net_subtotal = round(subtotal + adjustment_total, 2)
     tax_rate = max(0, min(100, _safe_float(document.get('taxRate'), 0)))
     tax = round(max(0, net_subtotal) * tax_rate / 100, 2)
@@ -26335,7 +26442,13 @@ def _finance_totals(document):
     return {
         'subtotal': subtotal,
         'adjustments': adjustment_total,
-        'discount': round(sum(abs(min(0, _safe_float(row.get('amount'), 0))) for row in document.get('adjustments') or []), 2),
+        'discount': round(
+            sum(
+                abs(min(0, _safe_float(row.get('amount'), 0)))
+                for row in included_adjustments
+            ),
+            2,
+        ),
         'netSubtotal': net_subtotal,
         'calculatedPreTax': net_subtotal,
         'lockedPreTax': locked_value,
@@ -26370,6 +26483,11 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         for row in (value.get('lineItems') if 'lineItems' in value else existing.get('lineItems') or [])
         if isinstance(row, dict)
     ]
+    if document_type == 'quotation' and existing and 'lineItems' in value:
+        _propagate_finance_quotation_price_changes(
+            lines,
+            existing.get('lineItems') or [],
+        )
     subprojects = _normalise_finance_subprojects(
         value.get('subprojects')
         if 'subprojects' in value

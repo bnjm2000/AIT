@@ -71,7 +71,8 @@ const financeScheduleBulkState = {
   pasteText: '',
   excluded: {},
   initialBatchIdentities: [],
-  initialiseExclusions: false
+  initialiseExclusions: false,
+  restrictPasteKind: false
 };
 
 const profitLossState = {
@@ -465,6 +466,126 @@ function financeParseBulkScheduleLine(value) {
   return date ? { date, time, original } : { error: 'Unrecognised date', original };
 }
 
+function financeBriefScheduleKind(value, fallbackKind) {
+  const label = String(value || '').split(':', 1)[0].trim().toLowerCase();
+  if (/\b(?:tear\s*down|strike)\b/.test(label)) return 'teardown';
+  if (/\b(?:set\s*up)\b/.test(label)) return 'setup';
+  if (/\brehears/.test(label)) return 'rehearsal';
+  if (/\b(?:event|show)\b/.test(label)) return 'show';
+  return FINANCE_SCHEDULE_KEYS[fallbackKind] ? fallbackKind : 'show';
+}
+
+function financeBriefStartTime(value) {
+  const text = String(value || '').replace(/[\u2013\u2014]/g, '-');
+  let match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (match) {
+    const suffix = String(match[3] || match[6] || '').toLowerCase();
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || 0);
+    if (hour >= 1 && hour <= 12 && minute <= 59) {
+      if (suffix === 'pm' && hour !== 12) hour += 12;
+      if (suffix === 'am' && hour === 12) hour = 0;
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+  }
+  match = text.match(/\b(\d{1,2})(?::(\d{2}))\s*(?:hrs?)?\b/i);
+  if (match && Number(match[1]) <= 23 && Number(match[2]) <= 59) {
+    return `${String(Number(match[1])).padStart(2, '0')}:${String(Number(match[2])).padStart(2, '0')}`;
+  }
+  match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (!match) return '';
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  if (hour < 1 || hour > 12 || minute > 59) return '';
+  if (match[3].toLowerCase() === 'pm' && hour !== 12) hour += 12;
+  if (match[3].toLowerCase() === 'am' && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function financeBriefMonthNumber(value) {
+  const months = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+    apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+    aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12
+  };
+  return months[String(value || '').trim().toLowerCase()] || 0;
+}
+
+function financeBriefDateRange(startDay, startMonth, endDay, endMonth, year) {
+  let startYear = Number(year);
+  let endYear = Number(year);
+  if (Number(startMonth) > Number(endMonth)) endYear += 1;
+  const startIso = financeScheduleIsoDate(startYear, Number(startMonth), Number(startDay));
+  const endIso = financeScheduleIsoDate(endYear, Number(endMonth), Number(endDay));
+  const start = financeScheduleDate(startIso);
+  const end = financeScheduleDate(endIso);
+  if (!start || !end || end < start) return [];
+  const dates = [];
+  for (let cursor = new Date(start); cursor <= end && dates.length < 500; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function financeParseClientBriefLine(value, fallbackKind, fallbackYear) {
+  const original = String(value || '').trim();
+  if (!original) return { rows: [] };
+  const simple = financeParseBulkScheduleLine(original);
+  if (simple?.date) {
+    return {
+      rows: [{
+        kind: fallbackKind,
+        date: simple.date,
+        time: simple.time || ''
+      }]
+    };
+  }
+
+  const kind = financeBriefScheduleKind(original, fallbackKind);
+  const time = financeBriefStartTime(original);
+  const year = Number(fallbackYear) || new Date().getFullYear();
+  const dates = [];
+  let dateText = original
+    .replace(/^[^:]+:\s*/, '')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ')
+    .replace(/\b\d{1,2}:\d{2}\s*(?:hrs?)?\b/gi, ' ')
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, ' ');
+  const monthPattern = 'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?';
+  const rangePattern = new RegExp(
+    `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s*(${monthPattern})?\\s*-\\s*(\\d{1,2})(?:st|nd|rd|th)?\\s*(${monthPattern})(?:\\s+(\\d{4}))?\\b`,
+    'gi'
+  );
+  dateText = dateText.replace(rangePattern, (...match) => {
+    const startMonth = financeBriefMonthNumber(match[2] || match[4]);
+    const endMonth = financeBriefMonthNumber(match[4]);
+    const rangeYear = Number(match[5]) || year;
+    dates.push(...financeBriefDateRange(match[1], startMonth, match[3], endMonth, rangeYear));
+    return ' ';
+  });
+
+  const listPattern = new RegExp(
+    `\\b((?:\\d{1,2}(?:st|nd|rd|th)?\\s*(?:(?:,|and|&)\\s*)?)+)\\s*(${monthPattern})(?:\\s+(\\d{4}))?\\b`,
+    'gi'
+  );
+  dateText.replace(listPattern, (...match) => {
+    const month = financeBriefMonthNumber(match[2]);
+    const listYear = Number(match[3]) || year;
+    (match[1].match(/\d{1,2}/g) || []).forEach(day => {
+      const date = financeScheduleIsoDate(listYear, month, Number(day));
+      if (date) dates.push(date);
+    });
+    return match[0];
+  });
+
+  const uniqueDates = [...new Set(dates)].sort();
+  if (!uniqueDates.length) return { rows: [], error: 'Unrecognised date', original };
+  return {
+    rows: uniqueDates.map(date => ({ kind, date, time }))
+  };
+}
+
 function financeBulkScheduleCandidates() {
   const state = financeScheduleBulkState;
   const candidates = [];
@@ -483,7 +604,7 @@ function financeBulkScheduleCandidates() {
         const weekIndex = Math.floor(elapsedDays / 7);
         const everyDay = selectedWeekdays.length === 0;
         if (everyDay || (selectedWeekdays.includes(cursor.getUTCDay()) && weekIndex % interval === 0)) {
-          candidates.push({ date: cursor.toISOString().slice(0, 10), time: state.time || '' });
+          candidates.push({ kind: state.kind, date: cursor.toISOString().slice(0, 10), time: state.time || '' });
           if (candidates.length >= 500) {
             truncated = true;
             break;
@@ -492,37 +613,45 @@ function financeBulkScheduleCandidates() {
       }
     }
   } else {
+    const referenceYear = Number(String(state.startDate || financeTodayIso()).slice(0, 4));
     String(state.pasteText || '').split(/\r?\n/).forEach((line, index) => {
       if (!line.trim() || candidates.length >= 500) return;
-      const parsed = financeParseBulkScheduleLine(line);
+      const parsed = financeParseClientBriefLine(line, state.kind, referenceYear);
       if (parsed?.error) invalid.push(`Line ${index + 1}: ${parsed.error} (${parsed.original})`);
-      if (parsed?.date) candidates.push({
-        date: parsed.date,
-        time: parsed.time || state.time || ''
+      (parsed?.rows || []).forEach(row => {
+        if (candidates.length < 500 && (!state.restrictPasteKind || row.kind === state.kind)) {
+          candidates.push({ ...row, time: row.time || state.time || '' });
+        }
       });
     });
-    truncated = String(state.pasteText || '').split(/\r?\n/).filter(line => line.trim()).length > 500;
+    truncated = candidates.length >= 500;
   }
 
-  const existing = new Set();
-  const primaryDate = financeState.current?.[`${state.kind}Date`];
-  if (primaryDate) {
-    existing.add(financeScheduleIdentity(primaryDate, financeState.current?.[`${state.kind}Time`]));
-  }
-  financeAdditionalScheduleRows(state.kind).forEach(row => {
-    if (!state.editingBatchId || row.batchId !== state.editingBatchId) {
-      existing.add(financeScheduleIdentity(row.date, row.time));
+  const existing = new Map(Object.keys(FINANCE_SCHEDULE_KEYS).map(kind => [kind, new Set()]));
+  Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
+    const primaryDate = financeState.current?.[`${kind}Date`];
+    if (primaryDate) {
+      existing.get(kind).add(financeScheduleIdentity(primaryDate, financeState.current?.[`${kind}Time`]));
     }
+    financeAdditionalScheduleRows(kind).forEach(row => {
+      if (!state.editingBatchId || row.batchId !== state.editingBatchId) {
+        existing.get(kind).add(financeScheduleIdentity(row.date, row.time));
+      }
+    });
   });
 
   const seen = new Set();
   const rows = candidates.map((row, index) => {
-    const identity = financeScheduleIdentity(row.date, row.time);
-    const duplicate = existing.has(identity) || seen.has(identity);
+    const kind = FINANCE_SCHEDULE_KEYS[row.kind] ? row.kind : state.kind;
+    const scheduleIdentity = financeScheduleIdentity(row.date, row.time);
+    const identity = `${kind}|${scheduleIdentity}`;
+    const duplicate = existing.get(kind).has(scheduleIdentity) || seen.has(identity);
     seen.add(identity);
     return {
       ...row,
+      kind,
       identity,
+      scheduleIdentity,
       id: `${identity}_${index}`,
       duplicate,
       selected: !duplicate && !state.excluded[identity]
@@ -566,7 +695,13 @@ function financeOpenBulkSchedule(kind = 'show', encodedBatchId = '', duplicate =
   if (!financeState.current || !FINANCE_SCHEDULE_KEYS[kind]) return;
   const batchId = encodedBatchId ? decodeURIComponent(encodedBatchId) : '';
   const source = batchId ? financeScheduleBatches().find(row => row.id === batchId) : null;
-  const defaultDate = financeState.current[`${kind}Date`] || financeTodayIso();
+  const defaultDate = financeState.current[`${kind}Date`]
+    || financeState.current.showDate
+    || financeState.current.setupDate
+    || financeState.current.rehearsalDate
+    || financeState.current.teardownDate
+    || financeState.current.quotationDate
+    || financeTodayIso();
   const defaultDay = financeScheduleDate(defaultDate)?.getUTCDay() ?? new Date().getDay();
   Object.assign(financeScheduleBulkState, {
     kind: source?.kind || kind,
@@ -578,11 +713,15 @@ function financeOpenBulkSchedule(kind = 'show', encodedBatchId = '', duplicate =
     intervalWeeks: Math.max(1, Number(source?.intervalWeeks || 1)),
     time: source?.time || '',
     pasteText: source?.pasteText || '',
-    excluded: Object.fromEntries((source?.excludedDates || []).map(identity => [identity, true])),
+    excluded: Object.fromEntries(
+      (source?.excludedDates || []).map(identity => [`${source.kind}|${identity}`, true])
+    ),
     initialBatchIdentities: source && !duplicate
-      ? financeScheduleBatchRows(source.kind, source.id).map(item => financeScheduleIdentity(item.row.date, item.row.time))
+      ? financeScheduleBatchRows(source.kind, source.id)
+        .map(item => `${source.kind}|${financeScheduleIdentity(item.row.date, item.row.time)}`)
       : [],
-    initialiseExclusions: !!(source && !duplicate)
+    initialiseExclusions: !!(source && !duplicate),
+    restrictPasteKind: !!source
   });
   ensureFinanceBulkScheduleModal();
   financeRenderBulkScheduleModal();
@@ -662,7 +801,7 @@ function financeRenderBulkScheduleModal() {
           </div>
         ` : `
           <div class="finance-bulk-schedule-paste">
-            <label class="finance-field"><span>Dates and times</span><textarea class="finance-input" rows="8" placeholder="7 Aug 2026, 19:00&#10;14/08/2026 19:00&#10;2026-08-21, 20:00" oninput="financeSetBulkScheduleField('pasteText',this.value)">${financeEscape(state.pasteText)}</textarea></label>
+            <label class="finance-field"><span>Dates, times or client brief</span><textarea class="finance-input" rows="8" placeholder="Event Date and Time: 5th Nov, 7-10pm&#10;Setup Date(s): 30th Oct - 5th Nov&#10;AV rehearsal dates: 3 and 4 Nov (9am - 7pm)" oninput="financeSetBulkScheduleField('pasteText',this.value)">${financeEscape(state.pasteText)}</textarea></label>
             <label class="finance-field"><span>Default time when omitted</span><input class="finance-input" type="time" value="${financeEscapeAttr(state.time)}" onchange="financeSetBulkScheduleField('time',this.value)"></label>
           </div>
         `}
@@ -703,7 +842,7 @@ function financeRenderBulkSchedulePreview() {
       ${preview.rows.map(row => `
         <label class="finance-bulk-preview-row ${row.duplicate ? 'is-duplicate' : ''}">
           <input type="checkbox" ${row.selected ? 'checked' : ''} ${row.duplicate ? 'disabled' : ''} onchange="financeToggleBulkScheduleDate('${financeEscapeAttr(encodeURIComponent(row.identity))}',this.checked)">
-          <span><strong>${financeEscape(financeScheduleDateLabel(row.date, 'long'))}</strong>${row.time ? `<small>${financeEscape(row.time)}hrs</small>` : '<small>No time</small>'}</span>
+          <span><strong>${financeEscape(financeScheduleDateLabel(row.date, 'long'))}</strong><small><b class="finance-bulk-preview-kind">${financeEscape(FINANCE_SCHEDULE_LABELS[row.kind] || 'Show')}</b>${row.time ? `${financeEscape(row.time)}hrs` : 'No time'}</small></span>
           ${row.duplicate ? '<em>Already added</em>' : ''}
         </label>
       `).join('') || '<div class="finance-suggestion-empty">Enter a schedule to preview its dates.</div>'}
@@ -730,27 +869,33 @@ function financeApplyBulkSchedule(event) {
     financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.id !== batchId);
   }
 
-  const key = FINANCE_SCHEDULE_KEYS[state.kind];
-  const targetRows = financeState.current[key] || (financeState.current[key] = []);
-  selected.forEach((row, index) => targetRows.push({
-    id: `${batchId}_${index + 1}`,
-    date: row.date,
-    time: row.time,
-    batchId
-  }));
-  targetRows.sort((left, right) =>
-    String(left.date || '').localeCompare(String(right.date || ''))
-    || String(left.time || '').localeCompare(String(right.time || ''))
-  );
-
-  const excludedDates = preview.rows
-    .filter(row => !row.duplicate && !row.selected)
-    .map(row => row.identity);
-  financeState.current.scheduleBatches = [
-    ...financeScheduleBatches().filter(row => row.id !== batchId),
-    {
-      id: batchId,
-      kind: state.kind,
+  const grouped = selected.reduce((result, row) => {
+    const kind = FINANCE_SCHEDULE_KEYS[row.kind] ? row.kind : state.kind;
+    (result[kind] || (result[kind] = [])).push(row);
+    return result;
+  }, {});
+  const newBatches = [];
+  Object.entries(grouped).forEach(([kind, rows]) => {
+    const groupBatchId = state.editingBatchId
+      ? batchId
+      : Object.keys(grouped).length === 1
+        ? batchId
+        : `${batchId}_${kind}`;
+    const key = FINANCE_SCHEDULE_KEYS[kind];
+    const targetRows = financeState.current[key] || (financeState.current[key] = []);
+    rows.forEach((row, index) => targetRows.push({
+      id: `${groupBatchId}_${index + 1}`,
+      date: row.date,
+      time: row.time,
+      batchId: groupBatchId
+    }));
+    targetRows.sort((left, right) =>
+      String(left.date || '').localeCompare(String(right.date || ''))
+      || String(left.time || '').localeCompare(String(right.time || ''))
+    );
+    newBatches.push({
+      id: groupBatchId,
+      kind,
       method: state.method,
       startDate: state.startDate,
       endDate: state.endDate,
@@ -758,10 +903,16 @@ function financeApplyBulkSchedule(event) {
       intervalWeeks: Math.max(1, Number(state.intervalWeeks || 1)),
       time: state.time || '',
       pasteText: state.method === 'paste' ? state.pasteText : '',
-      excludedDates
-    }
+      excludedDates: preview.rows
+        .filter(row => row.kind === kind && !row.duplicate && !row.selected)
+        .map(row => row.scheduleIdentity)
+    });
+    financeState.expandedScheduleBatches[groupBatchId] = false;
+  });
+  financeState.current.scheduleBatches = [
+    ...financeScheduleBatches().filter(row => row.id !== batchId),
+    ...newBatches
   ];
-  financeState.expandedScheduleBatches[batchId] = false;
   closeModal('financeBulkScheduleModal');
   financeQueueSave();
   financeRenderEditor();
@@ -777,6 +928,32 @@ function financeLineTotal(line) {
   return Math.round(gross * (1 - financeNumber(line.discountPercent) / 100) * 100) / 100;
 }
 
+function financeLinePriceMatchKey(line) {
+  const catalogKey = String(line?.catalogKey || '').trim().toLowerCase();
+  if (catalogKey) return `catalog:${catalogKey}`;
+  const sourceAssetIds = [...new Set((line?.sourceAssetIds || [])
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean))]
+    .sort();
+  if (sourceAssetIds.length) return `assets:${sourceAssetIds.join('|')}`;
+  const brand = String(line?.brand || '').trim().toLowerCase();
+  const model = String(line?.model || '').trim().toLowerCase();
+  const description = String(line?.description || '').trim().toLowerCase();
+  if (!brand && !model && !description) return '';
+  return `item:${brand}|${model}|${description}|${String(line?.uom || 'units').trim().toLowerCase()}`;
+}
+
+function financePropagateLineUnitPrice(sourceLine) {
+  const matchKey = financeLinePriceMatchKey(sourceLine);
+  if (!matchKey) return;
+  const unitPrice = financeNumber(sourceLine.unitPrice);
+  (financeState.current?.lineItems || []).forEach(line => {
+    if (financeLinePriceMatchKey(line) !== matchKey) return;
+    line.unitPrice = unitPrice;
+    line.total = financeLineTotal(line);
+  });
+}
+
 function financeDefaultSystemName(department) {
   const value = String(department || '').trim();
   if (!value) return 'Unknown System';
@@ -790,6 +967,18 @@ function financeLineSystem(line) {
   return String(line?.systemName || '').trim() || financeDefaultSystemName(line?.department);
 }
 
+function financeIsOptionalCategory(value) {
+  return /\boptional\b/i.test(String(value || ''));
+}
+
+function financeLineIsOptional(line) {
+  return financeIsOptionalCategory(financeLineSystem(line));
+}
+
+function financeAdjustmentCountsTowardTotal(row) {
+  return row?.scope !== 'department' || !financeIsOptionalCategory(row?.department);
+}
+
 function financeRecalculateAdjustments(document) {
   const lines = document?.lineItems || [];
   const adjustments = document?.adjustments || [];
@@ -798,7 +987,10 @@ function financeRecalculateAdjustments(document) {
     const percent = Math.max(0, financeNumber(row.percent));
     if (!percent) return;
     const base = lines
-      .filter(line => financeLineSystem(line) === row.department)
+      .filter(line => (
+        financeLineSystem(line) === row.department
+        && (line.subprojectId || 'main') === (row.subprojectId || 'main')
+      ))
       .reduce((sum, line) => sum + financeLineTotal(line), 0);
     row.amount = Math.round(base * percent / 100 * (row.kind === 'discount' ? -1 : 1) * 100) / 100;
   });
@@ -809,15 +1001,17 @@ function financeTotals(document = financeState.current) {
   lines.forEach(line => { line.total = financeLineTotal(line); });
   financeRecalculateAdjustments(document);
   financeApplyLockedTotalAdjustment(document);
-  const subtotal = Math.round(lines.reduce((sum, line) => sum + financeNumber(line.total), 0) * 100) / 100;
-  const adjustmentTotal = Math.round((document?.adjustments || []).reduce((sum, row) => sum + financeNumber(row.amount), 0) * 100) / 100;
+  const includedLines = lines.filter(line => !financeLineIsOptional(line));
+  const includedAdjustments = (document?.adjustments || []).filter(financeAdjustmentCountsTowardTotal);
+  const subtotal = Math.round(includedLines.reduce((sum, line) => sum + financeNumber(line.total), 0) * 100) / 100;
+  const adjustmentTotal = Math.round(includedAdjustments.reduce((sum, row) => sum + financeNumber(row.amount), 0) * 100) / 100;
   const netSubtotal = Math.round((subtotal + adjustmentTotal) * 100) / 100;
   const tax = Math.round(Math.max(0, netSubtotal) * financeNumber(document?.taxRate) / 100 * 100) / 100;
   const lockedPreTax = document?.totalLocked ? financeNumber(document.lockedPreTaxTotal, netSubtotal) : null;
   return {
     subtotal,
     adjustmentTotal,
-    discount: Math.round((document?.adjustments || []).reduce((sum, row) => sum + Math.abs(Math.min(0, financeNumber(row.amount))), 0) * 100) / 100,
+    discount: Math.round(includedAdjustments.reduce((sum, row) => sum + Math.abs(Math.min(0, financeNumber(row.amount))), 0) * 100) / 100,
     netSubtotal,
     lockedPreTax,
     lockDifference: lockedPreTax === null ? 0 : Math.round((netSubtotal - lockedPreTax) * 100) / 100,
@@ -959,8 +1153,15 @@ function financeApplyLockedTotalAdjustment(document = financeState.current) {
     document.lockedPreTaxTotal = null;
     return;
   }
-  const subtotal = Math.round((document.lineItems || []).reduce((sum, line) => sum + financeLineTotal(line), 0) * 100) / 100;
-  const adjustmentBase = Math.round((subtotal + unlockedAdjustments.reduce((sum, row) => sum + financeNumber(row.amount), 0)) * 100) / 100;
+  const subtotal = Math.round((document.lineItems || [])
+    .filter(line => !financeLineIsOptional(line))
+    .reduce((sum, line) => sum + financeLineTotal(line), 0) * 100) / 100;
+  const adjustmentBase = Math.round((
+    subtotal
+    + unlockedAdjustments
+      .filter(financeAdjustmentCountsTowardTotal)
+      .reduce((sum, row) => sum + financeNumber(row.amount), 0)
+  ) * 100) / 100;
   const rawTarget = document.lockedPreTaxTotal;
   const target = rawTarget === null || rawTarget === undefined || rawTarget === ''
     ? adjustmentBase
@@ -1036,12 +1237,12 @@ function financeEventDateSummary(document) {
     return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}`;
   }
   if (start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()) {
-    return `${start.getUTCDate()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+    return `${start.getUTCDate()} - ${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
   }
   if (start.getUTCFullYear() === end.getUTCFullYear()) {
-    return `${start.getUTCDate()} ${month(start)}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+    return `${start.getUTCDate()} ${month(start)} - ${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
   }
-  return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+  return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()} - ${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
 }
 
 function financeDaysSince(value) {
@@ -2095,7 +2296,7 @@ function financeRenderLineGroups() {
           <td><input class="finance-line-input" value="${financeEscapeAttr(line.description)}" aria-label="Description" onchange="financeLineChange(${index},'description',this.value)"></td>
           <td>
             <div class="finance-inline-combobox">
-              <input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(line))}" aria-label="System" autocomplete="off"
+              <input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(line))}" aria-label="Category" autocomplete="off"
                 data-finance-department-index="${index}"
                 onfocus="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
                 oninput="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
@@ -2583,6 +2784,19 @@ function financeSwitch(label, checked, handler) {
   return `<button type="button" class="finance-switch ${checked ? 'on' : ''}" role="switch" aria-checked="${checked}" onclick="${handler}"><span></span>${financeEscape(label)}</button>`;
 }
 
+function financeSummaryGroupingControl(document) {
+  const byProject = document?.summaryBySubproject !== false;
+  return `
+    <div class="finance-summary-grouping">
+      <span>Group summary by</span>
+      <div role="radiogroup" aria-label="Group summary by">
+        <button type="button" class="${byProject ? 'selected' : ''}" role="radio" aria-checked="${byProject}" onclick="financeSetSummaryGrouping('project')">Project</button>
+        <button type="button" class="${byProject ? '' : 'selected'}" role="radio" aria-checked="${!byProject}" onclick="financeSetSummaryGrouping('category')">Category</button>
+      </div>
+    </div>
+  `;
+}
+
 function financeApplySnapshotReadOnly(root) {
   root.classList.add('finance-snapshot-mode');
   root.querySelectorAll('input, textarea, button').forEach(control => {
@@ -2702,7 +2916,7 @@ function financeRenderEditor() {
         <section class="finance-card finance-lines-card">
           ${financeRenderSubprojectTabs()}
           <div class="finance-section finance-section-heading">
-            <div><h3>Line items</h3><p>Department names accept free text and saved suggestions.</p></div>
+            <div><h3>Line items</h3><p>Category names accept free text and saved suggestions.</p></div>
             <button type="button" class="btn btn-secondary finance-rate-card-button" onclick="financeOpenRateCard()">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
               Show rate card
@@ -2711,7 +2925,7 @@ function financeRenderEditor() {
           <div class="finance-lines-scroll">
             <table class="finance-lines-table">
               <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:72px"><col style="width:88px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
-              <thead><tr><th>${document.showLineNumbers === false ? '' : '#'}</th><th>Description</th><th>System</th><th>
+              <thead><tr><th>${document.showLineNumbers === false ? '' : '#'}</th><th>Description</th><th>Category</th><th>
                 <div class="finance-custom-control finance-header-control">
                   <button type="button" class="finance-header-button" onclick="financeToggleMenu('${allDaysMenu}',event)">Days</button>
                   <div class="finance-custom-menu finance-days-menu" id="${allDaysMenu}">
@@ -2729,7 +2943,7 @@ function financeRenderEditor() {
               <div id="financeCatalogResults" class="finance-catalog-results"></div>
             </div>
             <div class="finance-inline-combobox">
-              <input id="financeAddDepartmentInput" class="finance-input" value="${financeEscapeAttr(financeState.addDepartment)}" placeholder="Department" autocomplete="off" oninput="financeState.addDepartment=this.value;financeShowAddDepartmentSuggestions(this.value)" onfocus="financeShowAddDepartmentSuggestions(this.value)">
+              <input id="financeAddDepartmentInput" class="finance-input" value="${financeEscapeAttr(financeState.addDepartment)}" placeholder="Category" autocomplete="off" oninput="financeState.addDepartment=this.value;financeShowAddDepartmentSuggestions(this.value)" onfocus="financeShowAddDepartmentSuggestions(this.value)">
               <div class="finance-inline-suggestions" id="financeAddDepartmentResults"></div>
             </div>
             <button type="button" class="btn btn-primary" onclick="financeAddCustomItem()">+ Add</button>
@@ -2766,10 +2980,10 @@ function financeRenderEditor() {
         </section>
         <section class="finance-card finance-section">
           <h3>PDF options</h3>
+          ${financeSubprojects(document).length > 1 ? financeSummaryGroupingControl(document) : ''}
           ${financeSwitch('Show unit prices', !!document.showUnitPrices, "financeToggleDocumentFlag('showUnitPrices')")}
-          ${financeSwitch('Show system discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
-          ${financeSwitch('Show system subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
-          ${financeSubprojects(document).length > 1 ? financeSwitch('Group summary by sub-project', document.summaryBySubproject !== false, "financeToggleDocumentFlag('summaryBySubproject')") : ''}
+          ${financeSwitch('Show category discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
+          ${financeSwitch('Show category subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
           ${financeSwitch('Show line item numbers', document.showLineNumbers !== false, "financeToggleDocumentFlag('showLineNumbers')")}
           ${financeSwitch('Show sign-off', !!document.showSignOff, "financeToggleDocumentFlag('showSignOff')")}
           <button type="button" class="btn btn-primary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
@@ -2963,6 +3177,7 @@ function financeLineChange(index, field, value) {
     line.systemName = String(value || '').trim() || financeDefaultSystemName(line.department);
     line.uom = financeDefaultUom(line.systemName, line.uom);
   }
+  if (field === 'unitPrice') financePropagateLineUnitPrice(line);
   line.total = financeLineTotal(line);
   financeSyncDocumentDepartments();
   financeQueueSave();
@@ -2982,6 +3197,7 @@ function financeSetLineTotal(index, value) {
   } else if (quantity > 0 && days > 0) {
     line.unitPrice = Math.round((target / quantity / days) * 100) / 100;
     line.discountPercent = 0;
+    financePropagateLineUnitPrice(line);
   } else {
     line.discountPercent = 0;
   }
@@ -3122,6 +3338,12 @@ function financeToggleDocumentFlag(field) {
     ? financeState.current[field] !== false
     : !!financeState.current[field];
   financeState.current[field] = !current;
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetSummaryGrouping(grouping) {
+  financeState.current.summaryBySubproject = grouping !== 'category';
   financeQueueSave();
   financeRenderEditor();
 }
