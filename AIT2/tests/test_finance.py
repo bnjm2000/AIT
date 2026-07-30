@@ -2169,13 +2169,13 @@ class FinanceFeatureTests(unittest.TestCase):
         schedule_start = source.index('<h3>Event schedule</h3>')
         schedule_source = source[schedule_start:source.index('</section>', schedule_start)]
         setup = schedule_source.index("financeSchedulePair('Set-up', 'setup')")
-        additional_setups = schedule_source.index("financeAdditionalScheduleRows('setup', document)")
+        additional_setups = schedule_source.index("financeScheduleRowsMarkup('setup', document)")
         teardown = schedule_source.index("financeSchedulePair('Teardown', 'teardown')")
-        additional_teardowns = schedule_source.index("financeAdditionalScheduleRows('teardown', document)")
+        additional_teardowns = schedule_source.index("financeScheduleRowsMarkup('teardown', document)")
         rehearsal = schedule_source.index("financeSchedulePair('Rehearsal', 'rehearsal')")
-        additional_rehearsals = schedule_source.index("financeAdditionalScheduleRows('rehearsal', document)")
+        additional_rehearsals = schedule_source.index("financeScheduleRowsMarkup('rehearsal', document)")
         show = schedule_source.index("financeSchedulePair('Show', 'show')")
-        additional_shows = schedule_source.index("financeAdditionalScheduleRows('show', document)")
+        additional_shows = schedule_source.index("financeScheduleRowsMarkup('show', document)")
         self.assertLess(setup, additional_setups)
         self.assertLess(additional_setups, teardown)
         self.assertLess(teardown, additional_teardowns)
@@ -2186,7 +2186,151 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-schedule-stack', schedule_source)
         self.assertIn("financeAddScheduleRow('setup')", schedule_source)
         self.assertIn("financeAddScheduleRow('teardown')", schedule_source)
-        self.assertIn("!['setup', 'rehearsal', 'show', 'teardown'].includes(kind)", source)
+        self.assertIn('!FINANCE_SCHEDULE_KEYS[kind]', source)
+
+    def test_bulk_schedule_batches_persist_and_pdf_uses_compact_recurrence(self):
+        quotation = self.create_quote('Long-running Show')
+        quotation.update({
+            'additionalShows': [
+                {
+                    'id': f'weekly-{index}',
+                    'date': date,
+                    'time': '19:00',
+                    'batchId': 'weekly-shows',
+                }
+                for index, date in enumerate((
+                    '2026-08-07',
+                    '2026-08-14',
+                    '2026-08-21',
+                    '2026-08-28',
+                ), start=1)
+            ],
+            'scheduleBatches': [{
+                'id': 'weekly-shows',
+                'kind': 'show',
+                'method': 'recurring',
+                'startDate': '2026-08-07',
+                'endDate': '2026-08-28',
+                'weekdays': [5],
+                'intervalWeeks': 1,
+                'time': '19:00',
+                'pasteText': '',
+                'excludedDates': [],
+            }],
+        })
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['scheduleBatches'][0]['id'], 'weekly-shows')
+        self.assertEqual(saved['additionalShows'][0]['batchId'], 'weekly-shows')
+        self.assertEqual(saved['eventDays'], 22)
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+        self.assertIn('Every Friday, 7-28 August 2026, 19:00hrs', text)
+
+    def test_bulk_schedule_pdf_lists_recurring_exceptions(self):
+        quotation = self.create_quote('Long-running Show With Exception')
+        quotation.update({
+            'additionalShows': [
+                {
+                    'id': f'weekly-{index}',
+                    'date': date,
+                    'time': '19:00',
+                    'batchId': 'weekly-shows',
+                }
+                for index, date in enumerate((
+                    '2026-08-07',
+                    '2026-08-21',
+                    '2026-08-28',
+                ), start=1)
+            ],
+            'scheduleBatches': [{
+                'id': 'weekly-shows',
+                'kind': 'show',
+                'method': 'recurring',
+                'startDate': '2026-08-07',
+                'endDate': '2026-08-28',
+                'weekdays': [5],
+                'intervalWeeks': 1,
+                'time': '19:00',
+                'excludedDates': ['2026-08-14|19:00'],
+            }],
+        })
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+        self.assertIn('Every Friday, 7-28 August 2026, 19:00hrs', text)
+        self.assertIn('except 14 August 2026', text)
+
+    def test_bulk_schedule_without_weekdays_repeats_every_day(self):
+        quotation = self.create_quote('Daily Show')
+        quotation.update({
+            'additionalShows': [
+                {
+                    'id': f'daily-{index}',
+                    'date': date,
+                    'time': '19:00',
+                    'batchId': 'daily-shows',
+                }
+                for index, date in enumerate((
+                    '2026-08-07',
+                    '2026-08-08',
+                    '2026-08-09',
+                ), start=1)
+            ],
+            'scheduleBatches': [{
+                'id': 'daily-shows',
+                'kind': 'show',
+                'method': 'recurring',
+                'startDate': '2026-08-07',
+                'endDate': '2026-08-09',
+                'weekdays': [],
+                'intervalWeeks': 1,
+                'time': '19:00',
+                'excludedDates': [],
+            }],
+        })
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['scheduleBatches'][0]['weekdays'], [])
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+        self.assertIn('7-9 August 2026, 19:00hrs', text)
+        self.assertNotIn('Every day', text)
+
+    def test_bulk_schedule_builder_includes_recurring_paste_and_batch_actions(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read().lower()
+
+        self.assertIn('bulk add dates', source)
+        self.assertIn('recurring range', source)
+        self.assertIn('paste dates', source)
+        self.assertIn('limited to 500 dates', source)
+        self.assertIn('duplicate', source)
+        self.assertIn('financebulkschedulecandidates', source)
+        self.assertIn('financeparsebulkscheduleline', source)
+        self.assertIn('financetoggleschedulebatch', source)
+        self.assertIn('financeduplicateschedulebatch', source)
+        self.assertIn('financedeleteschedulebatch', source)
 
     def test_pdf_groups_consecutive_rehearsal_show_and_teardown_dates(self):
         quotation = self.create_quote('Consecutive Schedule')

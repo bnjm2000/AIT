@@ -19195,7 +19195,19 @@ function ensureAssetCheckStyles() {
       flex-wrap: wrap;
     }
 
-    .asset-check-row-actions { display:flex;gap:6px;align-items:center;flex-wrap:wrap; }
+    .asset-check-row-actions {
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:6px;
+      align-items:stretch;
+      width:100%;
+    }
+    .asset-check-row-actions .btn {
+      min-width:0;
+      padding-left:5px;
+      padding-right:5px;
+      white-space:nowrap;
+    }
 
     @media (max-width: 850px) {
       .asset-check-scan-row {
@@ -19288,9 +19300,10 @@ function ensureAssetCheckStyles() {
       .asset-check-table tr.asset-check-row-excluded { background:#f7f9f8; }
       .asset-check-table td { display:grid;grid-template-columns:80px minmax(0,1fr);gap:7px;padding:3px 0;border:0;line-height:1.35; }
       .asset-check-table td::before { color:var(--check-muted);font-size:8px;font-weight:800;text-transform:uppercase;content:attr(data-label); }
-      .asset-check-table td:last-child { margin-top:5px;padding-top:7px;border-top:1px solid #e3ebe8; }
-      .asset-check-table td:last-child .btn { width:100%; }
-      .asset-check-row-actions { display:grid;grid-template-columns:1fr; }
+      .asset-check-table td:last-child { display:block;margin-top:5px;padding-top:7px;border-top:1px solid #e3ebe8; }
+      .asset-check-table td:last-child::before { display:block;margin-bottom:6px; }
+      .asset-check-table td:last-child .btn { width:100%;font-size:8px; }
+      .asset-check-row-actions { grid-template-columns:repeat(3,minmax(0,1fr));gap:4px; }
     }
   `;
 
@@ -19584,6 +19597,9 @@ function renderAssetCheckRow(asset) {
             </button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="markAssetCheckUntagged('${escapeHtmlAttr(encodedAssetId)}')" ${asset.isUntagged ? 'disabled' : ''}>
               ${asset.isUntagged ? 'Untagged' : 'Mark untagged'}
+            </button>
+            <button type="button" class="btn btn-warning btn-sm" onclick="openAssetCheckFault('${escapeHtmlAttr(encodedAssetId)}')">
+              Log fault
             </button>
           </div>
         ` : '<span style="font-size:12px;color:#777;">Excluded</span>'}
@@ -21485,6 +21501,43 @@ var EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__';
 
 function eventSubprojects(event) {
   return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
+}
+
+async function openAssetCheckFault(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId || '');
+  const checkAsset = assetCheckState.assets.find(item =>
+    String(item.id || item.internalId || '') === assetId
+  );
+  if (!checkAsset) {
+    showNotification('warning', 'Asset not found in this check group');
+    return;
+  }
+
+  try {
+    if (!getAssetByApiIdentifier(assetId)) {
+      const response = await apiCall('/api/assets');
+      assets = response.data || [];
+    }
+    if (!getAssetByApiIdentifier(assetId)) {
+      throw new Error(`Asset ${assetId} could not be loaded`);
+    }
+
+    openMaintenanceModalForAsset(assetId);
+    const title = document.querySelector('#maintenanceModal .modal-title');
+    const logType = document.getElementById('maintenanceLogType');
+    const description = document.getElementById('maintenanceLogEntry');
+    if (title) title.textContent = 'Log Fault';
+    if (logType) {
+      logType.value = 'Fault';
+      applyMaintenanceLogTypeSelectStyle(logType);
+    }
+    if (description) {
+      description.placeholder = 'Describe the fault or limitation...';
+      description.focus();
+    }
+  } catch (error) {
+    showNotification('error', `Unable to open the fault form: ${error.message}`);
+  }
 }
 
 function eventActiveSubproject(state, event) {
@@ -27510,6 +27563,7 @@ function openMaintenanceModal(initialAssetIds = []) {
   const assetSearchEl = document.getElementById('maintenanceAssetSearch');
   const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
   const logTypeEl = document.getElementById('maintenanceLogType');
+  const modalTitleEl = document.querySelector('#maintenanceModal .modal-title');
   
   if (!logEntryEl || !newLocationEl || !maintenanceDateEl || !assetSearchEl || !availableAssetsEl) {
     console.error('Maintenance modal elements not found');
@@ -27532,7 +27586,9 @@ function openMaintenanceModal(initialAssetIds = []) {
   replaceMaintenanceAssetSelection(initialAssetIds);
   
   // Clear form
+  if (modalTitleEl) modalTitleEl.textContent = 'Log Maintenance';
   logEntryEl.value = '';
+  logEntryEl.placeholder = 'Describe the maintenance performed...';
   newLocationEl.value = '';
   if (newSerialEl) newSerialEl.value = '';
   const maintenanceCostEl = document.getElementById('maintenanceCost');

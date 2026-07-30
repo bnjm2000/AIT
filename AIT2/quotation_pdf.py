@@ -254,6 +254,164 @@ def _schedule_date_summary(rows):
     return '; '.join([*(format_group(group) for group in groups), *unparsed_labels])
 
 
+def _schedule_identity(date_value, time_value=''):
+    return (
+        str(date_value or '').strip(),
+        str(time_value or '').strip().casefold(),
+    )
+
+
+def _schedule_range_label(start, end):
+    if start == end:
+        return f"{start.day} {start.strftime('%B %Y')}"
+    if start.year == end.year and start.month == end.month:
+        return f"{start.day}-{end.day} {end.strftime('%B %Y')}"
+    if start.year == end.year:
+        return f"{start.day} {start.strftime('%B')}-{end.day} {end.strftime('%B %Y')}"
+    return f"{start.day} {start.strftime('%B %Y')}-{end.day} {end.strftime('%B %Y')}"
+
+
+def _schedule_recurring_batch_details(batch):
+    if not isinstance(batch, dict) or batch.get('method') != 'recurring':
+        return None
+    try:
+        start = datetime.strptime(str(batch.get('startDate') or ''), '%Y-%m-%d').date()
+        end = datetime.strptime(str(batch.get('endDate') or ''), '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    weekdays = {
+        int(day)
+        for day in batch.get('weekdays') or []
+        if str(day).strip().lstrip('-').isdigit() and 0 <= int(day) <= 6
+    }
+    if end < start:
+        return None
+    interval = max(1, min(52, int(batch.get('intervalWeeks') or 1)))
+    time_value = str(batch.get('time') or '').strip()
+    expected = set()
+    cursor = start
+    while cursor <= end and len(expected) < 500:
+        elapsed_days = (cursor - start).days
+        # JavaScript's getUTCDay uses Sunday=0; Python's weekday uses Monday=0.
+        javascript_weekday = (cursor.weekday() + 1) % 7
+        if not weekdays or (
+            javascript_weekday in weekdays
+            and (elapsed_days // 7) % interval == 0
+        ):
+            expected.add(_schedule_identity(cursor.isoformat(), time_value))
+        cursor += timedelta(days=1)
+    return {
+        'start': start,
+        'end': end,
+        'weekdays': weekdays,
+        'interval': interval,
+        'time': time_value,
+        'expected': expected,
+    }
+
+
+def _schedule_recurring_batch_summary(batch, all_rows):
+    details = _schedule_recurring_batch_details(batch)
+    if not details:
+        return '', set()
+    available = {
+        _schedule_identity(row.get('date'), row.get('time'))
+        for row in all_rows
+        if isinstance(row, dict) and row.get('date')
+    }
+    excluded = {
+        tuple(str(identity or '').split('|', 1))
+        for identity in batch.get('excludedDates') or []
+        if '|' in str(identity or '')
+    }
+    required = details['expected'] - excluded
+    if not required or not required.issubset(available):
+        return '', set()
+
+    day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    selected_days = [day_names[day] for day in sorted(details['weekdays'])]
+    if not selected_days:
+        summary = _schedule_range_label(details['start'], details['end'])
+    else:
+        if len(selected_days) > 1:
+            day_label = ', '.join(selected_days[:-1]) + f" and {selected_days[-1]}"
+        else:
+            day_label = selected_days[0]
+        if details['interval'] == 1:
+            recurrence = f"Every {day_label}"
+        else:
+            recurrence = f"Every {details['interval']} weeks on {day_label}"
+        summary = f"{recurrence}, {_schedule_range_label(details['start'], details['end'])}"
+    if details['time']:
+        summary += f", {details['time']}hrs"
+
+    missing_dates = sorted(
+        datetime.strptime(date_value, '%Y-%m-%d').date()
+        for date_value, _time_value in excluded
+        if (date_value, _time_value) in details['expected']
+    )
+    if missing_dates:
+        summary += '; except ' + ', '.join(
+            f"{value.day} {value.strftime('%B %Y')}"
+            for value in missing_dates
+        )
+    return summary, required
+
+
+def _schedule_document_summary(document, date_key, time_key, additional_key, kind):
+    rows = []
+    if document.get(date_key):
+        rows.append({
+            'date': document.get(date_key),
+            'time': document.get(time_key),
+            'batchId': '',
+        })
+    if additional_key:
+        rows.extend(
+            row for row in document.get(additional_key) or []
+            if isinstance(row, dict)
+        )
+    if not rows:
+        return ''
+
+    batch_segments = []
+    covered = set()
+    handled_batch_ids = set()
+    for batch in document.get('scheduleBatches') or []:
+        if not isinstance(batch, dict) or batch.get('kind') != kind:
+            continue
+        batch_id = str(batch.get('id') or '')
+        batch_rows = [row for row in rows if str(row.get('batchId') or '') == batch_id]
+        if not batch_rows:
+            continue
+        handled_batch_ids.add(batch_id)
+        recurring_summary, recurring_identities = _schedule_recurring_batch_summary(batch, rows)
+        if recurring_summary:
+            batch_segments.append(recurring_summary)
+            covered.update(recurring_identities)
+            continue
+        explicit = _schedule_date_summary(batch_rows)
+        if explicit:
+            batch_segments.append(explicit)
+            covered.update(
+                _schedule_identity(row.get('date'), row.get('time'))
+                for row in batch_rows
+            )
+
+    remaining = [
+        row for row in rows
+        if (
+            _schedule_identity(row.get('date'), row.get('time')) not in covered
+            and str(row.get('batchId') or '') not in handled_batch_ids
+        )
+    ]
+    remaining_summary = _schedule_date_summary(remaining)
+    return '; '.join([
+        *([remaining_summary] if remaining_summary else []),
+        *batch_segments,
+    ])
+
+
 def _validity_label(document):
     amount = document.get('validityAmount')
     unit = str(document.get('validityUnit') or 'days').lower()
@@ -620,18 +778,19 @@ def build_finance_pdf(document, company, logo_path=''):
     ):
         if document.get(key):
             event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(document[key]))}")
-    for event_label, date_key, time_key, additional_key in (
-        ('Set-up', 'setupDate', 'setupTime', 'additionalSetups'),
-        ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals'),
-        ('Show', 'showDate', 'showTime', 'additionalShows'),
-        ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns'),
+    for event_label, date_key, time_key, additional_key, kind in (
+        ('Set-up', 'setupDate', 'setupTime', 'additionalSetups', 'setup'),
+        ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals', 'rehearsal'),
+        ('Show', 'showDate', 'showTime', 'additionalShows', 'show'),
+        ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns', 'teardown'),
     ):
-        rows = []
-        if document.get(date_key):
-            rows.append({'date': document.get(date_key), 'time': document.get(time_key)})
-        if additional_key:
-            rows.extend(document.get(additional_key) or [])
-        value = _schedule_date_summary(rows)
+        value = _schedule_document_summary(
+            document,
+            date_key,
+            time_key,
+            additional_key,
+            kind,
+        )
         if value:
             event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(value))}")
     if event_bits:

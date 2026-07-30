@@ -222,6 +222,11 @@ def test_asset_check_has_guided_progress_and_mobile_rows():
     assert 'data-label="Asset ID"' in script
     assert ".asset-check-table td::before" in script
     assert "@media(max-width:620px)" in script
+    assert "grid-template-columns:repeat(3,minmax(0,1fr))" in script
+    assert "onclick=\"openAssetCheckFault(" in script
+    assert "function openAssetCheckFault(encodedAssetId)" in script
+    assert "openMaintenanceModalForAsset(assetId)" in script
+    assert "logType.value = 'Fault'" in script
 
 
 def test_system_logs_are_searchable_categorised_and_responsive():

@@ -25681,6 +25681,7 @@ def _migrate_finance_data(data):
             ('totalLocked', bool(document.get('totalLocked', False))),
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
             ('totalDiscountLabel', document.get('totalDiscountLabel') or ''),
+            ('scheduleBatches', document.get('scheduleBatches') or []),
             ('setupDate', document.get('setupDate') or ''),
             ('setupTime', document.get('setupTime') or ''),
             ('additionalSetups', document.get('additionalSetups') or []),
@@ -26143,6 +26144,46 @@ def _normalise_finance_schedule_rows(value):
             'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(row.get('id') or ''))[:80] or secrets.token_hex(6),
             'date': str(row.get('date') or '').strip()[:20],
             'time': str(row.get('time') or '').strip()[:20],
+            'batchId': re.sub(r'[^A-Za-z0-9_-]+', '', str(row.get('batchId') or ''))[:80],
+        })
+    return result
+
+
+def _normalise_finance_schedule_batches(value):
+    rows = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for row in rows[:100]:
+        if not isinstance(row, dict):
+            continue
+        batch_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(row.get('id') or ''))[:80]
+        kind = str(row.get('kind') or '').strip().lower()
+        method = str(row.get('method') or '').strip().lower()
+        if not batch_id or batch_id in seen or kind not in {'setup', 'rehearsal', 'show', 'teardown'}:
+            continue
+        if method not in {'recurring', 'paste'}:
+            method = 'paste'
+        seen.add(batch_id)
+        weekdays = []
+        for day in row.get('weekdays') or []:
+            day_number = _safe_int(day, -1)
+            if 0 <= day_number <= 6 and day_number not in weekdays:
+                weekdays.append(day_number)
+        result.append({
+            'id': batch_id,
+            'kind': kind,
+            'method': method,
+            'startDate': str(row.get('startDate') or '').strip()[:20],
+            'endDate': str(row.get('endDate') or '').strip()[:20],
+            'weekdays': weekdays,
+            'intervalWeeks': max(1, min(52, _safe_int(row.get('intervalWeeks'), 1))),
+            'time': str(row.get('time') or '').strip()[:20],
+            'pasteText': str(row.get('pasteText') or '').strip()[:10000],
+            'excludedDates': [
+                str(identity or '').strip()[:60]
+                for identity in (row.get('excludedDates') or [])[:500]
+                if str(identity or '').strip()
+            ],
         })
     return result
 
@@ -26465,6 +26506,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             or ''
         ).strip()[:10],
         'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
+        'scheduleBatches': _normalise_finance_schedule_batches(
+            value.get('scheduleBatches') if 'scheduleBatches' in value else existing.get('scheduleBatches')
+        ),
         'setupDate': str(value.get('setupDate') if 'setupDate' in value else existing.get('setupDate') or '').strip()[:20],
         'setupTime': str(value.get('setupTime') if 'setupTime' in value else existing.get('setupTime') or '').strip()[:20],
         'additionalSetups': _normalise_finance_schedule_rows(

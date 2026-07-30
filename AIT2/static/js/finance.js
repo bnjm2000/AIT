@@ -6,6 +6,20 @@ const FINANCE_UOMS = [
   { value: 'sqm', label: 'sqm' }
 ];
 const FINANCE_SALUTATIONS = ['', 'Mr.', 'Ms.', 'Mrs.', 'Mdm.'];
+const FINANCE_SCHEDULE_KEYS = {
+  setup: 'additionalSetups',
+  rehearsal: 'additionalRehearsals',
+  show: 'additionalShows',
+  teardown: 'additionalTeardowns'
+};
+const FINANCE_SCHEDULE_LABELS = {
+  setup: 'Set-up',
+  rehearsal: 'Rehearsal',
+  show: 'Show',
+  teardown: 'Teardown'
+};
+const FINANCE_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FINANCE_WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const FINANCE_VALIDITY_UNITS = [
   { value: 'days', label: 'day(s)', multiplier: 1 },
   { value: 'weeks', label: 'week(s)', multiplier: 7 },
@@ -41,7 +55,23 @@ const financeState = {
   rateCardUom: 'units',
   newClientSalutation: '',
   editorDataLoadedAt: 0,
-  mineOnly: true
+  mineOnly: true,
+  expandedScheduleBatches: {}
+};
+
+const financeScheduleBulkState = {
+  kind: 'show',
+  method: 'recurring',
+  editingBatchId: '',
+  startDate: '',
+  endDate: '',
+  weekdays: [],
+  intervalWeeks: 1,
+  time: '',
+  pasteText: '',
+  excluded: {},
+  initialBatchIdentities: [],
+  initialiseExclusions: false
 };
 
 const profitLossState = {
@@ -190,23 +220,13 @@ function financeChooseSalesperson(encodedUsername) {
 }
 
 function financeAdditionalScheduleRows(kind, document = financeState.current) {
-  const key = {
-    setup: 'additionalSetups',
-    rehearsal: 'additionalRehearsals',
-    show: 'additionalShows',
-    teardown: 'additionalTeardowns'
-  }[kind];
+  const key = FINANCE_SCHEDULE_KEYS[kind];
   return Array.isArray(document?.[key]) ? document[key] : [];
 }
 
 function financeAddScheduleRow(kind) {
-  if (!financeState.current || !['setup', 'rehearsal', 'show', 'teardown'].includes(kind)) return;
-  const key = {
-    setup: 'additionalSetups',
-    rehearsal: 'additionalRehearsals',
-    show: 'additionalShows',
-    teardown: 'additionalTeardowns'
-  }[kind];
+  if (!financeState.current || !FINANCE_SCHEDULE_KEYS[kind]) return;
+  const key = FINANCE_SCHEDULE_KEYS[kind];
   const rows = financeState.current[key] || (financeState.current[key] = []);
   rows.push({ id: `schedule_${Date.now()}_${Math.random().toString(16).slice(2)}`, date: '', time: '' });
   financeQueueSave();
@@ -221,14 +241,17 @@ function financeAdditionalScheduleChange(kind, index, field, value) {
 }
 
 function financeRemoveScheduleRow(kind, index) {
-  const key = {
-    setup: 'additionalSetups',
-    rehearsal: 'additionalRehearsals',
-    show: 'additionalShows',
-    teardown: 'additionalTeardowns'
-  }[kind];
+  const key = FINANCE_SCHEDULE_KEYS[kind];
   if (!financeState.current || !Array.isArray(financeState.current[key])) return;
-  financeState.current[key].splice(index, 1);
+  const [removed] = financeState.current[key].splice(index, 1);
+  const batch = removed?.batchId
+    ? financeScheduleBatches().find(row => row.id === removed.batchId)
+    : null;
+  if (batch) {
+    const identity = financeScheduleIdentity(removed.date, removed.time);
+    batch.excludedDates = [...new Set([...(batch.excludedDates || []), identity])];
+  }
+  financeRemoveEmptyScheduleBatches();
   financeQueueSave();
   financeRenderEditor();
 }
@@ -245,12 +268,7 @@ function financeSchedulePair(label, key) {
 }
 
 function financeAdditionalSchedulePair(kind, row, index) {
-  const baseLabel = {
-    setup: 'Set-up',
-    rehearsal: 'Rehearsal',
-    show: 'Show',
-    teardown: 'Teardown'
-  }[kind] || kind;
+  const baseLabel = FINANCE_SCHEDULE_LABELS[kind] || kind;
   const label = `${baseLabel} ${index + 2}`;
   return `
     <div class="finance-schedule-pair finance-schedule-extra">
@@ -260,6 +278,494 @@ function financeAdditionalSchedulePair(kind, row, index) {
       <button type="button" class="finance-schedule-remove" title="Remove ${financeEscapeAttr(label)}" aria-label="Remove ${financeEscapeAttr(label)}" onclick="financeRemoveScheduleRow('${kind}',${index})">&times;</button>
     </div>
   `;
+}
+
+function financeScheduleBatches(document = financeState.current) {
+  return Array.isArray(document?.scheduleBatches) ? document.scheduleBatches : [];
+}
+
+function financeScheduleIdentity(date, time = '') {
+  return `${String(date || '').trim()}|${String(time || '').trim().toLowerCase()}`;
+}
+
+function financeScheduleDate(value) {
+  const raw = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const parsed = new Date(`${raw}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw ? null : parsed;
+}
+
+function financeScheduleDateLabel(value, month = 'short') {
+  const parsed = financeScheduleDate(value);
+  if (!parsed) return String(value || '');
+  return new Intl.DateTimeFormat('en-SG', {
+    day: 'numeric',
+    month,
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(parsed);
+}
+
+function financeScheduleBatchRows(kind, batchId, document = financeState.current) {
+  return financeAdditionalScheduleRows(kind, document)
+    .map((row, index) => ({ row, index }))
+    .filter(item => item.row?.batchId === batchId);
+}
+
+function financeRemoveEmptyScheduleBatches(document = financeState.current) {
+  if (!document || !Array.isArray(document.scheduleBatches)) return;
+  const used = new Set(
+    Object.keys(FINANCE_SCHEDULE_KEYS).flatMap(kind =>
+      financeAdditionalScheduleRows(kind, document).map(row => row?.batchId).filter(Boolean)
+    )
+  );
+  document.scheduleBatches = document.scheduleBatches.filter(batch => used.has(batch.id));
+}
+
+function financeScheduleBatchSummary(batch, rows) {
+  const dates = rows.map(item => item.row?.date).filter(Boolean).sort();
+  const first = dates[0] || batch.startDate;
+  const last = dates[dates.length - 1] || batch.endDate || first;
+  const range = first && last && first !== last
+    ? `${financeScheduleDateLabel(first)} to ${financeScheduleDateLabel(last)}`
+    : financeScheduleDateLabel(first);
+  if (batch.method === 'recurring') {
+    const days = (batch.weekdays || []).map(day => FINANCE_WEEKDAY_NAMES[Number(day)]).filter(Boolean);
+    const interval = Math.max(1, Number(batch.intervalWeeks || 1));
+    if (!days.length) {
+      return `${range || 'Date range'}${batch.time ? ` at ${batch.time}` : ''}`;
+    }
+    const recurrence = interval === 1
+      ? `Every ${days.join(', ')}`
+      : `Every ${interval} weeks on ${days.join(', ')}`;
+    return `${recurrence}${range ? `, ${range}` : ''}${batch.time ? ` at ${batch.time}` : ''}`;
+  }
+  return `Imported dates${range ? `, ${range}` : ''}`;
+}
+
+function financeScheduleBatchMarkup(kind, batch, rows) {
+  const encodedId = financeEscapeAttr(encodeURIComponent(batch.id));
+  const expanded = !!financeState.expandedScheduleBatches[batch.id];
+  return `
+    <div class="finance-schedule-batch">
+      <div class="finance-schedule-batch-summary">
+        <div>
+          <strong>${financeEscape(financeScheduleBatchSummary(batch, rows))}</strong>
+          <small>${rows.length} date${rows.length === 1 ? '' : 's'}</small>
+        </div>
+        <div class="finance-schedule-batch-actions">
+          <button type="button" onclick="financeToggleScheduleBatch('${encodedId}')">${expanded ? 'Hide dates' : 'View dates'}</button>
+          <button type="button" onclick="financeOpenBulkSchedule('${kind}','${encodedId}')">Edit</button>
+          <button type="button" onclick="financeDuplicateScheduleBatch('${encodedId}')">Duplicate</button>
+          <button type="button" class="is-danger" onclick="financeDeleteScheduleBatch('${encodedId}')">Delete</button>
+        </div>
+      </div>
+      <div class="finance-schedule-batch-dates" ${expanded ? '' : 'hidden'}>
+        ${rows.map(item => financeAdditionalSchedulePair(kind, item.row, item.index)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function financeScheduleRowsMarkup(kind, document = financeState.current) {
+  const rows = financeAdditionalScheduleRows(kind, document);
+  const batches = financeScheduleBatches(document)
+    .filter(batch => batch.kind === kind)
+    .map(batch => ({ batch, rows: financeScheduleBatchRows(kind, batch.id, document) }))
+    .filter(item => item.rows.length);
+  const knownBatchIds = new Set(batches.map(item => item.batch.id));
+  return [
+    ...batches.map(item => financeScheduleBatchMarkup(kind, item.batch, item.rows)),
+    ...rows
+      .map((row, index) => ({ row, index }))
+      .filter(item => !item.row?.batchId || !knownBatchIds.has(item.row.batchId))
+      .map(item => financeAdditionalSchedulePair(kind, item.row, item.index))
+  ].join('');
+}
+
+function financeToggleScheduleBatch(encodedBatchId) {
+  const batchId = decodeURIComponent(encodedBatchId);
+  financeState.expandedScheduleBatches[batchId] = !financeState.expandedScheduleBatches[batchId];
+  financeRenderEditor();
+}
+
+async function financeDeleteScheduleBatch(encodedBatchId) {
+  const batchId = decodeURIComponent(encodedBatchId);
+  const batch = financeScheduleBatches().find(row => row.id === batchId);
+  if (!batch) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete schedule',
+    message: `Delete this ${String(FINANCE_SCHEDULE_LABELS[batch.kind] || batch.kind).toLowerCase()} schedule and all of its dates?`,
+    confirmText: 'Delete schedule',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
+    const key = FINANCE_SCHEDULE_KEYS[kind];
+    financeState.current[key] = financeAdditionalScheduleRows(kind).filter(row => row.batchId !== batchId);
+  });
+  financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.id !== batchId);
+  delete financeState.expandedScheduleBatches[batchId];
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeDuplicateScheduleBatch(encodedBatchId) {
+  const batchId = decodeURIComponent(encodedBatchId);
+  const batch = financeScheduleBatches().find(row => row.id === batchId);
+  if (batch) financeOpenBulkSchedule(batch.kind, batchId, true);
+}
+
+function financeScheduleIsoDate(year, month, day) {
+  const value = new Date(Date.UTC(year, month - 1, day));
+  if (
+    value.getUTCFullYear() !== year
+    || value.getUTCMonth() !== month - 1
+    || value.getUTCDate() !== day
+  ) return '';
+  return value.toISOString().slice(0, 10);
+}
+
+function financeParseBulkScheduleLine(value) {
+  const original = String(value || '').trim();
+  if (!original) return null;
+  let dateText = original;
+  let time = '';
+  const timeMatch = dateText.match(/(?:,\s*|\s+)(\d{1,2}):(\d{2})(?:\s*hrs?)?\s*$/i);
+  if (timeMatch) {
+    const hour = Number(timeMatch[1]);
+    const minute = Number(timeMatch[2]);
+    if (hour > 23 || minute > 59) return { error: 'Invalid time', original };
+    time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    dateText = dateText.slice(0, timeMatch.index).trim().replace(/,$/, '').trim();
+  }
+
+  let date = '';
+  let match = dateText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) {
+    date = financeScheduleIsoDate(Number(match[1]), Number(match[2]), Number(match[3]));
+  }
+  if (!date) {
+    match = dateText.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (match) date = financeScheduleIsoDate(Number(match[3]), Number(match[2]), Number(match[1]));
+  }
+  if (!date) {
+    const monthNames = {
+      jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+      apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+      aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+      oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12
+    };
+    match = dateText.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+    if (match && monthNames[match[2].toLowerCase()]) {
+      date = financeScheduleIsoDate(Number(match[3]), monthNames[match[2].toLowerCase()], Number(match[1]));
+    }
+  }
+  return date ? { date, time, original } : { error: 'Unrecognised date', original };
+}
+
+function financeBulkScheduleCandidates() {
+  const state = financeScheduleBulkState;
+  const candidates = [];
+  const invalid = [];
+  let truncated = false;
+  if (state.method === 'recurring') {
+    const start = financeScheduleDate(state.startDate);
+    const end = financeScheduleDate(state.endDate);
+    if (!start || !end || end < start) {
+      invalid.push('Choose a valid start and end date.');
+    } else {
+      const selectedWeekdays = state.weekdays || [];
+      const interval = Math.max(1, Math.min(52, Number(state.intervalWeeks || 1)));
+      for (let cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+        const elapsedDays = Math.round((cursor - start) / 86400000);
+        const weekIndex = Math.floor(elapsedDays / 7);
+        const everyDay = selectedWeekdays.length === 0;
+        if (everyDay || (selectedWeekdays.includes(cursor.getUTCDay()) && weekIndex % interval === 0)) {
+          candidates.push({ date: cursor.toISOString().slice(0, 10), time: state.time || '' });
+          if (candidates.length >= 500) {
+            truncated = true;
+            break;
+          }
+        }
+      }
+    }
+  } else {
+    String(state.pasteText || '').split(/\r?\n/).forEach((line, index) => {
+      if (!line.trim() || candidates.length >= 500) return;
+      const parsed = financeParseBulkScheduleLine(line);
+      if (parsed?.error) invalid.push(`Line ${index + 1}: ${parsed.error} (${parsed.original})`);
+      if (parsed?.date) candidates.push({
+        date: parsed.date,
+        time: parsed.time || state.time || ''
+      });
+    });
+    truncated = String(state.pasteText || '').split(/\r?\n/).filter(line => line.trim()).length > 500;
+  }
+
+  const existing = new Set();
+  const primaryDate = financeState.current?.[`${state.kind}Date`];
+  if (primaryDate) {
+    existing.add(financeScheduleIdentity(primaryDate, financeState.current?.[`${state.kind}Time`]));
+  }
+  financeAdditionalScheduleRows(state.kind).forEach(row => {
+    if (!state.editingBatchId || row.batchId !== state.editingBatchId) {
+      existing.add(financeScheduleIdentity(row.date, row.time));
+    }
+  });
+
+  const seen = new Set();
+  const rows = candidates.map((row, index) => {
+    const identity = financeScheduleIdentity(row.date, row.time);
+    const duplicate = existing.has(identity) || seen.has(identity);
+    seen.add(identity);
+    return {
+      ...row,
+      identity,
+      id: `${identity}_${index}`,
+      duplicate,
+      selected: !duplicate && !state.excluded[identity]
+    };
+  });
+
+  if (state.initialiseExclusions) {
+    const initial = new Set(state.initialBatchIdentities || []);
+    rows.forEach(row => {
+      if (!row.duplicate && !initial.has(row.identity)) state.excluded[row.identity] = true;
+    });
+    state.initialiseExclusions = false;
+    rows.forEach(row => { row.selected = !row.duplicate && !state.excluded[row.identity]; });
+  }
+  return { rows, invalid, truncated };
+}
+
+function ensureFinanceBulkScheduleModal() {
+  let modal = document.getElementById('financeBulkScheduleModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'financeBulkScheduleModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-bulk-schedule-modal">
+      <div class="modal-header">
+        <div><h3>Bulk add schedule dates</h3><small>Create recurring dates or paste an existing schedule</small></div>
+        <button type="button" class="close-btn" aria-label="Close schedule builder" onclick="closeModal('financeBulkScheduleModal')">&times;</button>
+      </div>
+      <div id="financeBulkScheduleBody"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('financeBulkScheduleModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function financeOpenBulkSchedule(kind = 'show', encodedBatchId = '', duplicate = false) {
+  if (!financeState.current || !FINANCE_SCHEDULE_KEYS[kind]) return;
+  const batchId = encodedBatchId ? decodeURIComponent(encodedBatchId) : '';
+  const source = batchId ? financeScheduleBatches().find(row => row.id === batchId) : null;
+  const defaultDate = financeState.current[`${kind}Date`] || financeTodayIso();
+  const defaultDay = financeScheduleDate(defaultDate)?.getUTCDay() ?? new Date().getDay();
+  Object.assign(financeScheduleBulkState, {
+    kind: source?.kind || kind,
+    method: source?.method || 'recurring',
+    editingBatchId: source && !duplicate ? source.id : '',
+    startDate: source?.startDate || defaultDate,
+    endDate: source?.endDate || defaultDate,
+    weekdays: source ? [...(source.weekdays || [])] : [defaultDay],
+    intervalWeeks: Math.max(1, Number(source?.intervalWeeks || 1)),
+    time: source?.time || '',
+    pasteText: source?.pasteText || '',
+    excluded: Object.fromEntries((source?.excludedDates || []).map(identity => [identity, true])),
+    initialBatchIdentities: source && !duplicate
+      ? financeScheduleBatchRows(source.kind, source.id).map(item => financeScheduleIdentity(item.row.date, item.row.time))
+      : [],
+    initialiseExclusions: !!(source && !duplicate)
+  });
+  ensureFinanceBulkScheduleModal();
+  financeRenderBulkScheduleModal();
+  openModal('financeBulkScheduleModal');
+}
+
+function financeSetBulkScheduleKind(kind) {
+  if (!FINANCE_SCHEDULE_KEYS[kind]) return;
+  financeScheduleBulkState.kind = kind;
+  financeScheduleBulkState.excluded = {};
+  financeRenderBulkScheduleModal();
+}
+
+function financeSetBulkScheduleMethod(method) {
+  if (!['recurring', 'paste'].includes(method)) return;
+  financeScheduleBulkState.method = method;
+  financeScheduleBulkState.excluded = {};
+  financeRenderBulkScheduleModal();
+}
+
+function financeSetBulkScheduleField(field, value) {
+  if (!['startDate', 'endDate', 'intervalWeeks', 'time', 'pasteText'].includes(field)) return;
+  financeScheduleBulkState[field] = value;
+  financeRenderBulkSchedulePreview();
+}
+
+function financeToggleBulkScheduleWeekday(day) {
+  const value = Number(day);
+  const days = new Set(financeScheduleBulkState.weekdays || []);
+  if (days.has(value)) days.delete(value);
+  else days.add(value);
+  financeScheduleBulkState.weekdays = [...days].sort((a, b) => a - b);
+  financeRenderBulkScheduleModal();
+}
+
+function financeToggleBulkScheduleDate(encodedIdentity, checked) {
+  const identity = decodeURIComponent(encodedIdentity);
+  if (checked) delete financeScheduleBulkState.excluded[identity];
+  else financeScheduleBulkState.excluded[identity] = true;
+  financeRenderBulkSchedulePreview();
+}
+
+function financeRenderBulkScheduleModal() {
+  const body = document.getElementById('financeBulkScheduleBody');
+  if (!body) return;
+  const state = financeScheduleBulkState;
+  body.innerHTML = `
+    <form onsubmit="financeApplyBulkSchedule(event)">
+      <div class="finance-bulk-schedule-content">
+        <div class="finance-bulk-schedule-section">
+          <span class="finance-bulk-schedule-label">Schedule type</span>
+          <div class="finance-schedule-segments">
+            ${Object.keys(FINANCE_SCHEDULE_KEYS).map(kind => `
+              <button type="button" class="${state.kind === kind ? 'active' : ''}" onclick="financeSetBulkScheduleKind('${kind}')">${financeEscape(FINANCE_SCHEDULE_LABELS[kind])}</button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="finance-bulk-schedule-section">
+          <span class="finance-bulk-schedule-label">Entry method</span>
+          <div class="finance-schedule-segments finance-schedule-methods">
+            <button type="button" class="${state.method === 'recurring' ? 'active' : ''}" onclick="financeSetBulkScheduleMethod('recurring')">Recurring range</button>
+            <button type="button" class="${state.method === 'paste' ? 'active' : ''}" onclick="financeSetBulkScheduleMethod('paste')">Paste dates</button>
+          </div>
+        </div>
+        ${state.method === 'recurring' ? `
+          <div class="finance-bulk-schedule-grid">
+            <label class="finance-field"><span>From</span><input class="finance-input" type="date" value="${financeEscapeAttr(state.startDate)}" onchange="financeSetBulkScheduleField('startDate',this.value)"></label>
+            <label class="finance-field"><span>To</span><input class="finance-input" type="date" value="${financeEscapeAttr(state.endDate)}" onchange="financeSetBulkScheduleField('endDate',this.value)"></label>
+            <label class="finance-field"><span>Time</span><input class="finance-input" type="time" value="${financeEscapeAttr(state.time)}" onchange="financeSetBulkScheduleField('time',this.value)"></label>
+            <label class="finance-field"><span>Repeat every</span><span class="finance-schedule-interval"><input class="finance-input" type="number" min="1" max="52" value="${financeEscapeAttr(state.intervalWeeks)}" onchange="financeSetBulkScheduleField('intervalWeeks',this.value)"><small>week(s)</small></span></label>
+          </div>
+          <div class="finance-bulk-schedule-section">
+            <span class="finance-bulk-schedule-label">Repeat on${state.weekdays.length ? '' : ' - Every day'}</span>
+            <div class="finance-schedule-weekdays">
+              ${FINANCE_WEEKDAYS.map((label, day) => `<button type="button" class="${state.weekdays.includes(day) ? 'active' : ''}" onclick="financeToggleBulkScheduleWeekday(${day})">${label}</button>`).join('')}
+            </div>
+          </div>
+        ` : `
+          <div class="finance-bulk-schedule-paste">
+            <label class="finance-field"><span>Dates and times</span><textarea class="finance-input" rows="8" placeholder="7 Aug 2026, 19:00&#10;14/08/2026 19:00&#10;2026-08-21, 20:00" oninput="financeSetBulkScheduleField('pasteText',this.value)">${financeEscape(state.pasteText)}</textarea></label>
+            <label class="finance-field"><span>Default time when omitted</span><input class="finance-input" type="time" value="${financeEscapeAttr(state.time)}" onchange="financeSetBulkScheduleField('time',this.value)"></label>
+          </div>
+        `}
+        <div id="financeBulkSchedulePreview"></div>
+      </div>
+      <div class="modal-actions finance-bulk-schedule-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('financeBulkScheduleModal')">Cancel</button>
+        <button id="financeBulkScheduleSubmit" type="submit" class="btn btn-primary">Add dates</button>
+      </div>
+    </form>
+  `;
+  financeRenderBulkSchedulePreview();
+}
+
+function financeRenderBulkSchedulePreview() {
+  const container = document.getElementById('financeBulkSchedulePreview');
+  if (!container) return;
+  const preview = financeBulkScheduleCandidates();
+  const selected = preview.rows.filter(row => row.selected).length;
+  const duplicates = preview.rows.filter(row => row.duplicate).length;
+  const submit = document.getElementById('financeBulkScheduleSubmit');
+  if (submit) {
+    submit.disabled = selected === 0;
+    submit.textContent = financeScheduleBulkState.editingBatchId
+      ? `Update ${selected} date${selected === 1 ? '' : 's'}`
+      : `Add ${selected} date${selected === 1 ? '' : 's'}`;
+  }
+  container.innerHTML = `
+    <div class="finance-bulk-preview-heading">
+      <div><strong>Preview</strong><small>${selected} date${selected === 1 ? '' : 's'} selected</small></div>
+      <div class="finance-bulk-preview-counts">
+        ${duplicates ? `<span>${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped</span>` : ''}
+        ${preview.truncated ? '<span class="is-warning">Limited to 500 dates</span>' : ''}
+      </div>
+    </div>
+    ${preview.invalid.length ? `<div class="finance-bulk-preview-errors">${preview.invalid.map(message => `<span>${financeEscape(message)}</span>`).join('')}</div>` : ''}
+    <div class="finance-bulk-preview-list">
+      ${preview.rows.map(row => `
+        <label class="finance-bulk-preview-row ${row.duplicate ? 'is-duplicate' : ''}">
+          <input type="checkbox" ${row.selected ? 'checked' : ''} ${row.duplicate ? 'disabled' : ''} onchange="financeToggleBulkScheduleDate('${financeEscapeAttr(encodeURIComponent(row.identity))}',this.checked)">
+          <span><strong>${financeEscape(financeScheduleDateLabel(row.date, 'long'))}</strong>${row.time ? `<small>${financeEscape(row.time)}hrs</small>` : '<small>No time</small>'}</span>
+          ${row.duplicate ? '<em>Already added</em>' : ''}
+        </label>
+      `).join('') || '<div class="finance-suggestion-empty">Enter a schedule to preview its dates.</div>'}
+    </div>
+  `;
+}
+
+function financeApplyBulkSchedule(event) {
+  event.preventDefault();
+  if (!financeState.current) return;
+  const state = financeScheduleBulkState;
+  const preview = financeBulkScheduleCandidates();
+  const selected = preview.rows.filter(row => row.selected && !row.duplicate);
+  if (!selected.length) {
+    showNotification('warning', 'Choose at least one date to add');
+    return;
+  }
+  const batchId = state.editingBatchId || `schedule_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  if (state.editingBatchId) {
+    Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
+      const key = FINANCE_SCHEDULE_KEYS[kind];
+      financeState.current[key] = financeAdditionalScheduleRows(kind).filter(row => row.batchId !== batchId);
+    });
+    financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.id !== batchId);
+  }
+
+  const key = FINANCE_SCHEDULE_KEYS[state.kind];
+  const targetRows = financeState.current[key] || (financeState.current[key] = []);
+  selected.forEach((row, index) => targetRows.push({
+    id: `${batchId}_${index + 1}`,
+    date: row.date,
+    time: row.time,
+    batchId
+  }));
+  targetRows.sort((left, right) =>
+    String(left.date || '').localeCompare(String(right.date || ''))
+    || String(left.time || '').localeCompare(String(right.time || ''))
+  );
+
+  const excludedDates = preview.rows
+    .filter(row => !row.duplicate && !row.selected)
+    .map(row => row.identity);
+  financeState.current.scheduleBatches = [
+    ...financeScheduleBatches().filter(row => row.id !== batchId),
+    {
+      id: batchId,
+      kind: state.kind,
+      method: state.method,
+      startDate: state.startDate,
+      endDate: state.endDate,
+      weekdays: [...state.weekdays],
+      intervalWeeks: Math.max(1, Number(state.intervalWeeks || 1)),
+      time: state.time || '',
+      pasteText: state.method === 'paste' ? state.pasteText : '',
+      excludedDates
+    }
+  ];
+  financeState.expandedScheduleBatches[batchId] = false;
+  closeModal('financeBulkScheduleModal');
+  financeQueueSave();
+  financeRenderEditor();
+  showNotification('success', `${selected.length} schedule date${selected.length === 1 ? '' : 's'} added`);
 }
 
 function financePercent(value, fallback = 0) {
@@ -321,17 +827,19 @@ function financeTotals(document = financeState.current) {
 }
 
 function financeEventDays(document = financeState.current) {
-  const setupDates = [
+  const scheduleDates = [
     document?.setupDate,
-    ...financeAdditionalScheduleRows('setup', document).map(row => row.date)
-  ].filter(Boolean).sort();
-  const teardownDates = [
+    ...financeAdditionalScheduleRows('setup', document).map(row => row.date),
+    document?.rehearsalDate,
+    ...financeAdditionalScheduleRows('rehearsal', document).map(row => row.date),
+    document?.showDate,
+    ...financeAdditionalScheduleRows('show', document).map(row => row.date),
     document?.teardownDate,
     ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
   ].filter(Boolean).sort();
-  if (!setupDates.length || !teardownDates.length) return 1;
-  const start = new Date(`${setupDates[0]}T00:00:00`);
-  const end = new Date(`${teardownDates[teardownDates.length - 1]}T00:00:00`);
+  if (!scheduleDates.length) return 1;
+  const start = new Date(`${scheduleDates[0]}T00:00:00`);
+  const end = new Date(`${scheduleDates[scheduleDates.length - 1]}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
   return Math.max(1, Math.round((end - start) / 86400000) + 1);
 }
@@ -521,29 +1029,19 @@ function financeEventDateSummary(document) {
     .filter(value => !Number.isNaN(value.getTime()));
   if (!dates.length) return '';
 
-  const groups = [];
-  dates.forEach(value => {
-    const group = groups[groups.length - 1];
-    const previous = group?.[group.length - 1];
-    if (previous && value.getTime() - previous.getTime() === 86400000) group.push(value);
-    else groups.push([value]);
-  });
-
   const month = value => value.toLocaleDateString('en-SG', { month: 'short', timeZone: 'UTC' });
-  return groups.map(group => {
-    const start = group[0];
-    const end = group[group.length - 1];
-    if (start.getTime() === end.getTime()) {
-      return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}`;
-    }
-    if (start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()) {
-      return `${start.getUTCDate()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
-    }
-    if (start.getUTCFullYear() === end.getUTCFullYear()) {
-      return `${start.getUTCDate()} ${month(start)}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
-    }
-    return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
-  }).join(', ');
+  const start = dates[0];
+  const end = dates[dates.length - 1];
+  if (start.getTime() === end.getTime()) {
+    return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}`;
+  }
+  if (start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()) {
+    return `${start.getUTCDate()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+  }
+  if (start.getUTCFullYear() === end.getUTCFullYear()) {
+    return `${start.getUTCDate()} ${month(start)}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+  }
+  return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
 }
 
 function financeDaysSince(value) {
@@ -2173,26 +2671,29 @@ function financeRenderEditor() {
         </section>
 
         <section class="finance-card finance-section">
-          <div class="finance-section-heading"><div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div></div>
+          <div class="finance-section-heading">
+            <div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div>
+            <button type="button" class="btn btn-primary finance-bulk-schedule-open" onclick="financeOpenBulkSchedule('show')">Bulk add dates</button>
+          </div>
           <div class="finance-schedule-grid">
             <div class="finance-schedule-stack">
               ${financeSchedulePair('Set-up', 'setup')}
-              ${financeAdditionalScheduleRows('setup', document).map((row, index) => financeAdditionalSchedulePair('setup', row, index)).join('')}
+              ${financeScheduleRowsMarkup('setup', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('setup')">+ Add set-up</button>
             </div>
             <div class="finance-schedule-stack">
               ${financeSchedulePair('Teardown', 'teardown')}
-              ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
+              ${financeScheduleRowsMarkup('teardown', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('teardown')">+ Add teardown</button>
             </div>
             <div class="finance-schedule-stack">
               ${financeSchedulePair('Rehearsal', 'rehearsal')}
-              ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
+              ${financeScheduleRowsMarkup('rehearsal', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
             </div>
             <div class="finance-schedule-stack">
               ${financeSchedulePair('Show', 'show')}
-              ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
+              ${financeScheduleRowsMarkup('show', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('show')">+ Add show</button>
             </div>
           </div>
