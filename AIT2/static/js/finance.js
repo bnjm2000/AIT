@@ -41,6 +41,15 @@ const financeState = {
   catalogAbortController: null,
   catalogQuery: '',
   listTimer: null,
+  listLoading: false,
+  listRequestSeq: 0,
+  listQuery: '',
+  listObserver: null,
+  listMeta: {
+    total: 0,
+    hasMore: false,
+    nextOffset: null
+  },
   changeVersion: 0,
   statusTargetId: '',
   eventPairTargetId: '',
@@ -91,6 +100,7 @@ const compareState = {
   data: null,
   search: '',
   filter: 'all',
+  viewId: 'all',
   showMisc: false,
   showLoans: true,
   loading: false
@@ -1214,16 +1224,19 @@ function financeDateOnly(value) {
 }
 
 function financeEventDateSummary(document) {
-  const rawDates = [
-    document?.setupDate,
-    ...financeAdditionalScheduleRows('setup', document).map(row => row.date),
-    document?.rehearsalDate,
-    ...financeAdditionalScheduleRows('rehearsal', document).map(row => row.date),
-    document?.showDate,
-    ...financeAdditionalScheduleRows('show', document).map(row => row.date),
-    document?.teardownDate,
-    ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
-  ];
+  const summaryRange = [document?.eventStartDate, document?.eventEndDate].filter(Boolean);
+  const rawDates = summaryRange.length
+    ? summaryRange
+    : [
+        document?.setupDate,
+        ...financeAdditionalScheduleRows('setup', document).map(row => row.date),
+        document?.rehearsalDate,
+        ...financeAdditionalScheduleRows('rehearsal', document).map(row => row.date),
+        document?.showDate,
+        ...financeAdditionalScheduleRows('show', document).map(row => row.date),
+        document?.teardownDate,
+        ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
+      ];
   const dates = [...new Set(rawDates.map(financeDateOnly).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)))]
     .sort()
     .map(value => new Date(`${value}T00:00:00Z`))
@@ -1596,22 +1609,70 @@ async function loadQuotations() {
   return financeLoadList();
 }
 
-async function financeLoadList(query = '') {
+async function financeLoadList(query = '', options = {}) {
   const root = financeRoot();
   if (!root) return;
-  root.innerHTML = '<div class="loading">Loading quotations...</div>';
+  const append = options.append === true;
+  if (append && (financeState.listLoading || !financeState.listMeta.hasMore)) return;
+  const requestSeq = ++financeState.listRequestSeq;
+  const cleanQuery = String(query || '').trim();
+  financeState.listLoading = true;
+  financeState.listQuery = cleanQuery;
+  if (!append) {
+    financeState.listMeta = { total: 0, hasMore: false, nextOffset: null };
+    root.innerHTML = '<div class="loading">Loading quotations...</div>';
+  }
   try {
     const params = new URLSearchParams();
-    if (query) params.set('query', query);
+    params.set('view', 'summary');
+    params.set('limit', '40');
+    params.set('offset', String(append ? financeState.listMeta.nextOffset || financeState.documents.length : 0));
+    if (cleanQuery) params.set('query', cleanQuery);
     if (financeListCanToggleMine() && financeState.mineOnly) params.set('mine', '1');
-    const queryString = params.toString();
-    const response = await apiCall(`/api/quotations${queryString ? `?${queryString}` : ''}`);
-    financeState.documents = response.data || [];
-    financeRenderList(query);
+    const response = await apiCall(`/api/quotations?${params.toString()}`);
+    if (requestSeq !== financeState.listRequestSeq) return;
+    const incoming = response.data || [];
+    if (append) {
+      const existingIds = new Set(financeState.documents.map(row => String(row.id)));
+      financeState.documents.push(
+        ...incoming.filter(row => !existingIds.has(String(row.id)))
+      );
+    } else {
+      financeState.documents = incoming;
+    }
+    financeState.listMeta = {
+      total: Number(response.meta?.total ?? financeState.documents.length),
+      hasMore: response.meta?.hasMore === true,
+      nextOffset: response.meta?.nextOffset ?? null
+    };
+    financeRenderList(cleanQuery);
   } catch (error) {
-    root.innerHTML = '<div class="finance-empty">Could not load quotations.</div>';
+    if (requestSeq !== financeState.listRequestSeq) return;
+    if (!append) {
+      root.innerHTML = '<div class="finance-empty">Could not load quotations.</div>';
+    } else {
+      financeRenderList(cleanQuery);
+    }
     showNotification('error', error.message || 'Failed to load quotations');
+  } finally {
+    if (requestSeq === financeState.listRequestSeq) financeState.listLoading = false;
   }
+}
+
+function financeLoadMore() {
+  return financeLoadList(financeState.listQuery, { append: true });
+}
+
+function financeObserveListContinuation() {
+  financeState.listObserver?.disconnect();
+  financeState.listObserver = null;
+  if (!financeState.listMeta.hasMore || typeof IntersectionObserver !== 'function') return;
+  const sentinel = document.getElementById('financeListSentinel');
+  if (!sentinel) return;
+  financeState.listObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) financeLoadMore();
+  }, { rootMargin: '240px 0px' });
+  financeState.listObserver.observe(sentinel);
 }
 
 function financeListShowsSalesperson() {
@@ -1700,6 +1761,8 @@ function financeRenderList(query = '') {
   const showSalesperson = financeListShowsSalesperson();
   const showMineToggle = financeListCanToggleMine();
   const rows = financeState.documents.map(document => financeRenderListRow(document, showSalesperson)).join('');
+  const loadedCount = financeState.documents.length;
+  const totalCount = Math.max(loadedCount, Number(financeState.listMeta.total || 0));
   root.innerHTML = `
     <div class="finance-toolbar">
       <div class="finance-toolbar-heading">
@@ -1728,9 +1791,17 @@ function financeRenderList(query = '') {
           <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
+        <div class="finance-list-pagination">
+          <span>Showing ${loadedCount} of ${totalCount} quotation${totalCount === 1 ? '' : 's'}</span>
+          ${financeState.listMeta.hasMore ? `
+            <button type="button" class="btn btn-secondary" onclick="financeLoadMore()">Load more</button>
+            <span id="financeListSentinel" class="finance-list-sentinel" aria-hidden="true"></span>
+          ` : ''}
+        </div>
       ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
     </div>
   `;
+  requestAnimationFrame(financeObserveListContinuation);
 }
 
 function financeQueueListSearch(query) {
@@ -4971,6 +5042,7 @@ async function loadComparePage(options = {}) {
 async function selectCompareEvent(eventId, options = {}) {
   const id = Number(eventId || 0);
   if (!id) return;
+  if (Number(compareState.eventId) !== id) compareState.viewId = 'all';
   compareState.eventId = id;
   if (!options.keepQuotation) compareState.quotationId = '';
   const root = compareRoot();
@@ -4981,6 +5053,12 @@ async function selectCompareEvent(eventId, options = {}) {
     const response = await apiCall(`/api/finance/compare?${query.toString()}`);
     compareState.data = response.data;
     compareState.quotationId = response.data?.quotation?.id || '';
+    if (
+      compareState.viewId !== 'all'
+      && !(response.data?.subprojectViews || []).some(view => view.id === compareState.viewId)
+    ) {
+      compareState.viewId = 'all';
+    }
     renderComparePage();
   } catch (error) {
     if (root) root.innerHTML = `<div class="finance-empty">Could not load comparison.<br>${financeEscape(error.message || String(error))}</div>`;
@@ -4994,6 +5072,25 @@ async function refreshCompareForRealtime(eventId) {
 
 function compareSetFilter(filter) {
   compareState.filter = filter || 'all';
+  renderComparePage();
+}
+
+function compareSubprojectViews() {
+  return compareState.data?.subprojectViews || [];
+}
+
+function compareActiveSubprojectView() {
+  if (compareState.viewId === 'all') return null;
+  return compareSubprojectViews().find(view => view.id === compareState.viewId) || null;
+}
+
+function compareCurrentRows() {
+  return compareActiveSubprojectView()?.rows || compareState.data?.rows || [];
+}
+
+function compareSetSubprojectView(viewId) {
+  compareState.viewId = viewId || 'all';
+  compareState.filter = 'all';
   renderComparePage();
 }
 
@@ -5028,7 +5125,7 @@ function compareRowCustomType(row) {
 }
 
 function compareRowsAllowedByItemVisibility() {
-  const rows = compareState.data?.rows || [];
+  const rows = compareCurrentRows();
   return rows.filter(row => {
     const customType = compareRowCustomType(row);
     if (customType === 'MISC') return compareState.showMisc;
@@ -5112,6 +5209,8 @@ function renderComparePage() {
   if (!root || !data) return;
   const event = data.event || {};
   const quote = data.quotation || null;
+  const subprojectViews = compareSubprojectViews();
+  const activeSubprojectView = compareActiveSubprojectView();
   const actionableRows = compareRowsAllowedByItemVisibility();
   const counts = compareCountsForRows(actionableRows);
   const rows = compareVisibleRows();
@@ -5140,6 +5239,27 @@ function renderComparePage() {
       <div class="compare-stat missing"><strong>${Number(counts.missingInEvent || 0)}</strong><span>Missing in Event</span></div>
       <div class="compare-stat extra"><strong>${Number(counts.extraInEvent || 0)}</strong><span>Extra in Event</span></div>
       <div class="compare-stat mismatch"><strong>${Number(counts.qtyMismatch || 0)}</strong><span>Qty Mismatch</span></div>
+    </div>
+
+    <div class="compare-project-tabs" role="tablist" aria-label="Comparison sub-projects">
+      <button type="button" role="tab" class="${compareState.viewId === 'all' ? 'active' : ''}" aria-selected="${compareState.viewId === 'all'}" onclick="compareSetSubprojectView('all')">
+        <span>All Requirements</span>
+        <small>Consolidated</small>
+      </button>
+      ${subprojectViews.map(view => {
+        const issueCount = Number(view.counts?.missingInEvent || 0) + Number(view.counts?.extraInEvent || 0) + Number(view.counts?.qtyMismatch || 0);
+        const scopeLabel = view.scope === 'quotation_only'
+          ? 'Quotation only'
+          : view.scope === 'event_only'
+            ? 'Event only'
+            : 'Paired room';
+        return `
+          <button type="button" role="tab" class="${activeSubprojectView?.id === view.id ? 'active' : ''}" aria-selected="${activeSubprojectView?.id === view.id}" onclick="compareSetSubprojectView('${financeEscapeAttr(view.id)}')">
+            <span>${financeEscape(view.name || 'Room')}</span>
+            <small>${financeEscape(scopeLabel)}${issueCount ? ` · ${issueCount} difference${issueCount === 1 ? '' : 's'}` : ''}</small>
+          </button>
+        `;
+      }).join('')}
     </div>
 
     <section class="finance-card compare-table-card">
@@ -5203,13 +5323,22 @@ async function compareRunRowAction(action, key, options = {}) {
   };
   const endpoint = endpoints[action];
   if (!endpoint) return;
+  const actionViewId = options.viewId || compareState.viewId;
+  const activeView = compareSubprojectViews().find(view => view.id === actionViewId) || null;
   try {
     const response = await apiCall(`/api/finance/compare/${compareState.eventId}/${endpoint}`, 'POST', {
       quotationId: compareState.quotationId,
-      key
+      key,
+      viewId: actionViewId
     });
     compareState.data = response.data;
     compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
+    if (!options.preserveView && (
+      (action === 'add-event' && activeView?.scope === 'quotation_only')
+      || (action === 'add-quote' && activeView?.scope === 'event_only')
+    )) {
+      compareState.viewId = 'all';
+    }
     if (!options.silent) showNotification('success', 'Comparison updated');
     renderComparePage();
   } catch (error) {
@@ -5219,6 +5348,8 @@ async function compareRunRowAction(action, key, options = {}) {
 }
 
 async function compareBulkAction(action) {
+  const bulkViewId = compareState.viewId;
+  const bulkView = compareActiveSubprojectView();
   const rows = compareRowsAllowedByItemVisibility();
   const targets = rows.filter(row => {
     const quoteQty = financeNumber(row.quotationItem?.quantity);
@@ -5233,10 +5364,12 @@ async function compareBulkAction(action) {
     try {
       const response = await apiCall(`/api/finance/compare/${compareState.eventId}/add-to-quotation`, 'POST', {
         quotationId: compareState.quotationId,
-        keys: targets.map(row => row.key)
+        keys: targets.map(row => row.key),
+        viewId: bulkViewId
       });
       compareState.data = response.data;
       compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
+      if (bulkView?.scope === 'event_only') compareState.viewId = 'all';
       renderComparePage();
       showNotification('success', `${targets.length} item${targets.length === 1 ? '' : 's'} added to quotation`);
     } catch (error) {
@@ -5250,7 +5383,18 @@ async function compareBulkAction(action) {
     const chosen = action === 'resolve-mismatch'
       ? (quoteQty > eventQty ? 'add-event' : 'remove-extra')
       : action;
-    await compareRunRowAction(chosen, row.key, { silent: true });
+    await compareRunRowAction(chosen, row.key, {
+      silent: true,
+      viewId: bulkViewId,
+      preserveView: true
+    });
+  }
+  if (
+    bulkView?.scope === 'quotation_only'
+    && ['add-event', 'resolve-mismatch'].includes(action)
+  ) {
+    compareState.viewId = 'all';
+    renderComparePage();
   }
   if (targets.length) showNotification('success', 'Comparison updated');
 }
@@ -5287,6 +5431,7 @@ function compareOpenQuotationPicker() {
 
 async function compareChooseQuotation(quotationId) {
   compareState.quotationId = quotationId || '';
+  compareState.viewId = 'all';
   closeModal('compareQuotationPickerModal');
   await selectCompareEvent(compareState.eventId, { keepQuotation: true });
 }

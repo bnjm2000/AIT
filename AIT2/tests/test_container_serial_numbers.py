@@ -29,6 +29,7 @@ class ContainerSerialNumberTests(unittest.TestCase):
         }
         self.data_manager.containers = {
             'CASE-OLD': Container('CASE-OLD', ['A#01']),
+            'AD Rack #01': Container('AD Rack #01', ['A#02']),
         }
         self.data_manager.save_inventory()
         self.data_manager.save_containers()
@@ -98,6 +99,15 @@ class ContainerSerialNumberTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['data']['id'], 'CASE-OLD')
+
+        response = self.client.get('/api/containers/case-old')
+
+        self.assertEqual(response.status_code, 404, response.get_data(as_text=True))
+
+        response = self.client.get('/api/containers/AD%20Rack%20%2301')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['id'], 'AD Rack #01')
 
         response = self.client.put('/api/containers/CASE-OLD', json={
             'assetIds': ['A#01'],

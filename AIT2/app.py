@@ -2358,32 +2358,39 @@ def _save_departments(departments):
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'save_departments'):
         manager.save_departments(departments)
-        return
+    else:
+        filepath = _departments_csv_path()
+        folder = os.path.dirname(filepath)
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
 
-    filepath = _departments_csv_path()
-    folder = os.path.dirname(filepath)
-    if folder and not os.path.exists(folder):
-        os.makedirs(folder)
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['Code', 'Name', 'Color', 'TextColor'])
+            writer.writeheader()
+            for code in sorted(departments.keys()):
+                dept = _department_record(
+                    code,
+                    departments[code].get('name'),
+                    departments[code].get('color'),
+                    departments[code].get('textColor')
+                )
+                writer.writerow({
+                    'Code': dept['code'],
+                    'Name': dept['name'],
+                    'Color': dept['color'],
+                    'TextColor': dept['textColor']
+                })
 
-    with open(filepath, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['Code', 'Name', 'Color', 'TextColor'])
-        writer.writeheader()
-        for code in sorted(departments.keys()):
-            dept = _department_record(
-                code,
-                departments[code].get('name'),
-                departments[code].get('color'),
-                departments[code].get('textColor')
-            )
-            writer.writerow({
-                'Code': dept['code'],
-                'Name': dept['name'],
-                'Color': dept['color'],
-                'TextColor': dept['textColor']
-            })
+    if has_request_context():
+        g.departments_cache = departments
 
 
 def _load_departments():
+    if has_request_context():
+        cached = getattr(g, 'departments_cache', None)
+        if isinstance(cached, dict):
+            return cached
+
     filepath = _departments_csv_path()
     departments = {}
     changed = False
@@ -2428,6 +2435,8 @@ def _load_departments():
     if changed or (not database_backed and not os.path.exists(filepath)):
         _save_departments(departments)
 
+    if has_request_context():
+        g.departments_cache = departments
     return departments
 
 
@@ -2571,6 +2580,12 @@ def _normalise_pdf_settings(settings, company_code=None):
 
 
 def _load_pdf_settings(company_code=None):
+    cache_key = str(company_code or _current_company_code() or '').strip().upper()
+    if has_request_context():
+        cache = getattr(g, 'pdf_settings_cache', None)
+        if isinstance(cache, dict) and cache_key in cache:
+            return cache[cache_key]
+
     settings = _pdf_settings_defaults()
 
     manager = (
@@ -2585,7 +2600,14 @@ def _load_pdf_settings(company_code=None):
                 settings.update(loaded)
         except Exception as e:
             logger.warning("Failed to read PDF settings from PostgreSQL, using defaults: %s", e)
-        return _normalise_pdf_settings(settings, company_code)
+        settings = _normalise_pdf_settings(settings, company_code)
+        if has_request_context():
+            cache = getattr(g, 'pdf_settings_cache', None)
+            if not isinstance(cache, dict):
+                cache = {}
+                g.pdf_settings_cache = cache
+            cache[cache_key] = settings
+        return settings
 
     filepath = _pdf_settings_path(company_code)
 
@@ -2598,7 +2620,14 @@ def _load_pdf_settings(company_code=None):
         except Exception as e:
             logger.warning(f"Failed to read PdfSettings.json, using defaults: {e}")
 
-    return _normalise_pdf_settings(settings, company_code)
+    settings = _normalise_pdf_settings(settings, company_code)
+    if has_request_context():
+        cache = getattr(g, 'pdf_settings_cache', None)
+        if not isinstance(cache, dict):
+            cache = {}
+            g.pdf_settings_cache = cache
+        cache[cache_key] = settings
+    return settings
 
 
 def _save_pdf_settings(settings):
@@ -2606,15 +2635,21 @@ def _save_pdf_settings(settings):
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'save_company_document'):
         manager.save_company_document('pdf_settings', settings)
-        return settings
-    filepath = _pdf_settings_path()
-    folder = os.path.dirname(filepath)
-    if folder and not os.path.exists(folder):
-        os.makedirs(folder)
+    else:
+        filepath = _pdf_settings_path()
+        folder = os.path.dirname(filepath)
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(settings, f, ensure_ascii=False, indent=2)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
 
+    if has_request_context():
+        cache = getattr(g, 'pdf_settings_cache', None)
+        if not isinstance(cache, dict):
+            cache = {}
+            g.pdf_settings_cache = cache
+        cache[str(_current_company_code() or '').strip().upper()] = settings
     return settings
 
 
@@ -25823,8 +25858,9 @@ def _load_finance_data():
         if isinstance(loaded.get('accounting'), dict):
             data['accounting'] = loaded['accounting']
         data['version'] = loaded.get('version', 1)
-    if _migrate_finance_data(data):
-        _save_finance_data(data)
+    if _safe_int(data.get('version'), 1) < FINANCE_VERSION:
+        if _migrate_finance_data(data):
+            _save_finance_data(data)
     return data
 
 
@@ -29475,9 +29511,22 @@ def _finance_compare_item_from_line(line):
     }
 
 
-def _finance_compare_quote_items(document):
+_FINANCE_COMPARE_ALL_SUBPROJECTS = object()
+
+
+def _finance_compare_quote_items(
+    document,
+    subproject_id=_FINANCE_COMPARE_ALL_SUBPROJECTS,
+):
     items = {}
+    if subproject_id is None:
+        return items
     for line in (document or {}).get('lineItems') or []:
+        if (
+            subproject_id is not _FINANCE_COMPARE_ALL_SUBPROJECTS
+            and str(line.get('subprojectId') or 'main') != str(subproject_id)
+        ):
+            continue
         parsed = _finance_compare_item_from_line(line)
         if not parsed:
             continue
@@ -29550,8 +29599,137 @@ def _finance_compare_item_from_event_ref(ref):
     }
 
 
-def _finance_compare_event_items(event):
+def _finance_compare_main_subproject(event, create=False):
+    """Return the event's Main Room, creating it from legacy requirements if needed."""
+    subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    main = next((
+        row for row in subprojects
+        if str(row.get('id') or '').strip().casefold() == 'main'
+    ), None)
+    if not main:
+        main = next((
+            row for row in subprojects
+            if str(row.get('name') or '').strip().casefold() == 'main room'
+        ), None)
+    if not main and subprojects:
+        main = subprojects[0]
+    if main or not create:
+        if main:
+            main.setdefault('items', [])
+        return main
+
+    main = {
+        'id': 'main',
+        'name': 'Main Room',
+        'items': _event_initial_subproject_items(event),
+    }
+    _event_allocate_existing_refs_to_initial_subproject(event, main)
+    event.subprojects = [main]
+    return main
+
+
+def _finance_compare_item_from_subproject_item(item):
+    if not isinstance(item, dict):
+        return None
+    quantity = max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+    if quantity <= 0:
+        return None
+
+    group = _event_subproject_item_group(item)
+    if group:
+        identity = _finance_compare_model_identity(
+            group.get('department'),
+            group.get('brand'),
+            group.get('model'),
+        )
+        description = str(group.get('description') or '').strip()
+        return identity, quantity, {
+            'title': _finance_display_description(
+                group.get('brand'), group.get('model'), description
+            ),
+            'subtitle': description,
+            'department': _finance_compare_department_name(group.get('department')),
+            'departmentCode': group.get('department') or 'UN',
+            'uom': str(item.get('uom') or 'units'),
+            'description': description,
+        }
+
+    if not item.get('isCustom'):
+        return None
+    custom = next((
+        parsed for parsed in (
+            _parse_custom_marker(ref) for ref in (item.get('assetRefs') or [])
+        )
+        if parsed
+    ), None)
+    department = _normalise_department_code(
+        item.get('departmentCode') or item.get('department')
+    ) or (custom or {}).get('department') or 'UN'
+    name = str(item.get('description') or (custom or {}).get('name') or '').strip()
+    if not name:
+        return None
+    asset_type = (
+        (custom or {}).get('type')
+        or item.get('customType')
+        or item.get('type')
+        or 'MISC'
+    )
+    company = str(
+        (custom or {}).get('company')
+        or item.get('company')
+        or item.get('customCompany')
+        or ''
+    ).strip()
+    identity = _finance_compare_custom_identity(
+        asset_type, name, department, company
+    )
+    return identity, quantity, {
+        'title': name,
+        'subtitle': company or _normalise_custom_type(asset_type),
+        'department': _finance_compare_department_name(department),
+        'departmentCode': department,
+        'uom': str(item.get('uom') or 'units'),
+        'description': str(item.get('customDescription') or name).strip(),
+    }
+
+
+def _finance_compare_event_items(
+    event,
+    subproject_id=_FINANCE_COMPARE_ALL_SUBPROJECTS,
+):
     items = {}
+    if subproject_id is None:
+        return items
+    subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    if subprojects:
+        for subproject in subprojects:
+            if (
+                subproject_id is not _FINANCE_COMPARE_ALL_SUBPROJECTS
+                and str(subproject.get('id') or '') != str(subproject_id)
+            ):
+                continue
+            for item in subproject.get('items') or []:
+                parsed = _finance_compare_item_from_subproject_item(item)
+                if not parsed:
+                    continue
+                identity, quantity, details = parsed
+                _finance_compare_add_item(
+                    items,
+                    identity,
+                    quantity,
+                    details,
+                    line_id=(item or {}).get('lineId'),
+                )
+        return items
+
+    if subproject_id not in (_FINANCE_COMPARE_ALL_SUBPROJECTS, 'main'):
+        return items
     for ref in getattr(event, 'prepared_items', []) or []:
         parsed = _finance_compare_item_from_event_ref(ref)
         if not parsed:
@@ -29590,9 +29768,14 @@ def _finance_compare_display_item(item):
     }
 
 
-def _finance_compare_rows(event, quotation):
-    quote_items = _finance_compare_quote_items(quotation)
-    event_items = _finance_compare_event_items(event)
+def _finance_compare_rows(
+    event,
+    quotation,
+    quote_subproject_id=_FINANCE_COMPARE_ALL_SUBPROJECTS,
+    event_subproject_id=_FINANCE_COMPARE_ALL_SUBPROJECTS,
+):
+    quote_items = _finance_compare_quote_items(quotation, quote_subproject_id)
+    event_items = _finance_compare_event_items(event, event_subproject_id)
     rows = []
     counts = {
         'matched': 0,
@@ -29628,6 +29811,101 @@ def _finance_compare_rows(event, quotation):
             'quantityDelta': event_qty - quote_qty,
         })
     return rows, counts, quote_items, event_items
+
+
+def _finance_compare_subproject_rows(event, quotation):
+    """Pair quotation projects with event rooms without dropping one-sided rooms."""
+    quote_subprojects = [
+        {
+            'id': str(row.get('id') or 'main'),
+            'name': str(row.get('name') or 'Room').strip() or 'Room',
+        }
+        for row in (quotation or {}).get('subprojects') or []
+        if isinstance(row, dict)
+    ]
+    if quotation and not quote_subprojects:
+        quote_subprojects = [{'id': 'main', 'name': 'Main Room'}]
+
+    event_subprojects = [
+        {
+            'id': str(row.get('id') or 'main'),
+            'name': str(row.get('name') or 'Room').strip() or 'Room',
+        }
+        for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    if not event_subprojects:
+        event_subprojects = [{'id': 'main', 'name': 'Main Room'}]
+
+    unmatched_event_ids = {row['id'] for row in event_subprojects}
+    event_by_id = {row['id']: row for row in event_subprojects}
+    result = []
+    for quote_row in quote_subprojects:
+        event_row = event_by_id.get(quote_row['id'])
+        if not event_row:
+            quote_name = quote_row['name'].casefold()
+            event_row = next((
+                row for row in event_subprojects
+                if row['id'] in unmatched_event_ids
+                and row['name'].casefold() == quote_name
+            ), None)
+        if event_row:
+            unmatched_event_ids.discard(event_row['id'])
+        result.append({
+            'quoteSubprojectId': quote_row['id'],
+            'eventSubprojectId': event_row['id'] if event_row else None,
+            'quoteName': quote_row['name'],
+            'eventName': event_row['name'] if event_row else '',
+            'scope': 'paired' if event_row else 'quotation_only',
+        })
+
+    for event_row in event_subprojects:
+        if event_row['id'] not in unmatched_event_ids:
+            continue
+        result.append({
+            'quoteSubprojectId': None,
+            'eventSubprojectId': event_row['id'],
+            'quoteName': '',
+            'eventName': event_row['name'],
+            'scope': 'event_only',
+        })
+
+    for row in result:
+        raw_id = '|'.join((
+            row.get('quoteSubprojectId') or '',
+            row.get('eventSubprojectId') or '',
+        ))
+        row['id'] = 'room_' + hashlib.sha1(raw_id.encode('utf-8')).hexdigest()[:12]
+        quote_name = row.get('quoteName') or ''
+        event_name = row.get('eventName') or ''
+        row['name'] = (
+            quote_name
+            if quote_name and quote_name == event_name
+            else ' / '.join(value for value in (quote_name, event_name) if value)
+        ) or 'Room'
+        rows, counts, quote_items, event_items = _finance_compare_rows(
+            event,
+            quotation or {},
+            row.get('quoteSubprojectId'),
+            row.get('eventSubprojectId'),
+        )
+        row['rows'] = rows
+        row['counts'] = {
+            **counts,
+            'quotationItems': len(quote_items),
+            'eventItems': len(event_items),
+        }
+    return result
+
+
+def _finance_compare_subproject_scope(event, quotation, view_id):
+    clean_view_id = str(view_id or '').strip()
+    if not clean_view_id or clean_view_id == 'all':
+        return None
+    return next((
+        row for row in _finance_compare_subproject_rows(event, quotation)
+        if row.get('id') == clean_view_id
+    ), None)
 
 
 def _finance_compare_can_read_quotation(document, event_id):
@@ -29669,6 +29947,7 @@ def _finance_compare_payload(event, finance_data, quotation_id=''):
         if candidates:
             quotation = _normalise_finance_document(candidates[0], 'quotation', candidates[0])
     rows, counts, quote_items, event_items = _finance_compare_rows(event, quotation or {})
+    subproject_views = _finance_compare_subproject_rows(event, quotation or {})
     return {
         'event': _finance_event_brief(event),
         'quotation': ({
@@ -29679,6 +29958,7 @@ def _finance_compare_payload(event, finance_data, quotation_id=''):
         } if quotation else None),
         'quotations': _finance_compare_quotations_for_event(finance_data, event.event_id),
         'rows': rows,
+        'subprojectViews': subproject_views,
         'counts': {
             **counts,
             'quotationItems': len(quote_items),
@@ -29691,8 +29971,16 @@ def _finance_compare_payload(event, finance_data, quotation_id=''):
     }
 
 
-def _finance_compare_row_for_action(event, document, row_key):
-    rows, _counts, _quote_items, _event_items = _finance_compare_rows(event, document or {})
+def _finance_compare_row_for_action(event, document, row_key, view_id='all'):
+    scope = _finance_compare_subproject_scope(event, document or {}, view_id)
+    if str(view_id or 'all') != 'all' and not scope:
+        return None
+    rows, _counts, _quote_items, _event_items = _finance_compare_rows(
+        event,
+        document or {},
+        scope.get('quoteSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+        scope.get('eventSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+    )
     return next((row for row in rows if row.get('key') == row_key), None)
 
 
@@ -29704,10 +29992,177 @@ def _finance_compare_ref_matches_identity(ref, identity):
     return _finance_compare_identity_key(ref_identity) == _finance_compare_identity_key(identity)
 
 
-def _finance_compare_set_event_quantity(event, identity, target_quantity, display_item=None):
+def _finance_compare_set_event_quantity(
+    event,
+    identity,
+    target_quantity,
+    display_item=None,
+    target_subproject_id=None,
+):
     target_quantity = max(0, _safe_int(round(_safe_float(target_quantity, 0)), 0))
     _ensure_event_custom_lists(event)
     kind = (identity or {}).get('kind')
+    all_subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    target_subproject = (
+        _event_subproject(event, target_subproject_id)
+        if target_subproject_id
+        else None
+    )
+    subprojects = [target_subproject] if target_subproject else all_subprojects
+    if subprojects:
+        identity_key = _finance_compare_identity_key(identity)
+        matching_by_room = []
+        for subproject in subprojects:
+            matches = []
+            for item in subproject.get('items') or []:
+                parsed = _finance_compare_item_from_subproject_item(item)
+                if parsed and _finance_compare_identity_key(parsed[0]) == identity_key:
+                    matches.append(item)
+            matching_by_room.append((subproject, matches))
+
+        current_quantity = sum(
+            max(0, _safe_int(item.get('quantity'), 0))
+            for _subproject, matches in matching_by_room
+            for item in matches
+        )
+        main = target_subproject or _finance_compare_main_subproject(event, create=True)
+        if kind != 'custom':
+            group = {
+                'department': identity.get('department') or 'UN',
+                'brand': identity.get('brand') or '',
+                'model': identity.get('model') or '',
+                'description': (
+                    (display_item or {}).get('description')
+                    or (display_item or {}).get('subtitle')
+                    or ''
+                ),
+            }
+            if target_quantity >= current_quantity:
+                main_quantity = _event_subproject_required_quantity(main, group)
+                _event_subproject_set_group_quantity(
+                    main,
+                    group,
+                    main_quantity + target_quantity - current_quantity,
+                )
+            else:
+                remaining = current_quantity - target_quantity
+                ordered_rooms = [main] + [
+                    row for row in reversed(subprojects) if row is not main
+                ]
+                for subproject in ordered_rooms:
+                    if remaining <= 0:
+                        break
+                    room_quantity = _event_subproject_required_quantity(subproject, group)
+                    reduction = min(room_quantity, remaining)
+                    if reduction:
+                        _event_subproject_set_group_quantity(
+                            subproject, group, room_quantity - reduction
+                        )
+                        remaining -= reduction
+            _sync_event_model_markers_from_subprojects(event)
+            _reconcile_event_subproject_extras(event)
+            return
+
+        # Custom markers are the unit of preparation/collection. Rebuild the
+        # affected planned markers so the room quantities and legacy totals agree.
+        matching_refs = (
+            {
+                ref
+                for _subproject, matches in matching_by_room
+                for item in matches
+                for ref in (item.get('assetRefs') or [])
+                if _finance_compare_ref_matches_identity(ref, identity)
+            }
+            if target_subproject
+            else {
+                ref for ref in list(event.prepared_items or [])
+                if _finance_compare_ref_matches_identity(ref, identity)
+            }
+        )
+        for values in (
+            event.prepared_items,
+            event.actually_prepared,
+            event.returned_items,
+            event.extra_assets,
+            event.custom_collected,
+        ):
+            values[:] = [ref for ref in values if ref not in matching_refs]
+        for _subproject, matches in matching_by_room:
+            for item in matches:
+                item['assetRefs'] = [
+                    ref for ref in (item.get('assetRefs') or [])
+                    if ref not in matching_refs
+                ]
+
+        if target_quantity >= current_quantity:
+            if not matching_by_room or not any(matches for _room, matches in matching_by_room):
+                main.setdefault('items', []).append({
+                    'lineId': f"compare_{secrets.token_hex(8)}",
+                    'department': identity.get('department') or 'UN',
+                    'departmentCode': identity.get('department') or 'UN',
+                    'brand': '',
+                    'model': '',
+                    'description': identity.get('name') or (display_item or {}).get('title') or 'Custom item',
+                    'customType': identity.get('type') or 'MISC',
+                    'company': identity.get('company') or '',
+                    'quantity': target_quantity,
+                    'isCustom': True,
+                    'assetRefs': [],
+                })
+                matching_by_room = [(main, [main['items'][-1]])]
+            else:
+                first_item = next(
+                    item for _room, matches in matching_by_room for item in matches
+                )
+                first_item['quantity'] = max(
+                    0, _safe_int(first_item.get('quantity'), 0)
+                ) + target_quantity - current_quantity
+        else:
+            remaining = current_quantity - target_quantity
+            ordered_rooms = [main] + [
+                row for row in reversed(subprojects) if row is not main
+            ]
+            for subproject in ordered_rooms:
+                if remaining <= 0:
+                    break
+                for item in next((
+                    matches for room, matches in matching_by_room
+                    if room is subproject
+                ), []):
+                    item_quantity = max(0, _safe_int(item.get('quantity'), 0))
+                    reduction = min(item_quantity, remaining)
+                    item['quantity'] = item_quantity - reduction
+                    remaining -= reduction
+                    if remaining <= 0:
+                        break
+
+        for subproject, matches in matching_by_room:
+            retained_items = []
+            for item in subproject.get('items') or []:
+                if item not in matches:
+                    retained_items.append(item)
+                    continue
+                item_quantity = max(0, _safe_int(item.get('quantity'), 0))
+                if item_quantity <= 0:
+                    continue
+                marker = _make_custom_marker(
+                    identity.get('type') or 'MISC',
+                    identity.get('name') or item.get('description') or 'Custom item',
+                    item_quantity,
+                    identity.get('department') or 'UN',
+                    identity.get('company') or '',
+                    description=item.get('customDescription') or '',
+                )
+                item['assetRefs'] = [marker]
+                event.prepared_items.append(marker)
+                retained_items.append(item)
+            subproject['items'] = retained_items
+        _reconcile_event_subproject_extras(event)
+        return
+
     if kind == 'custom':
         matching_refs = {
             ref for ref in list(event.prepared_items or [])
@@ -29777,7 +30232,7 @@ def _finance_compare_set_event_quantity(event, identity, target_quantity, displa
         ]
 
 
-def _finance_compare_add_to_event(event, row):
+def _finance_compare_add_to_event(event, row, target_subproject_id=None):
     quote_item = row.get('quotationItem') or {}
     event_item = row.get('eventItem') or {}
     quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
@@ -29787,21 +30242,74 @@ def _finance_compare_add_to_event(event, row):
     identity = quote_item.get('identity') or {}
     if not identity:
         raise ValueError('Quotation item cannot be added to the event')
+    quantity_to_add = quote_qty - event_qty
+    main = _finance_compare_main_subproject(event, create=True)
+    target_subproject = (
+        _event_subproject(event, target_subproject_id)
+        if target_subproject_id
+        else None
+    ) or main
     if identity.get('kind') == 'custom':
-        event.prepared_items.append(_make_custom_marker(
+        marker = _make_custom_marker(
             identity.get('type') or 'MISC',
             identity.get('name') or quote_item.get('title') or 'Custom item',
-            quote_qty - event_qty,
+            quantity_to_add,
             identity.get('department') or quote_item.get('departmentCode') or 'UN',
             identity.get('company') or '',
-        ))
+            description=quote_item.get('description') or '',
+        )
+        event.prepared_items.append(marker)
+        identity_key = _finance_compare_identity_key(identity)
+        matching_item = next((
+            item for item in target_subproject.get('items') or []
+            if (
+                (parsed := _finance_compare_item_from_subproject_item(item))
+                and _finance_compare_identity_key(parsed[0]) == identity_key
+            )
+        ), None)
+        if matching_item:
+            matching_item['quantity'] = (
+                max(0, _safe_int(matching_item.get('quantity'), 0))
+                + quantity_to_add
+            )
+            matching_item.setdefault('assetRefs', []).append(marker)
+        else:
+            department = (
+                identity.get('department')
+                or quote_item.get('departmentCode')
+                or 'UN'
+            )
+            target_subproject.setdefault('items', []).append({
+                'lineId': f"compare_{secrets.token_hex(8)}",
+                'department': department,
+                'departmentCode': department,
+                'brand': '',
+                'model': '',
+                'description': identity.get('name') or quote_item.get('title') or 'Custom item',
+                'customDescription': quote_item.get('description') or '',
+                'customType': identity.get('type') or 'MISC',
+                'company': identity.get('company') or '',
+                'quantity': quantity_to_add,
+                'isCustom': True,
+                'assetRefs': [marker],
+            })
     else:
-        _add_or_increment_model_marker(event.prepared_items, {
+        group = {
             'department': identity.get('department') or quote_item.get('departmentCode') or 'UN',
             'brand': identity.get('brand') or '',
             'model': identity.get('model') or '',
             'description': quote_item.get('description') or quote_item.get('subtitle') or '',
-        }, quote_qty - event_qty)
+        }
+        current_main_quantity = _event_subproject_required_quantity(
+            target_subproject, group
+        )
+        _event_subproject_set_group_quantity(
+            target_subproject,
+            group,
+            current_main_quantity + quantity_to_add,
+        )
+        _sync_event_model_markers_from_subprojects(event)
+    _reconcile_event_subproject_extras(event)
 
 
 def _finance_compare_line_from_event_item(event_item, quantity, event, finance_data=None):
@@ -29868,7 +30376,13 @@ def _finance_compare_line_from_event_item(event_item, quantity, event, finance_d
     })
 
 
-def _finance_compare_apply_to_quotation(finance_data, quotation, event, row):
+def _finance_compare_apply_to_quotation(
+    finance_data,
+    quotation,
+    event,
+    row,
+    target_subproject_id=None,
+):
     event_item = row.get('eventItem') or {}
     quote_item = row.get('quotationItem') or {}
     event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
@@ -29917,16 +30431,28 @@ def _finance_compare_apply_to_quotation(finance_data, quotation, event, row):
                     })
                 break
     else:
-        quotation.setdefault('lineItems', []).append(
-            _finance_compare_line_from_event_item(
-                event_item, delta, event, finance_data
-            )
+        new_line = _finance_compare_line_from_event_item(
+            event_item, delta, event, finance_data
         )
+        new_line['subprojectId'] = str(target_subproject_id or 'main')
+        quotation.setdefault('lineItems', []).append(new_line)
 
 
-def _finance_compare_add_to_quotation(finance_data, quotation, event, row):
+def _finance_compare_add_to_quotation(
+    finance_data,
+    quotation,
+    event,
+    row,
+    target_subproject_id=None,
+):
     previous = copy.deepcopy(quotation)
-    _finance_compare_apply_to_quotation(finance_data, quotation, event, row)
+    _finance_compare_apply_to_quotation(
+        finance_data,
+        quotation,
+        event,
+        row,
+        target_subproject_id,
+    )
     updated = _normalise_finance_document(quotation, 'quotation', quotation)
     _remember_finance_prices(finance_data, updated, previous)
     for index, document in enumerate(finance_data.get('documents') or []):
@@ -29936,6 +30462,149 @@ def _finance_compare_add_to_quotation(finance_data, quotation, event, row):
     raise LookupError('Quotation not found')
 
 
+def _finance_revision_list_summary(revision):
+    revision = revision if isinstance(revision, dict) else {}
+    snapshot = revision.get('snapshot')
+    if not isinstance(snapshot, dict):
+        return None
+    return {
+        'revision': max(
+            1,
+            _safe_int(revision.get('revision'), _safe_int(snapshot.get('revision'), 1)),
+        ),
+        'number': str(revision.get('number') or snapshot.get('number') or ''),
+        'sentAt': str(revision.get('sentAt') or snapshot.get('sentAt') or ''),
+        'acceptedAt': str(
+            revision.get('acceptedAt') or snapshot.get('acceptedAt') or ''
+        ),
+        'validUntil': str(
+            revision.get('validUntil') or snapshot.get('validUntil') or ''
+        ),
+        'validityDays': max(
+            0,
+            _safe_int(
+                revision.get('validityDays'),
+                _safe_int(snapshot.get('validityDays'), 0),
+            ),
+        ),
+        # The list only needs to know that an archived snapshot exists.
+        'snapshot': True,
+    }
+
+
+def _finance_document_list_summary(document):
+    document = document if isinstance(document, dict) else {}
+    schedule_dates = [
+        document.get('setupDate'),
+        document.get('rehearsalDate'),
+        document.get('showDate'),
+        document.get('teardownDate'),
+        *[
+            row.get('date')
+            for key in (
+                'additionalSetups',
+                'additionalRehearsals',
+                'additionalShows',
+                'additionalTeardowns',
+            )
+            for row in document.get(key) or []
+            if isinstance(row, dict)
+        ],
+    ]
+    start_date, end_date = (
+        _finance_event_date_range(document)
+        if any(schedule_dates)
+        else ('', '')
+    )
+    stored_totals = document.get('totals')
+    totals = (
+        dict(stored_totals)
+        if isinstance(stored_totals, dict) and 'total' in stored_totals
+        else _finance_totals(document)
+    )
+    revisions = [
+        summary
+        for summary in (
+            _finance_revision_list_summary(row)
+            for row in document.get('revisions') or []
+        )
+        if summary
+    ]
+    created_by = str(document.get('createdBy') or '')
+    salesperson_username = str(document.get('salespersonUsername') or '')
+    salesperson = (
+        _user_display_name(salesperson_username)
+        if salesperson_username
+        else str(document.get('salesperson') or '')
+    )
+    return {
+        'id': str(document.get('id') or ''),
+        'type': str(document.get('type') or 'quotation'),
+        'number': str(document.get('number') or ''),
+        'revision': max(1, _safe_int(document.get('revision'), 1)),
+        'status': str(document.get('status') or 'draft'),
+        'client': _normalise_finance_client(document.get('client')),
+        'projectName': str(
+            document.get('projectName') or document.get('title') or ''
+        ),
+        'title': str(document.get('title') or document.get('projectName') or ''),
+        'reference': str(document.get('reference') or ''),
+        'salesperson': salesperson,
+        'salespersonUsername': salesperson_username,
+        'createdBy': created_by,
+        'createdByName': _user_display_name(created_by) if created_by else '',
+        'createdAt': str(document.get('createdAt') or ''),
+        'updatedAt': str(document.get('updatedAt') or ''),
+        'sentAt': str(document.get('sentAt') or ''),
+        'acceptedAt': str(document.get('acceptedAt') or ''),
+        'invoicedAt': str(document.get('invoicedAt') or ''),
+        'invoiceSentDate': str(document.get('invoiceSentDate') or ''),
+        'paymentDueDate': str(document.get('paymentDueDate') or ''),
+        'paymentTerms': str(document.get('paymentTerms') or ''),
+        'paidAt': str(document.get('paidAt') or ''),
+        'statusChangedAt': str(document.get('statusChangedAt') or ''),
+        'validUntil': str(document.get('validUntil') or ''),
+        'validityDays': max(1, _safe_int(document.get('validityDays'), 30)),
+        'eventId': _safe_int(document.get('eventId'), 0) or None,
+        'eventStartDate': start_date,
+        'eventEndDate': end_date,
+        'totals': totals,
+        'revisions': revisions,
+    }
+
+
+def _finance_list_search_text(document, linked_invoice=None):
+    document = document if isinstance(document, dict) else {}
+    client = document.get('client') if isinstance(document.get('client'), dict) else {}
+    event = data_manager.events.get(_safe_int(document.get('eventId'), 0))
+    salesperson_username = str(document.get('salespersonUsername') or '')
+    created_by = str(document.get('createdBy') or '')
+    return ' '.join((
+        str(document.get('number') or ''),
+        str(document.get('title') or document.get('projectName') or ''),
+        str(document.get('reference') or ''),
+        str((linked_invoice or {}).get('number') or ''),
+        str(getattr(event, 'state', '') or ''),
+        str(getattr(event, 'name', '') or ''),
+        str(document.get('salesperson') or ''),
+        _user_display_name(salesperson_username) if salesperson_username else '',
+        created_by,
+        _user_display_name(created_by) if created_by else '',
+        str(client.get('name') or ''),
+        str(client.get('company') or ''),
+    )).lower()
+
+
+def _finance_enrich_quotation_list_row(row, linked_invoice=None):
+    row['invoiceId'] = str((linked_invoice or {}).get('id') or '')
+    row['invoiceNumber'] = str((linked_invoice or {}).get('number') or '')
+    event = data_manager.events.get(_safe_int(row.get('eventId'), 0))
+    row['eventState'] = str(getattr(event, 'state', '') or '')
+    row['eventName'] = str(getattr(event, 'name', '') or '')
+    row['eventMissing'] = bool(row.get('eventId') and not event)
+    return row
+
+
 def _finance_list_or_create(document_type):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -29943,6 +30612,9 @@ def _finance_list_or_create(document_type):
             _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().lower()
+            summary_view = (
+                str(request.args.get('view') or '').strip().lower() == 'summary'
+            )
             mine_only = str(request.args.get('mine') or '').strip().lower() in {
                 '1', 'true', 'yes', 'on',
             }
@@ -29953,43 +30625,69 @@ def _finance_list_or_create(document_type):
                 quotation_id = str(document.get('sourceQuotationId') or '').strip()
                 if quotation_id and _finance_user_can_access(document):
                     linked_invoices[quotation_id] = document
-            rows = [
-                _normalise_finance_document(row, document_type, row)
+
+            source_rows = [
+                row
                 for row in finance_data.get('documents') or []
                 if row.get('type') == document_type and _finance_user_can_access(row)
             ]
             if mine_only:
                 current_username = _finance_current_username().lower()
-                rows = [
-                    row for row in rows
+                source_rows = [
+                    row for row in source_rows
                     if _finance_document_owner_username(row).lower() == current_username
                 ]
+            if query:
+                source_rows = [
+                    row for row in source_rows
+                    if query in _finance_list_search_text(
+                        row,
+                        linked_invoices.get(str(row.get('id') or '')),
+                    )
+                ]
+            source_rows.sort(
+                key=lambda row: (row.get('updatedAt', ''), row.get('number', '')),
+                reverse=True,
+            )
+
+            if summary_view:
+                total = len(source_rows)
+                offset = max(0, request.args.get('offset', type=int) or 0)
+                requested_limit = request.args.get('limit', type=int)
+                limit = min(max(1, requested_limit or 40), 100)
+                page_rows = source_rows[offset:offset + limit]
+                rows = [_finance_document_list_summary(row) for row in page_rows]
+                if document_type == 'quotation':
+                    for row in rows:
+                        _finance_enrich_quotation_list_row(
+                            row,
+                            linked_invoices.get(str(row.get('id') or '')),
+                        )
+                next_offset = offset + len(rows)
+                has_more = next_offset < total
+                return jsonify({
+                    'success': True,
+                    'data': rows,
+                    'meta': {
+                        'view': 'summary',
+                        'total': total,
+                        'offset': offset,
+                        'limit': limit,
+                        'hasMore': has_more,
+                        'nextOffset': next_offset if has_more else None,
+                    },
+                })
+
+            rows = [
+                _normalise_finance_document(row, document_type, row)
+                for row in source_rows
+            ]
             if document_type == 'quotation':
                 for row in rows:
-                    invoice = linked_invoices.get(str(row.get('id') or ''))
-                    row['invoiceId'] = str((invoice or {}).get('id') or '')
-                    row['invoiceNumber'] = str((invoice or {}).get('number') or '')
-                    event = data_manager.events.get(_safe_int(row.get('eventId'), 0))
-                    row['eventState'] = str(getattr(event, 'state', '') or '')
-                    row['eventName'] = str(getattr(event, 'name', '') or '')
-                    row['eventMissing'] = bool(row.get('eventId') and not event)
-            if query:
-                rows = [
-                    row for row in rows
-                    if query in ' '.join((
-                        row.get('number', ''),
-                        row.get('title', ''),
-                        row.get('reference', ''),
-                        row.get('invoiceNumber', ''),
-                        row.get('eventState', ''),
-                        row.get('eventName', ''),
-                        row.get('salesperson', ''),
-                        row.get('createdBy', ''),
-                        (row.get('client') or {}).get('name', ''),
-                        (row.get('client') or {}).get('company', ''),
-                    )).lower()
-                ]
-            rows.sort(key=lambda row: (row.get('updatedAt', ''), row.get('number', '')), reverse=True)
+                    _finance_enrich_quotation_list_row(
+                        row,
+                        linked_invoices.get(str(row.get('id') or '')),
+                    )
             return jsonify({'success': True, 'data': rows})
 
         document = _normalise_finance_document(request.get_json() or {}, document_type)
@@ -30923,17 +31621,25 @@ def finance_compare_add_to_event(event_id):
     payload = request.get_json(silent=True) or {}
     quotation_id = str(payload.get('quotationId') or '').strip()
     row_key = str(payload.get('key') or '').strip()
+    view_id = str(payload.get('viewId') or 'all').strip() or 'all'
     with _finance_lock:
         finance_data = _load_finance_data()
         quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
         if not quotation or not _finance_compare_can_read_quotation(quotation, event_id):
             return jsonify({'error': 'Quotation not found'}), 404
         normalised = _normalise_finance_document(quotation, 'quotation', quotation)
-        row = _finance_compare_row_for_action(event, normalised, row_key)
+        scope = _finance_compare_subproject_scope(event, normalised, view_id)
+        row = _finance_compare_row_for_action(
+            event, normalised, row_key, view_id
+        )
         if not row:
             return jsonify({'error': 'Comparison row not found'}), 404
         try:
-            _finance_compare_add_to_event(event, row)
+            _finance_compare_add_to_event(
+                event,
+                row,
+                scope.get('eventSubprojectId') if scope and scope.get('quoteSubprojectId') else None,
+            )
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
         update_event_state(event)
@@ -30957,13 +31663,17 @@ def finance_compare_remove_extra(event_id):
     payload = request.get_json(silent=True) or {}
     quotation_id = str(payload.get('quotationId') or '').strip()
     row_key = str(payload.get('key') or '').strip()
+    view_id = str(payload.get('viewId') or 'all').strip() or 'all'
     with _finance_lock:
         finance_data = _load_finance_data()
         quotation = _finance_find_document(finance_data, quotation_id, 'quotation') if quotation_id else None
         if quotation_id and (not quotation or not _finance_compare_can_read_quotation(quotation, event_id)):
             return jsonify({'error': 'Quotation not found'}), 404
         normalised = _normalise_finance_document(quotation, 'quotation', quotation) if quotation else {}
-        row = _finance_compare_row_for_action(event, normalised, row_key)
+        scope = _finance_compare_subproject_scope(event, normalised, view_id)
+        row = _finance_compare_row_for_action(
+            event, normalised, row_key, view_id
+        )
         if not row:
             return jsonify({'error': 'Comparison row not found'}), 404
         event_item = row.get('eventItem') or {}
@@ -30973,7 +31683,13 @@ def finance_compare_remove_extra(event_id):
         if event_qty <= quote_qty:
             return jsonify({'error': 'There is no extra event quantity to remove'}), 400
         identity = event_item.get('identity') or quote_item.get('identity') or {}
-        _finance_compare_set_event_quantity(event, identity, quote_qty, quote_item if quote_qty else event_item)
+        _finance_compare_set_event_quantity(
+            event,
+            identity,
+            quote_qty,
+            quote_item if quote_qty else event_item,
+            scope.get('eventSubprojectId') if scope else None,
+        )
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
@@ -30995,6 +31711,7 @@ def finance_compare_add_to_quotation(event_id):
         return _event_access_denied_response()
     payload = request.get_json(silent=True) or {}
     quotation_id = str(payload.get('quotationId') or '').strip()
+    view_id = str(payload.get('viewId') or 'all').strip() or 'all'
     row_keys = [
         str(key or '').strip()
         for key in (payload.get('keys') or [payload.get('key')])
@@ -31011,7 +31728,15 @@ def finance_compare_add_to_quotation(event_id):
             return jsonify({'error': 'Quotation access required'}), 403
         normalised = _normalise_finance_document(quotation, 'quotation', quotation)
         previous = copy.deepcopy(normalised)
-        rows, _counts, _quote_items, _event_items = _finance_compare_rows(event, normalised)
+        scope = _finance_compare_subproject_scope(event, normalised, view_id)
+        if view_id != 'all' and not scope:
+            return jsonify({'error': 'Comparison sub-project not found'}), 404
+        rows, _counts, _quote_items, _event_items = _finance_compare_rows(
+            event,
+            normalised,
+            scope.get('quoteSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+            scope.get('eventSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+        )
         rows_by_key = {row.get('key'): row for row in rows}
         selected_rows = []
         for row_key in dict.fromkeys(row_keys):
@@ -31022,7 +31747,11 @@ def finance_compare_add_to_quotation(event_id):
         try:
             for row in selected_rows:
                 _finance_compare_apply_to_quotation(
-                    finance_data, normalised, event, row
+                    finance_data,
+                    normalised,
+                    event,
+                    row,
+                    scope.get('quoteSubprojectId') if scope and scope.get('eventSubprojectId') else None,
                 )
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400

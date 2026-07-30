@@ -350,8 +350,12 @@ function findContainerInCacheByLookup(cache, lookup) {
 
   const rawLower = raw.toLowerCase();
   return Object.values(cache).find(container => {
+    const containerId = String(container?.id || '').trim();
     const serial = getContainerSerialNumber(container);
-    return serial && serial.toLowerCase() === rawLower;
+    return (
+      containerId === raw
+      || (serial && serial.toLowerCase() === rawLower)
+    );
   }) || null;
 }
 
@@ -1732,7 +1736,7 @@ function setupSingleAssetClickHandler() {
 
 // Global variables for maintenance functionality
 let selectedMaintenanceAssets = new Set();
-let maintenanceAssetSearchSequence = 0;
+let maintenanceIdentifierLookupInProgress = false;
 
 function removeExistingListeners() {
     // Remove any existing click handlers
@@ -2930,6 +2934,65 @@ function scanForReturn() {
   });
 }
 
+async function ensureMaintenanceAssetsForSelection(assetIds) {
+  const identifiers = Array.isArray(assetIds) ? assetIds : [];
+  const hasMissingAssets = identifiers.some(identifier => (
+    !getAssetByApiIdentifier(identifier)
+    && !findAssetByIdentifier(String(identifier || ''), assets)
+  ));
+  if (!hasMissingAssets) return;
+
+  const response = await apiCall(`/api/assets?_=${Date.now()}`);
+  if (!response?.success || !Array.isArray(response.data)) {
+    throw new Error('Unable to load the assets in this container');
+  }
+  assets = response.data;
+}
+
+async function addContainerToMaintenanceSelection(container) {
+  const containerId = String(container?.id || '').trim();
+  const assetIds = Array.isArray(container?.assetIds) ? container.assetIds : [];
+  const searchEl = document.getElementById('maintenanceAssetSearch');
+
+  if (!assetIds.length) {
+    showNotification('warning', `Container ${containerId || 'selected'} has no assets`);
+    return;
+  }
+
+  try {
+    await ensureMaintenanceAssetsForSelection(assetIds);
+  } catch (error) {
+    console.error(`Unable to load assets for container ${containerId}:`, error);
+    showNotification(
+      'error',
+      error.message || `Unable to load assets from container ${containerId}`
+    );
+    return;
+  }
+
+  if (typeof window.addAssetsToMaintenanceSelection !== 'function') {
+    throw new Error('Maintenance asset selection is not ready');
+  }
+  const selectionResult = window.addAssetsToMaintenanceSelection(assetIds);
+  if (searchEl) searchEl.value = '';
+  if (typeof window.searchMaintenanceAssets === 'function') {
+    window.searchMaintenanceAssets();
+  }
+
+  if (selectionResult.added > 0) {
+    const details = [
+      `${selectionResult.added} added`,
+      selectionResult.already ? `${selectionResult.already} already selected` : '',
+      selectionResult.skipped ? `${selectionResult.skipped} unavailable` : ''
+    ].filter(Boolean).join(', ');
+    showNotification('success', `Added container ${containerId}: ${details}`);
+  } else if (selectionResult.already > 0 && selectionResult.skipped === 0) {
+    showNotification('info', `All assets in container ${containerId} are already selected`);
+  } else {
+    showNotification('warning', `No eligible assets could be added from container ${containerId}`);
+  }
+}
+
 async function addIdentifierToMaintenanceSelection(identifier) {
   const normalized = normalizeScannedIdentifier(identifier);
   if (!normalized) {
@@ -2941,18 +3004,53 @@ async function addIdentifierToMaintenanceSelection(identifier) {
 
   const asset = findAssetByIdentifier(normalized, assets);
   if (asset) {
-    selectAssetForMaintenance(getAssetIdentifierForApi(asset));
+    if (typeof window.selectAssetForMaintenance !== 'function') {
+      throw new Error('Maintenance asset selection is not ready');
+    }
+    window.selectAssetForMaintenance(getAssetIdentifierForApi(asset));
     const searchEl = document.getElementById('maintenanceAssetSearch');
     if (searchEl) searchEl.value = '';
     return;
   }
 
-  let container = await getContainerById(normalized);
-  if (!container) {
-    container = await getContainerById(normalized, true);
+  const endpoint = `/api/containers/${encodeURIComponent(normalized)}?_=${Date.now()}`;
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Accept': 'application/json',
+      'X-Client-Id': REALTIME_CLIENT_ID
+    }
+  });
+  const responseText = await response.text();
+  let containerResponse = {};
+  if (responseText) {
+    try {
+      containerResponse = JSON.parse(responseText);
+    } catch (error) {
+      throw new Error('The container lookup returned an invalid response');
+    }
   }
+
+  if (response.status === 404) {
+    showNotification('error', `Asset or container not found: ${normalized}`);
+    const searchEl = document.getElementById('maintenanceAssetSearch');
+    if (searchEl) {
+      searchEl.value = normalized;
+      searchEl.focus();
+      if (typeof window.searchMaintenanceAssets === 'function') {
+        window.searchMaintenanceAssets();
+      }
+    }
+    return;
+  }
+  if (!response.ok) {
+    throw new Error(containerResponse.error || 'Unable to check this container');
+  }
+
+  const container = containerResponse.data || null;
   if (container) {
-    addContainerToMaintenanceSelection(container);
+    await addContainerToMaintenanceSelection(container);
     return;
   }
 
@@ -2961,7 +3059,45 @@ async function addIdentifierToMaintenanceSelection(identifier) {
   if (searchEl) {
     searchEl.value = normalized;
     searchEl.focus();
-    searchMaintenanceAssets();
+    if (typeof window.searchMaintenanceAssets === 'function') {
+      window.searchMaintenanceAssets();
+    }
+  }
+}
+
+async function handleMaintenanceIdentifierEntry(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (maintenanceIdentifierLookupInProgress) return;
+
+  const input = event.currentTarget;
+  const identifier = normalizeScannedIdentifier(input?.value);
+  if (!identifier) return;
+
+  maintenanceIdentifierLookupInProgress = true;
+  input.readOnly = true;
+  input.setAttribute('aria-busy', 'true');
+  const results = document.getElementById('availableMaintenanceAssets');
+  if (results) {
+    results.innerHTML = '<div style="padding: 20px; text-align: center; color: #66736c;">Checking asset or container...</div>';
+  }
+
+  try {
+    await addIdentifierToMaintenanceSelection(identifier);
+  } catch (error) {
+    console.error(`Maintenance identifier lookup failed for ${identifier}:`, error);
+    if (results) {
+      const message = error?.message || 'Unable to check this identifier. Please try again.';
+      results.innerHTML = `<div style="padding: 20px; text-align: center; color: #b42318;">${escapeHtml(message)}</div>`;
+    }
+  } finally {
+    maintenanceIdentifierLookupInProgress = false;
+    if (input?.isConnected) {
+      input.readOnly = false;
+      input.removeAttribute('aria-busy');
+      input.focus();
+    }
   }
 }
 
@@ -27459,15 +27595,11 @@ document.addEventListener("DOMContentLoaded", function () {
       searchMaintenanceAssets();
     });
     
-    // Add Enter key handler for direct asset ID selection
-    maintenanceAssetSearch.addEventListener("keypress", async function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const searchTerm = normalizeScannedIdentifier(e.target.value);
-        if (!searchTerm) return;
-        await addIdentifierToMaintenanceSelection(searchTerm);
-      }
-    });
+    // Enter accepts an exact asset or container identifier without listing containers.
+    maintenanceAssetSearch.addEventListener(
+      "keydown",
+      handleMaintenanceIdentifierEntry
+    );
   }
 
   fetch("/api/stats")
@@ -27621,46 +27753,7 @@ function openMaintenanceModal(initialAssetIds = []) {
 function openMaintenanceModalForAsset(assetId) {
   openMaintenanceModal([assetId]);
 }
-function maintenanceContainerSearchText(container) {
-  return [
-    container?.id,
-    getContainerSerialNumber(container)
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
-function maintenanceContainerResultHtml(container) {
-  const containerId = String(container?.id || '').trim();
-  const serialNumber = getContainerSerialNumber(container);
-  const assetIds = Array.isArray(container?.assetIds) ? container.assetIds : [];
-  const encodedId = encodeURIComponent(containerId);
-  const assetCountText = `${assetIds.length} asset${assetIds.length === 1 ? '' : 's'}`;
-  const assetPreview = assetIds.slice(0, 4).join(', ');
-  const previewSuffix = assetIds.length > 4 ? ` +${assetIds.length - 4} more` : '';
-
-  return `
-    <div style="padding: 9px 10px; border-bottom: 2px solid #e7ebee; display: flex; gap: 12px; align-items: center; cursor: pointer; background: #f5faf7; transition: background-color 0.15s;"
-         onmouseover="this.style.backgroundColor='#eaf6ef'"
-         onmouseout="this.style.backgroundColor='#f5faf7'"
-         onclick="selectContainerForMaintenance('${escapeJs(encodedId)}')">
-      <div style="flex: 1 1 300px; min-width: 0;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
-          <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(containerId)}</strong>
-          <span class="asset-badge status-available">Container</span>
-        </div>
-        <div style="color:#66736c; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-             title="${escapeHtmlAttr(`${assetPreview}${previewSuffix}`)}">
-          ${escapeHtml(assetCountText)}${serialNumber ? ` &middot; S/N: ${escapeHtml(serialNumber)}` : ''}${assetPreview ? ` &middot; ${escapeHtml(assetPreview)}${escapeHtml(previewSuffix)}` : ''}
-        </div>
-      </div>
-      <button type="button" class="btn btn-primary" style="padding:6px 12px; font-size:12px;"
-              onclick="event.stopPropagation(); selectContainerForMaintenance('${escapeJs(encodedId)}')">
-        Add all
-      </button>
-    </div>
-  `;
-}
-
-async function searchMaintenanceAssets() {
+function searchMaintenanceAssets() {
   const searchEl = document.getElementById('maintenanceAssetSearch');
   const container = document.getElementById('availableMaintenanceAssets');
   
@@ -27670,7 +27763,6 @@ async function searchMaintenanceAssets() {
   }
   
   const searchTerm = searchEl.value.toLowerCase().trim();
-  const searchSequence = ++maintenanceAssetSearchSequence;
   
   if (!searchTerm || searchTerm.length < 2) {
     container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Type at least 2 characters to search...</div>';
@@ -27688,26 +27780,12 @@ async function searchMaintenanceAssets() {
     return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(assetId);
   });
 
-  let matchingContainers = [];
-  try {
-    const containerCache = await refreshContainersCache(false);
-    if (searchSequence !== maintenanceAssetSearchSequence
-        || searchEl.value.toLowerCase().trim() !== searchTerm) {
-      return;
-    }
-    matchingContainers = Object.values(containerCache || {})
-      .filter(item => item?.id && maintenanceContainerSearchText(item).includes(searchTerm))
-      .sort((left, right) => String(left.id).localeCompare(String(right.id)));
-  } catch (error) {
-    console.warn('Unable to load containers for maintenance search:', error);
-  }
-
-  if (filteredAssets.length === 0 && matchingContainers.length === 0) {
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching assets or containers found.</div>';
+  if (filteredAssets.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching individual assets. Enter an exact container ID and press Enter to add its assets.</div>';
     return;
   }
   
-  let html = matchingContainers.slice(0, 20).map(maintenanceContainerResultHtml).join('');
+  let html = '';
   filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
     const assetId = getAssetIdentifierForApi(asset);
     const displayId = assetMaintenanceDisplayId(asset);
@@ -27748,47 +27826,6 @@ async function searchMaintenanceAssets() {
   });
   
   container.innerHTML = html;
-}
-
-function addContainerToMaintenanceSelection(container) {
-  const containerId = String(container?.id || '').trim();
-  const assetIds = Array.isArray(container?.assetIds) ? container.assetIds : [];
-  const searchEl = document.getElementById('maintenanceAssetSearch');
-
-  if (!assetIds.length) {
-    showNotification('warning', `Container ${containerId || 'selected'} has no assets`);
-    return;
-  }
-
-  const selectionResult = addAssetsToMaintenanceSelection(assetIds);
-  if (searchEl) searchEl.value = '';
-  searchMaintenanceAssets();
-
-  if (selectionResult.added > 0) {
-    const details = [
-      `${selectionResult.added} added`,
-      selectionResult.already ? `${selectionResult.already} already selected` : '',
-      selectionResult.skipped ? `${selectionResult.skipped} unavailable` : ''
-    ].filter(Boolean).join(', ');
-    showNotification('success', `Added container ${containerId}: ${details}`);
-  } else if (selectionResult.already > 0 && selectionResult.skipped === 0) {
-    showNotification('info', `All assets in container ${containerId} are already selected`);
-  } else {
-    showNotification('warning', `No eligible assets could be added from container ${containerId}`);
-  }
-}
-
-async function selectContainerForMaintenance(encodedContainerId) {
-  const containerId = decodeURIComponent(String(encodedContainerId || ''));
-  let container = await getContainerById(containerId);
-  if (!container) {
-    container = await getContainerById(containerId, true);
-  }
-  if (!container) {
-    showNotification('error', `Container not found: ${containerId}`);
-    return;
-  }
-  addContainerToMaintenanceSelection(container);
 }
 
 function selectAssetForMaintenance(assetId) {
@@ -29514,6 +29551,9 @@ window.deleteMaintenanceLog = deleteMaintenanceLog;
 window.deleteMaintenanceMedia = deleteMaintenanceMedia;
 window.deleteMaintenanceLogFromModal = deleteMaintenanceLogFromModal;
 window.showCustomConfirm = showCustomConfirm;
+window.addAssetsToMaintenanceSelection = addAssetsToMaintenanceSelection;
+window.searchMaintenanceAssets = searchMaintenanceAssets;
+window.selectAssetForMaintenance = selectAssetForMaintenance;
 
 });
 

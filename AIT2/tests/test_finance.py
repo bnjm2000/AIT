@@ -182,6 +182,64 @@ class FinanceFeatureTests(unittest.TestCase):
             source,
         )
 
+    def test_finance_reference_data_is_cached_for_each_request(self):
+        with app_module.app.test_request_context('/api/quotations'):
+            first_departments = app_module._load_departments()
+            second_departments = app_module._load_departments()
+            first_settings = app_module._load_pdf_settings()
+            second_settings = app_module._load_pdf_settings()
+
+        self.assertIs(first_departments, second_departments)
+        self.assertIs(first_settings, second_settings)
+
+    def test_current_finance_schema_skips_migration_on_read(self):
+        self.create_quote('Current Schema')
+
+        with patch.object(app_module, '_migrate_finance_data') as migrate:
+            response = self.client.get('/api/quotations?view=summary&limit=10')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        migrate.assert_not_called()
+
+    def test_quotation_summary_is_lightweight_and_paginated(self):
+        created = {
+            self.create_quote('First Project')['id'],
+            self.create_quote('Second Project')['id'],
+            self.create_quote('Third Project')['id'],
+        }
+
+        with patch.object(app_module, '_normalise_finance_document') as normalise:
+            first_response = self.client.get(
+                '/api/quotations?view=summary&limit=2&offset=0'
+            )
+        self.assertEqual(
+            first_response.status_code,
+            200,
+            first_response.get_data(as_text=True),
+        )
+        normalise.assert_not_called()
+        first_payload = first_response.get_json()
+        self.assertEqual(len(first_payload['data']), 2)
+        self.assertEqual(first_payload['meta']['total'], 3)
+        self.assertTrue(first_payload['meta']['hasMore'])
+        self.assertEqual(first_payload['meta']['nextOffset'], 2)
+        self.assertNotIn('lineItems', first_payload['data'][0])
+
+        second_payload = self.client.get(
+            '/api/quotations?view=summary&limit=2&offset=2'
+        ).get_json()
+        self.assertEqual(len(second_payload['data']), 1)
+        self.assertFalse(second_payload['meta']['hasMore'])
+        self.assertIsNone(second_payload['meta']['nextOffset'])
+        listed_ids = {
+            row['id']
+            for row in first_payload['data'] + second_payload['data']
+        }
+        self.assertEqual(listed_ids, created)
+
+        full_row = self.client.get('/api/quotations').get_json()['data'][0]
+        self.assertIn('lineItems', full_row)
+
     def test_sales_admin_can_manage_all_quotations_but_sales_manager_only_their_own(self):
         alice_quote = self.create_quote('Alice Project')
 
@@ -2934,6 +2992,12 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
         self.assertIn('[MODEL]AX|L-Acoustics|SB18 III|2|Subwoofer', event.prepared_items)
+        self.assertEqual(len(event.subprojects), 1)
+        self.assertEqual(event.subprojects[0]['id'], 'main')
+        self.assertEqual(
+            event.subprojects[0]['items'][0]['quantity'],
+            2,
+        )
 
         blocked = self.client.post(
             '/api/finance/compare/200/add-to-quotation',
@@ -2947,6 +3011,220 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
         self.assertFalse(any('Spiider' in item for item in event.prepared_items))
+
+    def test_compare_aggregates_all_rooms_and_adds_missing_quantity_to_main(self):
+        event = Event(
+            event_id=203,
+            name='Multi-room Comparison Event',
+            location='Convention Centre',
+            start_date='20260721',
+            end_date='20260721',
+            asset_models=[],
+            prepared_items=[
+                '[MODEL]AX|L-Acoustics|SB18 III|2|Subwoofer',
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'manager-no-sales'],
+        )
+        event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'event-main-sub',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'L-Acoustics',
+                    'model': 'SB18 III',
+                    'description': 'Subwoofer',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout Room',
+                'items': [{
+                    'lineId': 'event-breakout-sub',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'L-Acoustics',
+                    'model': 'SB18 III',
+                    'description': 'Subwoofer',
+                    'quantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+            },
+        ]
+        self.data_manager.events[203] = event
+        self.data_manager.save_event(event)
+
+        quotation = self.create_quote('Multi-room Comparison Event')
+        catalog = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        quotation['eventId'] = 203
+        quotation['subprojects'] = [
+            {'id': 'main', 'name': 'Main Room'},
+            {'id': 'quote-room-three', 'name': 'Quote Room Three'},
+        ]
+        quotation['lineItems'] = [
+            {
+                **catalog,
+                'id': 'quote-main-sub',
+                'subprojectId': 'main',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+            },
+            {
+                **catalog,
+                'id': 'quote-room-three-sub',
+                'subprojectId': 'quote-room-three',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+            },
+        ]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+
+        self.login('manager-no-sales')
+        comparison = self.client.get('/api/finance/compare?eventId=203').get_json()['data']
+        mismatch = next(row for row in comparison['rows'] if row['status'] == 'qty_mismatch')
+        self.assertEqual(mismatch['quotationItem']['quantity'], 4)
+        self.assertEqual(mismatch['eventItem']['quantity'], 2)
+        views_by_scope = {
+            view['scope']: view for view in comparison['subprojectViews']
+        }
+        self.assertEqual(set(views_by_scope), {
+            'paired', 'quotation_only', 'event_only',
+        })
+        paired_row = views_by_scope['paired']['rows'][0]
+        self.assertEqual(paired_row['quotationItem']['quantity'], 2)
+        self.assertEqual(paired_row['eventItem']['quantity'], 1)
+        quotation_only_row = views_by_scope['quotation_only']['rows'][0]
+        self.assertEqual(quotation_only_row['quotationItem']['quantity'], 2)
+        self.assertEqual(quotation_only_row['eventItem']['quantity'], 0)
+        event_only_row = views_by_scope['event_only']['rows'][0]
+        self.assertEqual(event_only_row['quotationItem']['quantity'], 0)
+        self.assertEqual(event_only_row['eventItem']['quantity'], 1)
+
+        response = self.client.post(
+            '/api/finance/compare/203/add-to-event',
+            json={
+                'quotationId': saved_quote['id'],
+                'key': quotation_only_row['key'],
+                'viewId': views_by_scope['quotation_only']['id'],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 3)
+        self.assertEqual(event.subprojects[1]['items'][0]['quantity'], 1)
+        refreshed_row = next(
+            row for row in response.get_json()['data']['rows']
+            if row['key'] == mismatch['key']
+        )
+        self.assertEqual(refreshed_row['eventItem']['quantity'], 4)
+        self.assertEqual(refreshed_row['status'], 'matched')
+
+    def test_compare_adds_custom_requirement_difference_to_main_room(self):
+        main_ref = app_module._make_custom_marker(
+            'MISC', 'Short mic stand', 1, 'AX'
+        )
+        breakout_ref = app_module._make_custom_marker(
+            'MISC', 'Short mic stand', 1, 'AX'
+        )
+        event = Event(
+            event_id=204,
+            name='Custom Multi-room Event',
+            location='Convention Centre',
+            start_date='20260721',
+            end_date='20260721',
+            asset_models=[],
+            prepared_items=[main_ref, breakout_ref],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'manager-no-sales'],
+        )
+        event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-custom',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'description': 'Short mic stand',
+                    'quantity': 1,
+                    'isCustom': True,
+                    'assetRefs': [main_ref],
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout Room',
+                'items': [{
+                    'lineId': 'breakout-custom',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'description': 'Short mic stand',
+                    'quantity': 1,
+                    'isCustom': True,
+                    'assetRefs': [breakout_ref],
+                }],
+            },
+        ]
+        self.data_manager.events[204] = event
+        self.data_manager.save_event(event)
+
+        quotation = self.create_quote('Custom Multi-room Event')
+        quotation['eventId'] = 204
+        quotation['lineItems'] = [{
+            'id': 'quote-custom',
+            'description': 'Short mic stand',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 4,
+            'uom': 'units',
+            'unitPrice': 10,
+            'discountPercent': 0,
+            'isCustom': True,
+            'customType': 'MISC',
+        }]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+
+        self.login('manager-no-sales')
+        comparison = self.client.get('/api/finance/compare?eventId=204').get_json()['data']
+        mismatch = next(row for row in comparison['rows'] if row['status'] == 'qty_mismatch')
+        self.assertEqual(mismatch['eventItem']['quantity'], 2)
+
+        response = self.client.post(
+            '/api/finance/compare/204/add-to-event',
+            json={'quotationId': saved_quote['id'], 'key': mismatch['key']},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 3)
+        self.assertEqual(event.subprojects[1]['items'][0]['quantity'], 1)
+        refreshed_row = next(
+            row for row in response.get_json()['data']['rows']
+            if row['key'] == mismatch['key']
+        )
+        self.assertEqual(refreshed_row['eventItem']['quantity'], 4)
+        self.assertEqual(refreshed_row['status'], 'matched')
 
     def test_compare_adds_brand_model_and_remembered_price_to_quotation(self):
         self.login('bnjm2000')

@@ -616,13 +616,29 @@ def test_maintenance_preselection_is_part_of_modal_initialisation():
     assert "function openMaintenanceModalForAsset(assetId)" in script
     assert "openMaintenanceModal([assetId]);" in script
     assert "window.openMaintenanceModalForAsset = openMaintenanceModalForAsset;" in script
-    assert "const selectionResult = addAssetsToMaintenanceSelection(assetIds);" in script
+    assert "const selectionResult = window.addAssetsToMaintenanceSelection(assetIds);" in script
     assert "setTimeout(() => {\n    if (assets && assets.length > 0)" not in script
-    assert "Search assets or key in a container ID / serial number..." in template
-    assert "function maintenanceContainerSearchText(container)" in script
-    assert "async function selectContainerForMaintenance(encodedContainerId)" in script
-    assert "addContainerToMaintenanceSelection(container);" in script
-    assert "No matching assets or containers found." in script
+    assert "Search individual assets, or enter a container ID and press Enter..." in template
+    assert "function maintenanceContainerSearchText(container)" not in script
+    assert "async function ensureMaintenanceAssetsForSelection(assetIds)" in script
+    assert "await ensureMaintenanceAssetsForSelection(assetIds);" in script
+    assert "await addContainerToMaintenanceSelection(container);" in script
+    assert script.index("async function addContainerToMaintenanceSelection(container)") < script.index(
+        "async function addIdentifierToMaintenanceSelection(identifier)"
+    )
+    assert "window.addAssetsToMaintenanceSelection = addAssetsToMaintenanceSelection;" in script
+    assert "window.searchMaintenanceAssets = searchMaintenanceAssets;" in script
+    assert "window.selectAssetForMaintenance = selectAssetForMaintenance;" in script
+    assert "window.addAssetsToMaintenanceSelection(assetIds)" in script
+    assert "No matching individual assets." in script
+    assert '"keydown",\n      handleMaintenanceIdentifierEntry' in script
+    assert "maintenanceIdentifierLookupInProgress" in script
+    assert "Checking asset or container..." in script
+    assert "/api/containers/${encodeURIComponent(normalized)}?_=${Date.now()}" in script
+    assert "cache: 'no-store'" in script
+    assert "The container lookup returned an invalid response" in script
+    assert "containerId === raw" in script
+    assert 'addEventListener("keypress"' not in script
 
 
 def test_inventory_search_supports_plus_separated_or_terms():
