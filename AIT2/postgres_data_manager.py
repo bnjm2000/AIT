@@ -416,6 +416,7 @@ class PostgresDataManager(DataManager):
     def _client_data(self, client):
         return {
             'name': client.name,
+            'salutation': getattr(client, 'salutation', ''),
             'company': client.company,
             'contactPerson': getattr(client, 'contact_person', ''),
             'email': getattr(client, 'email', ''),
@@ -657,6 +658,7 @@ class PostgresDataManager(DataManager):
                 for client_name, data, version in cursor.fetchall():
                     client = Client(
                         name=client_name,
+                        salutation=data.get('salutation', ''),
                         company=data.get('company', ''),
                         contact_person=data.get('contactPerson', ''),
                         email=data.get('email', ''),

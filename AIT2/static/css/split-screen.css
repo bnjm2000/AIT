@@ -1,3 +1,10 @@
+/* Give laptop-sized desktop viewports the same density as 80% browser zoom. */
+@media (min-width: 1301px) and (max-width: 1512px) and (max-height: 982px) {
+  :root {
+    --ui-scale: 0.8;
+  }
+}
+
 /* Shared compact-desktop behavior for side-by-side working. */
 @media (max-width: 1300px) {
   html,

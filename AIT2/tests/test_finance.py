@@ -237,6 +237,12 @@ class FinanceFeatureTests(unittest.TestCase):
         }
         self.assertEqual(listed_ids, created)
 
+        number_sorted = self.client.get(
+            '/api/quotations?view=summary&limit=10&sort=number'
+        ).get_json()['data']
+        number_values = [row['number'] for row in number_sorted]
+        self.assertEqual(number_values, sorted(number_values, reverse=True))
+
         full_row = self.client.get('/api/quotations').get_json()['data'][0]
         self.assertIn('lineItems', full_row)
 
@@ -1468,6 +1474,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("{ value: 'sqm', label: 'sqm' }", source)
         self.assertIn("target.classList.add('open-up')", source)
         self.assertIn('.finance-custom-menu.open-up', stylesheet)
+        self.assertIn('.finance-schedule-placement-flow', stylesheet)
+        self.assertIn('Select a line to place this custom date in the PDF order.', source)
+        self.assertIn('financeCustomScheduleDateChange', source)
+        self.assertIn('finance-schedule-heading-order', source)
+        self.assertIn("state.weekdays.length ? '' : 'disabled'", source)
         select_catalog = source.split('function financeSelectCatalog(index)', 1)[1].split(
             'async function financeAddCustomItem()', 1
         )[0]
@@ -1835,8 +1846,10 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         total_only_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         total_only_text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(total_only_pdf)).pages)
-        self.assertNotIn('DESCRIPTION', total_only_text)
-        self.assertNotIn('Audio item 1', total_only_text)
+        self.assertIn('DESCRIPTION', total_only_text)
+        self.assertIn('Audio item 1', total_only_text)
+        self.assertNotIn('$123.45', total_only_text)
+        self.assertNotIn('Audio System subtotal', total_only_text)
 
         saved['showUnitPrices'] = True
         saved['showDepartmentSubtotals'] = True
@@ -1923,6 +1936,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('601 - 546195 - 001', invoice_text)
         self.assertNotIn('UOM', invoice_text)
         self.assertIn('2 pax', invoice_text)
+        self.assertIn('PROJECT', quotation_text)
+        self.assertIn('EVENT SCHEDULE', quotation_text)
+        self.assertIn('QUOTATION REFERENCE', invoice_text)
         self.assertEqual(len(reader.pages), 2)
         self.assertIn('LINE ITEMS', reader.pages[0].extract_text() or '')
         self.assertIn('Summary', reader.pages[1].extract_text() or '')
@@ -2185,6 +2201,122 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(event.start_date, '20260801')
         self.assertEqual(event.end_date, '20260805')
 
+    def test_custom_schedule_dates_keep_the_selected_pdf_order(self):
+        quotation = self.create_quote('Ordered Custom Schedule')
+        quotation.update({
+            'setupDate': '2026-08-03',
+            'rehearsalDate': '2026-08-04',
+            'showDate': '2026-08-05',
+            'teardownDate': '2026-08-08',
+            'customScheduleGroups': [
+                {
+                    'id': 'venue-access',
+                    'label': 'Venue access',
+                    'dates': [{'id': 'access-1', 'date': '2026-08-02', 'time': '09:00'}],
+                },
+                {
+                    'id': 'handover',
+                    'label': 'Handover',
+                    'dates': [
+                        {'id': 'handover-1', 'date': '2026-08-06', 'time': ''},
+                        {'id': 'handover-2', 'date': '2026-08-07', 'time': ''},
+                    ],
+                },
+            ],
+            'scheduleOrder': [
+                'custom:venue-access',
+                'setup',
+                'rehearsal',
+                'show',
+                'custom:handover',
+                'teardown',
+            ],
+        })
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['eventDays'], 7)
+        self.assertEqual(saved['scheduleOrder'][0], 'custom:venue-access')
+        self.assertEqual(saved['scheduleOrder'][-2], 'custom:handover')
+        self.assertEqual(saved['customScheduleGroups'][1]['label'], 'Handover')
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        labels = [
+            'Venue access:', 'Set-up:', 'Rehearsal:',
+            'Show:', 'Handover:', 'Teardown:',
+        ]
+        positions = [text.index(label) for label in labels]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('2 August 2026, 09:00hrs', text)
+        self.assertIn('6 - 7 August 2026', text)
+
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}", json={'status': 'accepted'},
+        ).get_json()['data']
+        event = self.data_manager.events[accepted['eventId']]
+        self.assertEqual(event.start_date, '20260802')
+        self.assertEqual(event.end_date, '20260808')
+
+    def test_custom_schedule_batches_persist_and_render_recurrence(self):
+        quotation = self.create_quote('Recurring Custom Schedule')
+        quotation.update({
+            'customScheduleGroups': [{
+                'id': 'handover',
+                'label': 'Handover',
+                'dates': [
+                    {
+                        'id': f'handover-{index}',
+                        'date': date,
+                        'time': '10:00',
+                        'batchId': 'weekly-handover',
+                    }
+                    for index, date in enumerate((
+                        '2026-08-07',
+                        '2026-08-14',
+                        '2026-08-21',
+                    ), start=1)
+                ],
+            }],
+            'scheduleOrder': [
+                'setup', 'rehearsal', 'show', 'custom:handover', 'teardown',
+            ],
+            'scheduleBatches': [{
+                'id': 'weekly-handover',
+                'kind': 'custom:handover',
+                'method': 'recurring',
+                'startDate': '2026-08-07',
+                'endDate': '2026-08-21',
+                'weekdays': [5],
+                'intervalWeeks': 1,
+                'time': '10:00',
+                'excludedDates': [],
+            }],
+        })
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['scheduleBatches'][0]['kind'], 'custom:handover')
+        self.assertEqual(
+            saved['customScheduleGroups'][0]['dates'][0]['batchId'],
+            'weekly-handover',
+        )
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertIn('Handover:', text)
+        self.assertIn('Every Friday, 7 - 21 August 2026, 10:00hrs', text)
+
     def test_salutation_timed_schedule_manpower_default_and_pdf_signoff(self):
         self.data_manager.users['alice'].phone = '+65 9123 4567'
         self.data_manager.save_users()
@@ -2295,6 +2427,75 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(reloaded.clients['Clear Address Client'].address2, '')
         self.assertEqual(reloaded.clients['Clear Address Client'].address1, '10 Example Street')
 
+    def test_quotation_client_details_create_and_update_known_client(self):
+        quotation = self.create_quote('Client Sync')
+        quotation['client'] = {
+            'salutation': 'Ms.',
+            'name': 'Jamie Tan',
+            'company': 'First Company',
+            'phone': '+65 9123 4567',
+            'email': 'jamie@example.com',
+            'address1': '1 First Street',
+        }
+        created = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        saved = created.get_json()['data']
+        self.assertEqual(saved['clientRecordName'], 'Jamie Tan')
+        self.assertEqual(self.data_manager.clients['Jamie Tan'].company, 'First Company')
+
+        saved['client'].update({
+            'name': 'Jamie Lim',
+            'company': 'Updated Company',
+            'phone': '+65 9876 5432',
+            'address1': '',
+        })
+        updated = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=saved,
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertNotIn('Jamie Tan', self.data_manager.clients)
+        self.assertEqual(updated.get_json()['data']['clientRecordName'], 'Jamie Lim')
+        self.assertEqual(self.data_manager.clients['Jamie Lim'].company, 'Updated Company')
+        self.assertEqual(self.data_manager.clients['Jamie Lim'].phone, '+65 9876 5432')
+        self.assertEqual(self.data_manager.clients['Jamie Lim'].address1, '')
+
+    def test_quotation_list_backfills_missing_clients_without_overwriting_existing(self):
+        quotation = self.create_quote('Legacy Client')
+        quotation['client'] = {
+            'name': 'Legacy Person',
+            'company': 'Quotation Company',
+            'email': 'legacy@example.com',
+        }
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.data_manager.clients.pop('Legacy Person')
+        self.data_manager.save_clients()
+
+        response = self.client.get('/api/quotations?view=summary')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            self.data_manager.clients['Legacy Person'].company,
+            'Quotation Company',
+        )
+
+        self.data_manager.clients['Legacy Person'].company = 'Canonical Company'
+        self.data_manager.save_clients()
+        saved['client']['company'] = 'Older Quotation Value'
+        finance_data = app_module._load_finance_data()
+        for index, row in enumerate(finance_data['documents']):
+            if row.get('id') == saved['id']:
+                finance_data['documents'][index] = saved
+        app_module._save_finance_data(finance_data)
+
+        self.client.get('/api/quotations?view=summary')
+        self.assertEqual(
+            self.data_manager.clients['Legacy Person'].company,
+            'Canonical Company',
+        )
+
     def test_editor_pairs_setup_teardown_then_rehearsal_show(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
@@ -2324,6 +2525,25 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("financeAddScheduleRow('setup')", schedule_source)
         self.assertIn("financeAddScheduleRow('teardown')", schedule_source)
         self.assertIn('!FINANCE_SCHEDULE_KEYS[kind]', source)
+
+    def test_editor_supports_ordered_custom_schedule_dates(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read().lower()
+
+        self.assertIn('+ custom date(s)', source)
+        self.assertIn('customschedulegroups', source)
+        self.assertIn('scheduleorder', source)
+        self.assertIn('schedule position', source)
+        self.assertIn('financecustomscheduleplacementmarkup', source)
+        self.assertIn('place here', source)
+        self.assertIn('positionindex: -1', source)
+        self.assertIn('choose where the custom dates should appear in the schedule', source)
+        self.assertIn('between', source)
+        self.assertIn('financeopencustomschedule', source)
 
     def test_bulk_schedule_batches_persist_and_pdf_uses_compact_recurrence(self):
         quotation = self.create_quote('Long-running Show')
@@ -2406,8 +2626,9 @@ class FinanceFeatureTests(unittest.TestCase):
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
-        self.assertIn('Every Friday, 7 - 28 August 2026, 19:00hrs', text)
-        self.assertIn('except 14 August 2026', text)
+        compact_text = ' '.join(text.split())
+        self.assertIn('Every Friday, 7 - 28 August 2026, 19:00hrs', compact_text)
+        self.assertIn('except 14 August 2026', compact_text)
 
     def test_bulk_schedule_without_weekdays_repeats_every_day(self):
         quotation = self.create_quote('Daily Show')
@@ -2464,6 +2685,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('limited to 500 dates', source)
         self.assertIn('duplicate', source)
         self.assertIn('financebulkschedulecandidates', source)
+        self.assertIn('financeschedulekindoptions', source)
+        self.assertIn('financecustomschedulegroupforkind', source)
+        self.assertIn('finance-schedule-type-segments', source)
         self.assertIn('financeparsebulkscheduleline', source)
         self.assertIn('financeparseclientbriefline', source)
         self.assertIn('financebriefstarttime', source)
@@ -2526,13 +2750,17 @@ class FinanceFeatureTests(unittest.TestCase):
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+        compact_text = ' '.join(text.split())
 
-        self.assertIn('7 October 2026, 10:00hrs', text)
-        self.assertIn('7 October 2026, 14:00hrs', text)
-        self.assertIn('8 October 2026, 20:00hrs', text)
+        self.assertNotIn('BILL TO', text)
+        self.assertNotIn('No client selected', text)
+        self.assertNotIn('Reference', text)
+        self.assertIn('7 October 2026, 10:00hrs', compact_text)
+        self.assertIn('7 October 2026, 14:00hrs', compact_text)
+        self.assertIn('8 October 2026, 20:00hrs', compact_text)
         self.assertIn(
             '7 October 2026, 10:00hrs; 7 October 2026, 14:00hrs; 8 October 2026, 20:00hrs',
-            text,
+            compact_text,
         )
 
     def test_department_discount_remembers_amount_or_percentage_mode(self):
@@ -3649,6 +3877,16 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('window.open(pdfurl', source)
         self.assertNotIn('window.location.href = pdfurl', source)
         self.assertNotIn('link.download', source)
+        self.assertIn('financerequireexportprojectname(quotation)', source)
+        self.assertIn('financeprojectnameinput', source)
+        self.assertIn('project name before exporting the quotation', source)
+        self.assertIn('.finance-input[aria-invalid="true"]', css_source)
+        self.assertIn("params.set('sort', financestate.listsort)", source)
+        self.assertIn('quotation number', source)
+        self.assertIn('last modified', source)
+        self.assertIn('financelistresultshtml', source)
+        self.assertIn('financestate.listrequestseq += 1', source)
+        self.assertIn('settimeout(() => financeloadlist(query), 400)', source)
         self.assertIn('/api/events?view=summary&limit=500', source)
         self.assertIn('/api/finance/salespeople', source)
         self.assertIn('financeshowsalespersonsuggestions', source)

@@ -23,6 +23,11 @@ def test_split_screen_shell_releases_sidebar_width():
     assert "height: calc(100dvh - 78px)" in SPLIT_CSS
 
 
+def test_laptop_desktop_view_uses_eighty_percent_ui_scale():
+    assert "(min-width: 1301px) and (max-width: 1512px) and (max-height: 982px)" in SPLIT_CSS
+    assert "--ui-scale: 0.8" in SPLIT_CSS
+
+
 def test_wide_content_scrolls_inside_its_panel():
     assert '[class*="table-wrap"]' in SPLIT_CSS
     assert '[class*="table-container"]' in SPLIT_CSS

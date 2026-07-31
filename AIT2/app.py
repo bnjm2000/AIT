@@ -25736,6 +25736,12 @@ def _migrate_finance_data(data):
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
             ('totalDiscountLabel', document.get('totalDiscountLabel') or ''),
             ('scheduleBatches', document.get('scheduleBatches') or []),
+            ('customScheduleGroups', document.get('customScheduleGroups') or []),
+            (
+                'scheduleOrder',
+                document.get('scheduleOrder')
+                or list(FINANCE_STANDARD_SCHEDULE_ORDER),
+            ),
             ('setupDate', document.get('setupDate') or ''),
             ('setupTime', document.get('setupTime') or ''),
             ('additionalSetups', document.get('additionalSetups') or []),
@@ -26100,6 +26106,120 @@ def _normalise_finance_client(value):
     }
 
 
+def _finance_client_key(manager, name):
+    target = str(name or '').strip().casefold()
+    if not target:
+        return ''
+    return next(
+        (
+            str(key)
+            for key in manager.clients
+            if str(key or '').strip().casefold() == target
+        ),
+        '',
+    )
+
+
+def _finance_client_from_payload(payload):
+    client = _normalise_finance_client(payload)
+    return Client(
+        name=client['name'],
+        salutation=client['salutation'],
+        company=client['company'],
+        contact_person=client['contactPerson'],
+        email=client['email'],
+        phone=client['phone'],
+        tax_number=client['taxNumber'],
+        address1=client['address1'],
+        address2=client['address2'],
+        address3=client['address3'],
+        postal_code=client['postalCode'],
+    )
+
+
+def _sync_finance_client_record(document, previous_document=None, manager=None):
+    """Keep a quotation's client fields linked to one known-client record."""
+    manager = manager or _current_data_manager_object()
+    if manager is None:
+        return False
+
+    client = _normalise_finance_client((document or {}).get('client'))
+    client_name = client['name']
+    if not client_name:
+        document['clientRecordName'] = ''
+        return False
+
+    previous_document = previous_document if isinstance(previous_document, dict) else {}
+    previous_client = _normalise_finance_client(previous_document.get('client'))
+    linked_name = str(
+        document.get('clientRecordName')
+        or previous_document.get('clientRecordName')
+        or previous_client.get('name')
+        or ''
+    ).strip()
+    destination_key = _finance_client_key(manager, client_name)
+    linked_key = _finance_client_key(manager, linked_name)
+    source_key = destination_key or linked_key
+    previous_payload = (
+        _client_to_dict(manager.clients[source_key])
+        if source_key and source_key in manager.clients
+        else None
+    )
+
+    # A newly typed name keeps following the record that this quotation created
+    # or selected. If the new name already exists, treat it as selecting that
+    # client and leave the formerly linked record intact.
+    if (
+        source_key
+        and source_key != client_name
+        and (
+            not destination_key
+            or source_key.casefold() == client_name.casefold()
+        )
+    ):
+        del manager.clients[source_key]
+    manager.clients[client_name] = _finance_client_from_payload(client)
+    document['clientRecordName'] = client_name
+
+    changed = (
+        source_key != client_name
+        or previous_payload != _client_to_dict(manager.clients[client_name])
+    )
+    if changed:
+        manager.save_clients()
+    return changed
+
+
+def _backfill_finance_clients(finance_data, manager=None):
+    """Add quotation clients that pre-date automatic client synchronization."""
+    manager = manager or _current_data_manager_object()
+    if manager is None:
+        return 0
+
+    latest_by_name = {}
+    documents = finance_data.get('documents') if isinstance(finance_data, dict) else []
+    for document in documents or []:
+        if not isinstance(document, dict) or document.get('type') != 'quotation':
+            continue
+        client = _normalise_finance_client(document.get('client'))
+        if not client['name']:
+            continue
+        key = client['name'].casefold()
+        candidate = (str(document.get('updatedAt') or ''), client)
+        if key not in latest_by_name or candidate[0] >= latest_by_name[key][0]:
+            latest_by_name[key] = candidate
+
+    added = 0
+    for _updated_at, client in latest_by_name.values():
+        if _finance_client_key(manager, client['name']):
+            continue
+        manager.clients[client['name']] = _finance_client_from_payload(client)
+        added += 1
+    if added:
+        manager.save_clients()
+    return added
+
+
 def _normalise_finance_line(value):
     value = value if isinstance(value, dict) else {}
     quantity = max(0, _safe_float(value.get('quantity'), 1))
@@ -26250,10 +26370,10 @@ def _normalise_finance_subprojects(value, lines):
     return result
 
 
-def _normalise_finance_schedule_rows(value):
+def _normalise_finance_schedule_rows(value, limit=500):
     rows = value if isinstance(value, list) else []
     result = []
-    for row in rows[:40]:
+    for row in rows[:max(1, min(500, _safe_int(limit, 500)))]:
         if not isinstance(row, dict):
             continue
         result.append({
@@ -26265,17 +26385,67 @@ def _normalise_finance_schedule_rows(value):
     return result
 
 
-def _normalise_finance_schedule_batches(value):
+FINANCE_STANDARD_SCHEDULE_ORDER = ('setup', 'rehearsal', 'show', 'teardown')
+
+
+def _normalise_finance_custom_schedule_groups(value):
     rows = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for index, row in enumerate(rows[:30]):
+        if not isinstance(row, dict):
+            continue
+        group_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('id') or '')
+        )[:80] or f'custom_{index + 1}'
+        if group_id in seen:
+            continue
+        label = str(row.get('label') or '').strip()[:100]
+        dates = _normalise_finance_schedule_rows(row.get('dates'), 500)
+        if not label:
+            continue
+        seen.add(group_id)
+        result.append({
+            'id': group_id,
+            'label': label,
+            'dates': dates,
+        })
+    return result
+
+
+def _normalise_finance_schedule_order(value, custom_groups):
+    custom_tokens = [f"custom:{row['id']}" for row in custom_groups]
+    valid_tokens = set(FINANCE_STANDARD_SCHEDULE_ORDER) | set(custom_tokens)
+    result = []
+    for token in value if isinstance(value, list) else []:
+        token = str(token or '').strip()
+        if token in valid_tokens and token not in result:
+            result.append(token)
+    for token in (*FINANCE_STANDARD_SCHEDULE_ORDER, *custom_tokens):
+        if token not in result:
+            result.append(token)
+    return result
+
+
+def _normalise_finance_schedule_batches(value, custom_groups=None):
+    rows = value if isinstance(value, list) else []
+    valid_kinds = set(FINANCE_STANDARD_SCHEDULE_ORDER)
+    valid_kinds.update(
+        f"custom:{row['id']}"
+        for row in (custom_groups or [])
+        if isinstance(row, dict) and row.get('id')
+    )
     result = []
     seen = set()
     for row in rows[:100]:
         if not isinstance(row, dict):
             continue
         batch_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(row.get('id') or ''))[:80]
-        kind = str(row.get('kind') or '').strip().lower()
+        kind = str(row.get('kind') or '').strip()
+        if kind.lower() in FINANCE_STANDARD_SCHEDULE_ORDER:
+            kind = kind.lower()
         method = str(row.get('method') or '').strip().lower()
-        if not batch_id or batch_id in seen or kind not in {'setup', 'rehearsal', 'show', 'teardown'}:
+        if not batch_id or batch_id in seen or kind not in valid_kinds:
             continue
         if method not in {'recurring', 'paste'}:
             method = 'paste'
@@ -26606,6 +26776,17 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         if 'eventId' in value
         else existing.get('eventId')
     )
+    custom_schedule_groups = _normalise_finance_custom_schedule_groups(
+        value.get('customScheduleGroups')
+        if 'customScheduleGroups' in value
+        else existing.get('customScheduleGroups')
+    )
+    schedule_order = _normalise_finance_schedule_order(
+        value.get('scheduleOrder')
+        if 'scheduleOrder' in value
+        else existing.get('scheduleOrder'),
+        custom_schedule_groups,
+    )
 
     document = {
         'id': existing.get('id') or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(12),
@@ -26620,6 +26801,11 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'revision': revision,
         'status': status,
         'client': _normalise_finance_client(value.get('client') if 'client' in value else existing.get('client')),
+        'clientRecordName': str(
+            value.get('clientRecordName')
+            if 'clientRecordName' in value
+            else existing.get('clientRecordName') or ''
+        ).strip()[:160],
         date_key: str(value.get(date_key) or existing.get(date_key) or today).strip()[:20],
         secondary_date_key: str(value.get(secondary_date_key) or existing.get(secondary_date_key) or valid_until).strip()[:20],
         'projectName': project_name,
@@ -26661,8 +26847,11 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         ).strip()[:10],
         'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
         'scheduleBatches': _normalise_finance_schedule_batches(
-            value.get('scheduleBatches') if 'scheduleBatches' in value else existing.get('scheduleBatches')
+            value.get('scheduleBatches') if 'scheduleBatches' in value else existing.get('scheduleBatches'),
+            custom_schedule_groups,
         ),
+        'customScheduleGroups': custom_schedule_groups,
+        'scheduleOrder': schedule_order,
         'setupDate': str(value.get('setupDate') if 'setupDate' in value else existing.get('setupDate') or '').strip()[:20],
         'setupTime': str(value.get('setupTime') if 'setupTime' in value else existing.get('setupTime') or '').strip()[:20],
         'additionalSetups': _normalise_finance_schedule_rows(
@@ -26806,6 +26995,7 @@ def _finance_revision_payload(document):
         'revisions', 'totals', 'updatedAt', 'updatedBy', 'status',
         'sentAt', 'acceptedAt', 'eventId',
         'eventManagedByQuotation', 'eventSyncFingerprint',
+        'clientRecordName',
     }
     return {
         key: value
@@ -26926,6 +27116,13 @@ def _finance_event_date_range(document):
         *[row.get('date') for row in document.get('additionalSetups') or [] if isinstance(row, dict)],
     ]
     setup_dates = [value for value in setup_dates if value]
+    custom_dates = [
+        row.get('date')
+        for group in document.get('customScheduleGroups') or []
+        if isinstance(group, dict)
+        for row in group.get('dates') or []
+        if isinstance(row, dict) and row.get('date')
+    ]
     candidates = [
         *setup_dates,
         document.get('rehearsalDate'),
@@ -26934,12 +27131,14 @@ def _finance_event_date_range(document):
         document.get('teardownDate'),
         *[row.get('date') for row in document.get('additionalShows') or [] if isinstance(row, dict)],
         *[row.get('date') for row in document.get('additionalTeardowns') or [] if isinstance(row, dict)],
+        *custom_dates,
     ]
     candidates = [value for value in candidates if value]
     if not candidates:
         fallback = document.get('quotationDate') or datetime.now().strftime('%Y-%m-%d')
         return fallback, fallback
-    start = min(setup_dates) if setup_dates else min(candidates)
+    start_candidates = [*setup_dates, *custom_dates]
+    start = min(start_candidates) if start_candidates else min(candidates)
     end = max(candidates)
     if end < start:
         end = start
@@ -30510,6 +30709,13 @@ def _finance_document_list_summary(document):
             for row in document.get(key) or []
             if isinstance(row, dict)
         ],
+        *[
+            row.get('date')
+            for group in document.get('customScheduleGroups') or []
+            if isinstance(group, dict)
+            for row in group.get('dates') or []
+            if isinstance(row, dict)
+        ],
     ]
     start_date, end_date = (
         _finance_event_date_range(document)
@@ -30608,10 +30814,13 @@ def _finance_enrich_quotation_list_row(row, linked_invoice=None):
 def _finance_list_or_create(document_type):
     with _finance_lock:
         finance_data = _load_finance_data()
+        if document_type == 'quotation':
+            _backfill_finance_clients(finance_data)
         if _finance_expire_sent_documents(finance_data):
             _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().lower()
+            sort_by = str(request.args.get('sort') or 'updated').strip().lower()
             summary_view = (
                 str(request.args.get('view') or '').strip().lower() == 'summary'
             )
@@ -30645,10 +30854,19 @@ def _finance_list_or_create(document_type):
                         linked_invoices.get(str(row.get('id') or '')),
                     )
                 ]
-            source_rows.sort(
-                key=lambda row: (row.get('updatedAt', ''), row.get('number', '')),
-                reverse=True,
-            )
+            if sort_by == 'number':
+                source_rows.sort(
+                    key=lambda row: (
+                        str(row.get('number') or '').casefold(),
+                        str(row.get('updatedAt') or ''),
+                    ),
+                    reverse=True,
+                )
+            else:
+                source_rows.sort(
+                    key=lambda row: (row.get('updatedAt', ''), row.get('number', '')),
+                    reverse=True,
+                )
 
             if summary_view:
                 total = len(source_rows)
@@ -30702,6 +30920,7 @@ def _finance_list_or_create(document_type):
                 sequence,
                 revision,
             )
+            _sync_finance_client_record(document)
         _remember_finance_prices(finance_data, document)
         finance_data.setdefault('documents', []).append(document)
         _save_finance_data(finance_data)
@@ -30874,6 +31093,7 @@ def _finance_get_update_delete(document_id, document_type):
                 _finance_sync_managed_event(updated)
             if updated.get('status') in {'draft', 'sent'} and updated.get('eventId'):
                 _finance_sync_managed_event(updated)
+            _sync_finance_client_record(updated, previous_document)
 
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
@@ -32155,6 +32375,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'status': 'sent',
             'sentAt': snapshot_existing['sentAt'],
         })
+        _sync_finance_client_record(edited, snapshot_existing)
         revision_row.update({
             'number': edited['number'],
             'validityAmount': edited.get('validityAmount'),

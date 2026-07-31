@@ -18,6 +18,7 @@ const FINANCE_SCHEDULE_LABELS = {
   show: 'Show',
   teardown: 'Teardown'
 };
+const FINANCE_STANDARD_SCHEDULE_ORDER = ['setup', 'rehearsal', 'show', 'teardown'];
 const FINANCE_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const FINANCE_WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const FINANCE_VALIDITY_UNITS = [
@@ -45,6 +46,7 @@ const financeState = {
   listRequestSeq: 0,
   listQuery: '',
   listObserver: null,
+  listSort: 'updated',
   listMeta: {
     total: 0,
     hasMore: false,
@@ -82,6 +84,14 @@ const financeScheduleBulkState = {
   initialBatchIdentities: [],
   initialiseExclusions: false,
   restrictPasteKind: false
+};
+
+const financeCustomScheduleState = {
+  editingId: '',
+  label: '',
+  dates: [],
+  positionIndex: -1,
+  baseOrder: []
 };
 
 const profitLossState = {
@@ -318,7 +328,7 @@ function financeScheduleDateLabel(value, month = 'short') {
 }
 
 function financeScheduleBatchRows(kind, batchId, document = financeState.current) {
-  return financeAdditionalScheduleRows(kind, document)
+  return financeScheduleRowsForKind(kind, document)
     .map((row, index) => ({ row, index }))
     .filter(item => item.row?.batchId === batchId);
 }
@@ -326,8 +336,8 @@ function financeScheduleBatchRows(kind, batchId, document = financeState.current
 function financeRemoveEmptyScheduleBatches(document = financeState.current) {
   if (!document || !Array.isArray(document.scheduleBatches)) return;
   const used = new Set(
-    Object.keys(FINANCE_SCHEDULE_KEYS).flatMap(kind =>
-      financeAdditionalScheduleRows(kind, document).map(row => row?.batchId).filter(Boolean)
+    financeScheduleKindOptions(document).flatMap(option =>
+      financeScheduleRowsForKind(option.value, document).map(row => row?.batchId).filter(Boolean)
     )
   );
   document.scheduleBatches = document.scheduleBatches.filter(batch => used.has(batch.id));
@@ -394,6 +404,358 @@ function financeScheduleRowsMarkup(kind, document = financeState.current) {
   ].join('');
 }
 
+function financeCustomScheduleGroups(document = financeState.current) {
+  return Array.isArray(document?.customScheduleGroups) ? document.customScheduleGroups : [];
+}
+
+function financeCustomScheduleGroupForKind(kind, document = financeState.current) {
+  const groupId = String(kind || '').startsWith('custom:') ? String(kind).slice(7) : '';
+  return financeCustomScheduleGroups(document).find(group => group.id === groupId) || null;
+}
+
+function financeScheduleKindOptions(document = financeState.current) {
+  return [
+    ...Object.keys(FINANCE_SCHEDULE_KEYS).map(value => ({
+      value,
+      label: FINANCE_SCHEDULE_LABELS[value]
+    })),
+    ...financeCustomScheduleGroups(document).map(group => ({
+      value: `custom:${group.id}`,
+      label: group.label,
+      custom: true
+    }))
+  ];
+}
+
+function financeScheduleKindExists(kind, document = financeState.current) {
+  return financeScheduleKindOptions(document).some(option => option.value === kind);
+}
+
+function financeScheduleKindLabel(kind, document = financeState.current) {
+  return financeScheduleKindOptions(document).find(option => option.value === kind)?.label || 'Show';
+}
+
+function financeScheduleRowsForKind(kind, document = financeState.current) {
+  if (FINANCE_SCHEDULE_KEYS[kind]) return financeAdditionalScheduleRows(kind, document);
+  return financeCustomScheduleGroupForKind(kind, document)?.dates || [];
+}
+
+function financeReplaceScheduleRowsForKind(kind, rows, document = financeState.current) {
+  if (!document) return;
+  if (FINANCE_SCHEDULE_KEYS[kind]) {
+    document[FINANCE_SCHEDULE_KEYS[kind]] = rows;
+    return;
+  }
+  const group = financeCustomScheduleGroupForKind(kind, document);
+  if (group) group.dates = rows;
+}
+
+function financeScheduleOrder(document = financeState.current) {
+  const customTokens = financeCustomScheduleGroups(document).map(group => `custom:${group.id}`);
+  const valid = new Set([...FINANCE_STANDARD_SCHEDULE_ORDER, ...customTokens]);
+  const result = [];
+  (Array.isArray(document?.scheduleOrder) ? document.scheduleOrder : []).forEach(token => {
+    if (valid.has(token) && !result.includes(token)) result.push(token);
+  });
+  [...FINANCE_STANDARD_SCHEDULE_ORDER, ...customTokens].forEach(token => {
+    if (!result.includes(token)) result.push(token);
+  });
+  return result;
+}
+
+function financeScheduleTokenLabel(token, document = financeState.current) {
+  if (FINANCE_SCHEDULE_LABELS[token]) return FINANCE_SCHEDULE_LABELS[token];
+  const groupId = String(token || '').startsWith('custom:') ? String(token).slice(7) : '';
+  return financeCustomScheduleGroups(document).find(group => group.id === groupId)?.label || 'Custom date';
+}
+
+function financeCustomScheduleSummary(group) {
+  return (group?.dates || []).filter(row => row?.date).map(row => {
+    const date = financeScheduleDateLabel(row.date, 'long');
+    return `${date}${row.time ? `, ${row.time}hrs` : ''}`;
+  }).join('; ');
+}
+
+function financeScheduleOrderPreview(document = financeState.current) {
+  if (!financeCustomScheduleGroups(document).length) return '';
+  const order = financeScheduleOrder(document);
+  return `
+    <div class="finance-schedule-order-preview" aria-label="PDF schedule order">
+      <span>PDF order</span>
+      <div>${order.map((token, index) => `<b class="${token.startsWith('custom:') ? 'is-custom' : ''}"><small>${index + 1}</small>${financeEscape(financeScheduleTokenLabel(token, document))}</b>`).join('')}</div>
+    </div>
+  `;
+}
+
+function financeCustomScheduleDateChange(encodedGroupId, index, field, value) {
+  if (!['date', 'time'].includes(field)) return;
+  const groupId = decodeURIComponent(encodedGroupId);
+  const group = financeCustomScheduleGroups().find(row => row.id === groupId);
+  const date = group?.dates?.[Number(index)];
+  if (!date) return;
+  date[field] = value;
+  financeQueueSave();
+  const note = document.querySelector('.finance-event-schedule-heading p');
+  if (note) note.textContent = `Dates are optional. New line items will use ${financeEventDays()} day(s).`;
+}
+
+function financeCustomScheduleMarkup(document = financeState.current) {
+  const groups = financeCustomScheduleGroups(document);
+  if (!groups.length) return '';
+  const groupById = Object.fromEntries(groups.map(group => [group.id, group]));
+  const order = financeScheduleOrder(document);
+  const customGroups = order
+    .filter(token => token.startsWith('custom:'))
+    .map(token => groupById[token.slice(7)])
+    .filter(Boolean);
+  return `
+    <div class="finance-custom-schedule-panel">
+      ${customGroups.map(group => {
+        const encodedId = financeEscapeAttr(encodeURIComponent(group.id));
+        return `
+          <div class="finance-schedule-stack finance-custom-schedule-group">
+            ${(group.dates || []).map((row, index) => `
+              <div class="finance-schedule-pair finance-custom-schedule-pair">
+                <strong title="${financeEscapeAttr(group.label)}">${financeEscape(group.label)}${index ? ` ${index + 1}` : ''}</strong>
+                <input class="finance-input" type="date" value="${financeEscapeAttr(row.date || '')}" onchange="financeCustomScheduleDateChange('${encodedId}',${index},'date',this.value)">
+                <input class="finance-input" type="time" value="${financeEscapeAttr(row.time || '')}" onchange="financeCustomScheduleDateChange('${encodedId}',${index},'time',this.value)">
+                ${index === 0 ? `
+                  <span class="finance-custom-schedule-actions">
+                    <button type="button" class="finance-custom-schedule-edit" title="Edit dates and PDF order" onclick="financeOpenCustomSchedule('${encodedId}')">Edit</button>
+                    <button type="button" class="finance-schedule-remove" title="Delete ${financeEscapeAttr(group.label)}" aria-label="Delete ${financeEscapeAttr(group.label)}" onclick="financeDeleteCustomSchedule('${encodedId}')">&times;</button>
+                  </span>
+                ` : '<span></span>'}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function ensureFinanceCustomScheduleModal() {
+  let modal = document.getElementById('financeCustomScheduleModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'financeCustomScheduleModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-custom-schedule-modal">
+      <div class="modal-header">
+        <div><h3>Custom schedule dates</h3><small>Add a labelled date group and place it in the PDF schedule</small></div>
+        <button type="button" class="close-btn" aria-label="Close custom schedule" onclick="closeModal('financeCustomScheduleModal')">&times;</button>
+      </div>
+      <div id="financeCustomScheduleBody"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('financeCustomScheduleModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function financeOpenCustomSchedule(encodedGroupId = '') {
+  if (!financeState.current) return;
+  const groupId = encodedGroupId ? decodeURIComponent(encodedGroupId) : '';
+  const group = financeCustomScheduleGroups().find(row => row.id === groupId);
+  const token = group ? `custom:${group.id}` : '';
+  const currentOrder = financeScheduleOrder();
+  const baseOrder = currentOrder.filter(row => row !== token);
+  Object.assign(financeCustomScheduleState, {
+    editingId: group?.id || '',
+    label: group?.label || '',
+    dates: group?.dates?.length
+      ? group.dates.map(row => ({ ...row }))
+      : [{ id: `custom_date_${Date.now()}`, date: '', time: '' }],
+    positionIndex: token ? Math.max(0, currentOrder.indexOf(token)) : -1,
+    baseOrder
+  });
+  ensureFinanceCustomScheduleModal();
+  financeRenderCustomScheduleModal();
+  openModal('financeCustomScheduleModal');
+  setTimeout(() => document.getElementById('financeCustomScheduleLabel')?.focus(), 40);
+}
+
+function financeSetCustomScheduleField(field, value) {
+  if (field !== 'label') return;
+  financeCustomScheduleState.label = value;
+  const preview = document.getElementById('financeCustomSchedulePlacementLabel');
+  if (preview) {
+    const label = String(value || '').trim() || 'Custom date';
+    preview.textContent = `${financeCustomScheduleState.positionIndex + 1}. ${label}`;
+  }
+}
+
+function financeSetCustomScheduleDate(index, field, value) {
+  const row = financeCustomScheduleState.dates[index];
+  if (row && ['date', 'time'].includes(field)) row[field] = value;
+}
+
+function financeAddCustomScheduleDate() {
+  financeCustomScheduleState.dates.push({
+    id: `custom_date_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    date: '',
+    time: ''
+  });
+  financeRenderCustomScheduleModal();
+}
+
+function financeRemoveCustomScheduleDate(index) {
+  if (financeCustomScheduleState.dates.length <= 1) return;
+  const [removed] = financeCustomScheduleState.dates.splice(index, 1);
+  const batch = removed?.batchId
+    ? financeScheduleBatches().find(row => row.id === removed.batchId)
+    : null;
+  if (batch) {
+    const identity = financeScheduleIdentity(removed.date, removed.time);
+    batch.excludedDates = [...new Set([...(batch.excludedDates || []), identity])];
+  }
+  financeRenderCustomScheduleModal();
+}
+
+function financeSetCustomSchedulePosition(index) {
+  financeCustomScheduleState.positionIndex = Math.max(
+    0,
+    Math.min(financeCustomScheduleState.baseOrder.length, Number(index) || 0)
+  );
+  financeRenderCustomScheduleModal();
+}
+
+function financeCustomSchedulePositionLabel(index, order) {
+  if (index <= 0) return `Before ${financeScheduleTokenLabel(order[0])}`;
+  if (index >= order.length) return `After ${financeScheduleTokenLabel(order[order.length - 1])}`;
+  return `Between ${financeScheduleTokenLabel(order[index - 1])} and ${financeScheduleTokenLabel(order[index])}`;
+}
+
+function financeCustomSchedulePlacementMarkup(state) {
+  const previewLabel = String(state.label || '').trim() || 'Custom date';
+  return Array.from({ length: state.baseOrder.length + 1 }, (_unused, index) => {
+    const selected = state.positionIndex === index;
+    const insertion = `
+      <button
+        type="button"
+        class="finance-schedule-insertion${selected ? ' active' : ''}"
+        aria-label="${financeEscapeAttr(financeCustomSchedulePositionLabel(index, state.baseOrder))}"
+        aria-pressed="${selected ? 'true' : 'false'}"
+        onclick="financeSetCustomSchedulePosition(${index})"
+      >
+        <span class="finance-schedule-insertion-line"></span>
+        <span class="finance-schedule-insertion-control">
+          <b${selected ? ' id="financeCustomSchedulePlacementLabel"' : ''}>${selected ? `${index + 1}. ${financeEscape(previewLabel)}` : '+'}</b>
+          <small>${selected ? 'Custom date' : 'Place here'}</small>
+        </span>
+        <span class="finance-schedule-insertion-line"></span>
+      </button>
+    `;
+    if (index >= state.baseOrder.length) return insertion;
+    const token = state.baseOrder[index];
+    const isCustom = token.startsWith('custom:');
+    const stageNumber = index + 1 + (state.positionIndex >= 0 && state.positionIndex <= index ? 1 : 0);
+    return `${insertion}
+      <div class="finance-schedule-placement-stage${isCustom ? ' is-custom' : ''}">
+        <span>${stageNumber}</span>
+        <div>
+          <strong>${financeEscape(financeScheduleTokenLabel(token))}</strong>
+          <small>${isCustom ? 'Custom date' : 'Standard schedule'}</small>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function financeRenderCustomScheduleModal() {
+  const body = document.getElementById('financeCustomScheduleBody');
+  if (!body) return;
+  const state = financeCustomScheduleState;
+  body.innerHTML = `
+    <form onsubmit="financeSaveCustomSchedule(event)">
+      <div class="finance-custom-schedule-content">
+        <label class="finance-field"><span>Custom label</span><input id="financeCustomScheduleLabel" class="finance-input" maxlength="100" required placeholder="e.g. Handover" value="${financeEscapeAttr(state.label)}" oninput="financeSetCustomScheduleField('label',this.value)"></label>
+        <div class="finance-custom-schedule-dates">
+          <div class="finance-custom-schedule-subheading"><span>Date(s)</span><button type="button" class="btn btn-secondary" onclick="financeAddCustomScheduleDate()">+ Add date</button></div>
+          ${state.dates.map((row, index) => `
+            <div class="finance-custom-schedule-date-row">
+              <label class="finance-field"><span>Date ${index + 1}</span><input class="finance-input" type="date" required value="${financeEscapeAttr(row.date || '')}" onchange="financeSetCustomScheduleDate(${index},'date',this.value)"></label>
+              <label class="finance-field"><span>Time</span><input class="finance-input" type="time" value="${financeEscapeAttr(row.time || '')}" onchange="financeSetCustomScheduleDate(${index},'time',this.value)"></label>
+              <button type="button" class="finance-schedule-remove" ${state.dates.length <= 1 ? 'disabled' : ''} title="Remove date" aria-label="Remove date ${index + 1}" onclick="financeRemoveCustomScheduleDate(${index})">&times;</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="finance-custom-schedule-position">
+          <div class="finance-schedule-placement-heading">
+            <span class="finance-bulk-schedule-label">Schedule position</span>
+            <small>Select a line to place this custom date in the PDF order.</small>
+          </div>
+          <div class="finance-schedule-placement-flow">
+            ${financeCustomSchedulePlacementMarkup(state)}
+          </div>
+          ${state.positionIndex < 0 ? '<p class="finance-schedule-placement-required">Choose one of the <b>+ Place here</b> rows before adding these dates.</p>' : ''}
+        </div>
+      </div>
+      <div class="modal-actions finance-bulk-schedule-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('financeCustomScheduleModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">${state.editingId ? 'Update custom dates' : 'Add custom dates'}</button>
+      </div>
+    </form>
+  `;
+}
+
+function financeSaveCustomSchedule(event) {
+  event.preventDefault();
+  if (!financeState.current) return;
+  const state = financeCustomScheduleState;
+  const label = String(state.label || '').trim();
+  const dates = state.dates
+    .filter(row => String(row.date || '').trim())
+    .map(row => ({
+      id: row.id,
+      date: row.date,
+      time: row.time || '',
+      batchId: row.batchId || ''
+    }));
+  if (!label || !dates.length) {
+    showNotification('warning', 'Enter a custom label and at least one date');
+    return;
+  }
+  if (!Number.isInteger(state.positionIndex) || state.positionIndex < 0 || state.positionIndex > state.baseOrder.length) {
+    showNotification('warning', 'Choose where the custom dates should appear in the schedule');
+    return;
+  }
+  const groupId = state.editingId || `custom_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const groups = financeCustomScheduleGroups().filter(group => group.id !== groupId);
+  groups.push({ id: groupId, label, dates });
+  const order = [...state.baseOrder];
+  order.splice(Math.min(state.positionIndex, order.length), 0, `custom:${groupId}`);
+  financeState.current.customScheduleGroups = groups;
+  financeState.current.scheduleOrder = order;
+  financeRemoveEmptyScheduleBatches();
+  closeModal('financeCustomScheduleModal');
+  financeQueueSave();
+  financeRenderEditor();
+  showNotification('success', `${label} added to the schedule`);
+}
+
+async function financeDeleteCustomSchedule(encodedGroupId) {
+  const groupId = decodeURIComponent(encodedGroupId);
+  const group = financeCustomScheduleGroups().find(row => row.id === groupId);
+  if (!group) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete custom dates?',
+    message: `Delete ${group.label} and all dates under this label?`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    danger: true
+  });
+  if (!confirmed) return;
+  financeState.current.customScheduleGroups = financeCustomScheduleGroups().filter(row => row.id !== groupId);
+  financeState.current.scheduleOrder = financeScheduleOrder().filter(token => token !== `custom:${groupId}`);
+  financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.kind !== `custom:${groupId}`);
+  financeQueueSave();
+  financeRenderEditor();
+}
+
 function financeToggleScheduleBatch(encodedBatchId) {
   const batchId = decodeURIComponent(encodedBatchId);
   financeState.expandedScheduleBatches[batchId] = !financeState.expandedScheduleBatches[batchId];
@@ -406,15 +768,17 @@ async function financeDeleteScheduleBatch(encodedBatchId) {
   if (!batch) return;
   const confirmed = await showAppConfirm({
     title: 'Delete schedule',
-    message: `Delete this ${String(FINANCE_SCHEDULE_LABELS[batch.kind] || batch.kind).toLowerCase()} schedule and all of its dates?`,
+    message: `Delete this ${financeScheduleKindLabel(batch.kind).toLowerCase()} schedule and all of its dates?`,
     confirmText: 'Delete schedule',
     cancelText: 'Cancel',
     destructive: true
   });
   if (!confirmed) return;
-  Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
-    const key = FINANCE_SCHEDULE_KEYS[kind];
-    financeState.current[key] = financeAdditionalScheduleRows(kind).filter(row => row.batchId !== batchId);
+  financeScheduleKindOptions().forEach(({ value: kind }) => {
+    financeReplaceScheduleRowsForKind(
+      kind,
+      financeScheduleRowsForKind(kind).filter(row => row.batchId !== batchId)
+    );
   });
   financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.id !== batchId);
   delete financeState.expandedScheduleBatches[batchId];
@@ -482,7 +846,7 @@ function financeBriefScheduleKind(value, fallbackKind) {
   if (/\b(?:set\s*up)\b/.test(label)) return 'setup';
   if (/\brehears/.test(label)) return 'rehearsal';
   if (/\b(?:event|show)\b/.test(label)) return 'show';
-  return FINANCE_SCHEDULE_KEYS[fallbackKind] ? fallbackKind : 'show';
+  return financeScheduleKindExists(fallbackKind) ? fallbackKind : 'show';
 }
 
 function financeBriefStartTime(value) {
@@ -629,21 +993,23 @@ function financeBulkScheduleCandidates() {
       const parsed = financeParseClientBriefLine(line, state.kind, referenceYear);
       if (parsed?.error) invalid.push(`Line ${index + 1}: ${parsed.error} (${parsed.original})`);
       (parsed?.rows || []).forEach(row => {
-        if (candidates.length < 500 && (!state.restrictPasteKind || row.kind === state.kind)) {
-          candidates.push({ ...row, time: row.time || state.time || '' });
+        const targetKind = financeCustomScheduleGroupForKind(state.kind) ? state.kind : row.kind;
+        if (candidates.length < 500 && (!state.restrictPasteKind || targetKind === state.kind)) {
+          candidates.push({ ...row, kind: targetKind, time: row.time || state.time || '' });
         }
       });
     });
     truncated = candidates.length >= 500;
   }
 
-  const existing = new Map(Object.keys(FINANCE_SCHEDULE_KEYS).map(kind => [kind, new Set()]));
-  Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
-    const primaryDate = financeState.current?.[`${kind}Date`];
+  const scheduleKinds = financeScheduleKindOptions().map(option => option.value);
+  const existing = new Map(scheduleKinds.map(kind => [kind, new Set()]));
+  scheduleKinds.forEach(kind => {
+    const primaryDate = FINANCE_SCHEDULE_KEYS[kind] ? financeState.current?.[`${kind}Date`] : '';
     if (primaryDate) {
       existing.get(kind).add(financeScheduleIdentity(primaryDate, financeState.current?.[`${kind}Time`]));
     }
-    financeAdditionalScheduleRows(kind).forEach(row => {
+    financeScheduleRowsForKind(kind).forEach(row => {
       if (!state.editingBatchId || row.batchId !== state.editingBatchId) {
         existing.get(kind).add(financeScheduleIdentity(row.date, row.time));
       }
@@ -652,7 +1018,7 @@ function financeBulkScheduleCandidates() {
 
   const seen = new Set();
   const rows = candidates.map((row, index) => {
-    const kind = FINANCE_SCHEDULE_KEYS[row.kind] ? row.kind : state.kind;
+    const kind = financeScheduleKindExists(row.kind) ? row.kind : state.kind;
     const scheduleIdentity = financeScheduleIdentity(row.date, row.time);
     const identity = `${kind}|${scheduleIdentity}`;
     const duplicate = existing.get(kind).has(scheduleIdentity) || seen.has(identity);
@@ -702,10 +1068,11 @@ function ensureFinanceBulkScheduleModal() {
 }
 
 function financeOpenBulkSchedule(kind = 'show', encodedBatchId = '', duplicate = false) {
-  if (!financeState.current || !FINANCE_SCHEDULE_KEYS[kind]) return;
+  if (!financeState.current || !financeScheduleKindExists(kind)) return;
   const batchId = encodedBatchId ? decodeURIComponent(encodedBatchId) : '';
   const source = batchId ? financeScheduleBatches().find(row => row.id === batchId) : null;
-  const defaultDate = financeState.current[`${kind}Date`]
+  const defaultDate = financeCustomScheduleGroupForKind(kind)?.dates?.[0]?.date
+    || financeState.current[`${kind}Date`]
     || financeState.current.showDate
     || financeState.current.setupDate
     || financeState.current.rehearsalDate
@@ -739,7 +1106,7 @@ function financeOpenBulkSchedule(kind = 'show', encodedBatchId = '', duplicate =
 }
 
 function financeSetBulkScheduleKind(kind) {
-  if (!FINANCE_SCHEDULE_KEYS[kind]) return;
+  if (!financeScheduleKindExists(kind)) return;
   financeScheduleBulkState.kind = kind;
   financeScheduleBulkState.excluded = {};
   financeRenderBulkScheduleModal();
@@ -783,9 +1150,9 @@ function financeRenderBulkScheduleModal() {
       <div class="finance-bulk-schedule-content">
         <div class="finance-bulk-schedule-section">
           <span class="finance-bulk-schedule-label">Schedule type</span>
-          <div class="finance-schedule-segments">
-            ${Object.keys(FINANCE_SCHEDULE_KEYS).map(kind => `
-              <button type="button" class="${state.kind === kind ? 'active' : ''}" onclick="financeSetBulkScheduleKind('${kind}')">${financeEscape(FINANCE_SCHEDULE_LABELS[kind])}</button>
+          <div class="finance-schedule-segments finance-schedule-type-segments">
+            ${financeScheduleKindOptions().map(option => `
+              <button type="button" class="${state.kind === option.value ? 'active' : ''}${option.custom ? ' is-custom' : ''}" onclick="financeSetBulkScheduleKind('${financeEscapeAttr(option.value)}')">${financeEscape(option.label)}</button>
             `).join('')}
           </div>
         </div>
@@ -801,7 +1168,7 @@ function financeRenderBulkScheduleModal() {
             <label class="finance-field"><span>From</span><input class="finance-input" type="date" value="${financeEscapeAttr(state.startDate)}" onchange="financeSetBulkScheduleField('startDate',this.value)"></label>
             <label class="finance-field"><span>To</span><input class="finance-input" type="date" value="${financeEscapeAttr(state.endDate)}" onchange="financeSetBulkScheduleField('endDate',this.value)"></label>
             <label class="finance-field"><span>Time</span><input class="finance-input" type="time" value="${financeEscapeAttr(state.time)}" onchange="financeSetBulkScheduleField('time',this.value)"></label>
-            <label class="finance-field"><span>Repeat every</span><span class="finance-schedule-interval"><input class="finance-input" type="number" min="1" max="52" value="${financeEscapeAttr(state.intervalWeeks)}" onchange="financeSetBulkScheduleField('intervalWeeks',this.value)"><small>week(s)</small></span></label>
+            <label class="finance-field finance-schedule-repeat-field${state.weekdays.length ? '' : ' is-disabled'}"><span>Repeat every</span><span class="finance-schedule-interval"><input class="finance-input" type="number" min="1" max="52" value="${financeEscapeAttr(state.intervalWeeks)}" onchange="financeSetBulkScheduleField('intervalWeeks',this.value)" ${state.weekdays.length ? '' : 'disabled'}><small>week(s)</small></span></label>
           </div>
           <div class="finance-bulk-schedule-section">
             <span class="finance-bulk-schedule-label">Repeat on${state.weekdays.length ? '' : ' - Every day'}</span>
@@ -811,7 +1178,7 @@ function financeRenderBulkScheduleModal() {
           </div>
         ` : `
           <div class="finance-bulk-schedule-paste">
-            <label class="finance-field"><span>Dates, times or client brief</span><textarea class="finance-input" rows="8" placeholder="Event Date and Time: 5th Nov, 7-10pm&#10;Setup Date(s): 30th Oct - 5th Nov&#10;AV rehearsal dates: 3 and 4 Nov (9am - 7pm)" oninput="financeSetBulkScheduleField('pasteText',this.value)">${financeEscape(state.pasteText)}</textarea></label>
+            <label class="finance-field"><span>Dates, times or client brief</span><textarea class="finance-input" rows="8" placeholder="Event Date and Time: 18th Sep 2027, 7-10pm&#10;Setup Date(s): 16th - 18th Sep 2027&#10;AV rehearsal dates: 16th and 17th Sep 2027 (9am - 7pm)" oninput="financeSetBulkScheduleField('pasteText',this.value)">${financeEscape(state.pasteText)}</textarea></label>
             <label class="finance-field"><span>Default time when omitted</span><input class="finance-input" type="time" value="${financeEscapeAttr(state.time)}" onchange="financeSetBulkScheduleField('time',this.value)"></label>
           </div>
         `}
@@ -852,7 +1219,7 @@ function financeRenderBulkSchedulePreview() {
       ${preview.rows.map(row => `
         <label class="finance-bulk-preview-row ${row.duplicate ? 'is-duplicate' : ''}">
           <input type="checkbox" ${row.selected ? 'checked' : ''} ${row.duplicate ? 'disabled' : ''} onchange="financeToggleBulkScheduleDate('${financeEscapeAttr(encodeURIComponent(row.identity))}',this.checked)">
-          <span><strong>${financeEscape(financeScheduleDateLabel(row.date, 'long'))}</strong><small><b class="finance-bulk-preview-kind">${financeEscape(FINANCE_SCHEDULE_LABELS[row.kind] || 'Show')}</b>${row.time ? `${financeEscape(row.time)}hrs` : 'No time'}</small></span>
+          <span><strong>${financeEscape(financeScheduleDateLabel(row.date, 'long'))}</strong><small><b class="finance-bulk-preview-kind">${financeEscape(financeScheduleKindLabel(row.kind))}</b>${row.time ? `${financeEscape(row.time)}hrs` : 'No time'}</small></span>
           ${row.duplicate ? '<em>Already added</em>' : ''}
         </label>
       `).join('') || '<div class="finance-suggestion-empty">Enter a schedule to preview its dates.</div>'}
@@ -872,15 +1239,17 @@ function financeApplyBulkSchedule(event) {
   }
   const batchId = state.editingBatchId || `schedule_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   if (state.editingBatchId) {
-    Object.keys(FINANCE_SCHEDULE_KEYS).forEach(kind => {
-      const key = FINANCE_SCHEDULE_KEYS[kind];
-      financeState.current[key] = financeAdditionalScheduleRows(kind).filter(row => row.batchId !== batchId);
+    financeScheduleKindOptions().forEach(({ value: kind }) => {
+      financeReplaceScheduleRowsForKind(
+        kind,
+        financeScheduleRowsForKind(kind).filter(row => row.batchId !== batchId)
+      );
     });
     financeState.current.scheduleBatches = financeScheduleBatches().filter(row => row.id !== batchId);
   }
 
   const grouped = selected.reduce((result, row) => {
-    const kind = FINANCE_SCHEDULE_KEYS[row.kind] ? row.kind : state.kind;
+    const kind = financeScheduleKindExists(row.kind) ? row.kind : state.kind;
     (result[kind] || (result[kind] = [])).push(row);
     return result;
   }, {});
@@ -891,8 +1260,7 @@ function financeApplyBulkSchedule(event) {
       : Object.keys(grouped).length === 1
         ? batchId
         : `${batchId}_${kind}`;
-    const key = FINANCE_SCHEDULE_KEYS[kind];
-    const targetRows = financeState.current[key] || (financeState.current[key] = []);
+    const targetRows = financeScheduleRowsForKind(kind);
     rows.forEach((row, index) => targetRows.push({
       id: `${groupBatchId}_${index + 1}`,
       date: row.date,
@@ -903,6 +1271,7 @@ function financeApplyBulkSchedule(event) {
       String(left.date || '').localeCompare(String(right.date || ''))
       || String(left.time || '').localeCompare(String(right.time || ''))
     );
+    financeReplaceScheduleRowsForKind(kind, targetRows);
     newBatches.push({
       id: groupBatchId,
       kind,
@@ -1039,7 +1408,10 @@ function financeEventDays(document = financeState.current) {
     document?.showDate,
     ...financeAdditionalScheduleRows('show', document).map(row => row.date),
     document?.teardownDate,
-    ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
+    ...financeAdditionalScheduleRows('teardown', document).map(row => row.date),
+    ...financeCustomScheduleGroups(document).flatMap(group =>
+      (group.dates || []).map(row => row.date)
+    )
   ].filter(Boolean).sort();
   if (!scheduleDates.length) return 1;
   const start = new Date(`${scheduleDates[0]}T00:00:00`);
@@ -1620,7 +1992,9 @@ async function financeLoadList(query = '', options = {}) {
   financeState.listQuery = cleanQuery;
   if (!append) {
     financeState.listMeta = { total: 0, hasMore: false, nextOffset: null };
-    root.innerHTML = '<div class="loading">Loading quotations...</div>';
+    if (!root.querySelector('.finance-toolbar')) {
+      root.innerHTML = '<div class="loading">Loading quotations...</div>';
+    }
   }
   try {
     const params = new URLSearchParams();
@@ -1629,6 +2003,7 @@ async function financeLoadList(query = '', options = {}) {
     params.set('offset', String(append ? financeState.listMeta.nextOffset || financeState.documents.length : 0));
     if (cleanQuery) params.set('query', cleanQuery);
     if (financeListCanToggleMine() && financeState.mineOnly) params.set('mine', '1');
+    params.set('sort', financeState.listSort);
     const response = await apiCall(`/api/quotations?${params.toString()}`);
     if (requestSeq !== financeState.listRequestSeq) return;
     const incoming = response.data || [];
@@ -1649,7 +2024,12 @@ async function financeLoadList(query = '', options = {}) {
   } catch (error) {
     if (requestSeq !== financeState.listRequestSeq) return;
     if (!append) {
-      root.innerHTML = '<div class="finance-empty">Could not load quotations.</div>';
+      const results = document.getElementById('financeListResults');
+      if (results) {
+        results.innerHTML = '<div class="finance-empty">Could not load quotations.</div>';
+      } else {
+        root.innerHTML = '<div class="finance-empty">Could not load quotations.</div>';
+      }
     } else {
       financeRenderList(cleanQuery);
     }
@@ -1691,6 +2071,37 @@ function financeListCanToggleMine() {
 
 function financeToggleMineOnly() {
   financeState.mineOnly = !financeState.mineOnly;
+  const toggle = document.querySelector('.finance-list-mine-toggle');
+  toggle?.classList.toggle('on', financeState.mineOnly);
+  toggle?.setAttribute('aria-checked', financeState.mineOnly ? 'true' : 'false');
+  financeLoadList(document.querySelector('.finance-search')?.value || '');
+}
+
+function financeListSortLabel(value = financeState.listSort) {
+  return value === 'number' ? 'Quotation number' : 'Last modified';
+}
+
+function financeListSortControl() {
+  const options = ['updated', 'number'];
+  return `
+    <div class="finance-custom-control finance-list-sort-control" onclick="event.stopPropagation()">
+      <button type="button" class="finance-list-sort-button" onclick="financeToggleMenu('finance-list-sort-menu',event)" aria-haspopup="menu">
+        <span id="financeListSortLabel">${financeEscape(financeListSortLabel())}</span><span aria-hidden="true">v</span>
+      </button>
+      <div class="finance-custom-menu finance-list-sort-menu" id="finance-list-sort-menu" role="menu">
+        ${options.map(value => `
+          <button type="button" class="${value === financeState.listSort ? 'selected' : ''}" onclick="financeSetListSort('${value}')">${financeEscape(financeListSortLabel(value))}</button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function financeSetListSort(value) {
+  financeState.listSort = value === 'number' ? 'number' : 'updated';
+  financeCloseMenus();
+  const label = document.getElementById('financeListSortLabel');
+  if (label) label.textContent = financeListSortLabel();
   financeLoadList(document.querySelector('.finance-search')?.value || '');
 }
 
@@ -1755,14 +2166,40 @@ function financeUpdateListRow(updated) {
   if (currentRow) currentRow.outerHTML = financeRenderListRow(merged);
 }
 
+function financeListResultsHtml(showSalesperson = financeListShowsSalesperson()) {
+  const rows = financeState.documents.map(document => financeRenderListRow(document, showSalesperson)).join('');
+  const loadedCount = financeState.documents.length;
+  const totalCount = Math.max(loadedCount, Number(financeState.listMeta.total || 0));
+  return `
+    <div class="finance-card" id="financeListResults">
+      ${rows ? `
+        <table class="finance-list-table">
+          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="finance-list-pagination">
+          <span>Showing ${loadedCount} of ${totalCount} quotation${totalCount === 1 ? '' : 's'}</span>
+          ${financeState.listMeta.hasMore ? `
+            <button type="button" class="btn btn-secondary" onclick="financeLoadMore()">Load more</button>
+            <span id="financeListSentinel" class="finance-list-sentinel" aria-hidden="true"></span>
+          ` : ''}
+        </div>
+      ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
+    </div>
+  `;
+}
+
 function financeRenderList(query = '') {
   const root = financeRoot();
   if (!root) return;
   const showSalesperson = financeListShowsSalesperson();
+  const existingResults = document.getElementById('financeListResults');
+  if (existingResults && root.contains(existingResults)) {
+    existingResults.outerHTML = financeListResultsHtml(showSalesperson);
+    requestAnimationFrame(financeObserveListContinuation);
+    return;
+  }
   const showMineToggle = financeListCanToggleMine();
-  const rows = financeState.documents.map(document => financeRenderListRow(document, showSalesperson)).join('');
-  const loadedCount = financeState.documents.length;
-  const totalCount = Math.max(loadedCount, Number(financeState.listMeta.total || 0));
   root.innerHTML = `
     <div class="finance-toolbar">
       <div class="finance-toolbar-heading">
@@ -1781,32 +2218,21 @@ function financeRenderList(query = '') {
         <p class="finance-subtitle">Your quotations, versions and client approvals.</p>
       </div>
       <div class="finance-toolbar-actions">
-        <input class="finance-search" type="search" value="${financeEscapeAttr(query)}" placeholder="Search quotations..." oninput="financeQueueListSearch(this.value)">
+        <input class="finance-search" type="search" value="${financeEscapeAttr(query)}" placeholder="Search quotations..." autocomplete="off" oninput="financeQueueListSearch(this.value)">
+        ${financeListSortControl()}
         <button type="button" class="btn btn-primary" onclick="financeCreateDocument()">+ New Quotation</button>
       </div>
     </div>
-    <div class="finance-card">
-      ${rows ? `
-        <table class="finance-list-table">
-          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <div class="finance-list-pagination">
-          <span>Showing ${loadedCount} of ${totalCount} quotation${totalCount === 1 ? '' : 's'}</span>
-          ${financeState.listMeta.hasMore ? `
-            <button type="button" class="btn btn-secondary" onclick="financeLoadMore()">Load more</button>
-            <span id="financeListSentinel" class="finance-list-sentinel" aria-hidden="true"></span>
-          ` : ''}
-        </div>
-      ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
-    </div>
+    ${financeListResultsHtml(showSalesperson)}
   `;
   requestAnimationFrame(financeObserveListContinuation);
 }
 
 function financeQueueListSearch(query) {
   clearTimeout(financeState.listTimer);
-  financeState.listTimer = setTimeout(() => financeLoadList(query), 280);
+  financeState.listQuery = String(query || '').trim();
+  financeState.listRequestSeq += 1;
+  financeState.listTimer = setTimeout(() => financeLoadList(query), 400);
 }
 
 async function financeLoadEditorData(force = false) {
@@ -2077,6 +2503,7 @@ function financeApplySavedClient(encodedName) {
   const client = financeState.clients.find(row => row.name === name);
   if (!client || !financeState.current) return;
   financeState.current.client = { ...client };
+  financeState.current.clientRecordName = client.name;
   financeQueueSave();
   financeRenderEditor();
 }
@@ -2085,6 +2512,7 @@ function financeApplySavedClientByIndex(index) {
   const client = financeState.clients[Number(index)];
   if (!client || !financeState.current) return;
   financeState.current.client = { ...client };
+  financeState.current.clientRecordName = client.name;
   closeModal('financeClientPickerModal');
   financeQueueSave();
   financeRenderEditor();
@@ -2946,7 +3374,7 @@ function financeRenderEditor() {
             <label class="finance-field"><span>Email</span><input class="finance-input" type="email" value="${financeEscapeAttr(client.email || '')}" onchange="financeClientFieldChange('email',this.value)"></label>
             <label class="finance-field finance-span-3"><span>Billing address</span><input class="finance-input" value="${financeEscapeAttr([client.address1, client.address2, client.address3, client.postalCode].filter(Boolean).join(', '))}" onchange="financeSetClientAddress(this.value)"></label>
             <label class="finance-field"><span>Salesperson</span><span class="finance-salesperson-combobox"><input id="financeSalespersonInput" class="finance-input" value="${financeEscapeAttr(document.salesperson || '')}" autocomplete="off" onfocus="financeShowSalespersonSuggestions(this.value)" oninput="financeSalespersonInput(this.value)" onblur="setTimeout(() => document.getElementById('financeSalespersonResults')?.classList.remove('open'),120)"><span class="finance-salesperson-results" id="financeSalespersonResults"></span></span></label>
-            <label class="finance-field finance-span-2"><span>Project Name *</span><input class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" onchange="financeFieldChange('projectName',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>Project Name *</span><input id="financeProjectNameInput" class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" oninput="financeClearProjectNameExportError(this)" onchange="financeFieldChange('projectName',this.value)"></label>
             <label class="finance-field finance-span-2"><span>Location</span><span class="finance-location-combobox"><input id="financeLocationInput" class="finance-input" value="${financeEscapeAttr(document.eventLocation || '')}" autocomplete="off" onfocus="financeShowLocationSuggestions(this.value)" oninput="financeFieldChange('eventLocation',this.value);financeShowLocationSuggestions(this.value)" onchange="financeFieldChange('eventLocation',this.value)" onblur="setTimeout(() => document.getElementById('financeLocationResults')?.classList.remove('open'),120)"><span class="finance-location-results" id="financeLocationResults"></span></span></label>
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
             <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)">${financeValidityUnitControl(validityUnit, 'finance-editor-validity-unit-menu', 'financeSetValidityUnit')}</span></label>
@@ -2956,9 +3384,13 @@ function financeRenderEditor() {
         </section>
 
         <section class="finance-card finance-section">
-          <div class="finance-section-heading">
+          <div class="finance-section-heading finance-event-schedule-heading">
             <div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div>
-            <button type="button" class="btn btn-primary finance-bulk-schedule-open" onclick="financeOpenBulkSchedule('show')">Bulk add dates</button>
+            <div class="finance-schedule-heading-order">${financeScheduleOrderPreview(document)}</div>
+            <div class="finance-schedule-heading-actions">
+              <button type="button" class="btn btn-secondary" onclick="financeOpenCustomSchedule()">+ Custom date(s)</button>
+              <button type="button" class="btn btn-primary finance-bulk-schedule-open" onclick="financeOpenBulkSchedule('show')">Bulk add dates</button>
+            </div>
           </div>
           <div class="finance-schedule-grid">
             <div class="finance-schedule-stack">
@@ -2981,6 +3413,7 @@ function financeRenderEditor() {
               ${financeScheduleRowsMarkup('show', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('show')">+ Add show</button>
             </div>
+            ${financeCustomScheduleMarkup(document)}
           </div>
         </section>
 
@@ -3427,6 +3860,20 @@ function financeQueueSave() {
   financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 650);
 }
 
+function financeSyncClientCache(document, previousRecordName = '') {
+  const client = document?.client || {};
+  const recordName = String(document?.clientRecordName || client.name || '').trim();
+  if (!recordName || !String(client.name || '').trim()) return;
+  const previousKey = String(previousRecordName || '').trim().toLowerCase();
+  const recordKey = recordName.toLowerCase();
+  financeState.clients = (financeState.clients || []).filter(row => {
+    const key = String(row?.name || '').trim().toLowerCase();
+    return key !== recordKey && (!previousKey || key !== previousKey);
+  });
+  financeState.clients.push({ ...client });
+  financeState.clients.sort((left, right) => financeClientDisplay(left).localeCompare(financeClientDisplay(right)));
+}
+
 function financeQuotationIsBlank(document) {
   if (!document?._createdBlank) return false;
   const client = document.client || {};
@@ -3448,7 +3895,11 @@ function financeQuotationIsBlank(document) {
     ...(document.additionalRehearsals || []),
     ...(document.additionalShows || []),
     ...(document.additionalTeardowns || [])
-  ].some(row => String(row?.date || row?.time || '').trim());
+  ].some(row => String(row?.date || row?.time || '').trim())
+    || financeCustomScheduleGroups(document).some(group =>
+      String(group?.label || '').trim()
+      || (group?.dates || []).some(row => String(row?.date || row?.time || '').trim())
+    );
   return !hasClient
     && !String(document.projectName || '').trim()
     && !(document.departments || []).length
@@ -3465,6 +3916,7 @@ async function financeSaveCurrent(notify = false) {
   financeApplyLockedTotalAdjustment(current);
   clearTimeout(financeState.saveTimer);
   const version = financeState.changeVersion;
+  const previousClientRecordName = current.clientRecordName || current.client?.name || '';
   const state = document.getElementById('financeSaveState');
   if (state) state.textContent = 'Saving...';
   try {
@@ -3473,6 +3925,7 @@ async function financeSaveCurrent(notify = false) {
       ? `/api/quotations/${encodeURIComponent(current.id)}/revisions/${encodeURIComponent(editingSentRevision)}`
       : `/api/quotations/${encodeURIComponent(current.id)}`;
     const response = await apiCall(endpoint, 'PUT', current);
+    financeSyncClientCache(response.data, previousClientRecordName);
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
       const previousStatus = financeState.current.status;
@@ -3873,11 +4326,38 @@ async function financeExportPdf() {
   return financeExportQuotation(financeState.current?.id);
 }
 
+function financeClearProjectNameExportError(input = document.getElementById('financeProjectNameInput')) {
+  if (!input || !String(input.value || '').trim()) return;
+  input.removeAttribute('aria-invalid');
+  input.classList.remove('finance-input-error');
+}
+
+function financeRequireExportProjectName(quotation) {
+  const projectName = String(quotation?.projectName || '').trim();
+  if (projectName) {
+    financeClearProjectNameExportError();
+    return true;
+  }
+  const input = financeState.current?.id === quotation?.id
+    ? document.getElementById('financeProjectNameInput')
+    : null;
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.classList.add('finance-input-error');
+    input.focus();
+  }
+  const saveState = document.getElementById('financeSaveState');
+  if (saveState) saveState.textContent = 'Project Name is required before exporting';
+  showNotification('error', 'Add a Project Name before exporting the quotation.');
+  return false;
+}
+
 async function financeExportQuotation(documentId = financeState.current?.id) {
   const quotation = financeState.current?.id === documentId
     ? financeState.current
     : financeState.documents.find(row => row.id === documentId);
   if (!quotation || !financeCanExportQuotation(quotation)) return;
+  if (!financeRequireExportProjectName(quotation)) return;
   try {
     const current = financeState.current?.id === quotation.id
       ? await financeSaveCurrent(false)
@@ -4001,6 +4481,7 @@ async function financeSaveNewClient(event) {
     });
     await financeLoadEditorData();
     financeState.current.client = { ...response.data };
+    financeState.current.clientRecordName = response.data.name;
     closeModal('financeClientModal');
     financeQueueSave();
     financeRenderEditor();

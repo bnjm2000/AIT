@@ -362,19 +362,8 @@ def _schedule_recurring_batch_summary(batch, all_rows):
     return summary, required
 
 
-def _schedule_document_summary(document, date_key, time_key, additional_key, kind):
-    rows = []
-    if document.get(date_key):
-        rows.append({
-            'date': document.get(date_key),
-            'time': document.get(time_key),
-            'batchId': '',
-        })
-    if additional_key:
-        rows.extend(
-            row for row in document.get(additional_key) or []
-            if isinstance(row, dict)
-        )
+def _schedule_rows_summary(document, rows, kind):
+    rows = [row for row in rows or [] if isinstance(row, dict)]
     if not rows:
         return ''
 
@@ -414,6 +403,19 @@ def _schedule_document_summary(document, date_key, time_key, additional_key, kin
         *([remaining_summary] if remaining_summary else []),
         *batch_segments,
     ])
+
+
+def _schedule_document_summary(document, date_key, time_key, additional_key, kind):
+    rows = []
+    if document.get(date_key):
+        rows.append({
+            'date': document.get(date_key),
+            'time': document.get(time_key),
+            'batchId': '',
+        })
+    if additional_key:
+        rows.extend(document.get(additional_key) or [])
+    return _schedule_rows_summary(document, rows, kind)
 
 
 def _validity_label(document):
@@ -583,6 +585,28 @@ def build_finance_pdf(document, company, logo_path=''):
         parent=optional_body,
         fontName='Helvetica-Bold',
         alignment=TA_RIGHT,
+    )
+    project_name_style = ParagraphStyle(
+        'FinanceProjectName',
+        parent=body,
+        fontName='Helvetica-Bold',
+        fontSize=11.5,
+        leading=14,
+        textColor=ink,
+    )
+    project_location_style = ParagraphStyle(
+        'FinanceProjectLocation',
+        parent=body,
+        fontSize=9,
+        leading=11.5,
+        textColor=ink,
+    )
+    event_schedule_style = ParagraphStyle(
+        'FinanceEventSchedule',
+        parent=body,
+        fontSize=7.8,
+        leading=10,
+        textColor=ink,
     )
     section_title = ParagraphStyle(
         'FinanceSectionTitle',
@@ -761,85 +785,187 @@ def build_finance_pdf(document, company, logo_path=''):
         secondary_label = 'Valid for'
         secondary_value = _validity_label(document)
 
+    meta_values = [
+        (date_label, _date(date_value)),
+        (
+            secondary_label,
+            _date(secondary_value) if document_type == 'invoice' else secondary_value,
+        ),
+        (
+            'PO / Reference' if document_type == 'invoice' else 'Reference',
+            document.get('reference'),
+        ),
+        ('Salesperson', document.get('salesperson')),
+        ('Payment terms', document.get('paymentTerms')),
+    ]
     meta_rows = [
-        [_paragraph(date_label, label), _paragraph(_date(date_value), body)],
-        [_paragraph(secondary_label, label), _paragraph(_date(secondary_value) if document_type == 'invoice' else secondary_value, body)],
-        [_paragraph('PO / Reference' if document_type == 'invoice' else 'Reference', label), _paragraph(document.get('reference'), body)],
-        [_paragraph('Salesperson', label), _paragraph(document.get('salesperson'), body)],
-        [_paragraph('Payment terms', label), _paragraph(document.get('paymentTerms'), body)],
+        [_paragraph(meta_label, label), _paragraph(meta_value, body)]
+        for meta_label, meta_value in meta_values
+        if _text(meta_value).strip()
     ]
     meta_table = Table(
         meta_rows,
-        colWidths=[34 * mm, 51 * mm],
+        colWidths=[32 * mm, 46 * mm],
         style=TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]),
-    )
-    client_block = [
-        _paragraph('BILL TO', label),
-        _paragraph('\n'.join(bill_lines) or 'No client selected', body),
-    ]
-    client_table = Table(
-        [[client_block, meta_table]],
-        colWidths=[doc.width - 88 * mm, 88 * mm],
-        style=TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-            ('BOX', (0, 0), (-1, -1), 0.6, rule),
-            ('LINEBEFORE', (1, 0), (1, 0), 0.6, rule),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
-            ('TOPPADDING', (0, 0), (-1, -1), 4 * mm),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4 * mm),
-        ]),
-    )
-    story.extend([client_table, Spacer(1, 4 * mm)])
-
-    event_bits = []
-    for event_label, key in (
-        ('Project Name', 'projectName'),
-        ('Location', 'eventLocation'),
-    ):
-        if document.get(key):
-            event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(document[key]))}")
-    for event_label, date_key, time_key, additional_key, kind in (
-        ('Set-up', 'setupDate', 'setupTime', 'additionalSetups', 'setup'),
-        ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals', 'rehearsal'),
-        ('Show', 'showDate', 'showTime', 'additionalShows', 'show'),
-        ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns', 'teardown'),
-    ):
-        value = _schedule_document_summary(
-            document,
-            date_key,
-            time_key,
-            additional_key,
-            kind,
-        )
-        if value:
-            event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(value))}")
-    if event_bits:
-        quotation_reference = (
-            f"Ref: {_text(document.get('sourceQuotationNumber'))}"
-            if document_type == 'invoice' and document.get('sourceQuotationNumber')
-            else ''
-        )
-        event_panel_cells = [
-            Paragraph(_cjk_markup('<br/>'.join(event_bits)), body)
+    ) if meta_rows else []
+    client_block = []
+    if bill_lines:
+        client_block = [
+            _paragraph('BILL TO', label),
+            _paragraph('\n'.join(bill_lines), body),
         ]
-        event_panel_widths = [doc.width]
-        if quotation_reference:
-            event_panel_cells.append(_paragraph(quotation_reference, project_reference_style))
-            event_panel_widths = [doc.width * 0.68, doc.width * 0.32]
+    if client_block or meta_rows:
+        if client_block and meta_rows:
+            client_data = [[client_block, meta_table]]
+            client_widths = [doc.width - 88 * mm, 88 * mm]
+            client_alignment = 'CENTER'
+            client_divider = [('LINEBEFORE', (1, 0), (1, 0), 0.6, rule)]
+        elif client_block:
+            client_data = [[client_block]]
+            client_widths = [doc.width]
+            client_alignment = 'LEFT'
+            client_divider = []
+        else:
+            client_data = [[meta_table]]
+            client_widths = [88 * mm]
+            client_alignment = 'RIGHT'
+            client_divider = []
+        client_table = Table(
+            client_data,
+            colWidths=client_widths,
+            hAlign=client_alignment,
+            style=TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+                ('BOX', (0, 0), (-1, -1), 0.6, rule),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
+                ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * mm),
+                *client_divider,
+            ]),
+        )
+        story.extend([client_table, Spacer(1, 4 * mm)])
+
+    schedule_entries = []
+    standard_schedules = {
+        'setup': ('Set-up', 'setupDate', 'setupTime', 'additionalSetups'),
+        'rehearsal': ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals'),
+        'show': ('Show', 'showDate', 'showTime', 'additionalShows'),
+        'teardown': ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns'),
+    }
+    custom_schedules = {
+        f"custom:{row.get('id')}": row
+        for row in document.get('customScheduleGroups') or []
+        if isinstance(row, dict) and row.get('id') and row.get('label')
+    }
+    schedule_order = []
+    valid_schedule_tokens = set(standard_schedules) | set(custom_schedules)
+    for token in document.get('scheduleOrder') or []:
+        if token in valid_schedule_tokens and token not in schedule_order:
+            schedule_order.append(token)
+    for token in (*standard_schedules, *custom_schedules):
+        if token not in schedule_order:
+            schedule_order.append(token)
+
+    for token in schedule_order:
+        if token in standard_schedules:
+            event_label, date_key, time_key, additional_key = standard_schedules[token]
+            value = _schedule_document_summary(
+                document,
+                date_key,
+                time_key,
+                additional_key,
+                token,
+            )
+        else:
+            custom_schedule = custom_schedules[token]
+            event_label = str(custom_schedule.get('label') or '').strip()
+            value = _schedule_rows_summary(
+                document,
+                custom_schedule.get('dates') or [],
+                token,
+            )
+        if value:
+            schedule_entries.append((event_label, _text(value)))
+
+    project_name = _text(document.get('projectName')).strip()
+    project_location = _text(document.get('eventLocation')).strip()
+    quotation_reference = (
+        f"Ref: {_text(document.get('sourceQuotationNumber'))}"
+        if document_type == 'invoice' and document.get('sourceQuotationNumber')
+        else ''
+    )
+    if project_name or project_location or schedule_entries or quotation_reference:
+        project_column_width = doc.width - 88 * mm
+        project_inner_width = project_column_width - 8 * mm
+        project_block = []
+        if project_name or quotation_reference:
+            project_heading_cells = [
+                [
+                    _paragraph('PROJECT', label),
+                    _paragraph(project_name or '-', project_name_style),
+                ]
+            ]
+            project_heading_widths = [project_inner_width]
+            if quotation_reference:
+                project_heading_cells.append([
+                    _paragraph('QUOTATION REFERENCE', label),
+                    _paragraph(quotation_reference, project_reference_style),
+                ])
+                project_heading_widths = [project_inner_width * 0.62, project_inner_width * 0.38]
+            project_block.append(Table(
+                [project_heading_cells],
+                colWidths=project_heading_widths,
+                style=TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]),
+            ))
+        if project_location:
+            if project_block:
+                project_block.append(Spacer(1, 1 * mm))
+            project_block.extend([
+                _paragraph('LOCATION', label),
+                _paragraph(project_location, project_location_style),
+            ])
+
+        schedule_block = []
+        if schedule_entries:
+            schedule_table = Table(
+                [[
+                    _paragraph(f'{event_label}:', label),
+                    _paragraph(value, event_schedule_style),
+                ] for event_label, value in schedule_entries],
+                colWidths=[22 * mm, 58 * mm],
+                style=TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]),
+            )
+            schedule_block = [
+                _paragraph('EVENT SCHEDULE', label),
+                schedule_table,
+            ]
         event_panel = Table(
-            [event_panel_cells],
-            colWidths=event_panel_widths,
+            [[project_block, schedule_block]],
+            colWidths=[project_column_width, 88 * mm],
             style=TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), panel),
                 ('BOX', (0, 0), (-1, -1), 0.5, rule),
+                ('LINEBEFORE', (1, 0), (1, 0), 0.5, rule),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 4 * mm),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 4 * mm),
@@ -869,11 +995,11 @@ def build_finance_pdf(document, company, logo_path=''):
         30 * mm,
     ]
 
-    if show_unit_prices or show_department_subtotals:
+    if lines:
         story.append(_paragraph('LINE ITEMS', section_title))
 
     export_groups = []
-    if show_unit_prices or show_department_subtotals:
+    if lines:
         for subproject in subprojects:
             subproject_id = str(subproject.get('id') or 'main')
             subproject_departments = []
