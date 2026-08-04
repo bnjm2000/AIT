@@ -553,7 +553,7 @@ function renderWorkforceDocumentsPage() {
   list.innerHTML = `<div class="wf-documents-list-head">
       <span>Event</span><span>Uploader</span><span>File</span><span>Submitted</span><span>Amount</span><span>Status</span><span>Download</span>
     </div>` + (workforceDocumentsState.rows.length
-      ? workforceDocumentsState.rows.map(wfDocumentRow).join('')
+      ? workforceDocumentsState.rows.map(wfDocumentEntry).join('')
       : `<div class="wf-documents-empty"><strong>No matching uploads</strong><span>Try another status, type, or search term.</span></div>`);
   renderWorkforceDocumentsPagination(pagination);
 }
@@ -564,9 +564,11 @@ function wfDocumentRow(record) {
   const eventDates = event.startDate === event.endDate || !event.endDate
     ? event.startDate
     : `${event.startDate} - ${event.endDate}`;
-  const detail = record.kind === 'claim'
-    ? [record.category, record.description || record.notes].filter(Boolean).join(' - ')
-    : 'Invoice';
+  const claimCategory = String(record.category || 'Claim').trim() || 'Claim';
+  const claimDescription = String(record.description || record.notes || '').trim();
+  const detailMarkup = record.kind === 'claim'
+    ? `<small class="wf-document-claim-meta"><span class="wf-document-claim-category">${wfEscape(claimCategory)}</span>${claimDescription ? `<span>${wfEscape(claimDescription)}</span>` : ''}</small>`
+    : '<small>Invoice</small>';
   const canOpenSubject = ['worker', 'vendor'].includes(subject.type) && subject.id;
   const departments = (record.departmentDetails || []).map(department => `
     <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
@@ -580,7 +582,7 @@ function wfDocumentRow(record) {
       </div>`
     : `<button class="wf-document-file" data-label="File" type="button" onclick="openWorkforceDocumentSubmission('${wfAttr(record.id)}')">
         <span class="wf-document-type is-${wfAttr(record.kind)}">${record.kind === 'invoice' ? 'INV' : 'CLM'}</span>
-        <span><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${record.kind} upload`)}</strong><small>${wfEscape(detail || (record.kind === 'invoice' ? 'Invoice' : 'Claim'))}</small></span>
+        <span><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${record.kind} upload`)}</strong>${detailMarkup}</span>
       </button>`;
   const downloadCell = awaitingUpload
     ? '<span class="wf-document-download-empty" aria-label="No file available">-</span>'
@@ -605,6 +607,102 @@ function wfDocumentRow(record) {
     <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
     <div class="wf-document-download" data-label="Download">${downloadCell}</div>
   </article>`;
+}
+
+function wfDocumentEntry(record) {
+  return record.isClaimGroup ? wfDocumentClaimGroup(record) : wfDocumentRow(record);
+}
+
+function wfDocumentClaimGroupItem(record, index) {
+  const category = String(record.category || 'Claim').trim() || 'Claim';
+  const description = String(record.description || record.notes || '').trim();
+  return `<article class="wf-document-claim-item" data-submission-id="${wfAttr(record.id)}">
+    <span class="wf-document-claim-index">Claim ${index + 1}</span>
+    <button class="wf-document-file" data-label="File" type="button" onclick="openWorkforceDocumentSubmission('${wfAttr(record.id)}')">
+      <span class="wf-document-type is-claim">CLM</span>
+      <span><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || 'Claim upload')}</strong>
+        <small class="wf-document-claim-meta"><span class="wf-document-claim-category">${wfEscape(category)}</span>${description ? `<span>${wfEscape(description)}</span>` : ''}</small></span>
+    </button>
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${wfEscape(wfDateTime(record.submittedAt) || 'Unknown')}</strong></div>
+    <div class="wf-document-amount" data-label="Amount"><strong>${record.amount == null ? 'To verify' : wfMoney(record.amount)}</strong></div>
+    <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
+    <div class="wf-document-download" data-label="Download"><a class="wf-icon-button" href="${wfAttr(record.downloadUrl)}" download
+      title="Download ${wfAttr(record.originalName || 'claim')}" aria-label="Download ${wfAttr(record.originalName || 'claim')}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"></path><path d="M5 20h14"></path></svg>
+    </a></div>
+  </article>`;
+}
+
+function wfDocumentClaimGroup(group) {
+  const event = group.event || {};
+  const subject = group.subject || {};
+  const claims = group.claims || [];
+  const eventDates = event.startDate === event.endDate || !event.endDate
+    ? event.startDate
+    : `${event.startDate} - ${event.endDate}`;
+  const canOpenSubject = ['worker', 'vendor'].includes(subject.type) && subject.id;
+  const departments = (group.departmentDetails || []).map(department => `
+    <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
+      title="${wfAttr(department.name || department.code)}">${wfEscape(department.code || department.name)}</span>
+  `).join('');
+  const totalLabel = group.claimAmountsComplete
+    ? wfMoney(group.claimTotal || 0)
+    : `${wfMoney(group.claimTotal || 0)} + pending`;
+  const groupKey = `documents-${wfClaimGroupControlId(event.id, subject.id)}`;
+  const reviewedCount = claims.filter(record => record.verifiedAt).length;
+  const submittedAt = claims.reduce((latest, record) => {
+    const value = String(record.submittedAt || '');
+    return value > latest ? value : latest;
+  }, '');
+  return `<section class="wf-document-claim-group" id="wfDocumentClaimGroup-${wfAttr(groupKey)}"
+      data-event-id="${Number(event.id || 0)}" data-subject-id="${wfAttr(subject.id)}">
+    <header class="wf-document-claim-group-head">
+      <button class="wf-document-event wf-document-navigation" type="button"
+        onclick="viewEvent(${Number(event.id || 0)},{updateHistory:false})" title="View event">
+        <span class="wf-document-event-title"><strong>#${wfEscape(event.id)} ${wfEscape(event.name)}</strong>${planEventStateBadgeHtml(event)}</span>
+        <small>${wfEscape(eventDates || 'No event date')}${event.location ? ` &middot; ${wfEscape(event.location)}` : ''}</small>
+      </button>
+      <button class="wf-document-uploader wf-document-navigation" type="button"
+        ${canOpenSubject ? `onclick="openFreelancerHistory('${wfAttr(subject.id)}')" title="View all events for ${wfAttr(subject.name)}"` : 'disabled'}>
+        <span class="wf-avatar ${subject.type === 'vendor' ? 'vendor' : ''}">${wfEscape(wfInitials(subject.name))}</span>
+        <span><strong>${wfEscape(subject.name || 'Unknown')}</strong><small>${wfEscape(subject.type === 'vendor' ? 'Vendor' : (subject.company || 'Worker'))}</small>
+          ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
+      </button>
+      <button class="wf-document-file wf-document-claim-toggle" type="button"
+        onclick="toggleWorkforceDocumentClaimGroup(event,'${wfAttr(groupKey)}')" aria-expanded="false"
+        aria-controls="wfDocumentClaimItems-${wfAttr(groupKey)}">
+        <span class="wf-document-type is-claim">CLM</span>
+        <span><strong>${claims.length} claims</strong><small>${reviewedCount} of ${claims.length} reviewed</small></span>
+      </button>
+      <div class="wf-document-submitted"><strong>${wfEscape(wfDateTime(submittedAt) || 'Unknown')}</strong><small>Latest submission</small></div>
+      <div class="wf-document-amount"><strong>${totalLabel}</strong><small>Claim total</small></div>
+      <div class="wf-document-status">${wfClaimGroupStatusControl(claims, event.id, subject.id, 'documents')}</div>
+      <button class="wf-icon-button wf-document-claim-expand" type="button"
+        onclick="toggleWorkforceDocumentClaimGroup(event,'${wfAttr(groupKey)}')" aria-expanded="false"
+        aria-controls="wfDocumentClaimItems-${wfAttr(groupKey)}" title="Show claims" aria-label="Show claims">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"></path></svg>
+      </button>
+    </header>
+    <div class="wf-document-claim-items" id="wfDocumentClaimItems-${wfAttr(groupKey)}" hidden>${claims.map(wfDocumentClaimGroupItem).join('')}</div>
+  </section>`;
+}
+
+function toggleWorkforceDocumentClaimGroup(event, groupKey) {
+  event.stopPropagation();
+  const group = document.getElementById(`wfDocumentClaimGroup-${groupKey}`);
+  const items = document.getElementById(`wfDocumentClaimItems-${groupKey}`);
+  if (!group || !items) return;
+  const open = items.hidden;
+  items.hidden = !open;
+  group.classList.toggle('is-open', open);
+  group.querySelectorAll('[aria-controls]').forEach(button => {
+    button.setAttribute('aria-expanded', String(open));
+  });
+  const expand = group.querySelector('.wf-document-claim-expand');
+  if (expand) {
+    expand.title = open ? 'Hide claims' : 'Show claims';
+    expand.setAttribute('aria-label', expand.title);
+  }
 }
 
 function renderWorkforceDocumentsPagination(node) {
@@ -655,7 +753,14 @@ function wfDocumentsSetPage(page) {
 }
 
 function wfFindDocumentSubmission(id) {
-  return workforceDocumentsState.rows.find(row => String(row.id) === String(id));
+  for (const row of workforceDocumentsState.rows) {
+    if (String(row.id) === String(id)) return row;
+    if (row.isClaimGroup) {
+      const claim = (row.claims || []).find(item => String(item.id) === String(id));
+      if (claim) return claim;
+    }
+  }
+  return null;
 }
 
 async function wfLoadDocumentEvent(record) {
@@ -804,6 +909,53 @@ function wfStatusMenu(record) {
   </div>`;
 }
 
+function wfClaimTotalMarkup(claims) {
+  if (!Array.isArray(claims) || claims.length < 2) return '';
+  const included = claims.filter(record => record.status !== 'Denied');
+  const known = included
+    .map(record => Number(record.amount))
+    .filter(amount => Number.isFinite(amount));
+  if (!known.length) return '<span class="wf-claim-total">Total to verify</span>';
+  const total = known.reduce((sum, amount) => sum + amount, 0);
+  const suffix = known.length < included.length ? ' + pending' : ' total';
+  return `<span class="wf-claim-total">${wfMoney(total)}${suffix}</span>`;
+}
+
+function wfClaimDisplayStatus(record) {
+  return record.paymentConfirmedAt
+    ? 'Payment Confirmed'
+    : (record.status || 'Pending Review');
+}
+
+function wfClaimGroupControlId(eventId, subjectId) {
+  return `${Number(eventId || 0)}-${String(subjectId || '').replace(/[^a-z0-9_-]/gi, '-')}`;
+}
+
+function wfClaimGroupStatusControl(claims, eventId, subjectId, controlKey = '') {
+  if (!Array.isArray(claims) || claims.length < 2) return '';
+  const reviewed = claims.every(record => Boolean(record.verifiedAt));
+  const statuses = [...new Set(claims.map(wfClaimDisplayStatus))];
+  const commonStatus = statuses.length === 1 ? statuses[0] : '';
+  const instanceKey = String(controlKey || '').replace(/[^a-z0-9_-]/gi, '-');
+  const menuId = `claim-group-${wfClaimGroupControlId(eventId, subjectId)}${instanceKey ? `-${instanceKey}` : ''}`;
+  const buttonLabel = reviewed
+    ? (commonStatus ? `All: ${commonStatus}` : 'Update all')
+    : 'Review individually';
+  return `<div class="wf-status-control wf-claim-group-status">
+    <button class="wf-status-button ${commonStatus ? wfStatusClass(commonStatus) : 'status-mixed'}" type="button"
+      ${reviewed ? `onclick="toggleWorkforceStatusMenu(event,'${wfAttr(menuId)}')"` : 'disabled'}
+      title="${reviewed ? 'Update every claim in this group' : 'Review every claim individually before updating them together'}">
+      ${wfEscape(buttonLabel)}${reviewed ? ' <span>&#9662;</span>' : ''}
+    </button>
+    ${reviewed ? `<div class="wf-status-menu" id="wfStatusMenu-${wfAttr(menuId)}">
+      ${['Pending Review', 'Approved', 'Paid', 'Payment Confirmed'].map(status =>
+        `<button class="${wfStatusClass(status)}" type="button"
+          onclick="chooseWorkforceClaimGroupStatus(event,${Number(eventId || 0)},'${wfAttr(subjectId)}','${status}')">${status}</button>`
+      ).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
 function wfSubmissionRow(record, kind) {
   return `<div class="wf-file-row">
     <button class="wf-file-name" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')"
@@ -858,7 +1010,9 @@ function wfWorkerHtml(freelancerId, assignments) {
     <section class="wf-submission-box"><header><span>Invoice &middot; ${limits.activeInvoices}/${limits.invoiceLimit}</span>
       ${wfSlotControls(freelancer.id, 'invoice', limits)}</header>
       ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice submitted.</div>'}</section>
-    <section class="wf-submission-box"><header><span>Claims &middot; ${limits.activeClaims}/${limits.claimLimit}</span>
+    <section class="wf-submission-box"><header><span class="wf-claims-heading"><span>Claims &middot; ${limits.activeClaims}/${limits.claimLimit}</span>
+      ${wfClaimTotalMarkup(submissions.claims || [])}
+      ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, freelancer.id, assignments[0]?.department)}</span>
       ${wfSlotControls(freelancer.id, 'claim', limits)}</header>
       ${submissions.claims?.length ? submissions.claims.map(row => wfSubmissionRow(row, 'claim')).join('') : '<div class="wf-empty">No claims submitted.</div>'}</section>
   </article>`;
@@ -903,7 +1057,9 @@ function wfVendorHtml(vendorId, assignments) {
     <section class="wf-submission-box wf-vendor-invoice"><header><span>Vendor invoice · ${limits.activeInvoices}/${limits.invoiceLimit}</span>
       ${wfSlotControls(vendor.id, 'invoice', limits)}</header>
       ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice submitted.</div>'}</section>
-    <section class="wf-submission-box"><header><span>Vendor claims · ${limits.activeClaims || 0}/${limits.claimLimit || 5}</span>
+    <section class="wf-submission-box"><header><span class="wf-claims-heading"><span>Vendor claims &middot; ${limits.activeClaims || 0}/${limits.claimLimit || 5}</span>
+      ${wfClaimTotalMarkup(submissions.claims || [])}
+      ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, vendor.id, assignments[0]?.department)}</span>
       ${wfSlotControls(vendor.id, 'claim', {
         claimLimit: limits.claimLimit || 5,
         activeClaims: limits.activeClaims || 0,
@@ -3565,6 +3721,45 @@ async function chooseWorkforceStatus(event, id, status) {
   await applyWorkforceStatus(id, status);
 }
 
+function wfClaimsForEventSubject(eventId, subjectId) {
+  const targetEventId = Number(eventId || 0);
+  const targetSubjectId = String(subjectId || '');
+  for (const row of workforceDocumentsState.rows || []) {
+    if (
+      row.isClaimGroup &&
+      Number(row.eventId || row.event?.id || 0) === targetEventId &&
+      String(row.freelancerId || row.subject?.id || '') === targetSubjectId
+    ) {
+      return row.claims || [];
+    }
+  }
+  if (Number(workforcePageState.data?.event?.id || 0) === targetEventId) {
+    return workforcePageState.data?.submissions?.[targetSubjectId]?.claims || [];
+  }
+  return [];
+}
+
+async function chooseWorkforceClaimGroupStatus(event, eventId, subjectId, status) {
+  event.stopPropagation();
+  closeWorkforceStatusMenus();
+  const claims = wfClaimsForEventSubject(eventId, subjectId);
+  if (claims.length < 2) return;
+  if (claims.some(record => !record.verifiedAt)) {
+    showNotification('warning', 'Review every claim individually before updating them together');
+    return;
+  }
+  try {
+    const response = await apiCall('/api/workforce/submissions/bulk-status', 'PUT', {
+      submissionIds: claims.map(record => record.id),
+      status
+    });
+    await refreshAfterWorkforceSubmissionMutation(response.data);
+    showNotification('success', `${Number(response.updatedCount || 0)} claims updated to ${status}`);
+  } catch (error) {
+    showNotification('error', error.message);
+  }
+}
+
 async function applyWorkforceStatus(id, status, denialReason = '') {
   const found = wfFindSubmission(id);
   if (!found) return;
@@ -3761,6 +3956,162 @@ function wfReviewExpectedAmountHtml(record) {
   </section>`;
 }
 
+function wfIsoDayNumber(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const day = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000;
+  return Number.isFinite(day) ? day : null;
+}
+
+function wfReviewDateLabel(value) {
+  const day = wfIsoDayNumber(value);
+  if (day === null) return String(value || '');
+  return new Date(day * 86400000).toLocaleDateString('en-SG', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
+  });
+}
+
+function wfReviewDaySpanLabel(firstDay, lastDay) {
+  const first = new Date(firstDay * 86400000);
+  const last = new Date(lastDay * 86400000);
+  const firstDate = first.getUTCDate();
+  const lastDate = last.getUTCDate();
+  const firstMonth = first.toLocaleDateString('en-SG', { month: 'long', timeZone: 'UTC' });
+  const lastMonth = last.toLocaleDateString('en-SG', { month: 'long', timeZone: 'UTC' });
+  const firstYear = first.getUTCFullYear();
+  const lastYear = last.getUTCFullYear();
+  if (firstDay === lastDay) return `${firstDate} ${firstMonth} ${firstYear}`;
+  if (firstYear === lastYear && first.getUTCMonth() === last.getUTCMonth()) {
+    return `${firstDate} - ${lastDate} ${lastMonth} ${lastYear}`;
+  }
+  if (firstYear === lastYear) {
+    return `${firstDate} ${firstMonth} - ${lastDate} ${lastMonth} ${lastYear}`;
+  }
+  return `${firstDate} ${firstMonth} ${firstYear} - ${lastDate} ${lastMonth} ${lastYear}`;
+}
+
+function wfReviewDateRangesLabel(values) {
+  const days = [...new Set((values || []).map(wfIsoDayNumber).filter(day => day !== null))]
+    .sort((left, right) => left - right);
+  if (!days.length) return '';
+  const ranges = [];
+  let first = days[0];
+  let last = days[0];
+  days.slice(1).forEach(day => {
+    if (day === last + 1) {
+      last = day;
+      return;
+    }
+    ranges.push([first, last]);
+    first = day;
+    last = day;
+  });
+  ranges.push([first, last]);
+  return ranges.map(([start, end]) => wfReviewDaySpanLabel(start, end)).join(', ');
+}
+
+function wfReviewDateSpanLabel(startValue, endValue) {
+  const start = wfIsoDayNumber(startValue);
+  const end = wfIsoDayNumber(endValue);
+  if (start === null) return '';
+  return wfReviewDaySpanLabel(start, end === null ? start : end);
+}
+
+function wfReviewClaimDateCheckHtml(record) {
+  const event = workforcePageState.data?.event || record.event || {};
+  const workDates = [...new Set(record.assignmentWorkDates || [])].sort();
+  const eventStart = event.startDateValue || '';
+  const eventEnd = event.endDateValue || eventStart;
+  const hiredLabel = workDates.length
+    ? wfReviewDateRangesLabel(workDates)
+    : 'No specific work dates';
+  const eventLabel = eventStart
+    ? wfReviewDateSpanLabel(eventStart, eventEnd)
+    : 'Event dates unavailable';
+  return `<section class="wf-amount-check wf-claim-date-check" id="wfReviewClaimDateCheck"
+      data-work-dates="${wfAttr(workDates.join(','))}" data-event-start="${wfAttr(eventStart)}"
+      data-event-end="${wfAttr(eventEnd)}">
+    <div class="wf-amount-check-values wf-claim-date-check-values">
+      <div class="wf-claim-date-entered"><span>Claim date</span><strong id="wfReviewClaimDateValue">${wfEscape(wfReviewDateLabel(record.claimDate) || 'Not provided')}</strong></div>
+      <div class="wf-claim-date-reference is-neutral" id="wfReviewHiredDateCheck">
+        <span>Hired for</span><strong>${wfEscape(hiredLabel)}</strong>
+        <small class="wf-amount-match is-neutral" id="wfReviewHiredDateMatch">Checking hired date</small>
+      </div>
+      <div class="wf-claim-date-reference is-neutral" id="wfReviewEventDateCheck">
+        <span>Event window</span><strong>${wfEscape(eventLabel)}</strong>
+        <small class="wf-amount-match is-neutral" id="wfReviewEventDateMatch">Checking event date</small>
+      </div>
+    </div>
+  </section>`;
+}
+
+function wfSetClaimDateCheckState(box, result, state, message) {
+  if (!box || !result) return;
+  box.classList.remove('is-match', 'is-warning', 'is-difference', 'is-neutral');
+  result.className = `wf-amount-match ${state}`;
+  result.textContent = message;
+  box.classList.add(state);
+}
+
+function updateWorkforceClaimDateComparison() {
+  const card = document.getElementById('wfReviewClaimDateCheck');
+  const input = document.getElementById('wfReviewClaimDate');
+  const valueNode = document.getElementById('wfReviewClaimDateValue');
+  const hiredBox = document.getElementById('wfReviewHiredDateCheck');
+  const hiredResult = document.getElementById('wfReviewHiredDateMatch');
+  const eventBox = document.getElementById('wfReviewEventDateCheck');
+  const eventResult = document.getElementById('wfReviewEventDateMatch');
+  if (!card || !input || !valueNode || !hiredBox || !hiredResult || !eventBox || !eventResult) return;
+  const claimDate = String(input.value || '');
+  const claimDay = wfIsoDayNumber(claimDate);
+  const workDays = String(card.dataset.workDates || '').split(',')
+    .map(wfIsoDayNumber).filter(day => day !== null);
+  const eventStart = wfIsoDayNumber(card.dataset.eventStart);
+  const eventEnd = wfIsoDayNumber(card.dataset.eventEnd) ?? eventStart;
+  valueNode.textContent = wfReviewDateLabel(claimDate) || 'Not provided';
+  if (claimDay === null) {
+    wfSetClaimDateCheckState(hiredBox, hiredResult, 'is-neutral', 'Claim date required');
+    wfSetClaimDateCheckState(eventBox, eventResult, 'is-neutral', 'Claim date required');
+    return;
+  }
+
+  if (workDays.length) {
+    const hiredDistance = Math.min(...workDays.map(day => Math.abs(claimDay - day)));
+    const hiredState = hiredDistance === 0
+      ? 'is-match'
+      : (hiredDistance === 1 ? 'is-warning' : 'is-difference');
+    wfSetClaimDateCheckState(
+      hiredBox,
+      hiredResult,
+      hiredState,
+      hiredDistance === 0
+        ? 'Matches hired date'
+        : `${hiredDistance} day${hiredDistance === 1 ? '' : 's'} from hired date`
+    );
+  } else {
+    wfSetClaimDateCheckState(hiredBox, hiredResult, 'is-neutral', 'No hired dates to compare');
+  }
+
+  if (eventStart !== null && eventEnd !== null) {
+    const first = Math.min(eventStart, eventEnd);
+    const last = Math.max(eventStart, eventEnd);
+    const eventDistance = claimDay < first ? first - claimDay : (claimDay > last ? claimDay - last : 0);
+    const eventState = eventDistance === 0
+      ? 'is-match'
+      : (eventDistance === 1 ? 'is-warning' : 'is-difference');
+    wfSetClaimDateCheckState(
+      eventBox,
+      eventResult,
+      eventState,
+      eventDistance === 0
+        ? 'Within event dates'
+        : `${eventDistance} day${eventDistance === 1 ? '' : 's'} outside event dates`
+    );
+  } else {
+    wfSetClaimDateCheckState(eventBox, eventResult, 'is-neutral', 'No event dates to compare');
+  }
+}
+
 function updateWorkforceExpectedComparison() {
   const card = document.getElementById('wfReviewAmountCheck');
   const detectedNode = document.getElementById('wfReviewDetectedAmount');
@@ -3844,7 +4195,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     <form class="wf-review-form" id="wfReviewForm"><p class="wf-form-intro">${wfEscape(freelancer.name || '')} &middot; ${wfEscape(record.originalName || '')}</p>
       ${detailsRequired ? `<div class="wf-details-required-note"><strong>Claim details required</strong>
         <span>Complete the missing information below on behalf of the worker before saving or approving this claim.</span></div>` : ''}
-      ${wfReviewExpectedAmountHtml(record)}
+      ${kind === 'invoice' ? wfReviewExpectedAmountHtml(record) : wfReviewClaimDateCheckHtml(record)}
       ${kind === 'invoice' ? `<div class="wf-ocr-card"><strong>Document scan</strong><br>
         Confidence: ${wfEscape(record.ocrConfidence || 'Low')} &middot; ${wfEscape(record.ocrSource || 'No extractor result')}</div>`
         : `<div class="wf-ocr-card">${wfEscape(record.category || 'Claim')} &middot; ${wfEscape(record.claimDate || '')}<br>${wfEscape(record.description || '')}</div>`}
@@ -3878,9 +4229,11 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     updateAllocationProgress();
     updateWorkforceExpectedComparison();
   });
+  document.getElementById('wfReviewClaimDate')?.addEventListener('input', updateWorkforceClaimDateComparison);
   syncWorkforceReviewClaimCategory();
   updateAllocationProgress();
   updateWorkforceExpectedComparison();
+  updateWorkforceClaimDateComparison();
   openWorkforceModal('wfReviewModal');
 }
 

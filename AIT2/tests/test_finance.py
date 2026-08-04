@@ -1,9 +1,11 @@
 import base64
+import copy
 import io
 import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import patch
 
 from pypdf import PdfReader
@@ -135,6 +137,51 @@ class FinanceFeatureTests(unittest.TestCase):
             quotation = response.get_json()['data']
         return quotation
 
+    def test_quotation_can_be_duplicated_as_next_numbered_draft(self):
+        source = self.create_quote('Annual Conference')
+        source.update({
+            'status': 'sent',
+            'sentDate': datetime.now().strftime('%Y-%m-%d'),
+            'lineItems': [{
+                'id': 'copy-line',
+                'description': 'Audio package',
+                'department': 'Audio Department',
+                'days': 2,
+                'quantity': 1,
+                'uom': 'lot',
+                'unitPrice': 500,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            }],
+        })
+        source = self.client.put(
+            f"/api/quotations/{source['id']}",
+            json=source,
+        ).get_json()['data']
+        original = copy.deepcopy(source)
+
+        response = self.client.post(f"/api/quotations/{source['id']}/duplicate")
+
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        duplicate = response.get_json()['data']
+        self.assertNotEqual(duplicate['id'], source['id'])
+        self.assertNotEqual(duplicate['number'], source['number'])
+        self.assertTrue(duplicate['number'].endswith('-01'))
+        self.assertEqual(duplicate['baseSequence'], source['baseSequence'] + 1)
+        self.assertEqual(duplicate['projectName'], 'Copy of Annual Conference')
+        self.assertEqual((duplicate['revision'], duplicate['status']), (1, 'draft'))
+        self.assertEqual(duplicate['revisions'], [])
+        self.assertEqual(duplicate['quotationDate'], datetime.now().strftime('%Y-%m-%d'))
+        self.assertFalse(duplicate['sentAt'])
+        self.assertIsNone(duplicate['eventId'])
+        self.assertEqual(duplicate['salespersonUsername'], 'alice')
+        self.assertEqual(duplicate['lineItems'][0]['description'], 'Audio package')
+        persisted_source = self.client.get(
+            f"/api/quotations/{source['id']}"
+        ).get_json()['data']
+        self.assertEqual(persisted_source['number'], original['number'])
+        self.assertEqual(persisted_source['revisions'], original['revisions'])
+
     def test_draft_quotation_detail_autosaves_do_not_fill_system_logs(self):
         quotation = self.create_quote(project='')
         self.data_manager.logs = []
@@ -246,6 +293,64 @@ class FinanceFeatureTests(unittest.TestCase):
         full_row = self.client.get('/api/quotations').get_json()['data'][0]
         self.assertIn('lineItems', full_row)
 
+    def test_quotation_summary_can_be_filtered_by_status(self):
+        draft = self.create_quote('Draft Project')
+        cancelled = self.create_quote('Cancelled Project')
+        cancelled = self.client.put(
+            f"/api/quotations/{cancelled['id']}",
+            json={'status': 'cancelled'},
+        ).get_json()['data']
+
+        draft_payload = self.client.get(
+            '/api/quotations',
+            query_string={'view': 'summary', 'status': 'draft'},
+        ).get_json()
+        self.assertEqual([row['id'] for row in draft_payload['data']], [draft['id']])
+        self.assertEqual(draft_payload['meta']['total'], 1)
+        self.assertEqual(draft_payload['meta']['statusTotal'], 2)
+        self.assertEqual(draft_payload['meta']['statusCounts']['draft'], 1)
+        self.assertEqual(draft_payload['meta']['statusCounts']['cancelled'], 1)
+
+        cancelled_payload = self.client.get(
+            '/api/quotations',
+            query_string={'view': 'summary', 'status': 'cancelled'},
+        ).get_json()
+        self.assertEqual(
+            [row['id'] for row in cancelled_payload['data']],
+            [cancelled['id']],
+        )
+        self.assertEqual(cancelled_payload['meta']['total'], 1)
+
+        combined_payload = self.client.get(
+            '/api/quotations',
+            query_string=[
+                ('view', 'summary'),
+                ('status', 'draft'),
+                ('status', 'cancelled'),
+            ],
+        ).get_json()
+        self.assertEqual(
+            {row['id'] for row in combined_payload['data']},
+            {draft['id'], cancelled['id']},
+        )
+        self.assertEqual(combined_payload['meta']['total'], 2)
+        self.assertEqual(
+            self.client.get('/api/quotations?status=not-a-status').status_code,
+            400,
+        )
+
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+        self.assertIn("params.append('status', status)", source)
+        self.assertIn('financeListStatusFiltersHtml()', source)
+        self.assertIn('listStatuses: []', source)
+        self.assertIn('financeToggleListStatus', source)
+        self.assertIn('finance-list-status-filters', source)
+
     def test_sales_admin_can_manage_all_quotations_but_sales_manager_only_their_own(self):
         alice_quote = self.create_quote('Alice Project')
 
@@ -341,9 +446,16 @@ class FinanceFeatureTests(unittest.TestCase):
 
     def test_sent_snapshot_revision_expiry_and_statuses(self):
         quotation = self.create_quote('Revision Project')
+        quotation['quotationDate'] = '2025-01-15'
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+        selected_sent_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        expected_valid_until = (datetime.now() + timedelta(days=12)).strftime('%Y-%m-%d')
         sent = self.client.put(
             f"/api/quotations/{quotation['id']}",
-            json={'status': 'sent', 'validityDays': 14},
+            json={'status': 'sent', 'sentDate': selected_sent_date, 'validityDays': 14},
         ).get_json()['data']
         self.assertEqual(sent['status'], 'sent')
         self.assertEqual(sent['revision'], 1)
@@ -351,6 +463,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertTrue(sent['number'].endswith('-01'))
         self.assertEqual(sent['validityDays'], 14)
         self.assertEqual(sent['revisions'][0]['validityDays'], 14)
+        self.assertEqual(sent['sentAt'][:10], selected_sent_date)
+        self.assertEqual(sent['quotationDate'], selected_sent_date)
+        self.assertEqual(sent['validUntil'], expected_valid_until)
 
         sent['notes'] = 'Client requested a change'
         revised_response = self.client.put(
@@ -362,6 +477,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(revised['status'], 'draft')
         self.assertEqual(revised['revision'], 2)
         self.assertTrue(revised['number'].endswith('-02'))
+        self.assertEqual(revised['quotationDate'], datetime.now().strftime('%Y-%m-%d'))
 
         archived_pdf = self.client.get(
             f"/api/quotations/{quotation['id']}/pdf?revision=1"
@@ -584,6 +700,105 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertTrue(discarded['number'].endswith('-01'))
         self.assertEqual(discarded['notes'], 'Original sent wording')
         self.assertEqual(len(discarded['revisions']), 1)
+        exported = self.client.get(f"/api/quotations/{quotation['id']}/pdf?v=restored")
+        self.assertEqual(exported.status_code, 200)
+        exported_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(exported.data)).pages
+        )
+        self.assertIn(discarded['number'], exported_text)
+        self.assertNotIn(discarded['number'][:-2] + '02', exported_text)
+
+    def test_discard_draft_revision_reapplies_automatic_expiry(self):
+        quotation = self.create_quote('Expired Discard Project')
+        sent = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'sent'},
+        ).get_json()['data']
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        finance_data = app_module._load_finance_data()
+        stored = app_module._finance_find_document(
+            finance_data,
+            quotation['id'],
+            'quotation',
+        )
+        stored['validUntil'] = yesterday
+        stored['revisions'][0]['validUntil'] = yesterday
+        stored['revisions'][0]['snapshot']['validUntil'] = yesterday
+        app_module._save_finance_data(finance_data)
+
+        expired = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(expired['status'], 'expired')
+        revised = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**expired, 'notes': 'Create a temporary second version'},
+        ).get_json()['data']
+        self.assertEqual((revised['revision'], revised['status']), (2, 'draft'))
+
+        response = self.client.post(
+            f"/api/quotations/{quotation['id']}/discard-revision"
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        discarded = response.get_json()['data']
+        self.assertEqual((discarded['revision'], discarded['status']), (1, 'expired'))
+        self.assertTrue(discarded['number'].endswith('-01'))
+        listed = self.client.get('/api/quotations?view=summary').get_json()['data']
+        listed_quote = next(row for row in listed if row['id'] == quotation['id'])
+        self.assertEqual((listed_quote['revision'], listed_quote['status']), (1, 'expired'))
+        self.assertEqual(listed_quote['revisions'][0]['status'], 'expired')
+
+    def test_saved_version_status_is_restored_and_latest_version_takes_precedence(self):
+        quotation = self.create_quote('Version Status Project')
+        sent_one = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'sent'},
+        ).get_json()['data']
+        sent_one['notes'] = 'Create version two'
+        draft_two = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=sent_one,
+        ).get_json()['data']
+        self.assertEqual((draft_two['revision'], draft_two['status']), (2, 'draft'))
+        self.assertEqual(draft_two['revisions'][0]['status'], 'sent')
+
+        finance_data = app_module._load_finance_data()
+        stored = app_module._finance_find_document(
+            finance_data,
+            quotation['id'],
+            'quotation',
+        )
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        stored['revisions'][0]['validUntil'] = yesterday
+        stored['revisions'][0]['snapshot']['validUntil'] = yesterday
+        app_module._save_finance_data(finance_data)
+        listed = self.client.get('/api/quotations?view=summary').get_json()['data']
+        listed_quote = next(row for row in listed if row['id'] == quotation['id'])
+        self.assertEqual((listed_quote['revision'], listed_quote['status']), (2, 'draft'))
+        self.assertEqual(listed_quote['revisions'][0]['status'], 'expired')
+
+        accepted_two = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={'status': 'accepted'},
+        ).get_json()['data']
+        self.assertEqual((accepted_two['revision'], accepted_two['status']), (2, 'accepted'))
+        self.assertEqual(
+            [(row['revision'], row['status']) for row in accepted_two['revisions']],
+            [(1, 'expired'), (2, 'accepted')],
+        )
+
+        accepted_two['notes'] = 'Temporary version three'
+        draft_three = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=accepted_two,
+        ).get_json()['data']
+        self.assertEqual((draft_three['revision'], draft_three['status']), (3, 'draft'))
+        restored = self.client.post(
+            f"/api/quotations/{quotation['id']}/discard-revision"
+        ).get_json()['data']
+        self.assertEqual((restored['revision'], restored['status']), (2, 'accepted'))
+        self.assertTrue(restored['number'].endswith('-02'))
 
     def test_editing_and_deleting_sent_revisions_does_not_create_new_revision(self):
         quotation = self.create_quote('Direct Revision Editing')
@@ -637,6 +852,45 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertEqual((deleted_current['revision'], deleted_current['status']), (1, 'draft'))
         self.assertEqual(deleted_current['revisions'], [])
+
+    def test_summary_page_hydrates_saved_version_before_editing(self):
+        quotation = self.create_quote('Summary Version Editing')
+        quotation['lineItems'] = [{
+            'id': 'saved-version-line',
+            'description': 'Archived quoted item',
+            'department': 'Audio Department',
+            'days': 1,
+            'quantity': 2,
+            'uom': 'units',
+            'unitPrice': 150,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        sent = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'sent'},
+        ).get_json()['data']
+
+        listed = self.client.get('/api/quotations?view=summary').get_json()['data']
+        summary = next(row for row in listed if row['id'] == quotation['id'])
+        self.assertIs(summary['revisions'][0]['snapshot'], True)
+        detail = self.client.get(f"/api/quotations/{quotation['id']}").get_json()['data']
+        self.assertEqual(
+            detail['revisions'][0]['snapshot']['lineItems'][0]['description'],
+            'Archived quoted item',
+        )
+
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        start = source.index('async function financeEditRevision')
+        end = source.index('async function financeDeleteRevision', start)
+        edit_source = source[start:end]
+        self.assertIn('if (snapshotRow.snapshot === true)', edit_source)
+        self.assertIn(
+            'apiCall(`/api/quotations/${encodeURIComponent(documentId)}`)',
+            edit_source,
+        )
+        self.assertIn("typeof snapshotRow.snapshot !== 'object'", edit_source)
+        self.assertIn('updateAppDetailHistory(`/quotations/', edit_source)
 
     def test_export_invoice_is_idempotent_and_preserves_later_quotation_statuses(self):
         quotation = self.create_quote('Invoice Export Project')
@@ -781,6 +1035,50 @@ class FinanceFeatureTests(unittest.TestCase):
             set(app_module.FINANCE_QUOTATION_STATUSES),
             {'draft', 'sent', 'accepted', 'expired', 'cancelled', 'invoiced', 'overdue', 'paid'},
         )
+
+    def test_quotation_number_base_must_be_unique_within_company(self):
+        first = self.create_quote('First')
+        second = self.create_quote('Second')
+
+        duplicate_base = self.client.put(
+            f"/api/quotations/{second['id']}",
+            json={
+                **second,
+                'number': app_module._finance_number_with_revision(first['number'], 42),
+                'customNumber': True,
+            },
+        )
+        self.assertEqual(duplicate_base.status_code, 409)
+        self.assertIn('already in use', duplicate_base.get_json()['error'])
+
+        renamed = self.client.put(
+            f"/api/quotations/{second['id']}",
+            json={**second, 'number': 'CLIENT-PROPOSAL-01', 'customNumber': True},
+        )
+        self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
+        self.assertEqual(renamed.get_json()['data']['number'], 'CLIENT-PROPOSAL-01')
+
+    def test_renumbering_sent_quotation_keeps_new_base_on_next_revision(self):
+        quotation = self.create_quote('Renumber Sent')
+        sent = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={
+                **quotation,
+                'status': 'sent',
+                'sentDate': datetime.now().strftime('%Y-%m-%d'),
+            },
+        ).get_json()['data']
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**sent, 'number': 'CLIENT-RENAMED-01', 'customNumber': True},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        renumbered = response.get_json()['data']
+        self.assertEqual(renumbered['number'], 'CLIENT-RENAMED-02')
+        self.assertEqual(renumbered['revision'], 2)
+        self.assertEqual(renumbered['status'], 'draft')
 
     def test_accounting_page_and_api_are_owner_only(self):
         page = self.client.get('/accounting')
@@ -1845,11 +2143,18 @@ class FinanceFeatureTests(unittest.TestCase):
             json=saved,
         )
         total_only_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
-        total_only_text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(total_only_pdf)).pages)
+        total_only_reader = PdfReader(io.BytesIO(total_only_pdf))
+        total_only_text = '\n'.join(page.extract_text() or '' for page in total_only_reader.pages)
+        total_only_summary_text = total_only_reader.pages[-1].extract_text() or ''
         self.assertIn('DESCRIPTION', total_only_text)
         self.assertIn('Audio item 1', total_only_text)
         self.assertNotIn('$123.45', total_only_text)
         self.assertNotIn('Audio System subtotal', total_only_text)
+        self.assertIn('CATEGORY', total_only_summary_text)
+        self.assertIn('LINE ITEMS', total_only_summary_text)
+        self.assertIn('Audio System', total_only_summary_text)
+        self.assertNotIn('SUBTOTAL', total_only_summary_text)
+        self.assertIn('TOTAL', total_only_summary_text)
 
         saved['showUnitPrices'] = True
         saved['showDepartmentSubtotals'] = True
@@ -1862,6 +2167,74 @@ class FinanceFeatureTests(unittest.TestCase):
         visible_text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(visible_pdf)).pages)
         self.assertIn('$123.45', visible_text)
         self.assertIn('10% department discount', visible_text)
+
+    def test_changed_gst_rate_is_used_by_the_next_pdf_export(self):
+        quotation = self.create_quote('Updated GST Export')
+        quotation.update({
+            'taxRate': 7.5,
+            'lineItems': [{
+                'id': 'gst-line',
+                'description': 'Production package',
+                'department': 'Audio Department',
+                'days': 1,
+                'quantity': 1,
+                'uom': 'lot',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            }],
+        })
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.assertEqual(saved['taxRate'], 7.5)
+
+        response = self.client.get(f"/api/quotations/{quotation['id']}/pdf?v=updated")
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(response.data)).pages
+        )
+        self.assertIn('GST (7.5%)', text)
+        self.assertNotIn('GST (9%)', text)
+        self.assertIn('no-store', response.headers.get('Cache-Control', ''))
+
+    def test_manually_entered_line_total_is_preserved_in_pdf(self):
+        quotation = self.create_quote('Backdrop Fabrication')
+        quotation.update({
+            'showUnitPrices': True,
+            'lineItems': [{
+                'id': 'backdrop-line',
+                'description': 'Backdrop fabrication',
+                'department': 'Backdrop',
+                'systemName': 'Backdrop Fabrication',
+                'days': 1.5,
+                'quantity': 1,
+                'uom': 'units',
+                'unitPrice': 1533.33,
+                'discountPercent': 0,
+                'total': 2300,
+                'totalMode': 'amount',
+                'subprojectId': 'main',
+            }],
+        })
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['lineItems'][0]['total'], 2300)
+        self.assertEqual(saved['lineItems'][0]['totalMode'], 'amount')
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf")
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf.data)).pages
+        )
+        self.assertIn('$2,300.00', text)
+        self.assertNotIn('$2,299.99', text)
+
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn("line.totalMode = 'amount'", finance_source)
+        self.assertIn("line.totalMode = 'calculated'", finance_source)
 
     def test_pdf_does_not_insert_blank_page_before_boundary_summary(self):
         from quotation_pdf import build_finance_pdf
@@ -2201,6 +2574,36 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(event.start_date, '20260801')
         self.assertEqual(event.end_date, '20260805')
 
+    def test_dry_hire_schedule_labels_pdf_and_created_event_tag(self):
+        quotation = self.create_quote('Dry Hire Schedule')
+        quotation.update({
+            'scheduleMode': 'dry-hire',
+            'setupDate': '2026-08-10',
+            'rehearsalDate': '2026-08-11',
+            'showDate': '2026-08-12',
+            'teardownDate': '2026-08-13',
+        })
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        self.assertEqual(saved['scheduleMode'], 'dry-hire')
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertIn('Delivery / Collection:', text)
+        self.assertIn('Return:', text)
+        self.assertIn('Rehearsal:', text)
+        self.assertIn('Show:', text)
+        self.assertNotIn('Set-up:', text)
+        self.assertNotIn('Teardown:', text)
+
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}", json={'status': 'accepted'},
+        ).get_json()['data']
+        self.assertEqual(self.data_manager.events[accepted['eventId']].tag, 'dry hire')
+
     def test_custom_schedule_dates_keep_the_selected_pdf_order(self):
         quotation = self.create_quote('Ordered Custom Schedule')
         quotation.update({
@@ -2506,9 +2909,9 @@ class FinanceFeatureTests(unittest.TestCase):
 
         schedule_start = source.index('<h3>Event schedule</h3>')
         schedule_source = source[schedule_start:source.index('</section>', schedule_start)]
-        setup = schedule_source.index("financeSchedulePair('Set-up', 'setup')")
+        setup = schedule_source.index("financeSchedulePair(setupLabel, 'setup')")
         additional_setups = schedule_source.index("financeScheduleRowsMarkup('setup', document)")
-        teardown = schedule_source.index("financeSchedulePair('Teardown', 'teardown')")
+        teardown = schedule_source.index("financeSchedulePair(teardownLabel, 'teardown')")
         additional_teardowns = schedule_source.index("financeScheduleRowsMarkup('teardown', document)")
         rehearsal = schedule_source.index("financeSchedulePair('Rehearsal', 'rehearsal')")
         additional_rehearsals = schedule_source.index("financeScheduleRowsMarkup('rehearsal', document)")
@@ -2525,6 +2928,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("financeAddScheduleRow('setup')", schedule_source)
         self.assertIn("financeAddScheduleRow('teardown')", schedule_source)
         self.assertIn('!FINANCE_SCHEDULE_KEYS[kind]', source)
+        self.assertNotIn('Dates are optional. New line items will use', schedule_source)
+        self.assertIn('financeScheduleModeControl(document)', schedule_source)
+        self.assertIn("financeSetScheduleMode('dry-hire')", source)
+        self.assertIn("return 'Delivery / Collection'", source)
+        self.assertIn("return 'Return'", source)
 
     def test_editor_supports_ordered_custom_schedule_dates(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
@@ -2539,6 +2947,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('scheduleorder', source)
         self.assertIn('schedule position', source)
         self.assertIn('financecustomscheduleplacementmarkup', source)
+        self.assertIn('financescheduletokenhasdate', source)
+        self.assertIn(
+            '.filter(token => financescheduletokenhasdate(token, document))',
+            source,
+        )
         self.assertIn('place here', source)
         self.assertIn('positionindex: -1', source)
         self.assertIn('choose where the custom dates should appear in the schedule', source)
@@ -3240,7 +3653,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
         self.assertFalse(any('Spiider' in item for item in event.prepared_items))
 
-    def test_compare_aggregates_all_rooms_and_adds_missing_quantity_to_main(self):
+    def test_compare_creates_missing_event_room_for_quotation_items(self):
         event = Event(
             event_id=203,
             name='Multi-room Comparison Event',
@@ -3355,14 +3768,31 @@ class FinanceFeatureTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 3)
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 1)
         self.assertEqual(event.subprojects[1]['items'][0]['quantity'], 1)
+        self.assertEqual(
+            [room['id'] for room in event.subprojects],
+            ['main', 'breakout', 'quote-room-three'],
+        )
+        created_room = event.subprojects[2]
+        self.assertEqual(created_room['name'], 'Quote Room Three')
+        self.assertEqual(created_room['items'][0]['quantity'], 2)
+        self.assertEqual(created_room['items'][0]['model'], 'SB18 III')
         refreshed_row = next(
             row for row in response.get_json()['data']['rows']
             if row['key'] == mismatch['key']
         )
         self.assertEqual(refreshed_row['eventItem']['quantity'], 4)
         self.assertEqual(refreshed_row['status'], 'matched')
+        created_room_view = next(
+            view for view in response.get_json()['data']['subprojectViews']
+            if view.get('quoteSubprojectId') == 'quote-room-three'
+        )
+        self.assertEqual(created_room_view['scope'], 'paired')
+        self.assertEqual(created_room_view['eventSubprojectId'], 'quote-room-three')
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn("let actionViewId = bulkViewId;", finance_source)
+        self.assertIn("view.quoteSubprojectId === bulkView.quoteSubprojectId", finance_source)
 
     def test_compare_adds_custom_requirement_difference_to_main_room(self):
         main_ref = app_module._make_custom_marker(
@@ -3718,6 +4148,102 @@ class FinanceFeatureTests(unittest.TestCase):
             ['Main Room', 'Breakout A'],
         )
 
+    def test_reordering_rooms_preserves_ids_in_pdf_and_linked_event(self):
+        quotation = self.create_quote('Reordered Rooms')
+        quotation['subprojects'] = [
+            {'id': 'main', 'name': 'Main Room'},
+            {'id': 'breakout-a', 'name': 'Breakout A'},
+            {'id': 'breakout-b', 'name': 'Breakout B'},
+        ]
+        quotation['lineItems'] = [
+            {
+                'id': 'line-main', 'description': 'Main room item',
+                'department': 'Audio Department', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+                'discountPercent': 0, 'subprojectId': 'main', 'isCustom': True,
+            },
+            {
+                'id': 'line-a', 'description': 'Breakout A item',
+                'department': 'Video Department', 'departmentCode': 'VX',
+                'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+                'discountPercent': 0, 'subprojectId': 'breakout-a', 'isCustom': True,
+            },
+            {
+                'id': 'line-b', 'description': 'Breakout B item',
+                'department': 'Lighting Department', 'departmentCode': 'LX',
+                'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+                'discountPercent': 0, 'subprojectId': 'breakout-b', 'isCustom': True,
+            },
+        ]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation
+        ).get_json()['data']
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**saved, 'status': 'accepted'},
+        ).get_json()['data']
+
+        rooms_by_id = {room['id']: room for room in accepted['subprojects']}
+        reordered_rooms = [
+            rooms_by_id['breakout-b'], rooms_by_id['main'], rooms_by_id['breakout-a'],
+        ]
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**accepted, 'subprojects': reordered_rooms},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        reordered = response.get_json()['data']
+        expected_ids = ['breakout-b', 'main', 'breakout-a']
+        self.assertEqual([room['id'] for room in reordered['subprojects']], expected_ids)
+
+        event = self.data_manager.events[accepted['eventId']]
+        self.assertEqual([room['id'] for room in event.subprojects], expected_ids)
+        self.assertEqual(
+            {room['id']: [item['lineId'] for item in room['items']] for room in event.subprojects},
+            {
+                'breakout-b': ['line-b'],
+                'main': ['line-main'],
+                'breakout-a': ['line-a'],
+            },
+        )
+
+        exported = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(exported)).pages
+        )
+        self.assertLess(pdf_text.index('Breakout B'), pdf_text.index('Main Room'))
+        self.assertLess(pdf_text.index('Main Room'), pdf_text.index('Breakout A'))
+        self.assertIn('1.01', pdf_text)
+        self.assertIn('2.01', pdf_text)
+        self.assertIn('3.01', pdf_text)
+
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn('financeSubprojectDragStart', finance_source)
+        self.assertIn('financeSubprojectDrop', finance_source)
+        self.assertIn('draggable="true"', finance_source)
+        self.assertIn('financeSubprojectDropAtEnd', finance_source)
+        self.assertIn('financeSubprojectDropAtIndex', finance_source)
+        self.assertIn('finance-subproject-drop-slot', finance_source)
+        self.assertIn("index === 0 ? 'is-first' : ''", finance_source)
+
+    def test_line_item_dragging_supports_after_and_end_positions(self):
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        finance_css = Path('static/css/finance.css').read_text(encoding='utf-8')
+
+        self.assertIn(
+            "const position = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';",
+            finance_source,
+        )
+        self.assertIn("if (position === 'after') insertionIndex += 1;", finance_source)
+        self.assertIn(
+            'function financeDropLineAtEnd(event, encodedDepartment)',
+            finance_source,
+        )
+        self.assertIn('finance-line-drop-end-target', finance_source)
+        self.assertIn('.finance-line-row.drag-over-after', finance_css)
+        self.assertIn('.finance-line-drop-end-target.drag-over td', finance_css)
+
     def test_optional_categories_are_visible_but_excluded_from_totals(self):
         quotation = self.create_quote('Optional Systems')
         quotation.update({
@@ -3799,6 +4325,25 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertTrue(
             app_module._finance_is_optional_category('OPTIONAL Audio System')
         )
+
+        saved['showDepartmentSubtotals'] = False
+        hidden_response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=saved,
+        )
+        self.assertEqual(
+            hidden_response.status_code,
+            200,
+            hidden_response.get_data(as_text=True),
+        )
+        hidden_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        hidden_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(hidden_pdf)).pages
+        )
+        self.assertNotIn('Audio System subtotal', hidden_text)
+        self.assertIn('oPtIoNaL Lighting System subtotal', hidden_text)
+        self.assertIn('$180.00', hidden_text)
 
     def test_single_project_pdf_omits_project_header(self):
         quotation = self.create_quote('Single Room Conference')

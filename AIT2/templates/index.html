@@ -15,7 +15,7 @@
     />
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/finance.css', v=app_js_version) }}"
+      href="{{ url_for('static', filename='css/finance.css', v=finance_css_version) }}"
     />
     <style>
       * {
@@ -3318,6 +3318,39 @@
         margin: 0;
         color: var(--theme-primary, var(--brand-main, #0f766e));
         white-space: nowrap;
+      }
+
+      .maintenance-media-pill {
+        gap: 4px;
+        padding: 2px 3px 2px 8px;
+      }
+
+      .maintenance-media-pill-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .maintenance-media-pill-remove {
+        display: inline-grid;
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        place-items: center;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #a61b29;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .maintenance-media-pill-remove:hover,
+      .maintenance-media-pill-remove:focus-visible {
+        background: #fdebed;
+        outline: none;
       }
 
       .events-overview-controls {

@@ -45,7 +45,7 @@
       "frontendFolder": "companies/SP/frontend",
       "createdAt": "2026-07-25T22:20:59",
       "createdBy": "bnjm2000",
-      "brandingSetupRequired": true
+      "brandingSetupRequired": false
     }
   },
   "userCompanies": {
@@ -62,7 +62,8 @@
     "nbenjamin": "AVPL",
     "ericjunhao": "SP",
     "Justin": "TSC",
-    "tech-new": "AVPL"
+    "tech-new": "AVPL",
+    "admin": "TSC"
   },
   "userCompanyMemberships": {
     "feezahmnsr": [
@@ -108,5 +109,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-07-30T15:43:43"
+  "updatedAt": "2026-08-01T21:51:36"
 }

@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 import app as app_module
+from flask import session
 from data_manager import DataManager
 from models import LogEntry, User, hash_password
 
@@ -120,6 +121,20 @@ class CompanyManagementTests(unittest.TestCase):
                 app_module.SYSTEM_LOG_COMPANY_CODE,
             )
 
+    def test_owner_user_update_honours_explicit_company_scope(self):
+        with app_module.app.test_request_context(
+            '/api/users/admin?companyCode=TSC',
+            method='DELETE',
+        ):
+            session['user'] = 'bnjm2000'
+            session['is_admin'] = True
+            session['is_super_admin'] = True
+            session['company_code'] = 'AVPL'
+            self.assertEqual(
+                app_module._user_management_company_for_request('AVPL'),
+                'TSC',
+            )
+
     def test_new_company_first_admin_is_saved_in_the_new_company(self):
         self.login_super_admin()
         target_manager = mock.Mock()
@@ -166,7 +181,7 @@ class CompanyManagementTests(unittest.TestCase):
             app_module._load_company_registry()['companies'],
         )
 
-    def test_last_admin_cannot_be_moved_to_a_new_company(self):
+    def test_owner_can_assign_last_admin_to_a_new_company(self):
         last_admin = User(
             'last-avpl-admin',
             hash_password('pw', 'last-admin-salt'),
@@ -188,17 +203,21 @@ class CompanyManagementTests(unittest.TestCase):
             'firstAdminUsername': last_admin.username,
         })
 
-        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
-        self.assertEqual(
-            app_module._user_assigned_company_code(last_admin.username),
-            'AVPL',
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn(
+            'NEWCO',
+            app_module._user_company_codes(last_admin.username),
         )
-        self.assertNotIn(
+        self.assertIn(
             'NEWCO',
             app_module._load_company_registry()['companies'],
         )
+        self.assertIn(
+            last_admin.username,
+            app_module._get_company_data_manager('NEWCO').users,
+        )
 
-    def test_owner_cannot_delete_a_company_last_admin(self):
+    def test_owner_can_delete_a_company_last_admin(self):
         last_admin = User(
             'last-avpl-admin',
             hash_password('pw', 'last-admin-salt'),
@@ -216,8 +235,8 @@ class CompanyManagementTests(unittest.TestCase):
 
         response = self.client.delete(f'/api/users/{last_admin.username}')
 
-        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
-        self.assertIn(last_admin.username, self.data_manager.users)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn(last_admin.username, self.data_manager.users)
 
     def test_failed_login_logs_follow_username_company_or_system_scope(self):
         unknown_response = self.client.post(

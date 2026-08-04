@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 import tempfile
 import unittest
 
@@ -12,8 +13,17 @@ class ChangePasswordTests(unittest.TestCase):
         self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
+        self.original_company_registry_file = app_module.COMPANY_REGISTRY_FILE
         self.original_company_registry_cache = app_module._company_registry_cache
         self.tempdir = tempfile.TemporaryDirectory()
+
+        registry = app_module._load_company_registry()
+        app_module.COMPANY_REGISTRY_FILE = os.path.join(
+            self.tempdir.name,
+            'Companies.json',
+        )
+        app_module._company_registry_cache = None
+        app_module._save_company_registry(registry)
 
         self.data_manager = DataManager(self.tempdir.name)
         self.data_manager.setup_data_folder()
@@ -52,6 +62,7 @@ class ChangePasswordTests(unittest.TestCase):
         app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
+        app_module.COMPANY_REGISTRY_FILE = self.original_company_registry_file
         app_module._company_registry_cache = self.original_company_registry_cache
         self.tempdir.cleanup()
 
@@ -235,6 +246,41 @@ class ChangePasswordTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
         self.assertTrue(self.data_manager.users['admin'].is_active)
+
+    def test_owner_can_change_and_delete_a_company_last_admin(self):
+        owner = User(
+            'showbase-owner',
+            hash_password('owner-password', 'owner-salt'),
+            'owner-salt',
+            True,
+            True,
+            role='owner',
+        )
+        self.data_manager.users[owner.username] = owner
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        default_company = registry['defaultCompany']
+        registry['superAdmins'] = [owner.username]
+        registry['userCompanies'][owner.username] = default_company
+        app_module._company_registry_cache = registry
+
+        with self.client.session_transaction() as session:
+            session['user'] = owner.username
+            session['is_admin'] = True
+            session['role'] = 'owner'
+            session['is_active'] = True
+            session['is_super_admin'] = True
+            session['company_code'] = default_company
+
+        demoted = self.client.put('/api/users/admin', json={'role': 'manager'})
+        self.assertEqual(demoted.status_code, 200, demoted.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['admin'].role, 'manager')
+
+        restored = self.client.put('/api/users/admin', json={'role': 'admin'})
+        self.assertEqual(restored.status_code, 200, restored.get_data(as_text=True))
+        deleted = self.client.delete('/api/users/admin')
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertNotIn('admin', self.data_manager.users)
 
 
 if __name__ == '__main__':

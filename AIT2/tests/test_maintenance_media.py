@@ -148,6 +148,37 @@ class MaintenanceMediaTests(unittest.TestCase):
         self.assertFalse(os.path.exists(media_path))
         self.assertEqual(self.data_manager.inventory[self.asset_id].maintenance_logs, [])
 
+    def test_maintenance_log_accepts_multiple_media_in_one_submission(self):
+        self.login_as('normal')
+        encoded_asset_id = quote(self.asset_id, safe='')
+        response = self.client.post(
+            f'/api/assets/{encoded_asset_id}/maintain',
+            data={
+                'logEntry': 'Captured the fault from two angles',
+                'maintenanceDate': datetime.now().strftime('%Y-%m-%d'),
+                'logType': 'Fault',
+                'assetStatus': 'nochange',
+                'media': [
+                    (io.BytesIO(b'first-photo'), 'angle one.png'),
+                    (io.BytesIO(b'second-photo'), 'angle two.png'),
+                ],
+            },
+            content_type='multipart/form-data',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(
+            [media['name'] for media in log['media']],
+            ['angle one.png', 'angle two.png'],
+        )
+        self.assertTrue(all(
+            os.path.isfile(os.path.join(self.tempdir.name, media['path']))
+            for media in log['media']
+        ))
+
     def test_editing_update_log_detects_and_applies_confirmed_version(self):
         self.login_as('normal')
         encoded_asset_id = quote(self.asset_id, safe='')

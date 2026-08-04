@@ -1565,6 +1565,8 @@ def _user_management_company_for_request(default_company_code):
             payload.get('sourceCompanyCode')
             or request.args.get('companyCode')
         )
+        if requested in _all_company_records():
+            return requested
         if requested in _user_company_codes(username):
             return requested
         registry = _load_company_registry()
@@ -7349,6 +7351,7 @@ def _event_workforce_departments(event_id, event, manager, workforce):
 def _workforce_submission_expectation(workforce, event_id, subject_id):
     breakdown = []
     estimate_complete = True
+    assignment_work_dates = set()
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
@@ -7359,6 +7362,11 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
         )
         if assigned_subject_id != str(subject_id):
             continue
+        assignment_work_dates.update(
+            str(value).strip()
+            for value in (assignment.get('workDates') or [])
+            if re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(value).strip())
+        )
         try:
             days = max(1, int(assignment.get('days') or 1))
         except (TypeError, ValueError):
@@ -7414,6 +7422,7 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
             if breakdown and estimate_complete else None
         ),
         'expectedAmountBreakdown': breakdown,
+        'assignmentWorkDates': sorted(assignment_work_dates),
     }
 
 
@@ -7646,6 +7655,52 @@ def _admin_submission_rows(manager=None, workforce=None):
 
     rows.sort(key=sort_key)
     return rows
+
+
+def _group_admin_claim_rows(all_rows, filtered_rows):
+    """Collapse same-event, same-subject claims into one paginated display row."""
+    claim_groups = {}
+    for row in all_rows:
+        if row.get('kind') != 'claim':
+            continue
+        key = (int(row.get('eventId') or 0), str(row.get('freelancerId') or ''))
+        claim_groups.setdefault(key, []).append(row)
+
+    grouped = []
+    emitted = set()
+    for row in filtered_rows:
+        if row.get('kind') != 'claim':
+            grouped.append(row)
+            continue
+        key = (int(row.get('eventId') or 0), str(row.get('freelancerId') or ''))
+        claims = claim_groups.get(key) or [row]
+        if len(claims) < 2:
+            grouped.append(row)
+            continue
+        if key in emitted:
+            continue
+        emitted.add(key)
+        included_claims = [
+            claim for claim in claims
+            if str(claim.get('status') or '') != 'Denied'
+        ]
+        known_amounts = []
+        for claim in included_claims:
+            amount = money(claim.get('amount'))
+            if amount is not None:
+                known_amounts.append(amount)
+        group = dict(claims[0])
+        group.update({
+            'id': f"claim-group:{key[0]}:{key[1]}",
+            'isClaimGroup': True,
+            'claims': claims,
+            'claimCount': len(claims),
+            'claimTotal': round(sum(known_amounts), 2),
+            'claimAmountsComplete': len(known_amounts) == len(included_claims),
+            'allClaimsReviewed': all(bool(claim.get('verifiedAt')) for claim in claims),
+        })
+        grouped.append(group)
+    return grouped
 
 
 def _admin_freelancer_payload(freelancer):
@@ -11414,19 +11469,20 @@ def list_workforce_submissions():
                 continue
         filtered.append(row)
 
+    display_rows = _group_admin_claim_rows(rows, filtered)
     page = max(1, request.args.get('page', default=1, type=int) or 1)
     page_size = min(
         100,
         max(10, request.args.get('pageSize', default=50, type=int) or 50),
     )
-    total = len(filtered)
+    total = len(display_rows)
     page_count = max(1, (total + page_size - 1) // page_size)
     page = min(page, page_count)
     start = (page - 1) * page_size
     return jsonify({
         'success': True,
         'data': {
-            'rows': filtered[start:start + page_size],
+            'rows': display_rows[start:start + page_size],
             'total': total,
             'page': page,
             'pageSize': page_size,
@@ -11477,6 +11533,105 @@ def reextract_workforce_invoice_amount(submission_id):
     return jsonify({
         'success': True,
         'data': _admin_workforce_payload(event_id),
+    })
+
+
+@app.route('/api/workforce/submissions/bulk-status', methods=['PUT'])
+@require_admin
+def update_workforce_claim_group_status():
+    """Update reviewed claims for one person and event as one atomic action."""
+    payload = request.get_json(silent=True) or {}
+    submission_ids = list(dict.fromkeys(
+        str(value or '').strip()
+        for value in payload.get('submissionIds', [])
+        if str(value or '').strip()
+    ))
+    requested_status = str(payload.get('status') or '').strip()
+    allowed_statuses = {'Pending Review', 'Approved', 'Paid', 'Payment Confirmed'}
+    if len(submission_ids) < 2:
+        return jsonify({'error': 'Choose at least two claims'}), 400
+    if len(submission_ids) > 50:
+        return jsonify({'error': 'A maximum of 50 claims can be updated together'}), 400
+    if requested_status not in allowed_statuses:
+        return jsonify({'error': 'Choose a valid group claim status'}), 400
+
+    with mutate_workforce(_workforce_folder()) as workforce:
+        found_rows = []
+        for submission_id in submission_ids:
+            found = _find_submission_record(workforce, submission_id)
+            if not found:
+                return jsonify({'error': 'One or more claims could not be found'}), 404
+            found_rows.append(found)
+
+        group_keys = {
+            (found['eventId'], found['freelancerId'], found['kind'])
+            for found in found_rows
+        }
+        if len(group_keys) != 1 or next(iter(group_keys))[2] != 'claim':
+            return jsonify({
+                'error': 'Claims must belong to the same person and event'
+            }), 400
+        if any(not found['record'].get('verifiedAt') for found in found_rows):
+            return jsonify({
+                'error': 'Review every claim individually before updating them together'
+            }), 409
+        if requested_status != 'Pending Review' and any(
+            money(found['record'].get('amount')) is None
+            or not str(found['record'].get('claimDate') or '').strip()
+            or not str(found['record'].get('category') or '').strip()
+            for found in found_rows
+        ):
+            return jsonify({
+                'error': 'Every claim needs a verified amount, date and category'
+            }), 409
+
+        event_id, freelancer_id, _kind = next(iter(group_keys))
+        actor = session.get('user', '')
+        changed = 0
+        for found in found_rows:
+            record = found['record']
+            old_status = str(record.get('status') or 'Pending Review')
+            admin_confirming_payment = requested_status == 'Payment Confirmed'
+            stored_status = 'Paid' if admin_confirming_payment else requested_status
+            already_matching = (
+                old_status == stored_status
+                and bool(record.get('paymentConfirmedAt')) == admin_confirming_payment
+            )
+            if already_matching:
+                continue
+            record.update({
+                'status': stored_status,
+                'denialReason': '',
+                'reviewedAt': now_iso(),
+                'reviewedBy': actor,
+            })
+            if admin_confirming_payment:
+                record['paymentConfirmedAt'] = now_iso()
+                record['paymentConfirmedByAdmin'] = actor
+                record['paymentConfirmedByWorker'] = False
+            else:
+                record.pop('paymentConfirmedAt', None)
+                record.pop('paymentConfirmedByWorker', None)
+                record.pop('paymentConfirmedByAdmin', None)
+            record.setdefault('reviewHistory', []).append({
+                'at': now_iso(),
+                'by': actor,
+                'from': old_status,
+                'to': stored_status,
+                'amount': money(record.get('amount')),
+                'groupUpdate': True,
+            })
+            changed += 1
+
+    log_action(
+        f"Changed {changed} claims to {requested_status} for event {event_id}"
+    )
+    _workforce_changed(event_id, 'submission-group-status')
+    return jsonify({
+        'success': True,
+        'data': _admin_workforce_payload(event_id),
+        'updatedCount': changed,
+        'freelancerId': freelancer_id,
     })
 
 
@@ -13250,6 +13405,7 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        finance_css_version=_static_asset_version('css/finance.css'),
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
@@ -13715,6 +13871,7 @@ def create_company():
                 _effective_user_role(existing_first_admin) == 'admin'
                 and getattr(existing_first_admin, 'is_active', True)
                 and len(_active_company_admin_usernames(source_company)) <= 1
+                and not _current_user_is_owner()
             ):
                 return jsonify({
                     'error': _last_company_admin_error(source_company)
@@ -13747,15 +13904,14 @@ def create_company():
                     is_active=True,
                     role='admin',
                 )
-                company_manager.users[first_admin_username] = user
-
-            user.is_admin = True
-            user.role = 'admin'
-            user.is_active = True
-            if first_admin_username in company_manager.users:
-                company_manager.save_users()
-            else:
-                data_manager.save_users()
+            destination_user = company_manager.users.get(first_admin_username)
+            if destination_user is None:
+                destination_user = copy.deepcopy(user)
+                company_manager.users[first_admin_username] = destination_user
+            destination_user.is_admin = True
+            destination_user.role = 'admin'
+            destination_user.is_active = True
+            company_manager.save_users()
             _reload_users_for_all_company_managers()
             _assign_user_to_company(first_admin_username, code)
 
@@ -14534,6 +14690,7 @@ def create_user():
 
         if (
             not _active_company_admin_usernames(requested_company)
+            and not _current_user_is_owner()
             and (
                 requested_role != 'admin'
                 or not is_active
@@ -14658,6 +14815,7 @@ def update_user(username):
         )
         if (
             removes_active_admin
+            and not _current_user_is_owner()
             and len(_active_company_admin_usernames(source_company)) <= 1
         ):
             return jsonify({
@@ -14859,6 +15017,7 @@ def delete_user(username):
         if (
             _effective_user_role(user) == 'admin'
             and getattr(user, 'is_active', True)
+            and not _current_user_is_owner()
             and len(_active_company_admin_usernames(company_code)) <= 1
         ):
             return jsonify({
@@ -25557,6 +25716,10 @@ def _finance_number_with_revision(number, revision):
     return f"{base}-{min(99, max(1, int(revision))):02d}"
 
 
+def _finance_number_base(number):
+    return re.sub(r'-\d{2}$', '', str(number or '').strip()).strip().casefold()
+
+
 def _finance_active_departments(lines):
     departments = []
     for line in lines or []:
@@ -25736,6 +25899,12 @@ def _migrate_finance_data(data):
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
             ('totalDiscountLabel', document.get('totalDiscountLabel') or ''),
             ('scheduleBatches', document.get('scheduleBatches') or []),
+            (
+                'scheduleMode',
+                'dry-hire'
+                if str(document.get('scheduleMode') or '').strip().lower() == 'dry-hire'
+                else 'event',
+            ),
             ('customScheduleGroups', document.get('customScheduleGroups') or []),
             (
                 'scheduleOrder',
@@ -26227,7 +26396,17 @@ def _normalise_finance_line(value):
     unit_price = max(0, _safe_float(value.get('unitPrice'), 0))
     discount = max(-9999, min(100, _safe_float(value.get('discountPercent'), 0)))
     gross = quantity * days * unit_price
-    total = gross * (1 - discount / 100)
+    calculated_total = gross * (1 - discount / 100)
+    total_mode = (
+        'amount'
+        if str(value.get('totalMode') or '').strip().lower() == 'amount'
+        else 'calculated'
+    )
+    total = (
+        max(0, _safe_float(value.get('total'), calculated_total))
+        if total_mode == 'amount'
+        else calculated_total
+    )
     department, department_code = _finance_department_details(
         value.get('department'),
         value.get('departmentCode'),
@@ -26269,6 +26448,7 @@ def _normalise_finance_line(value):
         'unitPrice': round(unit_price, 2),
         'discountPercent': round(discount, 4),
         'total': round(total, 2),
+        'totalMode': total_mode,
         'isCustom': bool(value.get('isCustom') or not catalog_key),
         'customType': (
             _normalise_custom_type(value.get('customType'))
@@ -26332,6 +26512,7 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
         if unit_price is None:
             continue
         line['unitPrice'] = unit_price
+        line['totalMode'] = 'calculated'
         gross = (
             _safe_float(line.get('quantity'), 1)
             * _safe_float(line.get('days'), 1)
@@ -26787,6 +26968,13 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         else existing.get('scheduleOrder'),
         custom_schedule_groups,
     )
+    schedule_mode = str(
+        value.get('scheduleMode')
+        if 'scheduleMode' in value
+        else existing.get('scheduleMode') or 'event'
+    ).strip().lower()
+    if schedule_mode not in {'event', 'dry-hire'}:
+        schedule_mode = 'event'
 
     document = {
         'id': existing.get('id') or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(12),
@@ -26846,6 +27034,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             or ''
         ).strip()[:10],
         'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
+        'scheduleMode': schedule_mode,
         'scheduleBatches': _normalise_finance_schedule_batches(
             value.get('scheduleBatches') if 'scheduleBatches' in value else existing.get('scheduleBatches'),
             custom_schedule_groups,
@@ -27022,6 +27211,82 @@ def _finance_revision_is_snapshotted(document):
     )
 
 
+def _finance_revision_status(revision):
+    revision = revision if isinstance(revision, dict) else {}
+    snapshot = revision.get('snapshot') if isinstance(revision.get('snapshot'), dict) else {}
+    status = str(revision.get('status') or '').strip().lower()
+    if status not in FINANCE_QUOTATION_STATUSES or status == 'draft':
+        if revision.get('paidAt') or snapshot.get('paidAt'):
+            status = 'paid'
+        elif revision.get('invoicedAt') or snapshot.get('invoicedAt'):
+            status = 'invoiced'
+        elif revision.get('acceptedAt') or snapshot.get('acceptedAt'):
+            status = 'accepted'
+        else:
+            status = 'sent'
+
+    today = datetime.now().date()
+    date_field = 'paymentDueDate' if status == 'invoiced' else 'validUntil'
+    automatic_status = 'overdue' if status == 'invoiced' else 'expired'
+    if status in {'sent', 'invoiced'}:
+        try:
+            boundary = datetime.strptime(
+                str(revision.get(date_field) or snapshot.get(date_field) or ''),
+                '%Y-%m-%d',
+            ).date()
+        except ValueError:
+            boundary = None
+        if boundary and boundary < today:
+            status = automatic_status
+    return status
+
+
+def _finance_update_revision_status(document):
+    revision = _safe_int(document.get('revision'), 1)
+    revision_row = next(
+        (
+            row for row in document.get('revisions') or []
+            if isinstance(row, dict) and _safe_int(row.get('revision'), 0) == revision
+        ),
+        None,
+    )
+    if not revision_row:
+        return
+    for key in (
+        'status', 'sentAt', 'acceptedAt', 'invoicedAt', 'invoiceSentDate',
+        'paymentDueDate', 'paidAt', 'statusChangedAt',
+    ):
+        revision_row[key] = document.get(key) or ''
+
+
+def _finance_refresh_saved_revision_statuses(document):
+    changed = False
+    current_revision = _safe_int(document.get('revision'), 1)
+    current_status = str(document.get('status') or 'draft').strip().lower()
+    for revision_row in document.get('revisions') or []:
+        if not isinstance(revision_row, dict):
+            continue
+        row_revision = _safe_int(revision_row.get('revision'), 0)
+        if (
+            not str(revision_row.get('status') or '').strip()
+            and row_revision == current_revision
+            and current_status != 'draft'
+        ):
+            revision_row['status'] = current_status
+            for key in (
+                'sentAt', 'acceptedAt', 'invoicedAt', 'invoiceSentDate',
+                'paymentDueDate', 'paidAt', 'statusChangedAt',
+            ):
+                revision_row[key] = document.get(key) or ''
+            changed = True
+        derived_status = _finance_revision_status(revision_row)
+        if str(revision_row.get('status') or '').strip().lower() != derived_status:
+            revision_row['status'] = derived_status
+            revision_row['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
+            changed = True
+    return changed
+
+
 def _finance_snapshot_revision(document):
     revision = _safe_int(document.get('revision'), 1)
     revisions = document.setdefault('revisions', [])
@@ -27035,8 +27300,14 @@ def _finance_snapshot_revision(document):
     snapshot = {
         'revision': revision,
         'number': document.get('number'),
+        'status': document.get('status'),
         'sentAt': document.get('sentAt'),
         'acceptedAt': document.get('acceptedAt'),
+        'invoicedAt': document.get('invoicedAt'),
+        'invoiceSentDate': document.get('invoiceSentDate'),
+        'paymentDueDate': document.get('paymentDueDate'),
+        'paidAt': document.get('paidAt'),
+        'statusChangedAt': document.get('statusChangedAt'),
         'validUntil': document.get('validUntil'),
         'validityAmount': document.get('validityAmount'),
         'validityUnit': document.get('validityUnit'),
@@ -27073,6 +27344,8 @@ def _finance_expire_sent_documents(finance_data):
     for document in finance_data.get('documents') or []:
         if document.get('type') != 'quotation':
             continue
+        if _finance_refresh_saved_revision_statuses(document):
+            changed = True
         status = str(document.get('status') or '').strip().lower()
         automatic_status = ''
         if status == 'sent':
@@ -27100,6 +27373,7 @@ def _finance_expire_sent_documents(finance_data):
             document['status'] = automatic_status
             document['statusChangedAt'] = changed_at
             document['updatedAt'] = changed_at
+            _finance_update_revision_status(document)
             changed = True
     return changed
 
@@ -27448,7 +27722,11 @@ def _finance_create_event(document):
             actually_prepared=[],
             extra_assets=[],
             state='New',
-            tag='event',
+            tag=(
+                'dry hire'
+                if document.get('scheduleMode') == 'dry-hire'
+                else 'events'
+            ),
             assigned_users=assigned_users,
             notes=f"Created from quotation {document.get('number')}",
             subprojects=_finance_event_subprojects(document),
@@ -30107,6 +30385,34 @@ def _finance_compare_subproject_scope(event, quotation, view_id):
     ), None)
 
 
+def _finance_compare_ensure_event_subproject(event, scope):
+    """Return the event room for a quotation-room comparison, creating it if absent."""
+    if not scope or not scope.get('quoteSubprojectId'):
+        return scope.get('eventSubprojectId') if scope else None
+
+    event_subproject_id = str(scope.get('eventSubprojectId') or '').strip()
+    if event_subproject_id and _event_subproject(event, event_subproject_id):
+        return event_subproject_id
+
+    quotation_subproject_id = str(scope.get('quoteSubprojectId') or '').strip()
+    if not quotation_subproject_id:
+        return None
+
+    # Materialise the event's legacy Main Room before adding another room so
+    # existing requirements retain their current room assignment.
+    _finance_compare_main_subproject(event, create=True)
+    if _event_subproject(event, quotation_subproject_id):
+        return quotation_subproject_id
+
+    room_name = str(scope.get('quoteName') or 'Room').strip() or 'Room'
+    event.subprojects.append({
+        'id': quotation_subproject_id,
+        'name': room_name,
+        'items': [],
+    })
+    return quotation_subproject_id
+
+
 def _finance_compare_can_read_quotation(document, event_id):
     if not document or document.get('type') != 'quotation':
         return False
@@ -30672,6 +30978,7 @@ def _finance_revision_list_summary(revision):
             _safe_int(revision.get('revision'), _safe_int(snapshot.get('revision'), 1)),
         ),
         'number': str(revision.get('number') or snapshot.get('number') or ''),
+        'status': _finance_revision_status(revision),
         'sentAt': str(revision.get('sentAt') or snapshot.get('sentAt') or ''),
         'acceptedAt': str(
             revision.get('acceptedAt') or snapshot.get('acceptedAt') or ''
@@ -30821,6 +31128,18 @@ def _finance_list_or_create(document_type):
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().lower()
             sort_by = str(request.args.get('sort') or 'updated').strip().lower()
+            status_filters = {
+                status
+                for value in request.args.getlist('status')
+                for status in str(value or '').lower().split(',')
+                if status
+            }
+            if (
+                document_type == 'quotation'
+                and status_filters
+                and not status_filters.issubset(FINANCE_QUOTATION_STATUSES)
+            ):
+                return jsonify({'error': 'Invalid quotation status filter'}), 400
             summary_view = (
                 str(request.args.get('view') or '').strip().lower() == 'summary'
             )
@@ -30853,6 +31172,19 @@ def _finance_list_or_create(document_type):
                         row,
                         linked_invoices.get(str(row.get('id') or '')),
                     )
+                ]
+            status_counts = {
+                status: sum(
+                    1 for row in source_rows
+                    if str(row.get('status') or 'draft').strip().lower() == status
+                )
+                for status in FINANCE_QUOTATION_STATUSES
+            } if document_type == 'quotation' else {}
+            status_total = sum(status_counts.values())
+            if document_type == 'quotation' and status_filters:
+                source_rows = [
+                    row for row in source_rows
+                    if str(row.get('status') or 'draft').strip().lower() in status_filters
                 ]
             if sort_by == 'number':
                 source_rows.sort(
@@ -30893,6 +31225,8 @@ def _finance_list_or_create(document_type):
                         'limit': limit,
                         'hasMore': has_more,
                         'nextOffset': next_offset if has_more else None,
+                        'statusTotal': status_total,
+                        'statusCounts': status_counts,
                     },
                 })
 
@@ -30966,7 +31300,13 @@ def _finance_get_update_delete(document_id, document_type):
         if any(
             str(row.get('id')) != str(document_id)
             and row.get('type') == document_type
-            and str(row.get('number') or '').strip().casefold() == str(updated.get('number') or '').strip().casefold()
+            and (
+                _finance_number_base(row.get('number'))
+                == _finance_number_base(updated.get('number'))
+                if document_type == 'quotation'
+                else str(row.get('number') or '').strip().casefold()
+                == str(updated.get('number') or '').strip().casefold()
+            )
             for row in finance_data.get('documents') or []
             if isinstance(row, dict)
         ):
@@ -30975,7 +31315,7 @@ def _finance_get_update_delete(document_id, document_type):
             status_workflow_fields = {'status'}
             if raw_requested_status == 'sent':
                 status_workflow_fields.update({
-                    'validityAmount', 'validityUnit', 'validityDays',
+                    'sentDate', 'validityAmount', 'validityUnit', 'validityDays',
                 })
             elif raw_requested_status == 'invoiced':
                 status_workflow_fields.update({
@@ -31012,7 +31352,7 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['revision'] = _safe_int(existing_normalised.get('revision'), 1) + 1
                 if updated.get('customNumber'):
                     updated['number'] = _finance_number_with_revision(
-                        existing_normalised.get('number'),
+                        updated.get('number'),
                         updated['revision'],
                     )
                 else:
@@ -31027,11 +31367,23 @@ def _finance_get_update_delete(document_id, document_type):
                     )
                 updated['status'] = 'draft'
                 updated['sentAt'] = ''
+                updated['quotationDate'] = datetime.now().strftime('%Y-%m-%d')
 
             requested_status = str(request_data.get('status') or '').strip().lower()
             if requested_status == 'sent' and updated.get('status') == 'sent':
-                sent_at = datetime.now()
+                sent_date_value = str(
+                    request_data.get('sentDate')
+                    or updated.get('sentAt')
+                    or datetime.now().strftime('%Y-%m-%d')
+                )[:10]
+                try:
+                    selected_sent_date = datetime.strptime(sent_date_value, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'error': 'Enter a valid quotation sent date'}), 400
+                now = datetime.now()
+                sent_at = datetime.combine(selected_sent_date, now.time().replace(microsecond=0))
                 updated['sentAt'] = sent_at.isoformat(timespec='seconds')
+                updated['quotationDate'] = selected_sent_date.strftime('%Y-%m-%d')
                 updated['statusChangedAt'] = updated['sentAt']
                 updated['validUntil'] = (
                     sent_at + timedelta(days=max(1, _safe_int(updated.get('validityDays'), 30)))
@@ -31091,6 +31443,7 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
             elif updated.get('eventId'):
                 _finance_sync_managed_event(updated)
+            _finance_update_revision_status(updated)
             if updated.get('status') in {'draft', 'sent'} and updated.get('eventId'):
                 _finance_sync_managed_event(updated)
             _sync_finance_client_record(updated, previous_document)
@@ -31099,6 +31452,8 @@ def _finance_get_update_delete(document_id, document_type):
             if str(row.get('id')) == str(document_id):
                 finance_data['documents'][index] = updated
                 break
+        if document_type == 'quotation':
+            _finance_expire_sent_documents(finance_data)
         _remember_finance_prices(finance_data, updated, previous_document)
         _save_finance_data(finance_data)
         if document_type == 'quotation':
@@ -31107,6 +31462,10 @@ def _finance_get_update_delete(document_id, document_type):
             previous_revision = _safe_int(existing_normalised.get('revision'), 1)
             current_revision = _safe_int(updated.get('revision'), 1)
             significant_changes = []
+            if str(updated.get('number') or '') != str(existing_normalised.get('number') or ''):
+                significant_changes.append(
+                    f"number changed from {existing_normalised.get('number')} to {updated.get('number')}"
+                )
             if current_revision != previous_revision:
                 significant_changes.append(
                     f"created version {current_revision:02d} from version {previous_revision:02d}"
@@ -31855,10 +32214,13 @@ def finance_compare_add_to_event(event_id):
         if not row:
             return jsonify({'error': 'Comparison row not found'}), 404
         try:
+            target_subproject_id = _finance_compare_ensure_event_subproject(
+                event, scope
+            )
             _finance_compare_add_to_event(
                 event,
                 row,
-                scope.get('eventSubprojectId') if scope and scope.get('quoteSubprojectId') else None,
+                target_subproject_id,
             )
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
@@ -32058,6 +32420,71 @@ def quotation_item(document_id):
     return _finance_get_update_delete(document_id, 'quotation')
 
 
+@app.route('/api/quotations/<document_id>/duplicate', methods=['POST'])
+@require_sales
+def duplicate_quotation(document_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        source = _finance_find_document(finance_data, document_id, 'quotation')
+        if not source or not _finance_user_can_access(source):
+            return jsonify({'error': 'Quotation not found'}), 404
+
+        duplicate_source = copy.deepcopy(source)
+        duplicate_source.pop('id', None)
+        duplicate_source['customNumber'] = False
+        duplicate_source['revision'] = 1
+        duplicate_source['revisions'] = []
+        duplicate_source['status'] = 'draft'
+        duplicate_source['quotationDate'] = datetime.now().strftime('%Y-%m-%d')
+        source_project = str(source.get('projectName') or source.get('title') or '').strip()
+        duplicate_source['projectName'] = f"Copy of {source_project}".strip()
+        duplicate_source['title'] = duplicate_source['projectName']
+        duplicate_source['salespersonUsername'] = _finance_current_username()
+        duplicate_source['salesperson'] = _finance_current_user_display_name()
+        for key, value in (
+            ('sentAt', ''),
+            ('acceptedAt', ''),
+            ('invoicedAt', ''),
+            ('invoiceSentDate', ''),
+            ('paymentDueDate', ''),
+            ('paidAt', ''),
+            ('statusChangedAt', ''),
+            ('eventId', None),
+            ('eventManagedByQuotation', False),
+            ('eventSyncFingerprint', ''),
+            ('sourceQuotationId', ''),
+            ('sourceQuotationNumber', ''),
+        ):
+            duplicate_source[key] = value
+
+        duplicate = _normalise_finance_document(duplicate_source, 'quotation')
+        duplicate_number = _next_finance_number(
+            finance_data.get('documents') or [],
+            'quotation',
+        )
+        _prefix, _year, sequence, _revision = _finance_parse_number(duplicate_number)
+        duplicate.update({
+            'number': duplicate_number,
+            'baseSequence': sequence,
+            'revision': 1,
+            'customNumber': False,
+        })
+        _sync_finance_client_record(duplicate)
+        _remember_finance_prices(finance_data, duplicate)
+        finance_data.setdefault('documents', []).append(duplicate)
+        _save_finance_data(finance_data)
+
+    log_action(
+        f"Duplicated quotation {source.get('number')} as {duplicate.get('number')}"
+    )
+    mark_realtime_change('finance', {
+        'quotationId': duplicate.get('id'),
+        'sourceQuotationId': source.get('id'),
+        'action': 'quotation-duplicated',
+    })
+    return jsonify({'success': True, 'data': duplicate}), 201
+
+
 @app.route('/api/invoices', methods=['GET', 'POST'])
 @require_sales
 def invoices_collection():
@@ -32158,7 +32585,7 @@ def _finance_pdf_response(document_id, document_type):
                 'type': 'quotation',
                 'number': revision_row.get('number') or revision_row['snapshot'].get('number'),
                 'revision': revision,
-                'status': 'sent',
+                'status': _finance_revision_status(revision_row),
                 'sentAt': revision_row.get('sentAt') or '',
                 'validUntil': revision_row.get('validUntil') or revision_row['snapshot'].get('validUntil') or '',
                 'validityAmount': revision_row.get('validityAmount') or revision_row['snapshot'].get('validityAmount'),
@@ -32189,13 +32616,16 @@ def _finance_pdf_response(document_id, document_type):
         logger.error("Failed to render finance PDF: %s", exc, exc_info=True)
         return jsonify({'error': 'Failed to generate PDF'}), 500
 
-    return send_file(
+    response = send_file(
         BytesIO(pdf_bytes),
         mimetype='application/pdf',
         as_attachment=request.args.get('download') == '1',
         download_name=safe_pdf_filename(document.get('number')),
         max_age=0,
     )
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 
 @app.route('/api/quotations/<document_id>/pdf', methods=['GET'])
@@ -32232,14 +32662,20 @@ def discard_quotation_revision(document_id):
             return jsonify({'error': 'The previous sent revision is unavailable'}), 409
 
         target_revision = _safe_int(target.get('revision'), 1)
+        target_status = _finance_revision_status(target)
         restored_source = {
             **target['snapshot'],
             'id': current.get('id'),
             'type': 'quotation',
             'number': target.get('number') or target['snapshot'].get('number'),
             'revision': target_revision,
-            'status': 'sent',
+            'status': target_status,
             'sentAt': target.get('sentAt') or '',
+            'acceptedAt': target.get('acceptedAt') or target['snapshot'].get('acceptedAt') or '',
+            'invoicedAt': target.get('invoicedAt') or target['snapshot'].get('invoicedAt') or '',
+            'invoiceSentDate': target.get('invoiceSentDate') or target['snapshot'].get('invoiceSentDate') or '',
+            'paymentDueDate': target.get('paymentDueDate') or target['snapshot'].get('paymentDueDate') or '',
+            'paidAt': target.get('paidAt') or target['snapshot'].get('paidAt') or '',
             'validUntil': target.get('validUntil') or target['snapshot'].get('validUntil') or '',
             'validityAmount': target.get('validityAmount') or target['snapshot'].get('validityAmount'),
             'validityUnit': target.get('validityUnit') or target['snapshot'].get('validityUnit'),
@@ -32250,14 +32686,18 @@ def discard_quotation_revision(document_id):
             'id': current.get('id'),
             'number': restored_source['number'],
             'revision': target_revision,
-            'status': 'sent',
+            'status': target_status,
             'sentAt': restored_source['sentAt'],
             'validUntil': restored_source['validUntil'],
             'revisions': current.get('revisions') or [],
             'eventId': current.get('eventId'),
             'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
             'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
-            'statusChangedAt': restored_source['sentAt'],
+            'statusChangedAt': (
+                target.get('statusChangedAt')
+                or target['snapshot'].get('statusChangedAt')
+                or restored_source['sentAt']
+            ),
             'updatedAt': datetime.now().isoformat(timespec='seconds'),
             'updatedBy': _finance_current_username(),
         })
@@ -32265,6 +32705,7 @@ def discard_quotation_revision(document_id):
             restored if str(row.get('id')) == str(document_id) else row
             for row in finance_data.get('documents') or []
         ]
+        _finance_expire_sent_documents(finance_data)
         _save_finance_data(finance_data)
         log_action(
             f"Discarded draft revision {current_revision:02d} of quotation "
@@ -32310,14 +32751,20 @@ def update_or_delete_quotation_revision(document_id, revision):
                 )
                 if fallback:
                     fallback_revision = _safe_int(fallback.get('revision'), 1)
+                    fallback_status = _finance_revision_status(fallback)
                     fallback_source = {
                         **fallback['snapshot'],
                         'id': current.get('id'),
                         'type': 'quotation',
                         'number': fallback.get('number') or fallback['snapshot'].get('number'),
                         'revision': fallback_revision,
-                        'status': 'sent',
+                        'status': fallback_status,
                         'sentAt': fallback.get('sentAt') or '',
+                        'acceptedAt': fallback.get('acceptedAt') or fallback['snapshot'].get('acceptedAt') or '',
+                        'invoicedAt': fallback.get('invoicedAt') or fallback['snapshot'].get('invoicedAt') or '',
+                        'invoiceSentDate': fallback.get('invoiceSentDate') or fallback['snapshot'].get('invoiceSentDate') or '',
+                        'paymentDueDate': fallback.get('paymentDueDate') or fallback['snapshot'].get('paymentDueDate') or '',
+                        'paidAt': fallback.get('paidAt') or fallback['snapshot'].get('paidAt') or '',
                         'validUntil': fallback.get('validUntil') or fallback['snapshot'].get('validUntil') or '',
                         'validityAmount': fallback.get('validityAmount') or fallback['snapshot'].get('validityAmount'),
                         'validityUnit': fallback.get('validityUnit') or fallback['snapshot'].get('validityUnit'),
@@ -32328,13 +32775,18 @@ def update_or_delete_quotation_revision(document_id, revision):
                         'id': current.get('id'),
                         'number': fallback_source['number'],
                         'revision': fallback_revision,
-                        'status': 'sent',
+                        'status': fallback_status,
                         'sentAt': fallback_source['sentAt'],
                         'validUntil': fallback_source['validUntil'],
                         'revisions': remaining,
                         'eventId': current.get('eventId'),
                         'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
                         'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+                        'statusChangedAt': (
+                            fallback.get('statusChangedAt')
+                            or fallback['snapshot'].get('statusChangedAt')
+                            or fallback_source['sentAt']
+                        ),
                     })
                 else:
                     replacement = dict(current)
@@ -32350,18 +32802,25 @@ def update_or_delete_quotation_revision(document_id, revision):
                 replacement if str(row.get('id')) == str(document_id) else row
                 for row in finance_data.get('documents') or []
             ]
+            _finance_expire_sent_documents(finance_data)
             _save_finance_data(finance_data)
             log_action(f"Deleted revision {revision:02d} from quotation {current.get('number')}")
             return jsonify({'success': True, 'data': replacement})
 
+        revision_status = _finance_revision_status(revision_row)
         snapshot_existing = {
             **revision_row['snapshot'],
             'id': current.get('id'),
             'type': 'quotation',
             'number': revision_row.get('number') or revision_row['snapshot'].get('number'),
             'revision': revision,
-            'status': 'sent',
+            'status': revision_status,
             'sentAt': revision_row.get('sentAt') or '',
+            'acceptedAt': revision_row.get('acceptedAt') or revision_row['snapshot'].get('acceptedAt') or '',
+            'invoicedAt': revision_row.get('invoicedAt') or revision_row['snapshot'].get('invoicedAt') or '',
+            'invoiceSentDate': revision_row.get('invoiceSentDate') or revision_row['snapshot'].get('invoiceSentDate') or '',
+            'paymentDueDate': revision_row.get('paymentDueDate') or revision_row['snapshot'].get('paymentDueDate') or '',
+            'paidAt': revision_row.get('paidAt') or revision_row['snapshot'].get('paidAt') or '',
             'validUntil': revision_row.get('validUntil') or revision_row['snapshot'].get('validUntil') or '',
             'validityAmount': revision_row.get('validityAmount') or revision_row['snapshot'].get('validityAmount'),
             'validityUnit': revision_row.get('validityUnit') or revision_row['snapshot'].get('validityUnit'),
@@ -32372,12 +32831,18 @@ def update_or_delete_quotation_revision(document_id, revision):
             'id': current.get('id'),
             'number': snapshot_existing['number'],
             'revision': revision,
-            'status': 'sent',
+            'status': revision_status,
             'sentAt': snapshot_existing['sentAt'],
+            'acceptedAt': snapshot_existing['acceptedAt'],
+            'invoicedAt': snapshot_existing['invoicedAt'],
+            'invoiceSentDate': snapshot_existing['invoiceSentDate'],
+            'paymentDueDate': snapshot_existing['paymentDueDate'],
+            'paidAt': snapshot_existing['paidAt'],
         })
         _sync_finance_client_record(edited, snapshot_existing)
         revision_row.update({
             'number': edited['number'],
+            'status': revision_status,
             'validityAmount': edited.get('validityAmount'),
             'validityUnit': edited.get('validityUnit'),
             'validityDays': edited.get('validityDays'),
@@ -32385,7 +32850,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'snapshot': _finance_revision_payload(edited),
         })
 
-        if _safe_int(current.get('revision'), 1) == revision and current.get('status') == 'sent':
+        if _safe_int(current.get('revision'), 1) == revision:
             edited.update({
                 'revisions': revisions,
                 'eventId': current.get('eventId'),
@@ -32401,6 +32866,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             replacement if str(row.get('id')) == str(document_id) else row
             for row in finance_data.get('documents') or []
         ]
+        _finance_expire_sent_documents(finance_data)
         _save_finance_data(finance_data)
         log_action(f"Edited sent revision {revision:02d} of quotation {edited.get('number')}")
 
@@ -32410,8 +32876,13 @@ def update_or_delete_quotation_revision(document_id, revision):
             'type': 'quotation',
             'number': revision_row.get('number'),
             'revision': revision,
-            'status': 'sent',
+            'status': revision_status,
             'sentAt': revision_row.get('sentAt') or '',
+            'acceptedAt': revision_row.get('acceptedAt') or '',
+            'invoicedAt': revision_row.get('invoicedAt') or '',
+            'invoiceSentDate': revision_row.get('invoiceSentDate') or '',
+            'paymentDueDate': revision_row.get('paymentDueDate') or '',
+            'paidAt': revision_row.get('paidAt') or '',
             'validUntil': revision_row.get('validUntil') or '',
             'validityAmount': revision_row.get('validityAmount'),
             'validityUnit': revision_row.get('validityUnit'),

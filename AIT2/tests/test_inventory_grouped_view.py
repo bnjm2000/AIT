@@ -323,6 +323,32 @@ def test_maintenance_records_use_same_day_sequence_and_bound_media_delete_contro
     assert "removeMaintenanceMediaElements(mediaId);" in script
 
 
+def test_maintenance_recent_activity_flattens_all_logs_including_repeat_assets():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function maintenanceActivityEntries(assetList)" in script
+    assert "getMaintenanceLogRecords(asset).map((log, originalIndex)" in script
+    assert "compareMaintenanceLogsNewestFirst(entryA.log, entryB.log)" in script
+    assert "maintenanceActivityRowHtml(entry.asset, entry.log)" in script
+    assert "Latest maintenance log" not in script[
+        script.index('function displayMaintenanceAssets'):
+        script.index('let assetCheckState')
+    ]
+
+
+def test_maintenance_media_accumulates_mobile_captures_and_allows_pending_removal():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "const maintenancePendingMediaSelections = new WeakMap();" in script
+    assert "function appendMaintenanceMediaSelection(" in script
+    assert "[...existing, ...selected]" in script
+    assert "function removeMaintenancePendingMedia(" in script
+    assert "const files = maintenancePendingMediaFiles(input);" in script
+    assert 'class="maintenance-media-pill-remove"' in script
+    assert ".maintenance-media-pill-remove" in template
+
+
 def test_maintenance_report_is_responsive_informative_and_keeps_export_controls():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -375,6 +401,19 @@ def test_inventory_summary_pdf_uses_generated_timestamp_and_asset_count():
     assert "parts.push(`No. of assets: ${rowCount}`);" in script
     assert "parts.push(`Rows:" not in script
     assert "parts.push(`Layout:" not in script
+
+
+def test_inventory_pdf_splits_bulk_condition_quantities():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function inventoryExportStatusCounts(asset, statusFilter = '')" in script
+    assert "Number(asset.bulkOOCQuantity || 0)" in script
+    assert "Number(asset.bulkMissingQuantity || 0)" in script
+    assert "Number(asset.bulkDegradedQuantity || 0)" in script
+    assert "const assetStatusCounts = inventoryExportStatusCounts(asset, statusFilter);" in script
+    assert "Object.entries(assetStatusCounts).forEach(([status, statusQuantity])" in script
+    assert "inventoryStatusSummaryPdfHtml(inventoryExportStatusCounts(asset))" in script
+    assert "group.statusCounts[status] = (group.statusCounts[status] || 0) + quantity;" not in script
 
 
 def test_event_status_filters_hide_zero_counts_and_event_logs_are_reusable():

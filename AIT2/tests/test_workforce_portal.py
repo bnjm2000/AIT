@@ -323,6 +323,119 @@ class WorkforcePortalTests(unittest.TestCase):
             source,
         )
         self.assertIn("This action cannot be undone.", source)
+        self.assertIn('wfDocumentClaimGroup', source)
+        self.assertIn('wfClaimGroupStatusControl', source)
+        self.assertIn('wfClaimTotalMarkup', source)
+        self.assertIn('toggleWorkforceDocumentClaimGroup', source)
+        self.assertIn('wfReviewClaimDateCheckHtml', source)
+        self.assertIn('wfReviewDateRangesLabel', source)
+        self.assertIn('wfReviewHiredDateCheck', source)
+        self.assertIn('wfReviewEventDateCheck', source)
+        self.assertIn('wfSetClaimDateCheckState', source)
+        self.assertIn(
+            "kind === 'invoice' ? wfReviewExpectedAmountHtml(record)",
+            source,
+        )
+        self.assertIn('/api/workforce/submissions/bulk-status', source)
+
+    def test_same_event_claims_are_grouped_and_bulk_status_requires_review(self):
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['freelancers'] = [{
+                'id': 'worker-grouped',
+                'name': 'Grouped Worker',
+                'company': 'Crew Company',
+            }]
+            workforce['assignments'] = {'143': [{
+                'id': 'assignment-grouped',
+                'freelancerId': 'worker-grouped',
+                'department': 'AU',
+                'roleName': 'Crew',
+                'days': 2,
+                'workDates': ['2026-07-10', '2026-07-11'],
+            }]}
+            workforce['submissions'] = {
+                '143': {
+                    'worker-grouped': {
+                        'invoices': [],
+                        'claims': [
+                            {
+                                'id': 'claim-group-a',
+                                'originalName': 'meal.pdf',
+                                'submittedAt': '2026-07-10T09:00:00+08:00',
+                                'status': 'Approved',
+                                'amount': 25,
+                                'claimDate': '2026-07-10',
+                                'category': 'Meal',
+                                'verifiedAt': '2026-07-10T10:00:00+08:00',
+                            },
+                            {
+                                'id': 'claim-group-b',
+                                'originalName': 'transport.pdf',
+                                'submittedAt': '2026-07-10T09:05:00+08:00',
+                                'status': 'Paid',
+                                'amount': 35,
+                                'claimDate': '2026-07-10',
+                                'category': 'Transport',
+                            },
+                        ],
+                    },
+                },
+            }
+
+        self.login('admin', True)
+        grouped = self.client.get(
+            '/api/workforce/submissions?status=all&kind=claim'
+        ).get_json()['data']
+        self.assertEqual(grouped['total'], 1)
+        self.assertEqual(len(grouped['rows']), 1)
+        claim_group = grouped['rows'][0]
+        self.assertTrue(claim_group['isClaimGroup'])
+        self.assertEqual(claim_group['claimCount'], 2)
+        self.assertEqual(claim_group['claimTotal'], 60)
+        self.assertTrue(claim_group['claimAmountsComplete'])
+        self.assertFalse(claim_group['allClaimsReviewed'])
+        self.assertEqual(
+            claim_group['assignmentWorkDates'],
+            ['2026-07-10', '2026-07-11'],
+        )
+        self.assertEqual(
+            {row['id'] for row in claim_group['claims']},
+            {'claim-group-a', 'claim-group-b'},
+        )
+
+        approved_filter = self.client.get(
+            '/api/workforce/submissions?status=to-pay&kind=claim'
+        ).get_json()['data']
+        self.assertEqual(len(approved_filter['rows'][0]['claims']), 2)
+
+        blocked = self.client.put(
+            '/api/workforce/submissions/bulk-status',
+            json={
+                'submissionIds': ['claim-group-a', 'claim-group-b'],
+                'status': 'Paid',
+            },
+        )
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn('Review every claim individually', blocked.get_json()['error'])
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['submissions']['143']['worker-grouped']['claims'][1][
+                'verifiedAt'
+            ] = '2026-07-10T10:05:00+08:00'
+
+        updated = self.client.put(
+            '/api/workforce/submissions/bulk-status',
+            json={
+                'submissionIds': ['claim-group-a', 'claim-group-b'],
+                'status': 'Payment Confirmed',
+            },
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(updated.get_json()['updatedCount'], 2)
+        claims = updated.get_json()['data']['submissions']['worker-grouped']['claims']
+        self.assertTrue(all(row['status'] == 'Paid' for row in claims))
+        self.assertTrue(all(row.get('paymentConfirmedAt') for row in claims))
+        self.assertTrue(all(row['reviewHistory'][-1]['groupUpdate'] for row in claims))
 
     def test_event_overview_exposes_operations_without_financial_data(self):
         event = self.manager.events[143]

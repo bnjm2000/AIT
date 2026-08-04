@@ -11741,7 +11741,7 @@ async function openContainerMaintenanceModal(containerId) {
     const form = document.getElementById('containerMaintenanceForm');
     const mediaInput = document.getElementById('containerMaintenanceMedia');
     mediaInput?.addEventListener('change', () => {
-      updateMaintenanceMediaSelection('containerMaintenanceMedia', 'containerMaintenanceMediaList');
+      appendMaintenanceMediaSelection('containerMaintenanceMedia', 'containerMaintenanceMediaList');
     });
     modal?.addEventListener('click', event => {
       if (event.target === modal) closeContainerMaintenanceModal();
@@ -18474,17 +18474,80 @@ function bindMaintenanceMediaDeleteButtons(root = document) {
   });
 }
 
+const maintenancePendingMediaSelections = new WeakMap();
+
+function maintenancePendingMediaFiles(input) {
+  if (!input) return [];
+  return maintenancePendingMediaSelections.has(input)
+    ? maintenancePendingMediaSelections.get(input)
+    : Array.from(input.files || []);
+}
+
+function setMaintenancePendingMediaFiles(input, files) {
+  const selected = Array.from(files || []).filter(Boolean);
+  maintenancePendingMediaSelections.set(input, selected);
+  try {
+    if (typeof DataTransfer !== 'undefined') {
+      const transfer = new DataTransfer();
+      selected.forEach(file => transfer.items.add(file));
+      input.files = transfer.files;
+    }
+  } catch (error) {
+    // Some mobile browsers expose a read-only FileList. Submission uses the
+    // accumulated selection above, so the files are still retained.
+  }
+  return selected;
+}
+
 function updateMaintenanceMediaSelection(inputId, listId) {
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
   if (!input || !list) return;
 
-  const files = Array.from(input.files || []);
-  list.innerHTML = files.map(file => `
-    <span class="maintenance-media-pill" title="${escapeHtmlAttr(file.name)}">${escapeHtml(file.name)}</span>
+  const files = maintenancePendingMediaFiles(input);
+  list.innerHTML = files.map((file, index) => `
+    <span class="maintenance-media-pill" title="${escapeHtmlAttr(file.name)}">
+      <span class="maintenance-media-pill-name">${escapeHtml(file.name)}</span>
+      <button type="button" class="maintenance-media-pill-remove"
+              title="Remove ${escapeHtmlAttr(file.name)}" aria-label="Remove ${escapeHtmlAttr(file.name)}"
+              onclick="removeMaintenancePendingMedia(event,'${escapeHtmlAttr(inputId)}','${escapeHtmlAttr(listId)}',${index})">&times;</button>
+    </span>
   `).join('');
   const dropzone = document.querySelector(`[data-maintenance-drop-input="${inputId}"]`) || document.getElementById('maintenanceMediaDropzone');
   if (dropzone) dropzone.classList.toggle('has-files', files.length > 0);
+}
+
+function appendMaintenanceMediaSelection(inputId, listId, addedFiles = null) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const existing = maintenancePendingMediaSelections.get(input) || [];
+  const selected = addedFiles === null
+    ? Array.from(input.files || [])
+    : Array.from(addedFiles || []);
+  setMaintenancePendingMediaFiles(input, [...existing, ...selected]);
+  updateMaintenanceMediaSelection(inputId, listId);
+}
+
+function resetMaintenanceMediaSelection(inputId, listId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = '';
+  setMaintenancePendingMediaFiles(input, []);
+  updateMaintenanceMediaSelection(inputId, listId);
+}
+
+function removeMaintenancePendingMedia(event, inputId, listId, fileIndex) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const files = maintenancePendingMediaFiles(input);
+  if (fileIndex < 0 || fileIndex >= files.length) return;
+  setMaintenancePendingMediaFiles(
+    input,
+    files.filter((_file, index) => index !== fileIndex)
+  );
+  updateMaintenanceMediaSelection(inputId, listId);
 }
 
 function setupMaintenanceMediaDropzone(inputId, listId, dropzoneId) {
@@ -18517,16 +18580,13 @@ function setupMaintenanceMediaDropzone(inputId, listId, dropzoneId) {
       showNotification('warning', 'Please choose photo or video files');
       return;
     }
-    const transfer = new DataTransfer();
-    [...Array.from(input.files || []), ...dropped].forEach(file => transfer.items.add(file));
-    input.files = transfer.files;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    appendMaintenanceMediaSelection(inputId, listId, dropped);
   });
 }
 
 function maintenancePayloadToRequestData(payload, mediaInputId) {
   const input = document.getElementById(mediaInputId);
-  const files = Array.from(input?.files || []);
+  const files = maintenancePendingMediaFiles(input);
   if (!files.length) return payload;
 
   const formData = new FormData();
@@ -18997,6 +19057,35 @@ function maintenanceAssetSearchText(asset) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function maintenanceActivitySearchText(asset, log) {
+  const record = normalizeMaintenanceLogRecord(log);
+  return [
+    getAssetIdentifierForApi(asset), asset.id, asset.brand, asset.model,
+    asset.description, asset.serial, asset.serialNumber, asset.serial2,
+    asset.secondarySerial, asset.secondarySerialNumber, asset.version,
+    record.type, record.description, maintenanceLogUserLabel(record), record.date,
+    ...getMaintenanceChangeLabels(record),
+    record.source?.containerId,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function maintenanceActivityEntries(assetList) {
+  return (assetList || []).flatMap(asset =>
+    getMaintenanceLogRecords(asset).map((log, originalIndex) => ({
+      asset,
+      log: { ...log, originalIndex },
+    }))
+  ).sort((entryA, entryB) => {
+    const comparison = compareMaintenanceLogsNewestFirst(entryA.log, entryB.log);
+    if (comparison) return comparison;
+    return assetMaintenanceDisplayId(entryA.asset).localeCompare(
+      assetMaintenanceDisplayId(entryB.asset),
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+  });
+}
+
 function maintenanceAssetMatchesCondition(asset, condition) {
   if (!condition || condition === 'all') return true;
   if (condition === 'ooc') return Boolean(asset.isOOC || Number(asset.bulkOOCQuantity || 0) > 0);
@@ -19011,9 +19100,10 @@ function renderMaintenanceFilterButtons() {
   const typeRoot = document.getElementById('maintenance-log-type-filters');
   if (typeRoot) {
     const typeCounts = assets.reduce((counts, asset) => {
-      const latest = inventoryLatestMaintenance([asset]);
-      const type = latest ? normalizeMaintenanceLogType(latest.type) : 'No history';
-      counts[type] = (counts[type] || 0) + 1;
+      getMaintenanceLogRecords(asset).forEach(log => {
+        const type = normalizeMaintenanceLogType(log.type);
+        counts[type] = (counts[type] || 0) + 1;
+      });
       return counts;
     }, {});
     const typeOptions = [
@@ -19028,7 +19118,9 @@ function renderMaintenanceFilterButtons() {
       (maintenanceLogTypeFilter !== 'all' && !(typeCounts[maintenanceLogTypeFilter] || 0))
     ) maintenanceLogTypeFilter = 'all';
     typeRoot.innerHTML = typeOptions.filter(([value]) => value === 'all' || (typeCounts[value] || 0) > 0).map(([value, label, color, background]) => {
-      const count = value === 'all' ? assets.length : (typeCounts[value] || 0);
+      const count = value === 'all'
+        ? Object.values(typeCounts).reduce((sum, valueCount) => sum + valueCount, 0)
+        : (typeCounts[value] || 0);
       return `<button type="button" class="maintenance-filter-button${maintenanceLogTypeFilter === value ? ' active' : ''}" style="--filter-color:${color};--filter-bg:${background}" onclick="setMaintenanceLogTypeFilter('${escapeJs(value)}')">${escapeHtml(label)} ${count}</button>`;
     }).join('');
   }
@@ -19053,13 +19145,10 @@ function renderMaintenanceFilterButtons() {
 
 function applyMaintenanceRecentFilters() {
   const query = document.getElementById('maintenance-search')?.value.trim().toLowerCase() || '';
-  const filtered = assets.filter(asset => {
-    if (query && !maintenanceAssetSearchText(asset).includes(query)) return false;
-    const latest = inventoryLatestMaintenance([asset]);
-    const type = latest ? normalizeMaintenanceLogType(latest.type) : 'No history';
-    return maintenanceLogTypeFilter === 'all' || type === maintenanceLogTypeFilter;
+  displayMaintenanceAssets(assets, {
+    query,
+    logType: maintenanceLogTypeFilter,
   });
-  displayMaintenanceAssets(filtered);
 }
 
 function setMaintenanceLogTypeFilter(type) {
@@ -19160,30 +19249,31 @@ function maintenanceActivityRowHtml(asset, latestRecord = null) {
   `;
 }
 
-function displayMaintenanceAssets(assetsToShow) {
+function displayMaintenanceAssets(assetsToShow, options = {}) {
   const container = document.getElementById("maintenance-assets");
   if (!container) return;
 
-  if (assetsToShow.length === 0) {
+  const query = String(options.query || '').trim().toLowerCase();
+  const logType = String(options.logType || 'all');
+  const activityEntries = maintenanceActivityEntries(assetsToShow).filter(entry => {
+    if (logType !== 'all' && normalizeMaintenanceLogType(entry.log.type) !== logType) {
+      return false;
+    }
+    return !query || maintenanceActivitySearchText(entry.asset, entry.log).includes(query);
+  });
+
+  if (activityEntries.length === 0) {
     destroyVirtualTable('maintenance-all');
-    container.innerHTML = '<div class="maintenance-empty">No assets match this search.</div>';
+    container.innerHTML = '<div class="maintenance-empty">No maintenance activity matches this search.</div>';
     return;
   }
 
   destroyVirtualTable('maintenance-all');
-  const sortedAssets = assetsToShow.map(asset => ({ asset, latest: inventoryLatestMaintenance([asset]) })).sort((recordA, recordB) => {
-    if (recordA.latest && recordB.latest) {
-      const comparison = compareMaintenanceLogsNewestFirst(recordA.latest, recordB.latest);
-      if (comparison) return comparison;
-    } else if (recordA.latest) return -1;
-    else if (recordB.latest) return 1;
-    return assetMaintenanceDisplayId(recordA.asset).localeCompare(assetMaintenanceDisplayId(recordB.asset), undefined, { numeric: true, sensitivity: 'base' });
-  });
-  const visibleAssets = sortedAssets.slice(0, 250);
+  const visibleEntries = activityEntries.slice(0, 250);
   container.innerHTML = `
-    <div class="maintenance-list-header"><span>Asset</span><span>Latest maintenance log</span><span>Condition</span><span>Date / location</span><span></span></div>
-    <div class="maintenance-activity-list">${visibleAssets.map(record => maintenanceActivityRowHtml(record.asset, record.latest)).join('')}</div>
-    ${sortedAssets.length > visibleAssets.length ? `<div style="padding:8px 2px;color:#64748b;font-size:9px">Showing the 250 most recent assets. Search to find another asset.</div>` : ''}
+    <div class="maintenance-list-header"><span>Asset</span><span>Maintenance log</span><span>Condition</span><span>Date / location</span><span></span></div>
+    <div class="maintenance-activity-list">${visibleEntries.map(entry => maintenanceActivityRowHtml(entry.asset, entry.log)).join('')}</div>
+    ${activityEntries.length > visibleEntries.length ? `<div style="padding:8px 2px;color:#64748b;font-size:9px">Showing the 250 most recent logs. Search to find older activity.</div>` : ''}
   `;
 }
 
@@ -27557,7 +27647,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const maintenanceMediaFiles = document.getElementById("maintenanceMediaFiles");
   if (maintenanceMediaFiles) {
     maintenanceMediaFiles.addEventListener("change", () => {
-      updateMaintenanceMediaSelection("maintenanceMediaFiles", "maintenanceMediaFileList");
+      appendMaintenanceMediaSelection("maintenanceMediaFiles", "maintenanceMediaFileList");
     });
   }
   setupMaintenanceMediaDropzone('maintenanceMediaFiles', 'maintenanceMediaFileList', 'maintenanceMediaDropzone');
@@ -27725,8 +27815,9 @@ function openMaintenanceModal(initialAssetIds = []) {
     applyMaintenanceLogTypeSelectStyle(logTypeEl);
   }
   const maintenanceMediaEl = document.getElementById('maintenanceMediaFiles');
-  if (maintenanceMediaEl) maintenanceMediaEl.value = '';
-  updateMaintenanceMediaSelection('maintenanceMediaFiles', 'maintenanceMediaFileList');
+  if (maintenanceMediaEl) {
+    resetMaintenanceMediaSelection('maintenanceMediaFiles', 'maintenanceMediaFileList');
+  }
   void populateMaintenanceUserSelect('maintenanceUser', currentUser?.username || '', true);
   setupMaintenanceEventReferenceInput('maintenanceLogEntry');
   
@@ -28237,7 +28328,7 @@ function openBulkMaintenanceFaultModal(assetId) {
   `);
 
   document.getElementById('bulkFaultMediaFiles')?.addEventListener('change', () => {
-    updateMaintenanceMediaSelection('bulkFaultMediaFiles', 'bulkFaultMediaFileList');
+    appendMaintenanceMediaSelection('bulkFaultMediaFiles', 'bulkFaultMediaFileList');
   });
 
   document.getElementById('bulkMaintenanceFaultForm')?.addEventListener('submit', async event => {
@@ -28361,7 +28452,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
   `);
 
   document.getElementById('bulkFaultEditMediaFiles')?.addEventListener('change', () => {
-    updateMaintenanceMediaSelection('bulkFaultEditMediaFiles', 'bulkFaultEditMediaFileList');
+    appendMaintenanceMediaSelection('bulkFaultEditMediaFiles', 'bulkFaultEditMediaFileList');
   });
 
   document.getElementById('bulkMaintenanceFaultEditForm')?.addEventListener('submit', async event => {
@@ -28624,7 +28715,7 @@ function openBulkMaintenanceResolutionModal(assetId, faultKey, logNumber) {
   `);
 
   document.getElementById('bulkResolutionMediaFiles')?.addEventListener('change', () => {
-    updateMaintenanceMediaSelection('bulkResolutionMediaFiles', 'bulkResolutionMediaFileList');
+    appendMaintenanceMediaSelection('bulkResolutionMediaFiles', 'bulkResolutionMediaFileList');
   });
 
   document.getElementById('bulkMaintenanceResolutionForm')?.addEventListener('submit', async event => {
@@ -29962,7 +30053,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   const editMediaInput = document.getElementById('editMaintenanceMediaFiles');
   if (editMediaInput) {
     editMediaInput.addEventListener('change', () => {
-      updateMaintenanceMediaSelection('editMaintenanceMediaFiles', 'editMaintenanceMediaFileList');
+      appendMaintenanceMediaSelection('editMaintenanceMediaFiles', 'editMaintenanceMediaFileList');
     });
   }
   
@@ -36443,14 +36534,81 @@ function inventoryDepartmentPdfBadgeHtml(code) {
 }
 
 function inventoryExportQuantity(asset, statusFilter = '') {
-  if (!asset) return 0;
-  const total = Math.max(1, Number(asset.quantity || 1) || 1);
-  if (!asset.isBulk) return 1;
+  return Object.values(inventoryExportStatusCounts(asset, statusFilter))
+    .reduce((sum, quantity) => sum + quantity, 0);
+}
 
-  const available = Math.max(0, Number(asset.availableQuantity ?? total) || 0);
-  if (statusFilter === 'available') return available;
-  if (statusFilter === 'deployed') return Math.max(0, total - available);
-  return total;
+function inventoryExportStatusCounts(asset, statusFilter = '') {
+  if (!asset) return {};
+
+  const counts = {};
+  const addCount = (status, quantity) => {
+    const normalizedStatus = status === 'disposed' ? 'decommissioned' : status;
+    const safeQuantity = Math.max(0, Number(quantity || 0) || 0);
+    if (safeQuantity > 0) {
+      counts[normalizedStatus] = (counts[normalizedStatus] || 0) + safeQuantity;
+    }
+  };
+
+  if (!asset.isBulk) {
+    const condition = getAssetConditionStatus(asset);
+    const status = condition === 'available' && asset.status === 'deployed'
+      ? 'deployed'
+      : condition;
+    addCount(status, 1);
+  } else {
+    const total = Math.max(1, Number(asset.quantity || 1) || 1);
+    const condition = getAssetConditionStatus(asset);
+
+    if (condition === 'decommissioned') {
+      addCount('decommissioned', total);
+    } else {
+      let remaining = total;
+      const deployed = Math.min(
+        remaining,
+        Math.max(0, Number(asset.deployedQuantity || 0) || 0)
+      );
+      addCount('deployed', deployed);
+      remaining -= deployed;
+
+      if (asset.isMissing) {
+        addCount('missing', remaining);
+        remaining = 0;
+      } else if (asset.isOOC) {
+        addCount('ooc', remaining);
+        remaining = 0;
+      } else {
+        const missing = Math.min(
+          remaining,
+          Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0)
+        );
+        addCount('missing', missing);
+        remaining -= missing;
+
+        const ooc = Math.min(
+          remaining,
+          Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0)
+        );
+        addCount('ooc', ooc);
+        remaining -= ooc;
+
+        const degraded = asset.isDegraded
+          ? remaining
+          : Math.min(
+              remaining,
+              Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0)
+            );
+        addCount('degraded', degraded);
+        remaining -= degraded;
+        addCount('available', remaining);
+      }
+    }
+  }
+
+  const normalizedFilter = statusFilter === 'disposed' ? 'decommissioned' : statusFilter;
+  return normalizedFilter
+    ? (counts[normalizedFilter] ? { [normalizedFilter]: counts[normalizedFilter] } : {})
+    : counts;
 }
 
 function inventoryAssetFlagsText(asset) {
@@ -36472,6 +36630,17 @@ function inventoryAssetFlagsText(asset) {
 }
 
 function inventoryAssetFlagsPdfHtml(asset) {
+  if (asset?.isBulk) {
+    const flagCounts = inventoryExportStatusCounts(asset);
+    const entries = ['ooc', 'missing', 'degraded', 'decommissioned']
+      .filter(status => Number(flagCounts[status] || 0) > 0);
+    return entries.length
+      ? entries.map(status => inventoryStatusPdfBadgeHtml(
+          status,
+          `${inventoryStatusText(status)}: ${flagCounts[status]}`
+        )).join('')
+      : inventoryStatusPdfBadgeHtml('available', 'OK');
+  }
   const status = getAssetConditionStatus(asset);
   const label = status === 'available' ? 'OK' : inventoryStatusText(status);
   return inventoryStatusPdfBadgeHtml(status, label);
@@ -36523,7 +36692,10 @@ function groupInventoryAssetsForExport(filteredAssets, filters) {
     const model = inventoryPlainText(asset.model);
     const key = JSON.stringify([department, brand, model]);
     const statusFilter = filters.statusFilters.length === 1 ? filters.statusFilters[0] : '';
-    const quantity = inventoryExportQuantity(asset, statusFilter);
+    const assetStatusCounts = inventoryExportStatusCounts(asset, statusFilter);
+    const quantity = Object.values(assetStatusCounts)
+      .reduce((sum, statusQuantity) => sum + statusQuantity, 0);
+    if (quantity <= 0) return;
 
     if (!groups.has(key)) {
       groups.set(key, {
@@ -36540,8 +36712,9 @@ function groupInventoryAssetsForExport(filteredAssets, filters) {
     const group = groups.get(key);
     if (asset.description) group.descriptions.add(asset.description);
     group.count += quantity;
-    const status = asset.status || 'available';
-    group.statusCounts[status] = (group.statusCounts[status] || 0) + quantity;
+    Object.entries(assetStatusCounts).forEach(([status, statusQuantity]) => {
+      group.statusCounts[status] = (group.statusCounts[status] || 0) + statusQuantity;
+    });
   });
 
   return Array.from(groups.values()).sort((a, b) => {
@@ -36616,7 +36789,7 @@ function inventoryIndividualRowRecords(filteredAssets) {
         <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial))}</td>
         <td class="number-cell">${escapeHtml(inventoryAssetQuantityText(asset))}</td>
         <td>${inventoryDepartmentPdfBadgeHtml(asset.department)}</td>
-        <td>${inventoryStatusPdfBadgeHtml(asset.status || 'available')}</td>
+        <td>${inventoryStatusSummaryPdfHtml(inventoryExportStatusCounts(asset))}</td>
         <td>${escapeHtml(defaultLocation)}</td>
         <td>${escapeHtml(currentLocation)}</td>
         <td>${inventoryAssetFlagsPdfHtml(asset)}</td>

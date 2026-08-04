@@ -604,7 +604,7 @@ def build_finance_pdf(document, company, logo_path=''):
     event_schedule_style = ParagraphStyle(
         'FinanceEventSchedule',
         parent=body,
-        fontSize=7.8,
+        fontSize=7.5,
         leading=10,
         textColor=ink,
     )
@@ -854,11 +854,22 @@ def build_finance_pdf(document, company, logo_path=''):
         story.extend([client_table, Spacer(1, 4 * mm)])
 
     schedule_entries = []
+    dry_hire_schedule = str(document.get('scheduleMode') or '').strip().lower() == 'dry-hire'
     standard_schedules = {
-        'setup': ('Set-up', 'setupDate', 'setupTime', 'additionalSetups'),
+        'setup': (
+            'Delivery / Collection' if dry_hire_schedule else 'Set-up',
+            'setupDate',
+            'setupTime',
+            'additionalSetups',
+        ),
         'rehearsal': ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals'),
         'show': ('Show', 'showDate', 'showTime', 'additionalShows'),
-        'teardown': ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns'),
+        'teardown': (
+            'Return' if dry_hire_schedule else 'Teardown',
+            'teardownDate',
+            'teardownTime',
+            'additionalTeardowns',
+        ),
     }
     custom_schedules = {
         f"custom:{row.get('id')}": row
@@ -946,7 +957,7 @@ def build_finance_pdf(document, company, logo_path=''):
                     _paragraph(f'{event_label}:', label),
                     _paragraph(value, event_schedule_style),
                 ] for event_label, value in schedule_entries],
-                colWidths=[22 * mm, 58 * mm],
+                colWidths=[26 * mm, 54 * mm],
                 style=TableStyle([
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                     ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -1052,6 +1063,7 @@ def build_finance_pdf(document, company, logo_path=''):
     show_subproject_headers = len(subprojects) > 1
     for group_index, (subproject, department) in enumerate(export_groups):
         subproject_id = str(subproject.get('id') or 'main')
+        optional_category = _is_optional_category(department)
         first_group_for_subproject = subproject_id != current_subproject_id
         if first_group_for_subproject:
             current_subproject_id = subproject_id
@@ -1181,7 +1193,7 @@ def build_finance_pdf(document, company, logo_path=''):
                     ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), colors.HexColor('#ECFDF5')),
                 ])
 
-        if show_department_subtotals:
+        if show_department_subtotals or optional_category:
             subtotal_index = len(table_rows)
             table_rows.append([
                 '',
@@ -1231,8 +1243,10 @@ def build_finance_pdf(document, company, logo_path=''):
                     summary_source.append({
                         'name': str(subproject.get('name') or 'Room'),
                         'lineCount': sum(row['lineCount'] for row in rows),
-                        'total': sum(
-                            row['total'] for row in rows if not row['optional']
+                        'total': (
+                            sum(row['total'] for row in rows)
+                            if all(row['optional'] for row in rows)
+                            else sum(row['total'] for row in rows if not row['optional'])
                         ),
                         'optional': all(row['optional'] for row in rows),
                     })
@@ -1253,10 +1267,18 @@ def build_finance_pdf(document, company, logo_path=''):
                     summary_source.append(summary)
                 summary['lineCount'] += row['lineCount']
                 summary['total'] += row['total']
+        summary_shows_price = (
+            show_department_subtotals
+            or any(row['optional'] for row in summary_source)
+        )
         department_summary_rows = [[
             _paragraph('PROJECT' if use_subproject_summary else 'CATEGORY', table_header_label),
             _paragraph('LINE ITEMS', table_header_center),
-            _paragraph('SUBTOTAL', table_header_right),
+            *(
+                [_paragraph('SUBTOTAL', table_header_right)]
+                if summary_shows_price
+                else []
+            ),
         ]]
         for department_summary in summary_source:
             row_body = optional_body if department_summary['optional'] else body
@@ -1269,12 +1291,20 @@ def build_finance_pdf(document, company, logo_path=''):
             department_summary_rows.append([
                 _paragraph(department_summary['name'], row_body),
                 _paragraph(str(department_summary['lineCount']), row_center),
-                _paragraph(_money(department_summary['total'], currency), row_amount),
+                *(
+                    [_paragraph(_money(department_summary['total'], currency), row_amount)]
+                    if show_department_subtotals or department_summary['optional']
+                    else ([''] if summary_shows_price else [])
+                ),
             ])
         department_summary = Table(
             department_summary_rows,
             repeatRows=1,
-            colWidths=[doc.width - 56 * mm, 22 * mm, 34 * mm],
+            colWidths=(
+                [doc.width - 56 * mm, 22 * mm, 34 * mm]
+                if summary_shows_price
+                else [doc.width - 30 * mm, 30 * mm]
+            ),
             style=TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), accent),
                 ('TEXTCOLOR', (0, 0), (-1, 0), accent_text),
