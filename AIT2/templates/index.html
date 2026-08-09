@@ -15,6 +15,10 @@
     />
     <link
       rel="stylesheet"
+      href="{{ url_for('static', filename='css/line-workspace.css', v=line_workspace_css_version) }}"
+    />
+    <link
+      rel="stylesheet"
       href="{{ url_for('static', filename='css/finance.css', v=finance_css_version) }}"
     />
     <link
@@ -10988,13 +10992,10 @@
                 #delivery-order-section .do-catalog-result:hover,#delivery-order-section .do-catalog-result:focus { background:#eef7f5;outline:none; }
                 #delivery-order-section .do-catalog-result strong { display:block;color:var(--do-ink);font-size:11px; }
                 #delivery-order-section .do-catalog-result span { display:block;margin-top:2px;color:var(--do-muted);font-size:9px; }
-                #delivery-order-section .do-department-section + .do-department-section { border-top:1px solid var(--do-line); }
                 #delivery-order-section .do-line-table { width:100%;border-collapse:collapse;table-layout:fixed; }
                 #delivery-order-section .do-line-table th,#delivery-order-section .do-line-table td { border-bottom:2px solid #e5ece9; }
-                #delivery-order-section .do-category-row th { padding:8px 14px;background:#f0f6f4;color:#314a43;font-size:10px;font-weight:800;text-align:left;text-transform:uppercase; }
-                #delivery-order-section .do-category-row th { display:table-cell; }
-                #delivery-order-section .do-category-row th > span:first-child { float:left; }
-                #delivery-order-section .do-category-row .do-dept-count { float:right; }
+                #delivery-order-section .do-category-row th { padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#334155;font-size:10px;font-weight:800;text-align:left;text-transform:uppercase; }
+                #delivery-order-section .do-category-heading-main { display:flex;min-width:0;align-items:center;gap:8px; }
                 #delivery-order-section .do-column-row th { padding:6px 14px;background:#fafcfb;color:#71807b;font-size:9px;text-align:left;text-transform:uppercase; }
                 #delivery-order-section .do-column-row th:nth-child(2) { width:92px;text-align:right; }
                 #delivery-order-section .do-column-row th:nth-child(3) { width:86px; }

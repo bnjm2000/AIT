@@ -803,7 +803,7 @@ function costingRenderEditor() {
     <div class="costing-workspace-grid">
       <main class="costing-line-workspace">
         ${costingSubprojectTabsMarkup(readOnly)}
-        <div class="costing-category-list">
+        <div class="costing-category-list showbase-category-stack">
           ${categories.map(category => costingCategoryMarkup(category, readOnly)).join('') || '<section class="costing-empty-card">No items yet. Search inventory or enter a custom item below.</section>'}
           ${readOnly ? '' : costingAddItemMarkup()}
         </div>
@@ -843,15 +843,23 @@ function costingCategoryMarkup(category, readOnly) {
   );
   const defaults = costingCategoryDefaults(category, subprojectId);
   const totals = costingCategoryTotals(category);
-  return `<section class="costing-category-card ${collapsed ? 'is-collapsed' : ''}" data-category-total="${costingAttr(encoded)}" ondragover="costingDragCategoryOver(event,'${costingAttr(encoded)}')" ondragleave="costingDragCategoryLeave(event)" ondrop="costingDropCategory(event,'${costingAttr(encoded)}')">
-    <div class="costing-table-wrap"><table class="costing-table">
+  const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
+    colspan: 12,
+    className: 'costing-category-header',
+    content: `<div class="costing-category-title">${readOnly ? '' : `<span class="finance-department-drag-handle costing-category-drag-handle" draggable="true" title="Drag category" ondragstart="costingDragCategoryStart(event,'${costingAttr(encoded)}')" ondragend="costingDragEnd()">&#9776;</span>`}${showbaseLineWorkspace.categoryToggleMarkup({
+      label: `${category} category`,
+      collapsed,
+      action: `costingToggleCategory(${JSON.stringify(encoded)})`,
+      className: 'finance-collapse-button costing-category-toggle'
+    })}<input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : ''} onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)"></div>
+      <div class="costing-category-metrics"><span>Category Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></span><b></b><span>Revenue <strong data-category-revenue>${costingEscape(costingMoney(totals.charged))}</strong></span><b></b><span>Profit <strong class="is-profit" data-category-profit-display>${costingEscape(costingMoney(totals.profit))}</strong></span></div>`
+  });
+  return `<section class="${showbaseLineWorkspace.categorySectionClass({ className: 'costing-category-card', collapsed })}" data-category-total="${costingAttr(encoded)}" ondragover="costingDragCategoryOver(event,'${costingAttr(encoded)}')" ondragleave="costingDragCategoryLeave(event)" ondrop="costingDropCategory(event,'${costingAttr(encoded)}')">
+    <div class="costing-table-wrap"><table class="costing-table showbase-category-table">
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-sale"><col class="col-subtotal"><col class="col-menu"></colgroup>
       <thead>
-        <tr class="costing-category-header"><th colspan="12"><div class="costing-category-header-content">
-          <div class="costing-category-title">${readOnly ? '' : `<span class="finance-department-drag-handle costing-category-drag-handle" draggable="true" title="Drag category" ondragstart="costingDragCategoryStart(event,'${costingAttr(encoded)}')" ondragend="costingDragEnd()">&#9776;</span>`}<button type="button" class="finance-collapse-button costing-category-toggle" aria-label="${collapsed ? 'Open' : 'Close'} ${costingAttr(category)} category" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="costingToggleCategory('${costingAttr(encoded)}')">${collapsed ? '+' : '-'}</button><input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : ''} onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)"></div>
-          <div class="costing-category-metrics"><span>Category Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></span><b></b><span>Revenue <strong data-category-revenue>${costingEscape(costingMoney(totals.charged))}</strong></span><b></b><span>Profit <strong class="is-profit" data-category-profit-display>${costingEscape(costingMoney(totals.profit))}</strong></span></div>
-        </div></th></tr>
-        <tr class="costing-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Sale Price</th><th>Line Subtotal</th><th></th></tr>
+        ${categoryHeader}
+        <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Sale Price</th><th>Line Subtotal</th><th></th></tr>
       </thead>
       <tbody>${costingGroupedLinesMarkup(lines, readOnly)}</tbody>
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
@@ -981,13 +989,7 @@ function costingToggleCategory(encodedCategory) {
   const key = `${costingActiveSubprojectId()}::${category}`;
   costingState.collapsedCategories[key] = !costingState.collapsedCategories[key];
   const section = document.querySelector(`[data-category-total="${CSS.escape(encodedCategory)}"]`);
-  section?.classList.toggle('is-collapsed', costingState.collapsedCategories[key]);
-  const toggle = section?.querySelector('.costing-category-toggle');
-  if (toggle) {
-    toggle.textContent = costingState.collapsedCategories[key] ? '+' : '-';
-    toggle.setAttribute('aria-expanded', costingState.collapsedCategories[key] ? 'false' : 'true');
-    toggle.setAttribute('aria-label', `${costingState.collapsedCategories[key] ? 'Open' : 'Close'} ${category} category`);
-  }
+  showbaseLineWorkspace.setCategoryCollapsed(section, costingState.collapsedCategories[key]);
 }
 
 function costingBeginLineDrag(event, indexes, wholeGroup = false) {

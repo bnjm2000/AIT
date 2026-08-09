@@ -35,8 +35,47 @@
     return reordered.every((row, index) => row === rows[index]) ? null : reordered;
   }
 
-  // Shared quotation/costing workspace mechanics; each editor owns its data columns and calculations.
+  // Shared line-item workspace mechanics; each editor owns its data columns and calculations.
   global.showbaseLineWorkspace = {
+    categorySectionClass(options = {}) {
+      return [
+        'showbase-category-section',
+        options.collapsed ? 'is-collapsed' : '',
+        options.className || ''
+      ].filter(Boolean).map(escapeAttribute).join(' ');
+    },
+
+    categoryToggleMarkup(options = {}) {
+      const label = String(options.label || 'category');
+      const collapsed = !!options.collapsed;
+      return `<button type="button" class="showbase-category-toggle ${escapeAttribute(options.className || '')}"
+        data-category-label="${escapeAttribute(label)}"
+        aria-label="${collapsed ? 'Open' : 'Close'} ${escapeAttribute(label)}"
+        aria-expanded="${collapsed ? 'false' : 'true'}"
+        onclick="${escapeAttribute(options.action || '')}">${collapsed ? '+' : '-'}</button>`;
+    },
+
+    categoryHeaderRowMarkup(options = {}) {
+      const tag = options.cellTag === 'td' ? 'td' : 'th';
+      const colspan = Math.max(1, numberValue(options.colspan, 1));
+      return `<tr class="showbase-category-header-row ${escapeAttribute(options.className || '')}" ${String(options.attributes || '')}>
+        <${tag} colspan="${colspan}"><div class="showbase-category-header-content">${String(options.content || '')}</div></${tag}>
+      </tr>`;
+    },
+
+    setCategoryCollapsed(section, collapsed) {
+      if (!section) return false;
+      section.classList.toggle('is-collapsed', !!collapsed);
+      const toggle = section.querySelector('.showbase-category-toggle');
+      if (toggle) {
+        toggle.textContent = collapsed ? '+' : '-';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        const label = toggle.dataset.categoryLabel || 'category';
+        toggle.setAttribute('aria-label', `${collapsed ? 'Open' : 'Close'} ${label}`);
+      }
+      return true;
+    },
+
     addRowMarkup(options = {}) {
       const search = options.search || {};
       const category = options.category || {};

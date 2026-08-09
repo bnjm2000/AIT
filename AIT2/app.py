@@ -13596,6 +13596,7 @@ def _render_app_page(section):
         },
         app_js_version=_static_asset_version('js/app.js'),
         line_workspace_js_version=_static_asset_version('js/line-workspace.js'),
+        line_workspace_css_version=_static_asset_version('css/line-workspace.css'),
         finance_js_version=_static_asset_version('js/finance.js'),
         finance_css_version=_static_asset_version('css/finance.css'),
         costing_css_version=_static_asset_version('css/costing.css'),

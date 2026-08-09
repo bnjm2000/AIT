@@ -399,10 +399,13 @@ class CostingFeatureTests(unittest.TestCase):
         category_header_css = css_source.split(
             '.costing-table .costing-category-header > th {', 1,
         )[1].split('}', 1)[0]
-        self.assertIn('border-bottom: 0;', category_header_css)
-        self.assertIn('padding: 2px 8px 0;', category_header_css)
-        self.assertIn('<tr class="costing-category-header"><th colspan="12">', source)
-        self.assertIn('<tr class="costing-column-header"><th>Item</th>', source)
+        self.assertIn('border-bottom: 1px solid #e2e8f0;', category_header_css)
+        self.assertIn('padding: 6px 8px;', category_header_css)
+        self.assertIn('showbaseLineWorkspace.categoryHeaderRowMarkup({', source)
+        self.assertIn('showbaseLineWorkspace.categoryToggleMarkup({', source)
+        self.assertIn('showbaseLineWorkspace.categorySectionClass({', source)
+        self.assertIn('showbase-category-column-header', source)
+        self.assertIn('showbase-category-stack', source)
         self.assertNotIn('.costing-header-menu > summary::after', css_source)
         self.assertIn(
             '.costing-header-menu > summary { list-style: none; cursor: pointer; }',
@@ -443,11 +446,17 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('draggedIndexes(state, event, options', shared_source)
         self.assertIn('dropPosition(event)', shared_source)
         self.assertIn('subprojectTabsMarkup(options = {})', shared_source)
+        self.assertIn('categorySectionClass(options = {})', shared_source)
+        self.assertIn('categoryToggleMarkup(options = {})', shared_source)
+        self.assertIn('categoryHeaderRowMarkup(options = {})', shared_source)
+        self.assertIn('setCategoryCollapsed(section, collapsed)', shared_source)
         self.assertIn('showbase-line-workspace-add-row', shared_source)
         self.assertIn('reorderSubprojectsAtIndex(rows, sourceId, targetIndex)', shared_source)
         self.assertIn("reorderSubprojects(rows, sourceId, targetId, position = 'before')", shared_source)
         self.assertIn('return showbaseLineWorkspace.subprojectTabsMarkup({', finance_source)
         self.assertIn("handlerPrefix: 'finance'", finance_source)
+        self.assertIn('showbaseLineWorkspace.categoryHeaderRowMarkup({', finance_source)
+        self.assertIn('showbaseLineWorkspace.categoryToggleMarkup({', finance_source)
 
         finance_css_path = os.path.join(
             os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css',
@@ -463,11 +472,35 @@ class CostingFeatureTests(unittest.TestCase):
         )
         with open(template_path, 'r', encoding='utf-8') as template_file:
             template_source = template_file.read()
+        shared_css_index = template_source.index("filename='css/line-workspace.css'")
+        finance_css_index = template_source.index("filename='css/finance.css'")
+        costing_css_index = template_source.index("filename='css/costing.css'")
+        self.assertLess(shared_css_index, finance_css_index)
+        self.assertLess(finance_css_index, costing_css_index)
         shared_index = template_source.index("filename='js/line-workspace.js'")
         finance_index = template_source.index("filename='js/finance.js'")
         costing_index = template_source.index("filename='js/costing.js'")
         self.assertLess(shared_index, finance_index)
         self.assertLess(finance_index, costing_index)
+
+        app_script_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js',
+        )
+        with open(app_script_path, 'r', encoding='utf-8') as app_script_file:
+            app_source = app_script_file.read()
+        self.assertIn('showbaseLineWorkspace.categoryHeaderRowMarkup({', app_source)
+        self.assertIn('showbaseLineWorkspace.categoryToggleMarkup({', app_source)
+        self.assertIn('showbaseLineWorkspace.categorySectionClass({', app_source)
+        self.assertIn('showbase-category-stack', app_source)
+
+        shared_css_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'css', 'line-workspace.css',
+        )
+        with open(shared_css_path, 'r', encoding='utf-8') as shared_css_file:
+            shared_css_source = shared_css_file.read()
+        self.assertIn('gap: 0;', shared_css_source)
+        self.assertIn('margin: 0 !important;', shared_css_source)
+        self.assertIn('.showbase-category-section.is-collapsed tbody,', shared_css_source)
 
     def test_costing_deep_link_and_plan_vendor_card_sources(self):
         app_script_path = os.path.join(

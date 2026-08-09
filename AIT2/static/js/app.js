@@ -32156,7 +32156,8 @@ const deliveryOrderEditorState = {
   catalog: [],
   catalogMatches: [],
   selectedCatalogItem: null,
-  editMode: false
+  editMode: false,
+  collapsedCategories: {}
 };
 let deliveryOrderSubprojectWorkspace = null;
 
@@ -33912,6 +33913,17 @@ function deliveryOrderAddCatalogItem() {
   populateDeliveryItemsPreview(event);
 }
 
+function deliveryOrderToggleCategory(encodedCategory) {
+  const category = decodeURIComponent(encodedCategory);
+  const subprojectId = deliveryOrderActiveSubprojectId();
+  const eventId = currentDeliveryOrderEvent?.id || currentDeliveryOrderEvent?.event_id || '0';
+  const key = `${eventId}::${subprojectId}::${category}`;
+  const collapsed = !deliveryOrderEditorState.collapsedCategories[key];
+  deliveryOrderEditorState.collapsedCategories[key] = collapsed;
+  const section = document.querySelector(`[data-do-category="${CSS.escape(encodedCategory)}"]`);
+  showbaseLineWorkspace.setCategoryCollapsed(section, collapsed);
+}
+
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
   if (!previewContainer) return;
@@ -33958,6 +33970,9 @@ async function populateDeliveryItemsPreview(event) {
   }) : '';
 
   const sectionMarkup = (department, items) => {
+    const encodedDepartment = encodeURIComponent(department);
+    const collapseKey = `${eventId}::${subprojectId}::${department}`;
+    const collapsed = !!deliveryOrderEditorState.collapsedCategories[collapseKey];
     const rows = items.map((item, index) => editMode ? `
       <tr class="do-item-row do-edit-row" draggable="true"
           data-key="${escA(item.key)}"
@@ -33988,14 +34003,21 @@ async function populateDeliveryItemsPreview(event) {
       </tr>
     `).join('');
 
+    const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
+      colspan: editMode ? 3 : 2,
+      className: 'do-category-row',
+      content: `<div class="do-category-heading-main">${showbaseLineWorkspace.categoryToggleMarkup({
+        label: `${department} category`,
+        collapsed,
+        action: `deliveryOrderToggleCategory(${JSON.stringify(encodedDepartment)})`
+      })}<span>${escapeHtml(department)} Department</span></div><span class="do-dept-count">${items.length}</span>`
+    });
     return `
-      <section class="do-department-section">
-        <table class="do-line-table">
+      <section class="${showbaseLineWorkspace.categorySectionClass({ className: 'do-department-section', collapsed })}" data-do-category="${escA(encodedDepartment)}">
+        <table class="do-line-table showbase-category-table">
           <thead>
-            <tr class="do-category-row">
-              <th colspan="${editMode ? 3 : 2}"><span>${escapeHtml(department)} Department</span><span class="do-dept-count">${items.length}</span></th>
-            </tr>
-            <tr class="do-column-row">
+            ${categoryHeader}
+            <tr class="do-column-row showbase-category-column-header">
               <th>Item</th>
               <th>Quantity</th>
               ${editMode ? '<th aria-label="Actions"></th>' : ''}
@@ -34031,7 +34053,7 @@ async function populateDeliveryItemsPreview(event) {
       </div>
       ${deliveryOrderSubprojectTabsMarkup(event)}
       ${addRow ? `<div class="do-composer-toolbar">${addRow}</div>` : ''}
-      ${body}
+      <div class="do-category-list showbase-category-stack">${body}</div>
     </div>
   `;
 
@@ -34049,6 +34071,7 @@ async function populateDeliveryItemsPreview(event) {
     })) return;
     clearDoEdits(eventId);
     deliveryOrderEditorState.activeSubprojectId = '';
+    deliveryOrderEditorState.collapsedCategories = {};
     showNotification('success', 'Delivery Order changes reset');
     await populateDeliveryOrderForm(event);
   });

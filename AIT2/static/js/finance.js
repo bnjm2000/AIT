@@ -3878,20 +3878,26 @@ function financeRenderLineGroups() {
         </tr>
       `;
     }).join('');
-    return `
-      <tr class="finance-department-row ${collapsed ? 'is-collapsed' : ''}"
-        ondragover="financeDragDepartmentOver(event,'${financeEscapeAttr(encoded)}')"
-        ondragleave="financeDragDepartmentLeave(event)"
-        ondrop="financeDropDepartment(event,'${financeEscapeAttr(encoded)}')"
-        ondragend="financeDragDepartmentEnd()">
-        <td colspan="10">
+    const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
+      cellTag: 'td',
+      colspan: 10,
+      className: `finance-department-row ${collapsed ? 'is-collapsed' : ''}`,
+      attributes: `ondragover="financeDragDepartmentOver(event,'${financeEscapeAttr(encoded)}')" ondragleave="financeDragDepartmentLeave(event)" ondrop="financeDropDepartment(event,'${financeEscapeAttr(encoded)}')" ondragend="financeDragDepartmentEnd()"`,
+      content: `<div class="finance-department-heading-main">
           <span class="finance-department-drag-handle" draggable="true" title="Drag department" ondragstart="financeDragDepartmentStart(event,'${financeEscapeAttr(encoded)}')" ondragend="financeDragDepartmentEnd()">&#9776;</span>
-          <button type="button" class="finance-collapse-button" onclick="financeToggleDepartmentCollapse('${financeEscapeAttr(encoded)}')">${collapsed ? '+' : '-'}</button>
+          ${showbaseLineWorkspace.categoryToggleMarkup({
+            label: `${department} category`,
+            collapsed,
+            action: `financeToggleDepartmentCollapse(${JSON.stringify(encoded)})`,
+            className: 'finance-collapse-button'
+          })}
           <span>${financeEscape(department)}</span>
           <button type="button" class="finance-department-rename" title="Rename header" aria-label="Rename ${financeEscapeAttr(department)} header" onclick="financeRenameDepartment('${financeEscapeAttr(encoded)}')">&#9998;</button>
           <small>${itemCount} item${itemCount === 1 ? '' : 's'} &middot; ${financeEscape(financeMoney(subtotal))}</small>
-        </td>
-      </tr>
+        </div>`
+    });
+    return `
+      ${categoryHeader}
       ${collapsed ? '' : `
         ${financeCategoryColumnHeader(department)}
         ${lineRows}
@@ -4693,7 +4699,7 @@ function financeRenderEditor() {
             </button>
           </div>
           <div class="finance-lines-scroll">
-            <table class="finance-lines-table">
+            <table class="finance-lines-table showbase-category-table">
               <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:72px"><col style="width:88px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
               <tbody>${financeRenderLineGroups()}</tbody>
             </table>
