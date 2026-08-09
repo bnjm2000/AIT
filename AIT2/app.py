@@ -240,7 +240,7 @@ SYSTEM_LOG_COMPANY_CODE = 'SYSTEM'
 SYSTEM_LOG_COMPANY_NAME = 'System'
 SUPER_ADMIN_USERNAME = 'bnjm2000'
 ROLE_LABELS = {
-    'owner': 'Admin',
+    'owner': 'Owner',
     'admin': 'Admin',
     'manager': 'Manager',
     'user': 'User',
@@ -1194,10 +1194,12 @@ def _requested_role_from_payload(data, fallback=None):
     return None
 
 
-def _user_payload(user):
+def _user_payload(user, reveal_owner=False):
     role = _effective_user_role(user)
     is_platform_admin = role == 'owner'
-    public_role = 'admin' if is_platform_admin else role
+    public_role = role if reveal_owner and is_platform_admin else (
+        'admin' if is_platform_admin else role
+    )
     company = _company_payload(_user_assigned_company_code(user.username))
     has_sales_access = _user_has_sales_access(user)
     return {
@@ -1535,6 +1537,13 @@ def _user_management_company_for_request(default_company_code):
         username = str(payload.get('username') or '').strip()
         requested = _normalise_company_code(payload.get('companyCode'))
         registry = _load_company_registry()
+        if _is_super_admin_username(username):
+            assigned = _normalise_company_code(
+                registry.get('userCompanies', {}).get(username),
+                registry.get('defaultCompany', DEFAULT_COMPANY_CODE),
+            )
+            if assigned in registry.get('companies', {}):
+                return assigned
         if requested in registry.get('companies', {}) and requested in _user_company_codes(username):
             return requested
         memberships = _user_company_codes(username)
@@ -5784,6 +5793,68 @@ def _bulk_deployments_for_asset(bulk_id):
     return deployments
 
 
+def _inventory_deployments_by_asset():
+    """Build visible active deployment details for the whole inventory once."""
+    deployments = {}
+    if not data_manager:
+        return deployments
+
+    for event in data_manager.events.values():
+        if has_request_context() and not _current_user_can_access_event(event):
+            continue
+
+        common = {
+            'eventId': event.event_id,
+            'eventName': getattr(event, 'name', '') or f"Event {event.event_id}",
+            'startDate': _format_event_date_for_response(
+                getattr(event, 'start_date', '')
+            ),
+            'endDate': _format_event_date_for_response(
+                getattr(event, 'end_date', '')
+            ),
+            '_sortStartDate': getattr(event, 'start_date', '') or '',
+            '_sortEndDate': getattr(event, 'end_date', '') or '',
+        }
+
+        for asset_id in _active_physical_asset_refs_for_event(event):
+            deployments.setdefault(asset_id, []).append({
+                **common,
+                'quantity': 1,
+            })
+
+        bulk_ids = {
+            marker['bulkId']
+            for value in (
+                list(getattr(event, 'actually_prepared', []) or [])
+                + list(getattr(event, 'returned_items', []) or [])
+            )
+            for marker in [_parse_bulk_marker(value)]
+            if marker
+        }
+        for bulk_id in bulk_ids:
+            prepared_qty = _bulk_quantity_for_asset_in_values(
+                getattr(event, 'actually_prepared', []) or [], bulk_id
+            )
+            returned_qty = _bulk_quantity_for_asset_in_values(
+                getattr(event, 'returned_items', []) or [], bulk_id
+            )
+            deployed_qty = max(prepared_qty - returned_qty, 0)
+            if deployed_qty:
+                deployments.setdefault(bulk_id, []).append({
+                    **common,
+                    'quantity': deployed_qty,
+                })
+
+    for rows in deployments.values():
+        rows.sort(key=lambda row: (
+            row['_sortStartDate'], row['_sortEndDate'], row['eventId']
+        ))
+        for row in rows:
+            row.pop('_sortStartDate', None)
+            row.pop('_sortEndDate', None)
+    return deployments
+
+
 def _asset_usage_days(asset_id, events=None, today=None):
     """Return unique elapsed event days on which an asset was deployed."""
     manager = _current_data_manager_object()
@@ -7907,6 +7978,46 @@ def _workforce_row_with_subproject(row, event, options=None):
     return payload
 
 
+def _workforce_worker_date_conflicts(workforce, event_id, manager=None):
+    """Map workers to dates already booked on another event."""
+    manager = manager or _current_data_manager_object()
+    current_event = manager.events.get(int(event_id)) if manager else None
+    if not current_event:
+        return {}
+    start_date = _event_date_for_input(current_event.start_date)
+    end_date = _event_date_for_input(current_event.end_date)
+    conflicts = {}
+    assignments_by_event = workforce.get('assignments') or {}
+    for other_event_key, rows in assignments_by_event.items():
+        other_event_id = _safe_int(other_event_key, 0)
+        if not other_event_id or other_event_id == int(event_id):
+            continue
+        other_event = manager.events.get(other_event_id)
+        if not other_event:
+            continue
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict) or row.get('subjectType') == 'vendor':
+                continue
+            worker_id = str(row.get('freelancerId') or '').strip()
+            if not worker_id:
+                continue
+            for date_value in sorted(set(row.get('workDates') or [])):
+                date_value = str(date_value or '').strip()
+                if not date_value or date_value < start_date or date_value > end_date:
+                    continue
+                date_rows = conflicts.setdefault(worker_id, {}).setdefault(
+                    date_value, []
+                )
+                if any(item['eventId'] == other_event_id for item in date_rows):
+                    continue
+                date_rows.append({
+                    'eventId': other_event_id,
+                    'eventName': other_event.name or f'Event {other_event_id}',
+                    'date': date_value,
+                })
+    return conflicts
+
+
 def _admin_workforce_payload(event_id, manager=None):
     manager = manager or _current_data_manager_object()
     event = manager.events.get(int(event_id))
@@ -7943,11 +8054,23 @@ def _admin_workforce_payload(event_id, manager=None):
         }
 
     subprojects = _workforce_subproject_options(event)
-    assignments = [
-        _workforce_row_with_subproject(row, event, subprojects)
-        for row in event_assignments(workforce, event_id)
-        if isinstance(row, dict)
-    ]
+    worker_date_conflicts = _workforce_worker_date_conflicts(
+        workforce, event_id, manager
+    )
+    assignments = []
+    for stored_row in event_assignments(workforce, event_id):
+        if not isinstance(stored_row, dict):
+            continue
+        row = _workforce_row_with_subproject(stored_row, event, subprojects)
+        worker_conflicts = worker_date_conflicts.get(
+            str(row.get('freelancerId') or ''), {}
+        )
+        row['dateConflicts'] = [
+            conflict
+            for date_value in row.get('workDates') or []
+            for conflict in worker_conflicts.get(str(date_value), [])
+        ]
+        assignments.append(row)
     bookings = []
     for booking in event_bookings(workforce, event_id):
         if not isinstance(booking, dict):
@@ -8005,6 +8128,7 @@ def _admin_workforce_payload(event_id, manager=None):
         ],
         'roles': workforce.get('roles', []),
         'assignments': assignments,
+        'workerDateConflicts': worker_date_conflicts,
         'subprojects': subprojects,
         'transportVendors': _transport_profiles_for_response(workforce),
         'transportLocations': workforce.get('transportLocations', []),
@@ -8815,6 +8939,7 @@ def worker_upload_submission():
                     event_id,
                     freelancer_id,
                     kind,
+                    allow_spreadsheets=kind == 'invoice',
                 )
                 saved_records.append(saved_record)
                 record = {
@@ -9218,6 +9343,52 @@ def delete_workforce_freelancer(freelancer_id):
     return jsonify({'success': True, 'cleanup': cleanup})
 
 
+def _normalise_vendor_costing_rentals(value, existing=None):
+    existing_map = {
+        str(row.get('costingId') or ''): row
+        for row in (existing or [])
+        if isinstance(row, dict) and str(row.get('costingId') or '')
+    }
+    result = []
+    for row in value if isinstance(value, list) else []:
+        if not isinstance(row, dict):
+            continue
+        costing_id = str(row.get('costingId') or '').strip()[:120]
+        if not costing_id or costing_id not in existing_map:
+            continue
+        stored = existing_map[costing_id]
+        result.append({
+            'costingId': costing_id,
+            'projectName': str(stored.get('projectName') or '').strip()[:500],
+            'amount': round(max(0, _safe_float(row.get('amount'), stored.get('amount'))), 2),
+            'updatedAt': now_iso(),
+        })
+    return result
+
+
+def _normalise_vendor_costing_rentals(value, existing=None):
+    existing_map = {
+        str(row.get('costingId') or ''): row
+        for row in (existing or [])
+        if isinstance(row, dict) and str(row.get('costingId') or '')
+    }
+    result = []
+    for row in value if isinstance(value, list) else []:
+        if not isinstance(row, dict):
+            continue
+        costing_id = str(row.get('costingId') or '').strip()[:120]
+        if not costing_id or costing_id not in existing_map:
+            continue
+        stored = existing_map[costing_id]
+        result.append({
+            'costingId': costing_id,
+            'projectName': str(stored.get('projectName') or '').strip()[:500],
+            'amount': round(max(0, _safe_float(row.get('amount'), stored.get('amount'))), 2),
+            'updatedAt': now_iso(),
+        })
+    return result
+
+
 @app.route('/api/workforce/vendors', methods=['POST'])
 @require_admin
 def create_workforce_vendor():
@@ -9275,6 +9446,7 @@ def update_workforce_vendor(vendor_id):
         vendor = find_by_id(workforce.get('vendors'), vendor_id)
         if not vendor:
             return jsonify({'error': 'Vendor not found'}), 404
+        previous_vendor = copy.deepcopy(vendor)
         name = str(payload.get('name', vendor.get('name')) or '').strip()
         if not name:
             return jsonify({'error': 'Vendor name is required'}), 400
@@ -9302,13 +9474,26 @@ def update_workforce_vendor(vendor_id):
             'active': bool(payload.get('active', vendor.get('active', True))),
             'updatedAt': now_iso(),
         })
+        if 'costingRentals' in payload:
+            vendor['costingRentals'] = _normalise_vendor_costing_rentals(
+                payload.get('costingRentals'), vendor.get('costingRentals')
+            )
     saved_workforce = load_workforce(data_folder)
     saved_vendor = find_by_id(saved_workforce.get('vendors'), vendor_id)
+    costing_updates = _sync_workforce_vendor_to_unconfirmed_costings(
+        previous_vendor, saved_vendor or vendor
+    )
     log_action(f"Updated workforce vendor {name}")
     mark_realtime_change('workforce', {
         'action': 'vendor-updated',
         'vendorId': str(vendor_id),
     })
+    if costing_updates:
+        mark_realtime_change('finance', {
+            'action': 'costing-vendor-updated',
+            'vendorId': str(vendor_id),
+            'costingIds': costing_updates,
+        })
     return jsonify({
         'success': True,
         'data': _admin_vendor_payload(saved_vendor or vendor, saved_workforce),
@@ -10188,6 +10373,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
                     event_id,
                     freelancer_id,
                     kind,
+                    allow_spreadsheets=kind == 'invoice',
                 )
                 saved_records.append(saved_record)
                 record = {
@@ -11323,7 +11509,7 @@ def delete_transport_booking(event_id, booking_id):
 def upload_transport_invoice(event_id, booking_id):
     uploaded_file = request.files.get('file')
     if not uploaded_file or not uploaded_file.filename:
-        return jsonify({'error': 'Choose a PDF invoice'}), 400
+        return jsonify({'error': 'Choose an invoice file'}), 400
     saved = None
     try:
         with mutate_workforce(_workforce_folder()) as workforce:
@@ -11338,6 +11524,7 @@ def upload_transport_invoice(event_id, booking_id):
                 event_id,
                 f'transport-{booking_id}',
                 'transport',
+                allow_spreadsheets=True,
             )
             record = {
                 'id': new_id('transport_invoice'),
@@ -13377,6 +13564,7 @@ APP_PAGE_SECTIONS = {
     '/asset-check': 'asset-check',
     '/maintenance-report': 'maintenance-report',
     '/logs': 'logs',
+    '/costing': 'costing',
     '/quotations': 'quotations',
     '/profit-loss': 'profit-loss',
     '/accounting': 'accounting',
@@ -13391,8 +13579,10 @@ APP_ADMIN_PAGE_SECTIONS = {
     'plan', 'compare', 'workforce', 'invoice-claims', 'vehicles', 'logs', 'maintenance-report',
     'users', 'pdf-settings',
 }
-APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting'}
-APP_SALES_PAGE_SECTIONS = {'quotations'}
+APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting', 'costing'}
+APP_SALES_PAGE_SECTIONS = {
+    'quotations', 'costing', 'profit-loss', 'accounting',
+}
 
 
 def _render_app_page(section):
@@ -13405,7 +13595,10 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        finance_js_version=_static_asset_version('js/finance.js'),
         finance_css_version=_static_asset_version('css/finance.css'),
+        costing_css_version=_static_asset_version('css/costing.css'),
+        settings_css_version=_static_asset_version('css/settings.css'),
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
@@ -13413,6 +13606,7 @@ def _render_app_page(section):
         vehicles_css_version=_static_asset_version('css/vehicles.css'),
         accounting_js_version=_static_asset_version('js/accounting.js'),
         accounting_css_version=_static_asset_version('css/accounting.css'),
+        costing_js_version=_static_asset_version('js/costing.js'),
     )
 
 
@@ -13438,6 +13632,7 @@ def index():
 @app.route('/asset-check')
 @app.route('/maintenance-report')
 @app.route('/logs')
+@app.route('/costing')
 @app.route('/quotations')
 @app.route('/profit-loss')
 @app.route('/accounting')
@@ -13471,6 +13666,15 @@ def quotation_detail_page(document_id):
     if not _current_user_has_sales_access():
         return redirect('/events')
     return _render_app_page('quotations')
+
+
+@app.route('/costing/<costing_id>')
+@require_auth
+def costing_detail_page(costing_id):
+    """Serve a costing deep link; document access is enforced by its API."""
+    if not _current_user_is_owner():
+        return redirect('/events')
+    return _render_app_page('costing')
 
 
 @app.route('/events/<int:event_id>')
@@ -13525,6 +13729,13 @@ def login():
 
         requested_company = _normalise_company_code(data.get('companyCode'))
         matching_companies = _user_company_codes(username)
+        if _is_super_admin_username(username):
+            registry = _load_company_registry()
+            primary_company = _normalise_company_code(
+                registry.get('userCompanies', {}).get(username),
+                registry.get('defaultCompany', DEFAULT_COMPANY_CODE),
+            )
+            matching_companies = [primary_company]
         if len(matching_companies) > 1 and requested_company not in matching_companies:
             return jsonify({
                 'success': False,
@@ -13683,13 +13894,13 @@ def get_current_user():
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    payload = _user_payload(user)
+    payload = _user_payload(user, reveal_owner=_current_user_is_owner())
     internal_role = (
         session.get('role', _effective_user_role(user))
         if session.get('self_user_changes_pending')
         else _effective_user_role(user)
     )
-    public_role = 'admin' if internal_role == 'owner' else internal_role
+    public_role = internal_role
     payload.update({
         'role': public_role,
         'isAdmin': _current_user_effective_is_admin(),
@@ -14605,7 +14816,18 @@ def get_users():
                 username = str(user.username or '').strip()
                 if not username:
                     continue
-                global_users[(company_code, username)] = (user, company_code)
+                identity_key = (
+                    ('owner', username.casefold())
+                    if _is_owner_username(username)
+                    else (company_code, username.casefold())
+                )
+                existing = global_users.get(identity_key)
+                assigned_company = _normalise_company_code(
+                    _user_assigned_company_code(username),
+                    DEFAULT_COMPANY_CODE,
+                )
+                if existing is None or company_code == assigned_company:
+                    global_users[identity_key] = (user, company_code)
         user_rows = global_users.values()
     else:
         user_rows = (
@@ -14626,7 +14848,7 @@ def get_users():
         ):
             continue
 
-        payload = _user_payload(user)
+        payload = _user_payload(user, reveal_owner=can_see_owners)
         payload['companyCode'] = company_code
         payload['companyName'] = _company_payload(company_code).get('name')
         users_data.append(payload)
@@ -14938,7 +15160,10 @@ def update_user(username):
         else:
             log_action(f"Updated user {user.username}")
 
-        response_user = _user_payload(user)
+        response_user = _user_payload(
+            user,
+            reveal_owner=_current_user_is_owner(),
+        )
         return jsonify({
             'success': True,
             'message': 'User updated successfully',
@@ -16276,6 +16501,12 @@ def get_event(event_id):
             if linked_quotations:
                 event_data['quotationId'] = linked_quotations[0].get('id') or ''
                 event_data['quotationNumber'] = linked_quotations[0].get('number') or ''
+                linked_costing = _linked_costing_for_quotation(
+                    _load_finance_data(), linked_quotations[0]
+                )
+                event_data['vendorManagement'] = copy.deepcopy(
+                    (linked_costing or {}).get('vendorManagement') or []
+                )
         except Exception as finance_error:
             logger.warning(
                 "Unable to resolve paired quotation for event %s: %s",
@@ -18476,6 +18707,22 @@ def add_container_models_to_event(event_id):
                 }
             grouped[key]['quantity'] += 1
 
+        for asset_id, quantity in _container_bulk_item_map(container).items():
+            asset = data_manager.inventory.get(asset_id)
+            if not asset or getattr(asset, 'is_missing', False) or _is_disposed(asset):
+                skipped.append(asset_id)
+                continue
+            key = _asset_group_key(asset)
+            if key not in grouped:
+                grouped[key] = {
+                    'department': asset.department_code,
+                    'brand': asset.brand,
+                    'model': asset.model_number,
+                    'description': asset.description or '',
+                    'quantity': 0,
+                }
+            grouped[key]['quantity'] += quantity
+
         if not grouped:
             return jsonify({
                 'error': 'Container has no available model contents to add'
@@ -19667,6 +19914,22 @@ def assign_specific_asset_to_model(event_id):
             if not hasattr(event, 'extra_assets'):
                 event.extra_assets = []
 
+            bulk_group = _asset_group_from_item(bulk_asset)
+            required_before = (
+                _event_subproject_required_quantity(subproject, bulk_group)
+                if subproject
+                else _event_model_required_quantity(event, bulk_group)
+            )
+            prepared_before = (
+                _event_subproject_prepared_quantity(event, subproject, bulk_group)
+                if subproject
+                else _event_active_prepared_quantity_for_group(
+                    event,
+                    bulk_group,
+                    include_extra=True,
+                )
+            )
+
             quantity = _safe_int(data.get('quantity'), 0)
             if quantity <= 0:
                 quantity = _bulk_remaining_for_event_group(event, bulk_asset)
@@ -19715,7 +19978,6 @@ def assign_specific_asset_to_model(event_id):
                 )
 
             if subproject:
-                bulk_group = _asset_group_from_item(bulk_asset)
                 room_required = _event_subproject_required_quantity(
                     subproject,
                     bulk_group,
@@ -19745,16 +20007,21 @@ def assign_specific_asset_to_model(event_id):
             _log_event_asset_action(
                 event_id,
                 'prepare',
-                [_event_asset_log_item(asset_id, quantity=quantity)],
+                [_event_asset_log_item(marker, quantity=quantity)],
+            )
+            is_extra = bool(
+                not add_scanned_assets_to_event
+                and prepared_before + quantity > required_before
             )
             response_payload = {
                 'success': True,
                 'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}',
                 'data': {
                     'assetId': marker,
-                    'isExtra': marker in getattr(event, 'extra_assets', []),
+                    'isExtra': is_extra,
                     'addedToEvent': add_scanned_assets_to_event,
                     'addedRequirementUnits': added_requirement_units,
+                    'preparedQuantity': quantity,
                     'healthyQuantityUsed': min(quantity, healthy_quantity),
                     'degradedQuantityUsed': max(quantity - healthy_quantity, 0),
                 }
@@ -20059,7 +20326,7 @@ def prepare_event_model_quantity(event_id):
             if subproject
             else _event_model_required_quantity(event, group)
         )
-        if required <= 0:
+        if required <= 0 and action == 'prepare':
             return jsonify({'error': 'Model requirement not found for this event'}), 404
 
         is_bulk = _event_group_is_bulk_quantity(group)
@@ -21600,6 +21867,7 @@ def get_assets():
         summary_view = request.args.get('view', '').strip().lower() == 'summary'
         assets_data = []
         assigned_assets = get_assigned_assets()
+        deployments_by_asset = _inventory_deployments_by_asset()
         departments = _load_departments()
 
         for asset in data_manager.inventory.values():
@@ -21609,7 +21877,8 @@ def get_assets():
             ]
             is_bulk = _is_bulk_asset(asset)
             total_quantity = max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if is_bulk else 1
-            bulk_deployments = _bulk_deployments_for_asset(asset.asset_id) if is_bulk else []
+            asset_deployments = deployments_by_asset.get(asset.asset_id, [])
+            bulk_deployments = asset_deployments if is_bulk else []
             deployed_quantity = (
                 sum(item['quantity'] for item in bulk_deployments)
                 if is_bulk else (1 if asset.asset_id in assigned_assets else 0)
@@ -21692,6 +21961,7 @@ def get_assets():
                 'preparableQuantity': preparable_quantity,
                 'healthyQuantity': healthy_quantity,
                 'deployedQuantity': deployed_quantity,
+                'deployments': asset_deployments,
                 'bulkDeployments': bulk_deployments if is_bulk else [],
                 'bulkOOCQuantity': bulk_fault_counts['ooc'] if is_bulk else 0,
                 'bulkMissingQuantity': bulk_fault_counts['missing'] if is_bulk else 0,
@@ -22725,9 +22995,18 @@ def _delete_inventory_assets(asset_ids):
         before = len(container.asset_ids)
         container.asset_ids = [ref for ref in container.asset_ids if ref not in deleted_asset_ids]
         removed = before - len(container.asset_ids)
-        if removed:
+        bulk_items = _container_bulk_item_map(container)
+        removed_bulk = sum(
+            quantity for asset_id, quantity in bulk_items.items()
+            if asset_id in deleted_asset_ids
+        )
+        container.bulk_items = {
+            asset_id: quantity for asset_id, quantity in bulk_items.items()
+            if asset_id not in deleted_asset_ids
+        }
+        if removed or removed_bulk:
             result['containersUpdated'] += 1
-            result['containerRefsRemoved'] += removed
+            result['containerRefsRemoved'] += removed + removed_bulk
 
     for asset_id in delete_asset_ids:
         del data_manager.inventory[asset_id]
@@ -22885,6 +23164,10 @@ def bulk_renumber_assets():
                     container.asset_ids,
                     changed_mapping
                 )
+                changed += _replace_container_bulk_item_ids(
+                    container,
+                    changed_mapping,
+                )
                 if changed:
                     containers_updated += 1
                     id_references_changed += changed
@@ -23038,6 +23321,10 @@ def update_asset(asset_id):
             return jsonify({'error': 'Invalid applyTo value'}), 400
 
         old_group = _asset_group_from_item(asset)
+        old_group_assets = [
+            item for item in data_manager.inventory.values()
+            if _asset_matches_group(item, old_group)
+        ]
 
         new_asset_id = (
             data.get('id') or
@@ -23237,6 +23524,10 @@ def update_asset(asset_id):
                     old_asset_id,
                     new_asset_id
                 )
+                container_changed += _replace_container_bulk_item_ids(
+                    container,
+                    {old_asset_id: new_asset_id},
+                )
 
                 if container_changed:
                     id_references_changed += container_changed
@@ -23395,7 +23686,10 @@ def update_asset(asset_id):
             old_group,
             new_group,
             target_asset_ids=target_asset_ids_before,
-            apply_group_change=(apply_to == 'allSimilar' and group_changed),
+            apply_group_change=(
+                group_changed
+                and (apply_to == 'allSimilar' or len(old_group_assets) == 1)
+            ),
         )
 
         invalidate_cache()
@@ -24507,8 +24801,189 @@ def _container_serial_number(container):
     return str(getattr(container, 'serial_number', '') or '').strip()
 
 
+def _container_bulk_item_map(container):
+    raw_items = getattr(container, 'bulk_items', {}) or {}
+    if isinstance(raw_items, dict):
+        entries = raw_items.items()
+    elif isinstance(raw_items, list):
+        entries = (
+            (
+                item.get('assetId') or item.get('bulkId') or item.get('id'),
+                item.get('quantity'),
+            )
+            for item in raw_items
+            if isinstance(item, dict)
+        )
+    else:
+        entries = []
+
+    cleaned = {}
+    for asset_id, quantity in entries:
+        clean_id = str(asset_id or '').strip()
+        clean_quantity = _safe_int(quantity, 0)
+        if clean_id and clean_quantity > 0:
+            cleaned[clean_id] = clean_quantity
+    return cleaned
+
+
+def _container_inventory_asset_ids(container):
+    seen = set()
+    result = []
+    for asset_id in [
+        *(getattr(container, 'asset_ids', []) or []),
+        *_container_bulk_item_map(container).keys(),
+    ]:
+        clean_id = str(asset_id or '').strip()
+        if clean_id and clean_id not in seen:
+            seen.add(clean_id)
+            result.append(clean_id)
+    return result
+
+
+def _container_content_quantity(container):
+    return len(getattr(container, 'asset_ids', []) or []) + sum(
+        _container_bulk_item_map(container).values()
+    )
+
+
+def _container_bulk_allocated_quantity(asset_id, exclude_container_id=''):
+    clean_excluded_id = str(exclude_container_id or '').strip()
+    return sum(
+        _container_bulk_item_map(container).get(asset_id, 0)
+        for container in data_manager.containers.values()
+        if str(getattr(container, 'container_id', '') or '').strip() != clean_excluded_id
+    )
+
+
+def _normalise_requested_container_asset_ids(raw_asset_ids):
+    if isinstance(raw_asset_ids, list):
+        values = [str(value or '').strip() for value in raw_asset_ids]
+    elif isinstance(raw_asset_ids, str):
+        values = [
+            value.strip()
+            for value in raw_asset_ids.replace(',', '\n').splitlines()
+        ]
+    elif raw_asset_ids is None:
+        return []
+    else:
+        raise ValueError('assetIds must be a list or string')
+
+    cleaned = []
+    seen = set()
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+    return cleaned
+
+
+def _normalise_requested_container_bulk_items(raw_bulk_items):
+    if raw_bulk_items is None:
+        return {}
+    if isinstance(raw_bulk_items, dict):
+        entries = raw_bulk_items.items()
+    elif isinstance(raw_bulk_items, list):
+        entries = (
+            (
+                item.get('assetId') or item.get('bulkId') or item.get('id'),
+                item.get('quantity'),
+            )
+            for item in raw_bulk_items
+            if isinstance(item, dict)
+        )
+    else:
+        raise ValueError('bulkItems must be a list or object')
+
+    result = {}
+    for asset_id, quantity in entries:
+        clean_id = str(asset_id or '').strip()
+        clean_quantity = _safe_int(quantity, 0)
+        if not clean_id:
+            continue
+        if clean_quantity <= 0:
+            raise ValueError('Bulk container quantities must be greater than 0')
+        result[clean_id] = clean_quantity
+    return result
+
+
+def _normalise_container_contents(
+    raw_asset_ids,
+    raw_bulk_items,
+    *,
+    existing_container=None,
+    exclude_container_id='',
+):
+    if raw_asset_ids is None and existing_container is not None:
+        requested_asset_ids = list(existing_container.asset_ids)
+    else:
+        requested_asset_ids = _normalise_requested_container_asset_ids(raw_asset_ids)
+
+    if raw_bulk_items is None and existing_container is not None:
+        bulk_items = _container_bulk_item_map(existing_container)
+    else:
+        bulk_items = _normalise_requested_container_bulk_items(raw_bulk_items)
+
+    specific_asset_ids = []
+    missing = []
+    for asset_id in requested_asset_ids:
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            missing.append(asset_id)
+        elif _is_bulk_asset(asset):
+            # Legacy clients could only put the internal bulk ID in assetIds.
+            # Preserve that content as one bulk unit until an explicit quantity
+            # is supplied through bulkItems.
+            bulk_items.setdefault(asset_id, 1)
+        else:
+            specific_asset_ids.append(asset_id)
+
+    for asset_id, quantity in bulk_items.items():
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            missing.append(asset_id)
+            continue
+        if not _is_bulk_asset(asset):
+            raise ValueError(f'Asset {asset_id} is not a bulk asset')
+        inventory_quantity = max(1, _safe_int(getattr(asset, 'quantity', 1), 1))
+        allocated_elsewhere = _container_bulk_allocated_quantity(
+            asset_id,
+            exclude_container_id,
+        )
+        if allocated_elsewhere + quantity > inventory_quantity:
+            available = max(0, inventory_quantity - allocated_elsewhere)
+            label = _asset_log_label(asset) or 'bulk asset'
+            raise ValueError(
+                f'Only {available} unit(s) of {label} remain available for this container'
+            )
+
+    if missing:
+        unique_missing = list(dict.fromkeys(missing))
+        preview = ', '.join(unique_missing[:15])
+        more = '' if len(unique_missing) <= 15 else f' (+{len(unique_missing) - 15} more)'
+        raise ValueError(f'Unknown assets in container: {preview}{more}')
+    if not specific_asset_ids and not bulk_items:
+        raise ValueError('Container must include at least 1 asset or bulk quantity')
+
+    return specific_asset_ids, bulk_items
+
+
+def _replace_container_bulk_item_ids(container, replacements):
+    existing = _container_bulk_item_map(container)
+    rebuilt = {}
+    changed = 0
+    for asset_id, quantity in existing.items():
+        replacement = replacements.get(asset_id, asset_id)
+        if replacement != asset_id:
+            changed += 1
+        rebuilt[replacement] = rebuilt.get(replacement, 0) + quantity
+    container.bulk_items = rebuilt
+    return changed
+
+
 def _container_response(container):
     serial_number = _container_serial_number(container)
+    bulk_items = _container_bulk_item_map(container)
     maintenance_records = [
         _maintenance_log_for_response(log)
         for log in (getattr(container, 'maintenance_logs', []) or [])
@@ -24518,14 +24993,45 @@ def _container_response(container):
         'serialNumber': serial_number,
         'serial': serial_number,
         'assetIds': container.asset_ids,
-        'assetCount': len(container.asset_ids),
+        'bulkItems': [
+            {'assetId': asset_id, 'quantity': quantity}
+            for asset_id, quantity in bulk_items.items()
+        ],
+        'assetCount': _container_content_quantity(container),
+        'specificAssetCount': len(container.asset_ids),
+        'bulkQuantity': sum(bulk_items.values()),
         'maintenanceLogs': [
             maintenance_log_to_display_string(log, include_changes=False)
             for log in maintenance_records
         ],
         'maintenanceLogRecords': maintenance_records,
         'maintenanceLogCount': len(maintenance_records),
+        'photoUrl': (
+            url_for('container_photo', container_id=container.container_id)
+            if getattr(container, 'photo_filename', '')
+            else ''
+        ),
+        'photoOriginalName': getattr(container, 'photo_original_name', '') or '',
     }
+
+
+def _container_media_folder():
+    folder = os.path.join(data_manager.data_folder, 'ContainerMedia')
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def _delete_container_photo(container):
+    filename = os.path.basename(
+        str(getattr(container, 'photo_filename', '') or '')
+    )
+    if filename:
+        path = os.path.join(_container_media_folder(), filename)
+        if os.path.isfile(path):
+            os.remove(path)
+    container.photo_filename = ''
+    container.photo_mime_type = ''
+    container.photo_original_name = ''
 
 
 def _request_container_serial(data):
@@ -24592,6 +25098,7 @@ def containers_collection():
         container_id = (data.get('id') or data.get('containerId') or '').strip()
         serial_number = _request_container_serial(data)
         raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
+        raw_bulk_items = data.get('bulkItems') if 'bulkItems' in data else data.get('bulk_items')
 
         if not container_id:
             return jsonify({'error': 'Container id is required'}), 400
@@ -24608,43 +25115,27 @@ def containers_collection():
             if conflict:
                 return jsonify({'error': f"Container serial number conflicts with existing {conflict}"}), 409
 
-        # normalize asset IDs (accept list OR newline/comma separated string)
-        asset_ids_in = []
-        if isinstance(raw_asset_ids, list):
-            asset_ids_in = [str(x).strip() for x in raw_asset_ids]
-        elif isinstance(raw_asset_ids, str):
-            asset_ids_in = [x.strip() for x in raw_asset_ids.replace(',', '\n').splitlines()]
-        elif raw_asset_ids is None:
-            asset_ids_in = []
-        else:
-            return jsonify({'error': 'assetIds must be a list or string'}), 400
+        try:
+            cleaned, bulk_items = _normalise_container_contents(
+                raw_asset_ids,
+                raw_bulk_items,
+            )
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
 
-        # de-dupe (preserve order)
-        cleaned = []
-        seen = set()
-        for aid in asset_ids_in:
-            if not aid:
-                continue
-            if aid in seen:
-                continue
-            cleaned.append(aid)
-            seen.add(aid)
-
-        if not cleaned:
-            return jsonify({'error': 'Container must include at least 1 asset ID'}), 400
-
-        # validate assets exist
-        missing = [aid for aid in cleaned if aid not in data_manager.inventory]
-        if missing:
-            preview = ", ".join(missing[:15])
-            more = "" if len(missing) <= 15 else f" (+{len(missing)-15} more)"
-            return jsonify({'error': f"Unknown asset IDs in container: {preview}{more}"}), 400
-
-        new_container = Container(container_id, cleaned, serial_number)
+        new_container = Container(
+            container_id,
+            cleaned,
+            serial_number,
+            bulk_items=bulk_items,
+        )
         data_manager.containers[container_id] = new_container
         data_manager.save_containers()
         invalidate_cache()
-        log_action(f"Created container {container_id} ({len(cleaned)} assets)")
+        log_action(
+            f"Created container {container_id} "
+            f"({_container_content_quantity(new_container)} asset units)"
+        )
 
         return jsonify({
             'success': True,
@@ -24677,7 +25168,7 @@ def maintain_container(container_id):
 
         current_assets = []
         seen_asset_ids = set()
-        for asset_id in getattr(container, 'asset_ids', []) or []:
+        for asset_id in _container_inventory_asset_ids(container):
             asset_id = str(asset_id or '').strip()
             if asset_id and asset_id not in seen_asset_ids and asset_id in data_manager.inventory:
                 seen_asset_ids.add(asset_id)
@@ -24711,6 +25202,7 @@ def maintain_container(container_id):
             'containerId': container.container_id,
             'containerLogId': log_id,
             'assetCount': len(current_assets),
+            'contentQuantity': _container_content_quantity(container),
         }
         source.update(attribution_source)
 
@@ -24766,6 +25258,63 @@ def maintain_container(container_id):
         return jsonify({'error': f'Failed to log container maintenance: {str(exc)}'}), 500
 
 
+@app.route('/api/containers/<path:container_id>/photo', methods=['GET', 'POST', 'DELETE'])
+@require_auth
+def container_photo(container_id):
+    container = _find_container_by_lookup(unquote_plus(container_id).strip())
+    if not container:
+        return jsonify({'error': 'Container not found'}), 404
+
+    if request.method == 'GET':
+        filename = os.path.basename(
+            str(getattr(container, 'photo_filename', '') or '')
+        )
+        path = os.path.join(_container_media_folder(), filename) if filename else ''
+        if not path or not os.path.isfile(path):
+            return jsonify({'error': 'Container photo not found'}), 404
+        return send_file(
+            path,
+            mimetype=getattr(container, 'photo_mime_type', '') or None,
+            max_age=3600,
+        )
+
+    if request.method == 'DELETE':
+        _delete_container_photo(container)
+        data_manager.save_containers()
+        invalidate_cache()
+        return jsonify({'success': True, 'data': _container_response(container)})
+
+    uploaded = request.files.get('photo')
+    if not uploaded or not uploaded.filename:
+        return jsonify({'error': 'Choose a container photo'}), 400
+    uploaded.stream.seek(0, os.SEEK_END)
+    size = uploaded.stream.tell()
+    uploaded.stream.seek(0)
+    if size > 5 * 1024 * 1024:
+        return jsonify({'error': 'Container photo must not exceed 5 MB'}), 400
+    mime = str(uploaded.mimetype or '').lower()
+    allowed = {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+        'image/gif': '.gif',
+    }
+    extension = allowed.get(mime)
+    if not extension:
+        return jsonify({'error': 'Use a JPG, PNG, WebP, or GIF image'}), 400
+
+    _delete_container_photo(container)
+    filename = f"container_{secrets.token_hex(12)}{extension}"
+    uploaded.save(os.path.join(_container_media_folder(), filename))
+    container.photo_filename = filename
+    container.photo_mime_type = mime
+    container.photo_original_name = os.path.basename(uploaded.filename)[:255]
+    data_manager.save_containers()
+    invalidate_cache()
+    log_action(f"Updated photo for container {container.container_id}")
+    return jsonify({'success': True, 'data': _container_response(container)})
+
+
 @app.route('/api/containers/<path:container_id>', methods=['GET', 'PUT', 'DELETE'])
 @require_auth
 def container_resource(container_id):
@@ -24794,38 +25343,16 @@ def container_resource(container_id):
             serial_number = _request_container_serial(data) if serial_provided else _container_serial_number(container)
 
             raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
-
-            # normalize asset IDs only if provided; otherwise keep existing
-            if raw_asset_ids is None:
-                cleaned = list(container.asset_ids)
-            else:
-                asset_ids_in = []
-                if isinstance(raw_asset_ids, list):
-                    asset_ids_in = [str(x).strip() for x in raw_asset_ids]
-                elif isinstance(raw_asset_ids, str):
-                    asset_ids_in = [x.strip() for x in raw_asset_ids.replace(',', '\n').splitlines()]
-                else:
-                    return jsonify({'error': 'assetIds must be a list or string'}), 400
-
-                cleaned = []
-                seen = set()
-                for aid in asset_ids_in:
-                    if not aid:
-                        continue
-                    if aid in seen:
-                        continue
-                    cleaned.append(aid)
-                    seen.add(aid)
-
-            if not cleaned:
-                return jsonify({'error': 'Container must include at least 1 asset ID'}), 400
-
-            # validate assets exist
-            missing = [aid for aid in cleaned if aid not in data_manager.inventory]
-            if missing:
-                preview = ", ".join(missing[:15])
-                more = "" if len(missing) <= 15 else f" (+{len(missing)-15} more)"
-                return jsonify({'error': f"Unknown asset IDs in container: {preview}{more}"}), 400
+            raw_bulk_items = data.get('bulkItems') if 'bulkItems' in data else data.get('bulk_items')
+            try:
+                cleaned, bulk_items = _normalise_container_contents(
+                    raw_asset_ids,
+                    raw_bulk_items,
+                    existing_container=container,
+                    exclude_container_id=container_id,
+                )
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
 
             old_id = container.container_id
 
@@ -24848,14 +25375,21 @@ def container_resource(container_id):
 
             # update asset list
             container.asset_ids = cleaned
+            container.bulk_items = bulk_items
             container.serial_number = serial_number
             data_manager.save_containers()
             invalidate_cache()
 
             if old_id != container_id:
-                log_action(f"Renamed container {old_id} -> {container_id} ({len(cleaned)} assets)")
+                log_action(
+                    f"Renamed container {old_id} -> {container_id} "
+                    f"({_container_content_quantity(container)} asset units)"
+                )
             else:
-                log_action(f"Updated container {container_id} ({len(cleaned)} assets)")
+                log_action(
+                    f"Updated container {container_id} "
+                    f"({_container_content_quantity(container)} asset units)"
+                )
 
             return jsonify({
                 'success': True,
@@ -24866,6 +25400,7 @@ def container_resource(container_id):
         if not _current_user_is_admin():
             return jsonify({'error': 'Admin privileges required'}), 403
 
+        _delete_container_photo(container)
         del data_manager.containers[container_id]
         data_manager.save_containers()
         invalidate_cache()
@@ -25447,7 +25982,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 10
+FINANCE_VERSION = 14
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
@@ -25528,7 +26063,9 @@ def _finance_defaults():
     return {
         'version': FINANCE_VERSION,
         'documents': [],
+        'linkedLineItems': {},
         'priceBook': {},
+        'costBook': {},
         'profitLoss': {
             'expenses': {},
             'commissions': {},
@@ -25661,7 +26198,7 @@ def _finance_system_name(department, value=''):
         return 'Manpower'
     if base_name.lower() in {'transport', 'transportation'}:
         return 'Transportation'
-    return (f'{base_name} System' if base_name else 'Unknown System')[:200]
+    return (base_name or 'Unknown')[:200]
 
 
 def _finance_is_optional_category(value):
@@ -25686,7 +26223,7 @@ def _finance_adjustment_counts_toward_total(adjustment):
 def _finance_adjustment_system_name(value):
     name = re.sub(r'\s+', ' ', str(value or '').strip())
     if not name:
-        return 'Unknown System'
+        return 'Unknown'
     base_name = re.sub(
         r'\s+(?:department|system)$',
         '',
@@ -25700,10 +26237,10 @@ def _finance_adjustment_system_name(value):
     if re.search(r'\s+department$', name, flags=re.IGNORECASE):
         return re.sub(
             r'\s+department$',
-            ' System',
+            '',
             name,
             flags=re.IGNORECASE,
-        )[:200]
+        ).strip()[:200]
     return name[:200]
 
 
@@ -25733,6 +26270,20 @@ def _finance_active_departments(lines):
         if name and name not in departments:
             departments.append(name)
     return departments
+
+
+def _finance_department_identity(department, department_code=''):
+    name, code = _finance_department_details(department, department_code)
+    normalised_code = _normalise_department_code(code)
+    if normalised_code and normalised_code != 'UN':
+        return f'code:{normalised_code.casefold()}'
+    base_name = re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        str(name or '').strip(),
+        flags=re.IGNORECASE,
+    ).strip().casefold()
+    return f'name:{base_name or "unknown"}'
 
 
 def _finance_parse_number(number, fallback_sequence=1):
@@ -25781,12 +26332,97 @@ def _finance_payment_due_date(sent_date, payment_terms, default_days=30):
     return (sent + timedelta(days=days)).strftime('%Y-%m-%d'), days
 
 
+def _finance_price_book_line_key(line):
+    line = line if isinstance(line, dict) else {}
+    catalog_key = str(line.get('catalogKey') or '').strip()
+    if catalog_key:
+        return catalog_key
+    description = re.sub(
+        r'\s+', ' ', str(line.get('description') or '').strip().lower()
+    )
+    return f'custom:{description}' if description else ''
+
+
+def _finance_price_book_payload(line, owner, updated_at=''):
+    line = line if isinstance(line, dict) else {}
+    if line.get('groupId'):
+        return None
+    description = str(line.get('description') or '').strip()
+    unit_price = round(max(0, _safe_float(line.get('unitPrice'), 0)), 2)
+    if not description or unit_price <= 0:
+        return None
+    return {
+        'description': description[:1000],
+        'brand': str(line.get('brand') or '').strip()[:240],
+        'model': str(line.get('model') or '').strip()[:240],
+        'unitPrice': unit_price,
+        'department': line.get('department') or 'UN',
+        'departmentCode': line.get('departmentCode') or '',
+        'uom': line.get('uom') or 'units',
+        'owner': str(owner or '').strip().lower(),
+        'updatedAt': str(updated_at or ''),
+    }
+
+
+def _backfill_finance_price_book(data):
+    """Persist existing quotation rates without replacing newer remembered edits."""
+    price_book = data.setdefault('priceBook', {})
+    candidates = {}
+    documents = [
+        row for row in data.get('documents') or []
+        if isinstance(row, dict) and row.get('type') == 'quotation'
+    ]
+    documents.sort(key=lambda row: (
+        str(row.get('updatedAt') or row.get('createdAt') or ''),
+        str(row.get('id') or ''),
+    ))
+    for document in documents:
+        owner = str(
+            document.get('salespersonUsername')
+            or document.get('createdBy')
+            or _finance_owner_username()
+        ).strip().lower()
+        if not owner:
+            continue
+        updated_at = document.get('updatedAt') or document.get('createdAt') or ''
+        for line in document.get('lineItems') or []:
+            key = _finance_price_book_line_key(line)
+            payload = _finance_price_book_payload(line, owner, updated_at)
+            if not key or not payload:
+                continue
+            primary_key = f'{owner}::{key}'
+            existing_primary = price_book.get(primary_key)
+            if isinstance(existing_primary, dict) and existing_primary.get('deleted'):
+                continue
+            candidates[primary_key] = payload
+            for asset_id in line.get('sourceAssetIds') or []:
+                asset_id = str(asset_id or '').strip().lower()
+                if asset_id:
+                    candidates[f'{owner}::asset:{asset_id}'] = payload
+
+    changed = False
+    for key, payload in candidates.items():
+        if key in price_book:
+            continue
+        price_book[key] = payload
+        changed = True
+    return changed
+
+
 def _migrate_finance_data(data):
     changed = _safe_int(data.get('version'), 1) < FINANCE_VERSION
     owner = _finance_owner_username()
     settings = _load_pdf_settings()
     quote_prefix = str(settings.get('quotationPrefix') or 'QT').upper()
     documents = data.get('documents') or []
+
+    if not isinstance(data.get('costBook'), dict):
+        data['costBook'] = {}
+        changed = True
+
+    if not isinstance(data.get('linkedLineItems'), dict):
+        data['linkedLineItems'] = {}
+        changed = True
 
     profit_loss = data.get('profitLoss')
     if not isinstance(profit_loss, dict):
@@ -25938,6 +26574,21 @@ def _migrate_finance_data(data):
             )
             changed = True
 
+        category_by_department = {}
+        for line in document.get('lineItems') or []:
+            if not isinstance(line, dict) or not str(line.get('systemName') or '').strip():
+                continue
+            category_key = (
+                str(line.get('subprojectId') or 'main'),
+                _finance_department_identity(
+                    line.get('department'), line.get('departmentCode')
+                ),
+            )
+            category_by_department.setdefault(
+                category_key,
+                _finance_system_name(line.get('department'), line.get('systemName')),
+            )
+
         department_names = []
         for line in document.get('lineItems') or []:
             if not isinstance(line, dict):
@@ -25950,7 +26601,14 @@ def _migrate_finance_data(data):
                 line['department'] = name
                 line['departmentCode'] = code
                 changed = True
-            system_name = _finance_system_name(name, line.get('systemName'))
+            category_key = (
+                str(line.get('subprojectId') or 'main'),
+                _finance_department_identity(name, code),
+            )
+            system_name = _finance_system_name(
+                name,
+                line.get('systemName') or category_by_department.get(category_key),
+            )
             if line.get('systemName') != system_name:
                 line['systemName'] = system_name
                 changed = True
@@ -25995,6 +26653,8 @@ def _migrate_finance_data(data):
             document['adjustments'] = cleaned_adjustments
             changed = True
 
+    if _backfill_finance_price_book(data):
+        changed = True
     if data.get('version') != FINANCE_VERSION:
         data['version'] = FINANCE_VERSION
         changed = True
@@ -26028,22 +26688,42 @@ def _load_finance_data():
             data['documents'] = loaded['documents']
         if isinstance(loaded.get('priceBook'), dict):
             data['priceBook'] = loaded['priceBook']
+        if isinstance(loaded.get('costBook'), dict):
+            data['costBook'] = loaded['costBook']
+        if isinstance(loaded.get('linkedLineItems'), dict):
+            data['linkedLineItems'] = loaded['linkedLineItems']
         if isinstance(loaded.get('profitLoss'), dict):
             data['profitLoss'] = loaded['profitLoss']
         if isinstance(loaded.get('accounting'), dict):
             data['accounting'] = loaded['accounting']
         data['version'] = loaded.get('version', 1)
-    if _safe_int(data.get('version'), 1) < FINANCE_VERSION:
+    loaded_version = _safe_int(data.get('version'), 1)
+    if loaded_version < FINANCE_VERSION:
         if _migrate_finance_data(data):
+            _save_finance_data(data)
+    else:
+        _validate_linked_line_store(data)
+        _hydrate_linked_line_documents(data, require_all_pairs=True)
+        _validate_linked_line_store(data, require_projections=True)
+        if _ensure_quotation_costings(data):
             _save_finance_data(data)
     return data
 
 
 def _save_finance_data(data):
+    _ensure_quotation_costings(data)
+    _capture_linked_line_items(data)
+    # Capturing may merge or split quotation-visible groups. Re-project both
+    # documents from the new canonical store before validating their identity
+    # and order, even when the caller supplied existing line projections.
+    _hydrate_linked_line_documents(data, require_all_pairs=True)
+    _validate_linked_line_store(data, require_projections=True)
     payload = {
         'version': FINANCE_VERSION,
-        'documents': data.get('documents') or [],
+        'documents': _finance_persisted_documents(data),
+        'linkedLineItems': copy.deepcopy(data.get('linkedLineItems') or {}),
         'priceBook': data.get('priceBook') or {},
+        'costBook': data.get('costBook') or {},
         'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {
             'expenses': {},
             'commissions': {},
@@ -26122,6 +26802,15 @@ def _finance_line_matches_inventory_group(line, catalog_key, group, target_asset
     )
 
 
+def _finance_inventory_editable_quotation(document):
+    """Return whether inventory edits may update a live finance draft."""
+    return (
+        isinstance(document, dict)
+        and str(document.get('type') or '').strip().lower() in {'quotation', 'costing'}
+        and str(document.get('status') or 'draft').strip().lower() == 'draft'
+    )
+
+
 def _finance_sync_inventory_edit(
     old_asset_id,
     new_asset_id,
@@ -26130,7 +26819,7 @@ def _finance_sync_inventory_edit(
     target_asset_ids=None,
     apply_group_change=False,
 ):
-    """Keep linked quotation lines aligned with intentional all-similar inventory edits."""
+    """Keep live draft quotation lines aligned with intentional inventory edits."""
     id_mapping = {}
     old_asset_id = str(old_asset_id or '').strip()
     new_asset_id = str(new_asset_id or '').strip()
@@ -26173,6 +26862,8 @@ def _finance_sync_inventory_edit(
 
         if id_mapping:
             for document in finance_data.get('documents') or []:
+                if not _finance_inventory_editable_quotation(document):
+                    continue
                 document_changed = False
                 for line in document.get('lineItems') or []:
                     source_ids = list(line.get('sourceAssetIds') or [])
@@ -26203,6 +26894,8 @@ def _finance_sync_inventory_edit(
                 new_group.get('description'),
             ) or str(new_group.get('model') or '').strip() or 'Inventory item'
             for document in finance_data.get('documents') or []:
+                if not _finance_inventory_editable_quotation(document):
+                    continue
                 document_changed = False
                 for line in document.get('lineItems') or []:
                     if not _finance_line_matches_inventory_group(
@@ -26220,12 +26913,13 @@ def _finance_sync_inventory_edit(
                     line['description'] = new_description
                     document_changed = True
                 if document_changed:
-                    document['departments'] = _finance_active_departments(document.get('lineItems') or [])
                     document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
                     document['updatedBy'] = _finance_current_username()
-                    _recalculate_finance_adjustments(document)
-                    _apply_locked_total_adjustment(document)
-                    document['totals'] = _finance_totals(document)
+                    if document.get('type') == 'quotation':
+                        document['departments'] = _finance_active_departments(document.get('lineItems') or [])
+                        _recalculate_finance_adjustments(document)
+                        _apply_locked_total_adjustment(document)
+                        document['totals'] = _finance_totals(document)
                     changed = True
 
             for price_key, payload in list(price_book.items()):
@@ -26249,8 +26943,7 @@ def _finance_sync_inventory_edit(
 
 
 def _finance_custom_price_key(description):
-    compact = re.sub(r'\s+', ' ', str(description or '').strip().lower())
-    return f"custom:{compact}"
+    return _finance_price_book_line_key({'description': description})
 
 
 def _normalise_finance_salutation(value):
@@ -26432,6 +27125,10 @@ def _normalise_finance_line(value):
     legacy_parts = catalog_key.split('|')
     brand = str(value.get('brand') or (legacy_parts[1] if len(legacy_parts) > 2 else '')).strip()
     model = str(value.get('model') or (legacy_parts[2] if len(legacy_parts) > 2 else '')).strip()
+    group_display_fields = [
+        field for field in (value.get('groupDisplayFields') or [])
+        if field in {'brand', 'model', 'description'}
+    ]
     return {
         'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
         'catalogKey': catalog_key,
@@ -26443,6 +27140,14 @@ def _normalise_finance_line(value):
         'departmentCode': department_code,
         'systemName': _finance_system_name(department, value.get('systemName')),
         'days': round(days, 4),
+        'costingMultiplierLabel': (
+            'Day'
+            if str(value.get('costingMultiplierLabel') or '').strip().lower()
+            == 'day'
+            else 'Mult'
+            if str(value.get('costingMultiplierLabel') or '').strip()
+            else 'Day'
+        ),
         'quantity': round(quantity, 4),
         'uom': uom,
         'unitPrice': round(unit_price, 2),
@@ -26456,10 +27161,135 @@ def _normalise_finance_line(value):
             else ''
         ),
         'customCompany': str(value.get('customCompany') or '').strip()[:200],
+        'groupId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('groupId') or '')
+        )[:80],
+        'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
+        'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
+        'groupCustomText': bool(value.get('groupCustomText')),
+        'groupItemQuantity': round(max(0, _safe_float(
+            value.get('groupItemQuantity'), quantity
+        )), 4),
+        'groupHeaderQuantity': round(max(0, _safe_float(
+            value.get('groupHeaderQuantity'), 1
+        )), 4),
+        'groupLeader': bool(value.get('groupLeader')),
+        'groupItemDays': round(max(0, _safe_float(
+            value.get('groupItemDays'), days
+        )), 4),
+        'groupItemUom': str(value.get('groupItemUom') or uom).strip()[:32] or 'units',
+        'groupItemUnitPrice': round(max(0, _safe_float(
+            value.get('groupItemUnitPrice'), unit_price
+        )), 2),
+        'groupItemDiscountPercent': round(max(-9999, min(100, _safe_float(
+            value.get('groupItemDiscountPercent'), discount
+        ))), 4),
+        'groupItemTotalMode': (
+            'amount'
+            if str(value.get('groupItemTotalMode') or '').strip().lower() == 'amount'
+            else total_mode
+        ),
+        'groupItemTotal': round(max(0, _safe_float(
+            value.get('groupItemTotal'), total
+        )), 2),
+        'groupItemPriceContribution': round(max(0, _safe_float(
+            value.get('groupItemPriceContribution'), 0
+        )), 6),
+        'groupItemCommercialStored': bool(
+            value.get('groupItemCommercialStored')
+            or 'groupItemUnitPrice' in value
+        ),
         'subprojectId': re.sub(
             r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
         )[:80] or 'main',
     }
+
+
+def _normalise_finance_line_groups(lines):
+    groups = {}
+    for line in lines or []:
+        group_id = str(line.get('groupId') or '')
+        if group_id:
+            groups.setdefault(
+                (str(line.get('subprojectId') or 'main'), group_id), []
+            ).append(line)
+
+    for group_lines in groups.values():
+        explicit_leader = next(
+            (line for line in group_lines if line.get('groupLeader')), None
+        )
+        leader = explicit_leader or group_lines[0]
+        if explicit_leader:
+            header_days = max(0, _safe_float(leader.get('days'), 1))
+            header_quantity = max(0, _safe_float(leader.get('quantity'), 1))
+            header_uom = leader.get('uom') or 'lot'
+            header_unit_price = max(0, _safe_float(leader.get('unitPrice'), 0))
+            header_discount = max(
+                -9999, min(100, _safe_float(leader.get('discountPercent'), 0))
+            )
+            header_total_mode = leader.get('totalMode') or 'calculated'
+            calculated_total = (
+                header_days * header_quantity * header_unit_price
+                * (1 - header_discount / 100)
+            )
+            header_total = (
+                max(0, _safe_float(leader.get('total'), calculated_total))
+                if header_total_mode == 'amount'
+                else calculated_total
+            )
+        else:
+            # Legacy groups priced each child separately. Preserve their total
+            # while migrating to one commercial group header.
+            header_days = max(0, _safe_float(leader.get('days'), 1))
+            header_quantity = 1
+            header_uom = 'lot'
+            header_discount = 0
+            header_total_mode = 'amount'
+            header_total = sum(
+                max(0, _safe_float(line.get('total'), 0))
+                for line in group_lines
+            )
+            divisor = header_days * header_quantity
+            header_unit_price = header_total / divisor if divisor else header_total
+
+        header_system_name = leader.get('systemName') or _finance_system_name(
+            leader.get('department')
+        )
+
+        for line in group_lines:
+            if not line.get('groupItemCommercialStored'):
+                if explicit_leader:
+                    line.update({
+                        'groupItemDays': 1,
+                        'groupItemUom': 'units',
+                        'groupItemUnitPrice': 0,
+                        'groupItemDiscountPercent': 0,
+                        'groupItemTotalMode': 'calculated',
+                        'groupItemTotal': 0,
+                        'groupItemPriceContribution': 0,
+                    })
+                else:
+                    factor = (
+                        header_days * header_quantity
+                        * (1 - header_discount / 100)
+                    )
+                    line['groupItemPriceContribution'] = round(
+                        max(0, _safe_float(line.get('total'), 0)) / factor
+                        if factor else 0,
+                        6,
+                    )
+                line['groupItemCommercialStored'] = True
+            line['groupLeader'] = line is leader
+            line['groupHeaderQuantity'] = round(header_quantity, 4)
+            line['days'] = round(header_days, 4)
+            line['quantity'] = round(header_quantity, 4)
+            line['uom'] = header_uom
+            line['unitPrice'] = round(header_unit_price, 2)
+            line['discountPercent'] = round(header_discount, 4)
+            line['totalMode'] = 'amount'
+            line['total'] = round(header_total, 2) if line is leader else 0
+            line['systemName'] = header_system_name
+    return lines
 
 
 def _finance_line_item_match_key(line):
@@ -26496,6 +27326,8 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
     }
     changed_prices = {}
     for line in lines:
+        if line.get('groupId'):
+            continue
         previous = previous_by_id.get(str(line.get('id') or ''))
         if previous is None:
             continue
@@ -26508,6 +27340,8 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
     if not changed_prices:
         return
     for line in lines:
+        if line.get('groupId'):
+            continue
         unit_price = changed_prices.get(_finance_line_item_match_key(line))
         if unit_price is None:
             continue
@@ -26668,11 +27502,14 @@ def _normalise_finance_adjustment(value):
     calculation_mode = str(value.get('calculationMode') or '').strip().lower()
     if calculation_mode not in {'percent', 'amount'}:
         calculation_mode = 'percent' if _safe_float(value.get('percent'), 0) else 'amount'
+    label = str(value.get('label') or 'Discount').strip()[:300] or 'Discount'
+    if scope == 'department' and label.casefold() == 'system discount':
+        label = 'Discount'
     return {
         'id': adjustment_id,
         'scope': scope,
         'department': department if scope == 'department' else '',
-        'label': str(value.get('label') or 'Discount').strip()[:300] or 'Discount',
+        'label': label,
         'amount': round(_safe_float(value.get('amount'), 0), 2),
         'percent': round(max(0, _safe_float(value.get('percent'), 0)), 4),
         'calculationMode': calculation_mode,
@@ -26865,16 +27702,49 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     if status not in allowed_statuses:
         status = 'draft'
 
-    lines = [
-        _normalise_finance_line(row)
-        for row in (value.get('lineItems') if 'lineItems' in value else existing.get('lineItems') or [])
+    raw_lines = [
+        row
+        for row in (
+            value.get('lineItems')
+            if 'lineItems' in value
+            else existing.get('lineItems') or []
+        )
         if isinstance(row, dict)
     ]
+    category_by_department = {}
+    for row in raw_lines:
+        if not str(row.get('systemName') or '').strip():
+            continue
+        category_key = (
+            str(row.get('subprojectId') or 'main'),
+            _finance_department_identity(
+                row.get('department'), row.get('departmentCode')
+            ),
+        )
+        category_by_department.setdefault(
+            category_key,
+            _finance_system_name(row.get('department'), row.get('systemName')),
+        )
+    lines = []
+    for row in raw_lines:
+        normalised = _normalise_finance_line(row)
+        if not str(row.get('systemName') or '').strip():
+            category_key = (
+                str(normalised.get('subprojectId') or 'main'),
+                _finance_department_identity(
+                    normalised.get('department'), normalised.get('departmentCode')
+                ),
+            )
+            inherited_category = category_by_department.get(category_key)
+            if inherited_category:
+                normalised['systemName'] = inherited_category
+        lines.append(normalised)
     if document_type == 'quotation' and existing and 'lineItems' in value:
         _propagate_finance_quotation_price_changes(
             lines,
             existing.get('lineItems') or [],
         )
+    _normalise_finance_line_groups(lines)
     subprojects = _normalise_finance_subprojects(
         value.get('subprojects')
         if 'subprojects' in value
@@ -27096,6 +27966,12 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'eventSyncFingerprint': str(value.get('eventSyncFingerprint') if 'eventSyncFingerprint' in value else existing.get('eventSyncFingerprint') or '').strip()[:200],
         'sourceQuotationId': str(value.get('sourceQuotationId') or existing.get('sourceQuotationId') or '').strip()[:80],
         'sourceQuotationNumber': str(value.get('sourceQuotationNumber') or existing.get('sourceQuotationNumber') or '').strip()[:80],
+        'sourceCostingId': str(value.get('sourceCostingId') or existing.get('sourceCostingId') or '').strip()[:80],
+        'costingDisabled': bool(
+            value.get('costingDisabled')
+            if 'costingDisabled' in value
+            else existing.get('costingDisabled', False)
+        ),
         'createdAt': existing.get('createdAt') or now.isoformat(timespec='seconds'),
         'createdBy': existing.get('createdBy') or current_username,
         'updatedAt': existing.get('updatedAt') if is_read_normalisation else now.isoformat(timespec='seconds'),
@@ -27179,6 +28055,2022 @@ def _next_finance_number(documents, document_type):
     return f"{prefix}-{year}-{max(values, default=0) + 1:04d}"
 
 
+def _costing_item_key(line):
+    line = line if isinstance(line, dict) else {}
+    catalog_key = str(line.get('catalogKey') or '').strip().casefold()
+    if catalog_key:
+        return catalog_key
+    description = re.sub(
+        r'\s+', ' ', str(line.get('description') or '').strip().casefold()
+    )
+    return f'custom:{description}' if description else ''
+
+
+def _costing_vendor_key(name='', vendor_type='', vendor_id=''):
+    vendor_id = str(vendor_id or '').strip()
+    vendor_type = str(vendor_type or 'vendor').strip().lower()
+    if vendor_id:
+        return f'{vendor_type}:{vendor_id}'
+    name = re.sub(r'\s+', ' ', str(name or '').strip()).casefold()
+    return f'name:{name}' if name else ''
+
+
+def _normalise_costing_vendor_management(lines, value=None, existing=None):
+    """Keep one fulfilment choice for every non-Self costing vendor."""
+    supplied = {}
+    supplied_by_name = {}
+    for row in [*(existing or []), *(value or [])]:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get('key') or _costing_vendor_key(
+            row.get('vendorName'), row.get('vendorType'), row.get('vendorId')
+        )).strip()
+        mode = str(row.get('mode') or '').strip().lower()
+        if key and mode in {'dry-hire', 'outsourced'}:
+            supplied[key] = mode
+            name_key = re.sub(
+                r'\s+', ' ', str(row.get('vendorName') or '').strip()
+            ).casefold()
+            if name_key:
+                supplied_by_name[name_key] = mode
+
+    entries = []
+    by_key = {}
+    for line in lines or []:
+        name = str((line or {}).get('vendorName') or '').strip()
+        if not name or name.casefold() == 'self':
+            continue
+        key = _costing_vendor_key(
+            name, line.get('vendorType'), line.get('vendorId')
+        )
+        if not key:
+            continue
+        entry = by_key.get(key)
+        if entry is None:
+            entry = {
+                'key': key,
+                'vendorId': str(line.get('vendorId') or '')[:120],
+                'vendorType': str(line.get('vendorType') or 'vendor')[:40],
+                'vendorName': name[:200],
+                'mode': supplied.get(
+                    key,
+                    supplied_by_name.get(
+                        re.sub(r'\s+', ' ', name).casefold(), 'dry-hire'
+                    ),
+                ),
+                'itemCount': 0,
+                'quantity': 0.0,
+                'amount': 0.0,
+            }
+            by_key[key] = entry
+            entries.append(entry)
+        entry['itemCount'] += 1
+        entry['quantity'] = round(
+            entry['quantity'] + max(0, _safe_float(line.get('quantity'), 0)), 4
+        )
+        entry['amount'] = round(
+            entry['amount'] + max(0, _safe_float(line.get('costTotal'), 0)), 2
+        )
+    return entries
+
+
+def _costing_vendor_management_mode(costing, line):
+    key = _costing_vendor_key(
+        (line or {}).get('vendorName'),
+        (line or {}).get('vendorType'),
+        (line or {}).get('vendorId'),
+    )
+    entry = next((
+        row for row in (costing or {}).get('vendorManagement') or []
+        if str((row or {}).get('key') or '') == key
+    ), None)
+    return str((entry or {}).get('mode') or 'dry-hire').strip().lower()
+
+
+def _costing_cost_book_key(line):
+    vendor = re.sub(
+        r'\s+', ' ', str((line or {}).get('vendorName') or '').strip().casefold()
+    )
+    item = _costing_item_key(line)
+    return f'{vendor}::{item}' if vendor and item else ''
+
+
+def _costing_refresh_inventory_line(line):
+    """Refresh linked inventory display fields without losing stable asset IDs."""
+    source_ids = [
+        str(value or '').strip()
+        for value in (line.get('sourceAssetIds') or [])
+        if str(value or '').strip()
+    ]
+    assets = [data_manager.inventory.get(asset_id) for asset_id in source_ids]
+    assets = [asset for asset in assets if asset and not _is_disposed(asset)]
+    if not assets:
+        return line
+    asset = assets[0]
+    department_code = (
+        _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
+    )
+    department, department_code = _finance_department_details(
+        department_code, department_code
+    )
+    brand = str(getattr(asset, 'brand', '') or '').strip()
+    model = str(getattr(asset, 'model_number', '') or '').strip()
+    description = str(getattr(asset, 'description', '') or '').strip()
+    line.update({
+        'catalogKey': _finance_catalog_key(
+            department_code, brand, model, description
+        ),
+        'sourceAssetIds': source_ids,
+        'brand': brand[:240],
+        'model': model[:240],
+        'description': (
+            _finance_display_description(brand, model, description)
+            or model
+            or description
+            or 'Inventory item'
+        )[:1000],
+        'departmentCode': department_code,
+        'isCustom': False,
+    })
+    if not str(line.get('category') or '').strip():
+        line['category'] = department
+    return line
+
+
+def _normalise_costing_line(value):
+    value = value if isinstance(value, dict) else {}
+    quantity = round(max(0, _safe_float(value.get('quantity'), 1)), 4)
+    multiplier = round(max(0, _safe_float(value.get('multiplier'), 1)), 4)
+    # Retain enough precision for lump-sum totals divided across quantity and
+    # multiplier (for example, $100 / 3). The displayed total remains cents.
+    item_cost = round(max(0, _safe_float(value.get('itemCost'), 0)), 6)
+    cost_total = round(quantity * multiplier * item_cost, 2)
+    target_margin = round(
+        max(-100, min(9999, _safe_float(value.get('targetMarginPercent'), 20))),
+        4,
+    )
+    calculated_sale = round(max(0, cost_total * (1 + target_margin / 100)), 2)
+    sale_price = round(
+        max(0, _safe_float(value.get('salePrice'), calculated_sale)), 2
+    )
+    margin_amount = round(sale_price - cost_total, 2)
+    margin_percent = round(
+        (margin_amount / cost_total * 100) if cost_total else (100 if sale_price else 0),
+        4,
+    )
+    source_ids = [
+        str(asset_id or '').strip()
+        for asset_id in (value.get('sourceAssetIds') or [])
+        if str(asset_id or '').strip()
+    ]
+    vendor_name = re.sub(
+        r'\s+', ' ', str(value.get('vendorName') or '').strip()
+    )[:200]
+    if source_ids and not vendor_name:
+        vendor_name = 'Self'
+    category = re.sub(
+        r'\s+', ' ', str(value.get('category') or value.get('department') or 'General').strip()
+    )[:200] or 'General'
+    group_display_fields = [
+        field for field in (value.get('groupDisplayFields') or [])
+        if field in {'brand', 'model', 'description'}
+    ]
+    line = {
+        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80]
+        or new_id('costline'),
+        'quotationLineId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('quotationLineId') or '')
+        )[:80],
+        'subprojectId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or 'main')
+        )[:80] or 'main',
+        'catalogKey': str(value.get('catalogKey') or '').strip()[:500],
+        'sourceAssetIds': source_ids,
+        'brand': str(value.get('brand') or '').strip()[:240],
+        'model': str(value.get('model') or '').strip()[:240],
+        'description': str(value.get('description') or '').strip()[:1000],
+        'remarks': str(value.get('remarks') or '').strip()[:2000],
+        'category': category,
+        'departmentCode': _normalise_department_code(value.get('departmentCode')),
+        'quantity': quantity,
+        'multiplier': multiplier,
+        'multiplierLabel': 'Day'
+        if str(value.get('multiplierLabel') or '').strip().lower() == 'day'
+        else 'Mult',
+        'vendorName': vendor_name,
+        'vendorId': str(value.get('vendorId') or '').strip()[:120],
+        'vendorType': (
+            str(value.get('vendorType') or '').strip().lower()
+            if str(value.get('vendorType') or '').strip().lower()
+            in {'vendor', 'transport', 'worker'}
+            else 'vendor'
+        ),
+        'itemCost': item_cost,
+        'costTotal': cost_total,
+        'targetMarginPercent': target_margin,
+        'calculatedSalePrice': calculated_sale,
+        'salePrice': sale_price,
+        'marginAmount': margin_amount,
+        'marginPercent': margin_percent,
+        'saleDifference': round(sale_price - calculated_sale, 2),
+        'isCustom': bool(value.get('isCustom') or not value.get('catalogKey')),
+        'groupId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('groupId') or '')
+        )[:80],
+        'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
+        'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
+        'groupCustomText': bool(value.get('groupCustomText')),
+        'groupItemQuantity': round(max(0, _safe_float(
+            value.get('groupItemQuantity'), quantity
+        )), 4),
+        'groupHeaderQuantity': round(max(0, _safe_float(
+            value.get('groupHeaderQuantity'), 1
+        )), 4),
+        'groupLeader': bool(value.get('groupLeader')),
+        'groupItemDays': round(max(0, _safe_float(
+            value.get('groupItemDays'), 1
+        )), 4),
+        'groupItemUom': str(value.get('groupItemUom') or 'units').strip()[:32] or 'units',
+        'groupItemUnitPrice': round(max(0, _safe_float(
+            value.get('groupItemUnitPrice'), 0
+        )), 2),
+        'groupItemDiscountPercent': round(max(-9999, min(100, _safe_float(
+            value.get('groupItemDiscountPercent'), 0
+        ))), 4),
+        'groupItemTotalMode': (
+            'amount'
+            if str(value.get('groupItemTotalMode') or '').strip().lower() == 'amount'
+            else 'calculated'
+        ),
+        'groupItemTotal': round(max(0, _safe_float(
+            value.get('groupItemTotal'), 0
+        )), 2),
+        'groupItemPriceContribution': round(max(0, _safe_float(
+            value.get('groupItemPriceContribution'), 0
+        )), 6),
+        'groupItemCommercialStored': bool(value.get('groupItemCommercialStored')),
+    }
+    return _costing_refresh_inventory_line(line)
+
+
+def _normalise_costing_document(value, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    is_read_normalisation = value is existing and bool(existing)
+    line_source = (
+        value.get('lineItems')
+        if 'lineItems' in value
+        else existing.get('lineItems') or []
+    )
+    lines = [
+        _normalise_costing_line(row)
+        for row in line_source
+        if isinstance(row, dict)
+    ]
+    lines = _costing_equalise_group_sale_prices(
+        lines, existing.get('lineItems') or []
+    )
+    subprojects = _normalise_finance_subprojects(
+        value.get('subprojects')
+        if 'subprojects' in value
+        else existing.get('subprojects'),
+        lines,
+    )
+    category_source = (
+        value.get('categoryAdjustments')
+        if 'categoryAdjustments' in value
+        else existing.get('categoryAdjustments') or []
+    )
+    supplied_adjustments = {
+        (
+            str(row.get('subprojectId') or subprojects[0]['id']).strip(),
+            str(row.get('category') or '').strip().casefold(),
+        ): round(
+            _safe_float(row.get('amount'), 0), 2
+        )
+        for row in category_source
+        if isinstance(row, dict) and str(row.get('category') or '').strip()
+    }
+    categories = []
+    for line in lines:
+        key = (line.get('subprojectId') or subprojects[0]['id'], line['category'])
+        if key not in categories:
+            categories.append(key)
+    category_adjustments = []
+    category_totals = []
+    for subproject_id, category in categories:
+        category_lines = [
+            row for row in lines
+            if row['category'] == category
+            and row.get('subprojectId') == subproject_id
+        ]
+        cost = round(sum(row['costTotal'] for row in category_lines), 2)
+        raw_sale = round(sum(row['salePrice'] for row in category_lines), 2)
+        adjustment = supplied_adjustments.get(
+            (subproject_id, category.casefold()), 0
+        )
+        charged = round(max(0, raw_sale + adjustment), 2)
+        adjustment = round(charged - raw_sale, 2)
+        category_adjustments.append({
+            'category': category,
+            'subprojectId': subproject_id,
+            'amount': adjustment,
+        })
+        category_totals.append({
+            'category': category,
+            'subprojectId': subproject_id,
+            'cost': cost,
+            'rawSale': raw_sale,
+            'adjustment': adjustment,
+            'charged': charged,
+            'profit': round(charged - cost, 2),
+        })
+    total_cost = round(sum(row['costTotal'] for row in lines), 2)
+    total_sale = round(sum(row['charged'] for row in category_totals), 2)
+    status = str(value.get('status') or existing.get('status') or 'draft').lower()
+    if status not in {'draft', 'linked', 'converted'}:
+        status = 'draft'
+    project_name = str(
+        value.get('projectName')
+        if 'projectName' in value
+        else existing.get('projectName') or ''
+    ).strip()[:500]
+    vendor_snapshots = (
+        value.get('vendorSnapshots')
+        if isinstance(value.get('vendorSnapshots'), dict)
+        else existing.get('vendorSnapshots')
+        if isinstance(existing.get('vendorSnapshots'), dict)
+        else {}
+    )
+    vendor_management = _normalise_costing_vendor_management(
+        lines,
+        value.get('vendorManagement')
+        if isinstance(value.get('vendorManagement'), list)
+        else None,
+        existing.get('vendorManagement')
+        if isinstance(existing.get('vendorManagement'), list)
+        else None,
+    )
+    return {
+        'id': existing.get('id')
+        or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80]
+        or new_id('costing'),
+        'type': 'costing',
+        'projectName': project_name,
+        'eventLocation': str(
+            value.get('eventLocation')
+            if 'eventLocation' in value
+            else existing.get('eventLocation') or ''
+        ).strip()[:600],
+        'status': status,
+        'lineItems': lines,
+        'subprojects': subprojects,
+        'categoryAdjustments': category_adjustments,
+        'categoryTotals': category_totals,
+        'totals': {
+            'cost': total_cost,
+            'sale': total_sale,
+            'profit': round(total_sale - total_cost, 2),
+            'marginPercent': round(
+                ((total_sale - total_cost) / total_cost * 100)
+                if total_cost
+                else (100 if total_sale else 0),
+                4,
+            ),
+        },
+        'vendorSnapshots': copy.deepcopy(vendor_snapshots),
+        'vendorManagement': vendor_management,
+        'salesperson': str(
+            value.get('salesperson')
+            if 'salesperson' in value
+            else existing.get('salesperson') or ''
+        ).strip()[:240],
+        'salespersonUsername': str(
+            value.get('salespersonUsername')
+            if 'salespersonUsername' in value
+            else existing.get('salespersonUsername') or ''
+        ).strip()[:160],
+        'sourceQuotationId': str(
+            existing.get('sourceQuotationId')
+            or value.get('sourceQuotationId')
+            or ''
+        )[:80],
+        'sourceQuotationNumber': str(
+            existing.get('sourceQuotationNumber')
+            or value.get('sourceQuotationNumber')
+            or ''
+        )[:80],
+        'convertedQuotationId': str(
+            existing.get('convertedQuotationId')
+            or value.get('convertedQuotationId')
+            or ''
+        ),
+        'convertedQuotationNumber': str(
+            existing.get('convertedQuotationNumber')
+            or value.get('convertedQuotationNumber')
+            or ''
+        ),
+        'createdAt': existing.get('createdAt') or value.get('createdAt') or now_iso(),
+        'createdBy': existing.get('createdBy') or value.get('createdBy') or _finance_current_username(),
+        'updatedAt': existing.get('updatedAt') if is_read_normalisation else now_iso(),
+        'updatedBy': existing.get('updatedBy', '') if is_read_normalisation else _finance_current_username(),
+    }
+
+
+def _costing_from_quotation(quotation):
+    """Create an editable internal costing counterpart for a quotation."""
+    quotation = _normalise_finance_document(quotation, 'quotation', quotation)
+    owner = _finance_document_owner_username(quotation) or _finance_owner_username()
+    lines = [
+        _costing_line_from_quotation_line(quote_line)
+        for quote_line in quotation.get('lineItems') or []
+        if isinstance(quote_line, dict)
+    ]
+
+    adjustment_by_category = {}
+    global_adjustment = 0
+    for adjustment in quotation.get('adjustments') or []:
+        if not isinstance(adjustment, dict):
+            continue
+        amount = round(_safe_float(adjustment.get('amount'), 0), 2)
+        if adjustment.get('scope') == 'department':
+            category = _finance_adjustment_system_name(
+                adjustment.get('department')
+            )
+            key = (str(adjustment.get('subprojectId') or 'main'), category)
+            adjustment_by_category[key] = round(
+                adjustment_by_category.get(key, 0) + amount, 2
+            )
+        else:
+            global_adjustment = round(global_adjustment + amount, 2)
+    if global_adjustment and lines:
+        first_key = (
+            str(lines[0].get('subprojectId') or 'main'),
+            lines[0]['category'],
+        )
+        adjustment_by_category[first_key] = round(
+            adjustment_by_category.get(first_key, 0) + global_adjustment, 2
+        )
+
+    costing = _normalise_costing_document({
+        'projectName': quotation.get('projectName') or quotation.get('title') or '',
+        'eventLocation': quotation.get('eventLocation') or '',
+        'status': 'linked',
+        'lineItems': lines,
+        'subprojects': copy.deepcopy(quotation.get('subprojects') or []),
+        'categoryAdjustments': [
+            {
+                'subprojectId': subproject_id,
+                'category': category,
+                'amount': amount,
+            }
+            for (subproject_id, category), amount
+            in adjustment_by_category.items()
+        ],
+        'salesperson': quotation.get('salesperson') or _user_display_name(owner),
+        'salespersonUsername': owner,
+        'sourceQuotationId': quotation.get('id') or '',
+        'sourceQuotationNumber': quotation.get('number') or '',
+        'convertedQuotationId': quotation.get('id') or '',
+        'convertedQuotationNumber': quotation.get('number') or '',
+        'createdAt': quotation.get('createdAt') or now_iso(),
+        'createdBy': owner,
+    })
+    costing['updatedAt'] = quotation.get('updatedAt') or costing['updatedAt']
+    costing['updatedBy'] = quotation.get('updatedBy') or owner
+    return costing
+
+
+def _costing_line_from_quotation_line(quote_line):
+    quote_line = quote_line if isinstance(quote_line, dict) else {}
+    category = _finance_system_name(
+        quote_line.get('department'), quote_line.get('systemName')
+    ) or 'General'
+    return _normalise_costing_line({
+        'id': quote_line.get('id') or new_id('costline'),
+        'quotationLineId': quote_line.get('id') or '',
+        'subprojectId': quote_line.get('subprojectId') or 'main',
+        'catalogKey': quote_line.get('catalogKey') or '',
+        'sourceAssetIds': list(quote_line.get('sourceAssetIds') or []),
+        'brand': quote_line.get('brand') or '',
+        'model': quote_line.get('model') or '',
+        'description': quote_line.get('description') or '',
+        'category': category,
+        'departmentCode': quote_line.get('departmentCode') or '',
+        'quantity': (
+            quote_line.get('groupItemQuantity', quote_line.get('quantity', 1))
+            if quote_line.get('groupId')
+            else quote_line.get('quantity', 1)
+        ),
+        'multiplier': quote_line.get('days', 1),
+        'multiplierLabel': quote_line.get('costingMultiplierLabel') or 'Day',
+        'vendorName': 'Self' if quote_line.get('sourceAssetIds') else '',
+        'itemCost': 0,
+        'salePrice': round(_safe_float(quote_line.get('total'), 0), 2),
+        'targetMarginPercent': 20,
+        'isCustom': bool(quote_line.get('isCustom')),
+        'groupId': quote_line.get('groupId') or '',
+        'groupTitle': quote_line.get('groupTitle') or '',
+        'groupDisplayFields': list(quote_line.get('groupDisplayFields') or []),
+        'groupCustomText': bool(quote_line.get('groupCustomText')),
+        'groupItemQuantity': quote_line.get(
+            'groupItemQuantity', quote_line.get('quantity', 1)
+        ),
+        'groupHeaderQuantity': quote_line.get('quantity', 1),
+        'groupLeader': bool(quote_line.get('groupLeader')),
+        'groupItemDays': quote_line.get('groupItemDays', 1),
+        'groupItemUom': quote_line.get('groupItemUom', 'units'),
+        'groupItemUnitPrice': quote_line.get('groupItemUnitPrice', 0),
+        'groupItemDiscountPercent': quote_line.get('groupItemDiscountPercent', 0),
+        'groupItemTotalMode': quote_line.get('groupItemTotalMode', 'calculated'),
+        'groupItemTotal': quote_line.get('groupItemTotal', 0),
+        'groupItemPriceContribution': quote_line.get('groupItemPriceContribution', 0),
+        'groupItemCommercialStored': bool(quote_line.get('groupItemCommercialStored')),
+    })
+
+
+def _quotation_line_from_costing_line(costing_line, existing=None):
+    costing_line = _normalise_costing_line(costing_line)
+    existing = copy.deepcopy(existing) if isinstance(existing, dict) else {}
+    quantity = max(0, _safe_float(costing_line.get('quantity'), 1))
+    is_group = bool(costing_line.get('groupId'))
+    commercial_quantity = (
+        max(0, _safe_float(
+            existing.get('quantity'), costing_line.get('groupHeaderQuantity', 1)
+        ))
+        if is_group else quantity
+    )
+    days = max(0, _safe_float(costing_line.get('multiplier'), 1))
+    divisor = commercial_quantity * days
+    sale_price = round(_safe_float(costing_line.get('salePrice'), 0), 2)
+    pricing_changed = not existing or any((
+        abs(_safe_float(
+            existing.get('groupItemQuantity') if is_group else existing.get('quantity'),
+            1,
+        ) - quantity) >= 0.0001,
+        abs(_safe_float(existing.get('days'), 1) - days) >= 0.0001,
+        abs(_safe_float(existing.get('total'), 0) - sale_price) >= 0.005,
+    ))
+    underlying_department = str(existing.get('department') or '').strip()
+    if not underlying_department:
+        department_code = costing_line.get('departmentCode') or ''
+        underlying_department = (
+            _finance_department_details('', department_code)[0]
+            if department_code
+            else costing_line.get('category') or 'General'
+        )
+    existing.update({
+        'id': str(costing_line.get('id') or existing.get('id') or new_id('line')),
+        'catalogKey': costing_line.get('catalogKey') or '',
+        'sourceAssetIds': list(costing_line.get('sourceAssetIds') or []),
+        'brand': costing_line.get('brand') or '',
+        'model': costing_line.get('model') or '',
+        'description': costing_line.get('description') or '',
+        'department': underlying_department,
+        'departmentCode': costing_line.get('departmentCode') or '',
+        'systemName': costing_line.get('category') or 'General',
+        'subprojectId': costing_line.get('subprojectId') or 'main',
+        'days': days,
+        'costingMultiplierLabel': costing_line.get('multiplierLabel') or 'Mult',
+        'quantity': commercial_quantity,
+        'isCustom': bool(costing_line.get('isCustom')),
+        'groupId': costing_line.get('groupId') or '',
+        'groupTitle': costing_line.get('groupTitle') or '',
+        'groupDisplayFields': list(costing_line.get('groupDisplayFields') or []),
+        'groupCustomText': bool(costing_line.get('groupCustomText')),
+        'groupItemQuantity': costing_line.get(
+            'groupItemQuantity', costing_line.get('quantity', 1)
+        ),
+        'groupLeader': bool(costing_line.get('groupLeader')),
+        'groupItemDays': costing_line.get('groupItemDays', 1),
+        'groupItemUom': costing_line.get('groupItemUom', 'units'),
+        'groupItemUnitPrice': costing_line.get('groupItemUnitPrice', 0),
+        'groupItemDiscountPercent': costing_line.get('groupItemDiscountPercent', 0),
+        'groupItemTotalMode': costing_line.get('groupItemTotalMode', 'calculated'),
+        'groupItemTotal': costing_line.get('groupItemTotal', 0),
+        'groupItemPriceContribution': costing_line.get('groupItemPriceContribution', 0),
+        'groupItemCommercialStored': bool(costing_line.get('groupItemCommercialStored')),
+    })
+    if pricing_changed:
+        existing.update({
+            'uom': existing.get('uom') or 'units',
+            'unitPrice': round(sale_price / divisor, 2) if divisor else sale_price,
+            'discountPercent': 0,
+            'totalMode': 'amount',
+            'total': sale_price,
+        })
+    return existing
+
+
+def _costing_line_quote_identity(line):
+    """Identify costing rows that should collapse into one quotation row."""
+    line = line if isinstance(line, dict) else {}
+    subproject_id = str(line.get('subprojectId') or 'main')
+    description_key = re.sub(
+        r'\s+', ' ', str(line.get('description') or '').strip()
+    ).casefold()
+    catalog_key = str(line.get('catalogKey') or '').strip().casefold()
+    # A manually entered costing allocation may describe the same item as an
+    # inventory-linked allocation. The quotation must still show one client-
+    # facing line when its displayed item name is the same.
+    if description_key:
+        item_key = f'description:{description_key}'
+    elif catalog_key:
+        item_key = f'catalog:{catalog_key}'
+    else:
+        source_ids = sorted({
+            str(value or '').strip().casefold()
+            for value in line.get('sourceAssetIds') or []
+            if str(value or '').strip()
+        })
+        if source_ids:
+            item_key = f"assets:{'|'.join(source_ids)}"
+        else:
+            item_key = 'custom:' + '|'.join((
+                str(line.get('description') or '').strip().casefold(),
+                str(line.get('brand') or '').strip().casefold(),
+                str(line.get('model') or '').strip().casefold(),
+                str(line.get('departmentCode') or '').strip().casefold(),
+                str(line.get('category') or 'General').strip().casefold(),
+            ))
+    category_key = str(
+        line.get('category') or line.get('department') or 'General'
+    ).strip().casefold()
+    multiplier = round(max(0, _safe_float(
+        line.get('multiplier')
+        if 'multiplier' in line
+        else line.get('days'),
+        1,
+    )), 4)
+    return subproject_id, category_key, item_key, multiplier
+
+
+def _costing_line_unit_sale(line):
+    line = line if isinstance(line, dict) else {}
+    divisor = max(0, _safe_float(line.get('quantity'), 0)) * max(
+        0, _safe_float(line.get('multiplier'), 0)
+    )
+    sale_price = max(0, _safe_float(line.get('salePrice'), 0))
+    return sale_price / divisor if divisor else sale_price
+
+
+def _costing_equalise_group_sale_prices(lines, existing_lines=None):
+    """Keep one unit sale rate for each quotation-visible costing group."""
+    lines = [copy.deepcopy(row) for row in lines if isinstance(row, dict)]
+    existing_by_id = {
+        str(row.get('id') or ''): row
+        for row in existing_lines or []
+        if isinstance(row, dict) and str(row.get('id') or '')
+    }
+    changed_rates = {}
+    groups = {}
+    for row in lines:
+        identity = _costing_line_quote_identity(row)
+        groups.setdefault(identity, []).append(row)
+        previous = existing_by_id.get(str(row.get('id') or ''))
+        if previous is None:
+            continue
+        if _costing_line_quote_identity(previous) != identity:
+            continue
+        next_rate = round(_costing_line_unit_sale(row), 6)
+        previous_rate = round(_costing_line_unit_sale(previous), 6)
+        if abs(next_rate - previous_rate) >= 0.005:
+            changed_rates[identity] = next_rate
+
+    normalised = []
+    for identity, rows in groups.items():
+        total_units = sum(
+            max(0, _safe_float(row.get('quantity'), 0))
+            * max(0, _safe_float(row.get('multiplier'), 0))
+            for row in rows
+        )
+        if identity in changed_rates:
+            unit_rate = changed_rates[identity]
+        else:
+            total_sale = sum(
+                max(0, _safe_float(row.get('salePrice'), 0)) for row in rows
+            )
+            unit_rate = (
+                total_sale / total_units
+                if total_units
+                else total_sale / len(rows)
+            )
+        for row in rows:
+            units = max(0, _safe_float(row.get('quantity'), 0)) * max(
+                0, _safe_float(row.get('multiplier'), 0)
+            )
+            payload = {
+                **row,
+                'salePrice': round(unit_rate * (units or 1), 2),
+            }
+            normalised.append(_normalise_costing_line(payload))
+    order = {
+        str(row.get('id') or ''): index for index, row in enumerate(lines)
+    }
+    normalised.sort(key=lambda row: order.get(str(row.get('id') or ''), 0))
+    return normalised
+
+
+def _costing_distribute_total(rows, field, total, weight_field='quantity'):
+    """Distribute a quotation total across split costing rows without merging them."""
+    if not rows:
+        return
+    total = max(0, _safe_float(total, 0))
+    weights = [max(0, _safe_float(row.get(weight_field), 0)) for row in rows]
+    weight_total = sum(weights)
+    if weight_total <= 0:
+        weights = [1 for _row in rows]
+        weight_total = len(rows)
+    used = 0.0
+    precision = 4 if field == 'quantity' else 2
+    for index, row in enumerate(rows):
+        value = (
+            total - used
+            if index == len(rows) - 1
+            else round(total * weights[index] / weight_total, precision)
+        )
+        row[field] = round(max(0, value), precision)
+        used = round(used + row[field], precision)
+
+
+def _costing_grouped_quotation_lines(costing, quotation):
+    """Aggregate internal vendor splits into quotation-visible line items."""
+    existing_lines = {
+        str(line.get('id') or ''): line
+        for line in (quotation or {}).get('lineItems') or []
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    existing_by_identity = {}
+    for quote_line in existing_lines.values():
+        proxy = {
+            **quote_line,
+            'category': _finance_system_name(
+                quote_line.get('department'), quote_line.get('systemName')
+            ) or 'General',
+            'multiplier': quote_line.get('days', 1),
+            'multiplierLabel': quote_line.get('costingMultiplierLabel') or 'Day',
+        }
+        existing_by_identity.setdefault(
+            _costing_line_quote_identity(proxy), str(quote_line.get('id') or '')
+        )
+
+    groups = []
+    groups_by_id = {}
+    groups_by_identity = {}
+    for raw_line in costing.get('lineItems') or []:
+        if not isinstance(raw_line, dict):
+            continue
+        line = raw_line
+        identity = _costing_line_quote_identity(line)
+        linked_id = str(line.get('quotationLineId') or '').strip()
+        quote_id = existing_by_identity.get(identity)
+        if not quote_id and linked_id in existing_lines:
+            quote_id = linked_id
+        group = groups_by_identity.get(identity)
+        if group is None and quote_id:
+            linked_group = groups_by_id.get(quote_id)
+            if linked_group and linked_group.get('identity') == identity:
+                group = linked_group
+            elif linked_group:
+                quote_id = ''
+        if group is None:
+            quote_id = quote_id or linked_id or str(line.get('id') or new_id('line'))
+            group = {'id': quote_id, 'identity': identity, 'lines': []}
+            groups.append(group)
+            groups_by_id[quote_id] = group
+            groups_by_identity[identity] = group
+        group['lines'].append(line)
+
+    quote_lines = []
+    for group in groups:
+        rows = group['lines']
+        quote_id = group['id']
+        for row in rows:
+            row['quotationLineId'] = quote_id
+        first = copy.deepcopy(rows[0])
+        first['id'] = quote_id
+        first['quantity'] = round(sum(
+            max(0, _safe_float(row.get('quantity'), 0)) for row in rows
+        ), 4)
+        first['salePrice'] = round(sum(
+            max(0, _safe_float(row.get('salePrice'), 0)) for row in rows
+        ), 2)
+        first['sourceAssetIds'] = list(dict.fromkeys(
+            str(asset_id or '').strip()
+            for row in rows
+            for asset_id in row.get('sourceAssetIds') or []
+            if str(asset_id or '').strip()
+        ))
+        quote_lines.append(_quotation_line_from_costing_line(
+            first, existing_lines.get(quote_id)
+        ))
+    return quote_lines
+
+
+def _linked_costing_for_quotation(finance_data, quotation):
+    quotation_id = str((quotation or {}).get('id') or '').strip()
+    costing_id = str((quotation or {}).get('sourceCostingId') or '').strip()
+    return next((
+        row for row in (finance_data.get('documents') or [])
+        if isinstance(row, dict)
+        and row.get('type') == 'costing'
+        and (
+            (costing_id and str(row.get('id') or '') == costing_id)
+            or quotation_id in {
+                str(row.get('sourceQuotationId') or ''),
+                str(row.get('convertedQuotationId') or ''),
+            }
+        )
+    ), None)
+
+
+def _linked_quotation_for_costing(finance_data, costing):
+    quotation_ids = {
+        str((costing or {}).get('sourceQuotationId') or '').strip(),
+        str((costing or {}).get('convertedQuotationId') or '').strip(),
+    }
+    quotation_ids.discard('')
+    return next((
+        row for row in (finance_data.get('documents') or [])
+        if isinstance(row, dict)
+        and row.get('type') == 'quotation'
+        and (
+            str(row.get('id') or '') in quotation_ids
+            or str(row.get('sourceCostingId') or '') == str((costing or {}).get('id') or '')
+        )
+    ), None)
+
+
+def _sync_costing_from_quotation(finance_data, quotation):
+    """Make a linked costing mirror quotation-visible fields and line membership."""
+    if quotation.get('costingDisabled'):
+        quotation['sourceCostingId'] = ''
+        return None
+    costing = _linked_costing_for_quotation(finance_data, quotation)
+    if costing is None:
+        costing = _costing_from_quotation(quotation)
+        finance_data.setdefault('documents', []).append(costing)
+        quotation['sourceCostingId'] = costing['id']
+        return costing
+
+    existing_groups = {}
+    for line in costing.get('lineItems') or []:
+        if not isinstance(line, dict):
+            continue
+        quote_line_id = str(
+            line.get('quotationLineId') or line.get('id') or ''
+        )
+        if quote_line_id:
+            existing_groups.setdefault(quote_line_id, []).append(copy.deepcopy(line))
+    synced_lines = []
+    for quote_line in quotation.get('lineItems') or []:
+        if not isinstance(quote_line, dict):
+            continue
+        template = _costing_line_from_quotation_line(quote_line)
+        quote_line_id = str(template.get('quotationLineId') or template.get('id') or '')
+        group = existing_groups.get(quote_line_id) or [copy.deepcopy(template)]
+        if len(group) > 1:
+            _costing_distribute_total(
+                group, 'quantity', template.get('quantity'), 'quantity'
+            )
+            _costing_distribute_total(
+                group, 'salePrice', template.get('salePrice'), 'salePrice'
+            )
+        else:
+            group[0]['quantity'] = template.get('quantity')
+            group[0]['salePrice'] = template.get('salePrice')
+        for line in group:
+            for key in (
+                'quotationLineId', 'subprojectId', 'catalogKey',
+                'sourceAssetIds', 'brand', 'model', 'description', 'category',
+                'departmentCode', 'multiplier', 'multiplierLabel', 'isCustom',
+                'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
+                'groupItemQuantity', 'groupLeader',
+                'groupHeaderQuantity',
+                'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
+                'groupItemDiscountPercent', 'groupItemTotalMode',
+                'groupItemTotal', 'groupItemPriceContribution',
+                'groupItemCommercialStored',
+            ):
+                line[key] = copy.deepcopy(template.get(key))
+            synced_lines.append(line)
+
+    adjustment_template = _costing_from_quotation(quotation)
+    payload = copy.deepcopy(costing)
+    payload.update({
+        'status': 'linked',
+        'projectName': quotation.get('projectName') or quotation.get('title') or '',
+        'eventLocation': quotation.get('eventLocation') or '',
+        'lineItems': synced_lines,
+        'subprojects': copy.deepcopy(quotation.get('subprojects') or []),
+        'categoryAdjustments': adjustment_template.get('categoryAdjustments') or [],
+        'sourceQuotationId': quotation.get('id') or '',
+        'sourceQuotationNumber': quotation.get('number') or '',
+        'convertedQuotationId': quotation.get('id') or '',
+        'convertedQuotationNumber': quotation.get('number') or '',
+        'salespersonUsername': _finance_document_owner_username(quotation),
+        'salesperson': quotation.get('salesperson') or _user_display_name(
+            _finance_document_owner_username(quotation)
+        ),
+    })
+    synced = _normalise_costing_document(payload, costing)
+    _sync_costing_vendors(synced)
+    for index, row in enumerate(finance_data.get('documents') or []):
+        if str(row.get('id') or '') == str(costing.get('id') or ''):
+            finance_data['documents'][index] = synced
+            break
+    quotation['sourceCostingId'] = synced['id']
+    return synced
+
+
+def _sync_quotation_from_costing(finance_data, costing):
+    """Make a linked quotation mirror costing-visible fields and line membership."""
+    quotation = _linked_quotation_for_costing(finance_data, costing)
+    if quotation is None:
+        return None
+    quote_lines = _costing_grouped_quotation_lines(costing, quotation)
+    preserved_adjustments = [
+        copy.deepcopy(row)
+        for row in quotation.get('adjustments') or []
+        if isinstance(row, dict) and row.get('scope') != 'department'
+    ]
+    existing_department_adjustments = {
+        (
+            str(row.get('subprojectId') or 'main'),
+            _finance_adjustment_system_name(row.get('department')),
+        ): row
+        for row in quotation.get('adjustments') or []
+        if isinstance(row, dict) and row.get('scope') == 'department'
+    }
+    for row in costing.get('categoryAdjustments') or []:
+        amount = round(_safe_float((row or {}).get('amount'), 0), 2)
+        if abs(amount) < 0.005:
+            continue
+        category = str((row or {}).get('category') or 'General')
+        subproject_id = str((row or {}).get('subprojectId') or 'main')
+        adjustment = copy.deepcopy(
+            existing_department_adjustments.get((subproject_id, category)) or {}
+        )
+        adjustment.update({
+            'id': adjustment.get('id') or new_id('costadjustment'),
+            'scope': 'department',
+            'department': category,
+            'subprojectId': subproject_id,
+            'label': adjustment.get('label') or 'Costing adjustment',
+            'amount': amount,
+            'calculationMode': 'amount',
+            'kind': 'discount' if amount < 0 else 'adjustment',
+            'subprojectId': adjustment.get('subprojectId') or 'main',
+        })
+        preserved_adjustments.append(adjustment)
+
+    payload = copy.deepcopy(quotation)
+    payload.update({
+        'projectName': costing.get('projectName') or '',
+        'title': costing.get('projectName') or '',
+        'eventLocation': costing.get('eventLocation') or '',
+        'lineItems': quote_lines,
+        'subprojects': copy.deepcopy(costing.get('subprojects') or []),
+        'adjustments': preserved_adjustments,
+        'sourceCostingId': costing.get('id') or '',
+    })
+    normalisation_existing = copy.deepcopy(quotation)
+    # Costing supplies explicit per-group sale totals. Do not let quotation's
+    # same-item rate propagation overwrite a different sub-project's amount.
+    normalisation_existing['lineItems'] = []
+    synced = _normalise_finance_document(
+        payload, 'quotation', normalisation_existing
+    )
+    for index, row in enumerate(finance_data.get('documents') or []):
+        if str(row.get('id') or '') == str(quotation.get('id') or ''):
+            finance_data['documents'][index] = synced
+            break
+    return synced
+
+
+def _costing_quote_sync_fingerprint(costing, quotation):
+    costing_copy = copy.deepcopy(costing or {})
+    quote_lines = _costing_grouped_quotation_lines(
+        costing_copy, quotation or {}
+    )
+    payload = {
+        'projectName': str(costing_copy.get('projectName') or ''),
+        'eventLocation': str(costing_copy.get('eventLocation') or ''),
+        'subprojects': [
+            {
+                'id': str(row.get('id') or ''),
+                'name': str(row.get('name') or ''),
+            }
+            for row in costing_copy.get('subprojects') or []
+            if isinstance(row, dict)
+        ],
+        'lineItems': [
+            {
+                key: copy.deepcopy(line.get(key))
+                for key in (
+                    'id', 'catalogKey', 'sourceAssetIds', 'brand', 'model',
+                    'description', 'department', 'departmentCode',
+                    'systemName', 'subprojectId', 'days', 'quantity',
+                    'costingMultiplierLabel',
+                    'unitPrice', 'discountPercent', 'totalMode', 'total',
+                    'isCustom', 'groupId', 'groupTitle',
+                    'groupDisplayFields', 'groupCustomText',
+                    'groupItemQuantity', 'groupHeaderQuantity', 'groupLeader',
+                    'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
+                    'groupItemDiscountPercent', 'groupItemTotalMode',
+                    'groupItemTotal', 'groupItemPriceContribution',
+                    'groupItemCommercialStored',
+                )
+            }
+            for line in quote_lines
+        ],
+        'categoryAdjustments': sorted((
+            {
+                'subprojectId': str(row.get('subprojectId') or 'main'),
+                'category': str(row.get('category') or 'General'),
+                'amount': round(_safe_float(row.get('amount'), 0), 2),
+            }
+            for row in costing_copy.get('categoryAdjustments') or []
+            if isinstance(row, dict)
+        ), key=lambda row: (row['subprojectId'], row['category'].casefold())),
+    }
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')
+    )
+
+
+def _finance_start_costing_revision(quotation):
+    if _safe_int(quotation.get('revision'), 1) >= 99:
+        raise ValueError('This quotation has reached the maximum of 99 revisions')
+    if not _finance_revision_is_snapshotted(quotation):
+        _finance_snapshot_revision(quotation)
+    previous_revision = _safe_int(quotation.get('revision'), 1)
+    quotation['revision'] = previous_revision + 1
+    if quotation.get('customNumber'):
+        quotation['number'] = _finance_number_with_revision(
+            quotation.get('number'), quotation['revision']
+        )
+    else:
+        prefix, year, sequence, _revision = _finance_parse_number(
+            quotation.get('number')
+        )
+        quotation['number'] = _finance_format_number(
+            prefix, year, sequence, quotation['revision']
+        )
+    quotation['status'] = 'draft'
+    quotation['sentAt'] = ''
+    quotation['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
+    quotation['quotationDate'] = datetime.now().strftime('%Y-%m-%d')
+    quotation['validUntil'] = ''
+    return quotation
+
+
+_LINKED_COST_ALLOCATION_KEYS = (
+    'id', 'quantity', 'multiplier', 'multiplierLabel', 'vendorName',
+    'vendorId', 'vendorType', 'itemCost', 'targetMarginPercent',
+    'salePrice', 'remarks',
+)
+
+
+def _linked_cost_allocation_payload(line):
+    line = _normalise_costing_line(line)
+    return {
+        key: copy.deepcopy(line.get(key))
+        for key in _LINKED_COST_ALLOCATION_KEYS
+    }
+
+
+def _linked_cost_line_from_record(public_line, allocation):
+    public_line = public_line if isinstance(public_line, dict) else {}
+    allocation = allocation if isinstance(allocation, dict) else {}
+    category = _finance_system_name(
+        public_line.get('department'), public_line.get('systemName')
+    ) or 'General'
+    payload = {
+        **copy.deepcopy(allocation),
+        'id': allocation.get('id') or new_id('costline'),
+        'quotationLineId': public_line.get('id') or '',
+        'subprojectId': public_line.get('subprojectId') or 'main',
+        'catalogKey': public_line.get('catalogKey') or '',
+        'sourceAssetIds': list(public_line.get('sourceAssetIds') or []),
+        'brand': public_line.get('brand') or '',
+        'model': public_line.get('model') or '',
+        'description': public_line.get('description') or '',
+        'category': category,
+        'departmentCode': public_line.get('departmentCode') or '',
+        'isCustom': bool(public_line.get('isCustom')),
+        'groupId': public_line.get('groupId') or '',
+        'groupTitle': public_line.get('groupTitle') or '',
+        'groupDisplayFields': list(public_line.get('groupDisplayFields') or []),
+        'groupCustomText': bool(public_line.get('groupCustomText')),
+        'groupItemQuantity': public_line.get(
+            'groupItemQuantity', public_line.get('quantity', 1)
+        ),
+        'groupHeaderQuantity': public_line.get('quantity', 1),
+        'groupLeader': bool(public_line.get('groupLeader')),
+        'groupItemDays': public_line.get('groupItemDays', 1),
+        'groupItemUom': public_line.get('groupItemUom', 'units'),
+        'groupItemUnitPrice': public_line.get('groupItemUnitPrice', 0),
+        'groupItemDiscountPercent': public_line.get('groupItemDiscountPercent', 0),
+        'groupItemTotalMode': public_line.get('groupItemTotalMode', 'calculated'),
+        'groupItemTotal': public_line.get('groupItemTotal', 0),
+        'groupItemPriceContribution': public_line.get('groupItemPriceContribution', 0),
+        'groupItemCommercialStored': bool(public_line.get('groupItemCommercialStored')),
+    }
+    line = _normalise_costing_line(payload)
+    # The canonical commercial record owns current spelling and inventory
+    # identity. Re-apply it after derived costing values are calculated so a
+    # read cannot independently rename only the costing projection.
+    line.update({
+        'quotationLineId': str(public_line.get('id') or ''),
+        'subprojectId': str(public_line.get('subprojectId') or 'main'),
+        'catalogKey': str(public_line.get('catalogKey') or ''),
+        'sourceAssetIds': list(public_line.get('sourceAssetIds') or []),
+        'brand': str(public_line.get('brand') or ''),
+        'model': str(public_line.get('model') or ''),
+        'description': str(public_line.get('description') or ''),
+        'groupId': str(public_line.get('groupId') or ''),
+        'groupTitle': str(public_line.get('groupTitle') or ''),
+        'groupDisplayFields': list(public_line.get('groupDisplayFields') or []),
+        'groupCustomText': bool(public_line.get('groupCustomText')),
+        'groupItemQuantity': _safe_float(
+            public_line.get('groupItemQuantity'), public_line.get('quantity', 1)
+        ),
+        'groupHeaderQuantity': _safe_float(public_line.get('quantity'), 1),
+        'groupLeader': bool(public_line.get('groupLeader')),
+        'groupItemDays': _safe_float(public_line.get('groupItemDays'), 1),
+        'groupItemUom': str(public_line.get('groupItemUom') or 'units'),
+        'groupItemUnitPrice': _safe_float(public_line.get('groupItemUnitPrice'), 0),
+        'groupItemDiscountPercent': _safe_float(public_line.get('groupItemDiscountPercent'), 0),
+        'groupItemTotalMode': str(public_line.get('groupItemTotalMode') or 'calculated'),
+        'groupItemTotal': _safe_float(public_line.get('groupItemTotal'), 0),
+        'groupItemPriceContribution': _safe_float(public_line.get('groupItemPriceContribution'), 0),
+        'groupItemCommercialStored': bool(public_line.get('groupItemCommercialStored')),
+        'category': category,
+        'departmentCode': str(public_line.get('departmentCode') or ''),
+        'isCustom': bool(public_line.get('isCustom')),
+    })
+    return line
+
+
+def _linked_pair_documents(finance_data):
+    documents = finance_data.get('documents') or []
+    quotations = {
+        str(row.get('id') or ''): row
+        for row in documents
+        if isinstance(row, dict) and row.get('type') == 'quotation'
+    }
+    costings = {
+        str(row.get('id') or ''): row
+        for row in documents
+        if isinstance(row, dict) and row.get('type') == 'costing'
+    }
+    pairs = []
+    for quotation_id, quotation in quotations.items():
+        costing_id = str(quotation.get('sourceCostingId') or '')
+        costing = costings.get(costing_id)
+        if costing is None:
+            costing = next((
+                row for row in costings.values()
+                if quotation_id in {
+                    str(row.get('sourceQuotationId') or ''),
+                    str(row.get('convertedQuotationId') or ''),
+                }
+            ), None)
+        if costing is not None:
+            pairs.append((quotation, costing))
+    return pairs
+
+
+def _linked_line_record_checksum(record):
+    payload = {
+        'quotationId': str((record or {}).get('quotationId') or ''),
+        'costingId': str((record or {}).get('costingId') or ''),
+        'lines': (record or {}).get('lines') or [],
+    }
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _validate_linked_line_store(finance_data, require_projections=False):
+    """Fail closed when canonical line data is incomplete or inconsistent."""
+    store = finance_data.get('linkedLineItems')
+    if not isinstance(store, dict):
+        raise ValueError('Canonical finance line store is missing')
+
+    pairs = _linked_pair_documents(finance_data)
+    active_quotation_ids = set()
+    report = {
+        'pairs': len(pairs),
+        'quotationLines': 0,
+        'costingLines': 0,
+    }
+    for quotation, costing in pairs:
+        quotation_id = str(quotation.get('id') or '')
+        costing_id = str(costing.get('id') or '')
+        active_quotation_ids.add(quotation_id)
+        record = store.get(quotation_id)
+        if not isinstance(record, dict):
+            raise ValueError(
+                f'Canonical finance lines are missing for quotation {quotation_id}'
+            )
+        if str(record.get('quotationId') or '') != quotation_id:
+            raise ValueError(f'Canonical quotation link mismatch for {quotation_id}')
+        if str(record.get('costingId') or '') != costing_id:
+            raise ValueError(f'Canonical costing link mismatch for {quotation_id}')
+        if _safe_int(record.get('schemaVersion'), 0) != 1:
+            raise ValueError(f'Unsupported canonical line schema for {quotation_id}')
+        groups = record.get('lines')
+        if not isinstance(groups, list):
+            raise ValueError(f'Canonical line groups are invalid for {quotation_id}')
+        quotation_line_count = _safe_int(record.get('quotationLineCount'), -1)
+        costing_line_count = _safe_int(record.get('costingLineCount'), -1)
+        allocation_count = sum(
+            len(group.get('allocations') or [])
+            for group in groups if isinstance(group, dict)
+        )
+        if quotation_line_count < 0 or quotation_line_count != len(groups):
+            raise ValueError(f'Canonical quotation line count mismatch for {quotation_id}')
+        if costing_line_count < 0 or costing_line_count != allocation_count:
+            raise ValueError(f'Canonical costing line count mismatch for {quotation_id}')
+        group_ids = [
+            str((group or {}).get('id') or '') for group in groups
+            if isinstance(group, dict)
+        ]
+        if len(group_ids) != len(groups) or any(not value for value in group_ids):
+            raise ValueError(f'Canonical line identity is missing for {quotation_id}')
+        if len(set(group_ids)) != len(group_ids):
+            raise ValueError(f'Duplicate canonical quotation line for {quotation_id}')
+        allocation_ids = [
+            str((allocation or {}).get('id') or '')
+            for group in groups if isinstance(group, dict)
+            for allocation in group.get('allocations') or []
+            if isinstance(allocation, dict)
+        ]
+        if len(allocation_ids) != allocation_count or any(
+            not value for value in allocation_ids
+        ):
+            raise ValueError(f'Canonical allocation identity is missing for {quotation_id}')
+        if len(set(allocation_ids)) != len(allocation_ids):
+            raise ValueError(f'Duplicate canonical costing allocation for {quotation_id}')
+        if str(record.get('checksum') or '') != _linked_line_record_checksum(record):
+            raise ValueError(f'Canonical finance line checksum mismatch for {quotation_id}')
+
+        if require_projections:
+            if 'lineItems' not in quotation or 'lineItems' not in costing:
+                raise ValueError(f'Finance line projection is missing for {quotation_id}')
+            projected_quote_lines = quotation.get('lineItems') or []
+            projected_cost_lines = costing.get('lineItems') or []
+            if len(projected_quote_lines) != quotation_line_count:
+                raise ValueError(f'Quotation projection count mismatch for {quotation_id}')
+            if len(projected_cost_lines) != costing_line_count:
+                raise ValueError(f'Costing projection count mismatch for {quotation_id}')
+            if [str(row.get('id') or '') for row in projected_quote_lines] != group_ids:
+                raise ValueError(f'Quotation projection identity mismatch for {quotation_id}')
+            if [str(row.get('id') or '') for row in projected_cost_lines] != allocation_ids:
+                raise ValueError(f'Costing projection identity mismatch for {quotation_id}')
+
+        report['quotationLines'] += quotation_line_count
+        report['costingLines'] += costing_line_count
+
+    orphaned = set(store) - active_quotation_ids
+    if orphaned:
+        raise ValueError(
+            'Canonical finance lines contain orphaned quotations: '
+            + ', '.join(sorted(orphaned))
+        )
+    return report
+
+
+def _capture_linked_line_items(finance_data):
+    """Capture linked lines once, with costing rows stored as allocations."""
+    existing_store = finance_data.get('linkedLineItems')
+    if not isinstance(existing_store, dict):
+        existing_store = {}
+    next_store = {}
+    for quotation, costing in _linked_pair_documents(finance_data):
+        quotation_id = str(quotation.get('id') or '')
+        costing_id = str(costing.get('id') or '')
+        if not quotation_id or not costing_id:
+            continue
+
+        # Direct maintenance scripts may save a raw v14 payload whose document
+        # projections were intentionally stripped. Preserve the canonical record
+        # instead of interpreting absent projections as deletion of every line.
+        if 'lineItems' not in quotation or 'lineItems' not in costing:
+            existing = existing_store.get(quotation_id)
+            if not isinstance(existing, dict):
+                raise ValueError(
+                    f'Cannot save quotation {quotation_id} without line projections'
+                )
+            next_store[quotation_id] = copy.deepcopy(existing)
+            continue
+
+        quote_lines = [
+            copy.deepcopy(line)
+            for line in quotation.get('lineItems') or []
+            if isinstance(line, dict) and str(line.get('id') or '')
+        ]
+        if len(quote_lines) != len(quotation.get('lineItems') or []):
+            raise ValueError(f'Quotation {quotation_id} contains a line without an ID')
+        quote_ids = [str(line.get('id') or '') for line in quote_lines]
+        if len(set(quote_ids)) != len(quote_ids):
+            raise ValueError(f'Quotation {quotation_id} contains duplicate line IDs')
+        quote_id_set = set(quote_ids)
+        quote_id_by_identity = {}
+        for line in quote_lines:
+            proxy = {
+                **line,
+                'category': _finance_system_name(
+                    line.get('department'), line.get('systemName')
+                ) or 'General',
+            }
+            quote_id_by_identity.setdefault(
+                _costing_line_quote_identity(proxy), str(line.get('id') or '')
+            )
+
+        allocations_by_quote_id = {}
+        source_cost_lines = costing.get('lineItems') or []
+        for cost_line in source_cost_lines:
+            if not isinstance(cost_line, dict):
+                raise ValueError(f'Costing {costing_id} contains an invalid line')
+            quote_line_id = str(
+                cost_line.get('quotationLineId') or cost_line.get('id') or ''
+            )
+            if quote_line_id not in quote_id_set:
+                quote_line_id = quote_id_by_identity.get(
+                    _costing_line_quote_identity(cost_line), ''
+                )
+            if quote_line_id not in quote_id_set:
+                raise ValueError(
+                    f'Costing line {cost_line.get("id") or "(missing ID)"} '
+                    f'is not linked to quotation {quotation_id}'
+                )
+            cost_line['quotationLineId'] = quote_line_id
+            allocations_by_quote_id.setdefault(quote_line_id, []).append(
+                _linked_cost_allocation_payload(cost_line)
+            )
+
+        groups = []
+        for quote_line in quote_lines:
+            quote_line_id = str(quote_line.get('id') or '')
+            allocations = allocations_by_quote_id.get(quote_line_id) or []
+            if not allocations:
+                raise ValueError(
+                    f'Quotation line {quote_line_id} has no costing allocation'
+                )
+            groups.append({
+                'id': quote_line_id,
+                'public': quote_line,
+                'allocations': allocations,
+            })
+        record = {
+            'schemaVersion': 1,
+            'quotationId': quotation_id,
+            'costingId': costing_id,
+            'quotationLineCount': len(groups),
+            'costingLineCount': len(source_cost_lines),
+            'lines': groups,
+            'updatedAt': now_iso(),
+        }
+        record['checksum'] = _linked_line_record_checksum(record)
+        next_store[quotation_id] = record
+
+    finance_data['linkedLineItems'] = next_store
+    _validate_linked_line_store(finance_data)
+    return next_store
+
+
+def _hydrate_linked_line_documents(finance_data, require_all_pairs=False):
+    """Project canonical linked lines into the existing quotation/costing APIs."""
+    store = finance_data.get('linkedLineItems')
+    if not isinstance(store, dict):
+        raise ValueError('Canonical finance line store is missing')
+    documents = finance_data.get('documents') or []
+    by_id = {
+        str(row.get('id') or ''): row
+        for row in documents if isinstance(row, dict) and row.get('id')
+    }
+    hydrated_quotation_ids = set()
+    for record in store.values():
+        quotation_id = str((record or {}).get('quotationId') or '')
+        costing_id = str((record or {}).get('costingId') or '')
+        quotation = by_id.get(quotation_id)
+        costing = by_id.get(costing_id)
+        if quotation is None or costing is None:
+            raise ValueError(
+                f'Canonical finance pair is missing documents for {quotation_id}'
+            )
+        quote_lines = []
+        cost_lines = []
+        for group in record.get('lines') or []:
+            public_line = copy.deepcopy(group.get('public') or {})
+            public_line['id'] = str(group.get('id') or public_line.get('id') or '')
+            quote_lines.append(public_line)
+            cost_lines.extend(
+                _linked_cost_line_from_record(public_line, allocation)
+                for allocation in group.get('allocations') or []
+            )
+        quotation['lineItems'] = quote_lines
+        costing['lineItems'] = cost_lines
+        hydrated_quotation_ids.add(quotation_id)
+
+    if require_all_pairs:
+        expected_ids = {
+            str(quotation.get('id') or '')
+            for quotation, _costing in _linked_pair_documents(finance_data)
+        }
+        missing = expected_ids - hydrated_quotation_ids
+        if missing:
+            raise ValueError(
+                'Canonical finance lines are missing for quotations: '
+                + ', '.join(sorted(missing))
+            )
+    return bool(hydrated_quotation_ids)
+
+
+def _finance_persisted_documents(finance_data):
+    """Persist linked lines only in linkedLineItems, not in both documents."""
+    store = finance_data.get('linkedLineItems') or {}
+    quotation_ids = set(store)
+    costing_ids = {
+        str(record.get('costingId') or '')
+        for record in store.values()
+        if isinstance(record, dict) and record.get('costingId')
+    }
+    persisted = []
+    for document in finance_data.get('documents') or []:
+        if not isinstance(document, dict):
+            continue
+        row = copy.deepcopy(document)
+        if (
+            row.get('type') == 'quotation'
+            and str(row.get('id') or '') in quotation_ids
+        ) or (
+            row.get('type') == 'costing'
+            and str(row.get('id') or '') in costing_ids
+        ):
+            row.pop('lineItems', None)
+        persisted.append(row)
+    return persisted
+
+
+def _ensure_quotation_costings(finance_data):
+    """Ensure each non-opted-out quotation has one costing with the same owner."""
+    documents = finance_data.setdefault('documents', [])
+    quotations = [
+        row for row in documents
+        if isinstance(row, dict) and row.get('type') == 'quotation'
+    ]
+    costings = [
+        row for row in documents
+        if isinstance(row, dict) and row.get('type') == 'costing'
+    ]
+    costings_by_id = {
+        str(row.get('id') or ''): row for row in costings if row.get('id')
+    }
+    costings_by_quotation = {}
+    for costing in costings:
+        for quotation_id in (
+            costing.get('sourceQuotationId'), costing.get('convertedQuotationId')
+        ):
+            quotation_id = str(quotation_id or '').strip()
+            if quotation_id and quotation_id not in costings_by_quotation:
+                costings_by_quotation[quotation_id] = costing
+
+    changed = False
+    for quotation in quotations:
+        if quotation.get('costingDisabled'):
+            if quotation.get('sourceCostingId'):
+                quotation['sourceCostingId'] = ''
+                changed = True
+            continue
+        quotation_id = str(quotation.get('id') or '').strip()
+        costing = costings_by_id.get(
+            str(quotation.get('sourceCostingId') or '').strip()
+        ) or costings_by_quotation.get(quotation_id)
+        if costing is None:
+            costing = _costing_from_quotation(quotation)
+            documents.append(costing)
+            costings_by_id[costing['id']] = costing
+            costings_by_quotation[quotation_id] = costing
+            changed = True
+
+        owner = _finance_document_owner_username(quotation) or _finance_owner_username()
+        owner_name = quotation.get('salesperson') or _user_display_name(owner)
+        paired_values = {
+            'status': 'linked',
+            'projectName': str(
+                quotation.get('projectName') or quotation.get('title') or ''
+            ),
+            'eventLocation': str(quotation.get('eventLocation') or ''),
+            'sourceQuotationId': quotation_id,
+            'sourceQuotationNumber': str(quotation.get('number') or ''),
+            'convertedQuotationId': quotation_id,
+            'convertedQuotationNumber': str(quotation.get('number') or ''),
+            'salespersonUsername': owner,
+            'salesperson': owner_name,
+        }
+        for key, value in paired_values.items():
+            if costing.get(key) != value:
+                costing[key] = value
+                changed = True
+        if quotation.get('sourceCostingId') != costing.get('id'):
+            quotation['sourceCostingId'] = costing.get('id')
+            changed = True
+    return changed
+
+
+def _costing_remember_costs(finance_data, costing):
+    cost_book = finance_data.setdefault('costBook', {})
+    for line in costing.get('lineItems') or []:
+        key = _costing_cost_book_key(line)
+        if not key:
+            continue
+        cost_book[key] = {
+            'itemCost': round(max(0, _safe_float(line.get('itemCost'), 0)), 6),
+            'description': str(line.get('description') or '').strip()[:1000],
+            'vendorName': str(line.get('vendorName') or '').strip()[:200],
+            'updatedAt': costing.get('updatedAt') or now_iso(),
+        }
+
+
+def _costing_vendor_profiles(workforce):
+    rows = []
+    for vendor in workforce.get('vendors') or []:
+        if isinstance(vendor, dict) and vendor.get('active', True):
+            rows.append(('vendor', vendor))
+    for vendor in workforce.get('transportVendors') or []:
+        if isinstance(vendor, dict) and vendor.get('active', True):
+            rows.append(('transport', vendor))
+    for worker in workforce.get('freelancers') or []:
+        if isinstance(worker, dict) and worker.get('active', True):
+            rows.append(('worker', worker))
+    return rows
+
+
+def _costing_find_vendor(workforce, name='', vendor_type='', vendor_id=''):
+    profiles = _costing_vendor_profiles(workforce)
+    requested_type = str(vendor_type or 'vendor').strip().lower()
+    if vendor_id:
+        match = next((
+            (kind, row) for kind, row in profiles
+            if kind == requested_type
+            and str(row.get('id') or '') == str(vendor_id)
+        ), None)
+        if match:
+            return match
+    target = str(name or '').strip().casefold()
+    return next((
+        (kind, row) for kind, row in profiles
+        if kind == requested_type
+        and str(row.get('name') or '').strip().casefold() == target
+    ), (None, None))
+
+
+def _costing_workforce_department(line):
+    """Resolve a Costing category to the department code used by Workforce."""
+    category = str((line or {}).get('category') or 'General').strip() or 'General'
+    _name, code = _finance_department_details(
+        category, (line or {}).get('departmentCode')
+    )
+    return _normalise_department_code(code) or 'UN', category
+
+
+def _sync_costing_vendor_assignments(costing, event_id):
+    """Expose Costing vendor totals as normal event service assignments."""
+    event_id = _safe_int(event_id, 0)
+    event = data_manager.events.get(event_id) if event_id else None
+    if not event:
+        return
+
+    allocations = {}
+    for line in costing.get('lineItems') or []:
+        vendor_id = str(line.get('vendorId') or '').strip()
+        vendor_type = str(line.get('vendorType') or 'vendor').strip().lower()
+        vendor_name = str(line.get('vendorName') or '').strip()
+        if (
+            not vendor_id
+            or vendor_type != 'vendor'
+            or not vendor_name
+            or vendor_name.casefold() == 'self'
+        ):
+            continue
+        department, category = _costing_workforce_department(line)
+        subproject_id = str(line.get('subprojectId') or 'main').strip() or 'main'
+        key = f'{vendor_id}:{department}:{subproject_id}'
+        allocation = allocations.setdefault(key, {
+            'vendorId': vendor_id,
+            'vendorName': vendor_name,
+            'department': department,
+            'category': category,
+            'subprojectId': subproject_id,
+            'amount': 0.0,
+        })
+        allocation['amount'] = round(
+            allocation['amount'] + max(0, _safe_float(line.get('costTotal'), 0)),
+            2,
+        )
+
+    start_date = _event_date_for_input(event.start_date)
+    costing_id = str(costing.get('id') or '')
+    with mutate_workforce(_workforce_folder()) as workforce:
+        rows = workforce.setdefault('assignments', {}).setdefault(str(event_id), [])
+        existing_by_key = {
+            str(row.get('costingAllocationKey') or ''): row
+            for row in rows
+            if isinstance(row, dict)
+            and str(row.get('sourceCostingId') or '') == costing_id
+            and str(row.get('costingAllocationKey') or '')
+        }
+        active_keys = set()
+
+        for key, allocation in allocations.items():
+            vendor = find_by_id(workforce.get('vendors'), allocation['vendorId'])
+            if not vendor:
+                continue
+            active_keys.add(key)
+            expected = round(allocation['amount'], 2)
+            assignment = existing_by_key.get(key)
+            if assignment is None:
+                assignment = {
+                    'id': new_id('assignment'),
+                    'freelancerId': allocation['vendorId'],
+                    'vendorId': allocation['vendorId'],
+                    'subjectType': 'vendor',
+                    'providerType': 'service',
+                    'sourceType': 'costing',
+                    'sourceCostingId': costing_id,
+                    'costingAllocationKey': key,
+                    'createdAt': now_iso(),
+                }
+                rows.append(assignment)
+
+            previously_synced = assignment.get('costingSyncedAmount')
+            current_amount = round(
+                max(0, _safe_float(assignment.get('serviceCost'), 0)), 2
+            )
+            may_sync_amount = (
+                previously_synced is None
+                or abs(current_amount - _safe_float(previously_synced, 0)) < 0.005
+            )
+            assignment.update({
+                'freelancerId': allocation['vendorId'],
+                'vendorId': allocation['vendorId'],
+                'subjectType': 'vendor',
+                'providerType': 'service',
+                'department': allocation['department'],
+                'subprojectId': allocation['subprojectId'],
+                'serviceName': allocation['category'],
+                'roleName': allocation['category'],
+                'days': 1,
+                'workDates': [start_date] if start_date else [],
+                'sourceType': 'costing',
+                'sourceCostingId': costing_id,
+                'costingAllocationKey': key,
+                'updatedAt': now_iso(),
+            })
+            if may_sync_amount:
+                assignment['serviceCost'] = expected
+                assignment['dailyRate'] = expected
+                assignment['costingSyncedAmount'] = expected
+
+            manual_rows = workforce.setdefault('manualDepartments', {}).setdefault(
+                str(event_id), []
+            )
+            if not any(
+                isinstance(row, dict)
+                and _normalise_department_code(row.get('code'))
+                == allocation['department']
+                for row in manual_rows
+            ):
+                manual_rows.append({
+                    'code': allocation['department'],
+                    'name': allocation['category'],
+                    'createdAt': now_iso(),
+                    'sourceCostingId': costing_id,
+                })
+
+        kept = []
+        for row in rows:
+            if (
+                not isinstance(row, dict)
+                or str(row.get('sourceCostingId') or '') != costing_id
+                or str(row.get('costingAllocationKey') or '') in active_keys
+            ):
+                kept.append(row)
+                continue
+            current_amount = round(
+                max(0, _safe_float(row.get('serviceCost'), 0)), 2
+            )
+            synced_amount = round(
+                max(0, _safe_float(row.get('costingSyncedAmount'), 0)), 2
+            )
+            if abs(current_amount - synced_amount) >= 0.005:
+                row.pop('sourceCostingId', None)
+                row.pop('costingAllocationKey', None)
+                row.pop('costingSyncedAmount', None)
+                row['sourceType'] = 'manual'
+                kept.append(row)
+        workforce['assignments'][str(event_id)] = kept
+
+
+def _sync_costing_vendors(costing, event_id=None):
+    """Mirror rental totals to the vendor directory without overwriting edits."""
+    aggregate = {}
+    for line in costing.get('lineItems') or []:
+        name = str(line.get('vendorName') or '').strip()
+        if not name or name.casefold() == 'self':
+            continue
+        key = _costing_vendor_key(name, line.get('vendorType'), line.get('vendorId'))
+        bucket = aggregate.setdefault(key, {
+            'name': name,
+            'vendorType': line.get('vendorType') or 'vendor',
+            'vendorId': line.get('vendorId') or '',
+            'amount': 0.0,
+            'lines': [],
+        })
+        bucket['amount'] = round(bucket['amount'] + _safe_float(line.get('costTotal'), 0), 2)
+        bucket['lines'].append(line)
+
+    previous_snapshots = costing.get('vendorSnapshots') or {}
+    next_snapshots = {}
+    data_folder = _workforce_folder()
+    with mutate_workforce(data_folder) as workforce:
+        profiles = _costing_vendor_profiles(workforce)
+        active_profile_keys = set()
+        for original_key, bucket in aggregate.items():
+            kind, profile = _costing_find_vendor(
+                workforce,
+                bucket['name'],
+                bucket['vendorType'],
+                bucket['vendorId'],
+            )
+            if profile is None:
+                kind = 'vendor'
+                profile = {
+                    'id': new_id('vendor'),
+                    'name': bucket['name'],
+                    'memberIds': [],
+                    'notes': 'Added automatically from Costing',
+                    'active': True,
+                    'createdAt': now_iso(),
+                    'updatedAt': now_iso(),
+                    'costingRentals': [],
+                }
+                workforce.setdefault('vendors', []).append(profile)
+                profiles.append((kind, profile))
+            profile_key = _costing_vendor_key(profile.get('name'), kind, profile.get('id'))
+            active_profile_keys.add(profile_key)
+            for line in bucket['lines']:
+                line['vendorName'] = str(profile.get('name') or bucket['name'])
+                line['vendorId'] = str(profile.get('id') or '')
+                line['vendorType'] = kind
+            rentals = profile.setdefault('costingRentals', [])
+            rental = next((
+                row for row in rentals
+                if isinstance(row, dict)
+                and str(row.get('costingId') or '') == str(costing.get('id'))
+            ), None)
+            previous = previous_snapshots.get(profile_key) or previous_snapshots.get(original_key) or {}
+            synced_amount = previous.get('syncedAmount')
+            expected = round(bucket['amount'], 2)
+            if rental is None:
+                rental = {
+                    'costingId': costing.get('id'),
+                    'projectName': costing.get('projectName') or 'Untitled costing',
+                    'amount': expected,
+                    'updatedAt': now_iso(),
+                }
+                rentals.append(rental)
+                synced_amount = expected
+            elif synced_amount is None or abs(
+                _safe_float(rental.get('amount'), 0) - _safe_float(synced_amount, 0)
+            ) < 0.005:
+                rental.update({
+                    'projectName': costing.get('projectName') or 'Untitled costing',
+                    'amount': expected,
+                    'updatedAt': now_iso(),
+                })
+                synced_amount = expected
+            next_snapshots[profile_key] = {
+                'vendorId': str(profile.get('id') or ''),
+                'vendorType': kind,
+                'vendorName': str(profile.get('name') or ''),
+                'syncedAmount': round(_safe_float(synced_amount, rental.get('amount')), 2),
+            }
+            profile['updatedAt'] = now_iso()
+
+        for kind, profile in profiles:
+            profile_key = _costing_vendor_key(profile.get('name'), kind, profile.get('id'))
+            if profile_key in active_profile_keys:
+                continue
+            snapshot = previous_snapshots.get(profile_key) or {}
+            rentals = profile.get('costingRentals') or []
+            kept = []
+            for rental in rentals:
+                if str((rental or {}).get('costingId') or '') != str(costing.get('id')):
+                    kept.append(rental)
+                    continue
+                if abs(
+                    _safe_float((rental or {}).get('amount'), 0)
+                    - _safe_float(snapshot.get('syncedAmount'), 0)
+                ) >= 0.005:
+                    kept.append(rental)
+            profile['costingRentals'] = kept
+    costing['vendorSnapshots'] = next_snapshots
+    costing['vendorManagement'] = _normalise_costing_vendor_management(
+        costing.get('lineItems') or [],
+        costing.get('vendorManagement') or [],
+    )
+    if event_id:
+        _sync_costing_vendor_assignments(costing, event_id)
+
+
+def _costing_vendor_discrepancies(costing):
+    workforce = load_workforce(_workforce_folder())
+    with _finance_lock:
+        linked_quotation = _linked_quotation_for_costing(
+            _load_finance_data(), costing
+        )
+    event_id = _safe_int((linked_quotation or {}).get('eventId'), 0)
+    # Before an event exists, Costing is the source of truth. Vendor rental
+    # snapshots are kept in sync on save and are not an independent total to
+    # reconcile against.
+    manager = _current_data_manager_object()
+    if (
+        not event_id
+        or manager is None
+        or event_id not in manager.events
+    ):
+        return []
+    assignment_totals = {}
+    if event_id:
+        for assignment in event_assignments(workforce, event_id):
+            if (
+                not isinstance(assignment, dict)
+                or str(assignment.get('sourceCostingId') or '')
+                != str(costing.get('id') or '')
+            ):
+                continue
+            key = _costing_vendor_key(
+                '', 'vendor', assignment.get('vendorId')
+            )
+            if key:
+                assignment_totals[key] = round(
+                    assignment_totals.get(key, 0)
+                    + max(0, _safe_float(assignment.get('serviceCost'), 0)),
+                    2,
+                )
+    aggregate = {}
+    for line in costing.get('lineItems') or []:
+        name = str(line.get('vendorName') or '').strip()
+        if not name or name.casefold() == 'self':
+            continue
+        key = _costing_vendor_key(name, line.get('vendorType'), line.get('vendorId'))
+        aggregate[key] = round(
+            aggregate.get(key, 0) + _safe_float(line.get('costTotal'), 0), 2
+        )
+    warnings = []
+    for key, expected in aggregate.items():
+        snapshot = (costing.get('vendorSnapshots') or {}).get(key) or {}
+        kind, profile = _costing_find_vendor(
+            workforce,
+            snapshot.get('vendorName'),
+            snapshot.get('vendorType'),
+            snapshot.get('vendorId'),
+        )
+        if profile is None:
+            warnings.append({
+                'vendorName': snapshot.get('vendorName') or key.removeprefix('name:'),
+                'expectedAmount': expected,
+                'actualAmount': None,
+                'message': 'Vendor is missing from Manpower & Transport.',
+            })
+            continue
+        if event_id:
+            actual = assignment_totals.get(
+                _costing_vendor_key('', 'vendor', profile.get('id'))
+            )
+        else:
+            rental = next((
+                row for row in profile.get('costingRentals') or []
+                if isinstance(row, dict)
+                and str(row.get('costingId') or '') == str(costing.get('id'))
+            ), None)
+            actual = (
+                None
+                if rental is None
+                else round(_safe_float(rental.get('amount'), 0), 2)
+            )
+        if actual is None or abs(actual - expected) >= 0.005:
+            warnings.append({
+                'vendorName': profile.get('name') or snapshot.get('vendorName') or 'Vendor',
+                'vendorId': profile.get('id') or '',
+                'vendorType': kind or '',
+                'expectedAmount': expected,
+                'actualAmount': actual,
+                'message': (
+                    'Department vendor total differs from this costing sheet. '
+                    'Review and update it manually.'
+                    if event_id
+                    else 'Rental total differs from this costing sheet. Review and update it manually.'
+                ),
+            })
+    return warnings
+
+
+def _sync_workforce_vendor_to_unconfirmed_costings(previous_vendor, vendor):
+    """Let Manpower vendor edits flow back until the quotation creates an event."""
+    previous_vendor = previous_vendor if isinstance(previous_vendor, dict) else {}
+    vendor = vendor if isinstance(vendor, dict) else {}
+    vendor_id = str(vendor.get('id') or previous_vendor.get('id') or '')
+    old_name = str(previous_vendor.get('name') or '').strip()
+    new_name = str(vendor.get('name') or old_name).strip()
+    rentals = {
+        str(row.get('costingId') or ''): round(
+            max(0, _safe_float(row.get('amount'), 0)), 2
+        )
+        for row in vendor.get('costingRentals') or []
+        if isinstance(row, dict) and str(row.get('costingId') or '')
+    }
+    if not vendor_id or not rentals:
+        return []
+
+    updated_ids = []
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        for costing_id, rental_total in rentals.items():
+            stored = _finance_find_document(finance_data, costing_id, 'costing')
+            if not stored:
+                continue
+            quotation = _linked_quotation_for_costing(finance_data, stored)
+            if quotation and _safe_int(quotation.get('eventId'), 0):
+                continue
+
+            payload = copy.deepcopy(_normalise_costing_document(stored, stored))
+            matching = [
+                line for line in payload.get('lineItems') or []
+                if (
+                    str(line.get('vendorId') or '') == vendor_id
+                    or (
+                        not str(line.get('vendorId') or '')
+                        and str(line.get('vendorName') or '').strip().casefold()
+                        in {old_name.casefold(), new_name.casefold()}
+                    )
+                )
+            ]
+            if not matching:
+                continue
+
+            weights = [max(0, _safe_float(line.get('costTotal'), 0)) for line in matching]
+            if sum(weights) <= 0:
+                weights = [
+                    max(0, _safe_float(line.get('quantity'), 0))
+                    * max(0, _safe_float(line.get('multiplier'), 0))
+                    for line in matching
+                ]
+            weight_total = sum(weights) or len(matching)
+            used = 0.0
+            for index, line in enumerate(matching):
+                allocated = (
+                    round(rental_total - used, 2)
+                    if index == len(matching) - 1
+                    else round(rental_total * weights[index] / weight_total, 2)
+                )
+                used = round(used + allocated, 2)
+                divisor = max(0, _safe_float(line.get('quantity'), 0)) * max(
+                    0, _safe_float(line.get('multiplier'), 0)
+                )
+                line['itemCost'] = round(allocated / divisor, 6) if divisor else 0
+                line['vendorId'] = vendor_id
+                line['vendorType'] = 'vendor'
+                line['vendorName'] = new_name
+
+            payload['vendorSnapshots'] = copy.deepcopy(
+                payload.get('vendorSnapshots') or {}
+            )
+            profile_key = _costing_vendor_key(new_name, 'vendor', vendor_id)
+            payload['vendorSnapshots'][profile_key] = {
+                'vendorId': vendor_id,
+                'vendorType': 'vendor',
+                'vendorName': new_name,
+                'syncedAmount': rental_total,
+            }
+            updated = _normalise_costing_document(payload, stored)
+            for index, row in enumerate(finance_data.get('documents') or []):
+                if str(row.get('id') or '') == costing_id:
+                    finance_data['documents'][index] = updated
+                    break
+            _costing_remember_costs(finance_data, updated)
+            updated_ids.append(costing_id)
+        if updated_ids:
+            _save_finance_data(finance_data)
+    return updated_ids
+
+
 def _finance_revision_payload(document):
     omitted = {
         'revisions', 'totals', 'updatedAt', 'updatedBy', 'status',
@@ -27196,6 +30088,24 @@ def _finance_revision_payload(document):
 def _finance_revision_fingerprint(document):
     return json.dumps(
         _finance_revision_payload(document),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+
+
+def _finance_document_update_fingerprint(document, extra_omitted=None):
+    omitted = {
+        'totals', 'updatedAt', 'updatedBy', 'updatedByName',
+    }
+    omitted.update(extra_omitted or ())
+    payload = {
+        key: value
+        for key, value in (document or {}).items()
+        if key not in omitted
+    }
+    return json.dumps(
+        payload,
         ensure_ascii=False,
         sort_keys=True,
         separators=(',', ':'),
@@ -27483,8 +30393,44 @@ def _finance_inventory_group_from_line(line):
     if not brand or not model:
         return None
 
+    # Older rate-card and imported quotation lines can retain a legacy catalog
+    # key and no sourceAssetIds. Resolve their model signature against the live
+    # inventory before falling back to the quotation text so Compare creates a
+    # canonical inventory-backed event requirement (including correct casing
+    # and the inventory description).
+    target_department = (
+        _normalise_department_code(line.get('departmentCode')) or 'UN'
+    )
+    target_brand = brand.casefold()
+    target_model = model.casefold()
+    matching_asset = next((
+        asset for asset in data_manager.inventory.values()
+        if asset
+        and not _is_disposed(asset)
+        and (
+            _normalise_department_code(
+                getattr(asset, 'department_code', 'UN')
+            ) or 'UN'
+        ) == target_department
+        and str(getattr(asset, 'brand', '') or '').strip().casefold()
+        == target_brand
+        and str(getattr(asset, 'model_number', '') or '').strip().casefold()
+        == target_model
+    ), None)
+    if matching_asset:
+        return {
+            'department': target_department,
+            'brand': str(getattr(matching_asset, 'brand', '') or '').strip(),
+            'model': str(
+                getattr(matching_asset, 'model_number', '') or ''
+            ).strip(),
+            'description': str(
+                getattr(matching_asset, 'description', '') or ''
+            ).strip(),
+        }
+
     return {
-        'department': _normalise_department_code(line.get('departmentCode')) or 'UN',
+        'department': target_department,
         'brand': brand,
         'model': model,
         'description': str(line.get('description') or '').strip(),
@@ -27496,19 +30442,45 @@ def _finance_custom_marker_from_line(line, quantity):
         return None
     if not line.get('isCustom'):
         return None
-    description = str(line.get('description') or '').strip()
+    description = str(
+        line.get('groupTitle')
+        if line.get('groupCustomText') and line.get('groupTitle')
+        else line.get('description')
+    ).strip()
     if not description:
         return None
     department_code = _normalise_department_code(line.get('departmentCode')) or 'UN'
-    line_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(line.get('id') or ''))[:80]
+    line_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(
+        line.get('groupId') if line.get('groupCustomText') else line.get('id') or ''
+    ))[:80]
     uid = f"finance_{line_id}"[:80] if line_id else None
     return _make_custom_marker('MISC', description, quantity, department_code, uid=uid)
 
 
+def _finance_group_requirement_quantity(line, costing=False):
+    line = line if isinstance(line, dict) else {}
+    if not line.get('groupId'):
+        return max(0, _safe_float(line.get('quantity'), 0))
+    item_quantity = max(0, _safe_float(line.get('groupItemQuantity'), 1))
+    header_quantity = max(0, _safe_float(
+        line.get('groupHeaderQuantity') if costing else line.get('quantity'),
+        1,
+    ))
+    return item_quantity * header_quantity
+
+
 def _finance_event_prepared_items(document):
     prepared_items = []
+    custom_groups = set()
     for line in document.get('lineItems') or []:
-        quantity = max(1, _safe_int(round(_safe_float(line.get('quantity'), 1)), 1))
+        custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
+        if custom_group and custom_group in custom_groups:
+            continue
+        if custom_group:
+            custom_groups.add(custom_group)
+        quantity = max(1, _safe_int(round(
+            _finance_group_requirement_quantity(line)
+        ), 1))
         group = _finance_inventory_group_from_line(line)
         if group:
             _add_or_increment_model_marker(
@@ -27528,10 +30500,16 @@ def _finance_event_subprojects(document):
     for subproject in document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]:
         subproject_id = str(subproject.get('id') or 'main')
         items = []
+        custom_groups = set()
         for line in document.get('lineItems') or []:
             if str(line.get('subprojectId') or 'main') != subproject_id:
                 continue
-            quantity = max(0, _safe_float(line.get('quantity'), 0))
+            custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
+            if custom_group and custom_group in custom_groups:
+                continue
+            if custom_group:
+                custom_groups.add(custom_group)
+            quantity = _finance_group_requirement_quantity(line)
             custom_ref = _finance_custom_marker_from_line(
                 line,
                 max(1, _safe_int(round(quantity), 1)),
@@ -27563,7 +30541,158 @@ def _finance_event_subprojects(document):
                     else inventory_group.get('model')
                 ),
                 'description': (
-                    line.get('description')
+                    (
+                        line.get('groupTitle')
+                        if line.get('groupCustomText') and line.get('groupTitle')
+                        else line.get('description')
+                    )
+                    if not inventory_group
+                    else inventory_group.get('description')
+                ),
+                'quantity': quantity,
+                'isCustom': bool(line.get('isCustom')),
+            }
+            if custom_ref:
+                item['assetRefs'] = [custom_ref]
+            items.append(item)
+        result.append({
+            'id': subproject_id,
+            'name': str(subproject.get('name') or 'Room').strip() or 'Room',
+            'items': items,
+        })
+    return result
+
+
+def _costing_event_loan_marker(costing, line):
+    costing_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(
+        (costing or {}).get('id') or 'costing'
+    ))[:60]
+    line_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(
+        (line or {}).get('id') or secrets.token_hex(6)
+    ))[:60]
+    quantity = max(1, _safe_int(round(
+        _finance_group_requirement_quantity(line, costing=True)
+    ), 1))
+    return _make_custom_marker(
+        'LOAN',
+        str((line or {}).get('description') or 'Dry-hire equipment'),
+        quantity,
+        _normalise_department_code((line or {}).get('departmentCode')) or 'UN',
+        str((line or {}).get('vendorName') or 'Vendor'),
+        uid=f'costing_{costing_id}_{line_id}',
+        description='Managed from Event Costing',
+    )
+
+
+def _costing_line_is_external(line):
+    name = str((line or {}).get('vendorName') or '').strip().casefold()
+    return bool(name and name != 'self')
+
+
+def _costing_finance_line(line):
+    """Expose Costing category names through Finance's department helpers."""
+    return {
+        **(line or {}),
+        'department': (line or {}).get('category') or (line or {}).get('department'),
+        'systemName': (line or {}).get('category') or (line or {}).get('systemName'),
+    }
+
+
+def _costing_event_prepared_items(costing):
+    """Build Plan demand from costing sources without duplicating hired units."""
+    prepared_items = []
+    custom_groups = set()
+    for line in (costing or {}).get('lineItems') or []:
+        custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
+        if custom_group and custom_group in custom_groups:
+            continue
+        if custom_group:
+            custom_groups.add(custom_group)
+        finance_line = _costing_finance_line(line)
+        quantity = max(1, _safe_int(round(
+            _finance_group_requirement_quantity(line, costing=True)
+        ), 1))
+        if _costing_line_is_external(line):
+            if _costing_vendor_management_mode(costing, line) == 'dry-hire':
+                prepared_items.append(_costing_event_loan_marker(costing, line))
+            continue
+        group = _finance_inventory_group_from_line(finance_line)
+        if group:
+            _add_or_increment_model_marker(prepared_items, group, quantity)
+            continue
+        custom_marker = _finance_custom_marker_from_line(finance_line, quantity)
+        if custom_marker:
+            prepared_items.append(custom_marker)
+    return prepared_items
+
+
+def _costing_event_subprojects(costing, subprojects=None):
+    result = []
+    subprojects = subprojects or (costing or {}).get('subprojects') or [
+        {'id': 'main', 'name': 'Main Room'}
+    ]
+    for subproject in subprojects:
+        subproject_id = str(subproject.get('id') or 'main')
+        items = []
+        custom_groups = set()
+        for line in (costing or {}).get('lineItems') or []:
+            if str(line.get('subprojectId') or 'main') != subproject_id:
+                continue
+            custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
+            if custom_group and custom_group in custom_groups:
+                continue
+            if custom_group:
+                custom_groups.add(custom_group)
+            quantity = _finance_group_requirement_quantity(line, costing=True)
+            finance_line = _costing_finance_line(line)
+            if _costing_line_is_external(line):
+                if _costing_vendor_management_mode(costing, line) != 'dry-hire':
+                    continue
+                custom_ref = _costing_event_loan_marker(costing, line)
+                items.append({
+                    'lineId': f"costing_vendor_{line.get('id') or secrets.token_hex(5)}",
+                    'department': line.get('category') or 'General',
+                    'departmentCode': _normalise_department_code(
+                        line.get('departmentCode')
+                    ) or 'UN',
+                    'brand': '',
+                    'model': '',
+                    'description': line.get('description') or 'Dry-hire equipment',
+                    'customDescription': 'Managed from Event Costing',
+                    'company': line.get('vendorName') or 'Vendor',
+                    'quantity': max(1, _safe_int(round(quantity), 1)),
+                    'isCustom': True,
+                    'assetRefs': [custom_ref],
+                })
+                continue
+
+            inventory_group = _finance_inventory_group_from_line(finance_line)
+            custom_ref = _finance_custom_marker_from_line(
+                finance_line, max(1, _safe_int(round(quantity), 1))
+            )
+            item = {
+                'lineId': line.get('id'),
+                'department': (
+                    line.get('category')
+                    if not inventory_group
+                    else _finance_department_details(
+                        inventory_group.get('department'),
+                        inventory_group.get('department'),
+                    )[0]
+                ),
+                'departmentCode': (
+                    line.get('departmentCode')
+                    if not inventory_group
+                    else inventory_group.get('department')
+                ),
+                'brand': line.get('brand') if not inventory_group else inventory_group.get('brand'),
+                'model': line.get('model') if not inventory_group else inventory_group.get('model'),
+                'description': (
+                    (
+                        line.get('groupTitle')
+                        if line.get('groupCustomText') and line.get('groupTitle')
+                        else line.get('description')
+                    )
                     if not inventory_group
                     else inventory_group.get('description')
                 ),
@@ -27665,7 +30794,7 @@ def _finance_can_adopt_legacy_created_event(document, event):
     ))
 
 
-def _finance_sync_managed_event(document):
+def _finance_sync_managed_event(document, finance_data=None, force=False):
     event_id = _safe_int(document.get('eventId'), 0)
     if not event_id:
         _finance_clear_event_link(document)
@@ -27683,27 +30812,69 @@ def _finance_sync_managed_event(document):
         document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
 
     previous_fingerprint = str(document.get('eventSyncFingerprint') or '').strip()
-    if previous_fingerprint and _finance_event_asset_fingerprint(event) != previous_fingerprint:
+    if (
+        not force
+        and previous_fingerprint
+        and _finance_event_asset_fingerprint(event) != previous_fingerprint
+    ):
         document['eventManagedByQuotation'] = False
         document['eventSyncFingerprint'] = ''
         return event_id
 
+    linked_costing = (
+        _linked_costing_for_quotation(finance_data, document)
+        if isinstance(finance_data, dict)
+        else None
+    )
     event.asset_models = []
-    event.prepared_items = _finance_event_prepared_items(document)
-    event.subprojects = _finance_event_subprojects(document)
+    event.prepared_items = (
+        _costing_event_prepared_items(linked_costing)
+        if linked_costing
+        else _finance_event_prepared_items(document)
+    )
+    event.subprojects = (
+        _costing_event_subprojects(linked_costing, document.get('subprojects'))
+        if linked_costing
+        else _finance_event_subprojects(document)
+    )
     data_manager.save_event(event)
     invalidate_cache()
     document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
     return event_id
 
 
-def _finance_create_event(document):
+def _finance_create_event(document, finance_data=None, mark_accepted=True):
     if _safe_int(document.get('eventId'), 0):
-        document['acceptedAt'] = document.get('acceptedAt') or datetime.now().isoformat(timespec='seconds')
-        return _finance_sync_managed_event(document) or _safe_int(document.get('eventId'), 0)
+        if mark_accepted:
+            document['acceptedAt'] = (
+                document.get('acceptedAt')
+                or datetime.now().isoformat(timespec='seconds')
+            )
+        event_id = _finance_sync_managed_event(
+            document, finance_data
+        ) or _safe_int(document.get('eventId'), 0)
+        if finance_data is not None:
+            linked_costing = _linked_costing_for_quotation(finance_data, document)
+            if linked_costing:
+                _sync_costing_vendors(linked_costing, event_id)
+        return event_id
 
     start_date, end_date = _finance_event_date_range(document)
-    prepared_items = _finance_event_prepared_items(document)
+    linked_costing = (
+        _linked_costing_for_quotation(finance_data, document)
+        if isinstance(finance_data, dict)
+        else None
+    )
+    prepared_items = (
+        _costing_event_prepared_items(linked_costing)
+        if linked_costing
+        else _finance_event_prepared_items(document)
+    )
+    event_subprojects = (
+        _costing_event_subprojects(linked_costing, document.get('subprojects'))
+        if linked_costing
+        else _finance_event_subprojects(document)
+    )
 
     assigned_users = [
         document.get('createdBy')
@@ -27729,16 +30900,21 @@ def _finance_create_event(document):
             ),
             assigned_users=assigned_users,
             notes=f"Created from quotation {document.get('number')}",
-            subprojects=_finance_event_subprojects(document),
+            subprojects=event_subprojects,
         )
 
     event = _create_event_with_available_id(build_event)
     event_id = event.event_id
     invalidate_cache()
     document['eventId'] = event_id
-    document['acceptedAt'] = datetime.now().isoformat(timespec='seconds')
+    if mark_accepted:
+        document['acceptedAt'] = datetime.now().isoformat(timespec='seconds')
     document['eventManagedByQuotation'] = True
     document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
+    if finance_data is not None:
+        linked_costing = _linked_costing_for_quotation(finance_data, document)
+        if linked_costing:
+            _sync_costing_vendors(linked_costing, event_id)
     return event_id
 
 
@@ -27780,22 +30956,33 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
             == _finance_line_price_signature(line)
         ):
             continue
-        description = str(line.get('description') or '').strip()
-        unit_price = _safe_float(line.get('unitPrice'), 0)
-        if not description or unit_price <= 0:
+        key = _finance_price_book_line_key(line)
+        payload = _finance_price_book_payload(
+            line,
+            owner,
+            document.get('updatedAt'),
+        )
+        if not key or not payload:
             continue
-        key = str(line.get('catalogKey') or '').strip() or _finance_custom_price_key(description)
-        payload = {
-            'description': description,
-            'brand': str(line.get('brand') or '').strip()[:240],
-            'model': str(line.get('model') or '').strip()[:240],
-            'unitPrice': round(unit_price, 2),
-            'department': line.get('department') or 'UN',
-            'departmentCode': line.get('departmentCode') or '',
-            'uom': line.get('uom') or 'units',
-            'owner': owner,
-            'updatedAt': document.get('updatedAt'),
-        }
+        previous_key = _finance_price_book_line_key(previous_line)
+        if previous_key and previous_key.casefold() != key.casefold():
+            previous_payload = _finance_price_book_payload(
+                previous_line,
+                owner,
+                document.get('updatedAt'),
+            ) or {
+                'description': str(previous_line.get('description') or '').strip(),
+                'department': previous_line.get('department') or 'Unknown Department',
+                'departmentCode': previous_line.get('departmentCode') or '',
+                'brand': str(previous_line.get('brand') or '').strip()[:240],
+                'model': str(previous_line.get('model') or '').strip()[:240],
+                'owner': owner,
+                'updatedAt': document.get('updatedAt'),
+            }
+            price_book[f"{owner}::{previous_key}"] = {
+                **previous_payload,
+                'deleted': True,
+            }
         price_book[f"{owner}::{key}"] = payload
         for asset_id in line.get('sourceAssetIds') or []:
             price_book[f"{owner}::asset:{str(asset_id).lower()}"] = payload
@@ -27803,7 +30990,14 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
 
 def _finance_price_book_key_is_visible(key):
     raw = str(key or '')
-    if '::' not in raw or _current_user_is_owner():
+    can_view_company_rates = (
+        _current_user_is_owner()
+        or (
+            _effective_user_role(_finance_current_username()) == 'admin'
+            and _current_user_has_sales_access()
+        )
+    )
+    if '::' not in raw or can_view_company_rates:
         return True
     return raw.split('::', 1)[0].strip().lower() == _finance_current_username().lower()
 
@@ -27891,13 +31085,13 @@ def _finance_rate_card_rows(finance_data):
             'searchTags': line.get('searchTags') or [],
         }
 
-    for document in finance_data.get('documents') or []:
-        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
-            continue
-        for line in document.get('lineItems') or []:
-            add_row(line)
-
-    for stored_key, payload in (finance_data.get('priceBook') or {}).items():
+    stored_rows = list((finance_data.get('priceBook') or {}).items())
+    stored_rows.sort(key=lambda item: (
+        str((item[1] or {}).get('updatedAt') or '')
+        if isinstance(item[1], dict) else '',
+        str(item[0]),
+    ))
+    for stored_key, payload in stored_rows:
         if not _finance_price_book_key_is_visible(stored_key):
             continue
         base_key = str(stored_key).split('::', 1)[-1]
@@ -27943,31 +31137,30 @@ def _finance_rate_card_rows(finance_data):
 
 
 def _finance_remembered_price(price_book, catalog_key, asset_ids):
-    username = _finance_current_username().lower()
-    owner_prefixes = (
-        [username]
-        if not _current_user_is_owner()
-        else [username, _finance_owner_username().lower()]
-    )
-    for owner in owner_prefixes:
-        for asset_id in asset_ids:
-            remembered = price_book.get(f"{owner}::asset:{str(asset_id).lower()}")
-            if remembered and not remembered.get('deleted'):
-                return remembered
-        remembered = price_book.get(f"{owner}::{catalog_key}")
-        if remembered and not remembered.get('deleted'):
-            return remembered
-    remembered = price_book.get(catalog_key)
-    if remembered and not remembered.get('deleted'):
-        return remembered
+    catalog_key = str(catalog_key or '').strip().casefold()
+    asset_keys = {
+        f"asset:{str(asset_id or '').strip().casefold()}"
+        for asset_id in asset_ids or []
+        if str(asset_id or '').strip()
+    }
     legacy_prefix = str(catalog_key or '').removeprefix('inventory:') + '|'
-    for key, value in reversed(list(price_book.items())):
-        raw_key = str(key or '')
-        if '::' in raw_key and raw_key.split('::', 1)[0].strip().lower() not in owner_prefixes:
+    candidates = []
+    for index, (key, value) in enumerate(price_book.items()):
+        if not isinstance(value, dict) or not _finance_price_book_key_is_visible(key):
             continue
-        base_key = str(key).split('::', 1)[-1]
-        if base_key.startswith(legacy_prefix) and isinstance(value, dict) and not value.get('deleted'):
-            return value
+        base_key = str(key or '').split('::', 1)[-1].strip().casefold()
+        if not (
+            base_key == catalog_key
+            or base_key in asset_keys
+            or (legacy_prefix and base_key.startswith(legacy_prefix))
+        ):
+            continue
+        candidates.append((str(value.get('updatedAt') or ''), index, value))
+    if not candidates:
+        return {}
+    remembered = max(candidates, key=lambda row: (row[0], row[1]))[2]
+    if not remembered.get('deleted'):
+        return remembered
     return {}
 
 
@@ -28220,25 +31413,59 @@ def _finance_profit_loss_quotation_budgets(quotation):
     budgets = {'manpower': 0.0, 'transport': 0.0}
     if not quotation:
         return budgets
+
     system_buckets = {}
+    included_subtotal = 0.0
     for line in quotation.get('lineItems') or []:
-        bucket = _finance_profit_loss_line_bucket(line)
-        if bucket not in budgets:
+        if not isinstance(line, dict) or _finance_line_is_optional(line):
             continue
-        budgets[bucket] += _safe_float(line.get('total'), 0)
+        line_total = _safe_float(line.get('total'), 0)
+        included_subtotal += line_total
+        bucket = _finance_profit_loss_line_bucket(line)
         system_name = _finance_system_name(
             line.get('department'),
             line.get('systemName'),
         )
-        system_buckets.setdefault(system_name, set()).add(bucket)
+        system_key = (system_name, line.get('subprojectId') or 'main')
+        system_buckets.setdefault(system_key, set()).add(bucket)
+        if bucket in budgets:
+            budgets[bucket] += line_total
+
+    department_adjustment_total = 0.0
     for adjustment in quotation.get('adjustments') or []:
-        if not isinstance(adjustment, dict) or adjustment.get('scope') != 'department':
+        if (
+            not isinstance(adjustment, dict)
+            or adjustment.get('scope') != 'department'
+            or not _finance_adjustment_counts_toward_total(adjustment)
+        ):
             continue
-        buckets = system_buckets.get(str(adjustment.get('department') or ''), set())
+        amount = _safe_float(adjustment.get('amount'), 0)
+        department_adjustment_total += amount
+        system_key = (
+            str(adjustment.get('department') or ''),
+            adjustment.get('subprojectId') or 'main',
+        )
+        buckets = system_buckets.get(system_key, set())
         if len(buckets) == 1:
-            budgets[next(iter(buckets))] += _safe_float(adjustment.get('amount'), 0)
+            bucket = next(iter(buckets))
+            if bucket in budgets:
+                budgets[bucket] += amount
+
+    # A quotation-wide adjustment applies to every included category. Allocate
+    # it proportionally after category adjustments so each P&L budget reflects
+    # the same net pre-tax value as the quotation.
+    category_adjusted_subtotal = included_subtotal + department_adjustment_total
+    net_subtotal = _safe_float(
+        (quotation.get('totals') or {}).get('netSubtotal'),
+        _finance_totals(quotation).get('netSubtotal'),
+    )
+    overall_factor = (
+        net_subtotal / category_adjusted_subtotal
+        if category_adjusted_subtotal > 0
+        else 0
+    )
     return {
-        key: round(max(0, value), 2)
+        key: round(max(0, value * overall_factor), 2)
         for key, value in budgets.items()
     }
 
@@ -29972,6 +33199,17 @@ def _finance_compare_item_from_line(line):
     if not description:
         return None
     department = _normalise_department_code(line.get('departmentCode')) or 'UN'
+    department_name = _finance_compare_department_name(department)
+    system_name = _finance_system_name(
+        line.get('department'), line.get('systemName')
+    )
+    default_system_name = _finance_system_name(line.get('department'))
+    if (
+        system_name
+        and system_name.casefold() != default_system_name.casefold()
+    ):
+        department = _normalise_department_code(system_name) or department
+        department_name = system_name
     identity = _finance_compare_custom_identity(
         line.get('customType') or 'MISC',
         description,
@@ -29981,7 +33219,7 @@ def _finance_compare_item_from_line(line):
     return identity, quantity, {
         'title': description,
         'subtitle': 'Custom item',
-        'department': _finance_compare_department_name(department),
+        'department': department_name,
         'departmentCode': department,
         'uom': str(line.get('uom') or 'units'),
         'description': description,
@@ -31255,7 +34493,7 @@ def _finance_list_or_create(document_type):
                 revision,
             )
             _sync_finance_client_record(document)
-        _remember_finance_prices(finance_data, document)
+            _remember_finance_prices(finance_data, document)
         finance_data.setdefault('documents', []).append(document)
         _save_finance_data(finance_data)
         log_action(f"Created {document_type} {document['number']}")
@@ -31326,6 +34564,20 @@ def _finance_get_update_delete(document_id, document_type):
                 raw_requested_status in FINANCE_QUOTATION_STATUSES
                 and set(request_data).issubset(status_workflow_fields)
             )
+            existing_normalised = previous_document
+            automatic_draft_date_refresh = (
+                request_data.get('_automaticDraftDateRefresh') is True
+                and existing_normalised.get('status') == 'draft'
+                and updated.get('status') == 'draft'
+                and updated.get('quotationDate')
+                == datetime.now().strftime('%Y-%m-%d')
+                and _finance_document_update_fingerprint(
+                    updated, {'quotationDate'}
+                )
+                == _finance_document_update_fingerprint(
+                    existing_normalised, {'quotationDate'}
+                )
+            )
             missing_link_cleared = False
             if updated.get('eventId') and ('eventId' in request_data or str(request_data.get('status') or '').strip().lower() == 'accepted'):
                 linked_event = data_manager.events.get(_safe_int(updated.get('eventId'), 0))
@@ -31334,8 +34586,18 @@ def _finance_get_update_delete(document_id, document_type):
                     missing_link_cleared = True
                 elif not _current_user_can_access_event(linked_event):
                     return jsonify({'error': 'You are not assigned to this event'}), 403
+            if (
+                not missing_link_cleared
+                and not status_workflow_only
+                and _finance_document_update_fingerprint(updated)
+                == _finance_document_update_fingerprint(existing_normalised)
+            ):
+                return jsonify({
+                    'success': True,
+                    'data': existing_normalised,
+                    'unchanged': True,
+                })
 
-            existing_normalised = previous_document
             content_changed = (
                 _finance_revision_fingerprint(updated)
                 != _finance_revision_fingerprint(existing_normalised)
@@ -31370,6 +34632,9 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['quotationDate'] = datetime.now().strftime('%Y-%m-%d')
 
             requested_status = str(request_data.get('status') or '').strip().lower()
+            # The linked costing is the canonical source for Plan demand. Keep it
+            # current before any accepted quotation refreshes its managed event.
+            _sync_costing_from_quotation(finance_data, updated)
             if requested_status == 'sent' and updated.get('status') == 'sent':
                 sent_date_value = str(
                     request_data.get('sentDate')
@@ -31405,7 +34670,7 @@ def _finance_get_update_delete(document_id, document_type):
                 ):
                     _finance_snapshot_revision(updated)
                 if not missing_link_cleared:
-                    _finance_create_event(updated)
+                    _finance_create_event(updated, finance_data)
             elif requested_status == 'invoiced' and updated.get('status') == 'invoiced':
                 invoice_sent_date = str(
                     request_data.get('invoiceSentDate')
@@ -31441,20 +34706,33 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['statusChangedAt'] = updated['paidAt']
             elif requested_status in FINANCE_QUOTATION_STATUSES:
                 updated['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
-            elif updated.get('eventId'):
-                _finance_sync_managed_event(updated)
+            elif updated.get('eventId') and not automatic_draft_date_refresh:
+                _finance_sync_managed_event(updated, finance_data)
             _finance_update_revision_status(updated)
-            if updated.get('status') in {'draft', 'sent'} and updated.get('eventId'):
-                _finance_sync_managed_event(updated)
+            if (
+                updated.get('status') in {'draft', 'sent'}
+                and updated.get('eventId')
+                and not automatic_draft_date_refresh
+            ):
+                _finance_sync_managed_event(updated, finance_data)
             _sync_finance_client_record(updated, previous_document)
+            if automatic_draft_date_refresh:
+                updated['updatedAt'] = existing_normalised.get('updatedAt', '')
+                updated['updatedBy'] = existing_normalised.get('updatedBy', '')
+                if existing_normalised.get('updatedByName'):
+                    updated['updatedByName'] = existing_normalised['updatedByName']
+                else:
+                    updated.pop('updatedByName', None)
 
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
                 finance_data['documents'][index] = updated
                 break
         if document_type == 'quotation':
+            _sync_costing_from_quotation(finance_data, updated)
             _finance_expire_sent_documents(finance_data)
-        _remember_finance_prices(finance_data, updated, previous_document)
+        if document_type == 'quotation':
+            _remember_finance_prices(finance_data, updated, previous_document)
         _save_finance_data(finance_data)
         if document_type == 'quotation':
             previous_status = str(existing_normalised.get('status') or 'draft')
@@ -31491,7 +34769,7 @@ def finance_catalog():
     with _finance_lock:
         finance_data = _load_finance_data()
         price_book = finance_data.get('priceBook') or {}
-        finance_documents = list(finance_data.get('documents') or [])
+        rate_card_rows = _finance_rate_card_rows(finance_data)
 
     department_cache = {}
 
@@ -31577,6 +34855,47 @@ def finance_catalog():
             container_items[key]['availableQuantity'] += quantity
             container_items[key]['containerQuantity'] += quantity
 
+        for asset_id, quantity in _container_bulk_item_map(container).items():
+            asset = data_manager.inventory.get(asset_id)
+            if not asset or _is_disposed(asset):
+                continue
+            department_code = _normalise_department_code(
+                getattr(asset, 'department_code', 'UN')
+            ) or 'UN'
+            department, department_code = catalog_department(
+                department_code,
+                department_code,
+            )
+            brand = str(getattr(asset, 'brand', '') or '').strip()
+            model = str(getattr(asset, 'model_number', '') or '').strip()
+            description = str(getattr(asset, 'description', '') or '').strip()
+            display = (
+                _finance_display_description(brand, model, description)
+                or model or description or 'Bulk item'
+            )
+            haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
+            key = _finance_catalog_key(department_code, brand, model, description)
+            if key not in container_items:
+                container_items[key] = {
+                    'catalogKey': key,
+                    'description': display,
+                    'department': department,
+                    'departmentCode': department_code,
+                    'brand': brand,
+                    'model': model,
+                    'availableQuantity': 0,
+                    'sourceAssetIds': [],
+                    'unitPrice': 0,
+                    'uom': 'units',
+                    'isCustom': False,
+                    'containerId': container_id,
+                    'containerSerial': serial_number,
+                    'containerQuantity': 0,
+                }
+            container_items[key]['sourceAssetIds'].append(asset_id)
+            container_items[key]['availableQuantity'] += quantity
+            container_items[key]['containerQuantity'] += quantity
+
         if not container_items:
             continue
         if query and query not in ' '.join(haystack_parts).lower():
@@ -31612,38 +34931,41 @@ def finance_catalog():
         }
 
     custom_seen = set()
-    for document in finance_documents:
-        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+    for source in rate_card_rows:
+        if not source.get('isCustom'):
             continue
-        for source in document.get('lineItems') or []:
-            if not isinstance(source, dict) or not source.get('isCustom'):
-                continue
-            description = str(source.get('description') or '').strip()
-            if not description:
-                continue
-            department, department_code = catalog_department(
-                source.get('department'),
-                source.get('departmentCode'),
-            )
-            if query and query not in f"{description} {department}".lower():
-                continue
-            custom_key = _finance_custom_price_key(description)
-            if custom_key in custom_seen:
-                continue
-            custom_seen.add(custom_key)
-            grouped[f"custom:{len(custom_seen)}"] = {
-                'catalogKey': '',
-                'description': description,
-                'department': department,
-                'departmentCode': department_code,
-                'brand': '',
-                'model': '',
-                'availableQuantity': None,
-                'sourceAssetIds': [],
-                'unitPrice': _safe_float(source.get('unitPrice'), 0),
-                'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units',
-                'isCustom': True,
-            }
+        description = str(source.get('description') or '').strip()
+        if not description:
+            continue
+        department, department_code = catalog_department(
+            source.get('department'),
+            source.get('departmentCode'),
+        )
+        haystack = ' '.join((
+            str(source.get('brand') or ''),
+            str(source.get('model') or ''),
+            description,
+            department,
+        )).lower()
+        if query and query not in haystack:
+            continue
+        custom_key = _finance_custom_price_key(description)
+        if custom_key in custom_seen:
+            continue
+        custom_seen.add(custom_key)
+        grouped[f"rate-card:{custom_key}"] = {
+            'catalogKey': '',
+            'description': description,
+            'department': department,
+            'departmentCode': department_code,
+            'brand': str(source.get('brand') or '').strip(),
+            'model': str(source.get('model') or '').strip(),
+            'availableQuantity': None,
+            'sourceAssetIds': [],
+            'unitPrice': _safe_float(source.get('unitPrice'), 0),
+            'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units',
+            'isCustom': True,
+        }
 
     rows = sorted(
         grouped.values(),
@@ -31803,27 +35125,18 @@ def finance_rate_card():
 @require_sales
 def finance_price_suggestion():
     description = str(request.args.get('description') or '').strip()
-    remembered = {}
     with _finance_lock:
         finance_data = _load_finance_data()
-        for document in reversed(finance_data.get('documents') or []):
-            if document.get('type') != 'quotation' or not _finance_user_can_access(document):
-                continue
-            remembered = next(
-                (
-                    _normalise_finance_line(row)
-                    for row in reversed(document.get('lineItems') or [])
-                    if str(row.get('description') or '').strip().lower() == description.lower()
-                ),
-                {},
-            )
-            if remembered:
-                break
+        remembered = _finance_remembered_price(
+            finance_data.get('priceBook') or {},
+            _finance_custom_price_key(description),
+            [],
+        )
     return jsonify({'success': True, 'data': remembered or {}})
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>', methods=['GET'])
-@require_auth
+@require_sales
 def finance_profit_loss_event(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -31846,7 +35159,7 @@ def finance_profit_loss_event(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/revenue', methods=['PUT'])
-@require_auth
+@require_sales
 def finance_profit_loss_update_revenue(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -31929,7 +35242,7 @@ def finance_profit_loss_update_revenue(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/commissions', methods=['PUT'])
-@require_auth
+@require_sales
 def finance_profit_loss_update_commissions(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -31978,7 +35291,7 @@ def finance_profit_loss_update_commissions(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses', methods=['POST'])
-@require_auth
+@require_sales
 def finance_profit_loss_add_expense(event_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -32067,7 +35380,7 @@ def finance_profit_loss_add_expense(event_id):
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses/<expense_id>', methods=['PUT', 'DELETE'])
-@require_auth
+@require_sales
 def finance_profit_loss_update_expense(event_id, expense_id):
     event = data_manager.events.get(event_id)
     if not event:
@@ -32128,7 +35441,7 @@ def finance_profit_loss_update_expense(event_id, expense_id):
 
 
 @app.route('/api/finance/profit-loss/expenses/<expense_id>/file', methods=['GET'])
-@require_auth
+@require_sales
 def finance_profit_loss_expense_file(expense_id):
     found = None
     found_event_id = None
@@ -32345,6 +35658,7 @@ def finance_compare_add_to_quotation(event_id):
                 break
         else:
             return jsonify({'error': 'Quotation not found'}), 404
+        _sync_costing_from_quotation(finance_data, updated)
         _save_finance_data(finance_data)
         refreshed = _finance_compare_payload(event, finance_data, updated.get('id'))
     item_count = len(selected_rows)
@@ -32408,6 +35722,444 @@ def finance_salespeople():
     return jsonify({'success': True, 'data': rows})
 
 
+@app.route('/api/costings/lookups', methods=['GET'])
+@require_super_admin
+def costing_lookups():
+    workforce = load_workforce(_workforce_folder())
+    vendors = []
+    seen = set()
+    for kind, row in _costing_vendor_profiles(workforce):
+        name = str(row.get('name') or '').strip()
+        if not name or name.casefold() in seen:
+            continue
+        seen.add(name.casefold())
+        vendors.append({
+            'id': str(row.get('id') or ''),
+            'name': name,
+            'type': kind,
+            'label': (
+                'Worker' if kind == 'worker'
+                else 'Transport vendor' if kind == 'transport'
+                else 'Vendor'
+            ),
+        })
+    order = {'vendor': 0, 'transport': 1, 'worker': 2}
+    vendors.sort(key=lambda row: (
+        order.get(row.get('type'), 9), row['name'].casefold()
+    ))
+    return jsonify({'success': True, 'data': {'vendors': vendors}})
+
+
+@app.route('/api/costings/cost-suggestion', methods=['POST'])
+@require_super_admin
+def costing_cost_suggestion():
+    line = _normalise_costing_line((request.get_json(silent=True) or {}).get('line'))
+    key = _costing_cost_book_key(line)
+    with _finance_lock:
+        remembered = (_load_finance_data().get('costBook') or {}).get(key, {})
+    return jsonify({
+        'success': True,
+        'data': {
+            'itemCost': round(_safe_float(remembered.get('itemCost'), 0), 6),
+            'remembered': bool(remembered),
+        },
+    })
+
+
+@app.route('/api/costings', methods=['GET', 'POST'])
+@require_super_admin
+def costings_collection():
+    if request.method == 'GET':
+        query = str(request.args.get('query') or '').strip().casefold()
+        statuses = {
+            str(value or '').strip().lower()
+            for value in request.args.getlist('status')
+            if str(value or '').strip().lower() in {'draft', 'linked', 'converted'}
+        }
+        mine_only = str(request.args.get('mine') or '').strip().lower() in {
+            '1', 'true', 'yes', 'on',
+        }
+        with _finance_lock:
+            rows = [
+                _normalise_costing_document(row, row)
+                for row in _load_finance_data().get('documents') or []
+                if isinstance(row, dict)
+                and row.get('type') == 'costing'
+                and _finance_user_can_access(row)
+            ]
+        if mine_only:
+            current_username = _finance_current_username().casefold()
+            rows = [
+                row for row in rows
+                if _finance_document_owner_username(row).casefold()
+                == current_username
+            ]
+        if query:
+            rows = [
+                row for row in rows
+                if query in ' '.join((
+                    row.get('projectName') or '',
+                    row.get('eventLocation') or '',
+                    row.get('convertedQuotationNumber') or '',
+                    row.get('salesperson') or '',
+                    row.get('salespersonUsername') or '',
+                    row.get('createdBy') or '',
+                )).casefold()
+            ]
+        if statuses:
+            rows = [row for row in rows if row.get('status') in statuses]
+        rows.sort(
+            key=lambda row: (row.get('updatedAt') or '', row.get('projectName') or ''),
+            reverse=True,
+        )
+        summaries = [{
+            'id': row['id'],
+            'projectName': row['projectName'],
+            'eventLocation': row.get('eventLocation') or '',
+            'status': row['status'],
+            'totals': row['totals'],
+            'lineCount': len(row.get('lineItems') or []),
+            'convertedQuotationId': row.get('convertedQuotationId') or '',
+            'convertedQuotationNumber': row.get('convertedQuotationNumber') or '',
+            'salesperson': row.get('salesperson') or _user_display_name(
+                _finance_document_owner_username(row)
+            ),
+            'salespersonUsername': _finance_document_owner_username(row),
+            'createdBy': row.get('createdBy') or '',
+            'updatedAt': row.get('updatedAt') or '',
+            'updatedBy': row.get('updatedBy') or '',
+        } for row in rows]
+        return jsonify({'success': True, 'data': summaries})
+
+    payload = request.get_json(silent=True) or {}
+    if not str(payload.get('projectName') or '').strip():
+        return jsonify({'error': 'Project Name is required'}), 400
+    costing = _normalise_costing_document(payload)
+    _sync_costing_vendors(costing)
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        _costing_remember_costs(finance_data, costing)
+        finance_data.setdefault('documents', []).append(costing)
+        _save_finance_data(finance_data)
+    log_action(f"Created costing for {costing['projectName']}")
+    mark_realtime_change('finance', {
+        'action': 'costing-created', 'costingId': costing['id'],
+    })
+    costing['vendorDiscrepancies'] = _costing_vendor_discrepancies(costing)
+    return jsonify({'success': True, 'data': costing}), 201
+
+
+@app.route('/api/costings/<costing_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_super_admin
+def costing_item(costing_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        existing = _finance_find_document(finance_data, costing_id, 'costing')
+        if not existing or not _finance_user_can_access(existing):
+            return jsonify({'error': 'Costing not found'}), 404
+        if request.method == 'GET':
+            costing = _normalise_costing_document(existing, existing)
+            costing['vendorDiscrepancies'] = _costing_vendor_discrepancies(costing)
+            return jsonify({'success': True, 'data': costing})
+        if request.method == 'DELETE':
+            cleanup = _normalise_costing_document(existing, existing)
+            cleanup['lineItems'] = []
+            _sync_costing_vendors(cleanup)
+            for document in finance_data.get('documents') or []:
+                if (
+                    isinstance(document, dict)
+                    and document.get('type') == 'quotation'
+                    and str(document.get('sourceCostingId') or '') == str(costing_id)
+                ):
+                    document['sourceCostingId'] = ''
+                    document['costingDisabled'] = True
+            finance_data['documents'] = [
+                row for row in finance_data.get('documents') or []
+                if str(row.get('id')) != str(costing_id)
+            ]
+            _save_finance_data(finance_data)
+            log_action(f"Deleted costing for {existing.get('projectName') or costing_id}")
+            return jsonify({'success': True})
+
+        if str(existing.get('status') or 'draft') == 'converted':
+            return jsonify({'error': 'Converted costings are read-only'}), 409
+        payload = request.get_json(silent=True) or {}
+        if not str(payload.get('projectName') or '').strip():
+            return jsonify({'error': 'Project Name is required'}), 400
+        if (
+            existing.get('sourceQuotationId')
+            or existing.get('convertedQuotationId')
+        ):
+            payload['status'] = 'linked'
+        costing = _normalise_costing_document(payload, existing)
+        linked_quotation = _linked_quotation_for_costing(finance_data, costing)
+        sync_mode = str(payload.get('quotationSyncMode') or '').strip().lower()
+        quote_visible_changed = bool(
+            linked_quotation
+            and _costing_quote_sync_fingerprint(
+                _normalise_costing_document(existing, existing),
+                linked_quotation,
+            )
+            != _costing_quote_sync_fingerprint(costing, linked_quotation)
+        )
+        linked_status = str(
+            (linked_quotation or {}).get('status') or 'draft'
+        ).strip().lower()
+        if (
+            quote_visible_changed
+            and linked_status != 'draft'
+            and sync_mode not in {'new-revision', 'edit-current'}
+        ):
+            return jsonify({
+                'error': (
+                    'This costing change also changes a quotation that is '
+                    f'{linked_status}. Choose how to update it.'
+                ),
+                'code': 'quotation_revision_decision_required',
+                'quotation': {
+                    'id': linked_quotation.get('id'),
+                    'number': linked_quotation.get('number'),
+                    'revision': linked_quotation.get('revision'),
+                    'status': linked_status,
+                },
+            }), 409
+        if quote_visible_changed and linked_status != 'draft' and sync_mode == 'new-revision':
+            try:
+                _finance_start_costing_revision(linked_quotation)
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 409
+        _sync_costing_vendors(costing)
+        _costing_remember_costs(finance_data, costing)
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id')) == str(costing_id):
+                finance_data['documents'][index] = costing
+                break
+        linked_quotation = _sync_quotation_from_costing(finance_data, costing)
+        if linked_quotation:
+            costing['sourceQuotationId'] = linked_quotation.get('id') or ''
+            costing['sourceQuotationNumber'] = linked_quotation.get('number') or ''
+            costing['convertedQuotationId'] = linked_quotation.get('id') or ''
+            costing['convertedQuotationNumber'] = linked_quotation.get('number') or ''
+            costing['salespersonUsername'] = _finance_document_owner_username(
+                linked_quotation
+            )
+            costing['salesperson'] = (
+                linked_quotation.get('salesperson')
+                or _user_display_name(costing['salespersonUsername'])
+            )
+        if (
+            linked_quotation
+            and quote_visible_changed
+            and linked_status != 'draft'
+            and sync_mode == 'edit-current'
+        ):
+            _finance_snapshot_revision(linked_quotation)
+        if linked_quotation:
+            _remember_finance_prices(finance_data, linked_quotation)
+        if linked_quotation and linked_quotation.get('eventId'):
+            _finance_sync_managed_event(linked_quotation, finance_data)
+            _sync_costing_vendor_assignments(
+                costing, linked_quotation.get('eventId')
+            )
+        _save_finance_data(finance_data)
+    mark_realtime_change('finance', {
+        'action': 'costing-updated', 'costingId': costing['id'],
+    })
+    costing['vendorDiscrepancies'] = _costing_vendor_discrepancies(costing)
+    return jsonify({
+        'success': True,
+        'data': costing,
+        'quotation': {
+            'id': linked_quotation.get('id'),
+            'number': linked_quotation.get('number'),
+            'revision': linked_quotation.get('revision'),
+            'status': linked_quotation.get('status'),
+        } if linked_quotation else None,
+    })
+
+
+@app.route('/api/costings/<costing_id>/duplicate', methods=['POST'])
+@require_super_admin
+def duplicate_costing(costing_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, costing_id, 'costing')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Costing not found'}), 404
+
+        source = _normalise_costing_document(stored, stored)
+        payload = copy.deepcopy(source)
+        payload.pop('id', None)
+        payload.update({
+            'projectName': f"Copy of {source.get('projectName') or 'Untitled costing'}",
+            'status': 'draft',
+            'sourceQuotationId': '',
+            'sourceQuotationNumber': '',
+            'convertedQuotationId': '',
+            'convertedQuotationNumber': '',
+            'vendorSnapshots': {},
+            'createdBy': _finance_current_username(),
+            'salespersonUsername': _finance_current_username(),
+            'salesperson': _finance_current_user_display_name(),
+        })
+        duplicate = _normalise_costing_document(payload)
+        _sync_costing_vendors(duplicate)
+        _costing_remember_costs(finance_data, duplicate)
+        finance_data.setdefault('documents', []).append(duplicate)
+        _save_finance_data(finance_data)
+
+    log_action(
+        f"Duplicated costing for {source.get('projectName')} as "
+        f"{duplicate.get('projectName')}"
+    )
+    mark_realtime_change('finance', {
+        'action': 'costing-duplicated',
+        'costingId': duplicate.get('id'),
+        'sourceCostingId': costing_id,
+    })
+    duplicate['vendorDiscrepancies'] = []
+    return jsonify({'success': True, 'data': duplicate}), 201
+
+
+@app.route('/api/events/<int:event_id>/vendor-management', methods=['PUT'])
+@require_admin
+def update_event_vendor_management(event_id):
+    """Change Costing vendor fulfilment and immediately rebuild managed Plan demand."""
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    key = str(payload.get('key') or '').strip()
+    mode = str(payload.get('mode') or '').strip().lower()
+    if not key or mode not in {'dry-hire', 'outsourced'}:
+        return jsonify({'error': 'Choose Dry Hire or Outsourced for a vendor'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = next((
+            row for row in finance_data.get('documents') or []
+            if isinstance(row, dict)
+            and row.get('type') == 'quotation'
+            and _safe_int(row.get('eventId'), 0) == int(event_id)
+        ), None)
+        costing = _linked_costing_for_quotation(finance_data, quotation) if quotation else None
+        if not quotation or not costing:
+            return jsonify({'error': 'This event has no linked costing'}), 404
+
+        current = _normalise_costing_document(costing, costing)
+        entries = copy.deepcopy(current.get('vendorManagement') or [])
+        selected = next((row for row in entries if row.get('key') == key), None)
+        if selected is None:
+            return jsonify({'error': 'Vendor is no longer used by this costing'}), 404
+        selected['mode'] = mode
+        costing_payload = copy.deepcopy(current)
+        costing_payload['vendorManagement'] = entries
+        updated_costing = _normalise_costing_document(costing_payload, costing)
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id') or '') == str(updated_costing.get('id') or ''):
+                finance_data['documents'][index] = updated_costing
+                break
+
+        _finance_sync_managed_event(quotation, finance_data, force=True)
+        _save_finance_data(finance_data)
+
+    log_action(
+        f"Changed {selected.get('vendorName') or 'vendor'} to "
+        f"{'Dry Hire' if mode == 'dry-hire' else 'Outsourced'} for event {event_id}"
+    )
+    mark_realtime_change('finance', {
+        'action': 'vendor-management-updated',
+        'eventId': event_id,
+        'costingId': updated_costing.get('id'),
+    })
+    mark_realtime_change('event-assets', {
+        'action': 'vendor-management-updated', 'eventId': event_id,
+    })
+    return jsonify({
+        'success': True,
+        'data': updated_costing.get('vendorManagement') or [],
+    })
+
+
+@app.route('/api/costings/<costing_id>/convert-to-quotation', methods=['POST'])
+@require_super_admin
+def costing_convert_to_quotation(costing_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, costing_id, 'costing')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Costing not found'}), 404
+        costing = _normalise_costing_document(stored, stored)
+        if not costing.get('projectName'):
+            return jsonify({'error': 'Project Name is required'}), 400
+        linked_id = str(costing.get('convertedQuotationId') or '')
+        linked = _finance_find_document(finance_data, linked_id, 'quotation') if linked_id else None
+        if linked:
+            return jsonify({
+                'success': True,
+                'data': _normalise_finance_document(linked, 'quotation', linked),
+                'costing': costing,
+                'alreadyConverted': True,
+            })
+
+        quotation_lines = _costing_grouped_quotation_lines(costing, {})
+        adjustments = [{
+            'id': new_id('costadjustment'),
+            'scope': 'department',
+            'department': row.get('category') or 'General',
+            'subprojectId': row.get('subprojectId') or 'main',
+            'label': 'Costing adjustment',
+            'amount': round(_safe_float(row.get('amount'), 0), 2),
+            'calculationMode': 'amount',
+            'kind': 'discount' if _safe_float(row.get('amount'), 0) < 0 else 'adjustment',
+            'subprojectId': 'main',
+        } for row in costing.get('categoryAdjustments') or []
+            if abs(_safe_float(row.get('amount'), 0)) >= 0.005]
+        quotation = _normalise_finance_document({
+            'projectName': costing['projectName'],
+            'eventLocation': costing.get('eventLocation') or '',
+            'lineItems': quotation_lines,
+            'adjustments': adjustments,
+            'subprojects': copy.deepcopy(costing.get('subprojects') or []),
+            'sourceCostingId': costing['id'],
+            'salesperson': costing.get('salesperson')
+            or _user_display_name(_finance_document_owner_username(costing)),
+            'salespersonUsername': _finance_document_owner_username(costing),
+            'status': 'draft',
+        }, 'quotation')
+        quotation['number'] = _next_finance_number(
+            finance_data.get('documents') or [], 'quotation'
+        )
+        _prefix, year, sequence, revision = _finance_parse_number(quotation['number'])
+        quotation['baseSequence'] = sequence
+        quotation['revision'] = revision
+        quotation['number'] = _finance_format_number(
+            str(_load_pdf_settings().get('quotationPrefix') or 'QT').upper(),
+            year, sequence, revision,
+        )
+        _remember_finance_prices(finance_data, quotation)
+        finance_data.setdefault('documents', []).append(quotation)
+        costing['status'] = 'linked'
+        costing['convertedQuotationId'] = quotation['id']
+        costing['convertedQuotationNumber'] = quotation['number']
+        costing['updatedAt'] = now_iso()
+        costing['updatedBy'] = _finance_current_username()
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id')) == str(costing_id):
+                finance_data['documents'][index] = costing
+                break
+        _save_finance_data(finance_data)
+    log_action(
+        f"Converted costing {costing['projectName']} to quotation {quotation['number']}"
+    )
+    mark_realtime_change('finance', {
+        'action': 'costing-converted',
+        'costingId': costing['id'],
+        'quotationId': quotation['id'],
+    })
+    return jsonify({'success': True, 'data': quotation, 'costing': costing}), 201
+
+
 @app.route('/api/quotations', methods=['GET', 'POST'])
 @require_sales
 def quotations_collection():
@@ -32418,6 +36170,76 @@ def quotations_collection():
 @require_sales
 def quotation_item(document_id):
     return _finance_get_update_delete(document_id, 'quotation')
+
+
+@app.route('/api/quotations/<document_id>/create-event', methods=['POST'])
+@require_sales
+def create_event_from_quotation(document_id):
+    """Create and pair a planning event without accepting the quotation."""
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, document_id, 'quotation')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Quotation not found'}), 404
+        document = _normalise_finance_document(stored, 'quotation', stored)
+        existing_event_id = _safe_int(document.get('eventId'), 0)
+        event_id = _finance_create_event(
+            document,
+            finance_data,
+            mark_accepted=False,
+        )
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id') or '') == str(document_id):
+                finance_data['documents'][index] = document
+                break
+        _save_finance_data(finance_data)
+
+    if not existing_event_id:
+        log_action(
+            f"Created event {event_id} early from quotation {document.get('number')}"
+        )
+        mark_realtime_change('events', {
+            'action': 'event-created-from-quotation',
+            'eventId': event_id,
+            'quotationId': document_id,
+        })
+    mark_realtime_change('finance', {
+        'action': 'quotation-event-paired',
+        'eventId': event_id,
+        'quotationId': document_id,
+    })
+    return jsonify({
+        'success': True,
+        'data': document,
+        'eventId': event_id,
+        'alreadyCreated': bool(existing_event_id),
+    })
+
+
+@app.route('/api/quotations/<document_id>/costing', methods=['POST'])
+@require_super_admin
+def ensure_quotation_costing(document_id):
+    """Create a costing again after an earlier costing was explicitly removed."""
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _finance_find_document(finance_data, document_id, 'quotation')
+        if not quotation or not _finance_user_can_access(quotation):
+            return jsonify({'error': 'Quotation not found'}), 404
+        quotation['costingDisabled'] = False
+        costing = _sync_costing_from_quotation(finance_data, quotation)
+        if not costing:
+            return jsonify({'error': 'Failed to create costing'}), 500
+        _save_finance_data(finance_data)
+    mark_realtime_change('finance', {
+        'action': 'quotation-costing-created',
+        'quotationId': document_id,
+        'costingId': costing.get('id'),
+    })
+    return jsonify({
+        'success': True,
+        'data': _normalise_costing_document(costing, costing),
+        'quotation': _normalise_finance_document(quotation, 'quotation', quotation),
+    }), 201
 
 
 @app.route('/api/quotations/<document_id>/duplicate', methods=['POST'])
@@ -32454,6 +36276,8 @@ def duplicate_quotation(document_id):
             ('eventSyncFingerprint', ''),
             ('sourceQuotationId', ''),
             ('sourceQuotationNumber', ''),
+            ('sourceCostingId', ''),
+            ('costingDisabled', False),
         ):
             duplicate_source[key] = value
 
@@ -32472,6 +36296,7 @@ def duplicate_quotation(document_id):
         _sync_finance_client_record(duplicate)
         _remember_finance_prices(finance_data, duplicate)
         finance_data.setdefault('documents', []).append(duplicate)
+        _sync_costing_from_quotation(finance_data, duplicate)
         _save_finance_data(finance_data)
 
     log_action(
@@ -32521,9 +36346,9 @@ def convert_quotation_to_invoice(document_id):
                     'showDepartmentSubtotals',
                     'summaryBySubproject',
                     'showLineNumbers',
-                    'showSignOff',
                 )
             }
+            pdf_visibility['showSignOff'] = False
             pdf_visibility['sourceQuotationNumber'] = quotation.get('number') or ''
             updated_invoice = _normalise_finance_document(
                 pdf_visibility,
@@ -32542,6 +36367,7 @@ def convert_quotation_to_invoice(document_id):
         source.pop('number', None)
         source['sourceQuotationId'] = document_id
         source['sourceQuotationNumber'] = quotation.get('number') or ''
+        source['showSignOff'] = False
         source['status'] = 'draft'
         invoice_date = datetime.now().strftime('%Y-%m-%d')
         invoice_due_date, payment_term_days = _finance_payment_due_date(
@@ -32839,6 +36665,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'paymentDueDate': snapshot_existing['paymentDueDate'],
             'paidAt': snapshot_existing['paidAt'],
         })
+        _remember_finance_prices(finance_data, edited, snapshot_existing)
         _sync_finance_client_record(edited, snapshot_existing)
         revision_row.update({
             'number': edited['number'],

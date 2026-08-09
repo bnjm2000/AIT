@@ -995,12 +995,38 @@ class DataManager:
                 asset_ids = [clean_csv_cell(a) for a in asset_ids if clean_csv_cell(a)]
                 serial_number = row[2] if len(row) > 2 else ''
                 maintenance_logs = load_maintenance_logs(row[3] if len(row) > 3 else '')
+                photo_filename = row[4] if len(row) > 4 else ''
+                photo_mime_type = row[5] if len(row) > 5 else ''
+                photo_original_name = row[6] if len(row) > 6 else ''
+                bulk_items = {}
+                if len(row) > 7 and row[7]:
+                    try:
+                        parsed_bulk_items = json.loads(row[7])
+                        if isinstance(parsed_bulk_items, dict):
+                            bulk_items = parsed_bulk_items
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        logger.warning(
+                            "Ignoring invalid bulk contents for container %s",
+                            container_id,
+                        )
+                specific_asset_ids = []
+                for asset_id in asset_ids:
+                    asset = self.inventory.get(asset_id)
+                    if asset and getattr(asset, 'is_bulk', False):
+                        bulk_items.setdefault(asset_id, 1)
+                    else:
+                        specific_asset_ids.append(asset_id)
+                asset_ids = specific_asset_ids
                 if container_id:
                     self.containers[container_id] = Container(
                         container_id,
                         asset_ids,
                         serial_number,
                         maintenance_logs,
+                        photo_filename,
+                        photo_mime_type,
+                        photo_original_name,
+                        bulk_items,
                     )
         finally:
             f.close()
@@ -1015,6 +1041,14 @@ class DataManager:
                     '|'.join(container.asset_ids),
                     getattr(container, 'serial_number', ''),
                     dump_maintenance_logs(getattr(container, 'maintenance_logs', [])),
+                    getattr(container, 'photo_filename', ''),
+                    getattr(container, 'photo_mime_type', ''),
+                    getattr(container, 'photo_original_name', ''),
+                    json.dumps(
+                        getattr(container, 'bulk_items', {}) or {},
+                        ensure_ascii=False,
+                        separators=(',', ':'),
+                    ),
                 ])
 
     # ---------------- Events ----------------

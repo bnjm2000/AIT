@@ -21,7 +21,7 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "function groupInventoryByModel(assetList)" in script
     assert "function inventoryConditionCounts(assetList)" in script
     assert "function inventoryAvailabilityCounts(assetList)" in script
-    assert "function inventoryAvailabilityBadgesHtml(asset)" in script
+    assert "function inventoryAvailabilityBadgesHtml(asset, includeStatusHistory = false)" in script
     assert '<strong>${total}</strong>${compact ? \'assets\' : \'total\'}' in script
     assert "bulkOOCQuantity" in script
     assert "bulkMissingQuantity" in script
@@ -35,6 +35,33 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "`${conditionCounts.degraded} degraded`" in script
     assert "degraded total" not in script
     assert "`${availability.degradedAvailable} degraded available`" in script
+
+
+def test_flagged_inventory_statuses_show_immediate_history_tooltips():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function inventoryStatusHistoryRecord(asset, status)" in script
+    assert "function inventoryShowStatusHistoryTooltip" in script
+    assert "function inventoryHideStatusHistoryTooltip" in script
+    assert "pnl-chart-tooltip inventory-status-tooltip" in script
+    assert "maintenanceLogUserLabel(record)" in script
+    assert "inventoryMaintenanceDateText(record)" in script
+    assert "record.description || 'No description recorded.'" in script
+    assert 'onpointerenter="inventoryShowStatusHistoryTooltip' in script
+    assert "inventoryAvailabilityBadgesHtml(asset, true)" in script
+
+
+def test_deployed_inventory_badges_show_event_tooltips():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    stylesheet = (ROOT / "static" / "css" / "finance.css").read_text(encoding="utf-8")
+
+    assert "function inventoryDeploymentRecords(asset)" in script
+    assert "function inventoryShowDeploymentTooltip" in script
+    assert "function inventoryDeploymentBadgeHtml(asset, label)" in script
+    assert 'onpointerenter="inventoryShowDeploymentTooltip' in script
+    assert "deployment.eventName" in script
+    assert "bulkDeploymentDateText(deployment)" in script
+    assert ".inventory-deployment-tooltip-row" in stylesheet
 
 
 def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():

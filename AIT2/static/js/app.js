@@ -317,6 +317,8 @@ const MAINTENANCE_LOG_TYPES = [
 
 // ---------- containers cache ----------
 let selectedContainerAssets = new Set();
+let selectedContainerBulkAssets = new Map();
+let selectedContainerPhotoFile = null;
 let __containersCache = null;
 let __containersCacheTs = 0;
 let maintenanceReportSelectedAssetIds = new Set();
@@ -416,6 +418,7 @@ function currentUserHasSalesAccess() {
 function userRoleLabel(role = currentUserRole()) {
   const value = String(role || 'user').toLowerCase();
   return ({
+    owner: 'Owner',
     admin: 'Admin',
     manager: 'Manager',
     user: 'User'
@@ -430,7 +433,7 @@ function userInitials(username) {
 
 function roleBadgeMarkup(role, extraClass = '') {
   const rawRole = String(role || '').toLowerCase();
-  const safeRole = ['admin', 'manager', 'user'].includes(rawRole)
+  const safeRole = ['owner', 'admin', 'manager', 'user'].includes(rawRole)
     ? String(role || '').toLowerCase()
     : 'user';
   return `<span class="user-role-badge user-role-badge-${safeRole} ${extraClass}">${escapeHtml(userRoleLabel(safeRole))}</span>`;
@@ -504,6 +507,7 @@ function ensureSidebarUserMenuStyles() {
       color: #344054;
     }
 
+    .user-role-badge-owner { background: #fff7e6; color: #8a4b08; border-color: #f2c879; }
     .user-role-badge-admin { background: #eef4ff; color: #3538cd; border-color: #c7d7fe; }
     .user-role-badge-manager { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
     .user-role-badge-user { background: #f8fafc; color: #475467; border-color: #d0d5dd; }
@@ -2951,7 +2955,7 @@ async function ensureMaintenanceAssetsForSelection(assetIds) {
 
 async function addContainerToMaintenanceSelection(container) {
   const containerId = String(container?.id || '').trim();
-  const assetIds = Array.isArray(container?.assetIds) ? container.assetIds : [];
+  const assetIds = containerContentEntries(container).map(item => item.assetId);
   const searchEl = document.getElementById('maintenanceAssetSearch');
 
   if (!assetIds.length) {
@@ -3252,6 +3256,7 @@ function sectionFromSidebarLabel(item) {
     'maintenance': 'maintenance',
     'asset check': 'asset-check',
     'users': 'users',
+    'costing': 'costing',
     'quotations': 'quotations',
     'profit & loss': 'profit-loss',
     'profit and loss': 'profit-loss',
@@ -3271,6 +3276,7 @@ function sectionFromSidebarLabel(item) {
     ['profit & loss', 'profit-loss'],
     ['profit and loss', 'profit-loss'],
     ['accounting', 'accounting'],
+    ['costing', 'costing'],
     ['quotations', 'quotations'],
     ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
@@ -3334,6 +3340,7 @@ function navWireIconSvg(section) {
     'maintenance-report': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path>',
     logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
     quotations: '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 12h6M9 16h6"></path>',
+    costing: '<path d="M4 6h16v14H4z"></path><path d="M7 3h10v6H7zM8 13h2M14 13h2M8 17h2M14 17h2"></path>',
     'profit-loss': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path><path d="m4 6 5-3 6 4 6-5"></path>',
     accounting: '<path d="M4 7h16M6 3h12l2 4H4zM6 11h3v7H6zM11 11h3v7h-3zM16 11h3v7h-3zM4 21h16"></path>',
     users: '<circle cx="9" cy="8" r="3"></circle><path d="M4 20a5 5 0 0 1 10 0"></path><path d="M17 11h4M19 9v4"></path>',
@@ -3361,6 +3368,7 @@ function navLabelForSection(section, fallback = '') {
     'maintenance-report': 'Maintenance Report',
     logs: 'System Logs',
     quotations: 'Quotations',
+    costing: 'Costing',
     'profit-loss': 'Profit & Loss',
     accounting: 'Accounting',
     users: 'User Management',
@@ -3460,6 +3468,7 @@ const APP_SECTION_PATHS = Object.freeze({
   'asset-check': '/asset-check',
   'maintenance-report': '/maintenance-report',
   logs: '/logs',
+  costing: '/costing',
   quotations: '/quotations',
   'profit-loss': '/profit-loss',
   accounting: '/accounting',
@@ -3476,6 +3485,7 @@ function appSectionFromPath(pathname = window.location.pathname) {
   if (cleanPath === '/') return 'events';
   if (/^\/events\/\d+$/.test(cleanPath)) return 'events';
   if (/^\/quotations\/[^/]+$/.test(cleanPath)) return 'quotations';
+  if (/^\/costing\/[^/]+$/.test(cleanPath)) return 'costing';
   if (/^\/delivery-order\/\d+$/.test(cleanPath)) return 'delivery-order';
   if (/^\/packing-list\/\d+$/.test(cleanPath)) return 'events';
   return Object.entries(APP_SECTION_PATHS).find(([, path]) => path === cleanPath)?.[0] || 'events';
@@ -3485,6 +3495,8 @@ function appDetailRouteFromPath(pathname = window.location.pathname) {
   const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
   let match = cleanPath.match(/^\/quotations\/([^/]+)$/);
   if (match) return { kind: 'quotation', id: decodeURIComponent(match[1]) };
+  match = cleanPath.match(/^\/costing\/([^/]+)$/);
+  if (match) return { kind: 'costing', id: decodeURIComponent(match[1]) };
   match = cleanPath.match(/^\/events\/(\d+)$/);
   if (match) return { kind: 'event-overview', eventId: Number(match[1]) };
   match = cleanPath.match(/^\/delivery-order\/(\d+)$/);
@@ -3510,7 +3522,7 @@ function updateAppSectionHistory(sectionName, replace = false) {
 function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies", "accounting"]);
-  const salesOnlySections = new Set(["quotations"]);
+  const salesOnlySections = new Set(["quotations", "costing"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
@@ -3657,6 +3669,14 @@ function showSection(sectionName, options = {}) {
     case "profit-loss":
       if (typeof loadProfitLoss === "function") loadProfitLoss();
       break;
+    case "costing":
+      const costingRoute = appDetailRouteFromPath();
+      if (options.loadDetail !== false && costingRoute?.kind === 'costing' && typeof costingOpen === 'function') {
+        costingOpen(costingRoute.id, { updateHistory: false });
+      } else if (typeof loadCosting === "function") {
+        loadCosting();
+      }
+      break;
     case "accounting":
       if (typeof loadAccounting === "function") loadAccounting();
       break;
@@ -3685,6 +3705,24 @@ window.addEventListener('popstate', () => {
 
 // Modal functions
 let __lastFocusedBeforeModal = null;
+
+document.addEventListener('pointerdown', event => {
+  const modal = event.target.closest?.('.modal');
+  if (modal) modal.__pointerStartedOnBackdrop = event.target === modal;
+}, true);
+
+document.addEventListener('click', event => {
+  const modal = event.target.closest?.('.modal');
+  if (
+    modal
+    && event.target === modal
+    && modal.__pointerStartedOnBackdrop !== true
+  ) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+  if (modal) modal.__pointerStartedOnBackdrop = false;
+}, true);
 
 function getFocusableElements(container) {
   if (!container) return [];
@@ -3848,6 +3886,14 @@ function ensureAppDialogStyles() {
       white-space: normal;
     }
 
+    .app-dialog-field > span:not(.sr-only) {
+      display: block;
+      margin-bottom: 5px;
+      color: #334e68;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .app-dialog-field input {
       width: 100%;
       border: 1px solid #d9e2ec;
@@ -3975,7 +4021,8 @@ function showAppDialog(options = {}) {
     const variant = options.variant || 'info';
     const isAlert = options.kind === 'alert';
     const isPrompt = options.kind === 'prompt';
-    const cancelResult = isAlert ? true : (isPrompt ? null : false);
+    const isForm = options.kind === 'form';
+    const cancelResult = isAlert ? true : ((isPrompt || isForm) ? null : false);
 
     content.dataset.variant = variant;
     titleEl.textContent = options.title || (isAlert ? 'Notice' : 'Confirm Action');
@@ -3988,6 +4035,7 @@ function showAppDialog(options = {}) {
       messageEl.appendChild(messageText);
     }
     let promptInput = null;
+    const formInputs = {};
     let confirmationCheckbox = null;
     if (isPrompt) {
       const field = document.createElement('label');
@@ -4000,6 +4048,24 @@ function showAppDialog(options = {}) {
       promptInput.value = options.defaultValue || '';
       field.appendChild(promptInput);
       messageEl.appendChild(field);
+    }
+    if (isForm) {
+      (options.fields || []).forEach((definition, index) => {
+        const field = document.createElement('label');
+        field.className = 'app-dialog-field';
+        const label = document.createElement('span');
+        label.textContent = definition.label || definition.name || `Field ${index + 1}`;
+        const input = document.createElement('input');
+        input.type = definition.type || 'text';
+        input.autocomplete = definition.autocomplete || 'off';
+        input.placeholder = definition.placeholder || '';
+        input.value = definition.defaultValue || '';
+        if (definition.maxLength) input.maxLength = Number(definition.maxLength);
+        input.dataset.required = definition.required ? 'true' : 'false';
+        field.append(label, input);
+        messageEl.appendChild(field);
+        formInputs[definition.name || `field${index + 1}`] = input;
+      });
     }
     if (options.checkboxLabel) {
       const checkboxLabel = document.createElement('label');
@@ -4071,6 +4137,19 @@ function showAppDialog(options = {}) {
         finish(value);
         return;
       }
+      if (isForm) {
+        const result = {};
+        for (const [name, input] of Object.entries(formInputs)) {
+          const value = input.value || '';
+          if (input.dataset.required === 'true' && !value.trim()) {
+            input.focus();
+            return;
+          }
+          result[name] = value;
+        }
+        finish(result);
+        return;
+      }
       finish(Object.prototype.hasOwnProperty.call(options, 'confirmValue') ? options.confirmValue : true);
     };
     const handleCancel = () => finish(false);
@@ -4111,8 +4190,12 @@ function showAppDialog(options = {}) {
     modal.setAttribute('aria-labelledby', 'appDialogTitle');
     modal.setAttribute('aria-describedby', 'appDialogMessage');
     enhanceModalAccessibility(modal);
-    if (promptInput) setTimeout(() => promptInput.focus({ preventScroll: true }), 0);
-    else focusModalStart(modal);
+    const firstFormInput = Object.values(formInputs)[0];
+    if (promptInput || firstFormInput) {
+      setTimeout(() => (promptInput || firstFormInput).focus({ preventScroll: true }), 0);
+    } else {
+      focusModalStart(modal);
+    }
   });
 
   appDialogQueue = appDialogQueue.catch(() => undefined).then(runDialog);
@@ -4129,6 +4212,10 @@ function showAppAlert(options = {}) {
 
 function showAppPrompt(options = {}) {
   return showAppDialog({ ...options, kind: 'prompt' });
+}
+
+function showAppForm(options = {}) {
+  return showAppDialog({ ...options, kind: 'form' });
 }
 
 function enhanceModalAccessibility(root = document) {
@@ -4200,6 +4287,7 @@ async function apiCall(endpoint, method = "GET", data = null) {
     if (
       !error.payload?.requiresModelGroupMergeConfirmation
       && !error.payload?.requiresHistoryInheritanceConfirmation
+      && error.payload?.code !== 'quotation_revision_decision_required'
     ) {
       showNotification("error", error.message);
     }
@@ -5063,6 +5151,23 @@ async function resetPdfSettingsFooter() {
 
 
 // ---------------- Company Management ----------------
+function settingsIcon(name) {
+  const paths = {
+    building: '<path d="M4 21V5l8-3 8 3v16M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01M9 21v-4h6v4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
+    refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9m2 6a7 7 0 0 0 12 2.5L20 15"/>',
+    switch: '<path d="M7 7h11l-3-3m3 3-3 3M17 17H6l3 3m-3-3 3-3"/>',
+    lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/>',
+    shield: '<path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
+    eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
+    eyeOff: '<path d="m4 4 16 16M10.7 6.2A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.3 3.1M6.3 7.3A16 16 0 0 0 2.5 12s3.5 6 9.5 6a9.6 9.6 0 0 0 3-.5M10 10a2.8 2.8 0 0 0 4 4"/>',
+    check: '<path d="m5 12 4 4L19 6"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.building}</svg>`;
+}
+
 async function fetchCompanies(force = false) {
   if (!force && companyOptions.length) return companyOptions;
   if (!isSuperAdminUser()) {
@@ -5348,9 +5453,9 @@ function ensureCompanyActionModals() {
 function companyActionButtonsMarkup() {
   return `
     <div class="company-action-buttons">
-      <button type="button" class="btn btn-success" onclick="openCreateCompanyModal()">Create Company</button>
-      <button type="button" class="btn company-edit-button" onclick="openEditCompanyModal()">Edit Company</button>
-      <button type="button" class="btn btn-danger" onclick="openDeleteCompanyModal()">Delete Company</button>
+      <button type="button" class="btn company-create-button" onclick="openCreateCompanyModal()">${settingsIcon('plus')}<span>Create company</span></button>
+      <button type="button" class="btn company-edit-button" onclick="openEditCompanyModal()">${settingsIcon('edit')}<span>Edit company</span></button>
+      <button type="button" class="btn company-delete-button" onclick="openDeleteCompanyModal()">${settingsIcon('trash')}<span>Delete company</span></button>
     </div>
   `;
 }
@@ -5540,45 +5645,121 @@ function ensureCompanyManagementSection() {
   section.className = 'content-section';
 
   section.innerHTML = `
-    <div class="content-header">
-      <h2 class="content-title">Companies</h2>
+    <div class="content-header settings-page-header">
+      <div>
+        <h2 class="content-title">Companies</h2>
+        <p class="settings-page-subtitle">Manage company workspaces, access and storage.</p>
+      </div>
+      <button type="button" class="settings-icon-command" onclick="loadCompaniesAdmin()" title="Refresh companies">
+        ${settingsIcon('refresh')}<span>Refresh</span>
+      </button>
     </div>
 
-    <div class="form-container" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:15px;">Active Company</h3>
-      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
-        <div class="form-group" style="min-width:280px;">
-          <label class="form-label" for="activeCompanySelect">Company</label>
-          <select id="activeCompanySelect" class="form-input"></select>
+    <section class="companies-control-band" aria-label="Company controls">
+      <div class="company-active-control">
+        <span class="settings-eyebrow">Active company</span>
+        <div class="company-switch-row">
+          <div id="activeCompanySwitcher" class="company-custom-select">
+            <input id="activeCompanySelect" type="hidden">
+            <button id="activeCompanyTrigger" type="button" class="company-select-trigger" aria-haspopup="listbox" aria-expanded="false" onclick="toggleCompanySwitcher(event)">
+              <span class="company-select-trigger-copy"><strong>Loading...</strong><small>Please wait</small></span>
+              <span class="company-select-chevron" aria-hidden="true">&#8964;</span>
+            </button>
+            <div id="activeCompanyMenu" class="company-custom-menu" role="listbox"></div>
+          </div>
+          <button type="button" class="btn company-switch-button" onclick="switchCompanyAdmin()">
+            ${settingsIcon('switch')}<span>Switch</span>
+          </button>
         </div>
-        <button type="button" class="btn btn-primary" onclick="switchCompanyAdmin()">Switch</button>
       </div>
-    </div>
 
-    <div class="form-container" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:15px;">Company Actions</h3>
-      ${companyActionButtonsMarkup()}
-    </div>
+      <div class="company-actions-panel">
+        <span class="settings-eyebrow">Company actions</span>
+        ${companyActionButtonsMarkup()}
+      </div>
+    </section>
 
-    <div class="form-container">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-        <h3 style="margin:0;">Existing Companies</h3>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="loadCompaniesAdmin()">Refresh</button>
+    <section class="companies-directory">
+      <div class="settings-section-heading">
+        <div>
+          <h3>Company directory</h3>
+          <span id="companyDirectoryCount">Loading company records...</span>
+        </div>
       </div>
-      <div id="companies-admin-table-container">
-        <p style="text-align:center;color:#666;padding:30px;">Loading companies...</p>
+      <div id="companies-admin-table-container" aria-live="polite">
+        <div class="settings-loading-state">Loading companies...</div>
       </div>
-    </div>
+    </section>
   `;
 
   sectionParent.appendChild(section);
 }
 
+function closeCompanySwitcher() {
+  const switcher = document.getElementById('activeCompanySwitcher');
+  const trigger = document.getElementById('activeCompanyTrigger');
+  if (switcher) switcher.classList.remove('is-open');
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleCompanySwitcher(event) {
+  event?.stopPropagation();
+  const switcher = document.getElementById('activeCompanySwitcher');
+  const trigger = document.getElementById('activeCompanyTrigger');
+  if (!switcher || !trigger) return;
+  const isOpen = switcher.classList.toggle('is-open');
+  trigger.setAttribute('aria-expanded', String(isOpen));
+}
+
+function chooseCompanyForSwitch(encodedCode) {
+  const code = decodeURIComponent(String(encodedCode || ''));
+  const input = document.getElementById('activeCompanySelect');
+  if (input) input.value = code;
+  renderCompanySwitchControl();
+  closeCompanySwitcher();
+}
+
+function ensureCompanySwitcherDismissal() {
+  if (document.documentElement.dataset.companySwitcherDismissal === 'ready') return;
+  document.documentElement.dataset.companySwitcherDismissal = 'ready';
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#activeCompanySwitcher')) closeCompanySwitcher();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeCompanySwitcher();
+  });
+}
+
 function renderCompanySwitchControl() {
   const select = document.getElementById('activeCompanySelect');
-  if (!select) return;
+  const trigger = document.getElementById('activeCompanyTrigger');
+  const menu = document.getElementById('activeCompanyMenu');
+  if (!select || !trigger || !menu) return;
   const activeCode = currentUser?.company?.code || '';
-  select.innerHTML = companyOptionsMarkup(activeCode);
+  const selectedCode = (companyOptions || []).some(company => String(company.code) === String(select.value))
+    ? select.value
+    : activeCode;
+  select.value = selectedCode;
+
+  const selectedCompany = (companyOptions || []).find(company => String(company.code) === String(selectedCode));
+  trigger.innerHTML = `
+    <span class="company-select-trigger-copy">
+      <strong>${escapeHtml(selectedCompany?.name || selectedCompany?.code || 'Choose a company')}</strong>
+      <small>${selectedCompany ? escapeHtml(selectedCompany.code) : 'No company selected'}</small>
+    </span>
+    <span class="company-select-chevron" aria-hidden="true">&#8964;</span>
+  `;
+  menu.innerHTML = (companyOptions || []).map(company => {
+    const selected = String(company.code) === String(selectedCode);
+    return `
+      <button type="button" class="company-select-option${selected ? ' is-selected' : ''}" role="option" aria-selected="${selected}" data-company-code="${escapeHtmlAttr(encodeURIComponent(company.code))}" onclick="chooseCompanyForSwitch(this.dataset.companyCode)">
+        <span class="company-select-option-mark">${escapeHtml(String(company.code || '?').slice(0, 2).toUpperCase())}</span>
+        <span><strong>${escapeHtml(company.name || company.code)}</strong><small>${escapeHtml(company.code)}</small></span>
+        ${selected ? settingsIcon('check') : ''}
+      </button>
+    `;
+  }).join('');
+  ensureCompanySwitcherDismissal();
 }
 
 async function loadCompaniesAdmin() {
@@ -5591,7 +5772,7 @@ async function loadCompaniesAdmin() {
   ensureCompanyManagementSection();
   const container = document.getElementById('companies-admin-table-container');
   if (container) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading companies...</p>';
+    container.innerHTML = '<div class="settings-loading-state">Loading companies...</div>';
   }
 
   try {
@@ -5600,30 +5781,39 @@ async function loadCompaniesAdmin() {
 
     if (!container) return;
     if (!companies.length) {
-      container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">No companies found.</p>';
+      container.innerHTML = '<div class="settings-empty-state">No companies found.</div>';
+      const count = document.getElementById('companyDirectoryCount');
+      if (count) count.textContent = 'No company records';
       return;
     }
+
+    const count = document.getElementById('companyDirectoryCount');
+    if (count) count.textContent = `${companies.length} compan${companies.length === 1 ? 'y' : 'ies'}`;
 
     container.innerHTML = `
       <div class="companies-admin-table-scroll">
       <table class="table companies-admin-table">
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Name</th>
+            <th>Company</th>
             <th>People</th>
-            <th>Storage Used</th>
+            <th>Storage</th>
             <th>Branding</th>
+            <th>State</th>
           </tr>
         </thead>
         <tbody>
           ${companies.map(company => {
             const roles = company.roleCounts || {};
             return `
-            <tr>
-              <td><strong>${escapeHtml(company.code)}</strong>${company.isActive ? ' <span style="font-size:11px;color:#198754;">active</span>' : ''}</td>
-              <td>${escapeHtml(company.name || '')}</td>
-              <td>
+            <tr class="${company.isActive ? 'is-active' : ''}">
+              <td data-label="Company">
+                <div class="company-identity">
+                  <span class="company-monogram">${escapeHtml(String(company.code || '?').slice(0, 2).toUpperCase())}</span>
+                  <span><strong>${escapeHtml(company.name || company.code)}</strong><small>${escapeHtml(company.code)}</small></span>
+                </div>
+              </td>
+              <td data-label="People">
                 <div class="company-people-total">${Number(company.userCount || 0)} account${Number(company.userCount || 0) === 1 ? '' : 's'}</div>
                 <div class="company-role-counts">
                   <span class="company-role-count">${Number(roles.user || 0)} users</span>
@@ -5632,13 +5822,14 @@ async function loadCompaniesAdmin() {
                   <span class="company-role-count sales">${Number(company.salesPersonnelCount || 0)} sales</span>
                 </div>
               </td>
-              <td>
+              <td data-label="Storage">
                 <button type="button" class="company-storage-button" data-company-storage-code="${escapeHtmlAttr(company.code)}" onclick="openCompanyStorageBreakdown(this.dataset.companyStorageCode)" aria-label="View storage breakdown for ${escapeHtmlAttr(company.name || company.code)}">
                   <span class="company-storage-value">${formatCompanyStorageBytes(company.storageBytes)}</span>
                   <span class="company-storage-meta">${Number(company.storageFileCount || 0)} files</span>
                 </button>
               </td>
-              <td>${company.brandingSetupRequired ? 'Pending' : 'Ready'}</td>
+              <td data-label="Branding"><span class="company-state-badge ${company.brandingSetupRequired ? 'pending' : 'ready'}">${company.brandingSetupRequired ? 'Pending' : 'Ready'}</span></td>
+              <td data-label="State">${company.isActive ? '<span class="company-state-badge active">Active</span>' : '<span class="settings-dash">-</span>'}</td>
             </tr>
           `}).join('')}
         </tbody>
@@ -5647,7 +5838,7 @@ async function loadCompaniesAdmin() {
     `;
   } catch (error) {
     if (container) {
-      container.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Failed to load companies: ${escapeHtml(error.message)}</p>`;
+      container.innerHTML = `<div class="settings-error-state">Failed to load companies: ${escapeHtml(error.message)}</div>`;
     }
   }
 }
@@ -6270,7 +6461,7 @@ function ensureChangePasswordNavItem() {
   passwordTab.type = 'button';
   passwordTab.className = 'nav-item';
   passwordTab.dataset.section = 'change-password';
-  passwordTab.textContent = '🔐 Change Password';
+  passwordTab.textContent = 'Change Password';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
 
@@ -6291,52 +6482,83 @@ function ensureChangePasswordSection() {
   section.id = 'change-password-section';
   section.className = 'content-section';
 
+  const userName = String(currentUser?.name || currentUser?.username || 'Showbase user').trim();
+  const username = String(currentUser?.username || '').trim();
+
   section.innerHTML = `
-    <div class="content-header">
-      <h2 class="content-title">Change Password</h2>
+    <div class="content-header settings-page-header">
+      <div>
+        <h2 class="content-title">Change password</h2>
+        <p class="settings-page-subtitle">Update the password used for your Showbase account.</p>
+      </div>
     </div>
 
-    <div class="form-container" style="max-width:520px;">
-      <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
-        <div class="form-group">
-          <label class="form-label" for="currentPasswordInput">Current Password</label>
-          <input
-            id="currentPasswordInput"
-            type="password"
-            class="form-input"
-            autocomplete="current-password"
-          >
+    <div class="password-page-layout">
+      <section class="password-security-band" aria-label="Signed-in account">
+        <span class="settings-feature-icon">${settingsIcon('shield')}</span>
+        <div>
+          <span class="settings-eyebrow">Signed in as</span>
+          <strong>${escapeHtml(userName)}</strong>
+          ${username && username !== userName ? `<small>@${escapeHtml(username)}</small>` : ''}
         </div>
+      </section>
 
-        <div class="form-group">
-          <label class="form-label" for="newPasswordInput">New Password</label>
-          <input
-            id="newPasswordInput"
-            type="password"
-            class="form-input"
-            autocomplete="new-password"
-          >
-        </div>
+      <section class="password-form-panel">
+        <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+          <div class="password-form-heading">
+            <span class="settings-feature-icon compact">${settingsIcon('lock')}</span>
+            <div>
+              <h3>Set a new password</h3>
+              <p>Enter your current password before choosing a replacement.</p>
+            </div>
+          </div>
 
-        <div class="form-group">
-          <label class="form-label" for="confirmPasswordInput">Confirm Password</label>
-          <input
-            id="confirmPasswordInput"
-            type="password"
-            class="form-input"
-            autocomplete="new-password"
-          >
-        </div>
+          <div class="form-group password-field-current">
+            <label class="form-label" for="currentPasswordInput">Current password</label>
+            <div class="password-input-wrap">
+              <input id="currentPasswordInput" type="password" class="form-input" autocomplete="current-password">
+              <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('currentPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
+            </div>
+          </div>
 
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-          <button type="submit" id="changePasswordSubmit" class="btn btn-primary">Save Password</button>
-          <button type="button" class="btn btn-secondary" onclick="resetChangePasswordForm()">Clear</button>
-        </div>
-      </form>
+          <div class="password-new-grid">
+            <div class="form-group">
+              <label class="form-label" for="newPasswordInput">New password</label>
+              <div class="password-input-wrap">
+                <input id="newPasswordInput" type="password" class="form-input" autocomplete="new-password">
+                <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('newPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="confirmPasswordInput">Confirm password</label>
+              <div class="password-input-wrap">
+                <input id="confirmPasswordInput" type="password" class="form-input" autocomplete="new-password">
+                <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('confirmPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="password-form-actions">
+            <button type="submit" id="changePasswordSubmit" class="btn password-save-button">${settingsIcon('lock')}<span>Save new password</span></button>
+            <button type="button" class="btn password-clear-button" onclick="resetChangePasswordForm()">Clear</button>
+          </div>
+        </form>
+      </section>
     </div>
   `;
 
   sectionParent.appendChild(section);
+}
+
+function toggleSettingsPasswordVisibility(inputId, button) {
+  const input = document.getElementById(inputId);
+  if (!input || !button) return;
+  const willShow = input.type === 'password';
+  input.type = willShow ? 'text' : 'password';
+  button.innerHTML = settingsIcon(willShow ? 'eyeOff' : 'eye');
+  button.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
+  button.setAttribute('title', willShow ? 'Hide password' : 'Show password');
 }
 
 function resetChangePasswordForm() {
@@ -6439,14 +6661,19 @@ function ensureUsersNavItem() {
 
 function userRoleOptionsMarkup(selectedRole = 'user') {
   const selected = String(selectedRole || 'user').toLowerCase();
-  const roles = ['admin', 'manager', 'user'];
+  const roles = isPlatformAdminUser()
+    ? ['owner', 'admin', 'manager', 'user']
+    : ['admin', 'manager', 'user'];
   return roles.map(role => `
     <option value="${role}" ${role === selected ? 'selected' : ''}>${escapeHtml(userRoleLabel(role))}</option>
   `).join('');
 }
 
 function userRoleSummaryMarkup() {
-  return ['admin', 'manager', 'user'].map(role => `
+  const roles = isPlatformAdminUser()
+    ? ['owner', 'admin', 'manager', 'user']
+    : ['admin', 'manager', 'user'];
+  return roles.map(role => `
     <span class="user-role-chip user-role-chip-${role}">
       <strong>${escapeHtml(userRoleLabel(role))}</strong>
     </span>
@@ -6675,7 +6902,9 @@ function usersAdminRowMarkup(user, index) {
   );
   const role = String(user.role || (user.isSuperAdmin || user.isAdmin ? 'admin' : 'user')).toLowerCase();
   const isProtectedAccount = Boolean(user.isSuperAdmin);
-  const canEditRole = canCurrentUserManageRoles() && !isProtectedAccount;
+  const canEditRole = canCurrentUserManageRoles() && (
+    !isProtectedAccount || (isPlatformAdminUser() && !isSelf)
+  );
   const canEditUser = !isProtectedAccount || isPlatformAdminUser();
   const rawLastOnline = String(user.lastOnline || '-');
   const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
@@ -7406,6 +7635,7 @@ function ensureUserAdminStyles() {
       font-weight: 700;
     }
 
+    .user-role-chip-owner { border-color: #f2c879; background: #fff7e6; color: #8a4b08; }
     .user-role-chip-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
     .user-role-chip-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
     .user-role-chip-sales { border-color: #fcceee; background: #fdf2fa; color: #c11574; }
@@ -9576,27 +9806,184 @@ function inventoryGroupDescription(group) {
   return descriptions.length === 1 ? descriptions[0] : `${descriptions[0]} +${descriptions.length - 1} more`;
 }
 
-function inventoryAvailabilityBadgesHtml(asset) {
+function inventoryStatusHistoryRecord(asset, status) {
+  const cleanStatus = String(status || '').trim().toLowerCase();
+  if (!asset || !cleanStatus || cleanStatus === 'available' || cleanStatus === 'deployed') return null;
+
+  const activeBulkRecords = (Array.isArray(asset.bulkMaintenanceLogbook)
+    ? asset.bulkMaintenanceLogbook
+    : [])
+    .filter(row => !row?.isResolved && String(row?.status || '').toLowerCase() === cleanStatus)
+    .map((row, originalIndex) => ({
+      ...normalizeMaintenanceLogRecord(row.fault),
+      originalIndex
+    }))
+    .sort(compareMaintenanceLogsNewestFirst);
+  if (activeBulkRecords.length) return activeBulkRecords[0];
+
+  const records = getMaintenanceLogRecords(asset)
+    .map((record, originalIndex) => ({ ...record, originalIndex }))
+    .sort(compareMaintenanceLogsNewestFirst);
+  for (const record of records) {
+    for (let index = record.changes.length - 1; index >= 0; index--) {
+      const change = normalizeMaintenanceChange(record.changes[index]);
+      if (!change || change.kind !== cleanStatus) continue;
+      return change.action === 'marked' ? record : null;
+    }
+    const source = record.source || {};
+    if (
+      String(source.kind || '').toLowerCase() === 'bulk_maintenance_fault'
+      && String(source.bulkStatus || '').toLowerCase() === cleanStatus
+    ) return record;
+  }
+  return null;
+}
+
+function ensureInventoryStatusHistoryTooltip() {
+  let tooltip = document.getElementById('inventoryStatusHistoryTooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'inventoryStatusHistoryTooltip';
+  tooltip.className = 'pnl-chart-tooltip inventory-status-tooltip';
+  tooltip.setAttribute('role', 'status');
+  tooltip.setAttribute('aria-live', 'polite');
+  tooltip.innerHTML = '<i aria-hidden="true"></i><div><strong></strong><span></span><em></em></div>';
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function inventoryPositionStatusHistoryTooltip(event, target) {
+  const tooltip = document.getElementById('inventoryStatusHistoryTooltip');
+  if (!tooltip || !target) return;
+  const rect = target.getBoundingClientRect();
+  const eventX = Number(event?.clientX);
+  const xAnchor = Number.isFinite(eventX) && eventX > 0
+    ? eventX
+    : rect.left + rect.width / 2;
+  const below = rect.top < 105;
+  const width = Math.max(120, tooltip.offsetWidth || 240);
+  const x = Math.min(Math.max(xAnchor, width / 2 + 8), window.innerWidth - width / 2 - 8);
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${below ? rect.bottom : rect.top}px`;
+  tooltip.classList.toggle('is-below', below);
+}
+
+function inventoryShowStatusHistoryTooltip(event, target, encodedAssetId, status) {
+  let assetId = String(encodedAssetId || '');
+  try { assetId = decodeURIComponent(assetId); } catch (error) {}
+  const asset = getAssetByApiIdentifier(assetId);
+  const record = inventoryStatusHistoryRecord(asset, status);
+  if (!record) return;
+  const tooltip = ensureInventoryStatusHistoryTooltip();
+  tooltip.innerHTML = '<i aria-hidden="true"></i><div><strong></strong><span></span><em></em></div>';
+  const statusMeta = INVENTORY_CONDITION_META[status] || { label: inventoryStatusText(status), color: '#334155' };
+  tooltip.querySelector('strong').textContent = `Marked ${statusMeta.label}`;
+  tooltip.querySelector('span').textContent = `${maintenanceLogUserLabel(record) || 'Unknown person'} · ${inventoryMaintenanceDateText(record)}`;
+  tooltip.querySelector('em').textContent = record.description || 'No description recorded.';
+  tooltip.style.setProperty('--tooltip-colour', statusMeta.color || '#334155');
+  tooltip.classList.add('is-visible');
+  inventoryPositionStatusHistoryTooltip(event, target);
+}
+
+function inventoryHideStatusHistoryTooltip() {
+  document.getElementById('inventoryStatusHistoryTooltip')?.classList.remove('is-visible', 'is-below');
+}
+
+function inventoryDeploymentRecords(asset) {
+  const rows = Array.isArray(asset?.deployments)
+    ? asset.deployments
+    : Array.isArray(asset?.bulkDeployments)
+      ? asset.bulkDeployments
+      : [];
+  return rows.filter(row => row && Number(row.quantity || 0) > 0);
+}
+
+function inventoryShowDeploymentTooltip(event, target, encodedAssetId) {
+  let assetId = String(encodedAssetId || '');
+  try { assetId = decodeURIComponent(assetId); } catch (error) {}
+  const asset = getAssetByApiIdentifier(assetId);
+  const deployments = inventoryDeploymentRecords(asset);
+  if (!deployments.length) return;
+
+  const tooltip = ensureInventoryStatusHistoryTooltip();
+  const eventLabel = deployments.length === 1 ? 'Deployed to' : `Deployed to ${deployments.length} events`;
+  tooltip.innerHTML = `
+    <i aria-hidden="true"></i>
+    <div>
+      <strong>${escapeHtml(eventLabel)}</strong>
+      <div class="inventory-deployment-tooltip-list">
+        ${deployments.map(deployment => {
+          const eventName = deployment.eventName || (deployment.eventId ? `Event ${deployment.eventId}` : 'Event');
+          const eventId = deployment.eventId ? `#${deployment.eventId}` : '';
+          const dateText = bulkDeploymentDateText(deployment) || 'Date not set';
+          const quantity = Math.max(1, Number(deployment.quantity || 1) || 1);
+          const quantityText = asset?.isBulk ? `${quantity} deployed` : '1 asset';
+          return `<div class="inventory-deployment-tooltip-row"><span><b>${escapeHtml(eventId)}</b>${escapeHtml(eventName)}</span><em>${escapeHtml(dateText)} &middot; ${escapeHtml(quantityText)}</em></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  tooltip.style.setProperty('--tooltip-colour', ASSET_DEPLOYED_COLOR);
+  tooltip.classList.add('is-visible');
+  inventoryPositionStatusHistoryTooltip(event, target);
+}
+
+function inventoryDeploymentBadgeHtml(asset, label) {
+  const badge = statusBadgeHtml('deployed', label);
+  const deployments = inventoryDeploymentRecords(asset);
+  if (!deployments.length) return badge;
+  const encodedId = encodeURIComponent(inventoryAssetIdentifier(asset));
+  const accessibleEvents = deployments.map(deployment => {
+    const eventName = deployment.eventName || (deployment.eventId ? `Event ${deployment.eventId}` : 'Event');
+    return `${deployment.eventId ? `Event ${deployment.eventId}: ` : ''}${eventName}`;
+  }).join('; ');
+  return `<span class="inventory-status-history inventory-deployment-status" tabindex="0" aria-label="${escapeHtmlAttr(`${label}. ${accessibleEvents}`)}"
+    onpointerenter="inventoryShowDeploymentTooltip(event,this,'${escapeHtmlAttr(encodedId)}')"
+    onpointermove="inventoryPositionStatusHistoryTooltip(event,this)"
+    onpointerleave="inventoryHideStatusHistoryTooltip()"
+    onfocus="inventoryShowDeploymentTooltip(event,this,'${escapeHtmlAttr(encodedId)}')"
+    onblur="inventoryHideStatusHistoryTooltip()"
+    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip();this.blur();}">${badge}</span>`;
+}
+
+function inventoryStatusHistoryBadgeHtml(asset, status, label) {
+  const badge = statusBadgeHtml(status, label);
+  const record = inventoryStatusHistoryRecord(asset, status);
+  if (!record) return badge;
+  const encodedId = encodeURIComponent(inventoryAssetIdentifier(asset));
+  const accessible = `${label}. Marked by ${maintenanceLogUserLabel(record) || 'Unknown person'} on ${inventoryMaintenanceDateText(record)}. ${record.description || 'No description recorded.'}`;
+  return `<span class="inventory-status-history" tabindex="0" aria-label="${escapeHtmlAttr(accessible)}"
+    onpointerenter="inventoryShowStatusHistoryTooltip(event,this,'${escapeHtmlAttr(encodedId)}','${escapeHtmlAttr(status)}')"
+    onpointermove="inventoryPositionStatusHistoryTooltip(event,this)"
+    onpointerleave="inventoryHideStatusHistoryTooltip()"
+    onfocus="inventoryShowStatusHistoryTooltip(event,this,'${escapeHtmlAttr(encodedId)}','${escapeHtmlAttr(status)}')"
+    onblur="inventoryHideStatusHistoryTooltip()"
+    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip();this.blur();}">${badge}</span>`;
+}
+
+function inventoryAvailabilityBadgesHtml(asset, includeStatusHistory = false) {
   const counts = inventoryAvailabilityCounts([asset]);
   const badges = [];
   const withQuantity = (value, label) => `${counts.total > 1 ? `${value} ` : ''}${label}`;
+  const conditionBadge = (status, label) => includeStatusHistory
+    ? inventoryStatusHistoryBadgeHtml(asset, status, label)
+    : statusBadgeHtml(status, label);
 
-  if (counts.deployed > 0) badges.push(statusBadgeHtml('deployed', withQuantity(counts.deployed, 'Deployed')));
-  if (counts.ooc > 0) badges.push(statusBadgeHtml('ooc', withQuantity(counts.ooc, 'OOC')));
-  if (counts.missing > 0) badges.push(statusBadgeHtml('missing', withQuantity(counts.missing, 'Missing')));
-  if (counts.decommissioned > 0) badges.push(statusBadgeHtml('decommissioned', withQuantity(counts.decommissioned, 'Decommissioned')));
+  if (counts.deployed > 0) badges.push(inventoryDeploymentBadgeHtml(asset, withQuantity(counts.deployed, 'Deployed')));
+  if (counts.ooc > 0) badges.push(conditionBadge('ooc', withQuantity(counts.ooc, 'OOC')));
+  if (counts.missing > 0) badges.push(conditionBadge('missing', withQuantity(counts.missing, 'Missing')));
+  if (counts.decommissioned > 0) badges.push(conditionBadge('decommissioned', withQuantity(counts.decommissioned, 'Decommissioned')));
 
   const clearAvailable = Math.max(0, counts.available - counts.untaggedAvailable - counts.degradedAvailable);
   if (clearAvailable > 0) badges.push(statusBadgeHtml('available', withQuantity(clearAvailable, 'OK')));
   if (counts.untaggedAvailable > 0) {
-    badges.push(statusBadgeHtml('untagged', withQuantity(counts.untaggedAvailable, 'Untagged')));
+    badges.push(conditionBadge('untagged', withQuantity(counts.untaggedAvailable, 'Untagged')));
   } else if (counts.deployed > 0 && getAssetConditionStatus(asset) === 'untagged') {
-    badges.push(statusBadgeHtml('untagged', 'Untagged'));
+    badges.push(conditionBadge('untagged', 'Untagged'));
   }
   if (counts.degradedAvailable > 0) {
-    badges.push(statusBadgeHtml('degraded', withQuantity(counts.degradedAvailable, 'Degraded')));
+    badges.push(conditionBadge('degraded', withQuantity(counts.degradedAvailable, 'Degraded')));
   } else if (counts.deployed > 0 && getAssetConditionStatus(asset) === 'degraded') {
-    badges.push(statusBadgeHtml('degraded', 'Degraded'));
+    badges.push(conditionBadge('degraded', 'Degraded'));
   }
 
   return badges.join(' ') || statusBadgeHtml('available', 'OK');
@@ -9606,7 +9993,7 @@ function inventoryIndividualRowHtml(asset, isAdmin) {
   const assetId = inventoryAssetIdentifier(asset);
   const encodedId = encodeURIComponent(assetId);
   const total = inventoryAssetQuantity(asset);
-  const availabilityHtml = inventoryAvailabilityBadgesHtml(asset);
+  const availabilityHtml = inventoryAvailabilityBadgesHtml(asset, true);
   const maintenance = inventoryLatestMaintenance([asset]);
   return `
     <div class="inventory-individual-row">
@@ -11211,6 +11598,29 @@ function ensureContainerUiStyles() {
     .container-hero-title { display:flex;align-items:center;gap:7px;margin:0;color:var(--container-ink);font-size:17px; }
     .container-hero-title svg { width:19px;height:19px;fill:none;stroke:var(--container-green);stroke-width:2; }
     .container-hero-subtitle { margin-top:4px;color:var(--container-muted);font-size:10px; }
+    .container-summary-photo,
+    .container-photo-preview img {
+      display:block;
+      width:100%;
+      max-height:240px;
+      object-fit:contain;
+      margin-bottom:12px;
+      border:1px solid var(--container-line);
+      border-radius:7px;
+      background:#fff;
+    }
+    .container-photo-preview {
+      display:grid;
+      place-items:center;
+      min-height:64px;
+      margin-top:8px;
+      color:var(--container-muted);
+      border:1px dashed var(--container-line);
+      border-radius:7px;
+      background:#f8fbfa;
+      font-size:11px;
+    }
+    .container-photo-preview img { margin:0; border:0; }
     .container-stats-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -11314,6 +11724,12 @@ function ensureContainerUiStyles() {
     .selected-container-chip-id { color:var(--container-ink);font-size:11px; }
     .selected-container-chip-desc { color:var(--container-muted);font-size:9px; }
     .selected-container-chip button { width:25px;height:25px;border-radius:5px; }
+    .selected-container-chip.bulk { border-left-color:#d97706; }
+    .container-bulk-quantity { display:inline-grid;grid-template-columns:25px 42px 25px;gap:3px;align-items:center;margin-top:6px; }
+    .container-bulk-quantity button { display:grid;place-items:center;border:1px solid #cbdad5;background:#fff;color:#34524a;cursor:pointer;font-size:14px; }
+    .container-bulk-quantity input { width:42px;height:25px;border:1px solid #cbdad5;border-radius:5px;background:#fff;color:var(--container-ink);font-size:10px;font-weight:800;text-align:center; }
+    .container-bulk-quantity input::-webkit-outer-spin-button,.container-bulk-quantity input::-webkit-inner-spin-button { margin:0;appearance:none; }
+    .container-bulk-quantity input[type=number] { appearance:textfield; }
     .container-search-result { padding:8px 10px; }
     .container-search-result:hover { background:#eef8f4; }
     .container-assets-table-wrap { border-color:var(--container-line);border-radius:7px; }
@@ -11351,19 +11767,53 @@ function getAssetFromCache(assetId) {
     assetLookupSource = assets;
     assetLookupById = new Map();
     assets.forEach(asset => {
-      if (!assetLookupById.has(asset.id)) assetLookupById.set(asset.id, asset);
+      const assetId = containerAssetIdentifier(asset);
+      if (assetId && !assetLookupById.has(assetId)) assetLookupById.set(assetId, asset);
     });
   }
   return assetLookupById.get(assetId) || null;
 }
 
+function containerAssetIdentifier(asset) {
+  return String(asset?.id || asset?.bulkId || asset?.internalId || '').trim();
+}
+
+function containerBulkItems(container) {
+  const source = Array.isArray(container?.bulkItems)
+    ? container.bulkItems
+    : Object.entries(container?.bulkItems || {}).map(([assetId, quantity]) => ({ assetId, quantity }));
+  return source.map(item => ({
+    assetId: String(item?.assetId || item?.bulkId || item?.id || '').trim(),
+    quantity: Math.max(0, Number.parseInt(item?.quantity, 10) || 0)
+  })).filter(item => item.assetId && item.quantity > 0);
+}
+
+function containerContentEntries(container) {
+  const specificEntries = (container?.assetIds || []).map(assetId => ({
+    assetId: String(assetId || '').trim(),
+    quantity: 1,
+    isBulk: false
+  })).filter(item => item.assetId);
+  const bulkEntries = containerBulkItems(container).map(item => ({ ...item, isBulk: true }));
+  return [...specificEntries, ...bulkEntries];
+}
+
+function containerContentQuantity(container) {
+  return containerContentEntries(container).reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  );
+}
+
 function getContainerStats(containerList) {
   const totalContainers = containerList.length;
-  const totalAssets = containerList.reduce((sum, c) => sum + ((c.assetIds || []).length), 0);
-  const largest = containerList.reduce((max, c) => Math.max(max, (c.assetIds || []).length), 0);
+  const totalAssets = containerList.reduce((sum, container) => sum + containerContentQuantity(container), 0);
+  const largest = containerList.reduce((max, container) => Math.max(max, containerContentQuantity(container)), 0);
 
   const uniqueAssetIds = new Set();
-  containerList.forEach(c => (c.assetIds || []).forEach(id => uniqueAssetIds.add(id)));
+  containerList.forEach(container => {
+    containerContentEntries(container).forEach(item => uniqueAssetIds.add(item.assetId));
+  });
 
   return {
     totalContainers,
@@ -11376,10 +11826,10 @@ function getContainerStats(containerList) {
 function getContainerDepartments(container) {
   const counts = {};
 
-  (container.assetIds || []).forEach(assetId => {
-    const asset = getAssetFromCache(assetId);
+  containerContentEntries(container).forEach(item => {
+    const asset = getAssetFromCache(item.assetId);
     const dept = asset ? (asset.department || 'UN') : 'Unknown';
-    counts[dept] = (counts[dept] || 0) + 1;
+    counts[dept] = (counts[dept] || 0) + item.quantity;
   });
 
   return counts;
@@ -11387,14 +11837,14 @@ function getContainerDepartments(container) {
 
 function getContainerConditionCounts(container) {
   const counts = { available: 0, untagged: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
-  (container.assetIds || []).forEach(assetId => {
-    const asset = getAssetFromCache(assetId);
+  containerContentEntries(container).forEach(item => {
+    const asset = getAssetFromCache(item.assetId);
     if (!asset) {
-      counts.missing += 1;
+      counts.missing += item.quantity;
       return;
     }
     const condition = getAssetConditionStatus(asset);
-    counts[condition] = (counts[condition] || 0) + 1;
+    counts[condition] = (counts[condition] || 0) + item.quantity;
   });
   return counts;
 }
@@ -11420,11 +11870,11 @@ function containerMatchesSearch(container, term) {
   const searchTextParts = [
     container.id,
     getContainerSerialNumber(container),
-    ...(container.assetIds || [])
+    ...containerContentEntries(container).map(item => item.assetId)
   ];
 
-  (container.assetIds || []).forEach(assetId => {
-    const asset = getAssetFromCache(assetId);
+  containerContentEntries(container).forEach(item => {
+    const asset = getAssetFromCache(item.assetId);
     if (asset) {
       searchTextParts.push(
         asset.brand,
@@ -11445,11 +11895,11 @@ function sortContainerList(containerList, sortBy) {
   const list = [...containerList];
 
   if (sortBy === 'assets-desc') {
-    return list.sort((a, b) => (b.assetIds || []).length - (a.assetIds || []).length);
+    return list.sort((a, b) => containerContentQuantity(b) - containerContentQuantity(a));
   }
 
   if (sortBy === 'assets-asc') {
-    return list.sort((a, b) => (a.assetIds || []).length - (b.assetIds || []).length);
+    return list.sort((a, b) => containerContentQuantity(a) - containerContentQuantity(b));
   }
 
   return list.sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), undefined, {
@@ -11459,25 +11909,30 @@ function sortContainerList(containerList, sortBy) {
 }
 
 function renderContainerPreview(container) {
-  const assetIds = container.assetIds || [];
+  const entries = containerContentEntries(container);
 
-  if (assetIds.length === 0) {
+  if (entries.length === 0) {
     return `<div style="color:#777;font-size:13px;">No assets in this container.</div>`;
   }
 
   let html = '';
 
-  assetIds.slice(0, 4).forEach(assetId => {
-    const asset = getAssetFromCache(assetId);
+  entries.slice(0, 4).forEach(item => {
+    const asset = getAssetFromCache(item.assetId);
+    const displayName = item.isBulk
+      ? [asset?.brand, asset?.model].filter(Boolean).join(' ') || 'Bulk asset'
+      : item.assetId;
 
     html += `
       <div class="container-preview-item">
         <div class="container-preview-main">
-          <div class="container-preview-id">${escapeHtml(assetId)}</div>
+          <div class="container-preview-id">${item.isBulk ? `${item.quantity}x ` : ''}${escapeHtml(displayName)}</div>
           <div class="container-preview-desc">
             ${
               asset
-                ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`
+                ? (item.isBulk
+                  ? escapeHtml(asset.description || 'Bulk quantity item')
+                  : `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`)
                 : 'Asset not found in inventory'
             }
           </div>
@@ -11491,10 +11946,10 @@ function renderContainerPreview(container) {
     `;
   });
 
-  if (assetIds.length > 4) {
+  if (entries.length > 4) {
     html += `
       <div style="color:#0f766e;font-size:9px;font-weight:800;padding-top:2px;">
-        +${assetIds.length - 4} more asset(s)
+        +${entries.length - 4} more line item(s)
       </div>
     `;
   }
@@ -11537,7 +11992,7 @@ function renderContainerCards(containerList) {
     const serialNumber = getContainerSerialNumber(container);
     const maintenanceCount = getMaintenanceLogRecords(container).length;
     const latestMaintenance = getContainerLatestMaintenance(container);
-    const assetCount = (container.assetIds || []).length;
+    const assetCount = containerContentQuantity(container);
 
     return `
       <div class="container-card-modern">
@@ -11564,18 +12019,20 @@ function renderContainerCards(containerList) {
   }).join('');
 }
 
-function renderContainerAssetsTable(assetIds) {
-  if (!assetIds || assetIds.length === 0) {
+function renderContainerAssetsTable(container) {
+  const entries = containerContentEntries(container);
+  if (!entries.length) {
     return `<div style="padding:20px;text-align:center;color:#666;">No assets in this container.</div>`;
   }
 
-  const rows = assetIds.map(assetId => {
-    const asset = getAssetFromCache(assetId);
+  const rows = entries.map(item => {
+    const asset = getAssetFromCache(item.assetId);
 
     if (!asset) {
       return `
         <tr>
-          <td><strong>${escapeHtml(assetId)}</strong></td>
+          <td><strong>${escapeHtml(item.isBulk ? 'Bulk asset' : item.assetId)}</strong></td>
+          <td>${item.isBulk ? item.quantity : '-'}</td>
           <td colspan="5"><span class="asset-badge status-missing">Asset not found in inventory</span></td>
         </tr>
       `;
@@ -11583,10 +12040,11 @@ function renderContainerAssetsTable(assetIds) {
 
     return `
       <tr>
-        <td><strong>${escapeHtml(asset.id)}</strong></td>
+        <td><strong>${escapeHtml(item.isBulk ? 'Bulk asset' : asset.id)}</strong></td>
+        <td>${item.isBulk ? item.quantity : '-'}</td>
         <td>${escapeHtml(asset.brand || '')}</td>
         <td>${escapeHtml(asset.model || '')}</td>
-        <td>${escapeHtml(asset.serial || 'N/A')}</td>
+        <td>${escapeHtml(item.isBulk ? '-' : (asset.serial || '-'))}</td>
         <td><span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">${escapeHtml(asset.department || 'UN')}</span></td>
         <td>${escapeHtml(asset.description || '')}</td>
       </tr>
@@ -11599,6 +12057,7 @@ function renderContainerAssetsTable(assetIds) {
         <thead>
           <tr>
             <th>Asset ID</th>
+            <th>Quantity</th>
             <th>Brand</th>
             <th>Model</th>
             <th>Serial</th>
@@ -11689,8 +12148,9 @@ async function openContainerMaintenanceModal(containerId) {
           </div>
           <form id="containerMaintenanceForm">
             <div style="padding:12px 14px;margin-bottom:16px;border-radius:10px;background:#eef4ff;color:#294f88;">
-              This entry will be added to this container and all <strong>${(container.assetIds || []).length}</strong>
-              assets currently inside it. Each asset will retain the entry even if it is removed later.
+              This entry will be added to this container and all <strong>${containerContentEntries(container).length}</strong>
+              inventory records currently inside it, representing ${containerContentQuantity(container)} asset unit(s).
+              Each record will retain the entry even if it is removed later.
             </div>
 
             <div class="form-group">
@@ -11837,6 +12297,14 @@ function makeContainerEditorHtml(mode, container = null) {
             value="${escapeHtmlAttr(serialNumber)}"
             placeholder="e.g. SN-CASE-A01"
           >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Container Photo <span style="color:#666;font-weight:400;">(optional, max 5 MB)</span></label>
+          <input id="containerPhotoInput" class="form-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="containerPhotoSelected(this)">
+          <div id="containerPhotoPreview" class="container-photo-preview">
+            ${container?.photoUrl ? `<img src="${escapeHtmlAttr(container.photoUrl)}" alt="Photo of ${escapeHtmlAttr(containerId)}">` : '<span>No photo selected</span>'}
+          </div>
         </div>
 
         <div class="container-panel" style="margin-top:14px;">
@@ -12060,9 +12528,13 @@ function updateSelectedContainerAssetsDisplay() {
   const listElement = document.getElementById('selectedContainerAssetsList');
   if (!countElement || !listElement) return;
 
-  countElement.textContent = selectedContainerAssets.size;
+  const bulkQuantity = Array.from(selectedContainerBulkAssets.values()).reduce(
+    (sum, quantity) => sum + Number(quantity || 0),
+    0
+  );
+  countElement.textContent = selectedContainerAssets.size + bulkQuantity;
 
-  if (selectedContainerAssets.size === 0) {
+  if (selectedContainerAssets.size === 0 && selectedContainerBulkAssets.size === 0) {
     listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
     return;
   }
@@ -12090,10 +12562,32 @@ function updateSelectedContainerAssetsDisplay() {
     `;
   });
 
+  selectedContainerBulkAssets.forEach((quantity, assetId) => {
+    const asset = getAssetFromCache(assetId);
+    const label = [asset?.brand, asset?.model].filter(Boolean).join(' ') || 'Bulk asset';
+    const description = asset?.description || 'Quantity asset';
+    const maximum = Math.max(1, Number(asset?.quantity || quantity || 1));
+    const encodedId = escapeHtmlAttr(encodeURIComponent(assetId));
+    html += `
+      <div class="selected-container-chip bulk">
+        <div style="min-width:0;">
+          <div class="selected-container-chip-id">${escapeHtml(label)}</div>
+          <div class="selected-container-chip-desc">${escapeHtml(description)} &middot; Bulk quantity</div>
+          <div class="container-bulk-quantity" aria-label="Quantity of ${escapeHtmlAttr(label)} in container">
+            <button type="button" data-asset-id="${encodedId}" onclick="adjustContainerBulkQuantity(this.dataset.assetId,-1)" aria-label="Reduce quantity">&minus;</button>
+            <input type="number" min="1" max="${maximum}" value="${quantity}" data-asset-id="${encodedId}" onchange="setContainerBulkQuantity(this.dataset.assetId,this.value)" aria-label="Bulk quantity">
+            <button type="button" data-asset-id="${encodedId}" onclick="adjustContainerBulkQuantity(this.dataset.assetId,1)" aria-label="Increase quantity">+</button>
+          </div>
+        </div>
+        <button type="button" data-asset-id="${encodedId}" onclick="removeAssetFromContainer(decodeURIComponent(this.dataset.assetId))" title="Remove">&times;</button>
+      </div>
+    `;
+  });
+
   listElement.innerHTML = html;
 }
 
-async function initContainerAssetSelector(initialAssetIds = []) {
+async function initContainerAssetSelector(initialAssetIds = [], initialBulkItems = []) {
   const resultsEl = document.getElementById("availableContainerAssets");
   const searchElInitial = document.getElementById("containerAssetSearch");
 
@@ -12109,6 +12603,9 @@ async function initContainerAssetSelector(initialAssetIds = []) {
   await ensureAssetsLoadedForContainerSelector(true);
 
   selectedContainerAssets = new Set(Array.isArray(initialAssetIds) ? initialAssetIds : []);
+  selectedContainerBulkAssets = new Map(
+    containerBulkItems({ bulkItems: initialBulkItems }).map(item => [item.assetId, item.quantity])
+  );
   updateSelectedContainerAssetsDisplay();
 
   const searchEl = bindContainerAssetSearchHandlers();
@@ -12176,37 +12673,74 @@ function bindContainerAssetSearchHandlers() {
 }
 
 
-function selectAssetForContainer(assetId) {
+function setContainerBulkQuantity(encodedAssetId, rawQuantity) {
+  const assetId = decodeURIComponent(String(encodedAssetId || ''));
+  const asset = getAssetFromCache(assetId);
+  if (!asset || !asset.isBulk || !selectedContainerBulkAssets.has(assetId)) return;
+  const maximum = Math.max(1, Number(asset.quantity || 1));
+  const quantity = Math.min(maximum, Math.max(1, Number.parseInt(rawQuantity, 10) || 1));
+  selectedContainerBulkAssets.set(assetId, quantity);
+  updateSelectedContainerAssetsDisplay();
+  searchContainerAssets();
+}
+
+function adjustContainerBulkQuantity(encodedAssetId, delta) {
+  const assetId = decodeURIComponent(String(encodedAssetId || ''));
+  const current = selectedContainerBulkAssets.get(assetId);
+  if (!current) return;
+  setContainerBulkQuantity(encodedAssetId, current + Number(delta || 0));
+}
+
+async function selectAssetForContainer(assetId) {
   if (!assetId) return;
   if (!Array.isArray(assets) || assets.length === 0) {
     showNotification('error', 'Assets not loaded');
     return;
   }
 
-  const asset = assets.find(a => a.id === assetId);
+  const asset = assets.find(item => containerAssetIdentifier(item) === assetId);
   if (!asset) {
     showNotification('error', `Asset ${assetId} not found`);
     return;
   }
-  if (asset.isBulk) {
-    showNotification('warning', 'Bulk quantity assets cannot be added to containers');
-    return;
-  }
-
-  if (selectedContainerAssets.has(assetId)) {
+  if (selectedContainerAssets.has(assetId) || selectedContainerBulkAssets.has(assetId)) {
     showNotification('warning', `Asset ${assetId} is already selected`);
     return;
   }
 
-  selectedContainerAssets.add(assetId);
+  if (asset.isBulk) {
+    const maximum = Math.max(1, Number(asset.quantity || 1));
+    const label = [asset.brand, asset.model].filter(Boolean).join(' ') || 'bulk asset';
+    const value = await showAppPrompt({
+      title: 'Add bulk quantity',
+      message: `How many units of ${label} are in this container?`,
+      inputType: 'number',
+      inputLabel: 'Quantity',
+      placeholder: `Maximum ${maximum}`,
+      defaultValue: String(Math.min(maximum, 1)),
+      confirmText: 'Add to container',
+      cancelText: 'Cancel',
+      required: true
+    });
+    if (value === null || value === false) return;
+    const quantity = Number.parseInt(String(value || '').trim(), 10);
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > maximum) {
+      showNotification('warning', `Enter a quantity between 1 and ${maximum}`);
+      return;
+    }
+    selectedContainerBulkAssets.set(assetId, quantity);
+    showNotification('success', `Added ${quantity}x ${label} to container`);
+  } else {
+    selectedContainerAssets.add(assetId);
+    showNotification('success', `Added ${assetId} to container`);
+  }
   updateSelectedContainerAssetsDisplay();
   searchContainerAssets();
-
-  showNotification('success', `Added ${assetId} to container`);
 }
 
 function removeAssetFromContainer(assetId) {
   selectedContainerAssets.delete(assetId);
+  selectedContainerBulkAssets.delete(assetId);
   updateSelectedContainerAssetsDisplay();
   // refresh search results
   searchContainerAssets();
@@ -12214,6 +12748,7 @@ function removeAssetFromContainer(assetId) {
 
 function clearContainerSelection() {
   selectedContainerAssets.clear();
+  selectedContainerBulkAssets.clear();
   updateSelectedContainerAssetsDisplay();
   searchContainerAssets();
 }
@@ -12261,11 +12796,14 @@ function searchContainerAssets() {
   }
 
   const filtered = assets.filter(asset => {
+    const assetId = containerAssetIdentifier(asset);
     const searchableText =
-      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.department || ''} ${assetTagSearchText(asset)}`
+      `${assetId} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.department || ''} ${assetTagSearchText(asset)}`
         .toLowerCase();
 
-    return searchableText.includes(term) && !selectedContainerAssets.has(asset.id);
+    return searchableText.includes(term)
+      && !selectedContainerAssets.has(assetId)
+      && !selectedContainerBulkAssets.has(assetId);
   });
 
   if (filtered.length === 0) {
@@ -12283,11 +12821,18 @@ function searchContainerAssets() {
   filtered.slice(0, 60).forEach(asset => {
     const statusBadge = getAssetStatusBadge(asset);
     const locationText = asset.location || 'Store';
+    const assetId = containerAssetIdentifier(asset);
+    const displayTitle = asset.isBulk
+      ? ([asset.brand, asset.model].filter(Boolean).join(' ') || 'Bulk asset')
+      : assetId;
+    const bulkDetail = asset.isBulk
+      ? `<span class="container-count-pill">Bulk &middot; ${Number(asset.quantity || 1)} total</span>`
+      : '';
 
     html += `
-      <div class="container-search-result container-asset-item" data-asset-id="${escapeHtmlAttr(asset.id)}">
+      <div class="container-search-result container-asset-item" data-asset-id="${escapeHtmlAttr(assetId)}">
         <div style="min-width:0;flex:1;">
-          <div style="font-weight:800;color:#333;margin-bottom:3px;">${escapeHtml(asset.id)}</div>
+          <div style="font-weight:800;color:#333;margin-bottom:3px;">${escapeHtml(displayTitle)}</div>
           <div style="color:#555;font-size:13px;margin-bottom:2px;">
             ${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}
             ${asset.serial ? `• SN: ${escapeHtml(asset.serial)}` : ''}
@@ -12297,12 +12842,13 @@ function searchContainerAssets() {
           </div>
           <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             ${statusBadge}
+            ${bulkDetail}
             <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">${escapeHtml(asset.department || 'UN')}</span>
             <span style="color:#999;font-size:11px;">📍 ${escapeHtml(locationText)}</span>
           </div>
         </div>
 
-        <button type="button" class="btn btn-primary btn-sm select-container-btn" data-asset-id="${escapeHtmlAttr(asset.id)}">
+        <button type="button" class="btn btn-primary btn-sm select-container-btn" data-asset-id="${escapeHtmlAttr(assetId)}">
           Add
         </button>
       </div>
@@ -12333,12 +12879,12 @@ async function handleContainerAssetSearchKeypress(e) {
 
   // exact asset match first
   const asset = assets.find(a =>
-    a.id.toLowerCase() === searchTerm.toLowerCase() ||
+    containerAssetIdentifier(a).toLowerCase() === searchTerm.toLowerCase() ||
     (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
   );
 
   if (asset) {
-    selectAssetForContainer(asset.id);
+    await selectAssetForContainer(containerAssetIdentifier(asset));
     e.target.value = '';
     return;
   }
@@ -12357,12 +12903,26 @@ async function handleContainerAssetSearchKeypress(e) {
     for (const aid of (container.assetIds || [])) {
       if (!selectedContainerAssets.has(aid)) {
         // only add if the asset exists in inventory
-        if (assets.find(a => a.id === aid)) {
+        if (assets.find(a => containerAssetIdentifier(a) === aid)) {
           selectedContainerAssets.add(aid);
           added++;
         }
       } else {
         already++;
+      }
+    }
+
+    for (const item of containerBulkItems(container)) {
+      if (!selectedContainerBulkAssets.has(item.assetId)) {
+        const bulkAsset = assets.find(assetOption => (
+          containerAssetIdentifier(assetOption) === item.assetId
+        ));
+        if (bulkAsset?.isBulk) {
+          selectedContainerBulkAssets.set(item.assetId, item.quantity);
+          added += item.quantity;
+        }
+      } else {
+        already += item.quantity;
       }
     }
 
@@ -12374,15 +12934,44 @@ async function handleContainerAssetSearchKeypress(e) {
   }
 }
 
+function containerPhotoSelected(input) {
+  const file = input?.files?.[0] || null;
+  if (file && file.size > 5 * 1024 * 1024) {
+    input.value = '';
+    selectedContainerPhotoFile = null;
+    showNotification('warning', 'Container photo must not exceed 5 MB');
+    return;
+  }
+  selectedContainerPhotoFile = file;
+  const preview = document.getElementById('containerPhotoPreview');
+  if (!preview) return;
+  if (!file) {
+    preview.innerHTML = '<span>No photo selected</span>';
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  preview.innerHTML = `<img src="${escapeHtmlAttr(url)}" alt="Selected container photo">`;
+  preview.querySelector('img')?.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+}
+
+async function uploadContainerPhoto(containerId) {
+  if (!selectedContainerPhotoFile) return;
+  const formData = new FormData();
+  formData.append('photo', selectedContainerPhotoFile);
+  await apiCall(`/api/containers/${encodeURIComponent(containerId)}/photo`, 'POST', formData);
+  selectedContainerPhotoFile = null;
+}
+
 async function createContainer() {
   ensureContainerCrudModal();
+  selectedContainerPhotoFile = null;
 
   document.getElementById("containerCrudModalTitle").textContent = "Create Container";
   document.getElementById("containerCrudModalBody").innerHTML = makeContainerEditorHtml('create');
 
   openModal("containerCrudModal");
 
-  await initContainerAssetSelector([]);
+  await initContainerAssetSelector([], []);
   document.getElementById('containerAssetSearch')?.focus();
 }
 
@@ -12390,12 +12979,14 @@ async function saveNewContainer() {
   const id = (document.getElementById("containerIdInput").value || '').trim();
   const serialNumber = (document.getElementById("containerSerialInput")?.value || '').trim();
   const assetIds = Array.from(selectedContainerAssets);
+  const bulkItems = Array.from(selectedContainerBulkAssets, ([assetId, quantity]) => ({ assetId, quantity }));
 
   if (!id) return showNotification('error', 'Container ID is required');
-  if (assetIds.length === 0) return showNotification('error', 'Add at least 1 asset ID');
+  if (assetIds.length === 0 && bulkItems.length === 0) return showNotification('error', 'Add at least 1 asset or bulk quantity');
 
   try {
-    await apiCall('/api/containers', 'POST', { id, serialNumber, assetIds });
+    const response = await apiCall('/api/containers', 'POST', { id, serialNumber, assetIds, bulkItems });
+    await uploadContainerPhoto(response.data?.id || id);
     showNotification('success', `Created container ${id}`);
     closeModal("containerCrudModal");
     await refreshContainersCache(true);
@@ -12424,11 +13015,12 @@ async function viewContainer(containerId) {
 
     document.getElementById("containerCrudModalBody").innerHTML = `
       <div class="container-hero" style="margin-bottom:16px;">
+        ${c.photoUrl ? `<img class="container-summary-photo" src="${escapeHtmlAttr(c.photoUrl)}" alt="Photo of ${escapeHtmlAttr(c.id)}">` : ''}
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
           <div>
             <div class="container-hero-title">${inventoryIcon('box')} ${escapeHtml(c.id)}</div>
             <div class="container-hero-subtitle">
-              ${(c.assetIds || []).length} asset(s) in this container${serialNumber ? `, SN: ${escapeHtml(serialNumber)}` : ''}
+              ${containerContentQuantity(c)} asset unit(s) in this container${serialNumber ? `, SN: ${escapeHtml(serialNumber)}` : ''}
             </div>
           </div>
 
@@ -12444,7 +13036,7 @@ async function viewContainer(containerId) {
         </div>
       </div>
 
-      ${renderContainerAssetsTable(c.assetIds || [])}
+      ${renderContainerAssetsTable(c)}
       ${renderContainerMaintenanceHistory(c)}
     `;
 
@@ -12457,6 +13049,7 @@ async function viewContainer(containerId) {
 
 async function editContainer(containerId) {
   ensureContainerCrudModal();
+  selectedContainerPhotoFile = null;
 
   try {
     await ensureAssetsLoadedForContainerSelector(true);
@@ -12469,7 +13062,7 @@ async function editContainer(containerId) {
 
     openModal("containerCrudModal");
 
-    await initContainerAssetSelector(c.assetIds || []);
+    await initContainerAssetSelector(c.assetIds || [], c.bulkItems || []);
     document.getElementById('containerAssetSearch')?.focus();
 
   } catch (e) {
@@ -12481,12 +13074,14 @@ async function saveContainerEdit(containerId) {
   const newId = (document.getElementById('editContainerIdInput')?.value || '').trim();
   const serialNumber = (document.getElementById('editContainerSerialInput')?.value || '').trim();
   const assetIds = Array.from(selectedContainerAssets);
+  const bulkItems = Array.from(selectedContainerBulkAssets, ([assetId, quantity]) => ({ assetId, quantity }));
 
   if (!newId) return showNotification('error', 'Container ID is required');
-  if (assetIds.length === 0) return showNotification('error', 'Container must include at least 1 asset ID');
+  if (assetIds.length === 0 && bulkItems.length === 0) return showNotification('error', 'Container must include at least 1 asset or bulk quantity');
 
   try {
-    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'PUT', { newId, serialNumber, assetIds });
+    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'PUT', { newId, serialNumber, assetIds, bulkItems });
+    await uploadContainerPhoto(newId);
     if (newId !== containerId) {
       showNotification('success', `Renamed container ${containerId} → ${newId}`);
     } else {
@@ -12763,9 +13358,7 @@ function findMaintenanceReportContainer(value) {
 }
 
 function maintenanceReportContainerAssetIds(container) {
-  return (container?.assetIds || [])
-    .map(assetId => String(assetId || '').trim())
-    .filter(Boolean);
+  return containerContentEntries(container).map(item => item.assetId);
 }
 
 function maintenanceReportSelectedAssetIdSet() {
@@ -16418,6 +17011,7 @@ function renderReturnPage(options = {}) {
             <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
           </div>
         </div>
+
         ${renderEventSubprojectTabs(
           'returnPageState',
           event,
@@ -22596,7 +23190,10 @@ function eventSubprojectModelGroups(event, state) {
       countableAssignedQuantity: Math.min(required, countableAssigned),
       countableReturnedQuantity: Math.min(required, countableReturned),
       countablePreparedQuantity: Math.min(required, countablePrepared),
-      extraPreparedQuantity: activeExtraSpecific + Math.max(0, countablePrepared - required)
+      extraPreparedQuantity: activeExtraSpecific + Math.max(
+        0,
+        preparedSlots + countableAssignedSpecific - required
+      )
     };
   });
 }
@@ -22620,7 +23217,9 @@ var PLAN_EVENT_CHOOSER_FILTERS = [
 ];
 
 function planEncode(value) {
-  return escapeHtmlAttr(encodeURIComponent(String(value ?? '')));
+  const encoded = encodeURIComponent(String(value ?? ''))
+    .replace(/'/g, '%27');
+  return escapeHtmlAttr(encoded);
 }
 
 function planDecode(value) {
@@ -24087,7 +24686,7 @@ function renderPlanRequirementsCard() {
         </div>
       </div>
       <div class="plan-requirements-scroll">
-        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left or apply a template.</div>'}
+        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left.</div>'}
       </div>
     </section>
   `;
@@ -24129,6 +24728,82 @@ function renderPlanEventDetailsCard() {
       </div>
     </section>
   `;
+}
+
+function renderPlanVendorManagementCard() {
+  const rows = Array.isArray(planPageState.event?.vendorManagement)
+    ? planPageState.event.vendorManagement
+    : [];
+  if (!rows.length) return '';
+  return `
+    <section class="plan-card vendor-management-card">
+      <div class="plan-card-header"><h3>Vendor Management</h3><button type="button" class="vendor-management-open" onclick="planOpenVendorManagement()">Open</button></div>
+      <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+    </section>
+  `;
+}
+
+function planVendorManagementDialogMarkup() {
+  const rows = Array.isArray(planPageState.event?.vendorManagement)
+    ? planPageState.event.vendorManagement
+    : [];
+  return `<div class="modal-content vendor-management-dialog">
+    <div class="modal-header">
+      <div><h3 class="modal-title">Vendor Management</h3><p>Choose how each vendor fulfils their equipment.</p></div>
+      <button type="button" class="close-btn" aria-label="Close vendor management" onclick="closeModal('planVendorManagementModal')">&times;</button>
+    </div>
+    <div class="vendor-management-list">
+      ${rows.map(row => {
+        const dryHire = row.mode !== 'outsourced';
+        return `<div class="vendor-management-row">
+          <div class="vendor-management-details"><strong>${escapeHtml(row.vendorName || 'Vendor')}</strong><small>${Number(row.itemCount || 0)} item line${Number(row.itemCount || 0) === 1 ? '' : 's'} &middot; ${financeMoney(Number(row.amount || 0))}</small></div>
+          <div class="vendor-mode-toggle" role="radiogroup" aria-label="Fulfilment for ${escapeHtmlAttr(row.vendorName || 'vendor')}">
+            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','dry-hire')">Dry Hire</button>
+            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','outsourced')">Outsourced</button>
+          </div>
+        </div>`;
+      }).join('') || '<p class="vendor-management-empty">No external vendors for this event.</p>'}
+    </div>
+    <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+  </div>`;
+}
+
+function planOpenVendorManagement() {
+  let modal = document.getElementById('planVendorManagementModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'planVendorManagementModal';
+    modal.className = 'modal vendor-management-modal';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) closeModal(modal.id);
+    });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = planVendorManagementDialogMarkup();
+  openModal(modal.id);
+}
+
+async function planSetVendorManagement(encodedKey, mode) {
+  const key = planDecode(encodedKey);
+  if (!planPageState.eventId || !['dry-hire', 'outsourced'].includes(mode)) return;
+  try {
+    const response = await apiCall(
+      `/api/events/${planPageState.eventId}/vendor-management`,
+      'PUT',
+      { key, mode }
+    );
+    planPageState.event.vendorManagement = response.data || [];
+    await refreshPlanSelectedEvent();
+    const modal = document.getElementById('planVendorManagementModal');
+    if (modal?.classList.contains('active')) {
+      modal.innerHTML = planVendorManagementDialogMarkup();
+    }
+    showNotification('success', mode === 'dry-hire'
+      ? 'Vendor items added to Plan as loans'
+      : 'Vendor items marked as outsourced');
+  } catch (error) {
+    // apiCall already displays the server message.
+  }
 }
 
 function renderPlanTemplatesCard() {
@@ -24361,7 +25036,7 @@ function renderPlanPage() {
       </div>
       <aside class="plan-aside">
         ${renderPlanEventDetailsCard()}
-        ${renderPlanTemplatesCard()}
+        ${renderPlanVendorManagementCard()}
         <button type="button" class="plan-button plan-button-primary plan-aside-proceed"
                 onclick="planProceedToPrepare()">Proceed to Prepare →</button>
       </aside>
@@ -24445,6 +25120,8 @@ async function selectPlanEvent(eventId, options = {}) {
 
 async function refreshPlanSelectedEvent(options = {}) {
   if (!planPageState.eventId) return;
+  const pageScrollTop = window.scrollY;
+  const requirementsScrollTop = document.querySelector('.plan-requirements-scroll')?.scrollTop || 0;
   const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
     apiCall(`/api/events/${planPageState.eventId}`),
     apiCall(`/api/events/${planPageState.eventId}/availability`),
@@ -24454,6 +25131,11 @@ async function refreshPlanSelectedEvent(options = {}) {
   planPageState.availability = availabilityResponse.data || [];
   if (templatesResponse) planPageState.templates = templatesResponse.data || [];
   renderPlanPage();
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: pageScrollTop, behavior: 'auto' });
+    const requirements = document.querySelector('.plan-requirements-scroll');
+    if (requirements) requirements.scrollTop = requirementsScrollTop;
+  });
   refreshEventOverviewViews().catch(() => {});
 }
 
@@ -24612,7 +25294,15 @@ function planEditCustomAsset(encodedAssetId) {
   };
   setValue('planCustomName', custom.name);
   setValue('planCustomQuantity', custom.quantity);
-  setValue('planCustomDepartment', custom.department);
+  const departmentInput = document.getElementById('planCustomDepartment');
+  const customDepartment = normalizeDepartmentCode(custom.department || 'UN');
+  if (
+    departmentInput &&
+    !Array.from(departmentInput.options).some(option => option.value === customDepartment)
+  ) {
+    departmentInput.add(new Option(customDepartment, customDepartment));
+  }
+  setValue('planCustomDepartment', customDepartment);
   setValue('planCustomCompany', custom.type === 'LOAN' ? custom.company : custom.description);
   const submit = document.getElementById('planCustomSubmitButton');
   const cancel = document.getElementById('planCustomCancelEdit');
@@ -25620,7 +26310,7 @@ function renderPrepareNewCustomList() {
   const prepared = new Set(event.actuallyPrepared || []);
   const collected = new Set(event.customCollected || []);
   const returned = new Set(event.returnedItems || []);
-  return customAssets.map(asset => {
+  const renderRow = asset => {
     const custom = asset.parsedCustom;
     const ids = (asset.assetIds || [asset.id]).map(String).filter(Boolean);
     const id = ids[0] || '';
@@ -25683,7 +26373,7 @@ function renderPrepareNewCustomList() {
            <button type="button" class="plan-button plan-button-small"
                    onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`
         : `<button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepared</button>`;
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`;
     }
     const detail = custom.type === 'LOAN'
       ? (custom.company ? `From ${custom.company}` : '')
@@ -25702,7 +26392,31 @@ function renderPrepareNewCustomList() {
         ${action ? `<div class="prepare-new-custom-actions">${action}</div>` : ''}
       </div>
     `;
-  }).join('');
+  };
+
+  const misc = customAssets.filter(asset => asset.parsedCustom?.type !== 'LOAN');
+  const loanGroups = new Map();
+  customAssets.filter(asset => asset.parsedCustom?.type === 'LOAN').forEach(asset => {
+    const company = String(asset.parsedCustom?.company || 'Unspecified company').trim();
+    if (!loanGroups.has(company)) loanGroups.set(company, []);
+    loanGroups.get(company).push(asset);
+  });
+  const sections = [];
+  if (misc.length) sections.push({ label: 'Miscellaneous', rows: misc });
+  Array.from(loanGroups.entries())
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+    .forEach(([company, rows]) => sections.push({ label: company, rows, loan: true }));
+
+  return sections.map(section => `
+    <details class="prepare-new-custom-group">
+      <summary>
+        <span>${section.loan ? 'Loan from ' : ''}${escapeHtml(section.label)}</span>
+        <span class="plan-badge">${section.rows.length}</span>
+        <span aria-hidden="true">\u2304</span>
+      </summary>
+      <div class="prepare-new-custom-group-rows">${section.rows.map(renderRow).join('')}</div>
+    </details>
+  `).join('');
 }
 
 function renderPrepareNewEventDetails() {
@@ -36239,6 +36953,27 @@ async function unprepareSpecificAsset(eventId, assetId, requestData = {}) {
   }
 }
 
+function parseContainerBulkPreparedMarker(value) {
+  const match = String(value || '').match(/^\[BULK\]([^|]+)\|(\d+)(?:\|([^|]+))?$/);
+  if (!match) return null;
+  return {
+    bulkId: match[1],
+    quantity: Math.max(1, Number.parseInt(match[2], 10) || 1),
+    subprojectId: String(match[3] || '')
+  };
+}
+
+function eventContainerBulkQuantity(event, bulkId, subprojectId = '', returned = false) {
+  const returnedRefs = new Set(event?.returnedItems || []);
+  return (event?.actuallyPrepared || []).reduce((sum, ref) => {
+    const marker = parseContainerBulkPreparedMarker(ref);
+    if (!marker || marker.bulkId !== bulkId) return sum;
+    if (subprojectId && marker.subprojectId !== String(subprojectId)) return sum;
+    if (returnedRefs.has(ref) !== returned) return sum;
+    return sum + marker.quantity;
+  }, 0);
+}
+
 async function processUniversalContainer(eventId, containerId) {
   const feedbackDiv = document.getElementById('universal-asset-feedback');
   const input = document.getElementById('universalAssetInput');
@@ -36251,7 +36986,9 @@ async function processUniversalContainer(eventId, containerId) {
 
   const containerLabel = container.id || containerId;
   const assetIds = (container.assetIds || []).map(a => String(a || '').trim()).filter(Boolean);
-  if (!assetIds.length) {
+  const bulkItems = containerBulkItems(container);
+  const total = assetIds.length + bulkItems.reduce((sum, item) => sum + item.quantity, 0);
+  if (!total) {
     if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerLabel} has no assets`);
     return;
   }
@@ -36260,7 +36997,7 @@ async function processUniversalContainer(eventId, containerId) {
     showFeedback(
       feedbackDiv,
       'info',
-      `Processing container <strong>${escapeHtml(containerLabel)}</strong> (${assetIds.length} assets)…<br>` +
+      `Processing container <strong>${escapeHtml(containerLabel)}</strong> (${total} asset units)…<br>` +
       (quickAddEnabled
         ? `Scanned container assets will be added into this event.`
         : `Extra container assets will remain listed as extra assets.`)
@@ -36278,13 +37015,22 @@ async function processUniversalContainer(eventId, containerId) {
 
   const preparedSet = new Set(event.actuallyPrepared || []);
   const returnedSet = new Set(event.returnedItems || []);
-  const results = { prepared: [], addedToEvent: [], extra: [], skippedPrepared: [], skippedReturned: [], failed: [] };
+  const activeSubprojectId = (
+    Number(prepareNewPageState.eventId) === Number(eventId)
+      ? eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+      : ''
+  );
+  const results = {
+    prepared: [], addedToEvent: [], extra: [], skippedPrepared: [], skippedReturned: [], failed: [],
+    preparedQuantity: 0, addedToEventQuantity: 0, extraQuantity: 0,
+    skippedPreparedQuantity: 0, skippedReturnedQuantity: 0, failedQuantity: 0
+  };
 
   window.__processingContainerBatch = true;
   try {
     for (const aid of assetIds) {
-      if (returnedSet.has(aid)) { results.skippedReturned.push(aid); continue; }
-      if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); continue; }
+      if (returnedSet.has(aid)) { results.skippedReturned.push(aid); results.skippedReturnedQuantity += 1; continue; }
+      if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); results.skippedPreparedQuantity += 1; continue; }
       try {
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
           quickAdd: quickAddEnabled,
@@ -36292,23 +37038,88 @@ async function processUniversalContainer(eventId, containerId) {
           assetId: aid,
           fromContainer: true,
           source: quickAddEnabled ? 'quick-add-container' : 'container',
-          subprojectId: (
-            Number(prepareNewPageState.eventId) === Number(eventId)
-              ? eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-              : ''
-          )
+          subprojectId: activeSubprojectId
         }).then((response) => {
           updateAllButtonsForAsset(response?.data?.assetId || aid, true, { sourceAssetId: aid });
           if (response?.data?.isExtra) {
             results.extra.push(aid);
+            results.extraQuantity += 1;
           } else {
             results.addedToEvent.push(aid);
+            results.addedToEventQuantity += 1;
           }
         });
         results.prepared.push(aid);
+        results.preparedQuantity += 1;
         preparedSet.add(aid);
       } catch (err) {
         results.failed.push({ id: aid, error: err?.message || String(err) });
+        results.failedQuantity += 1;
+      }
+    }
+
+    for (const item of bulkItems) {
+      const asset = getAssetFromCache(item.assetId);
+      const label = [asset?.brand, asset?.model].filter(Boolean).join(' ') || 'Bulk asset';
+      const returnedQuantity = eventContainerBulkQuantity(
+        event,
+        item.assetId,
+        activeSubprojectId,
+        true
+      );
+      const returnedFromContainer = Math.min(item.quantity, returnedQuantity);
+      if (returnedFromContainer > 0) {
+        results.skippedReturned.push(`${returnedFromContainer}x ${label}`);
+        results.skippedReturnedQuantity += returnedFromContainer;
+      }
+
+      const alreadyPrepared = eventContainerBulkQuantity(
+        event,
+        item.assetId,
+        activeSubprojectId,
+        false
+      );
+      const activeContainerQuantity = Math.max(0, item.quantity - returnedFromContainer);
+      const quantity = Math.max(0, activeContainerQuantity - alreadyPrepared);
+      if (alreadyPrepared > 0) {
+        const skipped = Math.min(activeContainerQuantity, alreadyPrepared);
+        results.skippedPrepared.push(`${skipped}x ${label}`);
+        results.skippedPreparedQuantity += skipped;
+      }
+      if (quantity <= 0) continue;
+
+      try {
+        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+          quickAdd: quickAddEnabled,
+          addScannedAssetsToEvent: quickAddEnabled,
+          assetId: item.assetId,
+          quantity,
+          fromContainer: true,
+          source: quickAddEnabled ? 'quick-add-container' : 'container',
+          subprojectId: activeSubprojectId
+        });
+        const preparedQuantity = Math.max(
+          1,
+          Number(response?.data?.preparedQuantity || quantity)
+        );
+        const preparedLabel = `${preparedQuantity}x ${label}`;
+        results.prepared.push(preparedLabel);
+        results.preparedQuantity += preparedQuantity;
+        updateAllButtonsForAsset(
+          response?.data?.assetId || item.assetId,
+          true,
+          { sourceAssetId: item.assetId }
+        );
+        if (response?.data?.isExtra) {
+          results.extra.push(preparedLabel);
+          results.extraQuantity += preparedQuantity;
+        } else {
+          results.addedToEvent.push(preparedLabel);
+          results.addedToEventQuantity += preparedQuantity;
+        }
+      } catch (err) {
+        results.failed.push({ id: `${quantity}x ${label}`, error: err?.message || String(err) });
+        results.failedQuantity += quantity;
       }
     }
   } finally {
@@ -36316,8 +37127,7 @@ async function processUniversalContainer(eventId, containerId) {
     if (input) { input.value = ''; input.focus(); }
   }
 
-  const total = assetIds.length;
-  const failed = results.failed.length;
+  const failed = results.failedQuantity;
   const listToHtml = (title, items) => items && items.length ? `
     <section class="prepare-new-container-list">
       <h5>${escapeHtml(title)}</h5>
@@ -36339,13 +37149,13 @@ async function processUniversalContainer(eventId, containerId) {
     <div class="prepare-new-container-result">
       <div class="prepare-new-container-title">
         <strong>Container ${escapeHtml(containerLabel)}</strong>
-        <span>${results.prepared.length} / ${total} prepared</span>
+        <span>${results.preparedQuantity} / ${total} prepared</span>
       </div>
       <dl class="prepare-new-container-stats">
-        <div><dt>Added into event requirements</dt><dd>${results.addedToEvent.length}</dd></div>
-        <div><dt>Extra assets</dt><dd>${results.extra.length}</dd></div>
-        <div><dt>Already prepared</dt><dd>${results.skippedPrepared.length}</dd></div>
-        <div><dt>Returned in this event</dt><dd>${results.skippedReturned.length}</dd></div>
+        <div><dt>Added into event requirements</dt><dd>${results.addedToEventQuantity}</dd></div>
+        <div><dt>Extra assets</dt><dd>${results.extraQuantity}</dd></div>
+        <div><dt>Already prepared</dt><dd>${results.skippedPreparedQuantity}</dd></div>
+        <div><dt>Returned in this event</dt><dd>${results.skippedReturnedQuantity}</dd></div>
         <div class="${failed ? 'has-failures' : ''}"><dt>Failed</dt><dd>${failed}</dd></div>
       </dl>
       <details class="prepare-new-container-details" ${failed ? 'open' : ''}>
@@ -36603,6 +37413,7 @@ function inventoryExportStatusCounts(asset, statusFilter = '') {
         addCount('available', remaining);
       }
     }
+
   }
 
   const normalizedFilter = statusFilter === 'disposed' ? 'decommissioned' : statusFilter;

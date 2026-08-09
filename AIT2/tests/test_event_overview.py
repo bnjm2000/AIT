@@ -499,7 +499,12 @@ class EventAssignmentAccessTests(unittest.TestCase):
 
         response = self.client.get('/api/assets')
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        bulk = next(item for item in response.get_json()['data'] if item.get('bulkId') == 'BULK-01')
+        asset_rows = response.get_json()['data']
+        regular = next(item for item in asset_rows if item.get('id') == 'A#01')
+        self.assertEqual([row['eventId'] for row in regular['deployments']], [1])
+        self.assertEqual(regular['deployments'][0]['eventName'], 'Assigned')
+        self.assertEqual(regular['deployments'][0]['quantity'], 1)
+        bulk = next(item for item in asset_rows if item.get('bulkId') == 'BULK-01')
         self.assertEqual([row['eventId'] for row in bulk['bulkDeployments']], [1])
 
     def test_user_dashboard_stats_only_count_assigned_events(self):

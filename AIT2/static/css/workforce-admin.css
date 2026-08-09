@@ -990,6 +990,20 @@
   color: #24324b;
 }
 
+.wf-worker-conflict {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  place-items: center;
+  border-radius: 50%;
+  color: #9a3412;
+  background: #ffedd5;
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
+
 .wf-worker-profile small {
   display: block;
   margin-top: 2px;
@@ -1489,11 +1503,23 @@ button.wf-calendar-day.event-date:hover {
   border-color: #7664e8;
 }
 
+button.wf-calendar-day.event-date.has-conflict {
+  border-color: #fb923c;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 button.wf-calendar-day.selected {
   border-color: #5b45df;
   background: #5b45df;
   color: #fff;
   box-shadow: 0 3px 8px rgb(91 69 223 / 20%);
+}
+
+button.wf-calendar-day.selected.has-conflict {
+  border-color: #c2410c;
+  background: #ea580c;
+  color: #fff;
 }
 
 .wf-calendar-day.outside {

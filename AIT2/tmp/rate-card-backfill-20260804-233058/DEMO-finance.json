@@ -1,0 +1,383 @@
+{
+  "version": 10,
+  "documents": [
+    {
+      "id": "1bb32d905857f8780fa19fd4",
+      "type": "quotation",
+      "notes": "",
+      "terms": "This quotation is valid until the validity date shown above.\nA 50% deposit is required to confirm the booking, with the balance payable before the event date.\nPrices are in Singapore Dollars unless otherwise stated.",
+      "title": "Event 3",
+      "client": {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "company": "",
+        "address1": "",
+        "address2": "",
+        "address3": "",
+        "taxNumber": "",
+        "postalCode": "",
+        "salutation": "",
+        "contactPerson": ""
+      },
+      "number": "QT-2026-001-01",
+      "paidAt": "",
+      "sentAt": "",
+      "status": "accepted",
+      "totals": {
+        "tax": 0.0,
+        "total": 0.0,
+        "discount": 0,
+        "subtotal": 0.0,
+        "adjustments": 0,
+        "netSubtotal": 0.0,
+        "lockedPreTax": null,
+        "lockDifference": 0,
+        "calculatedPreTax": 0.0
+      },
+      "eventId": 3,
+      "taxRate": 9.0,
+      "currency": "SGD",
+      "revision": 1,
+      "showDate": "",
+      "showTime": "",
+      "createdAt": "2026-07-25T22:27:59",
+      "createdBy": "admin",
+      "eventDays": 1,
+      "lineItems": [
+        {
+          "id": "line_1784989683199_1691a95cd5ffa",
+          "uom": "units",
+          "days": 1.0,
+          "brand": "L-Acoustics",
+          "model": "Kara II",
+          "total": 0.0,
+          "isCustom": false,
+          "quantity": 1.0,
+          "unitPrice": 0,
+          "catalogKey": "inventory:ax|l-acoustics|kara ii",
+          "department": "Audio Department",
+          "description": "L-Acoustics Kara II Line Array",
+          "subprojectId": "main",
+          "departmentCode": "AX",
+          "sourceAssetIds": [
+            "KARAII#01",
+            "KARAII#02",
+            "KARAII#03",
+            "KARAII#04",
+            "KARAII#05",
+            "KARAII#06",
+            "KARAII#07",
+            "KARAII#08",
+            "KARAII#09",
+            "KARAII#10",
+            "KARAII#11",
+            "KARAII#12",
+            "KARAII#13",
+            "KARAII#14",
+            "KARAII#15",
+            "KARAII#16",
+            "KARAII#17",
+            "KARAII#18",
+            "KARAII#19",
+            "KARAII#20",
+            "KARAII#21",
+            "KARAII#22",
+            "KARAII#23",
+            "KARAII#24"
+          ],
+          "discountPercent": 0.0
+        }
+      ],
+      "reference": "",
+      "revisions": [],
+      "setupDate": "",
+      "setupTime": "",
+      "updatedAt": "2026-07-25T22:28:15",
+      "updatedBy": "admin",
+      "acceptedAt": "2026-07-25T22:28:15",
+      "invoicedAt": "",
+      "validUntil": "2026-08-24",
+      "adjustments": [],
+      "departments": [
+        "Audio Department"
+      ],
+      "projectName": "Event 3",
+      "salesperson": "admin",
+      "showSignOff": false,
+      "subprojects": [
+        {
+          "id": "main",
+          "name": "Main Room"
+        }
+      ],
+      "totalLocked": false,
+      "baseSequence": 1,
+      "customNumber": false,
+      "paymentTerms": "30 Days",
+      "teardownDate": "",
+      "teardownTime": "",
+      "validityDays": 30,
+      "validityUnit": "days",
+      "createdByName": "admin",
+      "eventLocation": "",
+      "quotationDate": "2026-07-25",
+      "rehearsalDate": "",
+      "rehearsalTime": "",
+      "updatedByName": "admin",
+      "eventReference": "",
+      "paymentDueDate": "",
+      "showUnitPrices": false,
+      "validityAmount": 30,
+      "additionalShows": [],
+      "invoiceSentDate": "",
+      "paymentTermDays": 30,
+      "showLineNumbers": true,
+      "statusChangedAt": "2026-07-25T22:28:15",
+      "lockedPreTaxTotal": null,
+      "sourceQuotationId": "",
+      "totalDiscountLabel": "",
+      "additionalTeardowns": [],
+      "salespersonUsername": "",
+      "additionalRehearsals": [],
+      "eventSyncFingerprint": "aa95e42bff92b0ed098a4423750a66773d986e6e8f372cee8a8836a52c5eaa11",
+      "sourceQuotationNumber": "",
+      "eventManagedByQuotation": true,
+      "showDepartmentDiscounts": false,
+      "showDepartmentSubtotals": true
+    }
+  ],
+  "priceBook": {},
+  "accounting": {
+    "accounts": [
+      {
+        "code": "1000",
+        "name": "Cash at Bank",
+        "type": "asset",
+        "group": "Current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "1100",
+        "name": "Accounts Receivable",
+        "type": "asset",
+        "group": "Current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "1200",
+        "name": "GST Input Tax Recoverable",
+        "type": "asset",
+        "group": "Current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "1300",
+        "name": "Prepayments",
+        "type": "asset",
+        "group": "Current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "1500",
+        "name": "Equipment and Fixed Assets",
+        "type": "asset",
+        "group": "Non-current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "1590",
+        "name": "Accumulated Depreciation",
+        "type": "asset",
+        "group": "Non-current Assets",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "2000",
+        "name": "Accounts Payable",
+        "type": "liability",
+        "group": "Current Liabilities",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "2100",
+        "name": "GST Output Tax Payable",
+        "type": "liability",
+        "group": "Current Liabilities",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "2200",
+        "name": "GST Control",
+        "type": "liability",
+        "group": "Current Liabilities",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "2300",
+        "name": "Accrued Expenses",
+        "type": "liability",
+        "group": "Current Liabilities",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "2400",
+        "name": "Loans Payable",
+        "type": "liability",
+        "group": "Non-current Liabilities",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "3000",
+        "name": "Owner Capital",
+        "type": "equity",
+        "group": "Equity",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "3100",
+        "name": "Retained Earnings",
+        "type": "equity",
+        "group": "Equity",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "4000",
+        "name": "Sales Revenue",
+        "type": "revenue",
+        "group": "Operating Revenue",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "4100",
+        "name": "Other Income",
+        "type": "revenue",
+        "group": "Other Income",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "5000",
+        "name": "Cost of Sales",
+        "type": "expense",
+        "group": "Cost of Sales",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6000",
+        "name": "Manpower Expense",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6100",
+        "name": "Transport Expense",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6200",
+        "name": "Equipment Rental",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6300",
+        "name": "Repairs and Maintenance",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6400",
+        "name": "Office and Administration",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6500",
+        "name": "Professional Fees",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6600",
+        "name": "Marketing Expense",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6700",
+        "name": "Bank Charges",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6800",
+        "name": "Other Expenses",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      },
+      {
+        "code": "6900",
+        "name": "Commission Expense",
+        "type": "expense",
+        "group": "Operating Expenses",
+        "active": true,
+        "system": true
+      }
+    ],
+    "journals": [],
+    "settings": {
+      "gstRate": 9.0,
+      "gstRegistered": false,
+      "periodLockDate": "",
+      "accountingBasis": "accrual",
+      "filingFrequency": "quarterly",
+      "defaultBankAccount": "1000",
+      "recordRetentionYears": 5,
+      "defaultPayableAccount": "2000",
+      "gstRegistrationNumber": "",
+      "financialYearStartMonth": 1,
+      "defaultReceivableAccount": "1100"
+    },
+    "bankTransactions": []
+  },
+  "profitLoss": {
+    "expenses": {},
+    "commissions": {},
+    "manualRevenue": {}
+  }
+}

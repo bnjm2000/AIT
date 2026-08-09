@@ -80,7 +80,10 @@ class PageRoutingTests(unittest.TestCase):
     def test_direct_routes_enforce_role_permissions(self):
         self.login('user')
         self.assertEqual(self.client.get('/prepare').status_code, 200)
-        for path in ('/plan', '/vehicles', '/quotations', '/companies'):
+        for path in (
+            '/plan', '/vehicles', '/quotations', '/costing', '/profit-loss',
+            '/accounting', '/companies',
+        ):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 302, path)
             self.assertTrue(response.headers['Location'].endswith('/events'), path)
@@ -91,15 +94,21 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(self.client.get('/vehicles').status_code, 200)
         self.assertEqual(self.client.get('/company-details').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 302)
+        self.assertEqual(self.client.get('/profit-loss').status_code, 302)
 
         self.login('sales')
         self.assertEqual(self.client.get('/quotations').status_code, 200)
+        self.assertEqual(self.client.get('/costing').status_code, 302)
         self.assertEqual(self.client.get('/profit-loss').status_code, 200)
+        self.assertEqual(self.client.get('/accounting').status_code, 302)
         self.assertEqual(self.client.get('/plan').status_code, 302)
 
         self.login('owner')
         self.assertEqual(self.client.get('/companies').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 200)
+        self.assertEqual(self.client.get('/costing').status_code, 200)
+        self.assertEqual(self.client.get('/profit-loss').status_code, 200)
+        self.assertEqual(self.client.get('/accounting').status_code, 200)
 
     def test_deep_link_selects_workspace_and_root_redirects(self):
         self.login('owner')

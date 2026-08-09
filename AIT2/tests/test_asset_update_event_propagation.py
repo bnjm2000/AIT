@@ -244,6 +244,205 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(line['catalogKey'], new_key)
         self.assertIn(f'admin::{new_key}', app_module._load_finance_data()['priceBook'])
 
+    def test_asset_rename_only_updates_live_draft_quotation_content(self):
+        old_key = app_module._finance_catalog_key(
+            'AX', 'TestBrand', 'OldModel', 'Old desc',
+        )
+
+        def quotation_line(line_id):
+            return {
+                'id': line_id,
+                'catalogKey': old_key,
+                'sourceAssetIds': ['A#01', 'A#02'],
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'TestBrand OldModel Old desc',
+                'department': 'Audio Department',
+                'departmentCode': 'AX',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'total': 200,
+                'isCustom': False,
+            }
+
+        protected_statuses = (
+            'sent', 'accepted', 'expired', 'cancelled',
+            'invoiced', 'overdue', 'paid',
+        )
+        documents = [
+            {
+                'id': 'draft-quotation',
+                'type': 'quotation',
+                'number': 'QT-2026-001-02',
+                'status': 'draft',
+                'lineItems': [quotation_line('draft-current')],
+                'adjustments': [],
+                'revisions': [{
+                    'revision': 1,
+                    'status': 'sent',
+                    'snapshot': {
+                        'lineItems': [quotation_line('draft-snapshot')],
+                    },
+                }],
+            },
+            *[{
+                'id': f'{status}-quotation',
+                'type': 'quotation',
+                'number': f'QT-2026-{index:03d}-01',
+                'status': status,
+                'lineItems': [quotation_line(f'{status}-current')],
+                'adjustments': [],
+                'revisions': [{
+                    'revision': 1,
+                    'status': status,
+                    'snapshot': {
+                        'lineItems': [quotation_line(f'{status}-snapshot')],
+                    },
+                }],
+            } for index, status in enumerate(protected_statuses, start=2)],
+            {
+                'id': 'draft-invoice',
+                'type': 'invoice',
+                'number': 'INV-2026-0001',
+                'status': 'draft',
+                'lineItems': [quotation_line('invoice-current')],
+                'adjustments': [],
+            },
+        ]
+        app_module._save_finance_data({
+            'version': app_module.FINANCE_VERSION,
+            'documents': documents,
+            'priceBook': {},
+        })
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        stored = {
+            row['id']: row
+            for row in app_module._load_finance_data()['documents']
+        }
+        self.assertEqual(
+            stored['draft-quotation']['lineItems'][0]['model'],
+            'NewModel',
+        )
+        self.assertEqual(
+            stored['draft-quotation']['revisions'][0]['snapshot']['lineItems'][0]['model'],
+            'OldModel',
+        )
+        for status in protected_statuses:
+            protected = stored[f'{status}-quotation']
+            self.assertEqual(protected['lineItems'][0]['model'], 'OldModel')
+            self.assertEqual(
+                protected['revisions'][0]['snapshot']['lineItems'][0]['model'],
+                'OldModel',
+            )
+        self.assertEqual(
+            stored['draft-invoice']['lineItems'][0]['model'],
+            'OldModel',
+        )
+
+    def test_single_asset_model_group_rename_updates_only_draft_content(self):
+        del self.data_manager.inventory['A#02']
+        self.data_manager.save_inventory(drop_asset_ids=['A#02'])
+        old_key = app_module._finance_catalog_key(
+            'AX', 'TestBrand', 'OldModel', 'Old desc',
+        )
+
+        def quotation_line(line_id):
+            return {
+                'id': line_id,
+                'catalogKey': old_key,
+                'sourceAssetIds': ['A#01'],
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'TestBrand OldModel Old desc',
+                'department': 'Audio Department',
+                'departmentCode': 'AX',
+                'days': 1,
+                'quantity': 1,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'total': 100,
+                'isCustom': False,
+            }
+
+        documents = [
+            {
+                'id': 'single-group-draft',
+                'type': 'quotation',
+                'number': 'QT-2026-010-02',
+                'status': 'draft',
+                'lineItems': [quotation_line('draft-current')],
+                'adjustments': [],
+                'revisions': [{
+                    'revision': 1,
+                    'status': 'sent',
+                    'snapshot': {
+                        'lineItems': [quotation_line('draft-snapshot')],
+                    },
+                }],
+            },
+            {
+                'id': 'single-group-sent',
+                'type': 'quotation',
+                'number': 'QT-2026-011-01',
+                'status': 'sent',
+                'lineItems': [quotation_line('sent-current')],
+                'adjustments': [],
+                'revisions': [{
+                    'revision': 1,
+                    'status': 'sent',
+                    'snapshot': {
+                        'lineItems': [quotation_line('sent-snapshot')],
+                    },
+                }],
+            },
+        ]
+        app_module._save_finance_data({
+            'version': app_module.FINANCE_VERSION,
+            'documents': documents,
+            'priceBook': {},
+        })
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertTrue(response.get_json()['data']['financeDocumentsUpdated'])
+        stored = {
+            row['id']: row
+            for row in app_module._load_finance_data()['documents']
+        }
+        draft = stored['single-group-draft']
+        self.assertEqual(draft['lineItems'][0]['model'], 'NewModel')
+        self.assertEqual(
+            draft['lineItems'][0]['description'],
+            'TestBrand NewModel New desc',
+        )
+        self.assertEqual(
+            draft['revisions'][0]['snapshot']['lineItems'][0]['model'],
+            'OldModel',
+        )
+        sent = stored['single-group-sent']
+        self.assertEqual(sent['lineItems'][0]['model'], 'OldModel')
+        self.assertEqual(
+            sent['revisions'][0]['snapshot']['lineItems'][0]['model'],
+            'OldModel',
+        )
+
     def test_asset_model_group_merge_requires_explicit_confirmation(self):
         self.data_manager.inventory['DEST#01'] = self.make_asset(
             'DEST#01',

@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 import app as app_module
@@ -21,6 +22,18 @@ from workforce import (
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"test-image"
+XLS_BYTES = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"test-workbook"
+
+
+def _xlsx_bytes():
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as workbook:
+        workbook.writestr("[Content_Types].xml", "<Types />")
+        workbook.writestr("xl/workbook.xml", "<workbook />")
+    return output.getvalue()
+
+
+XLSX_BYTES = _xlsx_bytes()
 
 
 class WorkforcePortalTests(unittest.TestCase):
@@ -1058,6 +1071,85 @@ class WorkforcePortalTests(unittest.TestCase):
             ],
             5,
         )
+
+    def test_admin_and_worker_invoice_uploads_accept_excel_files(self):
+        freelancer_id = self.create_worker_assignment()
+        token = self.worker_token()
+
+        response = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(b"not a workbook"), "disguised.xlsx"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("contents do not match", response.get_json()["error"])
+
+        response = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(XLSX_BYTES), "worker-invoice.xlsx"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        worker_invoice = response.get_json()["data"]["events"][0]["submissions"][
+            "invoices"
+        ][0]
+        self.assertEqual(worker_invoice["originalName"], "worker-invoice.xlsx")
+        self.assertEqual(worker_invoice["processingState"], "Complete")
+
+        self.login("admin", True)
+        response = self.client.delete(
+            f"/api/workforce/submissions/{worker_invoice['id']}"
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "file": (io.BytesIO(XLSX_BYTES), "admin-invoice.xlsx"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        invoice = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(invoice["originalName"], "admin-invoice.xlsx")
+        self.assertEqual(
+            invoice["contentType"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertEqual(invoice["processingState"], "Complete")
+
+        response = self.client.post(
+            f"/api/events/143/workforce/allowances/{freelancer_id}",
+            json={"kind": "invoice", "delta": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "file": (io.BytesIO(XLS_BYTES), "legacy-invoice.xls"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        invoices = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ]
+        self.assertEqual(invoices[-1]["contentType"], "application/vnd.ms-excel")
 
     def test_first_invoice_review_defaults_single_department_allocation(self):
         freelancer_id = self.create_worker_assignment()
@@ -2751,8 +2843,13 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("wfAdminUploadDropzone", admin_source)
         self.assertIn("event.dataTransfer?.files", admin_source)
         self.assertIn("new DataTransfer()", admin_source)
+        self.assertIn("ADMIN_INVOICE_FILE_ACCEPT", admin_source)
+        self.assertIn("'.xlsx'", admin_source)
+        self.assertIn("'.xls'", admin_source)
         self.assertIn("event-dropzone", worker_source)
         self.assertIn("dataTransfer.files", worker_source)
+        self.assertIn(".xlsx", worker_source)
+        self.assertIn(".xls", worker_source)
 
     def test_department_assignment_actions_are_in_the_collapsed_header(self):
         static_root = os.path.join(

@@ -35,7 +35,96 @@ def _line_system_name(line):
         return 'Manpower'
     if base_department.lower() in {'transport', 'transportation'}:
         return 'Transportation'
-    return f'{base_department} System' if base_department else 'Unknown System'
+    return base_department or 'Unknown'
+
+
+def _group_line_description(line):
+    if not isinstance(line, dict) or not line.get('groupId'):
+        return _text((line or {}).get('description'))
+    if line.get('groupCustomText'):
+        return _text(line.get('description'))
+    fields = line.get('groupDisplayFields') or ['brand', 'model', 'description']
+    description = _group_description_part(line)
+    values = []
+    for field in fields:
+        if field not in {'brand', 'model', 'description'}:
+            continue
+        value = (
+            description
+            if field == 'description'
+            else _text(line.get(field)).strip()
+        )
+        if value and value not in values:
+            values.append(value)
+    return ' '.join(values) or _text(line.get('description'))
+
+
+def _group_description_part(line):
+    line = line if isinstance(line, dict) else {}
+    description = _text(line.get('description')).strip()
+    if not description:
+        return ''
+    brand = _text(line.get('brand')).strip()
+    model = _text(line.get('model')).strip()
+    prefixes = sorted({
+        prefix for prefix in (
+            ' '.join(value for value in (brand, model) if value),
+            ' '.join(value for value in (model, brand) if value),
+            brand,
+            model,
+        ) if prefix
+    }, key=len, reverse=True)
+    for prefix in prefixes:
+        if not description.casefold().startswith(prefix.casefold()):
+            continue
+        boundary = description[len(prefix):len(prefix) + 1]
+        if boundary and not re.match(r'[\s\-\u2013\u2014:|/]', boundary):
+            continue
+        remainder = re.sub(
+            r'^[\s\-\u2013\u2014:|/]+', '', description[len(prefix):]
+        ).strip()
+        if remainder:
+            return remainder
+    return description
+
+
+def _group_pdf_line_units(lines):
+    """Return PDF rows, keeping all members of a group in one logical row."""
+    source = [line for line in (lines or []) if isinstance(line, dict)]
+    rendered_groups = set()
+    units = []
+    for line in source:
+        group_id = str(line.get('groupId') or '')
+        if not group_id:
+            units.append([line])
+            continue
+        if group_id in rendered_groups:
+            continue
+        rendered_groups.add(group_id)
+        units.append([
+            candidate for candidate in source
+            if str(candidate.get('groupId') or '') == group_id
+        ])
+    return units
+
+
+def _group_display_entries(lines):
+    """Consolidate group members exactly as their selected display fields render."""
+    entries = []
+    by_key = {}
+    for line in lines or []:
+        description = _group_line_description(line).strip() or 'Item'
+        key = (bool(line.get('groupCustomText')), description.casefold())
+        if key not in by_key:
+            by_key[key] = {
+                'description': description,
+                'quantity': 0.0,
+            }
+            entries.append(by_key[key])
+        by_key[key]['quantity'] += max(
+            0.0, float(line.get('groupItemQuantity', 1) or 0)
+        )
+    return entries
 
 
 def _is_optional_category(value):
@@ -176,6 +265,21 @@ def _money(value, currency='SGD'):
         amount = 0
     sign = '-' if amount < 0 else ''
     return f"{sign}${abs(amount):,.2f}"
+
+
+def _adjustment_label(adjustment, fallback='Discount'):
+    adjustment = adjustment if isinstance(adjustment, dict) else {}
+    label = _text(adjustment.get('label') or fallback).strip() or fallback
+    if label.casefold() == 'system discount':
+        label = 'Discount'
+    try:
+        percent = abs(float(adjustment.get('percent') or 0))
+    except (TypeError, ValueError):
+        percent = 0
+    if percent and not re.search(r'\d+(?:\.\d+)?\s*%', label):
+        percent_text = f'{percent:.2f}'.rstrip('0').rstrip('.')
+        label = f'{label} ({percent_text}%)'
+    return label
 
 
 def _date(value):
@@ -465,9 +569,10 @@ def build_finance_pdf(document, company, logo_path=''):
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import (
-        CondPageBreak,
         HRFlowable,
+        KeepInFrame,
         KeepTogether,
+        PageBreak,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
@@ -548,15 +653,6 @@ def build_finance_pdf(document, company, logo_path=''):
         textColor=accent_on_white,
         alignment=TA_RIGHT,
     )
-    project_reference_style = ParagraphStyle(
-        'FinanceProjectReference',
-        parent=body,
-        fontName='Helvetica-Bold',
-        fontSize=11.5,
-        leading=14,
-        textColor=accent_on_white,
-        alignment=TA_RIGHT,
-    )
     right = ParagraphStyle('FinanceRight', parent=body, alignment=TA_RIGHT)
     center = ParagraphStyle('FinanceCenter', parent=body, alignment=TA_CENTER)
     table_header_center = ParagraphStyle(
@@ -585,6 +681,14 @@ def build_finance_pdf(document, company, logo_path=''):
         parent=optional_body,
         fontName='Helvetica-Bold',
         alignment=TA_RIGHT,
+    )
+    quotation_reference_style = ParagraphStyle(
+        'FinanceQuotationReference',
+        parent=body,
+        fontName='Helvetica-Bold',
+        fontSize=9.2,
+        leading=11,
+        textColor=accent_on_white,
     )
     project_name_style = ParagraphStyle(
         'FinanceProjectName',
@@ -739,6 +843,15 @@ def build_finance_pdf(document, company, logo_path=''):
     lines = document.get('lineItems') or []
     adjustments = document.get('adjustments') or []
     subprojects = document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]
+    multiplier_labels = {
+        'Mult'
+        if str(line.get('costingMultiplierLabel') or '').strip().lower() == 'mult'
+        else 'Day'
+        for line in lines
+    }
+    multiplier_column_label = (
+        'MULT' if multiplier_labels == {'Mult'} else 'DAY(S)'
+    )
 
     story = [
         Table(
@@ -798,8 +911,20 @@ def build_finance_pdf(document, company, logo_path=''):
         ('Salesperson', document.get('salesperson')),
         ('Payment terms', document.get('paymentTerms')),
     ]
+    if document_type == 'invoice' and document.get('sourceQuotationNumber'):
+        meta_values.append(
+            ('Quotation ref', document.get('sourceQuotationNumber'))
+        )
     meta_rows = [
-        [_paragraph(meta_label, label), _paragraph(meta_value, body)]
+        [
+            _paragraph(meta_label, label),
+            _paragraph(
+                meta_value,
+                quotation_reference_style
+                if meta_label == 'Quotation ref'
+                else body,
+            ),
+        ]
         for meta_label, meta_value in meta_values
         if _text(meta_value).strip()
     ]
@@ -908,40 +1033,14 @@ def build_finance_pdf(document, company, logo_path=''):
 
     project_name = _text(document.get('projectName')).strip()
     project_location = _text(document.get('eventLocation')).strip()
-    quotation_reference = (
-        f"Ref: {_text(document.get('sourceQuotationNumber'))}"
-        if document_type == 'invoice' and document.get('sourceQuotationNumber')
-        else ''
-    )
-    if project_name or project_location or schedule_entries or quotation_reference:
+    if project_name or project_location or schedule_entries:
         project_column_width = doc.width - 88 * mm
-        project_inner_width = project_column_width - 8 * mm
         project_block = []
-        if project_name or quotation_reference:
-            project_heading_cells = [
-                [
-                    _paragraph('PROJECT', label),
-                    _paragraph(project_name or '-', project_name_style),
-                ]
-            ]
-            project_heading_widths = [project_inner_width]
-            if quotation_reference:
-                project_heading_cells.append([
-                    _paragraph('QUOTATION REFERENCE', label),
-                    _paragraph(quotation_reference, project_reference_style),
-                ])
-                project_heading_widths = [project_inner_width * 0.62, project_inner_width * 0.38]
-            project_block.append(Table(
-                [project_heading_cells],
-                colWidths=project_heading_widths,
-                style=TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                    ('TOPPADDING', (0, 0), (-1, -1), 0),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                ]),
-            ))
+        if project_name:
+            project_block.extend([
+                _paragraph('PROJECT', label),
+                _paragraph(project_name, project_name_style),
+            ])
         if project_location:
             if project_block:
                 project_block.append(Spacer(1, 1 * mm))
@@ -1047,7 +1146,7 @@ def build_finance_pdf(document, company, logo_path=''):
             'optional': _is_optional_category(department),
             'subprojectId': subproject_id,
             'subprojectName': str(subproject.get('name') or 'Room'),
-            'lineCount': len(department_lines),
+            'lineCount': len(_group_pdf_line_units(department_lines)),
             'total': department_total,
         })
     pdf_line_number = 1
@@ -1116,7 +1215,7 @@ def build_finance_pdf(document, company, logo_path=''):
             [
                 _paragraph('#' if show_line_numbers else '', table_header_center),
                 _paragraph('DESCRIPTION', table_header_label),
-                _paragraph('DAY(S)', table_header_right),
+                _paragraph(multiplier_column_label, table_header_right),
                 _paragraph('QTY', table_header_right),
                 _paragraph('UNIT PRICE', table_header_right),
                 _paragraph('DISC %', table_header_right),
@@ -1148,10 +1247,48 @@ def build_finance_pdf(document, company, logo_path=''):
                 ('BOTTOMPADDING', (0, room_header_row), (-1, room_header_row), 5),
             ])
 
-        for line in department_lines:
-            description = _text(line.get('description'))
-            quantity = f"{float(line.get('quantity') or 0):g}"
-            uom = _text('unit(s)' if line.get('uom') == 'units' else line.get('uom')).strip()
+        for line_unit in _group_pdf_line_units(department_lines):
+            line = next(
+                (member for member in line_unit if member.get('groupLeader')),
+                line_unit[0],
+            )
+            is_group = bool(line.get('groupId'))
+            if is_group:
+                title_markup = _cjk_markup(
+                    escape(_text(line.get('groupTitle') or 'Group')),
+                    bold=True,
+                )
+                content_markup = '<br/>'.join(
+                    _cjk_markup(escape(
+                        f"{entry['quantity']:g}x {entry['description']}"
+                    ))
+                    for entry in _group_display_entries(line_unit)
+                )
+                description_flowable = Paragraph(
+                    f'<b>{title_markup}</b>'
+                    + (f'<br/>{content_markup}' if content_markup else ''),
+                    body,
+                )
+                display_days = float(line.get('days') or 0)
+                quantity = f"{float(line.get('quantity') or 0):g}"
+                uom = _text(
+                    'unit(s)' if line.get('uom') == 'units' else line.get('uom')
+                ).strip()
+                quantity_label = f"{quantity} {uom}".strip()
+                unit_price = float(line.get('unitPrice') or 0)
+                group_total = float(line.get('total') or 0)
+            else:
+                description_flowable = _paragraph(
+                    _group_line_description(line), body
+                )
+                display_days = float(line.get('days') or 0)
+                quantity = f"{float(line.get('quantity') or 0):g}"
+                uom = _text(
+                    'unit(s)' if line.get('uom') == 'units' else line.get('uom')
+                ).strip()
+                quantity_label = f"{quantity} {uom}".strip()
+                unit_price = float(line.get('unitPrice') or 0)
+                group_total = float(line.get('total') or 0)
             if show_subproject_headers:
                 subproject_line_numbers[subproject_id] = (
                     subproject_line_numbers.get(subproject_id, 0) + 1
@@ -1164,34 +1301,43 @@ def build_finance_pdf(document, company, logo_path=''):
                 line_number = str(pdf_line_number)
             table_rows.append([
                 _paragraph(line_number if show_line_numbers else '', center),
-                _paragraph(description, body),
-                _paragraph(f"{float(line.get('days') or 0):g}", right),
-                _paragraph(f"{quantity} {uom}".strip(), right),
-                _paragraph(_money(line.get('unitPrice'), currency) if show_unit_prices else '', right),
+                description_flowable,
+                _paragraph(f"{display_days:g}" if display_days else '', right),
+                _paragraph(quantity_label, right),
+                _paragraph(_money(unit_price, currency) if show_unit_prices else '', right),
                 _paragraph(
                     f"{float(line.get('discountPercent') or 0):g}%"
                     if show_unit_prices and float(line.get('discountPercent') or 0)
                     else '',
                     right,
                 ),
-                _paragraph(_money(line.get('total'), currency) if show_unit_prices else '', right),
+                _paragraph(_money(group_total, currency) if show_unit_prices else '', right),
             ])
             pdf_line_number += 1
 
-        if show_department_discounts and show_department_subtotals:
-            for adjustment in department_adjustments:
+        show_department_adjustment_block = bool(
+            show_department_discounts
+            and show_department_subtotals
+            and department_adjustments
+        )
+        if show_department_adjustment_block:
+            for adjustment_position, adjustment in enumerate(department_adjustments):
                 adjustment_index = len(table_rows)
                 table_rows.append([
                     '',
-                    _paragraph(adjustment.get('label') or 'System discount', body),
+                    _paragraph(_adjustment_label(adjustment), right),
                     '', '', '', '',
                     _paragraph(_money(adjustment.get('amount'), currency), right),
                 ])
                 row_styles.extend([
                     ('SPAN', (1, adjustment_index), (5, adjustment_index)),
                     ('TEXTCOLOR', (1, adjustment_index), (-1, adjustment_index), success),
-                    ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), colors.HexColor('#ECFDF5')),
+                    ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), panel),
                 ])
+                if adjustment_position == 0:
+                    row_styles.append(
+                        ('LINEABOVE', (0, adjustment_index), (-1, adjustment_index), 0.8, ink)
+                    )
 
         if show_department_subtotals or optional_category:
             subtotal_index = len(table_rows)
@@ -1204,8 +1350,11 @@ def build_finance_pdf(document, company, logo_path=''):
             row_styles.extend([
                 ('SPAN', (1, subtotal_index), (5, subtotal_index)),
                 ('BACKGROUND', (0, subtotal_index), (-1, subtotal_index), panel),
-                ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink),
             ])
+            if not show_department_adjustment_block:
+                row_styles.append(
+                    ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink)
+                )
 
         items_table = Table(
             table_rows,
@@ -1224,7 +1373,9 @@ def build_finance_pdf(document, company, logo_path=''):
             story.append(Spacer(1, 3 * mm))
 
     if export_groups:
-        story.append(CondPageBreak(doc.height))
+        story.append(PageBreak())
+
+    final_page_story = []
 
     tax_label = _text(company.get('taxLabel') or 'Tax')
     tax_rate = float(document.get('taxRate') or 0)
@@ -1232,47 +1383,67 @@ def build_finance_pdf(document, company, logo_path=''):
         len(subprojects) > 1
         and document.get('summaryBySubproject', True) is not False
     )
-    story.append(_paragraph('Summary', summary_section_title))
+    included_department_summaries = [
+        row for row in department_summaries if not row['optional']
+    ]
+    optional_department_summaries = [
+        row for row in department_summaries if row['optional']
+    ]
+
+    def aggregate_category_summaries(rows):
+        aggregated = []
+        by_department = {}
+        for row in rows:
+            department = row['department']
+            category = by_department.get(department)
+            if category is None:
+                category = {
+                    'name': department,
+                    'lineCount': 0,
+                    'total': 0,
+                    'optional': row['optional'],
+                }
+                by_department[department] = category
+                aggregated.append(category)
+            category['lineCount'] += row['lineCount']
+            category['total'] += row['total']
+        return aggregated
+
+    final_page_story.append(_paragraph('Summary', summary_section_title))
     if department_summaries:
         if use_subproject_summary:
             summary_source = []
             for subproject in subprojects:
                 subproject_id = str(subproject.get('id') or 'main')
-                rows = [row for row in department_summaries if row['subprojectId'] == subproject_id]
+                rows = [
+                    row for row in included_department_summaries
+                    if row['subprojectId'] == subproject_id
+                ]
                 if rows:
                     summary_source.append({
                         'name': str(subproject.get('name') or 'Room'),
                         'lineCount': sum(row['lineCount'] for row in rows),
-                        'total': (
-                            sum(row['total'] for row in rows)
-                            if all(row['optional'] for row in rows)
-                            else sum(row['total'] for row in rows if not row['optional'])
-                        ),
-                        'optional': all(row['optional'] for row in rows),
+                        'total': sum(row['total'] for row in rows),
+                        'optional': False,
                     })
+            summary_source.extend(
+                aggregate_category_summaries(optional_department_summaries)
+            )
         else:
-            summary_source = []
-            summaries_by_department = {}
-            for row in department_summaries:
-                department = row['department']
-                summary = summaries_by_department.get(department)
-                if summary is None:
-                    summary = {
-                        'name': department,
-                        'lineCount': 0,
-                        'total': 0,
-                        'optional': row['optional'],
-                    }
-                    summaries_by_department[department] = summary
-                    summary_source.append(summary)
-                summary['lineCount'] += row['lineCount']
-                summary['total'] += row['total']
+            summary_source = aggregate_category_summaries(department_summaries)
         summary_shows_price = (
             show_department_subtotals
             or any(row['optional'] for row in summary_source)
         )
+        summary_has_optional_rows = any(row['optional'] for row in summary_source)
+        summary_middle_width = 34 * mm if summary_has_optional_rows else 22 * mm
+        summary_first_column = (
+            'PROJECT / CATEGORY'
+            if use_subproject_summary and optional_department_summaries
+            else ('PROJECT' if use_subproject_summary else 'CATEGORY')
+        )
         department_summary_rows = [[
-            _paragraph('PROJECT' if use_subproject_summary else 'CATEGORY', table_header_label),
+            _paragraph(summary_first_column, table_header_label),
             _paragraph('LINE ITEMS', table_header_center),
             *(
                 [_paragraph('SUBTOTAL', table_header_right)]
@@ -1283,14 +1454,15 @@ def build_finance_pdf(document, company, logo_path=''):
         for department_summary in summary_source:
             row_body = optional_body if department_summary['optional'] else body
             row_center = optional_center if department_summary['optional'] else center
-            row_amount = (
-                optional_right_bold
-                if department_summary['optional']
-                else right_bold
-            )
+            row_amount = optional_right_bold if department_summary['optional'] else right_bold
             department_summary_rows.append([
                 _paragraph(department_summary['name'], row_body),
-                _paragraph(str(department_summary['lineCount']), row_center),
+                _paragraph(
+                    'Not included in total'
+                    if department_summary['optional']
+                    else str(department_summary['lineCount']),
+                    row_center,
+                ),
                 *(
                     [_paragraph(_money(department_summary['total'], currency), row_amount)]
                     if show_department_subtotals or department_summary['optional']
@@ -1301,7 +1473,7 @@ def build_finance_pdf(document, company, logo_path=''):
             department_summary_rows,
             repeatRows=1,
             colWidths=(
-                [doc.width - 56 * mm, 22 * mm, 34 * mm]
+                [doc.width - summary_middle_width - 34 * mm, summary_middle_width, 34 * mm]
                 if summary_shows_price
                 else [doc.width - 30 * mm, 30 * mm]
             ),
@@ -1317,7 +1489,21 @@ def build_finance_pdf(document, company, logo_path=''):
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
             ]),
         )
-        story.extend([department_summary, Spacer(1, 4 * mm)])
+        final_page_story.extend([department_summary, Spacer(1, 4 * mm)])
+
+    payment_lines = []
+    if document_type == 'invoice':
+        for payment_label, key in (
+            ('Bank', 'bankName'),
+            ('Account name', 'bankAccountName'),
+            ('Account number', 'bankAccountNumber'),
+            ('PayNow UEN', 'paynowUen'),
+        ):
+            if company.get(key):
+                payment_lines.append(
+                    f"<b>{escape(payment_label)}:</b> "
+                    f"{escape(_text(company[key]))}"
+                )
 
     summary_rows = []
     if show_unit_prices or show_department_subtotals:
@@ -1356,37 +1542,49 @@ def build_finance_pdf(document, company, logo_path=''):
             ('BACKGROUND', (0, -1), (-1, -1), panel),
         ]),
     )
-    story.extend([summary, Spacer(1, 5 * mm)])
+    if payment_lines:
+        payment_heading = ParagraphStyle(
+            'FinancePaymentHeading',
+            parent=section_title,
+            spaceBefore=0,
+            spaceAfter=3,
+        )
+        payment_details = [
+            _paragraph('PAYMENT DETAILS', payment_heading),
+            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
+        ]
+        payment_and_total = Table(
+            [[payment_details, summary]],
+            colWidths=[doc.width - 100 * mm, 100 * mm],
+            style=TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (0, 0), 5 * mm),
+                ('RIGHTPADDING', (1, 0), (1, 0), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]),
+        )
+        final_page_story.append(payment_and_total)
+    else:
+        final_page_story.append(summary)
 
-    payment_lines = []
-    for payment_label, key in (
-        ('Bank', 'bankName'),
-        ('Account name', 'bankAccountName'),
-        ('Account number', 'bankAccountNumber'),
-        ('PayNow UEN', 'paynowUen'),
-    ):
-        if company.get(key):
-            payment_lines.append(f"<b>{escape(payment_label)}:</b> {escape(_text(company[key]))}")
+    final_page_story.append(Spacer(1, 5 * mm))
 
     notes = _text(document.get('notes')).strip()
     terms = _text(document.get('terms') or company.get('defaultTerms')).strip()
     if notes:
-        story.append(KeepTogether([
+        final_page_story.extend([
             _paragraph('NOTES', section_title),
             _paragraph(notes, body),
-        ]))
-    if document_type == 'invoice' and payment_lines:
-        story.append(KeepTogether([
-            _paragraph('PAYMENT DETAILS', section_title),
-            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
-        ]))
+        ])
     if terms:
-        story.append(KeepTogether([
+        final_page_story.extend([
             _paragraph('TERMS AND CONDITIONS', section_title),
             _paragraph(terms, small),
-        ]))
+        ])
 
-    if document.get('showSignOff'):
+    if document_type != 'invoice' and document.get('showSignOff'):
         signoff_heading = ParagraphStyle(
             'FinanceSignOffHeading',
             parent=body,
@@ -1444,7 +1642,18 @@ def build_finance_pdf(document, company, logo_path=''):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]),
         )
-        story.append(KeepTogether([Spacer(1, 8 * mm), signoff]))
+        final_page_story.extend([Spacer(1, 8 * mm), signoff])
+
+    story.append(KeepInFrame(
+        doc.width,
+        doc.height,
+        final_page_story,
+        mergeSpace=1,
+        mode='shrink',
+        name='FinanceFinalSummaryPage',
+        hAlign='LEFT',
+        vAlign='TOP',
+    ))
 
     doc.build(
         story,

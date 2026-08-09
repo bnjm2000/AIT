@@ -30,13 +30,13 @@
     },
     "AVERY": {
       "code": "AVERY",
-      "name": "Avery Events and Exhibitions",
+      "name": "Avery Events and Exhibitions Pte Ltd",
       "backendFolder": "companies/AVERY/backend",
       "frontendFolder": "companies/AVERY/frontend",
       "createdAt": "2026-06-25T11:49:19",
       "createdBy": "bnjm2000",
       "brandingSetupRequired": true,
-      "updatedAt": "2026-07-13T20:35:21"
+      "updatedAt": "2026-08-10T00:08:08"
     },
     "SP": {
       "code": "SP",
@@ -44,6 +44,15 @@
       "backendFolder": "companies/SP/backend",
       "frontendFolder": "companies/SP/frontend",
       "createdAt": "2026-07-25T22:20:59",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": false
+    },
+    "ARUP": {
+      "code": "ARUP",
+      "name": "Arup Singapore Pte Ltd",
+      "backendFolder": "companies/ARUP/backend",
+      "frontendFolder": "companies/ARUP/frontend",
+      "createdAt": "2026-08-07T23:45:19",
       "createdBy": "bnjm2000",
       "brandingSetupRequired": false
     }
@@ -58,11 +67,13 @@
     "Adi": "AVERY",
     "emily": "TSC",
     "ct": "TSC",
-    "bnjm2000": "AVPL",
     "nbenjamin": "AVPL",
     "ericjunhao": "SP",
     "Justin": "TSC",
     "tech-new": "AVPL",
+    "Alicia": "TSC",
+    "bnjm2000": "AVPL",
+    "ac-inventory": "ARUP",
     "admin": "TSC"
   },
   "userCompanyMemberships": {
@@ -74,9 +85,6 @@
     ],
     "tjacky": [
       "AVPL"
-    ],
-    "user": [
-      "DEMO"
     ],
     "cjamie": [
       "AVPL"
@@ -93,9 +101,6 @@
     "ct": [
       "TSC"
     ],
-    "bnjm2000": [
-      "AVPL"
-    ],
     "nbenjamin": [
       "AVPL"
     ],
@@ -109,5 +114,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-08-01T21:51:36"
+  "updatedAt": "2026-08-10T00:08:08"
 }

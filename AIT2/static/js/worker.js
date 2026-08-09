@@ -220,7 +220,9 @@ function dropZone(company, event, kind) {
     ? event.invoiceSlotsRemaining
     : event.claimSlotsRemaining;
   if (remaining <= 0) return '';
-  const accept = kind === 'invoice' ? '.pdf,application/pdf' : '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
+  const accept = kind === 'invoice'
+    ? '.pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    : '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
   return `<label class="event-dropzone" data-drop-kind="${kind}" data-company="${escapeHtml(company.code)}"
     data-event="${event.id}" data-subject="${escapeHtml(event.subjectId || '')}">
     <input type="file" accept="${accept}" multiple hidden>

@@ -44,3 +44,15 @@ def test_user_management_text_and_choice_controls_use_suitable_save_timing():
     assert "control.addEventListener('change', () => scheduleUserAdminAutosave(row, 0))" in user_management
     assert "control.addEventListener('blur', () => scheduleUserAdminAutosave(row, 0))" in user_management
     assert "USERS_ADMIN_AUTOSAVE_DELAY = 700" in (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+
+def test_owner_role_option_is_only_rendered_for_owner_sessions():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    options_start = script.index("function userRoleOptionsMarkup")
+    options_end = script.index("function userRoleSummaryMarkup", options_start)
+    options = script[options_start:options_end]
+
+    assert "isPlatformAdminUser()" in options
+    assert "['owner', 'admin', 'manager', 'user']" in options
+    assert ": ['admin', 'manager', 'user']" in options
+    assert "owner: 'Owner'" in script

@@ -380,11 +380,15 @@ class PostgresDataManager(DataManager):
         return {
             'containerId': container.container_id,
             'assetIds': list(container.asset_ids or []),
+            'bulkItems': dict(getattr(container, 'bulk_items', {}) or {}),
             'serialNumber': getattr(container, 'serial_number', '') or '',
             'maintenanceLogs': [
                 normalize_maintenance_log(log)
                 for log in (getattr(container, 'maintenance_logs', []) or [])
             ],
+            'photoFilename': getattr(container, 'photo_filename', '') or '',
+            'photoMimeType': getattr(container, 'photo_mime_type', '') or '',
+            'photoOriginalName': getattr(container, 'photo_original_name', '') or '',
         }
 
     def _event_data(self, event):
@@ -551,6 +555,10 @@ class PostgresDataManager(DataManager):
                         list(data.get('assetIds') or []),
                         data.get('serialNumber', ''),
                         data.get('maintenanceLogs') or [],
+                        data.get('photoFilename', ''),
+                        data.get('photoMimeType', ''),
+                        data.get('photoOriginalName', ''),
+                        data.get('bulkItems') or {},
                     )
                     containers[container_id] = container
                     snapshots[container_id] = _fingerprint(

@@ -537,8 +537,8 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertEqual(payload['username'], 'bnjm2000')
         self.assertEqual(payload['company']['code'], 'TSC')
         self.assertEqual(payload['assignedCompanyCode'], 'AVPL')
-        self.assertEqual(payload['role'], 'admin')
-        self.assertEqual(payload['roleLabel'], 'Admin')
+        self.assertEqual(payload['role'], 'owner')
+        self.assertEqual(payload['roleLabel'], 'Owner')
         self.assertTrue(payload['isSuperAdmin'])
         self.assertNotIn('isOwner', payload)
 
@@ -806,10 +806,51 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertIn('bnjm2000', owner_usernames)
         self.assertIn('chief', owner_usernames)
         protected_row = next(row for row in owner_rows if row['username'] == 'bnjm2000')
-        self.assertEqual(protected_row['role'], 'admin')
-        self.assertEqual(protected_row['roleLabel'], 'Admin')
+        self.assertEqual(protected_row['role'], 'owner')
+        self.assertEqual(protected_row['roleLabel'], 'Owner')
         self.assertTrue(protected_row['isSuperAdmin'])
         self.assertNotIn('isOwner', protected_row)
+
+    def test_only_owner_can_assign_owner_role(self):
+        self.data_manager.users.update({
+            'admin-avpl': User(
+                'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt',
+                True, True, role='admin',
+            ),
+            'candidate': User(
+                'candidate', hash_password('pw', 'candidatesalt'), 'candidatesalt',
+                False, True, role='user',
+            ),
+        })
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies'].update({
+            'admin-avpl': 'AVPL',
+            'candidate': 'AVPL',
+        })
+        app_module._save_company_registry(registry)
+
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin-avpl'
+            session['is_admin'] = True
+            session['is_super_admin'] = False
+            session['company_code'] = 'AVPL'
+
+        denied = self.client.put('/api/users/candidate', json={'role': 'owner'})
+        self.assertEqual(denied.status_code, 403, denied.get_data(as_text=True))
+        self.assertNotIn(
+            'candidate',
+            app_module._load_company_registry()['superAdmins'],
+        )
+
+        self.login_super_admin()
+        promoted = self.client.put('/api/users/candidate', json={'role': 'owner'})
+        self.assertEqual(promoted.status_code, 200, promoted.get_data(as_text=True))
+        self.assertEqual(promoted.get_json()['data']['role'], 'owner')
+        self.assertIn(
+            'candidate',
+            app_module._load_company_registry()['superAdmins'],
+        )
 
     def test_owner_user_management_aggregates_company_scoped_users(self):
         tsc_record = app_module._load_company_registry()['companies']['TSC']
@@ -822,6 +863,10 @@ class CompanyManagementTests(unittest.TestCase):
         tsc_manager.users = {
             'tsc-only': User(
                 'tsc-only', hash_password('pw', 'tscsalt'), 'tscsalt', False, True,
+            ),
+            'bnjm2000': User(
+                'bnjm2000', hash_password('pw', 'ownersalt'), 'ownersalt', True, True,
+                role='owner',
             ),
         }
         tsc_manager.save_users()

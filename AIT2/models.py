@@ -249,11 +249,47 @@ class InventoryItem:
 
 
 class Container:
-    def __init__(self, container_id, asset_ids, serial_number='', maintenance_logs=None):
+    def __init__(
+        self,
+        container_id,
+        asset_ids,
+        serial_number='',
+        maintenance_logs=None,
+        photo_filename='',
+        photo_mime_type='',
+        photo_original_name='',
+        bulk_items=None,
+    ):
         self.container_id = container_id
         self.asset_ids = asset_ids
         self.serial_number = serial_number or ''
         self.maintenance_logs = maintenance_logs if maintenance_logs is not None else []
+        self.photo_filename = photo_filename or ''
+        self.photo_mime_type = photo_mime_type or ''
+        self.photo_original_name = photo_original_name or ''
+        self.bulk_items = {}
+        source_bulk_items = bulk_items or {}
+        if isinstance(source_bulk_items, dict):
+            entries = source_bulk_items.items()
+        elif isinstance(source_bulk_items, list):
+            entries = (
+                (
+                    item.get('assetId') or item.get('bulkId') or item.get('id'),
+                    item.get('quantity'),
+                )
+                for item in source_bulk_items
+                if isinstance(item, dict)
+            )
+        else:
+            entries = []
+        for asset_id, quantity in entries:
+            clean_id = str(asset_id or '').strip()
+            try:
+                clean_quantity = int(quantity)
+            except (TypeError, ValueError):
+                continue
+            if clean_id and clean_quantity > 0:
+                self.bulk_items[clean_id] = clean_quantity
 
 
 def split_legacy_event_name_location(name, location=''):

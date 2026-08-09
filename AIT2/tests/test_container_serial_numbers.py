@@ -1,4 +1,5 @@
 import csv
+import io
 import os
 import tempfile
 import unittest
@@ -152,6 +153,29 @@ class ContainerSerialNumberTests(unittest.TestCase):
         })
 
         self.assertEqual(response.status_code, 409)
+
+    def test_container_photo_upload_is_limited_and_persisted(self):
+        self.login()
+        response = self.client.post(
+            '/api/containers/CASE-OLD/photo',
+            data={'photo': (io.BytesIO(b'container-image'), 'case.png')},
+            content_type='multipart/form-data',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['photoOriginalName'], 'case.png')
+        self.assertTrue(payload['photoUrl'].endswith('/api/containers/CASE-OLD/photo'))
+        fetched = self.client.get('/api/containers/CASE-OLD/photo')
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.data, b'container-image')
+
+        too_large = self.client.post(
+            '/api/containers/CASE-OLD/photo',
+            data={'photo': (io.BytesIO(b'x' * (5 * 1024 * 1024 + 1)), 'large.png')},
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(too_large.status_code, 400)
 
 
 if __name__ == '__main__':

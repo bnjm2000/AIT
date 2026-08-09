@@ -90,10 +90,29 @@ class PostgresDataManagerTests(unittest.TestCase):
                 '',
                 version='v2.4.1',
             ),
+            'BULK-0001': InventoryItem(
+                'BULK-0001',
+                'Brand',
+                'Bulk Cable',
+                '',
+                'Cable stock',
+                False,
+                [],
+                'AX',
+                'Store',
+                '',
+                is_bulk=True,
+                quantity=10,
+            ),
         }
         self.manager.save_inventory()
         self.manager.containers = {
-            'CASE-1': Container('CASE-1', ['A#01'], 'CASE-SN'),
+            'CASE-1': Container(
+                'CASE-1',
+                ['A#01'],
+                'CASE-SN',
+                bulk_items={'BULK-0001': 4},
+            ),
         }
         self.manager.save_containers()
         event = Event(
@@ -138,6 +157,10 @@ class PostgresDataManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.users['admin'].phone, '+65 9123 4567')
         self.assertEqual(reloaded.inventory['A#01'].serial_number, 'SN-1')
         self.assertEqual(reloaded.inventory['A#01'].version, 'v2.4.1')
+        self.assertEqual(
+            reloaded.containers['CASE-1'].bulk_items,
+            {'BULK-0001': 4},
+        )
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])
         self.assertEqual(reloaded.clients['Client'].company, 'Company')

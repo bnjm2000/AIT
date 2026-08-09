@@ -66,6 +66,15 @@ const workforceDocumentsState = {
   realtimeTimer: null
 };
 
+const ADMIN_INVOICE_FILE_ACCEPT = [
+  '.pdf',
+  '.xls',
+  '.xlsx',
+  'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+].join(',');
+
 function wfEscape(value) {
   if (typeof escapeHtml === 'function') return escapeHtml(String(value ?? ''));
   const node = document.createElement('div');
@@ -987,6 +996,11 @@ function wfWorkerHtml(freelancerId, assignments) {
     invoiceLimit: 1, claimLimit: 5, activeInvoices: 0, activeClaims: 0,
     invoiceSlotsRemaining: 1, claimSlotsRemaining: 5, extraInvoices: 0, extraClaims: 0
   };
+  const dateConflicts = assignments.flatMap(row => row.dateConflicts || []);
+  const conflictTitle = [...new Map(dateConflicts.map(row => [
+    `${row.eventId}:${row.date}`,
+    `${row.date}: Event #${row.eventId} ${row.eventName || ''}`
+  ])).values()].join('\n');
   const roles = assignments.map(row => `<span class="wf-assignment-chip">
     <button class="wf-assignment-edit" type="button" title="Edit assignment"
       onclick="openFreelancerAssignment('${wfAttr(freelancer.id)}','${wfAttr(row.department)}','${wfAttr(row.id)}')">
@@ -998,7 +1012,7 @@ function wfWorkerHtml(freelancerId, assignments) {
     <button class="wf-worker-identity wf-worker-open" type="button"
       onclick="openFreelancerHistory('${wfAttr(freelancer.id)}')"><div class="wf-worker-profile">
       <span class="wf-avatar">${wfEscape(wfInitials(freelancer.name))}</span>
-      <div><strong>${wfEscape(freelancer.name)}</strong>
+      <div><strong>${wfEscape(freelancer.name)}${dateConflicts.length ? ` <span class="wf-worker-conflict" title="${wfAttr(conflictTitle)}" aria-label="Worker has clashing event dates">!</span>` : ''}</strong>
         <small>${wfEscape(wfFormatPhone(freelancer.phone) || 'No portal phone number')}</small></div>
     </div><small>View all events &rsaquo;</small></button>
     <div class="wf-worker-roles">
@@ -1138,7 +1152,7 @@ function wfTransportCardLegacy(booking) {
       <div><span>Invoice</span><strong>${invoice ? `<button class="wf-link-button" type="button" onclick="window.open('${wfAttr(invoice.previewUrl)}','_blank')">${wfEscape(invoice.originalName)}</button>` : 'Not uploaded'}</strong></div>
     </div>
     <div class="wf-transport-footer"><label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}
-      <input type="file" accept=".pdf,application/pdf" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>
+      <input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>
       <div><button class="wf-button" type="button" onclick="openTransportBooking('${wfAttr(booking.vendorId)}','${wfAttr(booking.id)}')">Edit</button>
         <button class="wf-button danger" type="button" onclick="deleteTransportBooking('${wfAttr(booking.id)}')">Remove</button></div></div>
   </article>`;
@@ -1181,7 +1195,7 @@ function wfTransportTripCard(booking, direction) {
     </div>
     <div class="wf-transport-footer">
       ${!isLegacyReturn && !isFleet ? `<label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}
-        <input type="file" accept=".pdf,application/pdf" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>`
+        <input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>`
         : (isLegacyReturn
           ? '<span class="wf-return-booking-note">Return leg of the same booking</span>'
           : '<span></span>')}
@@ -1616,7 +1630,7 @@ function ensureWorkforceModals() {
     wfModal('wfAdminUploadModal', 'Upload for Crew', `<form id="wfAdminUploadForm">
       <input id="wfAdminUploadFreelancerId" type="hidden"><input id="wfAdminUploadKind" name="kind" type="hidden">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAdminUploadSubtitle"></p>
-        <div id="wfAdminInvoiceFields"><p class="wf-help">Invoice amount will be read from the PDF and verified during review.</p></div>
+        <div id="wfAdminInvoiceFields"><p class="wf-help">Invoice details will be read when supported and verified during review.</p></div>
         <div id="wfAdminClaimFields" hidden><p class="wf-help">Claim amount and date will be analysed after upload. Verify them during review.</p></div>
         <label class="wf-field wf-admin-dropzone" id="wfAdminUploadDropzone"><span id="wfAdminUploadFileLabel">Invoice PDF *</span><input id="wfAdminUploadFile" name="files" type="file" required><strong id="wfAdminUploadDropPrompt">Drag &amp; drop or choose a file</strong><small id="wfAdminUploadSelectedFiles">No file selected</small></label>
         <div class="wf-admin-upload-progress" id="wfAdminUploadProgress" hidden><strong>Uploading</strong>
@@ -2659,7 +2673,7 @@ function wfEventDateOptions() {
   return dates;
 }
 
-function wfDateCalendarHtml(selectedDates = []) {
+function wfDateCalendarHtml(selectedDates = [], conflictsByDate = {}) {
   const allowedDates = wfEventDateOptions();
   if (!allowedDates.length) return '<div class="wf-empty">No valid event dates.</div>';
   const allowed = new Set(allowedDates);
@@ -2684,8 +2698,11 @@ function wfDateCalendarHtml(selectedDates = []) {
       if (!allowed.has(date)) {
         cells.push(`<span class="wf-calendar-day outside">${day}</span>`);
       } else {
-        cells.push(`<button class="wf-calendar-day event-date ${selected.has(date) ? 'selected' : ''}"
+        const conflicts = conflictsByDate?.[date] || [];
+        const conflictTitle = conflicts.map(row => `Event #${row.eventId} ${row.eventName || ''}`).join(', ');
+        cells.push(`<button class="wf-calendar-day event-date ${selected.has(date) ? 'selected' : ''} ${conflicts.length ? 'has-conflict' : ''}"
           type="button" data-date="${date}" aria-pressed="${selected.has(date)}"
+          ${conflicts.length ? `title="Already assigned to ${wfAttr(conflictTitle)}"` : ''}
           onclick="toggleWorkforceCalendarDate(this)">${day}</button>`);
       }
     }
@@ -2745,7 +2762,10 @@ function openFreelancerAssignment(freelancerId, department = '', assignmentId = 
       : allDates.slice(0, Number(assignment?.days || 1))
   );
   document.getElementById('wfAssignmentDates').innerHTML =
-    wfDateCalendarHtml([...selectedDates]);
+    wfDateCalendarHtml(
+      [...selectedDates],
+      workforcePageState.data?.workerDateConflicts?.[freelancerId] || {}
+    );
   document.getElementById('wfAssignmentModalTitle').textContent =
     assignment ? 'Edit Event Assignment' : 'Event Assignment';
   document.querySelector('#wfAssignmentForm [type="submit"]').textContent =
@@ -2969,9 +2989,13 @@ function openAdminWorkforceUpload(freelancerId, kind) {
   document.getElementById('wfAdminInvoiceFields').hidden = claim;
   document.getElementById('wfAdminClaimFields').hidden = !claim;
   const file = document.getElementById('wfAdminUploadFile');
-  file.accept = claim ? '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg' : '.pdf,application/pdf';
+  file.accept = claim
+    ? '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg'
+    : ADMIN_INVOICE_FILE_ACCEPT;
   file.multiple = claim;
-  document.getElementById('wfAdminUploadFileLabel').textContent = claim ? 'Claim files (PDF, PNG or JPG) *' : 'Invoice PDF *';
+  document.getElementById('wfAdminUploadFileLabel').textContent = claim
+    ? 'Claim files (PDF, PNG or JPG) *'
+    : 'Invoice file (PDF or Excel) *';
   document.getElementById('wfAdminUploadDropPrompt').textContent = claim ? 'Drag & drop or choose claim files' : 'Drag & drop or choose an invoice';
   updateAdminWorkforceDropzoneFiles();
   document.querySelector('#wfAdminUploadForm [type="submit"]').textContent = claim ? 'Upload Files' : 'Upload File';

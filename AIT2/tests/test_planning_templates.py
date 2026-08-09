@@ -154,6 +154,22 @@ class PlanningTemplateTests(unittest.TestCase):
         )
         self.assertNotIn('Manage Assets', script)
 
+    def test_plan_action_identifiers_escape_apostrophes(self):
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn(".replace(/'/g, '%27')", script)
+        self.assertIn(
+            'departmentInput.add(new Option(customDepartment, customDepartment))',
+            script,
+        )
+
     def test_plan_asset_search_includes_each_asset_description(self):
         script_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -247,6 +263,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('>Collect</button>', script)
         self.assertIn('>Uncollect</button>', script)
         self.assertIn('>Unprepare</button>', script)
+        self.assertNotIn('>Prepared</button>', script)
 
     def test_matching_loans_remain_owned_by_their_rooms_and_collect_together(self):
         self.login('admin')

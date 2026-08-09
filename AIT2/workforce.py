@@ -24,6 +24,7 @@ VALID_STATUSES = {"Pending Review", "Approved", "Denied", "Paid"}
 INVOICE_EXTENSIONS = {".pdf"}
 CLAIM_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 TRANSPORT_EXTENSIONS = {".pdf"}
+INVOICE_SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 _STORE_LOCKS: dict[str, threading.RLock] = {}
 _STORE_LOCKS_GUARD = threading.RLock()
@@ -265,6 +266,18 @@ def _validate_magic(content: bytes, extension: str) -> bool:
         return content.startswith(b"\x89PNG\r\n\x1a\n")
     if extension in {".jpg", ".jpeg"}:
         return content.startswith(b"\xff\xd8\xff")
+    if extension == ".xls":
+        return content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+    if extension == ".xlsx":
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                names = set(archive.namelist())
+                return (
+                    "[Content_Types].xml" in names
+                    and any(name.startswith("xl/") for name in names)
+                )
+        except (OSError, ValueError, zipfile.BadZipFile):
+            return False
     return False
 
 
@@ -274,6 +287,8 @@ def save_upload(
     event_id,
     freelancer_id,
     kind: str,
+    *,
+    allow_spreadsheets: bool = False,
 ) -> dict:
     original_name = _safe_original_name(getattr(uploaded_file, "filename", ""))
     extension = os.path.splitext(original_name)[1].lower()
@@ -282,6 +297,8 @@ def save_upload(
         "claim": CLAIM_EXTENSIONS,
         "transport": TRANSPORT_EXTENSIONS,
     }.get(kind, set())
+    if allow_spreadsheets and kind in {"invoice", "transport"}:
+        allowed = allowed | INVOICE_SPREADSHEET_EXTENSIONS
     if extension not in allowed:
         raise ValueError("Unsupported file type")
 
@@ -318,6 +335,11 @@ def save_upload(
             ".png": "image/png",
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
+            ".xls": "application/vnd.ms-excel",
+            ".xlsx": (
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
         }[extension],
     }
 
@@ -840,6 +862,14 @@ def _date_from_filename(filename: str) -> dict:
 
 
 def extract_invoice_amount(path: str) -> dict:
+    if Path(path).suffix.lower() in INVOICE_SPREADSHEET_EXTENSIONS:
+        return {
+            "amount": None,
+            "confidence": "Low",
+            "source": "Spreadsheet - manual review",
+            "matchedText": "",
+            "ocrUsed": False,
+        }
     text = _pdf_text(path)
     result = _amount_from_text(text)
     result["source"] = "PDF text"
