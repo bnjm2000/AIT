@@ -411,6 +411,26 @@ function canCurrentUserManageRoles() {
   return !!(currentUser && (currentUser.canManageRoles || currentUserRole() === 'admin'));
 }
 
+function canCurrentUserManageUsers() {
+  return !!(
+    currentUser
+    && (
+      currentUser.canManageUsers
+      || ['owner', 'admin', 'manager'].includes(currentUserRole())
+    )
+  );
+}
+
+function canCurrentUserManageUser(user) {
+  if (!canCurrentUserManageUsers() || !user) return false;
+  if (isPlatformAdminUser()) return true;
+  const targetRole = String(
+    user.role || (user.isSuperAdmin || user.isAdmin ? 'admin' : 'user')
+  ).toLowerCase();
+  if (currentUserRole() === 'admin') return targetRole !== 'owner';
+  return currentUserRole() === 'manager' && ['manager', 'user'].includes(targetRole);
+}
+
 function currentUserHasSalesAccess() {
   return !!(currentUser && (isPlatformAdminUser() || currentUser.hasSalesAccess || currentUser.isSales));
 }
@@ -6757,7 +6777,9 @@ function userRoleOptionsMarkup(selectedRole = 'user') {
   const selected = String(selectedRole || 'user').toLowerCase();
   const roles = isPlatformAdminUser()
     ? ['owner', 'admin', 'manager', 'user']
-    : ['admin', 'manager', 'user'];
+    : (currentUserRole() === 'admin'
+      ? ['admin', 'manager', 'user']
+      : ['manager', 'user']);
   return roles.map(role => `
     <option value="${role}" ${role === selected ? 'selected' : ''}>${escapeHtml(userRoleLabel(role))}</option>
   `).join('');
@@ -6766,7 +6788,9 @@ function userRoleOptionsMarkup(selectedRole = 'user') {
 function userRoleSummaryMarkup() {
   const roles = isPlatformAdminUser()
     ? ['owner', 'admin', 'manager', 'user']
-    : ['admin', 'manager', 'user'];
+    : (currentUserRole() === 'admin'
+      ? ['admin', 'manager', 'user']
+      : ['manager', 'user']);
   return roles.map(role => `
     <span class="user-role-chip user-role-chip-${role}">
       <strong>${escapeHtml(userRoleLabel(role))}</strong>
@@ -6879,7 +6903,7 @@ function ensureCreateUserModal() {
             <input id="newUserPassword" type="password" class="form-input" placeholder="Password" autocomplete="new-password">
           </div>
 
-          ${canCurrentUserManageRoles() ? `
+          ${canCurrentUserManageUsers() ? `
             <div class="form-group">
               <label class="form-label" for="newUserRole">Role</label>
               <select id="newUserRole" class="form-input">${userRoleOptionsMarkup('user')}</select>
@@ -6996,10 +7020,10 @@ function usersAdminRowMarkup(user, index) {
   );
   const role = String(user.role || (user.isSuperAdmin || user.isAdmin ? 'admin' : 'user')).toLowerCase();
   const isProtectedAccount = Boolean(user.isSuperAdmin);
-  const canEditRole = canCurrentUserManageRoles() && (
+  const canEditUser = canCurrentUserManageUser(user);
+  const canEditRole = canEditUser && (
     !isProtectedAccount || (isPlatformAdminUser() && !isSelf)
   );
-  const canEditUser = !isProtectedAccount || isPlatformAdminUser();
   const rawLastOnline = String(user.lastOnline || '-');
   const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
   const displayName = String(user.name || '').trim();
@@ -7154,7 +7178,7 @@ function collectUserAdminRowPayload(row) {
     sourceCompanyCode: row.dataset.originalCompanyCode || '',
   };
   const role = field('role')?.value || '';
-  if (canCurrentUserManageRoles() && role) {
+  if (canCurrentUserManageUsers() && role) {
     payload.role = role;
     payload.hasSalesAccess = Boolean(field('sales')?.checked);
   }
@@ -7387,7 +7411,7 @@ async function createUserAdmin() {
       password,
       isActive
     };
-    if (canCurrentUserManageRoles()) {
+    if (canCurrentUserManageUsers()) {
       payload.role = role;
       payload.hasSalesAccess = hasSalesAccess;
     }

@@ -174,7 +174,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertEqual(invalid.status_code, 400, invalid.get_data(as_text=True))
         self.assertEqual(self.data_manager.users['normal'].phone, '+65 9123 4567')
 
-    def test_admin_can_change_roles_but_manager_cannot(self):
+    def test_admin_can_change_roles_but_manager_cannot_grant_admin(self):
         with self.client.session_transaction() as session:
             session['user'] = 'admin'
             session['is_admin'] = True
@@ -192,6 +192,7 @@ class ChangePasswordTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             session['user'] = 'manager'
             session['is_admin'] = True
+            session['role'] = 'manager'
             session['is_active'] = True
 
         response = self.client.put('/api/users/normal', json={
@@ -202,6 +203,74 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
         self.assertEqual(self.data_manager.users['normal'].role, 'manager')
         self.assertTrue(self.data_manager.users['normal'].has_sales_access)
+
+    def test_manager_can_create_edit_reset_and_delete_manager_or_user_accounts(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'manager'
+            session['is_admin'] = True
+            session['role'] = 'manager'
+            session['is_active'] = True
+
+        created = self.client.post('/api/users', json={
+            'username': 'managed-user',
+            'password': 'temporary-password',
+            'role': 'manager',
+            'hasSalesAccess': True,
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['managed-user'].role, 'manager')
+        self.assertTrue(self.data_manager.users['managed-user'].has_sales_access)
+
+        updated = self.client.put('/api/users/normal', json={
+            'name': 'Managed Team Member',
+            'role': 'manager',
+            'hasSalesAccess': True,
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].name, 'Managed Team Member')
+        self.assertEqual(self.data_manager.users['normal'].role, 'manager')
+        self.assertTrue(self.data_manager.users['normal'].has_sales_access)
+
+        reset = self.client.put('/api/users/normal/password', json={
+            'password': 'manager-reset-password',
+        })
+        self.assertEqual(reset.status_code, 200, reset.get_data(as_text=True))
+        normal = self.data_manager.users['normal']
+        self.assertEqual(
+            hash_password('manager-reset-password', normal.salt),
+            normal.password_hash,
+        )
+
+        deleted = self.client.delete('/api/users/managed-user')
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertNotIn('managed-user', self.data_manager.users)
+
+    def test_manager_cannot_manage_or_create_admin_accounts(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'manager'
+            session['is_admin'] = True
+            session['role'] = 'manager'
+            session['is_active'] = True
+
+        create_admin = self.client.post('/api/users', json={
+            'username': 'blocked-admin',
+            'password': 'temporary-password',
+            'role': 'admin',
+        })
+        self.assertEqual(create_admin.status_code, 403, create_admin.get_data(as_text=True))
+        self.assertNotIn('blocked-admin', self.data_manager.users)
+
+        promote = self.client.put('/api/users/normal', json={'role': 'admin'})
+        self.assertEqual(promote.status_code, 403, promote.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].role, 'user')
+
+        update_admin = self.client.put('/api/users/admin', json={'name': 'Changed'})
+        reset_admin = self.client.put('/api/users/admin/password', json={'password': 'changed'})
+        delete_admin = self.client.delete('/api/users/admin')
+        self.assertEqual(update_admin.status_code, 403, update_admin.get_data(as_text=True))
+        self.assertEqual(reset_admin.status_code, 403, reset_admin.get_data(as_text=True))
+        self.assertEqual(delete_admin.status_code, 403, delete_admin.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['admin'].name, '')
 
     def test_last_company_admin_cannot_demote_self_until_another_admin_exists(self):
         with self.client.session_transaction() as session:

@@ -54,5 +54,15 @@ def test_owner_role_option_is_only_rendered_for_owner_sessions():
 
     assert "isPlatformAdminUser()" in options
     assert "['owner', 'admin', 'manager', 'user']" in options
-    assert ": ['admin', 'manager', 'user']" in options
+    assert "? ['admin', 'manager', 'user']" in options
+    assert ": ['manager', 'user']" in options
     assert "owner: 'Owner'" in script
+
+
+def test_manager_user_controls_are_limited_by_target_role():
+    script, user_management = user_management_script()
+
+    assert 'function canCurrentUserManageUser(user)' in script
+    assert "currentUserRole() === 'manager' && ['manager', 'user'].includes(targetRole)" in script
+    assert 'const canEditUser = canCurrentUserManageUser(user);' in user_management
+    assert '${canCurrentUserManageUsers() ? `' in script

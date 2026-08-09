@@ -1034,10 +1034,42 @@ def _user_is_assigned_to_current_company(username):
     return user_company == current_company
 
 
-def _current_admin_can_manage_user(username):
-    if _current_user_is_super_admin():
+def _current_user_management_role():
+    if not has_request_context():
+        return 'user'
+    if session.get('self_user_changes_pending'):
+        return normalize_user_role(session.get('role'), session.get('is_admin'))
+    return _effective_user_role(session.get('user'))
+
+
+def _current_user_can_manage_users():
+    return _current_user_management_role() in {'owner', 'admin', 'manager'}
+
+
+def _current_user_can_assign_user_role(role):
+    actor_role = _current_user_management_role()
+    requested_role = normalize_user_role(role)
+    if actor_role == 'owner':
         return True
-    return _user_is_assigned_to_current_company(username)
+    if actor_role == 'admin':
+        return requested_role in {'admin', 'manager', 'user'}
+    if actor_role == 'manager':
+        return requested_role in {'manager', 'user'}
+    return False
+
+
+def _current_user_can_manage_user(username):
+    actor_role = _current_user_management_role()
+    if actor_role == 'owner':
+        return True
+    if not _user_is_assigned_to_current_company(username):
+        return False
+    target_role = _effective_user_role(username)
+    if actor_role == 'admin':
+        return target_role in {'admin', 'manager', 'user'}
+    if actor_role == 'manager':
+        return target_role in {'manager', 'user'}
+    return False
 
 
 def _active_company_admin_usernames(company_code):
@@ -1212,6 +1244,7 @@ def _user_payload(user, reveal_owner=False):
         'isManager': role == 'manager',
         'isSuperAdmin': is_platform_admin,
         'canManageRoles': role in {'owner', 'admin'},
+        'canManageUsers': role in {'owner', 'admin', 'manager'},
         'hasSalesAccess': has_sales_access,
         'isSales': has_sales_access,
         'isActive': getattr(user, 'is_active', True),
@@ -14900,8 +14933,13 @@ def create_user():
                 'historyCounts': history_counts,
             }), 409
 
-        if role_payload_present and not _current_user_can_manage_roles():
-            return jsonify({'error': 'Only administrators can change role permissions'}), 403
+        if (
+            role_payload_present
+            and not _current_user_can_assign_user_role(requested_role)
+        ):
+            return jsonify({
+                'error': 'You cannot create a user with this access level'
+            }), 403
 
         if data.get('companyCode') and not _current_user_is_owner():
             return jsonify({'error': 'You do not have permission to assign users to companies'}), 403
@@ -14973,8 +15011,10 @@ def update_user(username):
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        if not _current_admin_can_manage_user(old_username):
-            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+        if not _current_user_can_manage_user(old_username):
+            return jsonify({
+                'error': 'You cannot manage this user or access level'
+            }), 403
 
         target_role = _effective_user_role(user)
         if target_role == 'owner' and not _current_user_is_owner():
@@ -14997,8 +15037,8 @@ def update_user(username):
         role_fields = {'role', 'isAdmin', 'isOwner', 'isSuperAdmin', 'hasSalesAccess', 'isSales'}
         role_payload_present = any(field in data for field in role_fields)
 
-        if role_payload_present and not _current_user_can_manage_roles():
-            return jsonify({'error': 'Only administrators can change role permissions'}), 403
+        if role_payload_present and not _current_user_can_manage_users():
+            return jsonify({'error': 'You cannot change user permissions'}), 403
 
         if 'companyCode' in data:
             if not _current_user_is_owner():
@@ -15009,6 +15049,13 @@ def update_user(username):
 
         if role_payload_present:
             requested_role = _requested_role_from_payload(data, target_role)
+            if (
+                requested_role
+                and not _current_user_can_assign_user_role(requested_role)
+            ):
+                return jsonify({
+                    'error': 'You cannot grant this access level'
+                }), 403
             if requested_role == 'owner' and not _current_user_is_owner():
                 return jsonify({'error': 'You do not have permission to grant this access level'}), 403
             if 'hasSalesAccess' in data or 'isSales' in data:
@@ -15191,8 +15238,10 @@ def reset_user_password(username):
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        if not _current_admin_can_manage_user(username):
-            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+        if not _current_user_can_manage_user(username):
+            return jsonify({
+                'error': 'You cannot manage this user or access level'
+            }), 403
 
         if _is_owner_username(username) and not _current_user_is_owner():
             return jsonify({'error': 'This protected account cannot be managed'}), 403
@@ -15231,8 +15280,10 @@ def delete_user(username):
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        if not _current_admin_can_manage_user(username):
-            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+        if not _current_user_can_manage_user(username):
+            return jsonify({
+                'error': 'You cannot manage this user or access level'
+            }), 403
 
         if _is_owner_username(username) and not _current_user_is_owner():
             return jsonify({'error': 'This protected account cannot be deleted'}), 403
