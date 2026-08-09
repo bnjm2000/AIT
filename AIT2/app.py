@@ -16575,6 +16575,45 @@ def update_event_notes(event_id):
         return jsonify({'error': 'Failed to update event notes'}), 500
 
 
+@app.route('/api/events/<int:event_id>/delivery-order', methods=['GET', 'PUT', 'DELETE'])
+@require_auth
+@require_event_access
+def event_delivery_order(event_id):
+    """Read or update the event's independent Delivery Order workspace."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        if request.method == 'GET':
+            return jsonify({
+                'success': True,
+                'data': dict(getattr(event, 'delivery_order', {}) or {}),
+            })
+
+        if request.method == 'DELETE':
+            event.delivery_order = {}
+        else:
+            workspace = request.get_json(silent=True) or {}
+            if not isinstance(workspace, dict):
+                return jsonify({'error': 'Delivery Order workspace must be an object'}), 400
+            encoded = json.dumps(workspace, ensure_ascii=False)
+            if len(encoded.encode('utf-8')) > 1_000_000:
+                return jsonify({'error': 'Delivery Order workspace is too large'}), 413
+            event.delivery_order = json.loads(encoded)
+
+        data_manager.events[event_id] = event
+        data_manager.save_event(event)
+        mark_realtime_change('delivery-order', {'eventId': event_id})
+        return jsonify({
+            'success': True,
+            'data': dict(getattr(event, 'delivery_order', {}) or {}),
+        })
+    except Exception as exc:
+        logger.error("Error updating delivery order for event %s: %s", event_id, exc)
+        return jsonify({'error': 'Failed to update delivery order'}), 500
+
+
 @app.route('/api/events/<int:event_id>/files', methods=['POST'])
 @require_auth
 @require_event_access

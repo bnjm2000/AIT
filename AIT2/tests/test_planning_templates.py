@@ -873,7 +873,11 @@ class PlanningTemplateTests(unittest.TestCase):
             script = script_file.read()
 
         self.assertIn('function getDeliveryOrderAssetCatalog()', script)
-        self.assertIn('id="doCatalogSearch"', script)
+        self.assertIn("id: 'doCatalogSearch'", script)
+        self.assertIn('showbaseLineWorkspace.addRowMarkup({', script)
+        self.assertIn('deliveryOrderSubprojectTabsMarkup(event)', script)
+        self.assertIn("<th>Item</th>", script)
+        self.assertIn("<th>Quantity</th>", script)
         self.assertIn('class="do-dept form-input"', script)
         self.assertIn('data-custom-id=', script)
         self.assertIn('function removeDeliveryOrderItem(eventId, { key, kind, customId })', script)
@@ -899,6 +903,74 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('function generateExcelDO(', script)
         self.assertNotIn('xlsx.full.min.js', script)
         self.assertNotIn('do-item-price', script)
+
+    def test_delivery_order_workspace_persists_without_changing_event_requirements(self):
+        self.login('admin')
+        self.event.asset_models = [{
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'ModelA',
+            'description': 'ModelA description',
+            'requiredQuantity': 3,
+        }]
+        self.event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'main-model-a',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'quantity': 3,
+                'isCustom': False,
+            }],
+        }]
+        self.data_manager.save_event(self.event)
+        original_models = json.loads(json.dumps(self.event.asset_models))
+        original_rooms = json.loads(json.dumps(self.event.subprojects))
+        workspace = {
+            'document': {'doNumber': 'DO-TEST-01', 'clientName': 'Client'},
+            'overrides': {
+                'ROOM|main|main-model-a': {
+                    'description': 'Client-facing item name',
+                    'quantity': 2,
+                    'department': 'Audio',
+                },
+            },
+            'custom': {
+                'Audio': [{
+                    'id': 'do-line-1',
+                    'description': 'DO-only cable loom',
+                    'quantity': 1,
+                    'subprojectId': 'main',
+                }],
+            },
+            'ordering': {'main::Audio': ['DOCUSTOM|do-line-1', 'ROOM|main|main-model-a']},
+            'subprojectOrder': ['main'],
+        }
+
+        saved = self.client.put(
+            f'/api/events/{self.event.event_id}/delivery-order',
+            json=workspace,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        self.assertEqual(saved.get_json()['data']['document']['doNumber'], 'DO-TEST-01')
+        self.assertEqual(self.event.asset_models, original_models)
+        self.assertEqual(self.event.subprojects, original_rooms)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_events()
+        self.assertEqual(
+            reloaded.events[self.event.event_id].delivery_order['custom']['Audio'][0]['description'],
+            'DO-only cable loom',
+        )
+        self.assertEqual(reloaded.events[self.event.event_id].asset_models, original_models)
+        self.assertEqual(reloaded.events[self.event.event_id].subprojects, original_rooms)
+
+        cleared = self.client.delete(f'/api/events/{self.event.event_id}/delivery-order')
+        self.assertEqual(cleared.status_code, 200, cleared.get_data(as_text=True))
+        self.assertEqual(cleared.get_json()['data'], {})
 
     def test_template_crud_is_company_local(self):
         self.login('admin')

@@ -40,6 +40,7 @@
     addRowMarkup(options = {}) {
       const search = options.search || {};
       const category = options.category || {};
+      const extraMarkup = String(options.extraMarkup || '');
       const optionalAttribute = (name, value) => (
         value ? ` ${name}="${escapeAttribute(value)}"` : ''
       );
@@ -52,8 +53,9 @@
           <input id="${escapeAttribute(category.id || '')}" class="finance-input" value="${escapeAttribute(category.value || '')}" placeholder="${escapeAttribute(category.placeholder || 'Category')}" autocomplete="off"${optionalAttribute('oninput', category.oninput)}${optionalAttribute('onfocus', category.onfocus)}${optionalAttribute('onblur', category.onblur)}${optionalAttribute('onkeydown', category.onkeydown)}>
           <div class="finance-inline-suggestions" id="${escapeAttribute(category.resultsId || '')}"></div>
         </div>
+        ${extraMarkup}
         <button type="button" class="btn btn-primary" onclick="${escapeAttribute(options.addAction || '')}">+ Add</button>
-        <button type="button" class="btn btn-secondary finance-add-group-button" onclick="financeOpenLineGroupEditor('${escapeAttribute(options.mode || 'finance')}')">+ Group</button>
+        ${options.showGroup === false ? '' : `<button type="button" class="btn btn-secondary finance-add-group-button" onclick="${escapeAttribute(options.groupAction || `financeOpenLineGroupEditor('${options.mode || 'finance'}')`)}">+ Group</button>`}
       </div>`;
     },
 
@@ -99,8 +101,8 @@
       const rows = Array.isArray(options.rows) ? options.rows : [];
       const activeId = String(options.activeId || rows[0]?.id || '');
       const prefix = String(options.handlerPrefix || '').replace(/[^a-zA-Z0-9_$]/g, '');
-      const canEdit = !options.readOnly;
-      const canReorder = canEdit && rows.length > 1;
+      const canManage = !options.readOnly && options.allowManage !== false;
+      const canReorder = !options.readOnly && options.allowReorder !== false && rows.length > 1;
       return `<div class="finance-subproject-tabs showbase-subproject-tabs ${escapeAttribute(options.className || '')}" role="tablist" aria-label="${escapeAttribute(options.ariaLabel || 'Sub-projects')}">
         ${rows.map((row, index) => {
           const id = escapeAttribute(row.id || '');
@@ -124,15 +126,15 @@
                   title="Drag to reorder room" aria-label="Reorder ${name}"
                   onkeydown="${prefix}SubprojectDragKeydown(event,'${id}')">&#9776;</span>` : ''}
             <button type="button" role="tab" aria-selected="${String(row.id || '') === activeId}" onclick="${prefix}SelectSubproject('${id}')">${name}</button>
-            ${canEdit ? `<button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="${prefix}RenameSubproject('${id}')">&#9998;</button>` : ''}
-            ${canEdit && rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="${prefix}DeleteSubproject('${id}')">&times;</button>` : ''}
+            ${canManage ? `<button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="${prefix}RenameSubproject('${id}')">&#9998;</button>` : ''}
+            ${canManage && rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="${prefix}DeleteSubproject('${id}')">&times;</button>` : ''}
           </span>`;
         }).join('')}
         ${canReorder ? `<span class="finance-subproject-end-drop" aria-hidden="true"
               ondragover="${prefix}SubprojectEndDragOver(event)"
               ondragleave="${prefix}SubprojectEndDragLeave(event)"
               ondrop="${prefix}SubprojectDropAtEnd(event)"></span>` : ''}
-        ${canEdit ? `<button type="button" class="finance-subproject-add" onclick="${prefix}AddSubproject()">+ Sub-project</button>` : ''}
+        ${canManage ? `<button type="button" class="finance-subproject-add" onclick="${prefix}AddSubproject()">+ Sub-project</button>` : ''}
       </div>`;
     },
 

@@ -799,6 +799,8 @@ function ensureDoEditBuckets(data, deptNames = []) {
   data.custom ||= {};
   data.ordering ||= {};
   data.deleted ||= {};
+  data.document ||= {};
+  data.subprojectOrder ||= [];
 
   const dynamicDeptNames = [];
   try {
@@ -823,6 +825,10 @@ function ensureDoEditBuckets(data, deptNames = []) {
 function makeDoCustomItemId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `do-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function deliveryOrderOrderingKey(subprojectId, department) {
+  return `${String(subprojectId || 'all')}::${String(department || 'MISC')}`;
 }
 
 function getDoDepartmentList(groupedDepartments = {}, edits = null) {
@@ -1544,8 +1550,16 @@ function getAssignedAssetDisplay(asset) {
 
 
 // Delivery Order edit state
+const deliveryOrderWorkspaceCache = new Map();
+const deliveryOrderSaveTimers = new Map();
+const deliveryOrderActiveSaves = new Map();
+const deliveryOrderSaveVersions = new Map();
+
 function getDoEdits(eventId, deptNames = []) {
   const blank = ensureDoEditBuckets({ overrides: {}, custom: {}, ordering: {} }, deptNames);
+  if (deliveryOrderWorkspaceCache.has(String(eventId))) {
+    return ensureDoEditBuckets(deliveryOrderWorkspaceCache.get(String(eventId)), deptNames);
+  }
   try {
     const raw = localStorage.getItem(`doEdits/${eventId}`);
     if (!raw) return blank;
@@ -1554,10 +1568,90 @@ function getDoEdits(eventId, deptNames = []) {
   } catch { return blank; }
 }
 function saveDoEdits(eventId, data) {
-  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(ensureDoEditBuckets(data)));
+  const key = String(eventId);
+  const workspace = ensureDoEditBuckets(data);
+  deliveryOrderWorkspaceCache.set(key, workspace);
+  deliveryOrderSaveVersions.set(key, (deliveryOrderSaveVersions.get(key) || 0) + 1);
+  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(workspace));
+  clearTimeout(deliveryOrderSaveTimers.get(key));
+  deliveryOrderSaveTimers.set(key, setTimeout(() => {
+    persistDoEdits(eventId).catch(() => {});
+  }, 450));
 }
 function clearDoEdits(eventId) {
+  const key = String(eventId);
+  clearTimeout(deliveryOrderSaveTimers.get(key));
+  deliveryOrderSaveTimers.delete(key);
+  deliveryOrderWorkspaceCache.set(key, ensureDoEditBuckets({}));
+  deliveryOrderSaveVersions.set(key, (deliveryOrderSaveVersions.get(key) || 0) + 1);
   localStorage.removeItem(`doEdits/${eventId}`);
+  const previousSave = deliveryOrderActiveSaves.get(key);
+  const request = Promise.resolve(previousSave)
+    .catch(() => {})
+    .then(() => apiCall(`/api/events/${encodeURIComponent(eventId)}/delivery-order`, 'DELETE'))
+    .catch(error => showNotification('error', error.message || 'Failed to reset Delivery Order'));
+  deliveryOrderActiveSaves.set(key, request);
+  request.finally(() => {
+    if (deliveryOrderActiveSaves.get(key) === request) deliveryOrderActiveSaves.delete(key);
+  });
+}
+
+async function loadDoEdits(eventId) {
+  const key = String(eventId);
+  if (deliveryOrderWorkspaceCache.has(key)) return getDoEdits(eventId);
+  let localWorkspace = null;
+  try {
+    const raw = localStorage.getItem(`doEdits/${eventId}`);
+    if (raw) localWorkspace = ensureDoEditBuckets(JSON.parse(raw));
+  } catch {}
+  try {
+    const response = await apiCall(`/api/events/${encodeURIComponent(eventId)}/delivery-order`);
+    const serverWorkspace = ensureDoEditBuckets(response.data || {});
+    const hasServerData = Object.keys(response.data || {}).length > 0;
+    const workspace = hasServerData ? serverWorkspace : (localWorkspace || serverWorkspace);
+    deliveryOrderWorkspaceCache.set(key, workspace);
+    if (!hasServerData && localWorkspace) saveDoEdits(eventId, workspace);
+    return workspace;
+  } catch (error) {
+    const fallback = localWorkspace || ensureDoEditBuckets({});
+    deliveryOrderWorkspaceCache.set(key, fallback);
+    return fallback;
+  }
+}
+
+async function persistDoEdits(eventId) {
+  const key = String(eventId);
+  clearTimeout(deliveryOrderSaveTimers.get(key));
+  deliveryOrderSaveTimers.delete(key);
+  const previousSave = deliveryOrderActiveSaves.get(key);
+  if (previousSave) await previousSave.catch(() => {});
+  const saveVersion = deliveryOrderSaveVersions.get(key) || 0;
+  const workspace = getDoEdits(eventId);
+  const request = apiCall(
+    `/api/events/${encodeURIComponent(eventId)}/delivery-order`,
+    'PUT',
+    workspace
+  );
+  deliveryOrderActiveSaves.set(key, request);
+  try {
+    const response = await request;
+    if ((deliveryOrderSaveVersions.get(key) || 0) === saveVersion) {
+      deliveryOrderWorkspaceCache.set(key, ensureDoEditBuckets(response.data || workspace));
+    }
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to save Delivery Order');
+    throw error;
+  } finally {
+    if (deliveryOrderActiveSaves.get(key) === request) deliveryOrderActiveSaves.delete(key);
+  }
+}
+
+async function flushDoEdits(eventId) {
+  const key = String(eventId);
+  if (deliveryOrderSaveTimers.has(key)) await persistDoEdits(eventId);
+  if (deliveryOrderActiveSaves.has(key)) {
+    await deliveryOrderActiveSaves.get(key).catch(() => {});
+  }
 }
 /* stable key for model-group rows */
 function makeModelKey(mg) {
@@ -32056,6 +32150,111 @@ async function generatePackingList(eventId, options = {}) {
 }
 
 let currentDeliveryOrderEvent = null;
+const deliveryOrderEditorState = {
+  activeSubprojectId: '',
+  dragSubprojectId: '',
+  catalog: [],
+  catalogMatches: [],
+  selectedCatalogItem: null,
+  editMode: false
+};
+let deliveryOrderSubprojectWorkspace = null;
+
+function deliveryOrderSubprojects(event = currentDeliveryOrderEvent) {
+  const source = eventSubprojects(event);
+  const rows = source.length
+    ? source.map(room => ({ id: String(room.id || 'main'), name: room.name || 'Main Room' }))
+    : [{ id: 'main', name: 'Main Room' }];
+  const eventId = event?.id || event?.event_id || '0';
+  const order = getDoEdits(eventId).subprojectOrder || [];
+  const positions = new Map(order.map((id, index) => [String(id), index]));
+  return [...rows].sort((left, right) => {
+    const leftIndex = positions.has(left.id) ? positions.get(left.id) : Number.MAX_SAFE_INTEGER;
+    const rightIndex = positions.has(right.id) ? positions.get(right.id) : Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}
+
+function deliveryOrderActiveSubprojectId(event = currentDeliveryOrderEvent) {
+  const rows = deliveryOrderSubprojects(event);
+  if (!rows.some(row => row.id === deliveryOrderEditorState.activeSubprojectId)) {
+    deliveryOrderEditorState.activeSubprojectId = rows[0]?.id || 'main';
+  }
+  return deliveryOrderEditorState.activeSubprojectId;
+}
+
+function ensureDeliveryOrderSubprojectWorkspace() {
+  if (deliveryOrderSubprojectWorkspace) return deliveryOrderSubprojectWorkspace;
+  deliveryOrderSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
+    state: deliveryOrderEditorState,
+    getRows: () => deliveryOrderSubprojects(),
+    mimeType: 'application/x-showbase-delivery-order-room',
+    commit: reordered => {
+      if (!reordered || !currentDeliveryOrderEvent) return false;
+      const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
+      const workspace = getDoEdits(eventId);
+      workspace.subprojectOrder = reordered.map(row => row.id);
+      saveDoEdits(eventId, workspace);
+      populateDeliveryItemsPreview(currentDeliveryOrderEvent);
+      return true;
+    }
+  });
+  return deliveryOrderSubprojectWorkspace;
+}
+
+function deliveryOrderSubprojectTabsMarkup(event) {
+  return showbaseLineWorkspace.subprojectTabsMarkup({
+    rows: deliveryOrderSubprojects(event),
+    activeId: deliveryOrderActiveSubprojectId(event),
+    handlerPrefix: 'deliveryOrder',
+    allowManage: false,
+    ariaLabel: 'Delivery Order sub-projects',
+    className: 'do-subproject-tabs'
+  });
+}
+
+function deliveryOrderSelectSubproject(subprojectId) {
+  if (!deliveryOrderSubprojects().some(row => row.id === subprojectId)) return;
+  deliveryOrderEditorState.activeSubprojectId = subprojectId;
+  populateDeliveryItemsPreview(currentDeliveryOrderEvent);
+}
+
+function deliveryOrderSubprojectDragStart(event, subprojectId) {
+  ensureDeliveryOrderSubprojectWorkspace().dragStart(event, subprojectId);
+}
+function deliveryOrderSubprojectDragOver(event, targetId) {
+  ensureDeliveryOrderSubprojectWorkspace().dragOver(event, targetId);
+}
+function deliveryOrderSubprojectDragLeave(event) {
+  ensureDeliveryOrderSubprojectWorkspace().dragLeave(event);
+}
+function deliveryOrderSubprojectEndDragOver(event) {
+  ensureDeliveryOrderSubprojectWorkspace().endDragOver(event);
+}
+function deliveryOrderSubprojectEndDragLeave(event) {
+  ensureDeliveryOrderSubprojectWorkspace().endDragLeave(event);
+}
+function deliveryOrderSubprojectSlotDragOver(event, targetIndex) {
+  ensureDeliveryOrderSubprojectWorkspace().slotDragOver(event, targetIndex);
+}
+function deliveryOrderSubprojectSlotDragLeave(event) {
+  ensureDeliveryOrderSubprojectWorkspace().slotDragLeave(event);
+}
+function deliveryOrderSubprojectDropAtIndex(event, targetIndex) {
+  ensureDeliveryOrderSubprojectWorkspace().dropAtIndex(event, targetIndex);
+}
+function deliveryOrderSubprojectDrop(event, targetId) {
+  ensureDeliveryOrderSubprojectWorkspace().drop(event, targetId);
+}
+function deliveryOrderSubprojectDropAtEnd(event) {
+  ensureDeliveryOrderSubprojectWorkspace().dropAtEnd(event);
+}
+function deliveryOrderSubprojectDragEnd() {
+  ensureDeliveryOrderSubprojectWorkspace().dragEnd();
+}
+function deliveryOrderSubprojectDragKeydown(event, subprojectId) {
+  ensureDeliveryOrderSubprojectWorkspace().dragKeydown(event, subprojectId);
+}
 
 async function openDeliveryOrderTab(eventId, options = {}) {
     // Use stored event data if available, otherwise fetch it
@@ -32083,6 +32282,34 @@ async function openDeliveryOrderTab(eventId, options = {}) {
     }
 }
 
+const DELIVERY_ORDER_DOCUMENT_FIELDS = [
+  'doNumber', 'doDate', 'clientName', 'clientCompany', 'deliveryAddress1',
+  'deliveryAddress2', 'deliveryAddress3', 'clientPhone', 'jobTitle',
+  'jobLocation', 'additionalComments'
+];
+
+function deliveryOrderCaptureDocument(eventId) {
+  const workspace = getDoEdits(eventId);
+  const documentData = {};
+  DELIVERY_ORDER_DOCUMENT_FIELDS.forEach(field => {
+    documentData[field] = document.getElementById(field)?.value || '';
+  });
+  documentData.showAssetIds = !!document.getElementById('showAssetIds')?.checked;
+  workspace.document = documentData;
+  saveDoEdits(eventId, workspace);
+}
+
+function deliveryOrderBindDocumentAutosave(eventId) {
+  [...DELIVERY_ORDER_DOCUMENT_FIELDS, 'showAssetIds'].forEach(field => {
+    const input = document.getElementById(field);
+    if (!input || input.dataset.doAutosaveBound === 'true') return;
+    input.dataset.doAutosaveBound = 'true';
+    input.addEventListener(field === 'showAssetIds' ? 'change' : 'input', () => {
+      deliveryOrderCaptureDocument(eventId);
+    });
+  });
+}
+
 async function populateDeliveryOrderForm(event) {
     // Auto-populate form with event data and defaults
     const doNumberEl = document.getElementById('doNumber');
@@ -32097,30 +32324,40 @@ async function populateDeliveryOrderForm(event) {
     const jobLocationEl = document.getElementById('jobLocation');
     const additionalCommentsEl = document.getElementById('additionalComments');
     const eventContextEl = document.getElementById('doEventContext');
+    const eventId = event && (event.event_id ?? event.id);
+    const workspace = await loadDoEdits(eventId || '0');
+    const savedDocument = workspace.document || {};
+    const savedValue = (field, fallback) => (
+      Object.prototype.hasOwnProperty.call(savedDocument, field)
+        ? savedDocument[field]
+        : fallback
+    );
 
     if (eventContextEl) {
-      const eventId = event && (event.event_id ?? event.id);
       eventContextEl.textContent = [eventId ? `Event #${eventId}` : '', event?.name || ''].filter(Boolean).join(' / ');
     }
 
     if (doNumberEl) {
       const year = new Date().getFullYear();
       const eid = (event && (event.event_id ?? event.id)) ? String(event.event_id ?? event.id).padStart(4, '0') : '0000';
-      doNumberEl.value = `DO-${year}${eid}`;
+      doNumberEl.value = savedValue('doNumber', `DO-${year}${eid}`);
     }
     
-    if (doDateEl) doDateEl.value = new Date().toISOString().split('T')[0];
-    if (clientNameEl) clientNameEl.value = event.client_name || event.name || '';
-    if (clientCompanyEl) clientCompanyEl.value = event.client_company || '';
-    if (deliveryAddress1El) deliveryAddress1El.value = event.location || event.venue || '';
-    if (deliveryAddress2El) deliveryAddress2El.value = event.venue_address || '';
-    if (deliveryAddress3El) deliveryAddress3El.value = event.venue_city || '';
-    if (clientPhoneEl) clientPhoneEl.value = event.client_phone || '';
-    if (jobTitleEl) jobTitleEl.value = event.name || '';
-    if (jobLocationEl) jobLocationEl.value = event.location || event.venue || '';
-    if (additionalCommentsEl) additionalCommentsEl.value = '';
+    if (doDateEl) doDateEl.value = savedValue('doDate', new Date().toISOString().split('T')[0]);
+    if (clientNameEl) clientNameEl.value = savedValue('clientName', event.client_name || event.name || '');
+    if (clientCompanyEl) clientCompanyEl.value = savedValue('clientCompany', event.client_company || '');
+    if (deliveryAddress1El) deliveryAddress1El.value = savedValue('deliveryAddress1', event.location || event.venue || '');
+    if (deliveryAddress2El) deliveryAddress2El.value = savedValue('deliveryAddress2', event.venue_address || '');
+    if (deliveryAddress3El) deliveryAddress3El.value = savedValue('deliveryAddress3', event.venue_city || '');
+    if (clientPhoneEl) clientPhoneEl.value = savedValue('clientPhone', event.client_phone || '');
+    if (jobTitleEl) jobTitleEl.value = savedValue('jobTitle', event.name || '');
+    if (jobLocationEl) jobLocationEl.value = savedValue('jobLocation', event.location || event.venue || '');
+    if (additionalCommentsEl) additionalCommentsEl.value = savedValue('additionalComments', '');
     
-    if (document.getElementById('showAssetIds')) document.getElementById('showAssetIds').checked = false;
+    if (document.getElementById('showAssetIds')) {
+      document.getElementById('showAssetIds').checked = !!savedValue('showAssetIds', false);
+    }
+    deliveryOrderBindDocumentAutosave(eventId || '0');
 
     // Populate items preview (now async)
     await populateDeliveryItemsPreview(event);
@@ -32157,6 +32394,8 @@ async function generateDeliveryOrder() {
         return;
     }
 
+    deliveryOrderCaptureDocument(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
+    await flushDoEdits(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
     await loadPdfSettings(true);
     
     generatePdfDO(deliveryOrderData);
@@ -33415,146 +33654,100 @@ async function ensureAssetsLoaded() {
 }
 
 // Delivery order item ordering
-function reorderDoItems(eventId, dept, fromIndex, toIndex) {
+function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', subprojectId = '') {
   const state = getDoEdits(eventId);
-  
-  // Get the current items for this department from groupItemsByDepartment
-  const event = events.find(e => e.id === eventId || e.event_id === eventId);
+
+  const event = currentDeliveryOrderEvent
+    || events.find(e => e.id === eventId || e.event_id === eventId);
   if (!event) return false;
-  
-  const depts = groupItemsByDepartment(event);
+
+  const depts = groupItemsByDepartment(event, subprojectId || deliveryOrderActiveSubprojectId(event));
   const items = depts[dept] || [];
-  
-  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || 
+
+  if (fromIndex < 0 || toIndex < 0 ||
       fromIndex >= items.length || toIndex >= items.length) {
     return false;
   }
 
-  // Create a new ordering array for this department if it doesn't exist
-  if (!state.ordering) {
-    state.ordering = {};
-  }
-  if (!state.ordering[dept]) {
-    // Initialize ordering with current item keys
-    state.ordering[dept] = items.map(item => item.key);
-  }
-
-  // Reorder in the ordering array
-  const ordering = [...state.ordering[dept]];
+  const orderingKey = deliveryOrderOrderingKey(subprojectId, dept);
+  const ordering = [...(state.ordering[orderingKey] || items.map(item => item.key))];
   const [movedKey] = ordering.splice(fromIndex, 1);
-  ordering.splice(toIndex, 0, movedKey);
-  
-  state.ordering[dept] = ordering;
+  let insertionIndex = toIndex + (position === 'after' ? 1 : 0);
+  if (fromIndex < insertionIndex) insertionIndex -= 1;
+  ordering.splice(Math.max(0, Math.min(insertionIndex, ordering.length)), 0, movedKey);
+  if (ordering.every((key, index) => key === items[index]?.key)) return false;
+
+  state.ordering[orderingKey] = ordering;
   saveDoEdits(eventId, state);
   return true;
 }
 
-function applyDoOrdering(items, dept, eventId) {
+function applyDoOrdering(items, dept, eventId, subprojectId = '') {
   const state = getDoEdits(eventId);
-  
-  if (!state.ordering || !state.ordering[dept]) {
-    return items; // Return original order if no custom ordering
-  }
-  
-  const ordering = state.ordering[dept];
+  const ordering = state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)];
+  if (!ordering) return items;
   const orderedItems = [];
   const itemsMap = new Map(items.map(item => [item.key, item]));
-  
-  // First, add items in the specified order
   ordering.forEach(key => {
     const item = itemsMap.get(key);
     if (item) {
       orderedItems.push(item);
-      itemsMap.delete(key); // Remove from map to avoid duplicates
+      itemsMap.delete(key);
     }
   });
-  
-  // Then, add any new items that weren't in the original ordering
-  itemsMap.forEach(item => {
-    orderedItems.push(item);
-  });
-  
+  itemsMap.forEach(item => orderedItems.push(item));
   return orderedItems;
 }
 
-function clearDoOrdering(eventId) {
-  const state = getDoEdits(eventId);
-  if (state.ordering) {
-    delete state.ordering;
-    saveDoEdits(eventId, state);
-  }
-}
-
 function setupDoItemDragHandlers(previewContainer, eventId) {
-  let draggedElement = null;
   let draggedIndex = null;
   let draggedDept = null;
+  let draggedSubprojectId = '';
 
   previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
     row.addEventListener('dragstart', (e) => {
-      draggedElement = e.target;
-      draggedIndex = parseInt(e.target.getAttribute('data-index'));
-      draggedDept = e.target.getAttribute('data-dept');
-      e.target.classList.add('dragging');
-      
-      // Set drag data
+      draggedIndex = Number(row.dataset.index);
+      draggedDept = row.dataset.dept;
+      draggedSubprojectId = row.dataset.subprojectId || '';
+      row.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/html', e.target.outerHTML);
+      e.dataTransfer.setData('application/x-showbase-delivery-order-line', String(draggedIndex));
     });
 
-    row.addEventListener('dragend', (e) => {
-      e.target.classList.remove('dragging');
-      draggedElement = null;
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
       draggedIndex = null;
       draggedDept = null;
-      
-      // Remove drag-over class from all rows
-      previewContainer.querySelectorAll('.do-item-row').forEach(r => r.classList.remove('drag-over'));
+      draggedSubprojectId = '';
+      previewContainer.querySelectorAll('.do-item-row').forEach(target => {
+        target.classList.remove('drag-over-before', 'drag-over-after');
+        delete target.dataset.dropPosition;
+      });
     });
 
     row.addEventListener('dragover', (e) => {
+      if (row.dataset.dept !== draggedDept || row.dataset.subprojectId !== draggedSubprojectId) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      
-      // Only allow dropping within same department
-      const targetDept = e.target.closest('.do-item-row').getAttribute('data-dept');
-      if (targetDept === draggedDept) {
-        e.target.closest('.do-item-row').classList.add('drag-over');
-      }
+      const position = showbaseLineWorkspace.dropPosition(e);
+      row.dataset.dropPosition = position;
+      row.classList.toggle('drag-over-before', position === 'before');
+      row.classList.toggle('drag-over-after', position === 'after');
     });
 
-    row.addEventListener('dragleave', (e) => {
-      e.target.closest('.do-item-row').classList.remove('drag-over');
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('drag-over-before', 'drag-over-after');
+      delete row.dataset.dropPosition;
     });
 
     row.addEventListener('drop', (e) => {
       e.preventDefault();
-      const targetRow = e.target.closest('.do-item-row');
-      const targetIndex = parseInt(targetRow.getAttribute('data-index'));
-      const targetDept = targetRow.getAttribute('data-dept');
-      
-      targetRow.classList.remove('drag-over');
-      
-      // Only allow dropping within same department
-      if (targetDept !== draggedDept || targetIndex === draggedIndex) {
-        return;
-      }
-
-      // Attempt to reorder the items
-      if (reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex)) {
-        // Refresh the display
-        const event = events.find(e => e.id === eventId || e.event_id === eventId);
-        if (event) {
-          populateDeliveryItemsPreview(event);
-        }
-        if (typeof showNotification === 'function') {
-          showNotification('success', 'Items reordered successfully');
-        }
-      } else {
-        if (typeof showNotification === 'function') {
-          showNotification('warning', 'Can only reorder custom items within the same department');
-        }
-      }
+      const targetIndex = Number(row.dataset.index);
+      const position = row.dataset.dropPosition || showbaseLineWorkspace.dropPosition(e);
+      row.classList.remove('drag-over-before', 'drag-over-after');
+      if (row.dataset.dept !== draggedDept || row.dataset.subprojectId !== draggedSubprojectId) return;
+      if (!reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex, position, draggedSubprojectId)) return;
+      populateDeliveryItemsPreview(currentDeliveryOrderEvent);
     });
   });
 }
@@ -33631,496 +33824,278 @@ function removeDeliveryOrderRow(button) {
 }
 
 // Delivery order preview and inline editing
+function deliveryOrderRenderCatalogResults() {
+  const search = document.getElementById('doCatalogSearch');
+  const results = document.getElementById('doCatalogResults');
+  if (!search || !results) return;
+  const query = search.value.trim().toLowerCase();
+  deliveryOrderEditorState.selectedCatalogItem = null;
+  if (!query) {
+    results.innerHTML = '';
+    return;
+  }
+  deliveryOrderEditorState.catalogMatches = deliveryOrderEditorState.catalog.filter(item =>
+    [item.label, item.detail, item.brand, item.model, item.department, ...(item.tags || [])]
+      .join(' ').toLowerCase().includes(query)
+  ).slice(0, 12);
+  results.innerHTML = deliveryOrderEditorState.catalogMatches.map((item, index) => `
+    <button type="button" class="do-catalog-result" onclick="deliveryOrderSelectCatalogItem(${index})">
+      <strong>${escapeHtml(item.label)}</strong>
+      <span>${escapeHtml([item.detail, item.department].filter(Boolean).join(' / '))}</span>
+    </button>
+  `).join('') || '<div class="do-empty-dept">No inventory match. This can be added as a custom DO item.</div>';
+}
+
+function deliveryOrderSelectCatalogItem(index) {
+  const item = deliveryOrderEditorState.catalogMatches[Number(index)];
+  if (!item) return;
+  deliveryOrderEditorState.selectedCatalogItem = item;
+  const search = document.getElementById('doCatalogSearch');
+  const category = document.getElementById('doCatalogDepartment');
+  const results = document.getElementById('doCatalogResults');
+  if (search) search.value = [item.label, item.detail].filter(Boolean).join(' - ');
+  if (category) category.value = item.department;
+  if (results) results.innerHTML = '';
+}
+
+function deliveryOrderRenderDepartmentSuggestions() {
+  const input = document.getElementById('doCatalogDepartment');
+  const results = document.getElementById('doCatalogDepartmentResults');
+  if (!input || !results || !currentDeliveryOrderEvent) return;
+  const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
+  const grouped = groupItemsByDepartment(
+    currentDeliveryOrderEvent,
+    deliveryOrderActiveSubprojectId(currentDeliveryOrderEvent)
+  );
+  const query = input.value.trim().toLowerCase();
+  const names = getDoDepartmentList(grouped, getDoEdits(eventId))
+    .filter(name => !query || name.toLowerCase().includes(query));
+  results.innerHTML = names.map(name => `
+    <button type="button" onclick="deliveryOrderSelectDepartment('${escapeHtmlAttr(name)}')">${escapeHtml(name)}</button>
+  `).join('');
+}
+
+function deliveryOrderSelectDepartment(name) {
+  const input = document.getElementById('doCatalogDepartment');
+  const results = document.getElementById('doCatalogDepartmentResults');
+  if (input) input.value = name;
+  if (results) results.innerHTML = '';
+}
+
+function deliveryOrderAddCatalogItem() {
+  const event = currentDeliveryOrderEvent;
+  if (!event) return;
+  const eventId = event.id || event.event_id || '0';
+  const search = document.getElementById('doCatalogSearch');
+  const category = document.getElementById('doCatalogDepartment');
+  const quantityInput = document.getElementById('doCatalogQuantity');
+  const description = search?.value.trim();
+  if (!description) {
+    showNotification('warning', 'Enter or select an asset first');
+    search?.focus();
+    return;
+  }
+  const selected = deliveryOrderEditorState.selectedCatalogItem;
+  const department = category?.value.trim() || selected?.department || 'MISC';
+  const state = getDoEdits(eventId);
+  state.custom[department] ||= [];
+  state.custom[department].push({
+    id: makeDoCustomItemId(),
+    description,
+    quantity: Math.max(1, Number(quantityInput?.value) || 1),
+    brand: selected?.brand || '',
+    model: selected?.model || '',
+    subprojectId: deliveryOrderActiveSubprojectId(event)
+  });
+  saveDoEdits(eventId, state);
+  showNotification('success', 'Item added to the delivery order');
+  populateDeliveryItemsPreview(event);
+}
+
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
   if (!previewContainer) return;
 
-  try { 
-    if (typeof ensureAssetsLoaded === 'function') await ensureAssetsLoaded(); 
+  try {
+    await ensureAssetsLoaded();
   } catch {}
 
+  currentDeliveryOrderEvent = event;
   const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const subprojectId = deliveryOrderActiveSubprojectId(event);
   const edits = getDoEdits(eventId);
+  const depts = groupItemsByDepartment(event, subprojectId);
+  const editMode = !!deliveryOrderEditorState.editMode;
+  const populatedDepartments = Object.values(depts).filter(items => items.length);
+  const lineCount = populatedDepartments.reduce((total, items) => total + items.length, 0);
+  const unitCount = populatedDepartments.reduce((total, items) => (
+    total + items.reduce((subtotal, item) => subtotal + (Number(item.quantity) || 0), 0)
+  ), 0);
+  const escA = value => (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(value) : escapeHtml(value));
 
-  const render = () => {
-    const depts = groupItemsByDepartment(event);
-    const editMode = !!document.querySelector('#doEditToggle')?.checked;
-    const populatedDepartments = Object.values(depts).filter(items => items.length > 0);
-    const lineCount = populatedDepartments.reduce((total, items) => total + items.length, 0);
-    const unitCount = populatedDepartments.reduce((total, items) => (
-      total + items.reduce((subtotal, item) => subtotal + (Number(item.quantity) || 0), 0)
-    ), 0);
+  const addRow = editMode ? showbaseLineWorkspace.addRowMarkup({
+    mode: 'delivery-order',
+    className: 'do-catalog-composer',
+    search: {
+      id: 'doCatalogSearch',
+      resultsId: 'doCatalogResults',
+      placeholder: 'Search inventory or enter an item',
+      oninput: 'deliveryOrderRenderCatalogResults()',
+      onkeydown: "if(event.key==='Enter'){event.preventDefault();deliveryOrderAddCatalogItem();}"
+    },
+    category: {
+      id: 'doCatalogDepartment',
+      resultsId: 'doCatalogDepartmentResults',
+      value: 'MISC',
+      placeholder: 'Category',
+      oninput: 'deliveryOrderRenderDepartmentSuggestions()',
+      onfocus: 'deliveryOrderRenderDepartmentSuggestions()',
+      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||'MISC'),120)"
+    },
+    extraMarkup: '<input id="doCatalogQuantity" class="finance-input do-catalog-quantity" type="number" min="1" max="999" value="1" aria-label="Quantity">',
+    addAction: 'deliveryOrderAddCatalogItem()',
+    showGroup: false
+  }) : '';
 
-    let html = `
-      <style>
-        .do-items-container {
-          background: white;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        .do-toolbar {
-          background: #fff;
-          padding: 16px;
-          border-bottom: 1px solid #e5ebe9;
-          display: flex;
-          gap: 12px;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-        }
-        .do-toolbar label {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          font-weight: 500;
-          color: #495057;
-          cursor: pointer;
-        }
-        .do-department-section {
-          border-bottom: 1px solid #f1f3f4;
-        }
-        .do-department-section:last-child {
-          border-bottom: none;
-        }
-        .do-dept-header {
-          background: #f4f8f7;
-          padding: 10px 16px;
-          font-weight: 700;
-          color: #30433f;
-          border-bottom: 1px solid #e1e9e7;
-          font-size: 11px;
-          text-transform: uppercase;
-        }
-        .do-items-list {
-          padding: 0;
-        }
-        .do-item-row {
-          display: flex;
-          align-items: center;
-          padding: 10px 16px;
-          border-bottom: 1px solid #f8f9fa;
-          transition: background-color 0.2s ease;
-        }
-        .do-item-row:hover {
-          background-color: #f8f9fa;
-        }
-        .do-item-row:last-child {
-          border-bottom: none;
-        }
-        .do-item-description {
-          flex: 1;
-          min-width: 0;
-          margin-right: 15px;
-        }
-        .do-item-description input {
-          width: 100%;
-          border: 1px solid #e9ecef;
-          border-radius: 4px;
-          padding: 8px 12px;
-          font-size: 14px;
-        }
-        .do-item-description input:focus {
-          outline: none;
-          border-color: var(--theme-primary, #0f766e);
-          box-shadow: 0 0 0 2px rgba(15, 118, 110, .14);
-        }
-        .do-item-quantity {
-          width: 80px;
-          margin-right: 15px;
-        }
-        .do-item-quantity input {
-          width: 100%;
-          text-align: center;
-          border: 1px solid #e9ecef;
-          border-radius: 4px;
-          padding: 8px;
-          font-size: 14px;
-          font-weight: 600;
-        }
-        .do-item-quantity input:focus {
-          outline: none;
-          border-color: #667eea;
-          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-        }
-        .do-quantity-badge {
-          display: inline-block;
-          background: var(--theme-primary, #0f766e);
-          color: white;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 600;
-          min-width: 32px;
-          text-align: center;
-        }
-        .do-item-actions {
-          display: flex;
-          gap: 8px;
-        }
-        .do-item-department { width: 150px; margin-right: 12px; }
-        .do-item-department select { width: 100%; }
-        .do-catalog-composer { width: 100%; display: grid; grid-template-columns: minmax(260px, 1fr) 170px 88px auto; gap: 8px; align-items: end; }
-        .do-catalog-field { position: relative; }
-        .do-catalog-label { display: block; margin-bottom: 4px; color: #61716f; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-        .do-catalog-results { position: absolute; z-index: 80; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow: auto; border: 1px solid #d8e2df; border-radius: 6px; background: #fff; box-shadow: 0 12px 28px rgba(25, 43, 39, .16); }
-        .do-catalog-result { width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid #edf1f0; background: #fff; text-align: left; cursor: pointer; }
-        .do-catalog-result:hover, .do-catalog-result:focus { background: #eef7f5; outline: none; }
-        .do-catalog-result strong { display: block; color: #263934; font-size: 12px; }
-        .do-catalog-result span { display: block; margin-top: 2px; color: #73817e; font-size: 10px; }
-        .do-empty-dept { padding: 18px 16px; color: #82908d; font-size: 11px; }
-        .do-add-section {
-          background: #f8f9fa;
-          padding: 15px 20px;
-          border-top: 1px solid #e9ecef;
-        }
-        .do-add-form {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .do-add-description {
-          flex: 1;
-          min-width: 300px;
-        }
-        .do-add-quantity {
-          width: 80px;
-        }
-        .no-items-message {
-          padding: 40px 20px;
-          text-align: center;
-          color: #6c757d;
-          font-style: italic;
-        }
-
-        .do-item-row.dragging {
-          opacity: 0.5;
-        }
-        .do-item-row.drag-over {
-          border-top: 2px solid #667eea;
-        }
-        .do-drag-handle {
-          cursor: grab;
-          padding: 8px;
-          margin-right: 8px;
-          color: #6c757d;
-          font-size: 14px;
-          user-select: none;
-        }
-        .do-drag-handle:hover {
-          color: #495057;
-        }
-        .do-drag-handle:active {
-          cursor: grabbing;
-        }
-        @media (max-width: 760px) {
-          .do-catalog-composer { grid-template-columns: 1fr 1fr; }
-          .do-catalog-field { grid-column: 1 / -1; }
-          .do-item-row { align-items: stretch; flex-wrap: wrap; gap: 8px; }
-          .do-item-description { flex: 1 1 calc(100% - 40px); margin-right: 0; }
-          .do-item-department { width: calc(65% - 4px); margin-right: 0; }
-          .do-item-quantity { width: calc(35% - 4px); margin-right: 0; }
-          .do-item-actions { margin-left: auto; }
-        }
-      </style>
-
-      <div class="do-items-container">
-        <div class="do-toolbar">
-          <div class="do-items-title">
-            <h3>Items</h3>
-            <span>${lineCount} line${lineCount === 1 ? '' : 's'} / ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
-          </div>
-          <div class="do-items-actions">
-            <label class="do-edit-toggle">
-              <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}>
-              <span class="do-toggle-control" aria-hidden="true"></span>
-              <span>Edit</span>
-            </label>
-            <button class="btn do-reset-button" id="doResetEdits" title="Reset item changes">Reset</button>
-          </div>
-        </div>
-        ${editMode ? `
-          <div class="do-toolbar do-composer-toolbar">
-            <div class="do-catalog-composer">
-              <div class="do-catalog-field">
-                <label class="do-catalog-label" for="doCatalogSearch">Asset or description</label>
-                <input id="doCatalogSearch" class="form-input" autocomplete="off" placeholder="Search brand, model or description">
-                <div id="doCatalogResults" class="do-catalog-results" hidden></div>
-              </div>
-              <div>
-                <label class="do-catalog-label" for="doCatalogDepartment">Department</label>
-                <select id="doCatalogDepartment" class="form-input">${deliveryOrderDepartmentOptions('MISC', getDoDepartmentList(depts, edits))}</select>
-              </div>
-              <div>
-                <label class="do-catalog-label" for="doCatalogQuantity">Quantity</label>
-                <input id="doCatalogQuantity" class="form-input" type="number" min="1" max="999" value="1">
-              </div>
-              <button type="button" id="doCatalogAdd" class="btn btn-primary do-catalog-add">Add item</button>
+  const sectionMarkup = (department, items) => {
+    const rows = items.map((item, index) => editMode ? `
+      <tr class="do-item-row do-edit-row" draggable="true"
+          data-key="${escA(item.key)}"
+          data-custom-id="${escA(item.customId || '')}"
+          data-kind="${escA(item.source || '')}"
+          data-dept="${escA(department)}"
+          data-subproject-id="${escA(subprojectId)}"
+          data-index="${index}">
+        <td class="do-item-cell">
+          <div class="do-edit-item">
+            <span class="do-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <div class="do-edit-fields">
+              <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item">
+              <select class="do-dept form-input" aria-label="Category">${deliveryOrderDepartmentOptions(department, getDoDepartmentList(depts, edits))}</select>
             </div>
-          </div>` : ''}
+          </div>
+        </td>
+        <td class="do-quantity-cell"><input type="number" class="do-qty form-input" value="${escA(item.quantity)}" min="1" max="999"></td>
+        <td class="do-action-cell">
+          <button type="button" class="btn do-save">Save</button>
+          <button type="button" class="btn do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>
+        </td>
+      </tr>
+    ` : `
+      <tr class="do-item-row">
+        <td class="do-item-cell">${escapeHtml(item.description)}</td>
+        <td class="do-quantity-cell"><span class="do-quantity-badge">${escapeHtml(item.quantity)}</span></td>
+      </tr>
+    `).join('');
+
+    return `
+      <section class="do-department-section">
+        <table class="do-line-table">
+          <thead>
+            <tr class="do-category-row">
+              <th colspan="${editMode ? 3 : 2}"><span>${escapeHtml(department)} Department</span><span class="do-dept-count">${items.length}</span></th>
+            </tr>
+            <tr class="do-column-row">
+              <th>Item</th>
+              <th>Quantity</th>
+              ${editMode ? '<th aria-label="Actions"></th>' : ''}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>
     `;
-
-    const esc = (s) => escapeHtml(s);
-    const escA = (s) => (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(s) : esc(s));
-
-    // Generate department sections
-    const section = (deptName, items) => {
-      const rows = items.map((item, i) => {
-        const isDoCustom = item.source?.startsWith('do-custom');
-        const canDelete = editMode;
-        
-        if (editMode) {
-          return `
-            <div class="do-item-row do-edit-row" draggable="true" data-key="${escA(item.key)}" data-custom-id="${escA(item.customId || '')}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
-              <div class="do-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-              <div class="do-item-description">
-                <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item description">
-              </div>
-              <div class="do-item-department">
-                <select class="do-dept form-input" aria-label="Department">${deliveryOrderDepartmentOptions(deptName, getDoDepartmentList(depts, edits))}</select>
-              </div>
-              <div class="do-item-quantity">
-                <input type="number" class="do-qty form-input" value="${item.quantity}" min="1" max="999">
-              </div>
-              <div class="do-item-actions">
-                <button class="btn btn-sm do-save">Save</button>
-                ${canDelete ? '<button type="button" class="btn btn-danger btn-sm do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>' : ''}
-              </div>
-            </div>
-          `;
-        } else {
-          return `
-            <div class="do-item-row">
-              <div class="do-item-description">
-                <span class="do-item-name">${esc(item.description)}</span>
-              </div>
-              <div class="do-item-quantity">
-                <span class="do-quantity-badge">${item.quantity}</span>
-              </div>
-            </div>
-          `;
-        }
-      }).join('');
-
-      return `
-        <div class="do-department-section">
-          <div class="do-dept-header"><span>${esc(deptName)} Department</span><span class="do-dept-count">${items.length}</span></div>
-          <div class="do-items-list" data-dept="${escA(deptName)}">
-            ${rows || '<div class="do-empty-dept">No items in this department</div>'}
-          </div>
-        </div>
-      `;
-    };
-
-    let body = '';
-    getDoDepartmentList(depts, edits).forEach(dept => {
-      if ((depts[dept] || []).length > 0 || ((edits.custom || {})[dept] || []).length > 0 || (editMode && dept !== 'MISC')) {
-        body += section(dept, depts[dept] || []);
-      }
-    });
-
-    if (!body.trim()) {
-      body = '<div class="no-items-message">No items assigned to this event.</div>';
-    }
-
-    html += body + '</div>';
-    previewContainer.innerHTML = html;
-
-    // Wire up event handlers
-    const resetBtn = document.getElementById('doResetEdits');
-    if (resetBtn) {
-      resetBtn.onclick = () => {
-        clearDoEdits(eventId);
-        clearDoOrdering(eventId); // Add this line
-        if (typeof showNotification === 'function') {
-          showNotification('success', 'DO edits reset');
-        }
-        populateDeliveryItemsPreview(event);
-      };
-    }
-
-    const toggle = document.getElementById('doEditToggle');
-    if (toggle) {
-      toggle.onchange = () => populateDeliveryItemsPreview(event);
-    }
-
-    const catalogSearch = document.getElementById('doCatalogSearch');
-    const catalogResults = document.getElementById('doCatalogResults');
-    const catalogDepartment = document.getElementById('doCatalogDepartment');
-    const catalogQuantity = document.getElementById('doCatalogQuantity');
-    const catalog = getDeliveryOrderAssetCatalog();
-    let selectedCatalogItem = null;
-
-    const showCatalogResults = () => {
-      if (!catalogSearch || !catalogResults) return;
-      const query = catalogSearch.value.trim().toLowerCase();
-      if (!query) {
-        catalogResults.hidden = true;
-        catalogResults.innerHTML = '';
-        return;
-      }
-      const matches = catalog.filter(item =>
-        [item.label, item.detail, item.brand, item.model, item.department, ...(item.tags || [])].join(' ').toLowerCase().includes(query)
-      ).slice(0, 12);
-      catalogResults.innerHTML = matches.map((item, index) => `
-        <button type="button" class="do-catalog-result" data-catalog-index="${index}">
-          <strong>${esc(item.label)}</strong>
-          <span>${esc([item.detail, item.department].filter(Boolean).join(' · '))}</span>
-        </button>
-      `).join('') || '<div class="do-empty-dept">No inventory match. You can add this as a custom item.</div>';
-      catalogResults.hidden = false;
-      catalogResults.querySelectorAll('[data-catalog-index]').forEach(button => {
-        button.onclick = () => {
-          selectedCatalogItem = matches[Number(button.dataset.catalogIndex)];
-          catalogSearch.value = [selectedCatalogItem.label, selectedCatalogItem.detail].filter(Boolean).join(' - ');
-          catalogDepartment.value = selectedCatalogItem.department;
-          catalogResults.hidden = true;
-        };
-      });
-    };
-
-    if (catalogSearch) {
-      catalogSearch.oninput = () => {
-        selectedCatalogItem = null;
-        showCatalogResults();
-      };
-      catalogSearch.onfocus = showCatalogResults;
-      catalogSearch.onblur = () => setTimeout(() => {
-        if (catalogResults) catalogResults.hidden = true;
-      }, 120);
-      catalogSearch.onkeydown = eventKey => {
-        if (eventKey.key === 'Enter') {
-          eventKey.preventDefault();
-          document.getElementById('doCatalogAdd')?.click();
-        }
-      };
-    }
-    document.getElementById('doCatalogAdd')?.addEventListener('click', () => {
-      const description = catalogSearch?.value.trim();
-      if (!description) {
-        showNotification('warning', 'Enter or select an asset first');
-        catalogSearch?.focus();
-        return;
-      }
-      const department = catalogDepartment?.value || selectedCatalogItem?.department || 'MISC';
-      const quantity = Math.max(1, parseInt(catalogQuantity?.value, 10) || 1);
-      const state = getDoEdits(eventId);
-      state.custom[department] ||= [];
-      state.custom[department].push({
-        id: makeDoCustomItemId(),
-        description,
-        quantity,
-        brand: selectedCatalogItem?.brand || '',
-        model: selectedCatalogItem?.model || ''
-      });
-      saveDoEdits(eventId, state);
-      showNotification('success', 'Item added to the delivery order');
-      populateDeliveryItemsPreview(event);
-    });
-    // Save / delete / add handlers
-    previewContainer.querySelectorAll('.do-save').forEach(btn => {
-      btn.onclick = (e) => {
-        const row = e.target.closest('.do-item-row');
-        const key = row.getAttribute('data-key');
-        const kind = row.getAttribute('data-kind');
-        const dept = row.getAttribute('data-dept');
-        const customId = row.getAttribute('data-custom-id');
-        const targetDept = row.querySelector('.do-dept')?.value || dept;
-        const desc = row.querySelector('.do-desc').value.trim();
-        const qty = Math.max(1, parseInt(row.querySelector('.do-qty').value, 10) || 1);
-
-        if (!desc) {
-          showNotification('warning', 'Description is required');
-          return;
-        }
-
-        const state = getDoEdits(eventId);
-        if (kind === 'do-custom') {
-          let savedItem = null;
-          Object.keys(state.custom).some(sourceDept => {
-            const index = state.custom[sourceDept].findIndex(item => item.id === customId);
-            if (index < 0) return false;
-            savedItem = { ...state.custom[sourceDept][index], description: desc, quantity: qty };
-            state.custom[sourceDept].splice(index, 1);
-            return true;
-          });
-          if (savedItem) {
-            state.custom[targetDept] ||= [];
-            state.custom[targetDept].push(savedItem);
-          }
-        } else {
-          state.overrides[key] = { description: desc, quantity: qty, department: targetDept };
-        }
-        
-        saveDoEdits(eventId, state);
-        if (typeof showNotification === 'function') {
-          showNotification('success', 'Item updated successfully');
-        }
-        populateDeliveryItemsPreview(event);
-      };
-    });
-
-    previewContainer.querySelectorAll('.do-add-btn').forEach(btn => {
-      btn.onclick = (e) => {
-        const dept = e.currentTarget.getAttribute('data-dept');
-        const wrap = e.currentTarget.closest('.do-add-form');
-        const desc = wrap.querySelector('.do-add-desc').value.trim();
-        const qty = Math.max(1, parseInt(wrap.querySelector('.do-add-qty').value, 10) || 1);
-        
-        if (!desc) {
-          showNotification('warning', 'Description is required');
-          wrap.querySelector('.do-add-desc').focus();
-          return;
-        }
-
-        const state = getDoEdits(eventId);
-        state.custom[dept] ||= [];
-        state.custom[dept].push({ description: desc, quantity: qty });
-        saveDoEdits(eventId, state);
-        
-        // Clear the form
-        wrap.querySelector('.do-add-desc').value = '';
-        wrap.querySelector('.do-add-qty').value = '1';
-        
-        if (typeof showNotification === 'function') {
-          showNotification('success', `Added item to ${dept} department`);
-        }
-        populateDeliveryItemsPreview(event);
-      };
-    });
-
-    // Add keyboard shortcuts for form inputs
-    previewContainer.querySelectorAll('.do-add-desc').forEach(input => {
-      input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          const addBtn = input.closest('.do-add-form').querySelector('.do-add-btn');
-          if (addBtn) addBtn.click();
-        }
-      });
-    });
-
-    // Setup drag and drop handlers for reordering (only in edit mode)
-    if (editMode) {
-      setupDoItemDragHandlers(previewContainer, eventId);
-    }
-
-    // Also update the drag handles to prevent dragging on form inputs
-    previewContainer.querySelectorAll('.do-drag-handle').forEach(handle => {
-      handle.addEventListener('mousedown', (e) => {
-        // Prevent drag from starting on input fields
-        const row = handle.closest('.do-item-row');
-        const inputs = row.querySelectorAll('input');
-        inputs.forEach(input => {
-          input.setAttribute('draggable', 'false');
-        });
-      });
-    });
   };
 
-  render();
+  let body = getDoDepartmentList(depts, edits)
+    .filter(department => (depts[department] || []).length)
+    .map(department => sectionMarkup(department, depts[department]))
+    .join('');
+  if (!body) body = '<div class="no-items-message">No event items are assigned to this room.</div>';
+
+  previewContainer.innerHTML = `
+    <div class="do-items-container">
+      <div class="do-toolbar">
+        <div class="do-items-title">
+          <h3>Items</h3>
+          <span>${lineCount} line${lineCount === 1 ? '' : 's'} / ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
+        </div>
+        <div class="do-items-actions">
+          <label class="do-edit-toggle">
+            <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}>
+            <span class="do-toggle-control" aria-hidden="true"></span>
+            <span>Edit</span>
+          </label>
+          <button type="button" class="btn do-reset-button" id="doResetEdits">Reset</button>
+        </div>
+      </div>
+      ${deliveryOrderSubprojectTabsMarkup(event)}
+      ${addRow ? `<div class="do-composer-toolbar">${addRow}</div>` : ''}
+      ${body}
+    </div>
+  `;
+
+  document.getElementById('doEditToggle')?.addEventListener('change', eventChange => {
+    deliveryOrderEditorState.editMode = !!eventChange.currentTarget.checked;
+    populateDeliveryItemsPreview(event);
+  });
+  document.getElementById('doResetEdits')?.addEventListener('click', async () => {
+    if (!await showAppConfirm({
+      title: 'Reset Delivery Order',
+      message: 'Reset all Delivery Order item and document changes for this event?',
+      confirmText: 'Reset',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })) return;
+    clearDoEdits(eventId);
+    deliveryOrderEditorState.activeSubprojectId = '';
+    showNotification('success', 'Delivery Order changes reset');
+    await populateDeliveryOrderForm(event);
+  });
+
+  deliveryOrderEditorState.catalog = getDeliveryOrderAssetCatalog();
+  previewContainer.querySelectorAll('.do-save').forEach(button => {
+    button.addEventListener('click', () => {
+      const row = button.closest('.do-item-row');
+      const key = row?.dataset.key || '';
+      const kind = row?.dataset.kind || '';
+      const customId = row?.dataset.customId || '';
+      const sourceDepartment = row?.dataset.dept || 'MISC';
+      const targetDepartment = row?.querySelector('.do-dept')?.value || sourceDepartment;
+      const description = row?.querySelector('.do-desc')?.value.trim() || '';
+      const quantity = Math.max(1, Number(row?.querySelector('.do-qty')?.value) || 1);
+      if (!description) {
+        showNotification('warning', 'Item is required');
+        return;
+      }
+
+      const state = getDoEdits(eventId);
+      if (kind.startsWith('do-custom')) {
+        let savedItem = null;
+        Object.keys(state.custom || {}).some(department => {
+          const index = state.custom[department].findIndex(item => item.id === customId);
+          if (index < 0) return false;
+          savedItem = { ...state.custom[department][index], description, quantity };
+          state.custom[department].splice(index, 1);
+          return true;
+        });
+        if (savedItem) {
+          state.custom[targetDepartment] ||= [];
+          state.custom[targetDepartment].push(savedItem);
+        }
+      } else {
+        state.overrides[key] = { description, quantity, department: targetDepartment };
+      }
+      saveDoEdits(eventId, state);
+      showNotification('success', 'Delivery Order item updated');
+      populateDeliveryItemsPreview(event);
+    });
+  });
+
+  if (editMode) setupDoItemDragHandlers(previewContainer, eventId);
 }
 
-function groupItemsByDepartment(event) {
+function groupItemsByDepartment(event, subprojectId = null) {
   const departments = {};
   const ensureDept = (dept) => {
     const name = departmentCodeToDoName(dept);
@@ -34130,8 +34105,31 @@ function groupItemsByDepartment(event) {
 
   getDefaultDoDepartments().forEach(ensureDept);
 
-  // 1) Base groups from modelGroups (what the job actually asked for)
-  if (event.modelGroups && Object.keys(event.modelGroups).length) {
+  const rooms = eventSubprojects(event);
+  const selectedRooms = rooms.length
+    ? (subprojectId == null
+        ? rooms
+        : rooms.filter(room => String(room.id || 'main') === String(subprojectId || 'main')))
+    : [];
+
+  if (selectedRooms.length) {
+    selectedRooms.forEach(room => {
+      const roomId = String(room.id || 'main');
+      (room.items || []).forEach((line, index) => {
+        const dname = ensureDept(line.departmentCode || line.department || 'UN');
+        const description = line.isCustom
+          ? String(line.description || line.name || 'Custom item').trim()
+          : [line.brand, line.model, line.description].filter(Boolean).join(' ').trim();
+        departments[dname].push({
+          key: `ROOM|${roomId}|${line.lineId || `${dname}|${line.brand || ''}|${line.model || ''}|${index}`}`,
+          description,
+          quantity: String(line.quantity || 0),
+          source: line.isCustom ? 'event-custom' : 'model',
+          subprojectId: roomId
+        });
+      });
+    });
+  } else if (event.modelGroups && Object.keys(event.modelGroups).length) {
     Object.values(event.modelGroups).forEach(mg => {
       const dname = ensureDept(mg.department);
       const baseDesc = `${mg.brand || ''} ${mg.model || ''}${mg.description ? ' - ' + mg.description : ''}`.trim();
@@ -34144,7 +34142,7 @@ function groupItemsByDepartment(event) {
     });
   }
 
-  // 2) Custom assets assigned to the event. Company is intentionally hidden on the DO.
+  // Legacy events without room requirements may only expose prepared custom markers.
   const groupedCustom = {};
   const addCustomToDo = (custom) => {
     if (!custom) return;
@@ -34166,10 +34164,9 @@ function groupItemsByDepartment(event) {
   };
 
   const preparedList = event.preparedItems || event.prepared_items || [];
-  preparedList.forEach(id => addCustomToDo(parseCustomAsset(id)));
+  if (!rooms.length) preparedList.forEach(id => addCustomToDo(parseCustomAsset(id)));
 
-  // Fallback for any event object that only has assetsByDepartment populated.
-  if (event.assetsByDepartment) {
+  if (!rooms.length && event.assetsByDepartment) {
     Object.values(event.assetsByDepartment).forEach(list => {
       (list || []).forEach(asset => {
         const custom = parseCustomAsset(asset.id, asset);
@@ -34183,7 +34180,7 @@ function groupItemsByDepartment(event) {
     departments[dept].push({ ...item, quantity: String(item.quantity) });
   });
 
-  // 3) Apply DO display overrides + DO-only custom additions (stored locally per event)
+  // These overlays belong only to the DO document; event requirements stay untouched.
   const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
   const edits = getDoEdits(eventId, Object.keys(departments));
 
@@ -34197,7 +34194,7 @@ function groupItemsByDepartment(event) {
       regrouped[targetDepartment].push({
         ...item,
         description: ov?.description || item.description,
-        quantity: String(ov?.quantity || item.quantity)
+        quantity: String(ov?.quantity ?? item.quantity)
       });
     });
   });
@@ -34208,12 +34205,15 @@ function groupItemsByDepartment(event) {
     Object.keys(edits.custom).forEach(d => {
       if (!departments[d]) departments[d] = [];
       (edits.custom[d] || []).forEach(ci => {
+        const itemSubprojectId = String(ci.subprojectId || 'main');
+        if (subprojectId != null && itemSubprojectId !== String(subprojectId || 'main')) return;
         departments[d].push({
           key: `DOCUSTOM|${ci.id}`,
           customId: ci.id,
           description: ci.description,
           quantity: String(ci.quantity || 1),
-          source: 'do-custom'
+          source: 'do-custom',
+          subprojectId: itemSubprojectId
         });
       });
     });
@@ -34221,7 +34221,7 @@ function groupItemsByDepartment(event) {
 
   getDoDepartmentList(departments, edits).forEach(d => {
     departments[d] ||= [];
-    departments[d] = applyDoOrdering(departments[d], d, eventId);
+    departments[d] = applyDoOrdering(departments[d], d, eventId, subprojectId || 'all');
   });
 
   return departments;
@@ -35003,6 +35003,19 @@ function connectRealtimeUpdates() {
         const activeWorkforceEventId = typeof workforcePageState !== 'undefined'
           ? workforcePageState?.eventId
           : null;
+        const activeDeliveryOrderEventId = currentDeliveryOrderEvent?.id
+          || currentDeliveryOrderEvent?.event_id;
+        if (
+          activeSection === 'delivery-order' &&
+          topics.includes('delivery-order') &&
+          eventIds.some(eventId => Number(eventId) === Number(activeDeliveryOrderEventId))
+        ) {
+          deliveryOrderWorkspaceCache.delete(String(activeDeliveryOrderEventId));
+          loadDoEdits(activeDeliveryOrderEventId)
+            .then(() => populateDeliveryOrderForm(currentDeliveryOrderEvent))
+            .catch(error => console.warn('Delivery Order live update failed:', error));
+          return;
+        }
         if (
           activeSection === 'workforce' &&
           eventIds.some(eventId => Number(eventId) === Number(activeWorkforceEventId))
@@ -39915,6 +39928,9 @@ async function generateTransferPdf(selectedModes = ['common']) {
       .filter(Boolean);
     if (!sections.length) throw new Error('Select at least one PDF section');
 
+    const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
+    deliveryOrderCaptureDocument(eventId);
+    await flushDoEdits(eventId);
     await loadPdfSettings(true);
     const totalQty = sections.reduce(
       (sum, section) => sum + Number(section.quantity || 0),

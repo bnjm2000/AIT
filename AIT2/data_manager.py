@@ -39,7 +39,8 @@ INVENTORY_FIELDNAMES = [
 EVENT_FIELDNAMES = [
     'EventID', 'Name', 'Location', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
     'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
-    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers', 'Subprojects'
+    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers', 'Subprojects',
+    'DeliveryOrder'
 ]
 CLIENT_FIELDNAMES = [
     'Name', 'Salutation', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
@@ -1127,6 +1128,17 @@ class DataManager:
                     event_logs = self.normalize_event_logs(self._load_event_json_list(event_data, 'EventLogs', filename))
                 assigned_users = self._load_event_json_list(event_data, 'AssignedUsers', filename)
                 subprojects = self._load_event_json_list(event_data, 'Subprojects', filename)
+                delivery_order = {}
+                if event_data.get('DeliveryOrder'):
+                    try:
+                        parsed_delivery_order = json.loads(event_data['DeliveryOrder'])
+                        if isinstance(parsed_delivery_order, dict):
+                            delivery_order = parsed_delivery_order
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        logger.warning(
+                            "Ignoring invalid DeliveryOrder data in event file %s",
+                            filename,
+                        )
 
                 raw_state = event_data.get('State', 'New')
                 state = normalize_event_state(raw_state)
@@ -1152,6 +1164,7 @@ class DataManager:
                     event_logs=event_logs,
                     assigned_users=assigned_users,
                     subprojects=subprojects,
+                    delivery_order=delivery_order,
                 )
 
                 event.actually_prepared = actually_prepared
@@ -1163,6 +1176,7 @@ class DataManager:
                 event.event_logs = event_logs
                 event.assigned_users = assigned_users
                 event.subprojects = subprojects
+                event.delivery_order = delivery_order
                 event._legacy_state_migrated = str(raw_state or '').strip() != state
 
                 self.events[event_id] = event
@@ -1188,6 +1202,7 @@ class DataManager:
         event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
         assigned_users = list(getattr(event, 'assigned_users', []) or [])
         subprojects = list(getattr(event, 'subprojects', []) or [])
+        delivery_order = dict(getattr(event, 'delivery_order', {}) or {})
         
         if not hasattr(event, 'prepared_items'):
             logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
@@ -1210,6 +1225,7 @@ class DataManager:
             event_logs_json = json.dumps(event_logs)
             assigned_users_json = json.dumps(assigned_users)
             subprojects_json = json.dumps(subprojects)
+            delivery_order_json = json.dumps(delivery_order)
         except (TypeError, ValueError) as e:
             logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
             logger.error("prepared_items: %s", event.prepared_items)
@@ -1239,6 +1255,7 @@ class DataManager:
                 'Notes': notes,
                 'AssignedUsers': assigned_users_json,
                 'Subprojects': subprojects_json,
+                'DeliveryOrder': delivery_order_json,
             }
             
             logger.debug("Row data being written: %s", row_data)

@@ -10978,37 +10978,45 @@
                 #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control { border-color:var(--do-accent);background:var(--do-accent); }
                 #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control::after { transform:translateX(13px); }
                 #delivery-order-section .do-reset-button { min-height:30px;padding:5px 9px;border-color:#d3dfdb;background:#fff;color:#536861;font-size:9px;font-weight:800; }
-                #delivery-order-section .do-composer-toolbar { padding:12px 14px;background:#f5f9f7; }
-                #delivery-order-section .do-catalog-composer { width:100%;display:grid;grid-template-columns:minmax(260px,1fr) minmax(150px,.55fr) 82px auto;gap:8px;align-items:end; }
-                #delivery-order-section .do-catalog-field { position:relative; }
-                #delivery-order-section .do-catalog-label { display:block;margin-bottom:4px;color:#61716f;font-size:9px;font-weight:800;text-transform:uppercase; }
-                #delivery-order-section .do-catalog-results { position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;border:1px solid #cadbd5;border-radius:6px;background:#fff;box-shadow:0 12px 28px rgba(25,43,39,.16); }
+                #delivery-order-section .do-subproject-tabs { margin:0;padding:10px 14px;border-bottom:1px solid var(--do-line);background:#f8fbfa; }
+                #delivery-order-section .do-composer-toolbar { padding:12px 14px;border-bottom:1px solid var(--do-line);background:#f5f9f7; }
+                #delivery-order-section .do-catalog-composer { width:100%;grid-template-columns:minmax(260px,1fr) minmax(150px,.55fr) 82px auto; }
+                #delivery-order-section .do-catalog-quantity { text-align:center; }
+                #delivery-order-section .finance-catalog-results,
+                #delivery-order-section .finance-inline-suggestions { z-index:80;max-height:280px;overflow:auto; }
                 #delivery-order-section .do-catalog-result { width:100%;padding:9px 11px;border:0;border-bottom:1px solid #edf1f0;background:#fff;text-align:left;cursor:pointer; }
                 #delivery-order-section .do-catalog-result:hover,#delivery-order-section .do-catalog-result:focus { background:#eef7f5;outline:none; }
                 #delivery-order-section .do-catalog-result strong { display:block;color:var(--do-ink);font-size:11px; }
                 #delivery-order-section .do-catalog-result span { display:block;margin-top:2px;color:var(--do-muted);font-size:9px; }
-                #delivery-order-section .do-catalog-add { min-height:37px;padding:7px 11px;background:var(--do-accent);font-size:10px;font-weight:800; }
                 #delivery-order-section .do-department-section + .do-department-section { border-top:1px solid var(--do-line); }
-                #delivery-order-section .do-dept-header { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;border-bottom:1px solid #e3ebe8;background:#f0f6f4;color:#314a43;font-size:10px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .do-line-table { width:100%;border-collapse:collapse;table-layout:fixed; }
+                #delivery-order-section .do-line-table th,#delivery-order-section .do-line-table td { border-bottom:2px solid #e5ece9; }
+                #delivery-order-section .do-category-row th { padding:8px 14px;background:#f0f6f4;color:#314a43;font-size:10px;font-weight:800;text-align:left;text-transform:uppercase; }
+                #delivery-order-section .do-category-row th { display:table-cell; }
+                #delivery-order-section .do-category-row th > span:first-child { float:left; }
+                #delivery-order-section .do-category-row .do-dept-count { float:right; }
+                #delivery-order-section .do-column-row th { padding:6px 14px;background:#fafcfb;color:#71807b;font-size:9px;text-align:left;text-transform:uppercase; }
+                #delivery-order-section .do-column-row th:nth-child(2) { width:92px;text-align:right; }
+                #delivery-order-section .do-column-row th:nth-child(3) { width:86px; }
                 #delivery-order-section .do-dept-count { min-width:23px;padding:2px 6px;border-radius:9px;background:#dcebe6;color:#315c50;text-align:center;font-size:9px; }
-                #delivery-order-section .do-item-row { display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:10px;align-items:center;min-height:39px;padding:6px 14px;border-bottom:2px solid #edf2f0;background:#fff;transition:background .14s; }
-                #delivery-order-section .do-item-row:last-child { border-bottom:0; }
+                #delivery-order-section .do-item-row { background:#fff;transition:background .14s; }
                 #delivery-order-section .do-item-row:hover { background:#fafcfb; }
-                #delivery-order-section .do-item-row.do-edit-row { grid-template-columns:20px minmax(220px,1fr) minmax(130px,.5fr) 72px auto;gap:7px; }
-                #delivery-order-section .do-item-description { min-width:0;margin:0; }
-                #delivery-order-section .do-item-name { display:block;color:#2d433d;font-size:11px;font-weight:700;overflow-wrap:anywhere; }
-                #delivery-order-section .do-item-quantity { width:auto;margin:0;text-align:right; }
-                #delivery-order-section .do-item-quantity input { width:100%;min-height:32px;padding:5px 7px;border-color:#cbdad5;border-radius:5px;font-size:10px; }
+                #delivery-order-section .do-item-row td { padding:7px 14px;color:#2d433d;font-size:11px;vertical-align:middle; }
+                #delivery-order-section .do-item-cell { overflow-wrap:anywhere; }
+                #delivery-order-section .do-quantity-cell { width:92px;text-align:right; }
+                #delivery-order-section .do-action-cell { width:86px;white-space:nowrap;text-align:right; }
+                #delivery-order-section .do-edit-item { display:flex;align-items:center;gap:8px; }
+                #delivery-order-section .do-edit-fields { min-width:0;display:grid;grid-template-columns:minmax(160px,1fr) minmax(125px,.4fr);gap:7px;flex:1; }
+                #delivery-order-section .do-edit-fields .form-input,#delivery-order-section .do-quantity-cell .form-input { min-height:31px;padding:5px 7px;font-size:10px; }
                 #delivery-order-section .do-quantity-badge { display:inline-grid;min-width:30px;height:23px;place-items:center;padding:2px 8px;border-radius:5px;background:var(--do-accent-soft);color:#176652;font-size:10px;font-weight:800; }
-                #delivery-order-section .do-item-department { width:auto;margin:0; }
-                #delivery-order-section .do-item-actions { display:flex;align-items:center;justify-content:flex-end;gap:5px; }
-                #delivery-order-section .do-item-actions .btn { min-height:30px;padding:5px 8px;border-radius:5px;font-size:9px;font-weight:800; }
-                #delivery-order-section .do-item-actions .do-save { border-color:#a8d2c5;background:#e8f5f1;color:#176652; }
-                #delivery-order-section .do-item-actions .do-del { width:30px;padding:0;border-color:#efc4c4;background:#fff2f2;color:#a62d35;font-size:17px; }
+                #delivery-order-section .do-action-cell .btn { min-height:29px;padding:4px 7px;border-radius:5px;font-size:9px;font-weight:800; }
+                #delivery-order-section .do-action-cell .do-save { border-color:#a8d2c5;background:#e8f5f1;color:#176652; }
+                #delivery-order-section .do-action-cell .do-del { width:29px;padding:0;border-color:#efc4c4;background:#fff2f2;color:#a62d35;font-size:17px; }
                 #delivery-order-section .do-drag-handle { width:18px;height:25px;display:grid;grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);place-content:center;gap:3px;margin:0;padding:0;color:#82928d;cursor:grab; }
                 #delivery-order-section .do-drag-handle i { width:3px;height:3px;border-radius:50%;background:currentColor; }
                 #delivery-order-section .do-item-row.dragging { opacity:.45; }
-                #delivery-order-section .do-item-row.drag-over { box-shadow:inset 0 2px 0 var(--do-accent); }
+                #delivery-order-section .do-item-row.drag-over-before { box-shadow:inset 0 2px 0 var(--do-accent); }
+                #delivery-order-section .do-item-row.drag-over-after { box-shadow:inset 0 -2px 0 var(--do-accent); }
                 #delivery-order-section .do-empty-dept,#delivery-order-section .no-items-message { padding:24px 14px;color:#7c8c87;font-size:10px;text-align:center; }
                 @media (max-width: 1100px) {
                   #delivery-order-section .do-document-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -11024,11 +11032,13 @@
                   #delivery-order-section .do-recipient-grid .do-client-name { grid-column:auto; }
                   #delivery-order-section .do-form-section { padding:12px; }
                   #delivery-order-section .do-pdf-options { border-top:1px solid var(--do-line);border-left:0; }
-                  #delivery-order-section .do-catalog-composer { grid-template-columns:1fr 1fr; }
-                  #delivery-order-section .do-catalog-field { grid-column:1/-1; }
-                  #delivery-order-section .do-item-row.do-edit-row { grid-template-columns:18px minmax(0,1fr) 74px auto; }
-                  #delivery-order-section .do-item-row.do-edit-row .do-item-department { grid-column:2/4;grid-row:2; }
-                  #delivery-order-section .do-item-row.do-edit-row .do-item-actions { grid-column:4;grid-row:1/3; }
+                  #delivery-order-section .do-catalog-composer { grid-template-columns:1fr 80px auto; }
+                  #delivery-order-section .do-catalog-composer .finance-add-item-wrap { grid-column:1/-1; }
+                  #delivery-order-section .do-edit-fields { grid-template-columns:1fr; }
+                  #delivery-order-section .do-column-row th:nth-child(2),#delivery-order-section .do-quantity-cell { width:70px; }
+                  #delivery-order-section .do-column-row th:nth-child(3),#delivery-order-section .do-action-cell { width:68px; }
+                  #delivery-order-section .do-item-row td { padding:7px 8px; }
+                  #delivery-order-section .do-action-cell .do-save { display:none; }
                 }
               </style>
               <div class="content-header do-page-header">
