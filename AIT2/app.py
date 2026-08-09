@@ -13595,6 +13595,7 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        line_workspace_js_version=_static_asset_version('js/line-workspace.js'),
         finance_js_version=_static_asset_version('js/finance.js'),
         finance_css_version=_static_asset_version('css/finance.css'),
         costing_css_version=_static_asset_version('css/costing.css'),

@@ -5039,21 +5039,23 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('3.01', pdf_text)
 
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        shared_source = Path('static/js/line-workspace.js').read_text(encoding='utf-8')
         self.assertIn('financeSubprojectDragStart', finance_source)
         self.assertIn('financeSubprojectDrop', finance_source)
-        self.assertIn('draggable="true"', finance_source)
+        self.assertIn('draggable="true"', shared_source)
         self.assertIn('financeSubprojectDropAtEnd', finance_source)
         self.assertIn('financeSubprojectDropAtIndex', finance_source)
-        self.assertIn('finance-subproject-drop-slot', finance_source)
-        self.assertIn("index === 0 ? 'is-first' : ''", finance_source)
+        self.assertIn('finance-subproject-drop-slot', shared_source)
+        self.assertIn("index === 0 ? 'is-first' : ''", shared_source)
 
     def test_line_item_dragging_supports_after_and_end_positions(self):
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
         finance_css = Path('static/css/finance.css').read_text(encoding='utf-8')
+        shared_source = Path('static/js/line-workspace.js').read_text(encoding='utf-8')
 
         self.assertIn(
-            "const position = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';",
-            finance_source,
+            "event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after'",
+            shared_source,
         )
         self.assertIn("if (position === 'after') insertionIndex += 1;", finance_source)
         self.assertIn(

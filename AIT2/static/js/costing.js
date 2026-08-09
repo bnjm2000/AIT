@@ -18,7 +18,10 @@ const costingState = {
   addCategory: '',
   collapsedCategories: {},
   dragLineIndex: null,
+  dragLineIndexes: [],
+  dragWholeLineGroup: false,
   dragCategory: '',
+  dragSubprojectId: '',
   activeSubprojectId: '',
   quotationSyncMode: '',
   contextDocumentId: ''
@@ -743,15 +746,14 @@ function costingMarginPercent(totals) {
 }
 
 function costingSubprojectTabsMarkup(readOnly) {
-  const rows = costingSubprojects();
-  const activeId = costingActiveSubprojectId();
-  return `<div class="finance-subproject-tabs costing-subproject-tabs" role="tablist" aria-label="Costing sub-projects">
-    ${rows.map(row => `<span class="finance-subproject-tab ${row.id === activeId ? 'active' : ''}" data-subproject-id="${costingAttr(row.id)}">
-      <button type="button" role="tab" aria-selected="${row.id === activeId ? 'true' : 'false'}" onclick="costingSelectSubproject('${costingAttr(row.id)}')">${costingEscape(row.name)}</button>
-      ${readOnly ? '' : `<button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="costingRenameSubproject('${costingAttr(row.id)}')">&#9998;</button>${rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="costingDeleteSubproject('${costingAttr(row.id)}')">&times;</button>` : ''}`}
-    </span>`).join('')}
-    ${readOnly ? '' : '<button type="button" class="finance-subproject-add" onclick="costingAddSubproject()">+ Sub-project</button>'}
-  </div>`;
+  return showbaseLineWorkspace.subprojectTabsMarkup({
+    rows: costingSubprojects(),
+    activeId: costingActiveSubprojectId(),
+    readOnly,
+    handlerPrefix: 'costing',
+    className: 'costing-subproject-tabs',
+    ariaLabel: 'Costing sub-projects'
+  });
 }
 
 function costingRenderEditor() {
@@ -842,13 +844,15 @@ function costingCategoryMarkup(category, readOnly) {
   const defaults = costingCategoryDefaults(category, subprojectId);
   const totals = costingCategoryTotals(category);
   return `<section class="costing-category-card ${collapsed ? 'is-collapsed' : ''}" data-category-total="${costingAttr(encoded)}" ondragover="costingDragCategoryOver(event,'${costingAttr(encoded)}')" ondragleave="costingDragCategoryLeave(event)" ondrop="costingDropCategory(event,'${costingAttr(encoded)}')">
-    <header class="costing-category-header">
-      <div class="costing-category-title">${readOnly ? '' : `<span class="finance-department-drag-handle costing-category-drag-handle" draggable="true" title="Drag category" ondragstart="costingDragCategoryStart(event,'${costingAttr(encoded)}')" ondragend="costingDragEnd()">&#9776;</span>`}<button type="button" class="finance-collapse-button costing-category-toggle" aria-label="${collapsed ? 'Open' : 'Close'} ${costingAttr(category)} category" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="costingToggleCategory('${costingAttr(encoded)}')">${collapsed ? '+' : '-'}</button><input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : ''} onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)"></div>
-      <div class="costing-category-metrics"><span>Category Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></span><b></b><span>Revenue <strong data-category-revenue>${costingEscape(costingMoney(totals.charged))}</strong></span><b></b><span>Profit <strong class="is-profit" data-category-profit-display>${costingEscape(costingMoney(totals.profit))}</strong></span></div>
-    </header>
     <div class="costing-table-wrap"><table class="costing-table">
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-sale"><col class="col-subtotal"><col class="col-menu"></colgroup>
-      <thead><tr><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary>${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary>Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary>Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Sale Price</th><th>Line Subtotal</th><th></th></tr></thead>
+      <thead>
+        <tr class="costing-category-header"><th colspan="12"><div class="costing-category-header-content">
+          <div class="costing-category-title">${readOnly ? '' : `<span class="finance-department-drag-handle costing-category-drag-handle" draggable="true" title="Drag category" ondragstart="costingDragCategoryStart(event,'${costingAttr(encoded)}')" ondragend="costingDragEnd()">&#9776;</span>`}<button type="button" class="finance-collapse-button costing-category-toggle" aria-label="${collapsed ? 'Open' : 'Close'} ${costingAttr(category)} category" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="costingToggleCategory('${costingAttr(encoded)}')">${collapsed ? '+' : '-'}</button><input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : ''} onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)"></div>
+          <div class="costing-category-metrics"><span>Category Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></span><b></b><span>Revenue <strong data-category-revenue>${costingEscape(costingMoney(totals.charged))}</strong></span><b></b><span>Profit <strong class="is-profit" data-category-profit-display>${costingEscape(costingMoney(totals.profit))}</strong></span></div>
+        </div></th></tr>
+        <tr class="costing-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Sale Price</th><th>Line Subtotal</th><th></th></tr>
+      </thead>
       <tbody>${costingGroupedLinesMarkup(lines, readOnly)}</tbody>
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
         <span class="costing-subtotal-label"><strong>Category subtotal</strong><small data-category-adjustment>${totals.adjustment ? `Adjustment ${costingMoney(totals.adjustment)}` : 'No category adjustment'}</small></span>
@@ -864,9 +868,19 @@ function costingGroupedLinesMarkup(lines, readOnly) {
   const rendered = new Set();
   return lines.map(({ line, index }) => {
     const groupId = String(line.groupId || '');
-    const header = groupId && !rendered.has(groupId)
-      ? (rendered.add(groupId), `<tr class="costing-line-group-header" oncontextmenu="financeEditLineGroup(event,'costing','${costingAttr(groupId)}')"><td colspan="12"><span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</td></tr>`)
-      : '';
+    let header = '';
+    if (groupId && !rendered.has(groupId)) {
+      rendered.add(groupId);
+      const firstGroupIndex = lines.find(
+        row => String(row.line.groupId || '') === groupId
+      )?.index ?? index;
+      header = `<tr class="costing-line-group-header" data-costing-line="${firstGroupIndex}" data-group-boundary="before"
+        oncontextmenu="financeEditLineGroup(event,'costing','${costingAttr(groupId)}')"
+        ondragover="costingDragLineOver(event,${firstGroupIndex})"
+        ondragleave="costingDragLineLeave(event)"
+        ondrop="costingDropLine(event,${firstGroupIndex},'${costingAttr(encodeURIComponent(line.category || 'General'))}')"
+        ondragend="costingDragEnd()"><td colspan="12">${readOnly ? '' : `<span class="finance-drag-handle costing-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="costingDragLineGroupStart(event,'${costingAttr(groupId)}','${costingAttr(line.subprojectId || 'main')}')" ondragend="costingDragEnd()">&#9776;</span>`}<span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</td></tr>`;
+    }
     return header + costingLineMarkup(line, index, readOnly);
   }).join('');
 }
@@ -895,12 +909,29 @@ function costingLineMarkup(line, index, readOnly) {
 }
 
 function costingAddItemMarkup() {
-  return `<section class="finance-add-row finance-add-row-expanded costing-add-item">
-    <div class="finance-add-item-wrap costing-item-search"><input id="costingAddItemInput" class="finance-input" autocomplete="off" placeholder="Search inventory or enter any item..." oninput="costingSearchCatalog(this.value)" onkeydown="costingAddItemKeydown(event)"><div id="costingCatalogResults" class="finance-catalog-results"></div></div>
-    <div class="finance-inline-combobox"><input id="costingAddCategoryInput" class="finance-input" value="${costingAttr(costingState.addCategory)}" placeholder="Category" autocomplete="off" oninput="costingState.addCategory=this.value;costingShowAddCategorySuggestions(this.value)" onfocus="costingShowAddCategorySuggestions(this.value)" onblur="costingCloseAddCategorySuggestions()" onkeydown="costingAddCategoryKeydown(event)"><div class="finance-inline-suggestions" id="costingAddCategoryResults"></div></div>
-    <button type="button" class="btn btn-primary" onclick="costingAddCustomItem()">+ Add</button>
-    <button type="button" class="btn btn-secondary finance-add-group-button" onclick="financeOpenLineGroupEditor('costing')">+ Group</button>
-  </section>`;
+  return showbaseLineWorkspace.addRowMarkup({
+    mode: 'costing',
+    className: 'costing-add-item',
+    search: {
+      id: 'costingAddItemInput',
+      resultsId: 'costingCatalogResults',
+      wrapClass: 'costing-item-search',
+      placeholder: 'Search inventory or enter any item...',
+      oninput: 'costingSearchCatalog(this.value)',
+      onkeydown: 'costingAddItemKeydown(event)'
+    },
+    category: {
+      id: 'costingAddCategoryInput',
+      resultsId: 'costingAddCategoryResults',
+      value: costingState.addCategory,
+      placeholder: 'Category',
+      oninput: 'costingState.addCategory=this.value;costingShowAddCategorySuggestions(this.value)',
+      onfocus: 'costingShowAddCategorySuggestions(this.value)',
+      onblur: 'costingCloseAddCategorySuggestions()',
+      onkeydown: 'costingAddCategoryKeydown(event)'
+    },
+    addAction: 'costingAddCustomItem()'
+  });
 }
 
 function costingAvailableCategories() {
@@ -959,56 +990,179 @@ function costingToggleCategory(encodedCategory) {
   }
 }
 
-function costingDragLineStart(event, index) {
-  costingState.dragLineIndex = index;
+function costingBeginLineDrag(event, indexes, wholeGroup = false) {
+  const lines = costingLines();
+  const activeSubproject = costingActiveSubprojectId();
+  const selected = showbaseLineWorkspace.beginDrag(
+    costingState,
+    event,
+    lines,
+    indexes,
+    {
+      wholeGroup,
+      subprojectId: activeSubproject,
+      mimeType: 'application/x-showbase-costing-lines',
+      numberValue: costingNumber
+    }
+  );
+  if (!selected.length) return;
   costingState.dragCategory = '';
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', String(index));
-  document.querySelector(`[data-costing-line="${index}"]`)?.classList.add('dragging');
+}
+
+function costingDragLineStart(event, index) {
+  costingBeginLineDrag(event, [index]);
+}
+
+function costingDragLineGroupStart(event, groupId, subprojectId) {
+  const indexes = costingLines().map((line, index) => ({ line, index }))
+    .filter(row => (
+      String(row.line.groupId || '') === String(groupId || '')
+      && String(row.line.subprojectId || 'main') === String(subprojectId || 'main')
+    ))
+    .map(row => row.index);
+  costingBeginLineDrag(event, indexes, true);
+}
+
+function costingDraggedLineIndexes(event) {
+  return showbaseLineWorkspace.draggedIndexes(costingState, event, {
+    mimeType: 'application/x-showbase-costing-lines',
+    numberValue: costingNumber
+  });
+}
+
+function costingClearLineDropTargets() {
+  document.querySelectorAll(
+    '.costing-line.drag-over,.costing-line.drag-over-before,.costing-line.drag-over-after,'
+      + '.costing-line-group-header.drag-over-before,.costing-line-group-header.drag-over-after,'
+      + '.costing-category-subtotal.drag-over'
+  ).forEach(row => {
+    row.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+    delete row.dataset.dropPosition;
+  });
 }
 
 function costingDragLineOver(event, index) {
-  if (costingState.dragLineIndex == null) return;
+  if (!costingState.dragLineIndexes.length || costingState.dragLineIndexes.includes(index)) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.costing-line.drag-over').forEach(row => row.classList.remove('drag-over'));
-  document.querySelector(`[data-costing-line="${index}"]`)?.classList.add('drag-over');
+  costingClearLineDropTargets();
+  const position = showbaseLineWorkspace.dropPosition(event);
+  event.currentTarget.classList.add(`drag-over-${position}`);
+  event.currentTarget.dataset.dropPosition = position;
 }
 
 function costingDragLineEndOver(event) {
-  if (costingState.dragLineIndex == null) return;
+  if (!costingState.dragLineIndexes.length) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
+  costingClearLineDropTargets();
   event.currentTarget.classList.add('drag-over');
 }
 
 function costingDragLineLeave(event) {
-  event.currentTarget?.classList.remove('drag-over');
+  if (event.currentTarget?.contains(event.relatedTarget)) return;
+  event.currentTarget?.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+  if (event.currentTarget?.dataset) delete event.currentTarget.dataset.dropPosition;
 }
 
-function costingMoveLine(sourceIndex, targetIndex, targetCategory, atEnd = false) {
+function costingClearLineGroupFields(line) {
+  if (!line) return;
+  [
+    'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText', 'groupLeader',
+    'groupHeaderQuantity'
+  ].forEach(key => delete line[key]);
+}
+
+function costingDetachLineFromGroup(line) {
+  if (!line?.groupId) return;
+  costingClearLineGroupFields(line);
+}
+
+function costingAttachLineToGroup(line, targetGroupId, targetSubprojectId) {
+  if (!line || !targetGroupId) return false;
+  const roomId = String(targetSubprojectId || 'main');
+  const leader = costingLines().find(candidate => (
+    String(candidate.groupId || '') === String(targetGroupId)
+    && String(candidate.subprojectId || 'main') === roomId
+  ));
+  if (!leader) return false;
+  if (line.groupId) costingDetachLineFromGroup(line);
+  Object.assign(line, {
+    groupId: String(targetGroupId),
+    groupTitle: leader.groupTitle || 'Group',
+    groupDisplayFields: [...(leader.groupDisplayFields || ['brand', 'model', 'description'])],
+    groupCustomText: false,
+    subprojectId: roomId,
+    category: leader.category || 'General'
+  });
+  return true;
+}
+
+function costingMoveLines(sourceIndexes, targetIndex, targetCategory, options = {}) {
   const lines = costingLines();
-  const source = lines[sourceIndex];
-  if (!source) return;
+  const selectedIndexes = [...new Set((sourceIndexes || []).map(value => costingNumber(value, -1)))]
+    .filter(index => index >= 0 && !!lines[index]);
+  const movedItems = selectedIndexes.map(index => lines[index]);
+  const target = options.atEnd ? null : lines[targetIndex];
+  if (!movedItems.length || (!options.atEnd && (!target || movedItems.includes(target)))) {
+    costingDragEnd();
+    return;
+  }
   const activeSubproject = costingActiveSubprojectId();
-  if (String(source.subprojectId || 'main') !== String(activeSubproject)) return;
-  const [moved] = lines.splice(sourceIndex, 1);
-  moved.category = targetCategory || moved.category || 'General';
-  moved.subprojectId = activeSubproject;
+  if (movedItems.some(
+    line => String(line.subprojectId || 'main') !== String(activeSubproject)
+  )) {
+    costingDragEnd();
+    return;
+  }
+
+  const position = options.position || 'before';
+  const outsideGroupBoundary = !!options.outsideGroupBoundary;
+  if (!costingState.dragWholeLineGroup) {
+    movedItems.forEach(moved => {
+      const sameGroup = !!target
+        && String(moved.groupId || '') === String(target.groupId || '')
+        && String(moved.subprojectId || 'main') === String(target.subprojectId || 'main');
+      if (target?.groupId && !outsideGroupBoundary && !sameGroup) {
+        costingAttachLineToGroup(moved, target.groupId, target.subprojectId);
+      } else if (moved.groupId && (options.atEnd || !sameGroup || outsideGroupBoundary)) {
+        costingDetachLineFromGroup(moved);
+      }
+    });
+  }
+
+  [...selectedIndexes].sort((a, b) => b - a).forEach(index => lines.splice(index, 1));
+  movedItems.forEach(moved => {
+    moved.category = targetCategory || moved.category || 'General';
+    moved.subprojectId = activeSubproject;
+  });
+
   let insertIndex;
-  if (atEnd) {
+  if (options.atEnd) {
     insertIndex = lines.reduce((last, line, index) => (
       String(line.subprojectId || 'main') === String(activeSubproject)
-        && String(line.category || 'General') === String(moved.category)
+        && String(line.category || 'General') === String(targetCategory || 'General')
         ? index + 1
         : last
     ), -1);
     if (insertIndex < 0) insertIndex = lines.length;
   } else {
-    insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-    insertIndex = Math.max(0, Math.min(lines.length, insertIndex));
+    let anchor = target;
+    if (target.groupId && (costingState.dragWholeLineGroup || outsideGroupBoundary)) {
+      const targetMembers = lines.filter(line => (
+        String(line.groupId || '') === String(target.groupId || '')
+        && String(line.subprojectId || 'main') === String(target.subprojectId || 'main')
+      ));
+      if (targetMembers.length) {
+        anchor = position === 'after' && costingState.dragWholeLineGroup
+          ? targetMembers.at(-1)
+          : targetMembers[0];
+      }
+    }
+    insertIndex = Math.max(0, lines.indexOf(anchor));
+    if (position === 'after') insertIndex += 1;
   }
-  lines.splice(insertIndex, 0, moved);
+  lines.splice(Math.min(lines.length, insertIndex), 0, ...movedItems);
   costingEqualiseSaleGroups(costingVisibleLines());
   costingState.changeVersion += 1;
   costingQueueSave();
@@ -1017,31 +1171,39 @@ function costingMoveLine(sourceIndex, targetIndex, targetCategory, atEnd = false
 }
 
 function costingDropLine(event, targetIndex, encodedCategory) {
-  if (costingState.dragLineIndex == null) return;
+  if (!costingState.dragLineIndexes.length) return;
   event.preventDefault();
   event.stopPropagation();
-  costingMoveLine(
-    costingState.dragLineIndex,
+  const position = showbaseLineWorkspace.dropPosition(event);
+  costingMoveLines(
+    costingDraggedLineIndexes(event),
     targetIndex,
-    decodeURIComponent(encodedCategory)
+    decodeURIComponent(encodedCategory),
+    {
+      position,
+      outsideGroupBoundary: event.currentTarget.dataset.groupBoundary === 'before'
+        && position === 'before'
+    }
   );
 }
 
 function costingDropLineAtCategoryEnd(event, encodedCategory) {
-  if (costingState.dragLineIndex == null) return;
+  if (!costingState.dragLineIndexes.length) return;
   event.preventDefault();
   event.stopPropagation();
-  costingMoveLine(
-    costingState.dragLineIndex,
+  costingMoveLines(
+    costingDraggedLineIndexes(event),
     costingLines().length,
     decodeURIComponent(encodedCategory),
-    true
+    { atEnd: true, position: 'after' }
   );
 }
 
 function costingDragCategoryStart(event, encodedCategory) {
   costingState.dragCategory = decodeURIComponent(encodedCategory);
   costingState.dragLineIndex = null;
+  costingState.dragLineIndexes = [];
+  costingState.dragWholeLineGroup = false;
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', costingState.dragCategory);
   event.currentTarget?.closest('.costing-category-card')?.classList.add('dragging');
@@ -1092,9 +1254,12 @@ function costingDropCategory(event, encodedCategory) {
 
 function costingDragEnd() {
   costingState.dragLineIndex = null;
+  costingState.dragLineIndexes = [];
+  costingState.dragWholeLineGroup = false;
   costingState.dragCategory = '';
-  document.querySelectorAll('.costing-line.dragging,.costing-line.drag-over,.costing-category-card.dragging,.costing-category-card.drag-over,.costing-category-subtotal.drag-over')
+  document.querySelectorAll('.costing-line.dragging,.costing-line-group-header.dragging,.costing-category-card.dragging,.costing-category-card.drag-over')
     .forEach(node => node.classList.remove('dragging', 'drag-over'));
+  costingClearLineDropTargets();
 }
 
 function costingProjectChanged(value) {
@@ -1114,6 +1279,81 @@ function costingSelectSubproject(subprojectId) {
   costingState.activeSubprojectId = subprojectId;
   costingState.addCategory = '';
   costingRenderEditor();
+}
+
+const costingSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
+  state: costingState,
+  getRows: costingSubprojects,
+  isReadOnly: () => costingState.current?.status === 'converted',
+  mimeType: 'application/x-showbase-costing-room',
+  commit: reordered => {
+    if (!reordered || !costingState.current) return false;
+    costingState.current.subprojects = reordered;
+    costingState.changeVersion += 1;
+    costingQueueSave();
+    costingRenderEditor();
+    return true;
+  }
+});
+
+function costingClearSubprojectDropTargets() {
+  costingSubprojectWorkspace.clearDropTargets();
+}
+
+function costingSubprojectDragStart(event, subprojectId) {
+  costingSubprojectWorkspace.dragStart(event, subprojectId);
+}
+
+function costingSubprojectDragOver(event, targetId) {
+  costingSubprojectWorkspace.dragOver(event, targetId);
+}
+
+function costingSubprojectDragLeave(event) {
+  costingSubprojectWorkspace.dragLeave(event);
+}
+
+function costingSubprojectEndDragOver(event) {
+  costingSubprojectWorkspace.endDragOver(event);
+}
+
+function costingSubprojectEndDragLeave(event) {
+  costingSubprojectWorkspace.endDragLeave(event);
+}
+
+function costingSubprojectSlotDragOver(event, targetIndex) {
+  costingSubprojectWorkspace.slotDragOver(event, targetIndex);
+}
+
+function costingSubprojectSlotDragLeave(event) {
+  costingSubprojectWorkspace.slotDragLeave(event);
+}
+
+function costingReorderSubprojectAtIndex(sourceId, targetIndex) {
+  return costingSubprojectWorkspace.reorderAtIndex(sourceId, targetIndex);
+}
+
+function costingSubprojectDropAtIndex(event, targetIndex) {
+  costingSubprojectWorkspace.dropAtIndex(event, targetIndex);
+}
+
+function costingReorderSubproject(sourceId, targetId, position = 'before') {
+  return costingSubprojectWorkspace.reorder(sourceId, targetId, position);
+}
+
+function costingSubprojectDrop(event, targetId) {
+  costingSubprojectWorkspace.drop(event, targetId);
+}
+
+function costingSubprojectDropAtEnd(event) {
+  costingSubprojectWorkspace.dropAtEnd(event);
+}
+
+function costingSubprojectDragEnd() {
+  costingSubprojectWorkspace.dragEnd();
+}
+
+function costingSubprojectDragKeydown(event, subprojectId) {
+  costingSubprojectWorkspace.dragKeydown(event, subprojectId);
 }
 
 async function costingAddSubproject() {

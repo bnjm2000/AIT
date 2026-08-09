@@ -1919,6 +1919,10 @@
   grid-template-columns: minmax(260px, 1fr) minmax(160px, 230px) max-content max-content;
 }
 
+.showbase-line-workspace-add-row {
+  align-items: center;
+}
+
 .finance-add-item-wrap,
 .finance-inline-combobox {
   position: relative;
@@ -3122,10 +3126,7 @@
   letter-spacing: inherit;
 }
 
-.finance-header-button::after {
-  content: " ...";
-  color: var(--finance-accent);
-}
+.showbase-line-header-action { cursor: pointer; }
 
 .finance-custom-menu {
   position: absolute;

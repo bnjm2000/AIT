@@ -362,15 +362,21 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('function costingLineCostTotal(index, value)', source)
         self.assertIn('function costingFormatMoneyInput(input)', source)
         self.assertIn('onblur="costingFormatMoneyInput(this)"', source)
-        self.assertIn('finance-add-row finance-add-row-expanded costing-add-item', source)
+        self.assertIn('return showbaseLineWorkspace.addRowMarkup({', source)
+        self.assertIn("className: 'costing-add-item'", source)
         self.assertIn('<main class="costing-line-workspace">', source)
-        self.assertIn('id="costingAddCategoryInput"', source)
+        self.assertIn("id: 'costingAddCategoryInput'", source)
         self.assertIn('costingShowAddCategorySuggestions', source)
         self.assertIn('costingToggleCategory', source)
         self.assertIn('function costingCategoryDefaults(category', source)
         self.assertIn('multiplier: defaults.multiplier', source)
         self.assertIn('targetMarginPercent: defaults.targetMarginPercent', source)
         self.assertIn('function costingDragLineStart(event, index)', source)
+        self.assertIn('function costingDragLineGroupStart(event, groupId, subprojectId)', source)
+        self.assertIn('function costingDraggedLineIndexes(event)', source)
+        self.assertIn('showbaseLineWorkspace.dropPosition(event)', source)
+        self.assertIn("{ atEnd: true, position: 'after' }", source)
+        self.assertIn('title="Drag group to reorder"', source)
         self.assertIn('function costingDropCategory(event, encodedCategory)', source)
         self.assertIn('function costingSetSummaryGrouping(grouping)', source)
         self.assertIn('data-costing-summary-group="vendor"', source)
@@ -391,14 +397,77 @@ class CostingFeatureTests(unittest.TestCase):
         with open(css_path, 'r', encoding='utf-8') as css_file:
             css_source = css_file.read()
         category_header_css = css_source.split(
-            '.costing-category-header {', 1,
+            '.costing-table .costing-category-header > th {', 1,
         )[1].split('}', 1)[0]
         self.assertIn('border-bottom: 0;', category_header_css)
+        self.assertIn('padding: 2px 8px 0;', category_header_css)
+        self.assertIn('<tr class="costing-category-header"><th colspan="12">', source)
+        self.assertIn('<tr class="costing-column-header"><th>Item</th>', source)
         self.assertNotIn('.costing-header-menu > summary::after', css_source)
         self.assertIn(
             '.costing-header-menu > summary { list-style: none; cursor: pointer; }',
             css_source,
         )
+        self.assertNotIn('grid-template-columns:', css_source.split('.costing-add-item {', 1)[1].split('}', 1)[0])
+        self.assertIn('.costing-table .costing-line.drag-over-after,', css_source)
+
+        finance_script_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js',
+        )
+        with open(finance_script_path, 'r', encoding='utf-8') as finance_script_file:
+            finance_source = finance_script_file.read()
+        self.assertGreaterEqual(
+            finance_source.count('showbaseLineWorkspace.addRowMarkup({'),
+            1,
+        )
+        self.assertIn(
+            'showbaseLineWorkspace.beginDrag(financeState, event, lines, indexes',
+            finance_source,
+        )
+        self.assertIn('showbase-line-header-action', finance_source)
+        self.assertIn('showbase-line-header-action', source)
+        self.assertIn('return showbaseLineWorkspace.subprojectTabsMarkup({', source)
+        self.assertIn("handlerPrefix: 'costing'", source)
+        self.assertIn('function costingSubprojectDropAtIndex(event, targetIndex)', source)
+        self.assertIn('function costingSubprojectDropAtEnd(event)', source)
+        self.assertIn('function costingSubprojectDragKeydown(event, subprojectId)', source)
+
+        shared_script_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'line-workspace.js',
+        )
+        with open(shared_script_path, 'r', encoding='utf-8') as shared_script_file:
+            shared_source = shared_script_file.read()
+        self.assertIn('global.showbaseLineWorkspace = {', shared_source)
+        self.assertIn('addRowMarkup(options = {})', shared_source)
+        self.assertIn('beginDrag(state, event, lines, indexes', shared_source)
+        self.assertIn('draggedIndexes(state, event, options', shared_source)
+        self.assertIn('dropPosition(event)', shared_source)
+        self.assertIn('subprojectTabsMarkup(options = {})', shared_source)
+        self.assertIn('showbase-line-workspace-add-row', shared_source)
+        self.assertIn('reorderSubprojectsAtIndex(rows, sourceId, targetIndex)', shared_source)
+        self.assertIn("reorderSubprojects(rows, sourceId, targetId, position = 'before')", shared_source)
+        self.assertIn('return showbaseLineWorkspace.subprojectTabsMarkup({', finance_source)
+        self.assertIn("handlerPrefix: 'finance'", finance_source)
+
+        finance_css_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css',
+        )
+        with open(finance_css_path, 'r', encoding='utf-8') as finance_css_file:
+            finance_css_source = finance_css_file.read()
+        self.assertNotIn('.finance-header-button::after', finance_css_source)
+        self.assertIn('.showbase-line-header-action { cursor: pointer; }', finance_css_source)
+        self.assertNotIn('.costing-category-header + .costing-table-wrap', css_source)
+
+        template_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'templates', 'index.html',
+        )
+        with open(template_path, 'r', encoding='utf-8') as template_file:
+            template_source = template_file.read()
+        shared_index = template_source.index("filename='js/line-workspace.js'")
+        finance_index = template_source.index("filename='js/finance.js'")
+        costing_index = template_source.index("filename='js/costing.js'")
+        self.assertLess(shared_index, finance_index)
+        self.assertLess(finance_index, costing_index)
 
     def test_costing_deep_link_and_plan_vendor_card_sources(self):
         app_script_path = os.path.join(

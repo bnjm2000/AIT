@@ -3731,7 +3731,7 @@ function financeCategoryColumnHeader(department) {
       <td>Category</td>
       <td>
         <div class="finance-custom-control finance-header-control">
-          <button type="button" class="finance-header-button" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeMultiplierHeaderLabel())}</button>
+          <button type="button" class="finance-header-button showbase-line-header-action" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeMultiplierHeaderLabel())}</button>
           <div class="finance-custom-menu finance-days-menu" id="${financeEscapeAttr(menuId)}">
             <span class="finance-menu-caption">Column label</span>
             <div class="finance-label-choice">
@@ -3910,47 +3910,13 @@ function financeRenderLineGroups() {
 }
 
 function financeRenderSubprojectTabs() {
-  const activeId = financeCurrentSubprojectId();
-  const rows = financeSubprojects();
-  return `
-    <div class="finance-subproject-tabs" role="tablist" aria-label="Quotation sub-projects">
-      ${rows.map((row, index) => `
-        ${!financeState.snapshotMode && rows.length > 1 ? `
-          <span class="finance-subproject-drop-slot ${index === 0 ? 'is-first' : ''}" aria-hidden="true"
-                data-drop-index="${index}"
-                ondragover="financeSubprojectSlotDragOver(event,${index})"
-                ondragleave="financeSubprojectSlotDragLeave(event)"
-                ondrop="financeSubprojectDropAtIndex(event,${index})"></span>
-        ` : ''}
-        <span class="finance-subproject-tab ${row.id === activeId ? 'active' : ''}"
-              data-subproject-id="${financeEscapeAttr(row.id)}"
-              ${!financeState.snapshotMode && rows.length > 1 ? `
-                draggable="true"
-                ondragstart="financeSubprojectDragStart(event,'${financeEscapeAttr(row.id)}')"
-                ondragend="financeSubprojectDragEnd()"
-              ` : ''}
-              ondragover="financeSubprojectDragOver(event,'${financeEscapeAttr(row.id)}')"
-              ondragleave="financeSubprojectDragLeave(event)"
-              ondrop="financeSubprojectDrop(event,'${financeEscapeAttr(row.id)}')">
-          ${!financeState.snapshotMode && rows.length > 1 ? `
-            <span class="finance-subproject-drag-handle" role="button" tabindex="0"
-                  title="Drag to reorder room" aria-label="Reorder ${financeEscapeAttr(row.name)}"
-                  onkeydown="financeSubprojectDragKeydown(event,'${financeEscapeAttr(row.id)}')">&#9776;</span>
-          ` : ''}
-          <button type="button" role="tab" aria-selected="${row.id === activeId}" onclick="financeSelectSubproject('${financeEscapeAttr(row.id)}')">${financeEscape(row.name)}</button>
-          <button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="financeRenameSubproject('${financeEscapeAttr(row.id)}')">&#9998;</button>
-          ${rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="financeDeleteSubproject('${financeEscapeAttr(row.id)}')">&times;</button>` : ''}
-        </span>
-      `).join('')}
-      ${!financeState.snapshotMode && rows.length > 1 ? `
-        <span class="finance-subproject-end-drop" aria-hidden="true"
-              ondragover="financeSubprojectEndDragOver(event)"
-              ondragleave="financeSubprojectEndDragLeave(event)"
-              ondrop="financeSubprojectDropAtEnd(event)"></span>
-      ` : ''}
-      <button type="button" class="finance-subproject-add" onclick="financeAddSubproject()">+ Sub-project</button>
-    </div>
-  `;
+  return showbaseLineWorkspace.subprojectTabsMarkup({
+    rows: financeSubprojects(),
+    activeId: financeCurrentSubprojectId(),
+    readOnly: financeState.snapshotMode,
+    handlerPrefix: 'finance',
+    ariaLabel: 'Quotation sub-projects'
+  });
 }
 
 function ensureFinanceRateCardModal() {
@@ -4152,168 +4118,78 @@ function financeSelectSubproject(subprojectId) {
   financeRenderEditor();
 }
 
+const financeSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
+  state: financeState,
+  getRows: financeSubprojects,
+  isReadOnly: () => financeState.snapshotMode,
+  mimeType: 'application/x-showbase-quotation-room',
+  commit: reordered => {
+    if (!reordered || !financeState.current) return false;
+    financeState.current.subprojects = reordered;
+    financeQueueSave();
+    financeRenderEditor();
+    return true;
+  }
+});
+
 function financeClearSubprojectDropTargets() {
-  document.querySelectorAll('.finance-subproject-tab').forEach(tab => {
-    tab.classList.remove('is-reorder-before', 'is-reorder-after');
-    delete tab.dataset.reorderPosition;
-  });
-  document.querySelectorAll('.finance-subproject-end-drop.is-active').forEach(target => {
-    target.classList.remove('is-active');
-  });
-  document.querySelectorAll('.finance-subproject-drop-slot.is-active').forEach(target => {
-    target.classList.remove('is-active');
-  });
+  financeSubprojectWorkspace.clearDropTargets();
 }
 
 function financeSubprojectDragStart(event, subprojectId) {
-  if (financeState.snapshotMode) {
-    event.preventDefault();
-    return;
-  }
-  financeState.dragSubprojectId = subprojectId;
-  event.currentTarget.closest('.finance-subproject-tab')?.classList.add('is-dragging');
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('application/x-showbase-quotation-room', subprojectId);
-    event.dataTransfer.setData('text/plain', subprojectId);
-  }
+  financeSubprojectWorkspace.dragStart(event, subprojectId);
 }
 
 function financeSubprojectDragOver(event, targetId) {
-  if (!financeState.dragSubprojectId || financeState.dragSubprojectId === targetId) return;
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  financeClearSubprojectDropTargets();
-  const rect = event.currentTarget.getBoundingClientRect();
-  const position = event.clientX < rect.left + (rect.width / 2) ? 'before' : 'after';
-  event.currentTarget.classList.add(`is-reorder-${position}`);
-  event.currentTarget.dataset.reorderPosition = position;
+  financeSubprojectWorkspace.dragOver(event, targetId);
 }
 
 function financeSubprojectDragLeave(event) {
-  if (event.currentTarget.contains(event.relatedTarget)) return;
-  event.currentTarget.classList.remove('is-reorder-before', 'is-reorder-after');
-  delete event.currentTarget.dataset.reorderPosition;
+  financeSubprojectWorkspace.dragLeave(event);
 }
 
 function financeSubprojectEndDragOver(event) {
-  const rows = financeSubprojects();
-  if (!financeState.dragSubprojectId || rows.at(-1)?.id === financeState.dragSubprojectId) return;
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  financeClearSubprojectDropTargets();
-  event.currentTarget.classList.add('is-active');
+  financeSubprojectWorkspace.endDragOver(event);
 }
 
 function financeSubprojectEndDragLeave(event) {
-  if (event.currentTarget.contains(event.relatedTarget)) return;
-  event.currentTarget.classList.remove('is-active');
+  financeSubprojectWorkspace.endDragLeave(event);
 }
 
 function financeSubprojectSlotDragOver(event, targetIndex) {
-  const rows = financeSubprojects();
-  const sourceIndex = rows.findIndex(row => row.id === financeState.dragSubprojectId);
-  if (sourceIndex < 0) return;
-  const adjustedIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  if (adjustedIndex === sourceIndex) return;
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-  financeClearSubprojectDropTargets();
-  event.currentTarget.classList.add('is-active');
+  financeSubprojectWorkspace.slotDragOver(event, targetIndex);
 }
 
 function financeSubprojectSlotDragLeave(event) {
-  if (event.currentTarget.contains(event.relatedTarget)) return;
-  event.currentTarget.classList.remove('is-active');
+  financeSubprojectWorkspace.slotDragLeave(event);
 }
 
 function financeReorderSubprojectAtIndex(sourceId, targetIndex) {
-  const rows = financeSubprojects();
-  const sourceIndex = rows.findIndex(row => row.id === sourceId);
-  if (sourceIndex < 0) return false;
-
-  const reordered = [...rows];
-  const [source] = reordered.splice(sourceIndex, 1);
-  let insertionIndex = Math.max(0, Math.min(Number(targetIndex) || 0, rows.length));
-  if (sourceIndex < insertionIndex) insertionIndex -= 1;
-  if (insertionIndex === sourceIndex) return false;
-  reordered.splice(insertionIndex, 0, source);
-
-  financeState.current.subprojects = reordered;
-  financeQueueSave();
-  financeRenderEditor();
-  return true;
+  return financeSubprojectWorkspace.reorderAtIndex(sourceId, targetIndex);
 }
 
 function financeSubprojectDropAtIndex(event, targetIndex) {
-  event.preventDefault();
-  const sourceId = financeState.dragSubprojectId
-    || event.dataTransfer?.getData('application/x-showbase-quotation-room')
-    || event.dataTransfer?.getData('text/plain');
-  financeClearSubprojectDropTargets();
-  financeState.dragSubprojectId = '';
-  financeReorderSubprojectAtIndex(sourceId, targetIndex);
+  financeSubprojectWorkspace.dropAtIndex(event, targetIndex);
 }
 
 function financeReorderSubproject(sourceId, targetId, position = 'before') {
-  const rows = financeSubprojects();
-  const source = rows.find(row => row.id === sourceId);
-  const target = rows.find(row => row.id === targetId);
-  if (!source || !target || source === target) return false;
-
-  const reordered = rows.filter(row => row !== source);
-  const targetIndex = reordered.indexOf(target);
-  reordered.splice(targetIndex + (position === 'after' ? 1 : 0), 0, source);
-  if (reordered.every((row, index) => row === rows[index])) return false;
-
-  financeState.current.subprojects = reordered;
-  financeQueueSave();
-  financeRenderEditor();
-  return true;
+  return financeSubprojectWorkspace.reorder(sourceId, targetId, position);
 }
 
 function financeSubprojectDrop(event, targetId) {
-  event.preventDefault();
-  const sourceId = financeState.dragSubprojectId
-    || event.dataTransfer?.getData('application/x-showbase-quotation-room')
-    || event.dataTransfer?.getData('text/plain');
-  const position = event.currentTarget.dataset.reorderPosition
-    || (event.clientX < event.currentTarget.getBoundingClientRect().left + (event.currentTarget.offsetWidth / 2) ? 'before' : 'after');
-  financeClearSubprojectDropTargets();
-  financeState.dragSubprojectId = '';
-  financeReorderSubproject(sourceId, targetId, position);
+  financeSubprojectWorkspace.drop(event, targetId);
 }
 
 function financeSubprojectDropAtEnd(event) {
-  event.preventDefault();
-  const sourceId = financeState.dragSubprojectId
-    || event.dataTransfer?.getData('application/x-showbase-quotation-room')
-    || event.dataTransfer?.getData('text/plain');
-  const lastId = financeSubprojects().at(-1)?.id || '';
-  financeClearSubprojectDropTargets();
-  financeState.dragSubprojectId = '';
-  if (sourceId && lastId && sourceId !== lastId) {
-    financeReorderSubproject(sourceId, lastId, 'after');
-  }
+  financeSubprojectWorkspace.dropAtEnd(event);
 }
 
 function financeSubprojectDragEnd() {
-  financeState.dragSubprojectId = '';
-  financeClearSubprojectDropTargets();
-  document.querySelectorAll('.finance-subproject-tab.is-dragging').forEach(tab => tab.classList.remove('is-dragging'));
+  financeSubprojectWorkspace.dragEnd();
 }
 
 function financeSubprojectDragKeydown(event, subprojectId) {
-  if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-  event.preventDefault();
-  const rows = financeSubprojects();
-  const sourceIndex = rows.findIndex(row => row.id === subprojectId);
-  const targetIndex = sourceIndex + (event.key === 'ArrowLeft' ? -1 : 1);
-  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
-  const targetId = rows[targetIndex].id;
-  if (financeReorderSubproject(subprojectId, targetId, event.key === 'ArrowLeft' ? 'before' : 'after')) {
-    requestAnimationFrame(() => document.querySelector(`.finance-subproject-tab[data-subproject-id="${CSS.escape(subprojectId)}"] .finance-subproject-drag-handle`)?.focus());
-  }
+  financeSubprojectWorkspace.dragKeydown(event, subprojectId);
 }
 
 async function financeAddSubproject() {
@@ -4421,16 +4297,10 @@ async function financeRenameDepartment(encodedDepartment) {
 
 function financeBeginLineDrag(event, indexes, wholeGroup = false) {
   const lines = financeState.current?.lineItems || [];
-  const selected = [...new Set((indexes || []).map(value => financeNumber(value, -1)))]
-    .filter(index => index >= 0 && !!lines[index]);
-  if (!selected.length) return;
-  financeState.dragLineIndex = selected[0];
-  financeState.dragLineIndexes = selected;
-  financeState.dragWholeLineGroup = !!wholeGroup;
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('application/x-showbase-quotation-lines', JSON.stringify(selected));
-  event.dataTransfer.setData('text/plain', String(selected[0]));
-  event.currentTarget.closest('.finance-line-row')?.classList.add('dragging');
+  showbaseLineWorkspace.beginDrag(financeState, event, lines, indexes, {
+    wholeGroup,
+    mimeType: 'application/x-showbase-quotation-lines'
+  });
 }
 
 function financeDragLineStart(event, index) {
@@ -4452,14 +4322,9 @@ function financeDragLineGroupStart(event, groupId, subprojectId) {
 }
 
 function financeDraggedLineIndexes(event) {
-  if (financeState.dragLineIndexes?.length) return [...financeState.dragLineIndexes];
-  try {
-    const payload = JSON.parse(event?.dataTransfer?.getData('application/x-showbase-quotation-lines') || '[]');
-    if (Array.isArray(payload) && payload.length) return payload.map(value => financeNumber(value, -1));
-  } catch {}
-  const rawSource = event?.dataTransfer?.getData('text/plain');
-  const sourceIndex = rawSource === '' ? financeState.dragLineIndex : financeNumber(rawSource, -1);
-  return sourceIndex === null || sourceIndex === undefined ? [] : [sourceIndex];
+  return showbaseLineWorkspace.draggedIndexes(financeState, event, {
+    mimeType: 'application/x-showbase-quotation-lines'
+  });
 }
 
 function financeDragLineOver(event, index) {
@@ -4468,8 +4333,7 @@ function financeDragLineOver(event, index) {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
   financeClearLineDropTargets();
-  const rect = event.currentTarget.getBoundingClientRect();
-  const position = event.clientY < rect.top + (rect.height / 2) ? 'before' : 'after';
+  const position = showbaseLineWorkspace.dropPosition(event);
   event.currentTarget.classList.add(`drag-over-${position}`);
   event.currentTarget.dataset.dropPosition = position;
 }
@@ -4501,8 +4365,7 @@ function financeDropLine(event, targetIndex) {
     financeDragLineEnd();
     return;
   }
-  const position = event.currentTarget.dataset.dropPosition
-    || (event.clientY < event.currentTarget.getBoundingClientRect().top + (event.currentTarget.offsetHeight / 2) ? 'before' : 'after');
+  const position = showbaseLineWorkspace.dropPosition(event);
   const outsideGroupBoundary = event.currentTarget.dataset.groupBoundary === 'before' && position === 'before';
   const wholeGroup = !!financeState.dragWholeLineGroup;
   if (!wholeGroup) {
@@ -4835,18 +4698,25 @@ function financeRenderEditor() {
               <tbody>${financeRenderLineGroups()}</tbody>
             </table>
           </div>
-          <div class="finance-add-row finance-add-row-expanded">
-            <div class="finance-add-item-wrap">
-              <input id="financeAddItemInput" class="finance-input" placeholder="Search inventory or previously used custom items..." autocomplete="off" oninput="financeSearchCatalog(this.value)" onkeydown="financeAddItemKeydown(event)">
-              <div id="financeCatalogResults" class="finance-catalog-results"></div>
-            </div>
-            <div class="finance-inline-combobox">
-              <input id="financeAddDepartmentInput" class="finance-input" value="${financeEscapeAttr(financeState.addDepartment)}" placeholder="Category" autocomplete="off" oninput="financeState.addDepartment=this.value;financeShowAddDepartmentSuggestions(this.value)" onfocus="financeShowAddDepartmentSuggestions(this.value)">
-              <div class="finance-inline-suggestions" id="financeAddDepartmentResults"></div>
-            </div>
-            <button type="button" class="btn btn-primary" onclick="financeAddCustomItem()">+ Add</button>
-            <button type="button" class="btn btn-secondary finance-add-group-button" onclick="financeOpenLineGroupEditor('finance')">+ Group</button>
-          </div>
+          ${showbaseLineWorkspace.addRowMarkup({
+            mode: 'finance',
+            search: {
+              id: 'financeAddItemInput',
+              resultsId: 'financeCatalogResults',
+              placeholder: 'Search inventory or previously used custom items...',
+              oninput: 'financeSearchCatalog(this.value)',
+              onkeydown: 'financeAddItemKeydown(event)'
+            },
+            category: {
+              id: 'financeAddDepartmentInput',
+              resultsId: 'financeAddDepartmentResults',
+              value: financeState.addDepartment,
+              placeholder: 'Category',
+              oninput: 'financeState.addDepartment=this.value;financeShowAddDepartmentSuggestions(this.value)',
+              onfocus: 'financeShowAddDepartmentSuggestions(this.value)'
+            },
+            addAction: 'financeAddCustomItem()'
+          })}
         </section>
 
         <section class="finance-card finance-section">
