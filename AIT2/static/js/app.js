@@ -14833,19 +14833,165 @@ async function openPrepareEventModal(eventId) {
 
 // Calendar functionality
 let currentCalendarDate = new Date();
+const calendarMonthCache = new Map();
+const calendarMonthRequests = new Map();
+let calendarRequestVersion = 0;
+let calendarCacheGeneration = 0;
+let calendarStateCounts = null;
+let calendarStateCountsByTag = null;
+let calendarSelectionState = null;
+let calendarRawEvents = [];
 
-async function loadCalendarView() {
-  try {
-    const response = await apiCall('/api/events?view=summary');
-    const calendarEvents = response.data || [];
-    renderCalendar(
-      document.getElementById('events-section')?.classList.contains('active')
-        ? getFilteredEventsForOverview(calendarEvents)
-        : calendarEvents
+function calendarDateKey(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function calendarDateFromKey(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function calendarDisplayRange(monthDate = currentCalendarDate) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const first = new Date(year, month, 1, 12, 0, 0, 0);
+  const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+  const leadingDays = (first.getDay() + 6) % 7;
+  const naturalCells = leadingDays + last.getDate();
+  const totalCells = Math.max(35, Math.ceil(naturalCells / 7) * 7);
+  const start = new Date(first);
+  start.setDate(first.getDate() - leadingDays);
+  const end = new Date(start);
+  end.setDate(start.getDate() + totalCells - 1);
+  return {
+    start,
+    end,
+    startKey: calendarDateKey(start),
+    endKey: calendarDateKey(end),
+    totalCells,
+    cacheKey: `${calendarDateKey(start)}:${calendarDateKey(end)}`,
+  };
+}
+
+function clearCalendarCache() {
+  calendarCacheGeneration += 1;
+  calendarMonthCache.clear();
+  calendarMonthRequests.clear();
+}
+
+function updateCalendarCachedEvent(event) {
+  if (!event || !Number.isFinite(Number(event.id))) return;
+  const eventStart = parseEventOverviewDate(event.startDate);
+  const eventEnd = parseEventOverviewDate(event.endDate || event.startDate);
+  calendarMonthCache.forEach((entry, cacheKey) => {
+    const [rangeStartKey, rangeEndKey] = cacheKey.split(':');
+    const rangeStart = calendarDateFromKey(rangeStartKey);
+    const rangeEnd = calendarDateFromKey(rangeEndKey);
+    const rows = Array.isArray(entry.events) ? entry.events : [];
+    const existingIndex = rows.findIndex(row => Number(row.id) === Number(event.id));
+    const overlaps = Boolean(
+      eventStart && eventEnd && rangeStart && rangeEnd
+      && eventStart <= rangeEnd && eventEnd >= rangeStart
     );
+    if (!overlaps && existingIndex >= 0) rows.splice(existingIndex, 1);
+    if (overlaps) {
+      const summary = {
+        id: event.id,
+        name: event.name || '',
+        location: event.location || '',
+        startDate: event.startDate,
+        endDate: event.endDate || event.startDate,
+        state: event.state || 'New',
+        tag: event.tag || 'events',
+      };
+      if (existingIndex >= 0) rows[existingIndex] = { ...rows[existingIndex], ...summary };
+      else rows.push(summary);
+    }
+  });
+  const current = calendarMonthCache.get(calendarDisplayRange().cacheKey);
+  if (current) calendarRawEvents = current.events;
+}
+
+async function fetchCalendarMonth(monthDate, { force = false } = {}) {
+  const range = calendarDisplayRange(monthDate);
+  if (!force && calendarMonthCache.has(range.cacheKey)) {
+    return calendarMonthCache.get(range.cacheKey);
+  }
+  if (!force && calendarMonthRequests.has(range.cacheKey)) {
+    return calendarMonthRequests.get(range.cacheKey);
+  }
+  const generation = calendarCacheGeneration;
+  const request = apiCall(
+    `/api/events?view=calendar&rangeStart=${encodeURIComponent(range.startKey)}&rangeEnd=${encodeURIComponent(range.endKey)}&sort=startDate&direction=asc`
+  ).then(response => {
+    const result = {
+      events: Array.isArray(response.data) ? response.data : [],
+      meta: response.meta || {},
+    };
+    if (generation === calendarCacheGeneration) {
+      calendarMonthCache.set(range.cacheKey, result);
+    }
+    return result;
+  }).finally(() => {
+    if (calendarMonthRequests.get(range.cacheKey) === request) {
+      calendarMonthRequests.delete(range.cacheKey);
+    }
+  });
+  calendarMonthRequests.set(range.cacheKey, request);
+  return request;
+}
+
+function prefetchAdjacentCalendarMonths() {
+  const preload = () => {
+    [-1, 1].forEach(direction => {
+      const adjacent = new Date(
+        currentCalendarDate.getFullYear(),
+        currentCalendarDate.getMonth() + direction,
+        1,
+      );
+      fetchCalendarMonth(adjacent).catch(() => {});
+    });
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(preload, { timeout: 1200 });
+  else window.setTimeout(preload, 180);
+}
+
+async function loadCalendarView({ force = false } = {}) {
+  const requestVersion = ++calendarRequestVersion;
+  const container = document.getElementById('calendar-container');
+  const range = calendarDisplayRange();
+  const cached = !force ? calendarMonthCache.get(range.cacheKey) : null;
+  if (cached) {
+    calendarRawEvents = cached.events;
+    calendarStateCounts = cached.meta?.stateCounts || calendarStateCounts;
+    calendarStateCountsByTag = cached.meta?.stateCountsByTag || calendarStateCountsByTag;
+    renderCalendar(getFilteredEventsForOverview(cached.events));
+  } else if (container) {
+    container.classList.add('calendar-is-loading');
+  }
+  try {
+    const result = await fetchCalendarMonth(currentCalendarDate, { force });
+    if (requestVersion !== calendarRequestVersion) return;
+    calendarRawEvents = result.events;
+    calendarStateCounts = result.meta?.stateCounts || null;
+    calendarStateCountsByTag = result.meta?.stateCountsByTag || null;
+    updateEventStateFilterCounts(result.events, true);
+    renderCalendar(getFilteredEventsForOverview(result.events));
+    prefetchAdjacentCalendarMonths();
   } catch (error) {
-    document.getElementById('calendar-container').innerHTML = 
-      '<p style="color: red; text-align: center;">Error loading calendar</p>';
+    if (!cached && container) {
+      container.innerHTML = '<p style="color: red; text-align: center;">Error loading calendar</p>';
+    }
+  } finally {
+    if (requestVersion === calendarRequestVersion) {
+      container?.classList.remove('calendar-is-loading');
+    }
   }
 }
 
@@ -14869,7 +15015,16 @@ function renderCalendar(events) {
   
   const headerHTML = `
     <div class="calendar-header">
-      <h3>${monthNames[currentMonth]} ${currentYear}</h3>
+      <div class="calendar-month-heading">
+        <button type="button" class="calendar-month-jump" onclick="toggleCalendarMonthPicker(event)" aria-expanded="false" aria-controls="calendarMonthPicker">
+          <span>${monthNames[currentMonth]} ${currentYear}</span>
+          <span class="calendar-month-jump-icon" aria-hidden="true">&#9662;</span>
+        </button>
+        <div id="calendarMonthPicker" class="calendar-month-picker" hidden>
+          <input id="calendarMonthInput" type="month" value="${currentYear}-${String(currentMonth + 1).padStart(2, '0')}" aria-label="Choose calendar month and year" onchange="jumpToCalendarMonth()" onkeydown="if(event.key==='Enter'){event.preventDefault();jumpToCalendarMonth()}">
+          <button type="button" class="btn btn-primary btn-sm" onclick="jumpToCalendarMonth()">Go</button>
+        </div>
+      </div>
       <div class="calendar-nav">
         <button onclick="navigateCalendar(-1)">‹ Previous</button>
         <button onclick="goToToday()">Today</button>
@@ -14885,67 +15040,43 @@ function renderCalendar(events) {
   ).join('');
   
   // Calculate calendar grid
-  const firstDay = new Date(currentYear, currentMonth, 1);
-  const lastDay = new Date(currentYear, currentMonth + 1, 0);
-  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
-  const daysInMonth = lastDay.getDate();
-  
-  // Previous month days
-  const prevMonth = new Date(currentYear, currentMonth, 0);
-  const daysInPrevMonth = prevMonth.getDate();
-  
-  // Create calendar grid data structure
+  const displayRange = calendarDisplayRange(currentCalendarDate);
   const calendarDays = [];
-  
-  // Previous month's trailing days
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const dayNum = daysInPrevMonth - i;
-    const date = new Date(currentYear, currentMonth - 1, dayNum);
-    calendarDays.push({
-      date,
-      dayNum,
-      isCurrentMonth: false,
-      isToday: false
-    });
-  }
-  
-  // Current month days
   const today = new Date();
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentYear, currentMonth, day);
-    const isToday = date.toDateString() === today.toDateString();
-    
+  for (let index = 0; index < displayRange.totalCells; index += 1) {
+    const date = new Date(displayRange.start);
+    date.setDate(displayRange.start.getDate() + index);
     calendarDays.push({
       date,
-      dayNum: day,
-      isCurrentMonth: true,
-      isToday
-    });
-  }
-  
-  // Next month's leading days
-  const totalCells = 35; // 5 rows × 7 days (changed from 42)
-  const usedCells = calendarDays.length;
-  const remainingCells = totalCells - usedCells;
-
-  for (let day = 1; day <= remainingCells; day++) {
-    const date = new Date(currentYear, currentMonth + 1, day);
-    calendarDays.push({
-      date,
-      dayNum: day,
-      isCurrentMonth: false,
-      isToday: false
+      dayNum: date.getDate(),
+      isCurrentMonth: date.getMonth() === currentMonth,
+      isToday: date.toDateString() === today.toDateString(),
     });
   }
   
   // Process events for the calendar with proper row assignment
   const eventPlacements = processEventsForCalendar(events, calendarDays);
+  const placementsByDay = new Map();
+  eventPlacements.forEach(placement => {
+    if (!placementsByDay.has(placement.dayIndex)) placementsByDay.set(placement.dayIndex, []);
+    placementsByDay.get(placement.dayIndex).push(placement);
+  });
+  const dayEventCounts = new Array(calendarDays.length).fill(0);
+  const calendarStartTime = displayRange.start.getTime();
+  events.forEach(event => {
+    const eventStart = parseEventOverviewDate(event.startDate);
+    const eventEnd = parseEventOverviewDate(event.endDate || event.startDate);
+    if (!eventStart || !eventEnd) return;
+    const firstIndex = Math.max(0, Math.floor((eventStart.getTime() - calendarStartTime) / 86400000));
+    const lastIndex = Math.min(calendarDays.length - 1, Math.floor((eventEnd.getTime() - calendarStartTime) / 86400000));
+    for (let index = firstIndex; index <= lastIndex; index += 1) dayEventCounts[index] += 1;
+  });
   
   // Generate calendar HTML
   let calendarDaysHTML = '';
   
   calendarDays.forEach((dayData, dayIndex) => {
-    const dayPlacements = eventPlacements.filter(p => p.dayIndex === dayIndex);
+    const dayPlacements = placementsByDay.get(dayIndex) || [];
     
     // Create event layers HTML (max 4 visible)
     const eventLayersHTML = [];
@@ -14965,7 +15096,7 @@ function renderCalendar(events) {
 
         eventLayersHTML.push(`
           <div class="calendar-event-layer" style="top:${20 + (row * 18)}px;z-index:10;">
-            <div class="${eventClass}" data-calendar-event-id="${escapeHtmlAttr(String(placement.event.id))}" onclick="openEventFromCalendar(${placement.event.id})" onmouseenter="setCalendarEventHover('${escapeJs(String(placement.event.id))}',true)" onmouseleave="setCalendarEventHover('${escapeJs(String(placement.event.id))}',false)" title="${escapeHtmlAttr(eventName)}" style="${spanWidth}z-index:10;position:relative;">
+            <div class="${eventClass}" data-calendar-event-id="${escapeHtmlAttr(String(placement.event.id))}" onclick="event.stopPropagation();openEventFromCalendar(${placement.event.id})" onpointerdown="event.stopPropagation()" onmouseenter="setCalendarEventHover('${escapeJs(String(placement.event.id))}',true)" onmouseleave="setCalendarEventHover('${escapeJs(String(placement.event.id))}',false)" title="${escapeHtmlAttr(eventName)}" style="${spanWidth}z-index:10;position:relative;">
               ${eventText}
             </div>
           </div>
@@ -14974,26 +15105,16 @@ function renderCalendar(events) {
     }
     
     // Count total events for this day (for "more" indicator)
-    const allDayEvents = events.filter(event => {
-      const eventStart = new Date(event.startDate);
-      const eventEnd = new Date(event.endDate);
-      const dayDate = new Date(dayData.date);
-      eventStart.setHours(0, 0, 0, 0);
-      eventEnd.setHours(23, 59, 59, 999);
-      dayDate.setHours(0, 0, 0, 0);
-      return dayDate >= eventStart && dayDate <= eventEnd;
-    });
-    
-    const hiddenEventCount = Math.max(0, allDayEvents.length - 4);
+    const hiddenEventCount = Math.max(0, dayEventCounts[dayIndex] - 4);
     
     // More events indicator
     const moreEventsHTML = hiddenEventCount > 0 ? 
-      `<div class="more-events" onclick="showDayEvents(event, ${dayIndex}, '${dayData.date.toDateString()}')">${hiddenEventCount} more</div>` : '';
+      `<div class="more-events" onpointerdown="event.stopPropagation()" onclick="showDayEvents(event, ${dayIndex}, '${dayData.date.toDateString()}')">${hiddenEventCount} more</div>` : '';
     
     const dayClass = `calendar-day ${!dayData.isCurrentMonth ? 'other-month' : ''} ${dayData.isToday ? 'today' : ''}`;
     
     calendarDaysHTML += `
-      <div class="${dayClass}">
+      <div class="${dayClass}" data-calendar-date="${calendarDateKey(dayData.date)}"${isAdminUser() ? ` tabindex="0" role="button" aria-label="Create event on ${escapeHtmlAttr(dayData.date.toLocaleDateString('en-SG', { day:'numeric', month:'long', year:'numeric' }))}"` : ''}>
         <div class="calendar-day-number">${dayData.dayNum}</div>
         <div class="calendar-events-container">
           ${eventLayersHTML.join('')}
@@ -15012,9 +15133,156 @@ function renderCalendar(events) {
   `;
   
   // Store events data for popup
-  window.calendarAllEvents = events;
+  window.calendarVisibleEvents = events;
   window.calendarDays = calendarDays;
+  bindCalendarDateSelection(container);
 }
+
+let calendarSuppressClickUntil = 0;
+
+function calendarSelectionBounds(startKey, endKey) {
+  return String(startKey || '').localeCompare(String(endKey || '')) <= 0
+    ? [startKey, endKey]
+    : [endKey, startKey];
+}
+
+function paintCalendarSelection(startKey, endKey) {
+  const [first, last] = calendarSelectionBounds(startKey, endKey);
+  document.querySelectorAll('#calendar-container [data-calendar-date]').forEach(cell => {
+    const key = cell.dataset.calendarDate || '';
+    cell.classList.toggle('is-selection-preview', key >= first && key <= last);
+    cell.classList.toggle('is-selection-start', key === first);
+    cell.classList.toggle('is-selection-end', key === last);
+  });
+}
+
+function clearCalendarSelectionPreview() {
+  document.querySelectorAll('#calendar-container [data-calendar-date]').forEach(cell => {
+    cell.classList.remove('is-selection-preview', 'is-selection-start', 'is-selection-end');
+  });
+  calendarSelectionState = null;
+}
+
+function openAddEventModalForRange(startKey, endKey = startKey) {
+  if (!isAdminUser()) return;
+  const [first, last] = calendarSelectionBounds(startKey, endKey);
+  const form = document.getElementById('addEventForm');
+  form?.reset();
+  setAddEventTag('events');
+  const startInput = document.getElementById('eventStartDate');
+  const endInput = document.getElementById('eventEndDate');
+  if (startInput) startInput.value = first;
+  if (endInput) endInput.value = last;
+  openAddEventModal();
+  requestAnimationFrame(() => document.getElementById('eventName')?.focus());
+}
+
+function bindCalendarDateSelection(container) {
+  const grid = container?.querySelector('.calendar-grid');
+  if (!grid || !isAdminUser()) return;
+
+  const cellAtPoint = (clientX, clientY) => {
+    const cell = document.elementFromPoint(clientX, clientY)?.closest('[data-calendar-date]');
+    return cell && grid.contains(cell) ? cell : null;
+  };
+
+  grid.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.pointerType === 'touch') return;
+    if (event.target.closest('.calendar-event,.more-events')) return;
+    const cell = event.target.closest('[data-calendar-date]');
+    if (!cell) return;
+    event.preventDefault();
+    calendarSelectionState = {
+      pointerId: event.pointerId,
+      startKey: cell.dataset.calendarDate,
+      endKey: cell.dataset.calendarDate,
+    };
+    grid.setPointerCapture?.(event.pointerId);
+    paintCalendarSelection(calendarSelectionState.startKey, calendarSelectionState.endKey);
+  });
+
+  grid.addEventListener('pointermove', event => {
+    if (!calendarSelectionState || calendarSelectionState.pointerId !== event.pointerId) return;
+    const cell = cellAtPoint(event.clientX, event.clientY);
+    if (!cell || cell.dataset.calendarDate === calendarSelectionState.endKey) return;
+    calendarSelectionState.endKey = cell.dataset.calendarDate;
+    paintCalendarSelection(calendarSelectionState.startKey, calendarSelectionState.endKey);
+  });
+
+  const finishSelection = event => {
+    if (!calendarSelectionState || calendarSelectionState.pointerId !== event.pointerId) return;
+    const selection = { ...calendarSelectionState };
+    calendarSuppressClickUntil = Date.now() + 350;
+    grid.releasePointerCapture?.(event.pointerId);
+    clearCalendarSelectionPreview();
+    openAddEventModalForRange(selection.startKey, selection.endKey);
+  };
+  grid.addEventListener('pointerup', finishSelection);
+  grid.addEventListener('pointercancel', clearCalendarSelectionPreview);
+
+  grid.addEventListener('click', event => {
+    if (Date.now() < calendarSuppressClickUntil) return;
+    if (event.target.closest('.calendar-event,.more-events')) return;
+    const cell = event.target.closest('[data-calendar-date]');
+    if (cell) openAddEventModalForRange(cell.dataset.calendarDate);
+  });
+
+  grid.addEventListener('keydown', event => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    const cell = event.target.closest('[data-calendar-date]');
+    if (!cell) return;
+    event.preventDefault();
+    openAddEventModalForRange(cell.dataset.calendarDate);
+  });
+}
+
+function closeCalendarMonthPicker() {
+  const picker = document.getElementById('calendarMonthPicker');
+  const button = document.querySelector('.calendar-month-jump');
+  if (picker) picker.hidden = true;
+  button?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleCalendarMonthPicker(event) {
+  event?.stopPropagation();
+  const picker = document.getElementById('calendarMonthPicker');
+  const button = document.querySelector('.calendar-month-jump');
+  if (!picker || !button) return;
+  const opening = picker.hidden;
+  picker.hidden = !opening;
+  button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  if (opening) {
+    const input = document.getElementById('calendarMonthInput');
+    input?.focus();
+    try {
+      input?.showPicker?.();
+    } catch (error) {
+      // The styled month field remains usable when a browser blocks showPicker().
+    }
+  }
+}
+
+function jumpToCalendarMonth() {
+  const value = document.getElementById('calendarMonthInput')?.value || '';
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return;
+  currentCalendarDate = new Date(Number(match[1]), Number(match[2]) - 1, 1, 12, 0, 0, 0);
+  closeCalendarMonthPicker();
+  loadCalendarView();
+}
+
+document.addEventListener('pointerdown', event => {
+  const picker = document.getElementById('calendarMonthPicker');
+  if (!picker || picker.hidden || event.target.closest('.calendar-month-heading')) return;
+  closeCalendarMonthPicker();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    closeCalendarMonthPicker();
+    clearCalendarSelectionPreview();
+  }
+});
 
 function processEventsForCalendar(events, calendarDays) {
   const eventPlacements = [];
@@ -15139,7 +15407,7 @@ function showDayEvents(event, dayIndex, dateString) {
   
   // Get all events for this day
   const dayDate = window.calendarDays[dayIndex].date;
-  const dayEvents = window.calendarAllEvents.filter(event => {
+  const dayEvents = (window.calendarVisibleEvents || []).filter(event => {
     const eventStart = new Date(event.startDate);
     const eventEnd = new Date(event.endDate);
     const checkDate = new Date(dayDate);
@@ -15196,12 +15464,21 @@ function closeDayEventsPopup() {
 }
 
 function navigateCalendar(direction) {
-  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+  currentCalendarDate = new Date(
+    currentCalendarDate.getFullYear(),
+    currentCalendarDate.getMonth() + direction,
+    1,
+    12,
+    0,
+    0,
+    0,
+  );
   loadCalendarView();
 }
 
 function goToToday() {
-  currentCalendarDate = new Date();
+  const today = new Date();
+  currentCalendarDate = new Date(today.getFullYear(), today.getMonth(), 1, 12, 0, 0, 0);
   loadCalendarView();
 }
 
@@ -27356,6 +27633,7 @@ async function deleteEvent(eventId) {
 
   try {
     await apiCall(`/api/events/${eventId}`, "DELETE");
+    clearCalendarCache();
     showNotification("success", "Event deleted successfully");
 
     // Refresh the current view
@@ -27385,6 +27663,7 @@ async function deleteEvent(eventId) {
       if (!adminPassword) return;
       try {
         await apiCall(`/api/events/${eventId}`, "DELETE", { adminPassword });
+        clearCalendarCache();
         showNotification("success", "Event deleted successfully");
         if (document.getElementById("dashboard-section").classList.contains("active")) {
           loadDashboard();
@@ -27989,6 +28268,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       try {
         await apiCall("/api/events", "POST", eventData);
+        clearCalendarCache();
         closeModal("addEventModal");
         showNotification("success", "Event added successfully!");
 
@@ -28288,6 +28568,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       try {
         await apiCall(`/api/events/${eventId}`, "PUT", eventData);
+        clearCalendarCache();
         closeModal("eventDetailsModal");
         showNotification("success", "Event updated successfully!");
 
@@ -34737,6 +35018,7 @@ async function refreshViewedEventModal(eventId) {
 
 async function updateEventAssetOverview(event) {
   if (!event) return;
+  updateCalendarCachedEvent(event);
   const existingIndex = events.findIndex(item => Number(item.id) === Number(event.id));
   if (existingIndex >= 0) events[existingIndex] = event;
   else events.push(event);
@@ -34760,7 +35042,7 @@ async function updateEventAssetOverview(event) {
     } else if (activeTab === 'list') {
       renderAllEventsTable(events);
     } else if (activeTab === 'calendar') {
-      renderCalendar(getFilteredEventsForOverview(events));
+      renderCalendar(getFilteredEventsForOverview(calendarRawEvents));
     }
   }
 
@@ -36068,6 +36350,7 @@ function getActiveAllEventsTab() {
 
 function setAllEventsOverviewView(view, shouldRender = true) {
   const validView = ['card', 'event-list', 'calendar'].includes(view) ? view : 'card';
+  const previousView = getActiveAllEventsTab();
   localStorage.setItem('allEventsOverviewView', validView);
 
   document.querySelectorAll('.events-view-toggle [data-events-view]').forEach(button => {
@@ -36090,7 +36373,15 @@ function setAllEventsOverviewView(view, shouldRender = true) {
   });
 
   if (!shouldRender) return;
-  renderAllEventsList(events);
+  if (validView === 'calendar') {
+    __allEventsLoadVersion += 1;
+    __allEventsProgressiveLoading = false;
+    loadCalendarView();
+  } else if (previousView === 'calendar') {
+    loadAllEvents();
+  } else {
+    renderAllEventsList(events);
+  }
 }
 
 function switchAllEventsTab(tabName) {
@@ -36137,7 +36428,37 @@ function eventMatchesOverviewStateFilter(event, stateFilter = allEventsStateFilt
   return displayState === stateFilter;
 }
 
-function updateEventStateFilterCounts(list) {
+function updateEventStateFilterCounts(list, preferCalendarTotals = false) {
+  const useCalendarTotals = (
+    preferCalendarTotals
+    && calendarStateCounts
+    && typeof calendarStateCounts === 'object'
+  );
+  if (useCalendarTotals) {
+    const sourceCounts = allEventsTypeFilter === 'all'
+      ? calendarStateCounts
+      : (calendarStateCountsByTag?.[allEventsTypeFilter] || {});
+    const counts = { ...sourceCounts };
+    counts.All = Object.values(sourceCounts).reduce((sum, value) => sum + Number(value || 0), 0);
+    counts.Active = Math.max(
+      0,
+      counts.All - Number(sourceCounts.Closed || 0) - Number(sourceCounts['Pending Closure'] || 0),
+    );
+    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+      const state = button.dataset.eventState;
+      const count = Number(counts[state] || 0);
+      const span = button.querySelector('span');
+      if (span) span.textContent = String(count);
+      button.hidden = state !== 'All' && count === 0;
+    });
+    if (allEventsStateFilter !== 'All' && !Number(counts[allEventsStateFilter] || 0)) {
+      allEventsStateFilter = 'All';
+      document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+        button.classList.toggle('active', button.dataset.eventState === 'All');
+      });
+    }
+    return;
+  }
   const source = (list || []).filter(event => {
     if (allEventsTypeFilter === 'all') return true;
     return overviewEventType(event) === allEventsTypeFilter;
@@ -36734,12 +37055,15 @@ function renderAllEventsTable(list) {
 
 function renderAllEventsList(eventsToRender = null) {
   const source = eventsToRender || events;
-  updateEventStateFilterCounts(source);
   const active = getActiveAllEventsTab();
+  const calendarSource = active === 'calendar' && Array.isArray(calendarRawEvents)
+    ? calendarRawEvents
+    : source;
+  updateEventStateFilterCounts(calendarSource, active === 'calendar');
   if (active === 'event-list') {
     renderAllEventsTable(source);
   } else if (active === 'calendar') {
-    renderCalendar(getFilteredEventsForOverview(source));
+    renderCalendar(getFilteredEventsForOverview(calendarSource));
   } else {
     renderAllEventsCards(source);
   }
@@ -36769,6 +37093,11 @@ async function loadAllEvents() {
 
   try {
     ensureAllEventsViewTabs();
+    if (getActiveAllEventsTab() === 'calendar') {
+      statsPromise = loadStatsCards();
+      await loadCalendarView();
+      return;
+    }
     events = [];
     let offset = 0;
     let total = Number.POSITIVE_INFINITY;

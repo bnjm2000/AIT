@@ -398,6 +398,46 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertNotIn('assignedUsers', option)
         self.assertNotIn('modelGroups', option)
 
+    def test_calendar_view_returns_only_overlapping_lightweight_events(self):
+        self.login('admin')
+
+        with patch.object(app_module, '_event_files_for_response', return_value=[]) as files:
+            response = self.client.get(
+                '/api/events?view=calendar&rangeStart=2026-06-29&rangeEnd=2026-08-02'
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload['meta']['view'], 'calendar')
+        self.assertEqual(payload['meta']['rangeStart'], '2026-06-29')
+        self.assertEqual({row['id'] for row in payload['data']}, {1, 2})
+        self.assertEqual(files.call_count, 0)
+        self.assertEqual(
+            set(payload['data'][0]),
+            {'id', 'name', 'location', 'startDate', 'endDate', 'state', 'tag'},
+        )
+        self.assertIn('stateCounts', payload['meta'])
+        self.assertIn('stateCountsByTag', payload['meta'])
+
+        outside = self.client.get(
+            '/api/events?view=calendar&rangeStart=2026-08-03&rangeEnd=2026-09-06'
+        )
+        self.assertEqual(outside.status_code, 200)
+        self.assertEqual(outside.get_json()['data'], [])
+
+    def test_calendar_view_requires_a_complete_valid_range(self):
+        self.login('admin')
+
+        missing_end = self.client.get(
+            '/api/events?view=calendar&rangeStart=2026-07-01'
+        )
+        reversed_range = self.client.get(
+            '/api/events?view=calendar&rangeStart=2026-07-31&rangeEnd=2026-07-01'
+        )
+
+        self.assertEqual(missing_end.status_code, 400)
+        self.assertEqual(reversed_range.status_code, 400)
+
     def test_event_options_can_be_narrowed_by_event_number(self):
         self.login('admin')
 

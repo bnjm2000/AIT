@@ -16195,23 +16195,56 @@ def get_events():
             event for event in data_manager.events.values()
             if _current_user_can_access_event(event)
         ]
-        refresh_event_states_for_read(visible_events)
 
         view_mode = request.args.get('view', '').strip().lower()
-        summary_view = view_mode in {'summary', 'options'}
+        calendar_view = view_mode == 'calendar'
+        summary_view = view_mode in {'summary', 'options', 'calendar'}
         options_view = view_mode == 'options'
+        range_start_raw = request.args.get('rangeStart', '').strip()
+        range_end_raw = request.args.get('rangeEnd', '').strip()
+        range_start = _parse_any_date(range_start_raw)
+        range_end = _parse_any_date(range_end_raw)
+        if calendar_view and bool(range_start_raw) != bool(range_end_raw):
+            return jsonify({'error': 'Both rangeStart and rangeEnd are required'}), 400
+        if calendar_view and range_start_raw and (not range_start or not range_end):
+            return jsonify({'error': 'Calendar range dates are invalid'}), 400
+        if calendar_view and range_start and range_end and range_end < range_start:
+            return jsonify({'error': 'rangeEnd cannot be before rangeStart'}), 400
+        events_to_refresh = visible_events
+        if calendar_view and range_start and range_end:
+            events_to_refresh = [
+                event for event in visible_events
+                if _ranges_overlap(
+                    getattr(event, 'start_date', ''),
+                    getattr(event, 'end_date', ''),
+                    range_start,
+                    range_end,
+                )
+            ]
+        refresh_event_states_for_read(events_to_refresh)
         query = request.args.get('query', '').strip().lower()
         state_filter = request.args.get('state', '').strip().lower()
         tag_filter = request.args.get('tag', '').strip().lower()
         event_id_filter = request.args.get('eventId', type=int)
 
         state_counts = {}
+        state_counts_by_tag = {}
         for event in visible_events:
             state = str(getattr(event, 'state', '') or 'New')
             state_counts[state] = state_counts.get(state, 0) + 1
+            event_tag = str(getattr(event, 'tag', 'events') or 'events').strip().lower()
+            tag_counts = state_counts_by_tag.setdefault(event_tag, {})
+            tag_counts[state] = tag_counts.get(state, 0) + 1
 
         filtered_events = []
         for event in visible_events:
+            if calendar_view and range_start and range_end and not _ranges_overlap(
+                getattr(event, 'start_date', ''),
+                getattr(event, 'end_date', ''),
+                range_start,
+                range_end,
+            ):
+                continue
             if event_id_filter is not None and event.event_id != event_id_filter:
                 continue
             if query and not (
@@ -16254,6 +16287,40 @@ def get_events():
         page_events = filtered_events[
             offset:offset + limit if limit is not None else None
         ] if (offset or limit is not None) else filtered_events
+
+        if calendar_view:
+            events_data = [
+                {
+                    'id': event.event_id,
+                    'name': event.name,
+                    'location': getattr(event, 'location', '') or '',
+                    'startDate': format_date_output(event.start_date),
+                    'endDate': format_date_output(event.end_date),
+                    'state': event.state,
+                    'tag': getattr(event, 'tag', 'events'),
+                }
+                for event in page_events
+            ]
+            return jsonify({
+                'success': True,
+                'data': events_data,
+                'meta': {
+                    'total': total,
+                    'offset': offset,
+                    'limit': limit,
+                    'hasMore': offset + len(events_data) < total,
+                    'nextOffset': (
+                        offset + len(events_data)
+                        if offset + len(events_data) < total
+                        else None
+                    ),
+                    'stateCounts': state_counts,
+                    'stateCountsByTag': state_counts_by_tag,
+                    'view': 'calendar',
+                    'rangeStart': range_start.isoformat() if range_start else '',
+                    'rangeEnd': range_end.isoformat() if range_end else '',
+                },
+            })
 
         events_data = []
         for event in page_events:

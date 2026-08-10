@@ -129,6 +129,43 @@ def test_calendar_days_do_not_hide_bars_arriving_from_an_earlier_day():
     assert 'z-index:' not in calendar_events_css
 
 
+def test_calendar_uses_lightweight_cached_month_ranges():
+    load_calendar = function_source('loadCalendarView', 'setCalendarEventHover')
+
+    assert 'view=calendar&rangeStart=' in SCRIPT
+    assert 'const calendarMonthCache = new Map()' in SCRIPT
+    assert 'fetchCalendarMonth(currentCalendarDate' in load_calendar
+    assert 'prefetchAdjacentCalendarMonths()' in load_calendar
+    assert 'calendar-is-loading' in load_calendar
+    assert 'processEventsForCalendar(events, calendarDays)' in SCRIPT
+    assert 'const placementsByDay = new Map()' in SCRIPT
+
+
+def test_calendar_dates_create_prefilled_events_by_click_or_drag():
+    render_calendar = function_source('renderCalendar', 'calendarSelectionBounds')
+    selection = function_source('bindCalendarDateSelection', 'closeCalendarMonthPicker')
+
+    assert 'data-calendar-date=' in render_calendar
+    assert 'bindCalendarDateSelection(container)' in render_calendar
+    assert "grid.addEventListener('pointerdown'" in selection
+    assert "grid.addEventListener('pointermove'" in selection
+    assert "grid.addEventListener('pointerup'" in selection
+    assert 'openAddEventModalForRange(selection.startKey, selection.endKey)' in selection
+    assert "startInput.value = first" in SCRIPT
+    assert "endInput.value = last" in SCRIPT
+    assert '.calendar-day.is-selection-preview' in TEMPLATE
+
+
+def test_calendar_month_heading_opens_a_jump_picker():
+    render_calendar = function_source('renderCalendar', 'calendarSelectionBounds')
+
+    assert 'class="calendar-month-jump"' in render_calendar
+    assert 'id="calendarMonthInput" type="month"' in render_calendar
+    assert 'function toggleCalendarMonthPicker(event)' in SCRIPT
+    assert 'function jumpToCalendarMonth()' in SCRIPT
+    assert '.calendar-month-picker' in TEMPLATE
+
+
 def test_event_cards_and_list_rows_use_compact_dimensions():
     assert 'min-height: 260px;' in TEMPLATE
     assert '.event-list-table td { padding:6px 9px;' in SCRIPT
