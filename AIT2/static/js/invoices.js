@@ -11,7 +11,8 @@ const invoiceState = {
   searchTimer: null,
   saving: false,
   dirty: false,
-  paidTarget: null
+  paidTarget: null,
+  clients: []
 };
 
 function invoiceRoot() {
@@ -39,6 +40,26 @@ function invoiceToday() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+function invoiceDateFromToday(days = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + Number(days || 0));
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function invoiceDueCountdown(value) {
+  const raw = String(value || '').slice(0, 10);
+  if (!raw) return '';
+  const due = new Date(`${raw}T00:00:00`);
+  const today = new Date(`${invoiceToday()}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return '';
+  const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (days === 0) return 'Due today';
+  if (days === 1) return '1 day from today';
+  if (days > 1) return `${days} days from today`;
+  if (days === -1) return '1 day overdue';
+  return `${Math.abs(days)} days overdue`;
+}
+
 function invoiceUid(prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`;
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -56,6 +77,38 @@ function invoiceClientLabel(quotation) {
   return client.company || client.name || 'No client';
 }
 
+function invoicePlanDetails(plan = invoiceState.current?.plan, quotation = invoiceState.current?.quotation) {
+  if (!plan) return {};
+  if (!plan.invoiceDetails) {
+    plan.invoiceDetails = {
+      client: { ...(quotation?.client || {}) },
+      clientRecordName: quotation?.clientRecordName || '',
+      projectName: quotation?.projectName || '',
+      eventLocation: quotation?.eventLocation || '',
+      salesperson: quotation?.salesperson || '',
+      salespersonUsername: quotation?.salespersonUsername || '',
+      reference: quotation?.reference || '',
+      paymentTerms: quotation?.paymentTerms || ''
+    };
+  }
+  plan.invoiceDetails.client ||= {};
+  return plan.invoiceDetails;
+}
+
+function invoiceClientDisplay(client = {}) {
+  return [client.salutation, client.name].filter(Boolean).join(' ').trim()
+    || client.company || client.email || '';
+}
+
+function invoiceSalutationControl(value) {
+  if (typeof financeSalutationControl === 'function') {
+    return financeSalutationControl(
+      value || '', 'invoice-client-salutation-menu', 'invoiceSetClientSalutation'
+    );
+  }
+  return '';
+}
+
 function invoiceDateLabel(value) {
   if (!value) return 'Not set';
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
@@ -66,10 +119,25 @@ function invoiceDateLabel(value) {
 
 function invoiceLocalSummary(plan, quotation) {
   const total = Number(quotation?.totals?.total || 0);
+  const taxRate = Math.max(0, Number(quotation?.taxRate || 0));
+  const preTaxTotal = Number(
+    quotation?.totals?.netSubtotal
+    ?? (taxRate ? total / (1 + taxRate / 100) : total)
+  );
+  const discountMode = plan?.invoiceDiscountMode === 'amount' ? 'amount' : 'percentage';
+  const discountValue = Math.max(0, Number(plan?.invoiceDiscountValue || 0));
+  const discountAmount = Math.min(preTaxTotal, discountMode === 'amount'
+    ? discountValue
+    : preTaxTotal * Math.min(100, discountValue) / 100);
+  const adjustedPreTax = Math.max(0, Math.round((preTaxTotal - discountAmount) * 100) / 100);
+  const adjustedTax = Math.round(adjustedPreTax * taxRate) / 100;
+  const adjustedTotal = Math.max(0, Math.round((adjustedPreTax + adjustedTax) * 100) / 100);
   const installments = plan?.installments || [];
   const payments = plan?.payments || [];
-  const amountFor = row => row.mode === 'percentage'
-    ? Math.round(total * Number(row.value || 0)) / 100
+  const amountFor = row => invoiceInstallmentIsFrozen(row)
+    ? Number(row.amount || 0)
+    : row.mode === 'percentage'
+    ? Math.round(adjustedTotal * Number(row.value || 0)) / 100
     : Number(row.value || 0);
   installments.forEach(row => { row.amount = Math.round(amountFor(row) * 100) / 100; });
   const active = installments.filter(row => !['cancelled', 'void'].includes(row.status));
@@ -78,14 +146,28 @@ function invoiceLocalSummary(plan, quotation) {
   const paid = payments.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   return {
     quotationTotal: total,
+    invoiceDiscountMode: discountMode,
+    invoiceDiscountValue: discountValue,
+    invoiceDiscountAmount: Math.round(discountAmount * 100) / 100,
+    quotationPreTax: Math.round(preTaxTotal * 100) / 100,
+    adjustedPreTax,
+    taxRate,
+    adjustedTax,
+    adjustedTotal,
     planned,
-    unplanned: Math.max(0, total - planned),
+    unplanned: Math.max(0, adjustedTotal - planned),
     invoiced,
-    notInvoiced: Math.max(0, total - invoiced),
+    notInvoiced: Math.max(0, adjustedTotal - invoiced),
     paid,
-    due: Math.max(0, total - paid),
+    due: Math.max(0, adjustedTotal - paid),
     invoiceBalance: Math.max(0, invoiced - paid)
   };
+}
+
+function invoiceInstallmentIsFrozen(row) {
+  return !!row?.invoiceId && (
+    String(row.status || 'draft').toLowerCase() !== 'draft' || row.invoiceFrozen
+  );
 }
 
 async function loadInvoices(query = '') {
@@ -217,8 +299,9 @@ function invoiceListRowMarkup(row) {
   const plan = row.plan || {};
   const summary = plan.summary || {};
   const installmentCount = (plan.installments || []).length;
+  const isCancelled = String(plan.status || '').toLowerCase() === 'cancelled';
   return `
-    <tr onclick="invoiceOpenPlan('${invoiceAttr(quotation.id)}')">
+    <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPlan('${invoiceAttr(quotation.id)}')">
       <td><strong>${invoiceEscape(quotation.number)}</strong><small>${invoiceDateLabel(quotation.acceptedAt || quotation.updatedAt)}</small></td>
       <td><strong>${invoiceEscape(quotation.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(quotation))}</small></td>
       <td><strong>${invoiceEscape(plan.strategyLabel || 'Not configured')}</strong><small>${installmentCount} installment${installmentCount === 1 ? '' : 's'}</small></td>
@@ -249,12 +332,13 @@ function invoiceIssuedAmountDue(invoice) {
 
 function invoiceIssuedRowMarkup(invoice) {
   const due = invoiceIssuedAmountDue(invoice);
+  const isCancelled = ['cancelled', 'void'].includes(String(invoice.status || '').toLowerCase());
   return `
-    <tr onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
+    <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
       <td><strong>${invoiceEscape(invoice.number || 'Unnumbered invoice')}</strong><small>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</small></td>
       <td><strong>${invoiceEscape(invoice.sourceQuotationNumber || 'Not linked')}</strong></td>
       <td><strong>${invoiceEscape(invoice.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(invoice))}</small></td>
-      <td><strong>${invoiceEscape(invoice.invoiceLabel || 'Full payment')}</strong></td>
+      <td><strong>${invoiceEscape(invoice.invoiceLabel || '-')}</strong></td>
       <td>${invoiceStatusControlMarkup(invoice.status || 'draft', `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, INVOICE_DOCUMENT_STATUSES)}</td>
       <td><strong>${invoiceMoney(invoice.invoiceAmount || invoice.totals?.total)}</strong></td>
       <td><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong></td>
@@ -327,32 +411,49 @@ function invoiceStatusControlMarkup(status, id, actionTemplate, statuses = INVOI
 
 function invoiceToggleStatusMenu(id, event) {
   event?.stopPropagation();
-  document.querySelectorAll('.invoice-status-menu.open').forEach(menu => {
-    if (menu.id !== id) menu.classList.remove('open');
-  });
+  const existingPortal = Array.from(document.querySelectorAll('[data-invoice-status-portal]'))
+    .find(menu => menu.dataset.invoiceStatusPortal === id);
+  if (existingPortal) {
+    existingPortal.remove();
+    return;
+  }
   const menu = document.getElementById(id);
   if (!menu) return;
-  const shouldOpen = !menu.classList.contains('open');
-  menu.classList.toggle('open', shouldOpen);
-  menu.classList.remove('viewport-menu');
-  menu.style.removeProperty('top');
-  menu.style.removeProperty('bottom');
-  menu.style.removeProperty('left');
-  if (!shouldOpen || !menu.closest('.invoice-list-scroll')) return;
+  if (!menu.closest('.invoice-list-scroll')) {
+    const shouldOpen = !menu.classList.contains('open');
+    invoiceCloseStatusMenus();
+    if (!shouldOpen) return;
+    menu.classList.toggle('open');
+    return;
+  }
+  invoiceCloseStatusMenus();
   const trigger = event?.currentTarget || menu.previousElementSibling;
   const rect = trigger?.getBoundingClientRect();
   if (!rect) return;
-  menu.classList.add('viewport-menu');
-  const estimatedHeight = Math.min(280, 12 + menu.children.length * 34);
-  const openAbove = rect.bottom + estimatedHeight > window.innerHeight - 12;
-  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 180))}px`;
-  menu.style.top = `${openAbove ? Math.max(8, rect.top - estimatedHeight - 5) : rect.bottom + 5}px`;
+  const portal = menu.cloneNode(true);
+  portal.id = `${id}-portal`;
+  portal.dataset.invoiceStatusPortal = id;
+  portal.classList.add('open', 'viewport-menu');
+  document.body.appendChild(portal);
+  const menuWidth = Math.max(165, portal.getBoundingClientRect().width || 0);
+  portal.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
+  portal.style.top = `${rect.bottom + 5}px`;
+  portal.style.maxHeight = `${Math.max(96, window.innerHeight - rect.bottom - 17)}px`;
+}
+
+function invoiceCloseStatusMenus(exceptId = '') {
+  document.querySelectorAll('.invoice-status-menu.open:not([data-invoice-status-portal])').forEach(menu => {
+    if (menu.id !== exceptId) menu.classList.remove('open');
+  });
+  document.querySelectorAll('[data-invoice-status-portal]').forEach(menu => {
+    if (menu.dataset.invoiceStatusPortal !== exceptId) menu.remove();
+  });
 }
 
 async function invoiceSetListStatus(quotationId, status) {
   const row = invoiceState.rows.find(item => item.quotation?.id === quotationId);
   if (!row) return;
-  document.querySelectorAll('.invoice-status-menu.open').forEach(menu => menu.classList.remove('open'));
+  invoiceCloseStatusMenus();
   try {
     const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(quotationId)}`, 'PUT', { ...row.plan, status });
     Object.assign(row, response.data);
@@ -390,27 +491,41 @@ function invoiceBackToList() {
 function invoiceApplyPreset(preset, rerender = true) {
   const current = invoiceState.current;
   if (!current) return;
-  const total = Number(current.quotation?.totals?.total || 0);
-  const today = invoiceToday();
+  const total = invoiceLocalSummary(current.plan, current.quotation).adjustedTotal;
+  const defaultDueDate = invoiceDateFromToday(30);
   const row = (label, mode, value) => ({
     id: invoiceUid('installment'), label, mode, value, amount: mode === 'percentage' ? total * value / 100 : value,
-    dueDate: today, notes: '', status: 'planned', invoiceId: '', invoiceNumber: ''
+    dueDate: defaultDueDate, notes: '', status: 'planned', invoiceId: '', invoiceNumber: ''
   });
+  const existingRows = current.plan.installments || [];
+  const issuedRows = existingRows.filter(item => item.invoiceId);
+  const issuedAmount = issuedRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const remaining = Math.max(0, Math.round((total - issuedAmount) * 100) / 100);
   if (preset === 'full') {
     current.plan.strategy = 'full';
     current.plan.strategyLabel = 'Full amount';
-    current.plan.installments = [row('Full payment', 'percentage', 100)];
+    current.plan.installments = issuedRows.length
+      ? [
+          ...issuedRows,
+          ...(remaining > 0 ? [row('Remaining balance', 'amount', remaining)] : [])
+        ]
+      : [row('Full payment', 'percentage', 100)];
   } else if (preset === 'deposit') {
     current.plan.strategy = 'deposit';
     current.plan.strategyLabel = '50% deposit / 50% balance';
-    current.plan.installments = [
-      row('50% deposit', 'percentage', 50),
-      row('Balance after show', 'percentage', 50)
-    ];
+    current.plan.installments = issuedRows.length
+      ? [
+          ...issuedRows,
+          ...(remaining > 0 ? [row('Balance after show', 'amount', remaining)] : [])
+        ]
+      : [
+          row('50% deposit', 'percentage', 50),
+          row('Balance after show', 'percentage', 50)
+        ];
   } else {
     current.plan.strategy = 'custom';
     current.plan.strategyLabel = 'Custom installment plan';
-    if (!(current.plan.installments || []).length) current.plan.installments = [row('Installment 1', 'amount', total)];
+    if (!existingRows.length) current.plan.installments = [row('Installment 1', 'amount', total)];
   }
   invoiceMarkDirty();
   if (rerender) invoiceRenderEditor();
@@ -422,13 +537,16 @@ function invoiceRenderEditor() {
   if (!root || !current) return;
   const quotation = current.quotation || {};
   const plan = current.plan || {};
+  const details = invoicePlanDetails(plan, quotation);
+  const client = details.client || {};
   const summary = invoiceLocalSummary(plan, quotation);
+  const discountLocked = (plan.installments || []).some(invoiceInstallmentIsFrozen);
   plan.summary = summary;
   root.innerHTML = `
     <header class="invoice-editor-header">
       <div class="invoice-editor-title">
         <button type="button" class="invoice-back" onclick="invoiceBackToList()"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>Invoices</button>
-        <div><span>${invoiceEscape(quotation.number)}</span><h2>${invoiceEscape(quotation.projectName || 'Untitled project')}</h2><p>${invoiceEscape(invoiceClientLabel(quotation))}</p></div>
+        <div><span>${invoiceEscape(quotation.number)}</span><h2>${invoiceEscape(details.projectName || 'Untitled project')}</h2><p>${invoiceEscape(invoiceClientDisplay(client) || 'No client')}</p></div>
       </div>
       <div class="invoice-editor-actions">
         ${invoiceStatusControlMarkup(plan.status || 'draft', `editor-status-${quotation.id}`, 'invoiceSetPlanStatus(STATUS_VALUE)')}
@@ -438,13 +556,37 @@ function invoiceRenderEditor() {
       </div>
     </header>
     <div class="invoice-metrics">
-      ${invoiceMetric('Quotation total', summary.quotationTotal, '')}
+      ${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}
       ${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}
       ${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}
       ${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}
     </div>
     <div class="invoice-editor-grid">
       <main class="invoice-editor-main">
+        <section class="invoice-panel invoice-details-panel">
+          <div class="invoice-panel-heading finance-client-heading">
+            <div><h3>Client &amp; invoicing details</h3></div>
+            <div class="finance-client-actions invoice-client-actions">
+              <button type="button" class="finance-picker-button" onclick="invoiceOpenClientPicker()">
+                <span>${invoiceEscape(invoiceClientDisplay(client) || 'Select known client')}</span>
+                <small>${invoiceEscape(client.company || client.email || client.phone || '')}</small>
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="invoiceStartNewClient()">+ New Client</button>
+            </div>
+          </div>
+          <div class="finance-form-grid finance-quote-details-grid invoice-details-grid">
+            <label class="finance-field"><span>Name</span><div class="finance-client-name-control">${invoiceSalutationControl(client.salutation || '')}<input id="invoiceClientName" class="finance-input" value="${invoiceAttr(client.name || '')}" oninput="invoiceUpdateClientField('name',this.value)"></div></label>
+            <label class="finance-field"><span>Company</span><input class="finance-input" value="${invoiceAttr(client.company || '')}" oninput="invoiceUpdateClientField('company',this.value)"></label>
+            <label class="finance-field"><span>Phone</span><input class="finance-input" value="${invoiceAttr(client.phone || '')}" oninput="invoiceUpdateClientField('phone',this.value)"></label>
+            <label class="finance-field"><span>Email</span><input class="finance-input" type="email" value="${invoiceAttr(client.email || '')}" oninput="invoiceUpdateClientField('email',this.value)"></label>
+            <label class="finance-field finance-span-3"><span>Billing address</span><input class="finance-input" value="${invoiceAttr([client.address1, client.address2, client.address3, client.postalCode].filter(Boolean).join(', '))}" oninput="invoiceSetClientAddress(this.value)"></label>
+            <label class="finance-field"><span>Salesperson</span><input class="finance-input" value="${invoiceAttr(details.salesperson || '')}" oninput="invoiceUpdateDetail('salesperson',this.value,true)"></label>
+            <label class="finance-field finance-span-2"><span>Project Name</span><input class="finance-input" value="${invoiceAttr(details.projectName || '')}" oninput="invoiceUpdateDetail('projectName',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>Location</span><input class="finance-input" value="${invoiceAttr(details.eventLocation || '')}" oninput="invoiceUpdateDetail('eventLocation',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>PO / reference number</span><input class="finance-input" value="${invoiceAttr(details.reference || '')}" oninput="invoiceUpdateDetail('reference',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>Payment terms</span><input class="finance-input" value="${invoiceAttr(details.paymentTerms || '')}" oninput="invoiceUpdateDetail('paymentTerms',this.value)"></label>
+          </div>
+        </section>
         <section class="invoice-panel">
           <div class="invoice-panel-heading"><div><h3>Invoicing strategy</h3><p>Choose a starting point, then adjust any installment.</p></div></div>
           <div class="invoice-presets">
@@ -453,14 +595,23 @@ function invoiceRenderEditor() {
             <button type="button" class="${plan.strategy === 'custom' ? 'active' : ''}" onclick="invoiceApplyPreset('custom')"><strong>Custom</strong><span>Any installment plan</span></button>
           </div>
           <label class="invoice-strategy-name"><span>Plan label</span><input value="${invoiceAttr(plan.strategyLabel || '')}" oninput="invoiceUpdatePlanField('strategyLabel',this.value)"></label>
+          <div class="invoice-discount-control ${discountLocked ? 'locked' : ''}">
+            <div><strong>Additional discount</strong><span>${discountLocked ? 'Locked after invoice issue' : 'Applied before installments'}</span></div>
+            <div class="invoice-discount-mode">
+              <button type="button" class="${(plan.invoiceDiscountMode || 'percentage') === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateDiscount('invoiceDiscountMode','percentage')" ${discountLocked ? 'disabled' : ''}>%</button>
+              <button type="button" class="${plan.invoiceDiscountMode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateDiscount('invoiceDiscountMode','amount')" ${discountLocked ? 'disabled' : ''}>$</button>
+            </div>
+            <label><span>${plan.invoiceDiscountMode === 'amount' ? 'Amount' : 'Percentage'}</span><div class="invoice-value-input"><b>${plan.invoiceDiscountMode === 'amount' ? '$' : '%'}</b><input type="number" min="0" ${plan.invoiceDiscountMode === 'amount' ? 'step="0.01"' : 'max="100" step="0.1"'} value="${Number(plan.invoiceDiscountValue || 0)}" oninput="invoiceUpdateDiscount('invoiceDiscountValue',this.value)" ${discountLocked ? 'disabled' : ''}></div></label>
+            <div class="invoice-discount-total"><span>Discount</span><strong id="invoiceDiscountAmount">-${invoiceMoney(summary.invoiceDiscountAmount)}</strong></div>
+          </div>
         </section>
         <section class="invoice-panel invoice-installments-panel">
-          <div class="invoice-panel-heading"><div><h3>Installments</h3><p>${invoiceMoney(summary.planned)} planned of ${invoiceMoney(summary.quotationTotal)}</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddInstallment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add installment</button></div>
+          <div class="invoice-panel-heading"><div><h3>Installments</h3><p>${invoiceMoney(summary.planned)} planned of ${invoiceMoney(summary.adjustedTotal)}</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddInstallment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add installment</button></div>
           <div class="invoice-installment-list">${(plan.installments || []).map((row, index) => invoiceInstallmentMarkup(row, index)).join('')}</div>
           <div class="invoice-plan-balance ${Math.abs(summary.unplanned) < 0.01 ? 'balanced' : ''}"><span>${Math.abs(summary.unplanned) < 0.01 ? 'Plan covers the quotation total' : 'Still to allocate'}</span><strong>${invoiceMoney(summary.unplanned)}</strong></div>
         </section>
         <section class="invoice-panel">
-          <div class="invoice-panel-heading"><div><h3>Payments received</h3><p>These entries appear on issued invoice PDFs.</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddPayment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add payment</button></div>
+          <div class="invoice-panel-heading"><div><h3>Payments received</h3><p>Track receipts without changing sent invoices.</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddPayment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add payment</button></div>
           <div class="invoice-payment-list">${(plan.payments || []).length ? plan.payments.map((row, index) => invoicePaymentMarkup(row, index)).join('') : '<div class="invoice-inline-empty">No payments recorded yet.</div>'}</div>
         </section>
       </main>
@@ -485,18 +636,21 @@ function invoiceMetric(label, amount, detail, tone = '') {
 
 function invoiceInstallmentMarkup(row, index) {
   const issued = !!row.invoiceId;
+  const detailsEditable = !issued || (
+    String(row.status || 'draft').toLowerCase() === 'draft' && !row.invoiceFrozen
+  );
   return `
     <article class="invoice-installment ${issued ? 'issued' : ''}">
       <div class="invoice-installment-index">${String(index + 1).padStart(2, '0')}</div>
-      <label><span>Label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdateInstallment(${index},'label',this.value)" ${issued ? 'disabled' : ''}></label>
+      <label><span>Label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdateInstallment(${index},'label',this.value)" ${detailsEditable ? '' : 'disabled'}></label>
       <div class="invoice-mode-field"><span>Calculate by</span><div><button type="button" class="${row.mode === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','percentage')" ${issued ? 'disabled' : ''}>%</button><button type="button" class="${row.mode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','amount')" ${issued ? 'disabled' : ''}>$</button></div></div>
       <label><span>${row.mode === 'percentage' ? 'Percentage' : 'Amount'}</span><div class="invoice-value-input"><b>${row.mode === 'percentage' ? '%' : '$'}</b><input type="number" min="0" step="0.01" value="${Number(row.value || 0)}" oninput="invoiceUpdateInstallment(${index},'value',this.value)" ${issued ? 'disabled' : ''}></div></label>
-      <label><span>Due date</span><input type="date" value="${invoiceAttr(row.dueDate || '')}" oninput="invoiceUpdateInstallment(${index},'dueDate',this.value)"></label>
+      <label class="invoice-due-date-field"><span>Due date <small id="invoiceDueCountdown-${invoiceAttr(row.id)}">${invoiceEscape(invoiceDueCountdown(row.dueDate))}</small></span><input type="date" value="${invoiceAttr(row.dueDate || '')}" oninput="invoiceUpdateInstallment(${index},'dueDate',this.value)" ${detailsEditable ? '' : 'disabled'}></label>
       <div class="invoice-installment-amount"><span>Invoice amount</span><strong>${invoiceMoney(row.amount)}</strong></div>
       <div class="invoice-installment-actions">
         ${issued ? `
           ${invoiceStatusControlMarkup(row.status || 'draft', `installment-status-${row.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(row.invoiceId)}',${index},STATUS_VALUE,'editor')`, INVOICE_DOCUMENT_STATUSES)}
-          <button type="button" class="invoice-pdf-button" onclick="invoiceOpenPdf('${invoiceAttr(row.invoiceId)}')"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>${invoiceEscape(row.invoiceNumber || 'Export PDF')}</button>
+          <button type="button" class="invoice-pdf-button" onclick="invoiceOpenPdf('${invoiceAttr(row.invoiceId)}',${index})"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>${invoiceEscape(row.invoiceNumber || 'Export PDF')}</button>
         ` : `
           <button type="button" class="invoice-issue-button" onclick="invoiceIssueInstallment(${index})">Issue invoice</button>
           <button type="button" class="invoice-remove-button" title="Remove installment" onclick="invoiceRemoveInstallment(${index})"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></button>
@@ -510,7 +664,7 @@ function invoicePaymentMarkup(row, index) {
   return `
     <article class="invoice-payment">
       <label><span>Date received</span><input type="date" value="${invoiceAttr(row.date || '')}" oninput="invoiceUpdatePayment(${index},'date',this.value)"></label>
-      <label class="invoice-payment-label"><span>Label shown on invoice</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdatePayment(${index},'label',this.value)" placeholder="Deposit received"></label>
+      <label class="invoice-payment-label"><span>Payment label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdatePayment(${index},'label',this.value)" placeholder="Deposit received"></label>
       <label><span>Amount</span><div class="invoice-value-input"><b>$</b><input type="number" min="0" step="0.01" value="${Number(row.amount || 0)}" oninput="invoiceUpdatePayment(${index},'amount',this.value)"></div></label>
       <button type="button" class="invoice-remove-button" title="Remove payment" onclick="invoiceRemovePayment(${index})"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></button>
     </article>
@@ -541,18 +695,146 @@ function invoiceUpdatePlanField(key, value) {
   invoiceMarkDirty();
 }
 
+function invoiceUpdateDetail(field, value, clearSalespersonLink = false) {
+  const details = invoicePlanDetails();
+  if (!details) return;
+  details[field] = value;
+  if (clearSalespersonLink) details.salespersonUsername = '';
+  invoiceMarkDirty();
+}
+
+function invoiceUpdateClientField(field, value) {
+  const details = invoicePlanDetails();
+  if (!details) return;
+  details.client[field] = value;
+  invoiceMarkDirty();
+}
+
+function invoiceSetClientAddress(value) {
+  const details = invoicePlanDetails();
+  if (!details) return;
+  Object.assign(details.client, {
+    address1: value,
+    address2: '',
+    address3: '',
+    postalCode: ''
+  });
+  invoiceMarkDirty();
+}
+
+function invoiceSetClientSalutation(value, menuId) {
+  document.getElementById(menuId)?.classList.remove('open');
+  invoiceUpdateClientField('salutation', value || '');
+  invoiceRenderEditor();
+}
+
+function invoiceStartNewClient() {
+  const details = invoicePlanDetails();
+  if (!details) return;
+  details.client = {
+    salutation: '', name: '', company: '', phone: '', email: '',
+    contactPerson: '', taxNumber: '', address1: '', address2: '',
+    address3: '', postalCode: ''
+  };
+  details.clientRecordName = '';
+  invoiceMarkDirty();
+  invoiceRenderEditor();
+  setTimeout(() => document.getElementById('invoiceClientName')?.focus(), 0);
+}
+
+function invoiceEnsureClientPicker() {
+  if (document.getElementById('invoiceClientPickerModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'invoiceClientPickerModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-picker-modal">
+      <div class="modal-header"><h3 class="modal-title">Select known client</h3><button type="button" class="close-btn" onclick="closeModal('invoiceClientPickerModal')">&times;</button></div>
+      <input id="invoiceClientPickerSearch" class="finance-input" placeholder="Search clients..." autocomplete="off" oninput="invoiceRenderClientPickerResults(this.value)">
+      <div id="invoiceClientPickerResults" class="finance-picker-results"></div>
+      <div class="modal-actions finance-picker-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('invoiceClientPickerModal')">Cancel</button></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function invoiceRenderClientPickerResults(query = '') {
+  const root = document.getElementById('invoiceClientPickerResults');
+  if (!root) return;
+  const needle = String(query || '').trim().toLowerCase();
+  const matches = invoiceState.clients
+    .map((client, index) => ({ client, index }))
+    .filter(({ client }) => !needle || [
+      client.name, client.company, client.email, client.phone
+    ].some(value => String(value || '').toLowerCase().includes(needle)));
+  root.innerHTML = matches.map(({ client, index }) => `
+    <button type="button" class="finance-picker-option" onclick="invoiceApplyKnownClient(${index})">
+      <strong>${invoiceEscape(invoiceClientDisplay(client) || 'Unnamed client')}</strong>
+      <span>${invoiceEscape([client.company, client.email, client.phone].filter(Boolean).join(' - '))}</span>
+    </button>
+  `).join('') || '<div class="finance-suggestion-empty">No matching clients.</div>';
+}
+
+async function invoiceOpenClientPicker() {
+  invoiceEnsureClientPicker();
+  const search = document.getElementById('invoiceClientPickerSearch');
+  const results = document.getElementById('invoiceClientPickerResults');
+  if (search) search.value = '';
+  if (results) results.innerHTML = '<div class="invoice-inline-empty">Loading clients...</div>';
+  openModal('invoiceClientPickerModal');
+  try {
+    const response = await apiCall('/api/clients');
+    invoiceState.clients = Array.isArray(response.data) ? response.data : [];
+    invoiceRenderClientPickerResults('');
+    search?.focus();
+  } catch (error) {
+    if (results) results.innerHTML = `<div class="finance-suggestion-empty">${invoiceEscape(error.message || 'Unable to load clients')}</div>`;
+  }
+}
+
+function invoiceApplyKnownClient(index) {
+  const client = invoiceState.clients[Number(index)];
+  const details = invoicePlanDetails();
+  if (!client || !details) return;
+  details.client = { ...client };
+  details.clientRecordName = client.name || '';
+  invoiceMarkDirty();
+  closeModal('invoiceClientPickerModal');
+  invoiceRenderEditor();
+}
+
+function invoiceUpdateDiscount(key, value) {
+  const current = invoiceState.current;
+  if (!current || (current.plan.installments || []).some(invoiceInstallmentIsFrozen)) return;
+  current.plan[key] = key === 'invoiceDiscountValue' ? Math.max(0, Number(value || 0)) : value;
+  invoiceMarkDirty();
+  if (key === 'invoiceDiscountMode') invoiceRenderEditor();
+  else invoiceRefreshCalculatedValues();
+}
+
 function invoiceSetPlanStatus(status) {
   if (!invoiceState.current) return;
   invoiceState.current.plan.status = status;
-  document.querySelectorAll('.invoice-status-menu.open').forEach(menu => menu.classList.remove('open'));
+  invoiceCloseStatusMenus();
   invoiceMarkDirty();
   invoiceSavePlan();
 }
 
 function invoiceUpdateInstallment(index, key, value) {
   const row = invoiceState.current?.plan?.installments?.[index];
-  if (!row || row.invoiceId && ['mode', 'value', 'label'].includes(key)) return;
+  const issuedDetailsLocked = row?.invoiceId && (
+    String(row.status || 'draft').toLowerCase() !== 'draft' || row.invoiceFrozen
+  );
+  if (
+    !row
+    || row.invoiceId && ['mode', 'value'].includes(key)
+    || issuedDetailsLocked && ['label', 'dueDate'].includes(key)
+  ) return;
   row[key] = key === 'value' ? Number(value || 0) : value;
+  if (key === 'dueDate') {
+    const countdown = document.getElementById(`invoiceDueCountdown-${row.id}`);
+    if (countdown) countdown.textContent = invoiceDueCountdown(value);
+  }
   if (key === 'mode' && row.mode === 'percentage') {
     const total = Number(invoiceState.current.quotation?.totals?.total || 0);
     row.value = total ? Math.round(Number(row.amount || 0) / total * 10000) / 100 : 0;
@@ -579,14 +861,27 @@ function invoiceRefreshCalculatedValues() {
     balance.querySelector('strong').textContent = invoiceMoney(summary.unplanned);
   }
   const metrics = document.querySelector('.invoice-metrics');
-  if (metrics) metrics.outerHTML = `<div class="invoice-metrics">${invoiceMetric('Quotation total', summary.quotationTotal, '')}${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}</div>`;
+  if (metrics) metrics.outerHTML = `<div class="invoice-metrics">${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}</div>`;
+  const discountAmount = document.getElementById('invoiceDiscountAmount');
+  if (discountAmount) discountAmount.textContent = `-${invoiceMoney(summary.invoiceDiscountAmount)}`;
 }
 
 function invoiceAddInstallment() {
   const rows = invoiceState.current?.plan?.installments;
   if (!rows) return;
-  rows.push({ id: invoiceUid('installment'), label: `Installment ${rows.length + 1}`, mode: 'amount', value: 0, amount: 0, dueDate: invoiceToday(), notes: '', status: 'planned', invoiceId: '', invoiceNumber: '' });
+  const summary = invoiceLocalSummary(invoiceState.current.plan, invoiceState.current.quotation);
+  const quotationStatus = String(invoiceState.current.quotation?.status || '').toLowerCase();
+  if (
+    quotationStatus === 'accepted'
+    && summary.invoiced > 0.005
+    && summary.notInvoiced <= 0.005
+  ) {
+    showNotification('info', 'This quotation has already been invoiced in full.');
+    return;
+  }
+  rows.push({ id: invoiceUid('installment'), label: `Installment ${rows.length + 1}`, mode: 'amount', value: 0, amount: 0, dueDate: invoiceDateFromToday(30), notes: '', status: 'planned', invoiceId: '', invoiceNumber: '' });
   invoiceState.current.plan.strategy = 'custom';
+  invoiceState.current.plan.strategyLabel = 'Custom installment plan';
   invoiceMarkDirty();
   invoiceRenderEditor();
 }
@@ -658,6 +953,16 @@ async function invoiceIssueInstallment(index) {
     showNotification('error', 'Enter an installment amount before issuing the invoice.');
     return;
   }
+  const summary = invoiceLocalSummary(current.plan, current.quotation);
+  const quotationStatus = String(current.quotation?.status || '').toLowerCase();
+  if (
+    quotationStatus === 'accepted'
+    && summary.invoiced > 0.005
+    && Number(row.amount || 0) > Number(summary.notInvoiced || 0) + 0.005
+  ) {
+    showNotification('error', 'This invoice would exceed the remaining quotation amount.');
+    return;
+  }
   const saved = await invoiceSavePlan({ silent: true });
   if (!saved) return;
   const confirmed = typeof showAppConfirm === 'function' ? await showAppConfirm({
@@ -689,7 +994,7 @@ function invoiceEnsurePaidModal() {
       <p>Confirm when the payment was received. The amount due for this invoice will be recorded automatically.</p>
       <label><span>Payment received date</span><input id="invoicePaidReceivedDate" type="date"></label>
       <div class="invoice-paid-amount"><span>Payment to record</span><strong id="invoicePaidAmount">$0.00</strong></div>
-      <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('invoicePaidModal')">Cancel</button><button type="button" class="btn invoice-save" onclick="invoiceConfirmPaid()">Mark as paid</button></div>
+      <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('invoicePaidModal')">Cancel</button><button type="button" class="btn invoice-paid-confirm" onclick="invoiceConfirmPaid()">Mark as paid</button></div>
     </div>
   `;
   document.body.appendChild(modal);
@@ -710,7 +1015,7 @@ function invoiceFindDocument(invoiceId) {
 
 async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = 'editor') {
   if (!invoiceId) return;
-  document.querySelectorAll('.invoice-status-menu.open').forEach(menu => menu.classList.remove('open'));
+  invoiceCloseStatusMenus();
   if (status === 'paid') {
     const invoice = invoiceFindDocument(invoiceId);
     invoiceState.paidTarget = { invoiceId, index, origin };
@@ -728,7 +1033,10 @@ async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = '
       await loadInvoices(invoiceState.query);
     } else {
       const row = invoiceState.current?.plan?.installments?.[index];
-      if (row) row.status = response.data.status;
+      if (row) {
+        row.status = response.data.status;
+        row.invoiceFrozen = !!response.data.invoiceSentSnapshot;
+      }
       await invoiceSavePlan({ silent: true });
       invoiceRenderEditor();
     }
@@ -765,9 +1073,25 @@ async function invoiceConfirmPaid() {
   }
 }
 
-function invoiceOpenPdf(invoiceId) {
+async function invoiceOpenPdf(invoiceId, installmentIndex = -1) {
   if (!invoiceId) return;
-  window.open(`/api/invoices/${encodeURIComponent(invoiceId)}/pdf`, '_blank', 'noopener');
+  const row = invoiceState.current?.plan?.installments?.[installmentIndex];
+  let previewWindow = null;
+  if (
+    row?.invoiceId === invoiceId
+    && String(row.status || 'draft').toLowerCase() === 'draft'
+    && invoiceState.dirty
+  ) {
+    previewWindow = window.open('', '_blank');
+    const saved = await invoiceSavePlan({ silent: true });
+    if (!saved) {
+      previewWindow?.close();
+      return;
+    }
+  }
+  const pdfUrl = `/api/invoices/${encodeURIComponent(invoiceId)}/pdf`;
+  if (previewWindow) previewWindow.location.href = pdfUrl;
+  else window.open(pdfUrl, '_blank', 'noopener');
 }
 
 function invoiceOpenQuotation(quotationId) {
@@ -777,5 +1101,5 @@ function invoiceOpenQuotation(quotationId) {
 
 document.addEventListener('click', event => {
   if (event.target.closest('.invoice-status-control')) return;
-  document.querySelectorAll('.invoice-status-menu.open').forEach(menu => menu.classList.remove('open'));
+  invoiceCloseStatusMenus();
 });

@@ -2495,7 +2495,7 @@ function setupFinanceNavigation() {
   section.dataset.financeNavigation = 'true';
   section.innerHTML = `
     <h3>Finance</h3>
-    ${isOwner ? '<button type="button" class="nav-item nav-item-inline" data-section="costing">Costing</button>' : ''}
+    <button type="button" class="nav-item nav-item-inline" data-section="costing">Costing</button>
     <button type="button" class="nav-item nav-item-inline" data-section="quotations">Quotations</button>
     <button type="button" class="nav-item nav-item-inline" data-section="invoices">Invoices</button>
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
@@ -4633,7 +4633,9 @@ function financeRenderEditor() {
   const quotationNumber = financeQuotationNumberParts(document.number, document.revision);
   const setupLabel = financeScheduleLabel('setup', document);
   const teardownLabel = financeScheduleLabel('teardown', document);
-  const canOpenCosting = typeof isPlatformAdminUser === 'function' && isPlatformAdminUser();
+  const canOpenCosting = typeof currentUserHasSalesAccess === 'function'
+    ? currentUserHasSalesAccess()
+    : false;
   root.innerHTML = `
     <div class="finance-editor-header">
       <div class="finance-editor-identity">
@@ -5805,8 +5807,9 @@ async function financeExportInvoice(documentId = financeState.current?.id) {
   if (!current || !financeCanExportInvoice(current)) return;
   try {
     if (financeState.current?.id === current.id) await financeSaveCurrent(false);
-    showSection('invoices', { loadDetail: false });
-    await invoiceOpenPlan(current.id);
+    const invoicePath = `/invoices/${encodeURIComponent(current.id)}`;
+    if (typeof updateAppDetailHistory === 'function') updateAppDetailHistory(invoicePath);
+    showSection('invoices', { updateHistory: false });
   } catch (error) {
     showNotification('error', error.message || 'Failed to open invoice plan');
   }

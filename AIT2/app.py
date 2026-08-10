@@ -2531,6 +2531,8 @@ def _pdf_settings_defaults():
         'bankAccountName': '',
         'bankAccountNumber': '',
         'paynowUen': '',
+        'paymentDetailsText': '',
+        'paymentDetailsEnabled': True,
         'currency': 'SGD',
         'taxLabel': 'GST',
         'taxRate': 9,
@@ -2594,7 +2596,7 @@ def _normalise_pdf_settings(settings, company_code=None):
     for key in (
         'companyName', 'registrationNumber', 'billingAddress', 'phone', 'email',
         'website', 'bankName', 'bankAccountName', 'bankAccountNumber',
-        'paynowUen', 'currency', 'taxLabel', 'quotationPrefix',
+        'paynowUen', 'paymentDetailsText', 'currency', 'taxLabel', 'quotationPrefix',
         'invoicePrefix', 'defaultPaymentTerms', 'defaultTerms',
         'themeColor', 'letterheadText',
     ):
@@ -2610,6 +2612,12 @@ def _normalise_pdf_settings(settings, company_code=None):
             '', '0', 'false', 'no', 'off'
         }
     merged['letterheadEnabled'] = bool(letterhead_enabled)
+    payment_details_enabled = merged.get('paymentDetailsEnabled', True)
+    if isinstance(payment_details_enabled, str):
+        payment_details_enabled = payment_details_enabled.strip().lower() not in {
+            '', '0', 'false', 'no', 'off'
+        }
+    merged['paymentDetailsEnabled'] = bool(payment_details_enabled)
     if not re.fullmatch(r'#[0-9A-Fa-f]{6}', merged.get('themeColor') or ''):
         merged['themeColor'] = DEFAULT_PDF_THEME_COLOR
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
@@ -2726,6 +2734,8 @@ def _pdf_settings_payload(settings=None):
         'bankAccountName': settings.get('bankAccountName', ''),
         'bankAccountNumber': settings.get('bankAccountNumber', ''),
         'paynowUen': settings.get('paynowUen', ''),
+        'paymentDetailsText': settings.get('paymentDetailsText', ''),
+        'paymentDetailsEnabled': settings.get('paymentDetailsEnabled', True),
         'currency': settings.get('currency', 'SGD'),
         'taxLabel': settings.get('taxLabel', 'GST'),
         'taxRate': settings.get('taxRate', 0),
@@ -13590,7 +13600,7 @@ APP_ADMIN_PAGE_SECTIONS = {
     'plan', 'compare', 'workforce', 'invoice-claims', 'vehicles', 'logs', 'maintenance-report',
     'users', 'pdf-settings',
 }
-APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting', 'costing'}
+APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting'}
 APP_SALES_PAGE_SECTIONS = {
     'quotations', 'invoices', 'costing', 'profit-loss', 'accounting',
 }
@@ -13697,7 +13707,7 @@ def invoice_plan_detail_page(quotation_id):
 @require_auth
 def costing_detail_page(costing_id):
     """Serve a costing deep link; document access is enforced by its API."""
-    if not _current_user_is_owner():
+    if not _current_user_has_sales_access():
         return redirect('/events')
     return _render_app_page('costing')
 
@@ -14439,7 +14449,7 @@ def update_pdf_settings():
             'phone', 'email', 'website', 'bankName', 'bankAccountName',
             'bankAccountNumber', 'paynowUen', 'currency', 'taxLabel',
             'quotationPrefix', 'invoicePrefix', 'defaultPaymentTerms',
-            'defaultTerms', 'themeColor', 'letterheadText',
+            'defaultTerms', 'themeColor', 'letterheadText', 'paymentDetailsText',
         )
         for key in text_fields:
             if key not in data:
@@ -14456,6 +14466,13 @@ def update_pdf_settings():
             )
         if 'letterheadEnabled' in data:
             settings['letterheadEnabled'] = bool(data.get('letterheadEnabled'))
+
+        if 'paymentDetailsText' in data:
+            settings['paymentDetailsEnabled'] = bool(
+                str(data.get('paymentDetailsText') or '').strip()
+            )
+        if 'paymentDetailsEnabled' in data:
+            settings['paymentDetailsEnabled'] = bool(data.get('paymentDetailsEnabled'))
 
         if 'taxRate' in data:
             settings['taxRate'] = _safe_float(data.get('taxRate'), 0)
@@ -28140,6 +28157,41 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'invoicePlanId': str(value.get('invoicePlanId') or existing.get('invoicePlanId') or '').strip()[:80],
         'invoiceInstallmentId': str(value.get('invoiceInstallmentId') or existing.get('invoiceInstallmentId') or '').strip()[:80],
         'invoiceLabel': str(value.get('invoiceLabel') if 'invoiceLabel' in value else existing.get('invoiceLabel') or '').strip()[:300],
+        'invoiceDiscountMode': str(
+            value.get('invoiceDiscountMode')
+            if 'invoiceDiscountMode' in value
+            else existing.get('invoiceDiscountMode') or 'percentage'
+        ).strip().lower()[:20],
+        'invoiceDiscountValue': round(max(0, _safe_float(
+            value.get('invoiceDiscountValue')
+            if 'invoiceDiscountValue' in value
+            else existing.get('invoiceDiscountValue'),
+            0,
+        )), 4),
+        'invoiceDiscountAmount': round(max(0, _safe_float(
+            value.get('invoiceDiscountAmount')
+            if 'invoiceDiscountAmount' in value
+            else existing.get('invoiceDiscountAmount'),
+            0,
+        )), 2),
+        'quotationPreTax': round(max(0, _safe_float(
+            value.get('quotationPreTax')
+            if 'quotationPreTax' in value
+            else existing.get('quotationPreTax'),
+            0,
+        )), 2),
+        'invoiceAdjustedPreTax': round(max(0, _safe_float(
+            value.get('invoiceAdjustedPreTax')
+            if 'invoiceAdjustedPreTax' in value
+            else existing.get('invoiceAdjustedPreTax'),
+            0,
+        )), 2),
+        'invoiceAdjustedTax': round(max(0, _safe_float(
+            value.get('invoiceAdjustedTax')
+            if 'invoiceAdjustedTax' in value
+            else existing.get('invoiceAdjustedTax'),
+            0,
+        )), 2),
         'invoiceAmount': round(max(0, _safe_float(
             value.get('invoiceAmount') if 'invoiceAmount' in value else existing.get('invoiceAmount'),
             0,
@@ -28178,6 +28230,10 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'updatedAt': existing.get('updatedAt') if is_read_normalisation else now.isoformat(timespec='seconds'),
         'updatedBy': existing.get('updatedBy', '') if is_read_normalisation else current_username,
     }
+    if document_type == 'invoice':
+        frozen_source = existing.get('invoiceSentSnapshot')
+        if isinstance(frozen_source, dict):
+            document['invoiceSentSnapshot'] = copy.deepcopy(frozen_source)
     if document_type == 'quotation':
         quote_prefix = str(settings.get('quotationPrefix') or prefix or 'QT').upper()
         if not document.get('customNumber'):
@@ -28224,7 +28280,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             updated_by = str(value.get('updatedBy') or '').strip()
             if updated_by:
                 value['updatedByName'] = _user_display_name(updated_by)
-            for item in value.values():
+            for key, item in value.items():
+                if key == 'invoiceSentSnapshot':
+                    continue
                 if isinstance(item, (dict, list)):
                     hydrate_user_names(item)
 
@@ -35072,7 +35130,28 @@ def _finance_get_update_delete(document_id, document_type):
             and str(existing.get('status') or '').strip().lower() != 'expired'
         ):
             return jsonify({'error': 'Expired status is set automatically'}), 400
+        if document_type == 'invoice':
+            locked_detail_fields = {'invoiceLabel', 'dueDate'}
+            changed_locked_fields = {
+                key for key in locked_detail_fields
+                if key in request_data
+                and str(request_data.get(key) or '').strip()
+                != str(existing.get(key) or '').strip()
+            }
+            if (
+                changed_locked_fields
+                and raw_requested_status != 'draft'
+                and (
+                    str(existing.get('status') or 'draft').strip().lower() != 'draft'
+                    or isinstance(existing.get('invoiceSentSnapshot'), dict)
+                )
+            ):
+                return jsonify({
+                    'error': 'Invoice label and due date can only be edited while the invoice is a draft'
+                }), 409
         updated = _normalise_finance_document(request_data, document_type, existing)
+        if document_type == 'invoice' and raw_requested_status == 'draft':
+            updated.pop('invoiceSentSnapshot', None)
         previous_document = _normalise_finance_document(
             existing,
             document_type,
@@ -35267,10 +35346,32 @@ def _finance_get_update_delete(document_id, document_type):
                 else:
                     updated.pop('updatedByName', None)
 
+        if document_type == 'invoice':
+            _ensure_invoice_sent_snapshot(updated)
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
                 finance_data['documents'][index] = updated
                 break
+        if document_type == 'invoice':
+            quotation_id = str(updated.get('sourceQuotationId') or '')
+            stored_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
+            if isinstance(stored_plan, dict):
+                for installment in stored_plan.get('installments') or []:
+                    if str(installment.get('invoiceId') or '') != str(document_id):
+                        continue
+                    installment.update({
+                        'label': (
+                            updated.get('invoiceLabel')
+                            if 'invoiceLabel' in updated
+                            else installment.get('label')
+                        ),
+                        'dueDate': updated.get('dueDate') or '',
+                        'status': updated.get('status') or 'draft',
+                        'invoiceFrozen': isinstance(
+                            updated.get('invoiceSentSnapshot'), dict
+                        ),
+                        'invoiceNumber': updated.get('number') or installment.get('invoiceNumber'),
+                    })
         if document_type == 'quotation':
             _sync_costing_from_quotation(finance_data, updated)
             _finance_expire_sent_documents(finance_data)
@@ -36266,7 +36367,7 @@ def finance_salespeople():
 
 
 @app.route('/api/costings/lookups', methods=['GET'])
-@require_super_admin
+@require_sales
 def costing_lookups():
     workforce = load_workforce(_workforce_folder())
     vendors = []
@@ -36294,7 +36395,7 @@ def costing_lookups():
 
 
 @app.route('/api/costings/cost-suggestion', methods=['POST'])
-@require_super_admin
+@require_sales
 def costing_cost_suggestion():
     line = _normalise_costing_line((request.get_json(silent=True) or {}).get('line'))
     key = _costing_cost_book_key(line)
@@ -36310,7 +36411,7 @@ def costing_cost_suggestion():
 
 
 @app.route('/api/costings', methods=['GET', 'POST'])
-@require_super_admin
+@require_sales
 def costings_collection():
     if request.method == 'GET':
         query = str(request.args.get('query') or '').strip().casefold()
@@ -36393,7 +36494,7 @@ def costings_collection():
 
 
 @app.route('/api/costings/<costing_id>', methods=['GET', 'PUT', 'DELETE'])
-@require_super_admin
+@require_sales
 def costing_item(costing_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36526,7 +36627,7 @@ def costing_item(costing_id):
 
 
 @app.route('/api/costings/<costing_id>/pdf', methods=['GET'])
-@require_super_admin
+@require_sales
 def costing_pdf_export(costing_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36573,7 +36674,7 @@ def costing_pdf_export(costing_id):
 
 
 @app.route('/api/costings/<costing_id>/duplicate', methods=['POST'])
-@require_super_admin
+@require_sales
 def duplicate_costing(costing_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36676,7 +36777,7 @@ def update_event_vendor_management(event_id):
 
 
 @app.route('/api/costings/<costing_id>/convert-to-quotation', methods=['POST'])
-@require_super_admin
+@require_sales
 def costing_convert_to_quotation(costing_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36811,7 +36912,7 @@ def create_event_from_quotation(document_id):
 
 
 @app.route('/api/quotations/<document_id>/costing', methods=['POST'])
-@require_super_admin
+@require_sales
 def ensure_quotation_costing(document_id):
     """Create a costing again after an earlier costing was explicitly removed."""
     with _finance_lock:
@@ -36931,11 +37032,27 @@ def _invoice_plan_history_entry(action, detail=''):
 def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
     value = value if isinstance(value, dict) else {}
     existing = existing if isinstance(existing, dict) else {}
-    mode = str(value.get('mode') or existing.get('mode') or 'amount').strip().lower()
+    issued = bool(existing.get('invoiceId'))
+    existing_status = str(
+        existing.get('status') or 'draft'
+    ).strip().lower()
+    issued_locked = issued and (
+        existing_status != 'draft' or bool(existing.get('invoiceFrozen'))
+    )
+    issued_details_editable = (
+        issued and not issued_locked
+    )
+    mode = str(
+        existing.get('mode')
+        if issued
+        else value.get('mode') or existing.get('mode') or 'amount'
+    ).strip().lower()
     if mode not in {'amount', 'percentage'}:
         mode = 'amount'
     raw_value = max(0, _safe_float(
-        value.get('value') if 'value' in value else existing.get('value'),
+        existing.get('value')
+        if issued
+        else value.get('value') if 'value' in value else existing.get('value'),
         0,
     ))
     if mode == 'percentage':
@@ -36943,22 +37060,43 @@ def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
         amount = round(quotation_total * raw_value / 100, 2)
     else:
         amount = round(raw_value, 2)
-    status = str(value.get('status') or existing.get('status') or 'planned').strip().lower()
+    if issued_locked:
+        amount = round(max(0, _safe_float(existing.get('amount'), amount)), 2)
+    status = str(
+        existing.get('status')
+        if issued
+        else value.get('status') or existing.get('status') or 'planned'
+    ).strip().lower()
     if status not in {'planned', *FINANCE_INVOICE_STATUSES}:
         status = 'planned'
+    default_due_date = (
+        (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        if not existing.get('invoiceId')
+        else ''
+    )
+    if issued_details_editable and 'label' in value:
+        label = str(value.get('label') or '').strip()[:200]
+    elif issued:
+        label = str(existing.get('label') or '').strip()[:200]
+    elif 'label' in value:
+        label = str(value.get('label') or '').strip()[:200]
+    elif 'label' in existing:
+        label = str(existing.get('label') or '').strip()[:200]
+    else:
+        label = 'Invoice'
     return {
         'id': re.sub(
             r'[^A-Za-z0-9_-]+', '',
             str(value.get('id') or existing.get('id') or ''),
         )[:80] or new_id('installment'),
-        'label': str(
-            value.get('label') if 'label' in value else existing.get('label') or 'Invoice'
-        ).strip()[:200] or 'Invoice',
+        'label': label,
         'mode': mode,
         'value': round(raw_value, 4),
         'amount': amount,
         'dueDate': str(
-            value.get('dueDate') if 'dueDate' in value else existing.get('dueDate') or ''
+            value.get('dueDate')
+            if (not issued or issued_details_editable) and 'dueDate' in value
+            else existing.get('dueDate') or default_due_date
         ).strip()[:10],
         'notes': str(
             value.get('notes') if 'notes' in value else existing.get('notes') or ''
@@ -36966,6 +37104,11 @@ def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
         'status': status,
         'invoiceId': str(existing.get('invoiceId') or value.get('invoiceId') or '').strip()[:80],
         'invoiceNumber': str(existing.get('invoiceNumber') or value.get('invoiceNumber') or '').strip()[:80],
+        'invoiceFrozen': bool(
+            existing.get('invoiceFrozen')
+            if issued
+            else value.get('invoiceFrozen')
+        ),
         'issuedAt': str(existing.get('issuedAt') or value.get('issuedAt') or '').strip()[:40],
         'createdAt': str(existing.get('createdAt') or value.get('createdAt') or datetime.now().isoformat(timespec='seconds'))[:40],
         'updatedAt': datetime.now().isoformat(timespec='seconds'),
@@ -36998,13 +37141,88 @@ def _normalise_invoice_plan_payment(value, existing=None):
     }
 
 
+def _normalise_invoice_plan_details(value, quotation, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+
+    def detail(field, limit):
+        return str(
+            value.get(field)
+            if field in value
+            else existing.get(field)
+            if field in existing
+            else quotation.get(field) or ''
+        ).strip()[:limit]
+
+    client_source = (
+        value.get('client')
+        if 'client' in value
+        else existing.get('client')
+        if isinstance(existing.get('client'), dict)
+        else quotation.get('client')
+    )
+    return {
+        'client': _normalise_finance_client(client_source),
+        'clientRecordName': detail('clientRecordName', 160),
+        'projectName': detail('projectName', 500),
+        'eventLocation': detail('eventLocation', 600),
+        'salesperson': detail('salesperson', 160),
+        'salespersonUsername': detail('salespersonUsername', 160),
+        'reference': detail('reference', 300),
+        'paymentTerms': detail('paymentTerms', 300),
+    }
+
+
 def _normalise_invoice_plan(value, quotation, existing=None):
     value = value if isinstance(value, dict) else {}
     existing = existing if isinstance(existing, dict) else {}
+    quotation_totals = quotation.get('totals') or _finance_totals(quotation)
     quotation_total = round(max(0, _safe_float(
-        (quotation.get('totals') or {}).get('total'),
-        _finance_totals(quotation).get('total'),
+        quotation_totals.get('total'),
+        0,
     )), 2)
+    quotation_pre_tax = round(max(0, _safe_float(
+        quotation_totals.get('netSubtotal'),
+        quotation_total,
+    )), 2)
+    tax_rate = round(max(0, min(100, _safe_float(
+        quotation.get('taxRate'), 0,
+    ))), 4)
+    discount_locked = any(
+        isinstance(row, dict)
+        and row.get('invoiceId')
+        and (
+            str(row.get('status') or 'draft').strip().lower() != 'draft'
+            or bool(row.get('invoiceFrozen'))
+        )
+        for row in existing.get('installments') or []
+    )
+    discount_mode = str(
+        existing.get('invoiceDiscountMode')
+        if discount_locked
+        else value.get('invoiceDiscountMode')
+        if 'invoiceDiscountMode' in value
+        else existing.get('invoiceDiscountMode') or 'percentage'
+    ).strip().lower()
+    if discount_mode not in {'percentage', 'amount'}:
+        discount_mode = 'percentage'
+    discount_value = max(0, _safe_float(
+        existing.get('invoiceDiscountValue')
+        if discount_locked
+        else value.get('invoiceDiscountValue')
+        if 'invoiceDiscountValue' in value
+        else existing.get('invoiceDiscountValue'),
+        0,
+    ))
+    if discount_mode == 'percentage':
+        discount_value = min(100, discount_value)
+        discount_amount = round(quotation_pre_tax * discount_value / 100, 2)
+    else:
+        discount_value = min(quotation_pre_tax, discount_value)
+        discount_amount = round(discount_value, 2)
+    adjusted_pre_tax = round(max(0, quotation_pre_tax - discount_amount), 2)
+    adjusted_tax = round(adjusted_pre_tax * tax_rate / 100, 2)
+    billing_total = round(adjusted_pre_tax + adjusted_tax, 2)
     existing_installments = {
         str(row.get('id') or ''): row
         for row in existing.get('installments') or []
@@ -37018,12 +37236,31 @@ def _normalise_invoice_plan(value, quotation, existing=None):
     installments = [
         _normalise_invoice_plan_installment(
             row,
-            quotation_total,
+            billing_total,
             existing_installments.get(str((row or {}).get('id') or '')),
         )
         for row in installments_source
         if isinstance(row, dict)
     ][:100]
+    requested_installment_ids = {
+        str((row or {}).get('id') or '')
+        for row in installments_source
+        if isinstance(row, dict)
+    }
+    # Issued installments are accounting records, not editable plan rows. Keep
+    # them even when an older or stale client submits a plan without them.
+    for installment_id, existing_installment in existing_installments.items():
+        if (
+            len(installments) >= 100
+            or installment_id in requested_installment_ids
+            or not existing_installment.get('invoiceId')
+        ):
+            continue
+        installments.append(_normalise_invoice_plan_installment(
+            existing_installment,
+            billing_total,
+            existing_installment,
+        ))
     existing_payments = {
         str(row.get('id') or ''): row
         for row in existing.get('payments') or []
@@ -37053,17 +37290,30 @@ def _normalise_invoice_plan(value, quotation, existing=None):
         for row in existing.get('history') or value.get('history') or []
         if isinstance(row, dict)
     ][-1000:]
+    invoice_details = _normalise_invoice_plan_details(
+        value.get('invoiceDetails')
+        if isinstance(value.get('invoiceDetails'), dict)
+        else {},
+        quotation,
+        existing.get('invoiceDetails'),
+    )
     plan = {
         'id': str(existing.get('id') or value.get('id') or new_id('invoice-plan'))[:80],
         'quotationId': str(quotation.get('id') or '')[:80],
         'quotationNumber': str(quotation.get('number') or '')[:80],
         'status': status,
         'strategy': strategy,
+        'invoiceDiscountMode': discount_mode,
+        'invoiceDiscountValue': round(discount_value, 4),
+        'invoiceDiscountAmount': discount_amount,
+        'quotationPreTax': quotation_pre_tax,
+        'taxRate': tax_rate,
         'strategyLabel': str(
             value.get('strategyLabel')
             if 'strategyLabel' in value
             else existing.get('strategyLabel') or 'Custom installment plan'
         ).strip()[:200] or 'Custom installment plan',
+        'invoiceDetails': invoice_details,
         'installments': installments,
         'payments': payments,
         'history': history,
@@ -37090,14 +37340,38 @@ def _invoice_plan_summary(plan, quotation_total):
         if row.get('invoiceId') and row.get('status') not in {'cancelled', 'void'}
     ), 2)
     paid = round(sum(_safe_float(row.get('amount'), 0) for row in payments), 2)
+    quotation_total = round(max(0, _safe_float(quotation_total, 0)), 2)
+    tax_rate = round(max(0, min(100, _safe_float(plan.get('taxRate'), 0))), 4)
+    quotation_pre_tax = round(max(0, _safe_float(
+        plan.get('quotationPreTax'),
+        quotation_total / (1 + tax_rate / 100) if tax_rate else quotation_total,
+    )), 2)
+    discount_mode = str(plan.get('invoiceDiscountMode') or 'percentage').strip().lower()
+    discount_value = max(0, _safe_float(plan.get('invoiceDiscountValue'), 0))
+    if discount_mode == 'amount':
+        discount_amount = round(min(quotation_pre_tax, discount_value), 2)
+    else:
+        discount_value = min(100, discount_value)
+        discount_amount = round(quotation_pre_tax * discount_value / 100, 2)
+    adjusted_pre_tax = round(max(0, quotation_pre_tax - discount_amount), 2)
+    adjusted_tax = round(adjusted_pre_tax * tax_rate / 100, 2)
+    adjusted_total = round(adjusted_pre_tax + adjusted_tax, 2)
     return {
-        'quotationTotal': round(max(0, _safe_float(quotation_total, 0)), 2),
+        'quotationTotal': quotation_total,
+        'invoiceDiscountMode': discount_mode,
+        'invoiceDiscountValue': round(discount_value, 4),
+        'invoiceDiscountAmount': discount_amount,
+        'quotationPreTax': quotation_pre_tax,
+        'adjustedPreTax': adjusted_pre_tax,
+        'taxRate': tax_rate,
+        'adjustedTax': adjusted_tax,
+        'adjustedTotal': adjusted_total,
         'planned': planned,
-        'unplanned': round(max(0, quotation_total - planned), 2),
+        'unplanned': round(max(0, adjusted_total - planned), 2),
         'invoiced': invoiced,
-        'notInvoiced': round(max(0, quotation_total - invoiced), 2),
+        'notInvoiced': round(max(0, adjusted_total - invoiced), 2),
         'paid': paid,
-        'due': round(max(0, quotation_total - paid), 2),
+        'due': round(max(0, adjusted_total - paid), 2),
         'invoiceBalance': round(max(0, invoiced - paid), 2),
     }
 
@@ -37160,6 +37434,28 @@ def _invoice_plan_legacy_seed(finance_data, quotation):
     }
 
 
+def _ensure_invoice_sent_snapshot(document):
+    if not isinstance(document, dict):
+        return None
+    existing_snapshot = document.get('invoiceSentSnapshot')
+    if isinstance(existing_snapshot, dict):
+        return existing_snapshot
+    if str(document.get('status') or 'draft').strip().lower() == 'draft':
+        return None
+
+    snapshot_source = copy.deepcopy(document)
+    snapshot_source.pop('invoiceSentSnapshot', None)
+    snapshot = _normalise_finance_document(
+        snapshot_source, 'invoice', snapshot_source
+    )
+    snapshot.pop('invoiceSentSnapshot', None)
+    snapshot['salespersonPhone'] = _finance_salesperson_phone(snapshot)
+    # Preserve the displayed salesperson even if that user is renamed later.
+    snapshot['salespersonUsername'] = ''
+    document['invoiceSentSnapshot'] = snapshot
+    return snapshot
+
+
 def _invoice_plan_sync_documents(finance_data, plan, quotation):
     summary = plan.get('summary') or _invoice_plan_summary(
         plan, (quotation.get('totals') or {}).get('total', 0)
@@ -37169,19 +37465,44 @@ def _invoice_plan_sync_documents(finance_data, plan, quotation):
         for row in plan.get('installments') or []
         if row.get('invoiceId')
     }
+    invoice_details = plan.get('invoiceDetails') or {}
     for index, document in enumerate(finance_data.get('documents') or []):
         installment = installments.get(str(document.get('id') or ''))
         if not installment or document.get('type') != 'invoice':
             continue
+        _ensure_invoice_sent_snapshot(document)
         update = {
             'invoiceLabel': installment.get('label'),
+            'dueDate': installment.get('dueDate') or '',
             'invoiceAmount': installment.get('amount'),
             'quotationTotal': summary.get('quotationTotal'),
+            'invoiceDiscountMode': summary.get('invoiceDiscountMode'),
+            'invoiceDiscountValue': summary.get('invoiceDiscountValue'),
+            'invoiceDiscountAmount': summary.get('invoiceDiscountAmount'),
+            'quotationPreTax': summary.get('quotationPreTax'),
+            'invoiceAdjustedPreTax': summary.get('adjustedPreTax'),
+            'invoiceAdjustedTax': summary.get('adjustedTax'),
             'amountInvoicedToDate': summary.get('invoiced'),
             'amountPaidToDate': summary.get('paid'),
             'amountOutstanding': summary.get('due'),
             'invoicePlanPayments': plan.get('payments') or [],
         }
+        if (
+            str(document.get('status') or 'draft').strip().lower() == 'draft'
+            and not isinstance(document.get('invoiceSentSnapshot'), dict)
+        ):
+            project_name = str(invoice_details.get('projectName') or '')
+            update.update({
+                'client': invoice_details.get('client') or {},
+                'clientRecordName': invoice_details.get('clientRecordName') or '',
+                'projectName': project_name,
+                'title': project_name,
+                'eventLocation': invoice_details.get('eventLocation') or '',
+                'salesperson': invoice_details.get('salesperson') or '',
+                'salespersonUsername': invoice_details.get('salespersonUsername') or '',
+                'reference': invoice_details.get('reference') or '',
+                'paymentTerms': invoice_details.get('paymentTerms') or '',
+            })
         finance_data['documents'][index] = _normalise_finance_document(
             update, 'invoice', document
         )
@@ -37201,6 +37522,9 @@ def _invoice_plan_response(finance_data, quotation, plan, include_quotation=Fals
         installment['invoiceNumber'] = invoice.get('number') or installment.get('invoiceNumber')
         installment['status'] = invoice.get('status') or installment.get('status')
         installment['invoiceDate'] = invoice.get('invoiceDate') or ''
+        installment['invoiceFrozen'] = isinstance(
+            invoice.get('invoiceSentSnapshot'), dict
+        )
     response_plan['summary'] = _invoice_plan_summary(
         response_plan, (quotation.get('totals') or {}).get('total', 0)
     )
@@ -37260,6 +37584,30 @@ def invoice_plan_item(quotation_id):
         existing = plans.get(str(quotation_id)) or _invoice_plan_legacy_seed(
             finance_data, quotation
         )
+        if isinstance(existing, dict):
+            existing = copy.deepcopy(existing)
+            invoice_documents = {
+                str(row.get('id') or ''): row
+                for row in finance_data.get('documents') or []
+                if row.get('type') == 'invoice'
+            }
+            for installment in existing.get('installments') or []:
+                invoice = invoice_documents.get(str(installment.get('invoiceId') or ''))
+                if not invoice:
+                    continue
+                installment.update({
+                    'label': (
+                        invoice.get('invoiceLabel')
+                        if 'invoiceLabel' in invoice
+                        else installment.get('label')
+                    ),
+                    'dueDate': invoice.get('dueDate') or '',
+                    'status': invoice.get('status') or installment.get('status'),
+                    'invoiceFrozen': isinstance(
+                        invoice.get('invoiceSentSnapshot'), dict
+                    ),
+                    'invoiceNumber': invoice.get('number') or installment.get('invoiceNumber'),
+                })
         if not isinstance(existing, dict) and quotation.get('status') not in {'accepted', 'cancelled'}:
             return jsonify({
                 'error': 'Only accepted or cancelled quotations can start an invoice plan'
@@ -37275,6 +37623,15 @@ def invoice_plan_item(quotation_id):
 
         requested = request.get_json() or {}
         plan = _normalise_invoice_plan(requested, quotation, existing or {})
+        previous_details = (
+            existing.get('invoiceDetails')
+            if isinstance(existing, dict)
+            and isinstance(existing.get('invoiceDetails'), dict)
+            else {}
+        )
+        _sync_finance_client_record(
+            plan['invoiceDetails'], previous_details
+        )
         history = list(plan.get('history') or [])
         if not existing:
             history.append(_invoice_plan_history_entry(
@@ -37337,17 +37694,63 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
                     'unchanged': True,
                 })
 
+        quotation_status = str(quotation.get('status') or '').strip().lower()
+        if quotation_status == 'accepted':
+            quotation_total = round(max(0, _safe_float(
+                (plan.get('summary') or {}).get('adjustedTotal'),
+                (quotation.get('totals') or {}).get('total'),
+            )), 2)
+            already_invoiced = round(sum(
+                _safe_float(row.get('amount'), 0)
+                for row in plan.get('installments') or []
+                if row.get('invoiceId')
+                and row.get('status') not in {'cancelled', 'void'}
+            ), 2)
+            requested_amount = round(max(0, _safe_float(
+                installment.get('amount'), 0,
+            )), 2)
+            if (
+                already_invoiced > 0.005
+                and already_invoiced + requested_amount > quotation_total + 0.01
+            ):
+                return jsonify({
+                    'error': (
+                        'This quotation has already been invoiced for its full '
+                        'amount. Delete or void an existing invoice before '
+                        'issuing another one.'
+                    ),
+                }), 409
+
         request_data = request.get_json() or {}
         source = copy.deepcopy(quotation)
+        invoice_details = plan.get('invoiceDetails') or {}
+        project_name = str(invoice_details.get('projectName') or '')
+        source.update({
+            'client': invoice_details.get('client') or {},
+            'clientRecordName': invoice_details.get('clientRecordName') or '',
+            'projectName': project_name,
+            'title': project_name,
+            'eventLocation': invoice_details.get('eventLocation') or '',
+            'salesperson': invoice_details.get('salesperson') or '',
+            'salespersonUsername': invoice_details.get('salespersonUsername') or '',
+            'reference': invoice_details.get('reference') or '',
+            'paymentTerms': invoice_details.get('paymentTerms') or '',
+        })
         source.pop('id', None)
         source.pop('number', None)
         source['sourceQuotationId'] = quotation_id
         source['sourceQuotationNumber'] = quotation.get('number') or ''
         source['invoicePlanId'] = plan.get('id') or ''
         source['invoiceInstallmentId'] = installment.get('id') or ''
-        source['invoiceLabel'] = installment.get('label') or 'Invoice'
+        source['invoiceLabel'] = str(installment.get('label') or '').strip()[:300]
         source['invoiceAmount'] = installment.get('amount') or 0
         source['quotationTotal'] = (plan.get('summary') or {}).get('quotationTotal', 0)
+        source['invoiceDiscountMode'] = plan.get('invoiceDiscountMode') or 'percentage'
+        source['invoiceDiscountValue'] = plan.get('invoiceDiscountValue') or 0
+        source['invoiceDiscountAmount'] = (plan.get('summary') or {}).get('invoiceDiscountAmount', 0)
+        source['quotationPreTax'] = (plan.get('summary') or {}).get('quotationPreTax', 0)
+        source['invoiceAdjustedPreTax'] = (plan.get('summary') or {}).get('adjustedPreTax', 0)
+        source['invoiceAdjustedTax'] = (plan.get('summary') or {}).get('adjustedTax', 0)
         source['showSignOff'] = False
         source['status'] = str(request_data.get('status') or 'draft').strip().lower()
         invoice_date = str(
@@ -37356,7 +37759,7 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
         due_date = str(request_data.get('dueDate') or installment.get('dueDate') or '')[:10]
         if not due_date:
             due_date, payment_term_days = _finance_payment_due_date(
-                invoice_date, quotation.get('paymentTerms')
+                invoice_date, source.get('paymentTerms')
             )
             source['paymentTermDays'] = payment_term_days
         source['invoiceDate'] = invoice_date
@@ -37365,12 +37768,16 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
         invoice['number'] = _next_finance_number(
             finance_data.get('documents') or [], 'invoice'
         )
+        _ensure_invoice_sent_snapshot(invoice)
         finance_data.setdefault('documents', []).append(invoice)
         installment.update({
             'invoiceId': invoice['id'],
             'invoiceNumber': invoice['number'],
             'issuedAt': datetime.now().isoformat(timespec='seconds'),
             'status': invoice.get('status') or 'draft',
+            'invoiceFrozen': isinstance(
+                invoice.get('invoiceSentSnapshot'), dict
+            ),
         })
         plan['history'].append(_invoice_plan_history_entry(
             'invoice-issued',
@@ -37459,6 +37866,7 @@ def mark_invoice_paid(document_id):
         paid_at = datetime.combine(
             received_day.date(), datetime.now().time().replace(microsecond=0)
         ).isoformat(timespec='seconds')
+        _ensure_invoice_sent_snapshot(stored_invoice)
         updated_invoice = _normalise_finance_document({
             'status': 'paid',
             'paidAt': paid_at,
@@ -37613,8 +38021,31 @@ def _finance_pdf_response(document_id, document_type):
             document['number'] = revision_source['number']
             document['revision'] = revision
         else:
-            document = _normalise_finance_document(stored, document_type, stored)
-        document['salespersonPhone'] = _finance_salesperson_phone(document)
+            if document_type == 'invoice':
+                had_frozen_invoice = isinstance(
+                    stored.get('invoiceSentSnapshot'), dict
+                )
+                _ensure_invoice_sent_snapshot(stored)
+                if (
+                    not had_frozen_invoice
+                    and isinstance(stored.get('invoiceSentSnapshot'), dict)
+                ):
+                    _save_finance_data(finance_data)
+            frozen_invoice = (
+                stored.get('invoiceSentSnapshot')
+                if document_type == 'invoice'
+                else None
+            )
+            if isinstance(frozen_invoice, dict):
+                document = _normalise_finance_document(
+                    frozen_invoice, 'invoice', frozen_invoice
+                )
+            else:
+                document = _normalise_finance_document(
+                    stored, document_type, stored
+                )
+        if not document.get('salespersonPhone'):
+            document['salespersonPhone'] = _finance_salesperson_phone(document)
         export_error = _finance_export_error(document)
         if export_error:
             return jsonify({'error': export_error}), 400

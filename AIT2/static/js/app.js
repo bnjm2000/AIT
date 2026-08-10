@@ -4775,6 +4775,8 @@ function normalisePdfSettings(settings = {}) {
     bankAccountName: settings.bankAccountName || "",
     bankAccountNumber: settings.bankAccountNumber || "",
     paynowUen: settings.paynowUen || "",
+    paymentDetailsText: typeof settings.paymentDetailsText === 'string' ? settings.paymentDetailsText : "",
+    paymentDetailsEnabled: settings.paymentDetailsEnabled !== false,
     currency: settings.currency || "SGD",
     taxLabel: settings.taxLabel || "GST",
     taxRate: Number(settings.taxRate || 0),
@@ -5000,6 +5002,13 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
               <label class="form-group"><span class="form-label">PayNow UEN</span><input id="companyDetailsPaynow" class="form-input"></label>
+              <div class="form-group company-details-wide">
+                <div class="company-letterhead-heading">
+                  <label class="form-label" for="companyDetailsPaymentDetails">Payment details</label>
+                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyPaymentDetails()">Default</button>
+                </div>
+                <textarea id="companyDetailsPaymentDetails" class="form-input" rows="4" placeholder="Payment instructions shown on invoices"></textarea>
+              </div>
               <label class="form-group"><span class="form-label">Currency</span><input id="companyDetailsCurrency" class="form-input" maxlength="6"></label>
               <label class="form-group"><span class="form-label">Tax label</span><input id="companyDetailsTaxLabel" class="form-input"></label>
               <label class="form-group"><span class="form-label">Tax rate (%)</span><input id="companyDetailsTaxRate" class="form-input" type="number" min="0" max="100" step="0.01"></label>
@@ -5068,6 +5077,9 @@ function renderPdfSettingsForm() {
     companyDetailsAccountName: pdfSettings.bankAccountName,
     companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
     companyDetailsPaynow: pdfSettings.paynowUen,
+    companyDetailsPaymentDetails: pdfSettings.paymentDetailsEnabled === false
+      ? ''
+      : (pdfSettings.paymentDetailsText || defaultCompanyPaymentDetailsText()),
     companyDetailsCurrency: pdfSettings.currency,
     companyDetailsTaxLabel: pdfSettings.taxLabel,
     companyDetailsTaxRate: pdfSettings.taxRate,
@@ -5119,6 +5131,32 @@ function populateDefaultCompanyLetterhead() {
   const textarea = document.getElementById('companyDetailsLetterhead');
   if (!textarea) return;
   textarea.value = defaultCompanyLetterheadText(true);
+  textarea.focus();
+}
+
+function defaultCompanyPaymentDetailsText(useFormValues = false) {
+  const settingValue = (fieldId, settingKey) => {
+    if (useFormValues) {
+      const field = document.getElementById(fieldId);
+      if (field) return field.value;
+    }
+    return pdfSettings?.[settingKey];
+  };
+  return [
+    ['Bank', settingValue('companyDetailsBank', 'bankName')],
+    ['Account name', settingValue('companyDetailsAccountName', 'bankAccountName')],
+    ['Account number', settingValue('companyDetailsAccountNumber', 'bankAccountNumber')],
+    ['PayNow UEN', settingValue('companyDetailsPaynow', 'paynowUen')],
+  ]
+    .filter(([, value]) => String(value || '').trim())
+    .map(([label, value]) => `${label}: ${String(value).trim()}`)
+    .join('\n');
+}
+
+function populateDefaultCompanyPaymentDetails() {
+  const textarea = document.getElementById('companyDetailsPaymentDetails');
+  if (!textarea) return;
+  textarea.value = defaultCompanyPaymentDetailsText(true);
   textarea.focus();
 }
 
@@ -5234,6 +5272,8 @@ async function saveCompanyDetails() {
     bankAccountName: value('companyDetailsAccountName'),
     bankAccountNumber: value('companyDetailsAccountNumber'),
     paynowUen: value('companyDetailsPaynow'),
+    paymentDetailsText: value('companyDetailsPaymentDetails'),
+    paymentDetailsEnabled: Boolean(value('companyDetailsPaymentDetails').trim()),
     currency: value('companyDetailsCurrency'),
     taxLabel: value('companyDetailsTaxLabel'),
     taxRate: Number(value('companyDetailsTaxRate') || 0),

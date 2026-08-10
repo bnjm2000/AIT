@@ -29,7 +29,7 @@ class CostingFeatureTests(unittest.TestCase):
             'defaultCompany': 'TEST',
             'companies': {'TEST': company},
             'userCompanies': {
-                'owner': 'TEST', 'admin': 'TEST', 'sales': 'TEST',
+                'owner': 'TEST', 'admin': 'TEST', 'manager': 'TEST', 'sales': 'TEST',
                 'viewer': 'TEST',
             },
             'superAdmins': ['owner'],
@@ -39,6 +39,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.manager.users = {
             'owner': self.make_user('owner', 'owner', True),
             'admin': self.make_user('admin', 'admin', True),
+            'manager': self.make_user('manager', 'manager', True),
             'sales': self.make_user('sales', 'user', True),
             'viewer': self.make_user('viewer', 'user', False),
         }
@@ -97,7 +98,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         return response.get_json()['data']
 
-    def test_page_and_api_are_owner_only(self):
+    def test_page_and_api_are_available_to_sales_active_users(self):
         self.login('owner')
         page = self.client.get('/costing')
         self.assertEqual(page.status_code, 200)
@@ -106,19 +107,48 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/costings').status_code, 200)
 
         self.login('admin')
-        self.assertEqual(self.client.get('/costing').status_code, 302)
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        self.assertEqual(self.client.get('/costing').status_code, 200)
+        self.assertEqual(self.client.get('/api/costings').status_code, 200)
+
+        self.login('manager')
+        self.assertEqual(self.client.get('/costing').status_code, 200)
+        self.assertEqual(self.client.get('/costing/example-costing').status_code, 200)
+        self.assertEqual(self.client.get('/api/costings').status_code, 200)
 
         self.login('sales')
-        self.assertEqual(self.client.get('/costing').status_code, 302)
-        self.assertEqual(self.client.get('/costing/example-costing').status_code, 302)
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        self.assertEqual(self.client.get('/costing').status_code, 200)
+        self.assertEqual(self.client.get('/costing/example-costing').status_code, 200)
+        self.assertEqual(self.client.get('/api/costings').status_code, 200)
 
         self.login('viewer')
         page = self.client.get('/costing')
         self.assertEqual(page.status_code, 302)
         self.assertTrue(page.headers['Location'].endswith('/events'))
         self.assertEqual(self.client.get('/api/costings').status_code, 403)
+
+    def test_manager_sees_own_costings_while_admin_sees_all(self):
+        self.login('owner')
+        owner_costing = self.create_costing(projectName='Owner Project')
+
+        self.login('manager')
+        manager_costing = self.create_costing(projectName='Manager Project')
+        manager_rows = self.client.get('/api/costings').get_json()['data']
+        self.assertEqual({row['id'] for row in manager_rows}, {manager_costing['id']})
+        self.assertEqual(
+            self.client.get(f"/api/costings/{owner_costing['id']}").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f"/api/costings/{manager_costing['id']}").status_code,
+            200,
+        )
+
+        self.login('admin')
+        admin_rows = self.client.get('/api/costings').get_json()['data']
+        self.assertEqual(
+            {row['id'] for row in admin_rows},
+            {owner_costing['id'], manager_costing['id']},
+        )
 
     def test_costing_pdf_exports_complete_report_and_action_order(self):
         self.login('owner')
@@ -237,7 +267,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.login('admin')
         self.assertEqual(
             self.client.get(f"/api/costings/{costing['id']}/pdf").status_code,
-            403,
+            200,
         )
 
         source_path = os.path.join(
@@ -301,9 +331,12 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(paired['eventLocation'], 'Hall A')
 
         self.login('sales')
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        self.assertEqual(self.client.get('/api/costings').get_json()['data'], [])
         self.login('admin')
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        self.assertIn(
+            quotation['sourceCostingId'],
+            {row['id'] for row in self.client.get('/api/costings').get_json()['data']},
+        )
         self.login('owner')
         all_costings = self.client.get('/api/costings').get_json()['data']
         self.assertIn(quotation['sourceCostingId'], {row['id'] for row in all_costings})
@@ -319,7 +352,10 @@ class CostingFeatureTests(unittest.TestCase):
         )
         self.assertEqual(reassigned.status_code, 200, reassigned.get_data(as_text=True))
         self.login('sales')
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        self.assertIn(
+            quotation['sourceCostingId'],
+            {row['id'] for row in self.client.get('/api/costings').get_json()['data']},
+        )
 
         quotation_update = self.client.put(
             f"/api/quotations/{quotation['id']}",
@@ -370,7 +406,9 @@ class CostingFeatureTests(unittest.TestCase):
 
         self.login('sales')
         quotation = self.client.get('/api/quotations/legacy-quotation').get_json()['data']
-        self.assertEqual(self.client.get('/api/costings').status_code, 403)
+        sales_costings = self.client.get('/api/costings').get_json()['data']
+        self.assertEqual(len(sales_costings), 1)
+        self.assertEqual(sales_costings[0]['projectName'], 'Existing Project')
         self.login('owner')
         costings = self.client.get('/api/costings').get_json()['data']
         self.assertEqual(len(costings), 1)

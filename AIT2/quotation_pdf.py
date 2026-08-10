@@ -297,6 +297,15 @@ def _date(value):
         return raw
 
 
+def _date_long(value):
+    raw = str(value or '').strip()
+    try:
+        parsed = datetime.strptime(raw, '%Y-%m-%d')
+        return f'{parsed.day} {parsed.strftime("%B %Y")}'
+    except ValueError:
+        return raw
+
+
 def _schedule_date_summary(rows):
     parsed = []
     unparsed = []
@@ -985,57 +994,6 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         story.extend([client_table, Spacer(1, 4 * mm)])
 
-    if document_type == 'invoice' and float(document.get('invoiceAmount') or 0) > 0:
-        invoice_amount = float(document.get('invoiceAmount') or 0)
-        invoice_id = str(document.get('id') or '')
-        paid_for_invoice = sum(
-            float(row.get('amount') or 0)
-            for row in document.get('invoicePlanPayments') or []
-            if isinstance(row, dict)
-            and str(row.get('invoiceId') or '') == invoice_id
-        )
-        invoice_due = max(0, invoice_amount - paid_for_invoice)
-        invoice_label_style = ParagraphStyle(
-            'InvoiceStageLabel',
-            parent=body,
-            fontName='Helvetica-Bold',
-            fontSize=10.5,
-            leading=13,
-            textColor=accent_text,
-        )
-        invoice_due_label_style = ParagraphStyle(
-            'InvoiceDueLabel',
-            parent=label,
-            alignment=TA_RIGHT,
-            textColor=accent_text,
-        )
-        invoice_due_amount_style = ParagraphStyle(
-            'InvoiceDueAmount',
-            parent=right_bold,
-            fontSize=15,
-            leading=18,
-            textColor=accent_text,
-        )
-        invoice_stage = Table(
-            [[
-                _paragraph(document.get('invoiceLabel') or 'Invoice', invoice_label_style),
-                [
-                    _paragraph('AMOUNT DUE FOR THIS INVOICE', invoice_due_label_style),
-                    _paragraph(_money(invoice_due, currency), invoice_due_amount_style),
-                ],
-            ]],
-            colWidths=[doc.width - 72 * mm, 72 * mm],
-            style=TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), accent),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
-                ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * mm),
-            ]),
-        )
-        story.extend([invoice_stage, Spacer(1, 4 * mm)])
-
     schedule_entries = []
     dry_hire_schedule = str(document.get('scheduleMode') or '').strip().lower() == 'dry-hire'
     standard_schedules = {
@@ -1552,42 +1510,122 @@ def build_finance_pdf(document, company, logo_path=''):
         final_page_story.extend([department_summary, Spacer(1, 4 * mm)])
 
     payment_lines = []
-    if document_type == 'invoice':
-        for payment_label, key in (
-            ('Bank', 'bankName'),
-            ('Account name', 'bankAccountName'),
-            ('Account number', 'bankAccountNumber'),
-            ('PayNow UEN', 'paynowUen'),
-        ):
-            if company.get(key):
-                payment_lines.append(
-                    f"<b>{escape(payment_label)}:</b> "
-                    f"{escape(_text(company[key]))}"
-                )
+    if document_type == 'invoice' and company.get('paymentDetailsEnabled', True) is not False:
+        custom_payment_details = _text(company.get('paymentDetailsText')).strip()
+        if custom_payment_details:
+            payment_lines = [
+                escape(line.strip())
+                for line in custom_payment_details.splitlines()
+                if line.strip()
+            ]
+        else:
+            for payment_label, key in (
+                ('Bank', 'bankName'),
+                ('Account name', 'bankAccountName'),
+                ('Account number', 'bankAccountNumber'),
+                ('PayNow UEN', 'paynowUen'),
+            ):
+                if company.get(key):
+                    payment_lines.append(
+                        f"<b>{escape(payment_label)}:</b> "
+                        f"{escape(_text(company[key]))}"
+                    )
 
+    received_payments = [
+        row for row in document.get('invoicePlanPayments') or []
+        if isinstance(row, dict) and float(row.get('amount') or 0) > 0
+    ]
     summary_rows = []
     invoice_amount = float(document.get('invoiceAmount') or 0)
     if document_type == 'invoice' and invoice_amount > 0:
         quotation_total = float(document.get('quotationTotal') or totals.get('total') or 0)
-        invoiced_to_date = float(document.get('amountInvoicedToDate') or invoice_amount)
+        invoice_discount_amount = min(
+            float(document.get('quotationPreTax') or quotation_total),
+            max(0, float(document.get('invoiceDiscountAmount') or 0)),
+        )
+        quotation_pre_tax = float(
+            document.get('quotationPreTax')
+            or (quotation_total / (1 + tax_rate / 100) if tax_rate else quotation_total)
+        )
+        adjusted_pre_tax = float(
+            document.get('invoiceAdjustedPreTax')
+            or max(0, quotation_pre_tax - invoice_discount_amount)
+        )
+        adjusted_tax = float(
+            document.get('invoiceAdjustedTax')
+            if document.get('invoiceAdjustedTax') not in (None, '')
+            else round(adjusted_pre_tax * tax_rate / 100, 2)
+        )
         paid_to_date = float(document.get('amountPaidToDate') or 0)
         outstanding = float(
             document.get('amountOutstanding')
             if document.get('amountOutstanding') not in (None, '')
-            else max(0, quotation_total - paid_to_date)
+            else max(0, quotation_total - invoice_discount_amount - paid_to_date)
         )
-        if document.get('invoiceLabel'):
+        paid_for_invoice = sum(
+            float(row.get('amount') or 0)
+            for row in received_payments
+            if str(row.get('invoiceId') or '') == str(document.get('id') or '')
+        )
+        invoice_due = max(0, invoice_amount - paid_for_invoice)
+        if invoice_discount_amount > 0 or tax_rate > 0:
             summary_rows.append([
-                _paragraph(document.get('invoiceLabel'), body),
-                _paragraph(_money(invoice_amount, currency), right),
+                _paragraph('Subtotal', body),
+                _paragraph(_money(quotation_pre_tax, currency), right),
             ])
+            if invoice_discount_amount > 0:
+                discount_label = 'Discount'
+                if _text(document.get('invoiceDiscountMode')).strip().lower() == 'percentage':
+                    discount_value = float(document.get('invoiceDiscountValue') or 0)
+                    discount_label = f"{discount_label} ({discount_value:g}%)"
+                summary_rows.append([
+                    _paragraph(discount_label, body),
+                    _paragraph(_money(-invoice_discount_amount, currency), right),
+                ])
+            summary_rows.append([
+                _paragraph('Total', body),
+                _paragraph(_money(adjusted_pre_tax, currency), right),
+            ])
+            if tax_rate > 0:
+                summary_rows.append([
+                    _paragraph(f"{tax_label} ({tax_rate:g}%)", body),
+                    _paragraph(_money(adjusted_tax, currency), right),
+                ])
+        else:
+            summary_rows.append(
+                [_paragraph('Quotation total', body), _paragraph(_money(quotation_total, currency), right)]
+            )
         summary_rows.extend([
-            [_paragraph('Quotation total', body), _paragraph(_money(quotation_total, currency), right)],
-            [_paragraph('Invoiced to date', body), _paragraph(_money(invoiced_to_date, currency), right)],
-            [_paragraph('Paid to date', body), _paragraph(_money(paid_to_date, currency), right)],
             [
-                _paragraph('BALANCE REMAINING', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-                _paragraph(_money(outstanding, currency), ParagraphStyle('InvoiceBalanceAmount', parent=right_bold, fontSize=11, textColor=accent_on_white)),
+                _paragraph(f"Paid on {_date_long(row.get('date'))}", body),
+                _paragraph(_money(-float(row.get('amount') or 0), currency), right),
+            ]
+            for row in received_payments
+        ])
+        summary_rows.extend([
+            [
+                _paragraph('Balance remaining', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName='Helvetica-Bold')),
+                _paragraph(_money(outstanding, currency), right_bold),
+            ],
+            [
+                [
+                    _paragraph('AMOUNT DUE', ParagraphStyle('InvoiceDueSummaryLabel', parent=body, fontName='Helvetica-Bold', fontSize=11.5, textColor=accent_text)),
+                    *(
+                        [_paragraph(
+                            document.get('invoiceLabel'),
+                            ParagraphStyle(
+                                'InvoiceDueSummaryCaption',
+                                parent=body,
+                                fontSize=7.5,
+                                leading=9,
+                                textColor=accent_text,
+                            ),
+                        )]
+                        if _text(document.get('invoiceLabel')).strip()
+                        else []
+                    ),
+                ],
+                _paragraph(_money(invoice_due, currency), ParagraphStyle('InvoiceDueSummaryAmount', parent=right_bold, fontSize=14, leading=17, textColor=accent_text)),
             ],
         ])
     else:
@@ -1624,40 +1662,23 @@ def build_finance_pdf(document, company, logo_path=''):
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('LINEABOVE', (0, -1), (-1, -1), 1.1, ink),
-            ('BACKGROUND', (0, -1), (-1, -1), panel),
+            (
+                'BACKGROUND', (0, -1), (-1, -1),
+                accent if document_type == 'invoice' and invoice_amount > 0 else panel,
+            ),
         ]),
     )
-    received_payments = [
-        row for row in document.get('invoicePlanPayments') or []
-        if isinstance(row, dict) and float(row.get('amount') or 0) > 0
-    ]
-    if payment_lines or received_payments:
+    if payment_lines:
         payment_heading = ParagraphStyle(
             'FinancePaymentHeading',
             parent=section_title,
             spaceBefore=0,
             spaceAfter=3,
         )
-        payment_details = []
-        if payment_lines:
-            payment_details.extend([
-                _paragraph('PAYMENT DETAILS', payment_heading),
-                Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
-            ])
-        if received_payments:
-            payment_details.extend([
-                *([Spacer(1, 3 * mm)] if payment_details else []),
-                _paragraph('PAYMENTS RECEIVED', payment_heading),
-                *[
-                    _paragraph(
-                        f"{escape(_date(row.get('date')))} - "
-                        f"{escape(_text(row.get('label') or 'Payment received'))}: "
-                        f"<b>{escape(_money(row.get('amount'), currency))}</b>",
-                        body,
-                    )
-                    for row in received_payments
-                ],
-            ])
+        payment_details = [
+            _paragraph('PAYMENT DETAILS', payment_heading),
+            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
+        ]
         payment_and_total = Table(
             [[payment_details, summary]],
             colWidths=[doc.width - 100 * mm, 100 * mm],

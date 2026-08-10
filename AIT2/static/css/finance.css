@@ -542,8 +542,8 @@
   background-image: linear-gradient(
     to bottom,
     transparent calc(50% - 1px),
-    rgba(185, 28, 28, .72) calc(50% - 1px),
-    rgba(185, 28, 28, .72) calc(50% + 1px),
+    #111827 calc(50% - 1px),
+    #111827 calc(50% + 1px),
     transparent calc(50% + 1px)
   );
   color: #64748b;
