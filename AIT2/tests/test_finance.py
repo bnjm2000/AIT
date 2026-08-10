@@ -5631,7 +5631,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('financedeleterevision', source)
         self.assertIn('financediscardchanges', source)
         self.assertIn('financeexportinvoicebutton', source)
-        self.assertIn("['accepted', 'cancelled', 'invoiced', 'overdue', 'paid']", source)
+        self.assertIn("['accepted', 'cancelled']", source)
         self.assertIn('finance-list-status-actions', source)
         self.assertIn('finance-list-export-cell', source)
         self.assertIn('finance-list-export-action', source)
@@ -5706,6 +5706,316 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(event.name, 'Early Planning')
         self.assertEqual(event.state, 'New')
         self.assertEqual(len(event.prepared_items), 1)
+
+    def test_invoice_plans_only_start_from_accepted_quotations_and_track_installments(self):
+        draft = self.create_quote('Not Ready For Invoicing')
+        listing = self.client.get('/api/invoice-plans')
+        self.assertEqual(listing.status_code, 200, listing.get_data(as_text=True))
+        self.assertNotIn(
+            draft['id'],
+            [row['quotation']['id'] for row in listing.get_json()['data']],
+        )
+
+        draft['lineItems'] = [{
+            'id': 'invoice-plan-line',
+            'description': 'Production package',
+            'department': 'Audio',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 1000,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        accepted_response = self.client.put(
+            f"/api/quotations/{draft['id']}",
+            json={**draft, 'status': 'accepted'},
+        )
+        self.assertEqual(
+            accepted_response.status_code, 200,
+            accepted_response.get_data(as_text=True),
+        )
+        accepted = accepted_response.get_json()['data']
+
+        listing = self.client.get('/api/invoice-plans').get_json()['data']
+        self.assertIn(accepted['id'], [row['quotation']['id'] for row in listing])
+
+        plan_response = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'status': 'sent',
+                'strategy': 'deposit',
+                'strategyLabel': '50% deposit / 50% balance',
+                'installments': [
+                    {
+                        'id': 'deposit',
+                        'label': 'Deposit',
+                        'mode': 'percentage',
+                        'value': 50,
+                        'dueDate': '2026-08-10',
+                    },
+                    {
+                        'id': 'balance',
+                        'label': 'Balance after show',
+                        'mode': 'percentage',
+                        'value': 50,
+                        'dueDate': '2026-09-10',
+                    },
+                ],
+                'payments': [],
+            },
+        )
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+        plan = plan_response.get_json()['data']['plan']
+        self.assertEqual(plan['status'], 'sent')
+        accepted_total = accepted['totals']['total']
+        self.assertEqual(plan['summary']['planned'], accepted_total)
+        self.assertEqual(
+            [row['amount'] for row in plan['installments']],
+            [accepted_total / 2, accepted_total / 2],
+        )
+
+        issued_response = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/deposit/issue",
+            json={'invoiceDate': '2026-08-10', 'status': 'sent'},
+        )
+        self.assertEqual(issued_response.status_code, 201, issued_response.get_data(as_text=True))
+        invoice = issued_response.get_json()['data']
+        self.assertEqual(invoice['invoiceAmount'], accepted_total / 2)
+        self.assertEqual(invoice['invoiceLabel'], 'Deposit')
+        self.assertEqual(invoice['sourceQuotationNumber'], accepted['number'])
+
+        refreshed_plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']
+        deposit = refreshed_plan['plan']['installments'][0]
+        self.assertEqual(deposit['invoiceNumber'], invoice['number'])
+        self.assertEqual(
+            refreshed_plan['plan']['summary']['invoiced'], accepted_total / 2
+        )
+
+    def test_invoice_plan_payments_flow_to_invoice_pdf_and_balance_history(self):
+        quotation = self.create_quote('Payment History Project')
+        quotation['lineItems'] = [{
+            'id': 'payment-plan-line',
+            'description': 'Technical service',
+            'department': 'Manpower',
+            'departmentCode': 'MANPOWER',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 400,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        saved = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'full',
+                'strategyLabel': 'Full amount',
+                'installments': [{
+                    'id': 'full', 'label': 'Full payment',
+                    'mode': 'percentage', 'value': 100,
+                }],
+                'payments': [],
+            },
+        ).get_json()['data']
+        issued = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/full/issue",
+            json={'invoiceDate': '2026-08-10'},
+        ).get_json()['data']
+
+        paid_plan = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                **saved['plan'],
+                'status': 'partially-paid',
+                'installments': self.client.get(
+                    f"/api/invoice-plans/{accepted['id']}"
+                ).get_json()['data']['plan']['installments'],
+                'payments': [{
+                    'id': 'client-deposit',
+                    'date': '2026-08-11',
+                    'label': 'Deposit received',
+                    'amount': 150,
+                }],
+            },
+        )
+        self.assertEqual(paid_plan.status_code, 200, paid_plan.get_data(as_text=True))
+        summary = paid_plan.get_json()['data']['plan']['summary']
+        self.assertEqual(summary['paid'], 150)
+        self.assertEqual(summary['due'], accepted['totals']['total'] - 150)
+
+        pdf_response = self.client.get(f"/api/invoices/{issued['id']}/pdf")
+        self.assertEqual(pdf_response.status_code, 200)
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf_response.data)).pages
+        )
+        self.assertIn('Deposit received', pdf_text)
+        self.assertIn('BALANCE REMAINING', pdf_text)
+        self.assertIn(
+            f"${accepted['totals']['total'] - 150:,.2f}", pdf_text
+        )
+
+    def test_invoice_workspace_requires_sales_access(self):
+        self.login('no-sales')
+        self.assertEqual(self.client.get('/api/invoice-plans').status_code, 403)
+        page = self.client.get('/invoices')
+        self.assertEqual(page.status_code, 302)
+
+    def test_invoice_workspace_navigation_and_assets_are_wired(self):
+        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
+        template_source = Path('templates/index.html').read_text(encoding='utf-8')
+        self.assertIn("invoices: '/invoices'", app_source)
+        self.assertIn('data-section="invoices">Invoices', finance_source)
+        self.assertIn('function invoiceOpenPlan', invoice_source)
+        self.assertIn('50% deposit / 50% balance', invoice_source)
+        self.assertIn("filename='js/invoices.js'", template_source)
+
+    def test_cancelled_quotation_can_create_a_cancellation_invoice_plan(self):
+        quotation = self.create_quote('Cancelled Production')
+        cancelled = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'cancelled'},
+        ).get_json()['data']
+        listing = self.client.get('/api/invoice-plans').get_json()['data']
+        self.assertIn(cancelled['id'], [row['quotation']['id'] for row in listing])
+
+        response = self.client.put(
+            f"/api/invoice-plans/{cancelled['id']}",
+            json={
+                'strategy': 'custom',
+                'strategyLabel': 'Cancellation fee',
+                'installments': [{
+                    'id': 'cancellation-fee',
+                    'label': 'Cancellation fee',
+                    'mode': 'amount',
+                    'value': 250,
+                }],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            response.get_json()['data']['plan']['installments'][0]['amount'],
+            250,
+        )
+
+    def test_marking_invoice_paid_records_dated_payment_and_updates_pdf(self):
+        quotation = self.create_quote('Paid Invoice Project')
+        quotation['lineItems'] = [{
+            'id': 'paid-invoice-line',
+            'description': 'Cancellation administration',
+            'department': 'General',
+            'departmentCode': 'GEN',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 200,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'full',
+                'strategyLabel': 'Full amount',
+                'installments': [{
+                    'id': 'full-payment',
+                    'label': 'Final production invoice',
+                    'mode': 'percentage',
+                    'value': 100,
+                }],
+            },
+        )
+        invoice = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/full-payment/issue",
+            json={'invoiceDate': '2026-08-10'},
+        ).get_json()['data']
+
+        paid_response = self.client.post(
+            f"/api/invoices/{invoice['id']}/mark-paid",
+            json={'receivedDate': '2026-08-12'},
+        )
+        self.assertEqual(
+            paid_response.status_code, 200,
+            paid_response.get_data(as_text=True),
+        )
+        paid = paid_response.get_json()
+        self.assertEqual(paid['data']['status'], 'paid')
+        self.assertEqual(paid['receivedDate'], '2026-08-12')
+        self.assertEqual(paid['paymentAmount'], accepted['totals']['total'])
+        payment = paid['plan']['plan']['payments'][0]
+        self.assertEqual(payment['date'], '2026-08-12')
+        self.assertEqual(payment['invoiceId'], invoice['id'])
+        self.assertEqual(paid['plan']['plan']['summary']['due'], 0)
+
+        pdf_response = self.client.get(f"/api/invoices/{invoice['id']}/pdf")
+        self.assertEqual(pdf_response.status_code, 200)
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf_response.data)).pages
+        )
+        self.assertIn('Final production invoice', pdf_text)
+        self.assertIn('AMOUNT DUE FOR THIS INVOICE', pdf_text)
+        self.assertIn('$0.00', pdf_text)
+
+    def test_invoice_can_be_renumbered_and_deleted_without_sticking_installment(self):
+        quotation = self.create_quote('Invoice Actions Project')
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'custom',
+                'installments': [{
+                    'id': 'admin-fee', 'label': 'Administration fee',
+                    'mode': 'amount', 'value': 80,
+                }],
+            },
+        )
+        invoice = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/admin-fee/issue",
+            json={},
+        ).get_json()['data']
+
+        renumbered = self.client.put(
+            f"/api/invoices/{invoice['id']}",
+            json={'number': 'SPECIAL-INV-42'},
+        )
+        self.assertEqual(renumbered.status_code, 200, renumbered.get_data(as_text=True))
+        self.assertEqual(renumbered.get_json()['data']['number'], 'SPECIAL-INV-42')
+
+        deleted = self.client.delete(f"/api/invoices/{invoice['id']}")
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        installment = plan['installments'][0]
+        self.assertFalse(installment['invoiceId'])
+        self.assertFalse(installment['invoiceNumber'])
+        self.assertEqual(installment['status'], 'planned')
+
+    def test_quotation_status_choices_stop_before_invoice_workflow(self):
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        first_line = source.splitlines()[0]
+        self.assertIn("['draft', 'sent', 'accepted', 'cancelled']", first_line)
+        self.assertNotIn("'invoiced'", first_line)
+        self.assertNotIn("'overdue'", first_line)
+        self.assertNotIn("'paid'", first_line)
 
 
 if __name__ == '__main__':

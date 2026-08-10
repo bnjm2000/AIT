@@ -3372,6 +3372,7 @@ function sectionFromSidebarLabel(item) {
     'users': 'users',
     'costing': 'costing',
     'quotations': 'quotations',
+    'invoices': 'invoices',
     'profit & loss': 'profit-loss',
     'profit and loss': 'profit-loss',
     'accounting': 'accounting',
@@ -3392,6 +3393,7 @@ function sectionFromSidebarLabel(item) {
     ['accounting', 'accounting'],
     ['costing', 'costing'],
     ['quotations', 'quotations'],
+    ['invoices', 'invoices'],
     ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
     ['maintenance report', 'maintenance-report'],
@@ -3454,6 +3456,7 @@ function navWireIconSvg(section) {
     'maintenance-report': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path>',
     logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
     quotations: '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 12h6M9 16h6"></path>',
+    invoices: '<path d="M6 3h12v18H6z"></path><path d="M9 7h6M9 11h6M9 15h3"></path><path d="M15 14v4M13 16h4"></path>',
     costing: '<path d="M4 6h16v14H4z"></path><path d="M7 3h10v6H7zM8 13h2M14 13h2M8 17h2M14 17h2"></path>',
     'profit-loss': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path><path d="m4 6 5-3 6 4 6-5"></path>',
     accounting: '<path d="M4 7h16M6 3h12l2 4H4zM6 11h3v7H6zM11 11h3v7h-3zM16 11h3v7h-3zM4 21h16"></path>',
@@ -3482,6 +3485,7 @@ function navLabelForSection(section, fallback = '') {
     'maintenance-report': 'Maintenance Report',
     logs: 'System Logs',
     quotations: 'Quotations',
+    invoices: 'Invoices',
     costing: 'Costing',
     'profit-loss': 'Profit & Loss',
     accounting: 'Accounting',
@@ -3584,6 +3588,7 @@ const APP_SECTION_PATHS = Object.freeze({
   logs: '/logs',
   costing: '/costing',
   quotations: '/quotations',
+  invoices: '/invoices',
   'profit-loss': '/profit-loss',
   accounting: '/accounting',
   compare: '/compare',
@@ -3599,6 +3604,7 @@ function appSectionFromPath(pathname = window.location.pathname) {
   if (cleanPath === '/') return 'events';
   if (/^\/events\/\d+$/.test(cleanPath)) return 'events';
   if (/^\/quotations\/[^/]+$/.test(cleanPath)) return 'quotations';
+  if (/^\/invoices\/[^/]+$/.test(cleanPath)) return 'invoices';
   if (/^\/costing\/[^/]+$/.test(cleanPath)) return 'costing';
   if (/^\/delivery-order\/\d+$/.test(cleanPath)) return 'delivery-order';
   if (/^\/packing-list\/\d+$/.test(cleanPath)) return 'events';
@@ -3609,6 +3615,8 @@ function appDetailRouteFromPath(pathname = window.location.pathname) {
   const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
   let match = cleanPath.match(/^\/quotations\/([^/]+)$/);
   if (match) return { kind: 'quotation', id: decodeURIComponent(match[1]) };
+  match = cleanPath.match(/^\/invoices\/([^/]+)$/);
+  if (match) return { kind: 'invoice-plan', id: decodeURIComponent(match[1]) };
   match = cleanPath.match(/^\/costing\/([^/]+)$/);
   if (match) return { kind: 'costing', id: decodeURIComponent(match[1]) };
   match = cleanPath.match(/^\/events\/(\d+)$/);
@@ -3636,7 +3644,7 @@ function updateAppSectionHistory(sectionName, replace = false) {
 function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies", "accounting"]);
-  const salesOnlySections = new Set(["quotations", "costing"]);
+  const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
@@ -3789,6 +3797,14 @@ function showSection(sectionName, options = {}) {
         costingOpen(costingRoute.id, { updateHistory: false });
       } else if (typeof loadCosting === "function") {
         loadCosting();
+      }
+      break;
+    case "invoices":
+      const invoiceRoute = appDetailRouteFromPath();
+      if (options.loadDetail !== false && invoiceRoute?.kind === 'invoice-plan' && typeof invoiceOpenPlan === 'function') {
+        invoiceOpenPlan(invoiceRoute.id, { updateHistory: false });
+      } else if (typeof loadInvoices === 'function') {
+        loadInvoices();
       }
       break;
     case "accounting":

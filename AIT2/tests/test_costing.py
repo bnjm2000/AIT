@@ -858,6 +858,96 @@ class CostingFeatureTests(unittest.TestCase):
             linked_quote['lineItems'][0]['costingInventoryNameMode'], 'costing'
         )
 
+    def test_costing_split_unbind_and_relink_control_quotation_lines(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Split vendor pricing',
+            'lineItems': [{
+                'id': 'shared-speaker',
+                'description': 'Speaker package',
+                'department': 'Audio',
+                'quantity': 5,
+                'days': 1,
+                'totalMode': 'amount',
+                'total': 500,
+            }],
+        }).get_json()['data']
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        source = costing['lineItems'][0]
+        costing['lineItems'] = [{
+            **source,
+            'id': 'speaker-self',
+            'quantity': 3,
+            'salePrice': 300,
+            'vendorName': 'Self',
+        }, {
+            **source,
+            'id': 'speaker-vendor',
+            'quantity': 2,
+            'salePrice': 200,
+            'vendorName': 'Rental House',
+        }]
+        split_response = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            split_response.status_code, 200, split_response.get_data(as_text=True)
+        )
+        split_costing = split_response.get_json()['data']
+        self.assertEqual(len(split_costing['lineItems']), 2)
+        split_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(len(split_quote['lineItems']), 1)
+        self.assertEqual(split_quote['lineItems'][0]['quantity'], 5)
+        self.assertEqual(split_quote['lineItems'][0]['total'], 500)
+
+        split_costing['unboundPriceNames'] = ['speaker package']
+        split_costing['lineItems'][0]['pricingBindingId'] = 'pricing-one'
+        split_costing['lineItems'][1]['pricingBindingId'] = 'pricing-two'
+        split_costing['lineItems'][1]['salePrice'] = 240
+        unbound_response = self.client.put(
+            f"/api/costings/{costing['id']}", json=split_costing,
+        )
+        self.assertEqual(
+            unbound_response.status_code, 200,
+            unbound_response.get_data(as_text=True),
+        )
+        unbound_costing = unbound_response.get_json()['data']
+        self.assertEqual(unbound_costing['unboundPriceNames'], ['speaker package'])
+        self.assertEqual(
+            {row['pricingBindingId'] for row in unbound_costing['lineItems']},
+            {'pricing-one', 'pricing-two'},
+        )
+        unbound_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(len(unbound_quote['lineItems']), 2)
+        self.assertEqual(
+            {row['costingPricingBindingId'] for row in unbound_quote['lineItems']},
+            {'pricing-one', 'pricing-two'},
+        )
+
+        unbound_costing['unboundPriceNames'] = []
+        for row in unbound_costing['lineItems']:
+            row['pricingBindingId'] = ''
+            row['salePrice'] = row['quantity'] * 100
+        relink_response = self.client.put(
+            f"/api/costings/{costing['id']}", json=unbound_costing,
+        )
+        self.assertEqual(
+            relink_response.status_code, 200,
+            relink_response.get_data(as_text=True),
+        )
+        relinked_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(len(relinked_quote['lineItems']), 1)
+        self.assertEqual(relinked_quote['lineItems'][0]['quantity'], 5)
+        self.assertEqual(relinked_quote['lineItems'][0]['total'], 500)
+
     def test_costing_self_link_ui_and_context_action_are_present(self):
         root = os.path.dirname(app_module.__file__)
         with open(
@@ -878,6 +968,13 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn("alternateValue: 'break'", source)
         self.assertIn('function costingBreakInventoryLinkFromMenu()', source)
         self.assertIn("name.toLowerCase() !== 'self'", source)
+        self.assertIn('function costingSplitLineFromMenu()', source)
+        self.assertIn('function costingDuplicateLineFromMenu()', source)
+        self.assertIn('function costingDeleteLineFromMenu()', source)
+        self.assertIn('function costingUnbindSameNamePricesFromMenu()', source)
+        self.assertIn('function costingLinkSameNamePricesFromMenu()', source)
+        self.assertIn('Unbind unit prices', source)
+        self.assertIn('Link unit prices', source)
         self.assertIn("costingApplyInventoryLink('inventory')", source)
         self.assertIn("costingApplyInventoryLink('costing')", source)
         self.assertIn('is-self-linked', styles)

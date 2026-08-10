@@ -1,4 +1,4 @@
-const FINANCE_STATUSES = ['draft', 'sent', 'accepted', 'cancelled', 'invoiced', 'overdue', 'paid'];
+const FINANCE_STATUSES = ['draft', 'sent', 'accepted', 'cancelled'];
 const FINANCE_LIST_STATUSES = ['draft', 'sent', 'accepted', 'invoiced', 'overdue', 'paid', 'expired', 'cancelled'];
 const FINANCE_UOMS = [
   { value: 'units', label: 'unit(s)' },
@@ -2432,7 +2432,7 @@ function financeSnapshotControl(document) {
 }
 
 function financeCanExportInvoice(document = financeState.current) {
-  return ['accepted', 'cancelled', 'invoiced', 'overdue', 'paid'].includes(String(document?.status || '').toLowerCase());
+  return ['accepted', 'cancelled'].includes(String(document?.status || '').toLowerCase());
 }
 
 function financeExportInvoiceButton(document = financeState.current) {
@@ -2465,6 +2465,7 @@ function ensureFinanceSections() {
   const sections = [
     ['costing-section', '<div id="costing-page-root" class="finance-page costing-page"><div class="loading">Loading costing...</div></div>'],
     ['quotations-section', '<div id="quotations-page-root" class="finance-page"><div class="loading">Loading...</div></div>'],
+    ['invoices-section', '<div id="invoices-page-root" class="finance-page invoice-page"><div class="loading">Loading invoices...</div></div>'],
     ['profit-loss-section', '<div id="profit-loss-page-root" class="finance-page profit-loss-page"><div class="loading">Loading...</div></div>'],
     ['accounting-section', '<div id="accounting-page-root" class="accounting-page"><div class="loading">Loading accounting...</div></div>'],
     ['compare-section', '<div id="compare-page-root" class="finance-page compare-page"><div class="loading">Loading...</div></div>']
@@ -2496,6 +2497,7 @@ function setupFinanceNavigation() {
     <h3>Finance</h3>
     ${isOwner ? '<button type="button" class="nav-item nav-item-inline" data-section="costing">Costing</button>' : ''}
     <button type="button" class="nav-item nav-item-inline" data-section="quotations">Quotations</button>
+    <button type="button" class="nav-item nav-item-inline" data-section="invoices">Invoices</button>
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
     ${isOwner ? '<button type="button" class="nav-item nav-item-inline platform-admin-only" data-section="accounting">Accounting</button>' : ''}
   `;
@@ -5803,29 +5805,10 @@ async function financeExportInvoice(documentId = financeState.current?.id) {
   if (!current || !financeCanExportInvoice(current)) return;
   try {
     if (financeState.current?.id === current.id) await financeSaveCurrent(false);
-    const response = await apiCall(
-      `/api/quotations/${encodeURIComponent(current.id)}/convert-to-invoice`,
-      'POST',
-      {}
-    );
-    const invoice = response.data;
-    const refreshed = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}`);
-    if (financeState.current?.id === current.id) {
-      financeState.current = refreshed.data;
-      financeRenderEditor();
-    } else {
-      const index = financeState.documents.findIndex(row => row.id === current.id);
-      if (index >= 0) financeState.documents[index] = refreshed.data;
-      financeRenderList(document.querySelector('.finance-search')?.value || '');
-    }
-    const opened = window.open(
-      `/api/invoices/${encodeURIComponent(invoice.id)}/pdf`,
-      '_blank',
-      'noopener'
-    );
-    if (!opened) showNotification('warning', 'Please allow pop-ups to preview the invoice PDF');
+    showSection('invoices', { loadDetail: false });
+    await invoiceOpenPlan(current.id);
   } catch (error) {
-    showNotification('error', error.message || 'Failed to export invoice');
+    showNotification('error', error.message || 'Failed to open invoice plan');
   }
 }
 

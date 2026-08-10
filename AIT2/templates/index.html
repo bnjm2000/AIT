@@ -23,6 +23,10 @@
     />
     <link
       rel="stylesheet"
+      href="{{ url_for('static', filename='css/invoices.css', v=invoices_css_version) }}"
+    />
+    <link
+      rel="stylesheet"
       href="{{ url_for('static', filename='css/costing.css', v=costing_css_version) }}"
     />
     <link
@@ -10532,7 +10536,7 @@
               #inventory-section .inventory-page-header { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--inventory-line); }
               #inventory-section .inventory-page-header h2 { margin:0;color:var(--inventory-ink);font-size:26px;letter-spacing:0; }
               #inventory-section .inventory-page-header p { margin:5px 0 0;color:var(--inventory-muted);font-size:13px; }
-              #inventory-section .inventory-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }
+              #inventory-section .inventory-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;transform:translateY(6px); }
               #inventory-section .inventory-manage-departments { border:1px solid #b9d4e7;background:#eaf3fb;color:#155b8f; }
               #inventory-section .inventory-manage-departments:hover { border-color:#1769aa;background:#dcecf8;color:#104d79; }
               #inventory-section .inventory-summary-layout { display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px;margin-bottom:12px; }
@@ -11134,7 +11138,7 @@
               #maintenance-section .maintenance-page-header { display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--maint-line); }
               #maintenance-section .maintenance-page-header h2 { margin:0;color:var(--maint-ink);font-size:25px;letter-spacing:0; }
               #maintenance-section .maintenance-page-header p { margin:4px 0 0;color:var(--maint-muted);font-size:12px; }
-              #maintenance-section .maintenance-page-actions { display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap; }
+              #maintenance-section .maintenance-page-actions { display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;transform:translateY(6px); }
               #maintenance-section .maintenance-page-actions .btn { display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:7px 11px;font-size:11px; }
               #maintenance-section .maintenance-page-actions svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
               #maintenance-section .maintenance-report-action { border:1px solid #b9d4e7;background:#eaf3fb;color:#155b8f; }
@@ -11998,6 +12002,7 @@
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/line-workspace.js', v=line_workspace_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/finance.js', v=finance_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/invoices.js', v=invoices_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/costing.js', v=costing_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/accounting.js', v=accounting_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>

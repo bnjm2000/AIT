@@ -985,6 +985,57 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         story.extend([client_table, Spacer(1, 4 * mm)])
 
+    if document_type == 'invoice' and float(document.get('invoiceAmount') or 0) > 0:
+        invoice_amount = float(document.get('invoiceAmount') or 0)
+        invoice_id = str(document.get('id') or '')
+        paid_for_invoice = sum(
+            float(row.get('amount') or 0)
+            for row in document.get('invoicePlanPayments') or []
+            if isinstance(row, dict)
+            and str(row.get('invoiceId') or '') == invoice_id
+        )
+        invoice_due = max(0, invoice_amount - paid_for_invoice)
+        invoice_label_style = ParagraphStyle(
+            'InvoiceStageLabel',
+            parent=body,
+            fontName='Helvetica-Bold',
+            fontSize=10.5,
+            leading=13,
+            textColor=accent_text,
+        )
+        invoice_due_label_style = ParagraphStyle(
+            'InvoiceDueLabel',
+            parent=label,
+            alignment=TA_RIGHT,
+            textColor=accent_text,
+        )
+        invoice_due_amount_style = ParagraphStyle(
+            'InvoiceDueAmount',
+            parent=right_bold,
+            fontSize=15,
+            leading=18,
+            textColor=accent_text,
+        )
+        invoice_stage = Table(
+            [[
+                _paragraph(document.get('invoiceLabel') or 'Invoice', invoice_label_style),
+                [
+                    _paragraph('AMOUNT DUE FOR THIS INVOICE', invoice_due_label_style),
+                    _paragraph(_money(invoice_due, currency), invoice_due_amount_style),
+                ],
+            ]],
+            colWidths=[doc.width - 72 * mm, 72 * mm],
+            style=TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), accent),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 5 * mm),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5 * mm),
+                ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3 * mm),
+            ]),
+        )
+        story.extend([invoice_stage, Spacer(1, 4 * mm)])
+
     schedule_entries = []
     dry_hire_schedule = str(document.get('scheduleMode') or '').strip().lower() == 'dry-hire'
     standard_schedules = {
@@ -1515,28 +1566,53 @@ def build_finance_pdf(document, company, logo_path=''):
                 )
 
     summary_rows = []
-    if show_unit_prices or show_department_subtotals:
-        for adjustment in adjustments:
-            if adjustment.get('scope') != 'total':
-                continue
-            summary_rows.append([
-                _paragraph(adjustment.get('label') or 'Total adjustment', body),
-                _paragraph(_money(adjustment.get('amount'), currency), right),
-            ])
-    if tax_rate > 0:
-        summary_rows.append(
-            [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)]
+    invoice_amount = float(document.get('invoiceAmount') or 0)
+    if document_type == 'invoice' and invoice_amount > 0:
+        quotation_total = float(document.get('quotationTotal') or totals.get('total') or 0)
+        invoiced_to_date = float(document.get('amountInvoicedToDate') or invoice_amount)
+        paid_to_date = float(document.get('amountPaidToDate') or 0)
+        outstanding = float(
+            document.get('amountOutstanding')
+            if document.get('amountOutstanding') not in (None, '')
+            else max(0, quotation_total - paid_to_date)
         )
+        if document.get('invoiceLabel'):
+            summary_rows.append([
+                _paragraph(document.get('invoiceLabel'), body),
+                _paragraph(_money(invoice_amount, currency), right),
+            ])
         summary_rows.extend([
-            [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
-            [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-             _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent_on_white))],
+            [_paragraph('Quotation total', body), _paragraph(_money(quotation_total, currency), right)],
+            [_paragraph('Invoiced to date', body), _paragraph(_money(invoiced_to_date, currency), right)],
+            [_paragraph('Paid to date', body), _paragraph(_money(paid_to_date, currency), right)],
+            [
+                _paragraph('BALANCE REMAINING', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+                _paragraph(_money(outstanding, currency), ParagraphStyle('InvoiceBalanceAmount', parent=right_bold, fontSize=11, textColor=accent_on_white)),
+            ],
         ])
     else:
-        summary_rows.append([
-            _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-            _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent_on_white)),
-        ])
+        if show_unit_prices or show_department_subtotals:
+            for adjustment in adjustments:
+                if adjustment.get('scope') != 'total':
+                    continue
+                summary_rows.append([
+                    _paragraph(adjustment.get('label') or 'Total adjustment', body),
+                    _paragraph(_money(adjustment.get('amount'), currency), right),
+                ])
+        if tax_rate > 0:
+            summary_rows.append(
+                [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)]
+            )
+            summary_rows.extend([
+                [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
+                [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+                 _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent_on_white))],
+            ])
+        else:
+            summary_rows.append([
+                _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+                _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent_on_white)),
+            ])
     summary = Table(
         summary_rows,
         colWidths=[56 * mm, 40 * mm],
@@ -1551,17 +1627,37 @@ def build_finance_pdf(document, company, logo_path=''):
             ('BACKGROUND', (0, -1), (-1, -1), panel),
         ]),
     )
-    if payment_lines:
+    received_payments = [
+        row for row in document.get('invoicePlanPayments') or []
+        if isinstance(row, dict) and float(row.get('amount') or 0) > 0
+    ]
+    if payment_lines or received_payments:
         payment_heading = ParagraphStyle(
             'FinancePaymentHeading',
             parent=section_title,
             spaceBefore=0,
             spaceAfter=3,
         )
-        payment_details = [
-            _paragraph('PAYMENT DETAILS', payment_heading),
-            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
-        ]
+        payment_details = []
+        if payment_lines:
+            payment_details.extend([
+                _paragraph('PAYMENT DETAILS', payment_heading),
+                Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
+            ])
+        if received_payments:
+            payment_details.extend([
+                *([Spacer(1, 3 * mm)] if payment_details else []),
+                _paragraph('PAYMENTS RECEIVED', payment_heading),
+                *[
+                    _paragraph(
+                        f"{escape(_date(row.get('date')))} - "
+                        f"{escape(_text(row.get('label') or 'Payment received'))}: "
+                        f"<b>{escape(_money(row.get('amount'), currency))}</b>",
+                        body,
+                    )
+                    for row in received_payments
+                ],
+            ])
         payment_and_total = Table(
             [[payment_details, summary]],
             colWidths=[doc.width - 100 * mm, 100 * mm],

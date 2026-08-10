@@ -152,10 +152,40 @@ function costingLineItemKey(line) {
   ].map(value => String(value || '').trim().toLowerCase()).join('|')}`;
 }
 
+function costingLineNameKey(lineOrName) {
+  const value = typeof lineOrName === 'object'
+    ? lineOrName?.description
+    : lineOrName;
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function costingNewPricingBindingId() {
+  return `pricing_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function costingUnboundPriceNames() {
+  if (!costingState.current) return [];
+  if (!Array.isArray(costingState.current.unboundPriceNames)) {
+    costingState.current.unboundPriceNames = [];
+  }
+  return costingState.current.unboundPriceNames;
+}
+
+function costingApplyUnboundNamePolicy(line) {
+  if (!line) return;
+  const nameKey = costingLineNameKey(line);
+  if (nameKey && costingUnboundPriceNames().includes(nameKey)) {
+    line.pricingBindingId = costingNewPricingBindingId();
+  } else {
+    line.pricingBindingId = '';
+  }
+}
+
 function costingLineSaleGroupKey(line) {
-  const multiplier = Math.max(0, costingNumber(line?.multiplier, 1)).toFixed(4);
-  const label = line?.multiplierLabel === 'Day' ? 'day' : 'mult';
-  return `${String(line?.subprojectId || 'main')}::${String(line?.category || 'General').toLowerCase()}::${costingLineItemKey(line)}::${label}::${multiplier}`;
+  const bindingId = String(line?.pricingBindingId || '').trim().toLowerCase();
+  if (bindingId) return `binding:${bindingId}`;
+  const nameKey = costingLineNameKey(line);
+  return nameKey ? `name:${nameKey}` : costingLineItemKey(line);
 }
 
 function costingLineUnitSale(line, field = 'salePrice') {
@@ -803,26 +833,168 @@ function costingOpenLineContextMenu(event, lineId) {
   const line = costingLines().find(row => String(row.id) === String(lineId));
   const linked = costingLineIsInventoryLinked(line);
   const self = String(line?.vendorName || '').trim().toLowerCase() === 'self';
-  if (
-    !line
-    || costingState.current?.status === 'converted'
-    || (!self && !linked)
-  ) return;
+  if (!line || costingState.current?.status === 'converted') return;
   event.preventDefault();
   event.stopPropagation();
   costingCloseLineContextMenu();
   const menu = costingEnsureLineContextMenu();
   costingState.contextLineId = String(lineId);
   document.querySelector(`.costing-line[data-costing-line-id="${CSS.escape(String(lineId))}"]`)?.classList.add('context-open');
-  menu.innerHTML = `${linked
-    ? `${self ? '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Change inventory link</span></button>' : ''}<button type="button" class="danger" role="menuitem" onclick="event.stopPropagation();costingBreakInventoryLinkFromMenu()"><span>Break inventory link</span></button>`
-    : '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Link to inventory</span></button>'}`;
+  const matchingNames = costingSameNameLines(line);
+  const priceAction = matchingNames.length > 1
+    ? `<button type="button" role="menuitem" onclick="event.stopPropagation();${costingSameNamePricesLinked(matchingNames) ? 'costingUnbindSameNamePricesFromMenu()' : 'costingLinkSameNamePricesFromMenu()'}"><span>${costingSameNamePricesLinked(matchingNames) ? 'Unbind unit prices' : 'Link unit prices'}</span></button>`
+    : '';
+  const inventoryActions = linked
+    ? `${self ? '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Change inventory link</span></button>' : ''}<button type="button" role="menuitem" onclick="event.stopPropagation();costingBreakInventoryLinkFromMenu()"><span>Break inventory link</span></button>`
+    : self
+      ? '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Link to inventory</span></button>'
+      : '';
+  menu.innerHTML = `
+    <button type="button" role="menuitem" onclick="event.stopPropagation();costingSplitLineFromMenu()"><span>Split item</span></button>
+    <button type="button" role="menuitem" onclick="event.stopPropagation();costingDuplicateLineFromMenu()"><span>Duplicate item</span></button>
+    ${priceAction}${inventoryActions}
+    <button type="button" class="danger" role="menuitem" onclick="event.stopPropagation();costingDeleteLineFromMenu()"><span>Delete item</span></button>`;
   menu.classList.add('open');
   const width = menu.offsetWidth;
   const height = menu.offsetHeight;
   menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
   menu.querySelector('button')?.focus();
+}
+
+function costingSameNameLines(line) {
+  const nameKey = costingLineNameKey(line);
+  if (!nameKey) return [];
+  return costingLines().filter(candidate => costingLineNameKey(candidate) === nameKey);
+}
+
+function costingSameNamePricesLinked(lines) {
+  if (!Array.isArray(lines) || lines.length < 2) return true;
+  const firstKey = costingLineSaleGroupKey(lines[0]);
+  return lines.every(line => costingLineSaleGroupKey(line) === firstKey);
+}
+
+function costingCloneLine(line) {
+  return {
+    ...JSON.parse(JSON.stringify(line || {})),
+    id: `costline_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    groupLeader: false
+  };
+}
+
+async function costingSplitLineFromMenu() {
+  const lineId = costingState.contextLineId;
+  const index = costingLines().findIndex(row => String(row.id) === String(lineId));
+  const line = costingLines()[index];
+  costingCloseLineContextMenu();
+  if (!line) return;
+  const currentQuantity = Math.max(0, costingNumber(line.quantity));
+  if (currentQuantity <= 0) {
+    showNotification('warning', 'This item has no quantity to split');
+    return;
+  }
+  const value = await showAppPrompt({
+    title: 'Split item',
+    message: `Move part of the ${currentQuantity} quantity into a new costing line.`,
+    inputLabel: 'Quantity to move',
+    inputType: 'number',
+    defaultValue: currentQuantity > 1 ? '1' : String(currentQuantity / 2),
+    confirmText: 'Split',
+    required: true
+  });
+  if (value === null) return;
+  const splitQuantity = costingNumber(value, -1);
+  if (splitQuantity <= 0 || splitQuantity >= currentQuantity) {
+    showNotification('warning', `Enter a quantity greater than 0 and less than ${currentQuantity}`);
+    return;
+  }
+  const unitPrice = costingLineUnitSale(line);
+  const clone = costingCloneLine(line);
+  line.quantity = Math.round((currentQuantity - splitQuantity) * 10000) / 10000;
+  clone.quantity = Math.round(splitQuantity * 10000) / 10000;
+  [line, clone].forEach(row => {
+    const divisor = Math.max(0, costingNumber(row.quantity))
+      * Math.max(0, costingNumber(row.multiplier));
+    row.salePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
+    costingLineRecalculate(row, 'sale');
+  });
+  costingLines().splice(index + 1, 0, clone);
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+}
+
+function costingDuplicateLineFromMenu() {
+  const lineId = costingState.contextLineId;
+  const index = costingLines().findIndex(row => String(row.id) === String(lineId));
+  const line = costingLines()[index];
+  costingCloseLineContextMenu();
+  if (!line) return;
+  const clone = costingCloneLine(line);
+  if (costingUnboundPriceNames().includes(costingLineNameKey(clone))) {
+    clone.pricingBindingId = costingNewPricingBindingId();
+  }
+  costingLines().splice(index + 1, 0, clone);
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+}
+
+async function costingDeleteLineFromMenu() {
+  const lineId = costingState.contextLineId;
+  const index = costingLines().findIndex(row => String(row.id) === String(lineId));
+  const line = costingLines()[index];
+  costingCloseLineContextMenu();
+  if (!line) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete costing item?',
+    message: `Remove ${line.description || 'this item'} from the costing?`,
+    confirmText: 'Delete Item',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  costingRemoveLine(index);
+}
+
+function costingUnbindSameNamePricesFromMenu() {
+  const lineId = costingState.contextLineId;
+  const source = costingLines().find(row => String(row.id) === String(lineId));
+  costingCloseLineContextMenu();
+  const matches = costingSameNameLines(source);
+  if (matches.length < 2) return;
+  const nameKey = costingLineNameKey(source);
+  if (!costingUnboundPriceNames().includes(nameKey)) {
+    costingUnboundPriceNames().push(nameKey);
+  }
+  matches.forEach(line => { line.pricingBindingId = costingNewPricingBindingId(); });
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+  showNotification('success', 'Unit prices can now be edited independently');
+}
+
+function costingLinkSameNamePricesFromMenu() {
+  const lineId = costingState.contextLineId;
+  const source = costingLines().find(row => String(row.id) === String(lineId));
+  costingCloseLineContextMenu();
+  const matches = costingSameNameLines(source);
+  if (matches.length < 2) return;
+  const nameKey = costingLineNameKey(source);
+  costingState.current.unboundPriceNames = costingUnboundPriceNames().filter(
+    value => value !== nameKey
+  );
+  const unitPrice = costingLineUnitSale(source);
+  matches.forEach(line => {
+    line.pricingBindingId = '';
+    const divisor = Math.max(0, costingNumber(line.quantity))
+      * Math.max(0, costingNumber(line.multiplier));
+    line.salePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
+    costingLineRecalculate(line, 'sale');
+  });
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+  showNotification('success', 'Same-name unit prices linked');
 }
 
 function costingBreakInventoryLink(line) {
@@ -1411,7 +1583,7 @@ function costingMoveLines(sourceIndexes, targetIndex, targetCategory, options = 
     if (position === 'after') insertIndex += 1;
   }
   lines.splice(Math.min(lines.length, insertIndex), 0, ...movedItems);
-  costingEqualiseSaleGroups(costingVisibleLines());
+  costingEqualiseSaleGroups(costingLines());
   costingState.changeVersion += 1;
   costingQueueSave();
   costingDragEnd();
@@ -1706,6 +1878,7 @@ async function costingLineDescriptionChanged(index, value, input) {
   } else {
     costingBreakInventoryLink(line);
   }
+  costingApplyUnboundNamePolicy(line);
   if (input) input.dataset.originalValue = next;
   costingState.changeVersion += 1;
   costingQueueSave();
@@ -1864,7 +2037,7 @@ function costingSetAllMultiplierLabels(label, encodedCategory = '') {
   costingVisibleLines().forEach(line => {
     if (!category || line.category === category) line.multiplierLabel = next;
   });
-  costingEqualiseSaleGroups(costingVisibleLines());
+  costingEqualiseSaleGroups(costingLines());
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -1888,7 +2061,7 @@ function costingApplyMultiplierAll(valueOverride, encodedCategory = '') {
       costingLineRecalculate(line, 'sale');
     }
   });
-  costingEqualiseSaleGroups(costingVisibleLines());
+  costingEqualiseSaleGroups(costingLines());
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -1902,7 +2075,7 @@ function costingApplyCategoryMargin(encodedCategory, valueOverride) {
     line.targetMarginPercent = value;
     costingLineRecalculate(line, 'margin-percent');
   });
-  costingEqualiseSaleGroups(costingCategoryLines(category));
+  costingEqualiseSaleGroups(costingLines());
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -1923,10 +2096,13 @@ function costingApplyCategoryVendor(encodedCategory, valueOverride) {
     line.vendorName = selected?.name || name;
     line.vendorId = selected?.id || '';
     line.vendorType = selected?.type || 'vendor';
+    if (name.toLowerCase() !== 'self' && costingLineIsInventoryLinked(line)) {
+      costingBreakInventoryLink(line);
+    }
     if (name.toLowerCase() === 'self') line.itemCost = 0;
     costingLineRecalculate(line, 'cost');
   });
-  costingEqualiseSaleGroups(costingCategoryLines(category));
+  costingEqualiseSaleGroups(costingLines());
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -2094,6 +2270,7 @@ function costingNewLine(selected) {
     salePrice: 0,
     isCustom: !selected.catalogKey
   }, 'margin-percent');
+  costingApplyUnboundNamePolicy(line);
   const matchingLine = costingLines().find(
     row => costingLineSaleGroupKey(row) === costingLineSaleGroupKey(line)
   );

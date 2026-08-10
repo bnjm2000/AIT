@@ -9399,29 +9399,6 @@ def _normalise_vendor_costing_rentals(value, existing=None):
     return result
 
 
-def _normalise_vendor_costing_rentals(value, existing=None):
-    existing_map = {
-        str(row.get('costingId') or ''): row
-        for row in (existing or [])
-        if isinstance(row, dict) and str(row.get('costingId') or '')
-    }
-    result = []
-    for row in value if isinstance(value, list) else []:
-        if not isinstance(row, dict):
-            continue
-        costing_id = str(row.get('costingId') or '').strip()[:120]
-        if not costing_id or costing_id not in existing_map:
-            continue
-        stored = existing_map[costing_id]
-        result.append({
-            'costingId': costing_id,
-            'projectName': str(stored.get('projectName') or '').strip()[:500],
-            'amount': round(max(0, _safe_float(row.get('amount'), stored.get('amount'))), 2),
-            'updatedAt': now_iso(),
-        })
-    return result
-
-
 @app.route('/api/workforce/vendors', methods=['POST'])
 @require_admin
 def create_workforce_vendor():
@@ -13599,6 +13576,7 @@ APP_PAGE_SECTIONS = {
     '/logs': 'logs',
     '/costing': 'costing',
     '/quotations': 'quotations',
+    '/invoices': 'invoices',
     '/profit-loss': 'profit-loss',
     '/accounting': 'accounting',
     '/compare': 'compare',
@@ -13614,7 +13592,7 @@ APP_ADMIN_PAGE_SECTIONS = {
 }
 APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting', 'costing'}
 APP_SALES_PAGE_SECTIONS = {
-    'quotations', 'costing', 'profit-loss', 'accounting',
+    'quotations', 'invoices', 'costing', 'profit-loss', 'accounting',
 }
 
 
@@ -13632,6 +13610,8 @@ def _render_app_page(section):
         line_workspace_css_version=_static_asset_version('css/line-workspace.css'),
         finance_js_version=_static_asset_version('js/finance.js'),
         finance_css_version=_static_asset_version('css/finance.css'),
+        invoices_js_version=_static_asset_version('js/invoices.js'),
+        invoices_css_version=_static_asset_version('css/invoices.css'),
         costing_css_version=_static_asset_version('css/costing.css'),
         settings_css_version=_static_asset_version('css/settings.css'),
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
@@ -13669,6 +13649,7 @@ def index():
 @app.route('/logs')
 @app.route('/costing')
 @app.route('/quotations')
+@app.route('/invoices')
 @app.route('/profit-loss')
 @app.route('/accounting')
 @app.route('/compare')
@@ -13701,6 +13682,15 @@ def quotation_detail_page(document_id):
     if not _current_user_has_sales_access():
         return redirect('/events')
     return _render_app_page('quotations')
+
+
+@app.route('/invoices/<quotation_id>')
+@require_auth
+def invoice_plan_detail_page(quotation_id):
+    """Serve an invoice-plan deep link; its API enforces document ownership."""
+    if not _current_user_has_sales_access():
+        return redirect('/events')
+    return _render_app_page('invoices')
 
 
 @app.route('/costing/<costing_id>')
@@ -26074,10 +26064,16 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 14
+FINANCE_VERSION = 15
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
+)
+FINANCE_INVOICE_PLAN_STATUSES = (
+    'draft', 'sent', 'partially-paid', 'paid', 'overdue', 'cancelled',
+)
+FINANCE_INVOICE_STATUSES = (
+    'draft', 'sent', 'partially-paid', 'paid', 'overdue', 'void',
 )
 FINANCE_DEFAULT_DEPARTMENTS = ('Manpower', 'Transportation')
 ACCOUNTING_GST_RATE = 9.0
@@ -26158,6 +26154,7 @@ def _finance_defaults():
         'linkedLineItems': {},
         'priceBook': {},
         'costBook': {},
+        'invoicePlans': {},
         'profitLoss': {
             'expenses': {},
             'commissions': {},
@@ -26508,6 +26505,10 @@ def _migrate_finance_data(data):
     quote_prefix = str(settings.get('quotationPrefix') or 'QT').upper()
     documents = data.get('documents') or []
 
+    if not isinstance(data.get('invoicePlans'), dict):
+        data['invoicePlans'] = {}
+        changed = True
+
     if not isinstance(data.get('costBook'), dict):
         data['costBook'] = {}
         changed = True
@@ -26782,6 +26783,8 @@ def _load_finance_data():
             data['priceBook'] = loaded['priceBook']
         if isinstance(loaded.get('costBook'), dict):
             data['costBook'] = loaded['costBook']
+        if isinstance(loaded.get('invoicePlans'), dict):
+            data['invoicePlans'] = loaded['invoicePlans']
         if isinstance(loaded.get('linkedLineItems'), dict):
             data['linkedLineItems'] = loaded['linkedLineItems']
         if isinstance(loaded.get('profitLoss'), dict):
@@ -26816,6 +26819,7 @@ def _save_finance_data(data):
         'linkedLineItems': copy.deepcopy(data.get('linkedLineItems') or {}),
         'priceBook': data.get('priceBook') or {},
         'costBook': data.get('costBook') or {},
+        'invoicePlans': copy.deepcopy(data.get('invoicePlans') or {}),
         'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {
             'expenses': {},
             'commissions': {},
@@ -27859,7 +27863,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     allowed_statuses = (
         set(FINANCE_QUOTATION_STATUSES)
         if document_type == 'quotation'
-        else {'draft', 'sent', 'paid', 'overdue', 'void'}
+        else set(FINANCE_INVOICE_STATUSES)
     )
     status = str(value.get('status') or existing.get('status') or 'draft').strip().lower()
     if status == 'declined':
@@ -28133,6 +28137,37 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'sourceQuotationId': str(value.get('sourceQuotationId') or existing.get('sourceQuotationId') or '').strip()[:80],
         'sourceQuotationNumber': str(value.get('sourceQuotationNumber') or existing.get('sourceQuotationNumber') or '').strip()[:80],
         'sourceCostingId': str(value.get('sourceCostingId') or existing.get('sourceCostingId') or '').strip()[:80],
+        'invoicePlanId': str(value.get('invoicePlanId') or existing.get('invoicePlanId') or '').strip()[:80],
+        'invoiceInstallmentId': str(value.get('invoiceInstallmentId') or existing.get('invoiceInstallmentId') or '').strip()[:80],
+        'invoiceLabel': str(value.get('invoiceLabel') if 'invoiceLabel' in value else existing.get('invoiceLabel') or '').strip()[:300],
+        'invoiceAmount': round(max(0, _safe_float(
+            value.get('invoiceAmount') if 'invoiceAmount' in value else existing.get('invoiceAmount'),
+            0,
+        )), 2),
+        'quotationTotal': round(max(0, _safe_float(
+            value.get('quotationTotal') if 'quotationTotal' in value else existing.get('quotationTotal'),
+            0,
+        )), 2),
+        'amountInvoicedToDate': round(max(0, _safe_float(
+            value.get('amountInvoicedToDate') if 'amountInvoicedToDate' in value else existing.get('amountInvoicedToDate'),
+            0,
+        )), 2),
+        'amountPaidToDate': round(max(0, _safe_float(
+            value.get('amountPaidToDate') if 'amountPaidToDate' in value else existing.get('amountPaidToDate'),
+            0,
+        )), 2),
+        'amountOutstanding': round(max(0, _safe_float(
+            value.get('amountOutstanding') if 'amountOutstanding' in value else existing.get('amountOutstanding'),
+            0,
+        )), 2),
+        'invoicePlanPayments': [
+            copy.deepcopy(row) for row in (
+                value.get('invoicePlanPayments')
+                if 'invoicePlanPayments' in value
+                else existing.get('invoicePlanPayments') or []
+            )
+            if isinstance(row, dict)
+        ][:500],
         'costingDisabled': bool(
             value.get('costingDisabled')
             if 'costingDisabled' in value
@@ -29374,6 +29409,7 @@ def _linked_cost_line_from_record(public_line, allocation):
         'inventoryNameMode': (
             public_line.get('costingInventoryNameMode') or 'inventory'
         ),
+        'pricingBindingId': public_line.get('costingPricingBindingId') or '',
         'isCustom': bool(public_line.get('isCustom')),
         'groupId': public_line.get('groupId') or '',
         'groupTitle': public_line.get('groupTitle') or '',
@@ -29431,6 +29467,10 @@ def _linked_cost_line_from_record(public_line, allocation):
             ).strip().lower() == 'costing'
             else 'inventory'
         ),
+        'pricingBindingId': re.sub(
+            r'[^A-Za-z0-9_-]+', '',
+            str(public_line.get('costingPricingBindingId') or ''),
+        )[:120],
         'isCustom': bool(public_line.get('isCustom')),
     })
     return line
@@ -34987,6 +35027,37 @@ def _finance_get_update_delete(document_id, document_type):
                 row for row in finance_data.get('documents') or []
                 if str(row.get('id')) != str(document_id)
             ]
+            if document_type == 'invoice':
+                quotation_id = str(existing.get('sourceQuotationId') or '')
+                stored_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
+                quotation = _finance_find_document(
+                    finance_data, quotation_id, 'quotation'
+                ) if quotation_id else None
+                if isinstance(stored_plan, dict) and quotation:
+                    plan = _normalise_invoice_plan(
+                        stored_plan, quotation, stored_plan
+                    )
+                    for installment in plan.get('installments') or []:
+                        if str(installment.get('invoiceId') or '') != str(document_id):
+                            continue
+                        installment.update({
+                            'invoiceId': '',
+                            'invoiceNumber': '',
+                            'issuedAt': '',
+                            'status': 'planned',
+                        })
+                    for payment in plan.get('payments') or []:
+                        if str(payment.get('invoiceId') or '') == str(document_id):
+                            payment['invoiceId'] = ''
+                    plan['history'].append(_invoice_plan_history_entry(
+                        'invoice-deleted',
+                        f"Deleted invoice {existing.get('number') or document_id}",
+                    ))
+                    plan['summary'] = _invoice_plan_summary(
+                        plan, (quotation.get('totals') or {}).get('total', 0)
+                    )
+                    finance_data['invoicePlans'][quotation_id] = plan
+                    _invoice_plan_sync_documents(finance_data, plan, quotation)
             _save_finance_data(finance_data)
             log_action(f"Deleted {document_type} {existing.get('number', document_id)}")
             return jsonify({'success': True})
@@ -36843,6 +36914,603 @@ def invoices_collection():
 @require_sales
 def invoice_item(document_id):
     return _finance_get_update_delete(document_id, 'invoice')
+
+
+def _invoice_plan_history_entry(action, detail=''):
+    username = _finance_current_username()
+    return {
+        'id': new_id('invoice-history'),
+        'action': str(action or '').strip()[:80],
+        'detail': str(detail or '').strip()[:500],
+        'at': datetime.now().isoformat(timespec='seconds'),
+        'by': username,
+        'byName': _user_display_name(username) if username else '',
+    }
+
+
+def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    mode = str(value.get('mode') or existing.get('mode') or 'amount').strip().lower()
+    if mode not in {'amount', 'percentage'}:
+        mode = 'amount'
+    raw_value = max(0, _safe_float(
+        value.get('value') if 'value' in value else existing.get('value'),
+        0,
+    ))
+    if mode == 'percentage':
+        raw_value = min(1000, raw_value)
+        amount = round(quotation_total * raw_value / 100, 2)
+    else:
+        amount = round(raw_value, 2)
+    status = str(value.get('status') or existing.get('status') or 'planned').strip().lower()
+    if status not in {'planned', *FINANCE_INVOICE_STATUSES}:
+        status = 'planned'
+    return {
+        'id': re.sub(
+            r'[^A-Za-z0-9_-]+', '',
+            str(value.get('id') or existing.get('id') or ''),
+        )[:80] or new_id('installment'),
+        'label': str(
+            value.get('label') if 'label' in value else existing.get('label') or 'Invoice'
+        ).strip()[:200] or 'Invoice',
+        'mode': mode,
+        'value': round(raw_value, 4),
+        'amount': amount,
+        'dueDate': str(
+            value.get('dueDate') if 'dueDate' in value else existing.get('dueDate') or ''
+        ).strip()[:10],
+        'notes': str(
+            value.get('notes') if 'notes' in value else existing.get('notes') or ''
+        ).strip()[:1000],
+        'status': status,
+        'invoiceId': str(existing.get('invoiceId') or value.get('invoiceId') or '').strip()[:80],
+        'invoiceNumber': str(existing.get('invoiceNumber') or value.get('invoiceNumber') or '').strip()[:80],
+        'issuedAt': str(existing.get('issuedAt') or value.get('issuedAt') or '').strip()[:40],
+        'createdAt': str(existing.get('createdAt') or value.get('createdAt') or datetime.now().isoformat(timespec='seconds'))[:40],
+        'updatedAt': datetime.now().isoformat(timespec='seconds'),
+    }
+
+
+def _normalise_invoice_plan_payment(value, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    return {
+        'id': re.sub(
+            r'[^A-Za-z0-9_-]+', '',
+            str(value.get('id') or existing.get('id') or ''),
+        )[:80] or new_id('payment'),
+        'date': str(
+            value.get('date') if 'date' in value else existing.get('date') or datetime.now().strftime('%Y-%m-%d')
+        ).strip()[:10],
+        'label': str(
+            value.get('label') if 'label' in value else existing.get('label') or 'Payment received'
+        ).strip()[:200] or 'Payment received',
+        'amount': round(max(0, _safe_float(
+            value.get('amount') if 'amount' in value else existing.get('amount'),
+            0,
+        )), 2),
+        'invoiceId': str(
+            value.get('invoiceId') if 'invoiceId' in value else existing.get('invoiceId') or ''
+        ).strip()[:80],
+        'createdAt': str(existing.get('createdAt') or value.get('createdAt') or datetime.now().isoformat(timespec='seconds'))[:40],
+        'createdBy': str(existing.get('createdBy') or value.get('createdBy') or _finance_current_username())[:160],
+    }
+
+
+def _normalise_invoice_plan(value, quotation, existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    quotation_total = round(max(0, _safe_float(
+        (quotation.get('totals') or {}).get('total'),
+        _finance_totals(quotation).get('total'),
+    )), 2)
+    existing_installments = {
+        str(row.get('id') or ''): row
+        for row in existing.get('installments') or []
+        if isinstance(row, dict)
+    }
+    installments_source = (
+        value.get('installments')
+        if 'installments' in value
+        else existing.get('installments') or []
+    )
+    installments = [
+        _normalise_invoice_plan_installment(
+            row,
+            quotation_total,
+            existing_installments.get(str((row or {}).get('id') or '')),
+        )
+        for row in installments_source
+        if isinstance(row, dict)
+    ][:100]
+    existing_payments = {
+        str(row.get('id') or ''): row
+        for row in existing.get('payments') or []
+        if isinstance(row, dict)
+    }
+    payments_source = (
+        value.get('payments')
+        if 'payments' in value
+        else existing.get('payments') or []
+    )
+    payments = [
+        _normalise_invoice_plan_payment(
+            row,
+            existing_payments.get(str((row or {}).get('id') or '')),
+        )
+        for row in payments_source
+        if isinstance(row, dict)
+    ][:500]
+    status = str(value.get('status') or existing.get('status') or 'draft').strip().lower()
+    if status not in FINANCE_INVOICE_PLAN_STATUSES:
+        status = 'draft'
+    strategy = str(value.get('strategy') or existing.get('strategy') or 'custom').strip().lower()
+    if strategy not in {'full', 'deposit', 'custom'}:
+        strategy = 'custom'
+    history = [
+        copy.deepcopy(row)
+        for row in existing.get('history') or value.get('history') or []
+        if isinstance(row, dict)
+    ][-1000:]
+    plan = {
+        'id': str(existing.get('id') or value.get('id') or new_id('invoice-plan'))[:80],
+        'quotationId': str(quotation.get('id') or '')[:80],
+        'quotationNumber': str(quotation.get('number') or '')[:80],
+        'status': status,
+        'strategy': strategy,
+        'strategyLabel': str(
+            value.get('strategyLabel')
+            if 'strategyLabel' in value
+            else existing.get('strategyLabel') or 'Custom installment plan'
+        ).strip()[:200] or 'Custom installment plan',
+        'installments': installments,
+        'payments': payments,
+        'history': history,
+        'createdAt': str(existing.get('createdAt') or datetime.now().isoformat(timespec='seconds'))[:40],
+        'createdBy': str(existing.get('createdBy') or _finance_current_username())[:160],
+        'updatedAt': datetime.now().isoformat(timespec='seconds'),
+        'updatedBy': _finance_current_username(),
+    }
+    plan['summary'] = _invoice_plan_summary(plan, quotation_total)
+    return plan
+
+
+def _invoice_plan_summary(plan, quotation_total):
+    installments = plan.get('installments') or []
+    payments = plan.get('payments') or []
+    planned = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in installments
+        if row.get('status') not in {'cancelled', 'void'}
+    ), 2)
+    invoiced = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in installments
+        if row.get('invoiceId') and row.get('status') not in {'cancelled', 'void'}
+    ), 2)
+    paid = round(sum(_safe_float(row.get('amount'), 0) for row in payments), 2)
+    return {
+        'quotationTotal': round(max(0, _safe_float(quotation_total, 0)), 2),
+        'planned': planned,
+        'unplanned': round(max(0, quotation_total - planned), 2),
+        'invoiced': invoiced,
+        'notInvoiced': round(max(0, quotation_total - invoiced), 2),
+        'paid': paid,
+        'due': round(max(0, quotation_total - paid), 2),
+        'invoiceBalance': round(max(0, invoiced - paid), 2),
+    }
+
+
+def _invoice_plan_find_quotation(finance_data, quotation_id):
+    quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
+    if not quotation or not _finance_user_can_access(quotation):
+        return None
+    return _normalise_finance_document(quotation, 'quotation', quotation)
+
+
+def _invoice_plan_legacy_seed(finance_data, quotation):
+    """Expose invoices made by the former one-click flow in the new ledger."""
+    quotation_id = str(quotation.get('id') or '')
+    invoices = [
+        row for row in finance_data.get('documents') or []
+        if row.get('type') == 'invoice'
+        and str(row.get('sourceQuotationId') or '') == quotation_id
+    ]
+    if not invoices:
+        return None
+    total = round(max(0, _safe_float(
+        (quotation.get('totals') or {}).get('total'), 0
+    )), 2)
+    invoice_count = max(1, len(invoices))
+    installments = []
+    for index, invoice in enumerate(invoices):
+        fallback_amount = round(total / invoice_count, 2)
+        installments.append({
+            'id': str(invoice.get('invoiceInstallmentId') or new_id('installment')),
+            'label': str(invoice.get('invoiceLabel') or (
+                'Full payment' if invoice_count == 1 else f'Invoice {index + 1}'
+            )),
+            'mode': 'amount',
+            'value': _safe_float(invoice.get('invoiceAmount'), fallback_amount),
+            'amount': _safe_float(invoice.get('invoiceAmount'), fallback_amount),
+            'dueDate': str(invoice.get('dueDate') or ''),
+            'status': str(invoice.get('status') or 'draft'),
+            'invoiceId': str(invoice.get('id') or ''),
+            'invoiceNumber': str(invoice.get('number') or ''),
+            'issuedAt': str(invoice.get('createdAt') or ''),
+        })
+    return {
+        'strategy': 'full' if invoice_count == 1 else 'custom',
+        'strategyLabel': (
+            'Full amount' if invoice_count == 1 else 'Existing invoice schedule'
+        ),
+        'status': str(invoices[-1].get('status') or 'draft'),
+        'installments': installments,
+        'payments': [],
+        'history': [{
+            **_invoice_plan_history_entry(
+                'invoice-imported',
+                'Imported invoice history from the previous export workflow',
+            ),
+            'at': str(invoices[0].get('createdAt') or datetime.now().isoformat(timespec='seconds')),
+        }],
+        'createdAt': str(invoices[0].get('createdAt') or ''),
+        'createdBy': str(invoices[0].get('createdBy') or ''),
+    }
+
+
+def _invoice_plan_sync_documents(finance_data, plan, quotation):
+    summary = plan.get('summary') or _invoice_plan_summary(
+        plan, (quotation.get('totals') or {}).get('total', 0)
+    )
+    installments = {
+        str(row.get('invoiceId') or ''): row
+        for row in plan.get('installments') or []
+        if row.get('invoiceId')
+    }
+    for index, document in enumerate(finance_data.get('documents') or []):
+        installment = installments.get(str(document.get('id') or ''))
+        if not installment or document.get('type') != 'invoice':
+            continue
+        update = {
+            'invoiceLabel': installment.get('label'),
+            'invoiceAmount': installment.get('amount'),
+            'quotationTotal': summary.get('quotationTotal'),
+            'amountInvoicedToDate': summary.get('invoiced'),
+            'amountPaidToDate': summary.get('paid'),
+            'amountOutstanding': summary.get('due'),
+            'invoicePlanPayments': plan.get('payments') or [],
+        }
+        finance_data['documents'][index] = _normalise_finance_document(
+            update, 'invoice', document
+        )
+
+
+def _invoice_plan_response(finance_data, quotation, plan, include_quotation=False):
+    invoice_documents = {
+        str(row.get('id') or ''): row
+        for row in finance_data.get('documents') or []
+        if row.get('type') == 'invoice'
+    }
+    response_plan = copy.deepcopy(plan)
+    for installment in response_plan.get('installments') or []:
+        invoice = invoice_documents.get(str(installment.get('invoiceId') or ''))
+        if not invoice:
+            continue
+        installment['invoiceNumber'] = invoice.get('number') or installment.get('invoiceNumber')
+        installment['status'] = invoice.get('status') or installment.get('status')
+        installment['invoiceDate'] = invoice.get('invoiceDate') or ''
+    response_plan['summary'] = _invoice_plan_summary(
+        response_plan, (quotation.get('totals') or {}).get('total', 0)
+    )
+    payload = {
+        'plan': response_plan,
+        'quotation': (
+            quotation if include_quotation
+            else _finance_document_list_summary(quotation)
+        ),
+    }
+    return payload
+
+
+@app.route('/api/invoice-plans', methods=['GET'])
+@require_sales
+def invoice_plans_collection():
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        query = str(request.args.get('query') or '').strip().casefold()
+        plans = finance_data.get('invoicePlans') or {}
+        rows = []
+        for quotation in finance_data.get('documents') or []:
+            if quotation.get('type') != 'quotation' or not _finance_user_can_access(quotation):
+                continue
+            quotation_id = str(quotation.get('id') or '')
+            existing = plans.get(quotation_id) or _invoice_plan_legacy_seed(
+                finance_data, quotation
+            )
+            if str(quotation.get('status') or '').lower() not in {'accepted', 'cancelled'} and not isinstance(existing, dict):
+                continue
+            normalised_quote = _normalise_finance_document(quotation, 'quotation', quotation)
+            plan = _normalise_invoice_plan(existing or {}, normalised_quote, existing or {})
+            row = _invoice_plan_response(finance_data, normalised_quote, plan)
+            search_text = _finance_list_search_text(normalised_quote)
+            if query and query not in search_text:
+                continue
+            rows.append(row)
+        rows.sort(
+            key=lambda row: (
+                str((row.get('plan') or {}).get('updatedAt') or ''),
+                str((row.get('quotation') or {}).get('number') or ''),
+            ),
+            reverse=True,
+        )
+        return jsonify({'success': True, 'data': rows})
+
+
+@app.route('/api/invoice-plans/<quotation_id>', methods=['GET', 'PUT'])
+@require_sales
+def invoice_plan_item(quotation_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _invoice_plan_find_quotation(finance_data, quotation_id)
+        if not quotation:
+            return jsonify({'error': 'Quotation not found'}), 404
+        plans = finance_data.setdefault('invoicePlans', {})
+        existing = plans.get(str(quotation_id)) or _invoice_plan_legacy_seed(
+            finance_data, quotation
+        )
+        if not isinstance(existing, dict) and quotation.get('status') not in {'accepted', 'cancelled'}:
+            return jsonify({
+                'error': 'Only accepted or cancelled quotations can start an invoice plan'
+            }), 409
+        if request.method == 'GET':
+            plan = _normalise_invoice_plan(existing or {}, quotation, existing or {})
+            return jsonify({
+                'success': True,
+                'data': _invoice_plan_response(
+                    finance_data, quotation, plan, include_quotation=True
+                ),
+            })
+
+        requested = request.get_json() or {}
+        plan = _normalise_invoice_plan(requested, quotation, existing or {})
+        history = list(plan.get('history') or [])
+        if not existing:
+            history.append(_invoice_plan_history_entry(
+                'plan-created', f"Created billing plan for {quotation.get('number')}"
+            ))
+        elif str(existing.get('status') or 'draft') != plan.get('status'):
+            history.append(_invoice_plan_history_entry(
+                'status-changed',
+                f"Changed invoice plan status to {plan.get('status')}",
+            ))
+        else:
+            history.append(_invoice_plan_history_entry(
+                'plan-updated', 'Updated invoice strategy or payment records'
+            ))
+        plan['history'] = history[-1000:]
+        plans[str(quotation_id)] = plan
+        _invoice_plan_sync_documents(finance_data, plan, quotation)
+        _save_finance_data(finance_data)
+    mark_realtime_change('finance', {
+        'quotationId': quotation_id,
+        'action': 'invoice-plan-updated',
+    })
+    return jsonify({
+        'success': True,
+        'data': _invoice_plan_response(
+            finance_data, quotation, plan, include_quotation=True
+        ),
+    })
+
+
+@app.route(
+    '/api/invoice-plans/<quotation_id>/installments/<installment_id>/issue',
+    methods=['POST'],
+)
+@require_sales
+def issue_invoice_plan_installment(quotation_id, installment_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _invoice_plan_find_quotation(finance_data, quotation_id)
+        existing_plan = (finance_data.get('invoicePlans') or {}).get(str(quotation_id))
+        if not quotation or not isinstance(existing_plan, dict):
+            return jsonify({'error': 'Invoice plan not found'}), 404
+        plan = _normalise_invoice_plan(existing_plan, quotation, existing_plan)
+        installment = next((
+            row for row in plan.get('installments') or []
+            if str(row.get('id') or '') == str(installment_id)
+        ), None)
+        if not installment:
+            return jsonify({'error': 'Installment not found'}), 404
+        if installment.get('invoiceId'):
+            existing_invoice = _finance_find_document(
+                finance_data, installment['invoiceId'], 'invoice'
+            )
+            if existing_invoice:
+                return jsonify({
+                    'success': True,
+                    'data': _normalise_finance_document(
+                        existing_invoice, 'invoice', existing_invoice
+                    ),
+                    'unchanged': True,
+                })
+
+        request_data = request.get_json() or {}
+        source = copy.deepcopy(quotation)
+        source.pop('id', None)
+        source.pop('number', None)
+        source['sourceQuotationId'] = quotation_id
+        source['sourceQuotationNumber'] = quotation.get('number') or ''
+        source['invoicePlanId'] = plan.get('id') or ''
+        source['invoiceInstallmentId'] = installment.get('id') or ''
+        source['invoiceLabel'] = installment.get('label') or 'Invoice'
+        source['invoiceAmount'] = installment.get('amount') or 0
+        source['quotationTotal'] = (plan.get('summary') or {}).get('quotationTotal', 0)
+        source['showSignOff'] = False
+        source['status'] = str(request_data.get('status') or 'draft').strip().lower()
+        invoice_date = str(
+            request_data.get('invoiceDate') or datetime.now().strftime('%Y-%m-%d')
+        )[:10]
+        due_date = str(request_data.get('dueDate') or installment.get('dueDate') or '')[:10]
+        if not due_date:
+            due_date, payment_term_days = _finance_payment_due_date(
+                invoice_date, quotation.get('paymentTerms')
+            )
+            source['paymentTermDays'] = payment_term_days
+        source['invoiceDate'] = invoice_date
+        source['dueDate'] = due_date
+        invoice = _normalise_finance_document(source, 'invoice')
+        invoice['number'] = _next_finance_number(
+            finance_data.get('documents') or [], 'invoice'
+        )
+        finance_data.setdefault('documents', []).append(invoice)
+        installment.update({
+            'invoiceId': invoice['id'],
+            'invoiceNumber': invoice['number'],
+            'issuedAt': datetime.now().isoformat(timespec='seconds'),
+            'status': invoice.get('status') or 'draft',
+        })
+        plan['history'].append(_invoice_plan_history_entry(
+            'invoice-issued',
+            f"Issued {invoice['number']} for {installment.get('label')} ({invoice.get('currency') or '$'} {installment.get('amount', 0):.2f})",
+        ))
+        plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        plan['updatedBy'] = _finance_current_username()
+        plan['summary'] = _invoice_plan_summary(
+            plan, (quotation.get('totals') or {}).get('total', 0)
+        )
+        finance_data.setdefault('invoicePlans', {})[str(quotation_id)] = plan
+        _invoice_plan_sync_documents(finance_data, plan, quotation)
+        _save_finance_data(finance_data)
+    log_action(
+        f"Issued invoice {invoice.get('number')} from quotation {quotation.get('number')}"
+    )
+    mark_realtime_change('finance', {
+        'quotationId': quotation_id,
+        'invoiceId': invoice.get('id'),
+        'action': 'invoice-issued',
+    })
+    return jsonify({
+        'success': True,
+        'data': invoice,
+        'plan': _invoice_plan_response(
+            finance_data, quotation, plan, include_quotation=True
+        ),
+    }), 201
+
+
+@app.route('/api/invoices/<document_id>/mark-paid', methods=['POST'])
+@require_sales
+def mark_invoice_paid(document_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored_invoice = _finance_find_document(finance_data, document_id, 'invoice')
+        if not stored_invoice or not _finance_user_can_access(stored_invoice):
+            return jsonify({'error': 'Invoice not found'}), 404
+        request_data = request.get_json() or {}
+        received_date = str(
+            request_data.get('receivedDate') or datetime.now().strftime('%Y-%m-%d')
+        )[:10]
+        try:
+            received_day = datetime.strptime(received_date, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Enter a valid payment received date'}), 400
+
+        quotation_id = str(stored_invoice.get('sourceQuotationId') or '')
+        quotation = _invoice_plan_find_quotation(finance_data, quotation_id)
+        if not quotation:
+            return jsonify({'error': 'The quotation linked to this invoice was not found'}), 409
+        raw_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
+        if not isinstance(raw_plan, dict):
+            raw_plan = _invoice_plan_legacy_seed(
+                finance_data, quotation
+            ) or {}
+        plan = _normalise_invoice_plan(raw_plan, quotation, raw_plan)
+        installment = next((
+            row for row in plan.get('installments') or []
+            if str(row.get('invoiceId') or '') == str(document_id)
+        ), None)
+        if not installment:
+            return jsonify({'error': 'This invoice is not part of a billing plan'}), 409
+
+        paid_for_invoice = round(sum(
+            _safe_float(row.get('amount'), 0)
+            for row in plan.get('payments') or []
+            if str(row.get('invoiceId') or '') == str(document_id)
+        ), 2)
+        amount_due = round(max(
+            0,
+            _safe_float(installment.get('amount'), 0) - paid_for_invoice,
+        ), 2)
+        if amount_due > 0:
+            plan['payments'].append(_normalise_invoice_plan_payment({
+                'date': received_date,
+                'label': str(
+                    request_data.get('label')
+                    or f"Payment for {stored_invoice.get('number') or 'invoice'}"
+                ),
+                'amount': amount_due,
+                'invoiceId': document_id,
+            }))
+        installment['status'] = 'paid'
+        installment['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        paid_at = datetime.combine(
+            received_day.date(), datetime.now().time().replace(microsecond=0)
+        ).isoformat(timespec='seconds')
+        updated_invoice = _normalise_finance_document({
+            'status': 'paid',
+            'paidAt': paid_at,
+            'statusChangedAt': paid_at,
+        }, 'invoice', stored_invoice)
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id') or '') == str(document_id):
+                finance_data['documents'][index] = updated_invoice
+                break
+
+        plan['history'].append(_invoice_plan_history_entry(
+            'payment-recorded',
+            (
+                f"Marked {updated_invoice.get('number')} paid on {received_date}"
+                + (f" and recorded ${amount_due:,.2f}" if amount_due else '')
+            ),
+        ))
+        plan['summary'] = _invoice_plan_summary(
+            plan, (quotation.get('totals') or {}).get('total', 0)
+        )
+        plan['status'] = (
+            'paid'
+            if plan['summary']['due'] <= 0.005
+            else 'partially-paid'
+        )
+        plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        plan['updatedBy'] = _finance_current_username()
+        finance_data.setdefault('invoicePlans', {})[quotation_id] = plan
+        _invoice_plan_sync_documents(finance_data, plan, quotation)
+        _save_finance_data(finance_data)
+        updated_invoice = _finance_find_document(
+            finance_data, document_id, 'invoice'
+        ) or updated_invoice
+    log_action(
+        f"Marked invoice {updated_invoice.get('number')} paid on {received_date}"
+    )
+    mark_realtime_change('finance', {
+        'quotationId': quotation_id,
+        'invoiceId': document_id,
+        'action': 'invoice-paid',
+    })
+    return jsonify({
+        'success': True,
+        'data': _normalise_finance_document(
+            updated_invoice, 'invoice', updated_invoice
+        ),
+        'plan': _invoice_plan_response(
+            finance_data, quotation, plan, include_quotation=True
+        ),
+        'paymentAmount': amount_due,
+        'receivedDate': received_date,
+    })
 
 
 @app.route('/api/quotations/<document_id>/convert-to-invoice', methods=['POST'])
