@@ -693,6 +693,65 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertEqual({row['companyCode'] for row in admin_logs}, {'AVPL'})
         self.assertNotIn('Updated TSC inventory', {row['action'] for row in admin_logs})
 
+    def test_log_presentation_keeps_raw_detail_and_humanizes_internal_fields(self):
+        presentation = app_module._log_action_presentation(
+            'Updated asset C1ProRHS#02; applyTo=single; updatedAssets=1; '
+            'eventsUpdated=0; containersUpdated=0',
+            'admin-avpl',
+        )
+
+        self.assertEqual(presentation['summary'], 'Updated asset C1ProRHS#02')
+        self.assertEqual(presentation['category'], 'inventory')
+        self.assertIn('Scope: This asset', presentation['details'])
+        self.assertIn('Assets updated: 1', presentation['details'])
+        self.assertIn('Events updated: 0', presentation['details'])
+        self.assertIn('Containers updated: 0', presentation['details'])
+
+        event_presentation = app_module._log_action_presentation(
+            'Created event 151: Product launch via web interface',
+            'admin-avpl',
+        )
+        self.assertEqual(event_presentation['summary'], 'Created event #151')
+        self.assertEqual(
+            event_presentation['details'],
+            'Product launch; Web interface',
+        )
+
+    def test_system_log_response_includes_searchable_person_and_action_fields(self):
+        admin = User(
+            'admin-avpl', hash_password('pw', 'admin-log-salt'), 'admin-log-salt',
+            True, True, role='admin', name='Alex Tan',
+        )
+        self.data_manager.users['admin-avpl'] = admin
+        self.data_manager.logs = [
+            LogEntry(
+                '2026/08/10 11:15:00',
+                'admin-avpl',
+                'Created event 151: Product launch via web interface',
+            ),
+        ]
+        self.data_manager.save_users()
+        self.data_manager.save_logs()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['admin-avpl'] = 'AVPL'
+        app_module._save_company_registry(registry)
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin-avpl'
+            session['is_admin'] = True
+            session['is_super_admin'] = False
+            session['company_code'] = 'AVPL'
+
+        response = self.client.get('/api/logs')
+
+        self.assertEqual(response.status_code, 200)
+        row = response.get_json()['data'][0]
+        self.assertEqual(row['action'], 'Created event 151: Product launch via web interface')
+        self.assertEqual(row['summary'], 'Created event #151')
+        self.assertEqual(row['details'], 'Product launch; Web interface')
+        self.assertEqual(row['category'], 'events')
+        self.assertEqual(row['username'], 'admin-avpl')
+        self.assertEqual(row['userDisplayName'], 'Alex Tan')
+
     def test_owner_renaming_user_updates_the_users_assigned_company_history(self):
         self.login_super_admin()
         tsc_manager = app_module._get_company_data_manager('TSC')

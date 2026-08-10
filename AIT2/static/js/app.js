@@ -13292,7 +13292,6 @@ async function deleteContainer(containerId) {
 
 let systemLogViewState = { search: '', user: '', category: 'all' };
 let systemLogSearchTimer = null;
-let systemLogSearchFocusField = '';
 
 function ensureSystemLogStyles() {
   if (document.getElementById('system-log-ui-styles')) return;
@@ -13309,7 +13308,9 @@ function ensureSystemLogStyles() {
     .system-log-stat strong { display:block;color:var(--log-ink);font-size:21px;line-height:1.1; }
     .system-log-stat span { display:block;margin-top:5px;color:var(--log-muted);font-size:10px;font-weight:700; }
     .system-log-toolbar { padding:10px;border:1px solid var(--log-line);border-radius:7px;background:#f8fbfa; }
-    .system-log-search-row { display:grid;grid-template-columns:minmax(190px,1fr) minmax(150px,.45fr) auto;gap:8px;align-items:center; }
+    .system-log-search-row { display:grid;grid-template-columns:minmax(190px,1fr) minmax(150px,.45fr) auto;gap:8px;align-items:end; }
+    .system-log-field { display:grid;gap:4px;min-width:0; }
+    .system-log-field span { color:#536861;font-size:9px;font-weight:800; }
     .system-log-input { width:100%;min-height:38px;padding:8px 11px;border:1px solid #cbdad5;border-radius:6px;background:#fff;color:var(--log-ink);font-size:12px; }
     .system-log-input:focus { outline:0;border-color:var(--log-green);box-shadow:0 0 0 3px rgba(15,118,110,.12); }
     .system-log-categories { display:flex;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid #e1eae7;overflow-x:auto; }
@@ -13327,10 +13328,13 @@ function ensureSystemLogStyles() {
     .system-log-time strong { display:block;color:var(--log-ink);font-size:10px; }
     .system-log-time span { display:block;margin-top:2px;color:var(--log-muted);font-size:9px; }
     .system-log-user { min-width:0;color:var(--log-ink);font-weight:800;overflow-wrap:anywhere; }
+    .system-log-user span { display:block;margin-top:2px;color:var(--log-muted);font-size:8px;font-weight:600; }
     .system-log-company { min-width:0;color:var(--log-ink);font-size:9px;font-weight:800;overflow-wrap:anywhere; }
     .system-log-company span { display:block;margin-top:2px;color:var(--log-muted);font-size:8px;font-weight:600; }
     .system-log-kind { display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border-radius:4px;background:var(--log-kind-bg);color:var(--log-kind-color);font-size:9px;font-weight:800; }
     .system-log-action { line-height:1.35;overflow-wrap:anywhere; }
+    .system-log-action strong { display:block;color:var(--log-ink);font-size:10px; }
+    .system-log-action span { display:block;margin-top:2px;color:var(--log-muted);font-size:9px; }
     .system-log-empty { padding:42px 16px;text-align:center;color:var(--log-muted); }
     @media(max-width:720px) {
       .system-log-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -13358,6 +13362,7 @@ function parseSystemLogTimestamp(value) {
 }
 
 function systemLogCategory(log) {
+  if (log?.category) return String(log.category).toLowerCase();
   const action = String(log?.action || '').toLowerCase();
   if (/log(?:ged)? in|log(?:ged)? out|password|login attempt|user /.test(action)) return 'access';
   if (/asset|inventory|container|maintenance|transfer|prepare|return/.test(action)) return 'inventory';
@@ -13390,14 +13395,78 @@ function systemLogTone(action) {
 
 function setSystemLogCategory(category) {
   systemLogViewState.category = category || 'all';
-  renderSystemLogs();
+  document.querySelectorAll('.system-log-category').forEach(button => {
+    button.classList.toggle('active', button.dataset.category === systemLogViewState.category);
+  });
+  refreshSystemLogRows();
 }
 
 function scheduleSystemLogSearch(field, value) {
   systemLogViewState[field] = value;
-  systemLogSearchFocusField = field;
   clearTimeout(systemLogSearchTimer);
-  systemLogSearchTimer = setTimeout(renderSystemLogs, 120);
+  systemLogSearchTimer = setTimeout(refreshSystemLogRows, 90);
+}
+
+function logSearchTerms(value) {
+  return String(value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function logTextMatches(value, query) {
+  const terms = logSearchTerms(query);
+  if (!terms.length) return true;
+  const haystack = String(value || '').toLowerCase();
+  return terms.every(term => haystack.includes(term));
+}
+
+function systemLogFilteredRows() {
+  const allLogs = Array.isArray(logs) ? logs : [];
+  return allLogs.filter(log => {
+    const category = systemLogCategory(log);
+    const matchesCategory = systemLogViewState.category === 'all' || category === systemLogViewState.category;
+    const actionText = `${log.timestamp || ''} ${log.companyCode || ''} ${log.companyName || ''} ${log.action || ''} ${log.summary || ''} ${log.details || ''}`;
+    const personText = `${log.user || ''} ${log.username || ''} ${log.userDisplayName || ''}`;
+    return matchesCategory
+      && logTextMatches(actionText, systemLogViewState.search)
+      && logTextMatches(personText, systemLogViewState.user);
+  });
+}
+
+function systemLogActorHtml(log) {
+  const username = String(log.username || log.user || '').trim();
+  const displayName = String(log.userDisplayName || username || 'System').trim();
+  const usernameLine = username && displayName.toLowerCase() !== username.toLowerCase()
+    ? `<span>@${escapeHtml(username)}</span>`
+    : '';
+  return `<div class="system-log-user">${escapeHtml(displayName)}${usernameLine}</div>`;
+}
+
+function systemLogRowHtml(log, showCompany) {
+  const date = parseSystemLogTimestamp(log.timestamp);
+  const category = systemLogCategory(log);
+  const meta = systemLogCategoryMeta(category);
+  const validDate = !Number.isNaN(date.getTime());
+  const summary = String(log.summary || log.action || 'Activity recorded');
+  const details = String(log.details || '');
+  return `<article class="system-log-row" style="--log-tone:${systemLogTone(log.action)};--log-kind-color:${meta.color};--log-kind-bg:${meta.background}">
+    <div class="system-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div>
+    ${showCompany ? `<div class="system-log-company"><strong>${escapeHtml(log.companyCode || '')}</strong><span>${escapeHtml(log.companyName || '')}</span></div>` : ''}
+    ${systemLogActorHtml(log)}
+    <span class="system-log-kind">${escapeHtml(meta.label)}</span>
+    <div class="system-log-action"><strong>${escapeHtml(summary)}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ''}</div>
+  </article>`;
+}
+
+function refreshSystemLogRows() {
+  const rows = document.getElementById('systemLogRows');
+  if (!rows) return;
+  const allLogs = Array.isArray(logs) ? logs : [];
+  const visible = systemLogFilteredRows();
+  const count = document.querySelector('.system-log-count');
+  if (count) count.textContent = `${visible.length} of ${allLogs.length} entries`;
+  const showCompany = isPlatformAdminUser();
+  rows.innerHTML = visible.length
+    ? visible.map(log => systemLogRowHtml(log, showCompany)).join('')
+    : '<div class="system-log-empty"><strong>No matching activity</strong><div style="margin-top:5px">Adjust the person, action, or category filter.</div></div>';
 }
 
 function renderSystemLogs() {
@@ -13407,8 +13476,6 @@ function renderSystemLogs() {
 
   const allLogs = Array.isArray(logs) ? logs : [];
   const showCompany = isPlatformAdminUser();
-  const search = String(systemLogViewState.search || '').trim().toLowerCase();
-  const userSearch = String(systemLogViewState.user || '').trim().toLowerCase();
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayCount = allLogs.filter(log => parseSystemLogTimestamp(log.timestamp) >= startOfToday).length;
@@ -13420,13 +13487,7 @@ function renderSystemLogs() {
     counts[category] = (counts[category] || 0) + 1;
     return counts;
   }, {});
-  const visible = allLogs.filter(log => {
-    const category = systemLogCategory(log);
-    const matchesCategory = systemLogViewState.category === 'all' || category === systemLogViewState.category;
-    const matchesSearch = !search || `${log.timestamp || ''} ${log.companyCode || ''} ${log.companyName || ''} ${log.user || ''} ${log.action || ''}`.toLowerCase().includes(search);
-    const matchesUser = !userSearch || String(log.user || '').toLowerCase().includes(userSearch);
-    return matchesCategory && matchesSearch && matchesUser;
-  });
+  const visible = systemLogFilteredRows();
 
   container.innerHTML = `
     <div class="system-log-shell">
@@ -13438,34 +13499,22 @@ function renderSystemLogs() {
       </div>
       <div class="system-log-toolbar">
         <div class="system-log-search-row">
-          <input id="systemLogSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.search)}" placeholder="Search user, action, or timestamp" aria-label="Search system logs">
-          <input id="systemLogUserSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.user)}" placeholder="Filter by user" aria-label="Filter logs by user">
+          <label class="system-log-field"><span>Action or details</span><input id="systemLogSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.search)}" placeholder="Search actions, assets, events, or details" aria-label="Search system log actions"></label>
+          <label class="system-log-field"><span>Person</span><input id="systemLogUserSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.user)}" placeholder="Search name or username" aria-label="Search logs by person"></label>
           <span class="system-log-count">${visible.length} of ${allLogs.length} entries</span>
         </div>
         <div class="system-log-categories" aria-label="Log categories">
-          ${categories.map(category => {
+          ${categories.filter(category => category === 'all' || categoryCounts[category]).map(category => {
             const label = category === 'all' ? 'All activity' : systemLogCategoryMeta(category).label;
             const count = category === 'all' ? allLogs.length : (categoryCounts[category] || 0);
-            return `<button type="button" class="system-log-category${systemLogViewState.category === category ? ' active' : ''}" onclick="setSystemLogCategory('${category}')">${label} ${count}</button>`;
+            return `<button type="button" data-category="${category}" class="system-log-category${systemLogViewState.category === category ? ' active' : ''}" onclick="setSystemLogCategory('${category}')">${label} ${count}</button>`;
           }).join('')}
         </div>
       </div>
       <div class="system-log-list${showCompany ? ' with-company' : ''}">
         <div class="system-log-head" aria-hidden="true"><span>Timestamp</span>${showCompany ? '<span>Company</span>' : ''}<span>User</span><span>Area</span><span>Action</span></div>
         <div id="systemLogRows">
-          ${visible.length ? visible.map(log => {
-            const date = parseSystemLogTimestamp(log.timestamp);
-            const category = systemLogCategory(log);
-            const meta = systemLogCategoryMeta(category);
-            const validDate = !Number.isNaN(date.getTime());
-            return `<article class="system-log-row" style="--log-tone:${systemLogTone(log.action)};--log-kind-color:${meta.color};--log-kind-bg:${meta.background}">
-              <div class="system-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div>
-              ${showCompany ? `<div class="system-log-company"><strong>${escapeHtml(log.companyCode || '')}</strong><span>${escapeHtml(log.companyName || '')}</span></div>` : ''}
-              <div class="system-log-user">${escapeHtml(log.user || 'System')}</div>
-              <span class="system-log-kind">${escapeHtml(meta.label)}</span>
-              <div class="system-log-action">${escapeHtml(log.action || '')}</div>
-            </article>`;
-          }).join('') : '<div class="system-log-empty"><strong>No matching activity</strong><div style="margin-top:5px">Adjust the search or category filter.</div></div>'}
+          ${visible.length ? visible.map(log => systemLogRowHtml(log, showCompany)).join('') : '<div class="system-log-empty"><strong>No matching activity</strong><div style="margin-top:5px">Adjust the person, action, or category filter.</div></div>'}
         </div>
       </div>
     </div>`;
@@ -13476,15 +13525,6 @@ function renderSystemLogs() {
     scheduleSystemLogSearch('search', event.target.value);
   });
   userSearchInput?.addEventListener('input', event => scheduleSystemLogSearch('user', event.target.value));
-  if (systemLogSearchFocusField) {
-    const id = systemLogSearchFocusField === 'user' ? 'systemLogUserSearch' : 'systemLogSearch';
-    systemLogSearchFocusField = '';
-    requestAnimationFrame(() => {
-      const input = document.getElementById(id);
-      input?.focus();
-      input?.setSelectionRange(input.value.length, input.value.length);
-    });
-  }
 }
 
 async function loadLogs() {
@@ -20836,18 +20876,29 @@ function ensureEventLogsModalStyles() {
     #eventLogsModal .event-logs-stat:last-child { border-right:0; }
     #eventLogsModal .event-logs-stat strong { display:block;color:var(--el-ink);font-size:17px; }
     #eventLogsModal .event-logs-stat span { display:block;margin-top:4px;color:var(--el-muted);font-size:8px;font-weight:700; }
-    #eventLogsModal .event-log-search { width:100%;min-height:38px;margin-bottom:10px;padding:8px 11px;border:1px solid #cbdad5;border-radius:6px;background:#fff;color:var(--el-ink);font-size:11px; }
+    #eventLogsModal .event-log-search-grid { display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,.45fr);gap:8px;margin-bottom:8px; }
+    #eventLogsModal .event-log-field { display:grid;gap:4px;min-width:0;color:#536861;font-size:9px;font-weight:800; }
+    #eventLogsModal .event-log-search { width:100%;min-height:38px;padding:8px 11px;border:1px solid #cbdad5;border-radius:6px;background:#fff;color:var(--el-ink);font-size:11px; }
     #eventLogsModal .event-log-search:focus { outline:0;border-color:var(--el-accent);box-shadow:0 0 0 3px rgba(15,118,110,.12); }
-    #eventLogsModal .event-log-visible-count { margin:-4px 0 8px;color:var(--el-muted);font-size:9px;text-align:right; }
+    #eventLogsModal .event-log-filter-row { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px; }
+    #eventLogsModal .event-log-categories { display:flex;gap:5px;min-width:0;overflow-x:auto; }
+    #eventLogsModal .event-log-category { flex:none;min-height:29px;padding:4px 8px;border:1px solid #d5e1dd;border-radius:5px;background:#fff;color:#536861;font:inherit;font-size:9px;font-weight:800;cursor:pointer; }
+    #eventLogsModal .event-log-category:hover,#eventLogsModal .event-log-category.active { border-color:var(--el-accent);background:#e9f7f2;color:#17654f; }
+    #eventLogsModal .event-log-visible-count { flex:none;color:var(--el-muted);font-size:9px;text-align:right; }
     #eventLogsModal .event-logs-list { border:1px solid var(--el-line);border-radius:7px;background:#fff;overflow:hidden; }
     #eventLogsModal .event-log-row { position:relative;display:grid;grid-template-columns:130px 105px minmax(0,1fr);gap:9px;align-items:start;min-height:49px;padding:8px 10px 8px 14px; }
     #eventLogsModal .event-log-row + .event-log-row { border-top:1px solid #e7eeec; }
     #eventLogsModal .event-log-row::before { position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--log-color);content:''; }
     #eventLogsModal .event-log-time strong,#eventLogsModal .event-log-user { color:var(--el-ink);font-size:9px;font-weight:800; }
     #eventLogsModal .event-log-time span { display:block;margin-top:2px;color:var(--el-muted);font-size:8px; }
+    #eventLogsModal .event-log-user span { display:block;margin-top:2px;color:var(--el-muted);font-size:8px;font-weight:600; }
     #eventLogsModal .event-log-action { color:#344b44;font-size:10px;line-height:1.4;overflow-wrap:anywhere; }
+    #eventLogsModal .event-log-action strong { display:block;color:var(--el-ink); }
+    #eventLogsModal .event-log-action > span { display:block;margin-top:2px;color:var(--el-muted);font-size:9px; }
+    #eventLogsModal .event-log-action-meta { display:flex;align-items:center;gap:6px;margin-top:4px; }
+    #eventLogsModal .event-log-kind { display:inline-flex;padding:2px 5px;border-radius:4px;background:#eef4f2;color:#526b63;font-size:8px;font-weight:800; }
     #eventLogsModal .event-logs-empty { padding:38px 16px;text-align:center;color:var(--el-muted);font-size:10px; }
-    @media(max-width:620px){#eventLogsModal .event-logs-content{width:100vw;height:100vh;max-height:none;border:0;border-radius:0}#eventLogsModal .event-logs-body{max-height:calc(100vh - 58px);padding:8px}#eventLogsModal .event-log-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}#eventLogsModal .event-log-time{grid-column:1}.event-log-user{grid-column:2}.event-log-action{grid-column:1/-1}#eventLogsModal .event-logs-summary{grid-template-columns:1fr 1fr}#eventLogsModal .event-logs-stat:nth-child(2){border-right:0}#eventLogsModal .event-logs-stat:last-child{grid-column:1/-1;border-top:1px solid var(--el-line)}}
+    @media(max-width:620px){#eventLogsModal .event-logs-content{width:100vw;height:100vh;max-height:none;border:0;border-radius:0}#eventLogsModal .event-logs-body{max-height:calc(100vh - 58px);padding:8px}#eventLogsModal .event-log-search-grid{grid-template-columns:1fr}#eventLogsModal .event-log-filter-row{align-items:flex-start;flex-direction:column}#eventLogsModal .event-log-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}#eventLogsModal .event-log-time{grid-column:1}#eventLogsModal .event-log-user{grid-column:2}#eventLogsModal .event-log-action{grid-column:1/-1}#eventLogsModal .event-logs-summary{grid-template-columns:1fr 1fr}#eventLogsModal .event-logs-stat:nth-child(2){border-right:0}#eventLogsModal .event-logs-stat:last-child{grid-column:1/-1;border-top:1px solid var(--el-line)}}
   `;
   document.head.appendChild(style);
 }
@@ -20865,17 +20916,54 @@ function closeEventLogs() {
 }
 
 let eventLogModalRecords = [];
+let eventLogModalState = { search: '', person: '', category: 'all' };
+
+function eventLogCategoryMeta(category) {
+  return ({
+    prepare: 'Prepare',
+    return: 'Return',
+    manpower: 'Manpower & transport',
+    details: 'Event details',
+  })[category] || 'Event details';
+}
+
+function setEventLogCategory(category) {
+  eventLogModalState.category = category || 'all';
+  document.querySelectorAll('#eventLogsModal .event-log-category').forEach(button => {
+    button.classList.toggle('active', button.dataset.category === eventLogModalState.category);
+  });
+  renderEventLogModalRows();
+}
 
 function eventLogSearchText(log) {
   const items = (log.items || []).map(item => `${item.label || ''} ${item.assetId || ''}`).join(' ');
-  return `${log.timestamp || log.date || ''} ${log.user || ''} ${log.action || ''} ${items}`.toLowerCase();
+  return `${log.timestamp || log.date || ''} ${log.action || ''} ${log.summary || ''} ${log.details || ''} ${items}`.toLowerCase();
+}
+
+function eventLogPersonText(log) {
+  return `${log.user || ''} ${log.username || ''} ${log.userDisplayName || ''}`.toLowerCase();
+}
+
+function eventLogActorHtml(log) {
+  const username = String(log.username || log.user || '').trim();
+  const displayName = String(log.userDisplayName || username || 'System').trim();
+  const usernameLine = username && displayName.toLowerCase() !== username.toLowerCase()
+    ? `<span>@${escapeHtml(username)}</span>`
+    : '';
+  return `<div class="event-log-user">${escapeHtml(displayName)}${usernameLine}</div>`;
 }
 
 function renderEventLogModalRows() {
   const modal = document.getElementById('eventLogsModal');
   if (!modal) return;
-  const query = String(modal.querySelector('#eventLogSearch')?.value || '').trim().toLowerCase();
-  const visible = eventLogModalRecords.filter(log => !query || eventLogSearchText(log).includes(query));
+  eventLogModalState.search = String(modal.querySelector('#eventLogSearch')?.value || '');
+  eventLogModalState.person = String(modal.querySelector('#eventLogPersonSearch')?.value || '');
+  const visible = eventLogModalRecords.filter(log => {
+    const category = String(log.category || 'details').toLowerCase();
+    return (eventLogModalState.category === 'all' || category === eventLogModalState.category)
+      && logTextMatches(eventLogSearchText(log), eventLogModalState.search)
+      && logTextMatches(eventLogPersonText(log), eventLogModalState.person);
+  });
   const count = modal.querySelector('.event-log-visible-count');
   const rows = modal.querySelector('#eventLogRows');
   if (count) count.textContent = `${visible.length} of ${eventLogModalRecords.length} records`;
@@ -20884,9 +20972,12 @@ function renderEventLogModalRows() {
     const date = parseSystemLogTimestamp(log.timestamp || log.date || '');
     const validDate = !Number.isNaN(date.getTime());
     const grouped = Number(log.groupCount || 0) > 1
-      ? ` <span style="color:#667085;font-size:8px;font-weight:700">${Number(log.groupCount)} actions grouped</span>`
+      ? `<span>${Number(log.groupCount)} actions grouped</span>`
       : '';
-    return `<article class="event-log-row" style="--log-color:${eventLogTone(log.action)}"><div class="event-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || log.date || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div><div class="event-log-user">${escapeHtml(log.user || 'System')}</div><div class="event-log-action">${escapeHtml(log.action || '')}${grouped}</div></article>`;
+    const category = String(log.category || 'details').toLowerCase();
+    const summary = String(log.summary || log.action || 'Activity recorded');
+    const details = String(log.details || '');
+    return `<article class="event-log-row" style="--log-color:${eventLogTone(log.action)}"><div class="event-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || log.date || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div>${eventLogActorHtml(log)}<div class="event-log-action"><strong>${escapeHtml(summary)}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ''}<div class="event-log-action-meta"><span class="event-log-kind">${escapeHtml(eventLogCategoryMeta(category))}</span>${grouped}</div></div></article>`;
   }).join('') : '<div class="event-logs-empty">No activity matches this search.</div>';
 }
 
@@ -20912,16 +21003,18 @@ async function openEventLogs(eventId, eventName = '') {
       .slice()
       .sort((a, b) => String(b.timestamp || b.date || '').localeCompare(String(a.timestamp || a.date || '')));
     eventLogModalRecords = records;
+    eventLogModalState = { search: '', person: '', category: 'all' };
     const users = new Set(records.map(log => String(log.user || '').trim()).filter(Boolean));
     const latestDate = records[0]?.timestamp || records[0]?.date || '';
     const body = modal?.querySelector('.event-logs-body');
     if (!body) return;
     body.innerHTML = `
       <div class="event-logs-summary"><div class="event-logs-stat"><strong>${records.length}</strong><span>Activity records</span></div><div class="event-logs-stat"><strong>${users.size}</strong><span>Users represented</span></div><div class="event-logs-stat"><strong>${escapeHtml(latestDate || '-')}</strong><span>Latest activity</span></div></div>
-      <input id="eventLogSearch" class="event-log-search" type="search" placeholder="Search by user, item, asset ID, or action" aria-label="Search event logs">
-      <div class="event-log-visible-count">${records.length} of ${records.length} records</div>
+      <div class="event-log-search-grid"><label class="event-log-field">Action, item, or details<input id="eventLogSearch" class="event-log-search" type="search" placeholder="Search actions, items, asset IDs, or details" aria-label="Search event log actions"></label><label class="event-log-field">Person<input id="eventLogPersonSearch" class="event-log-search" type="search" placeholder="Search name or username" aria-label="Search event logs by person"></label></div>
+      <div class="event-log-filter-row"><div class="event-log-categories" aria-label="Event log categories">${['all','prepare','return','manpower','details'].filter(category => category === 'all' || records.some(log => String(log.category || 'details').toLowerCase() === category)).map(category => `<button type="button" data-category="${category}" class="event-log-category${category === 'all' ? ' active' : ''}" onclick="setEventLogCategory('${category}')">${category === 'all' ? 'All activity' : eventLogCategoryMeta(category)}</button>`).join('')}</div><div class="event-log-visible-count">${records.length} of ${records.length} records</div></div>
       <div class="event-logs-list"><div id="eventLogRows"></div></div>`;
     body.querySelector('#eventLogSearch')?.addEventListener('input', renderEventLogModalRows);
+    body.querySelector('#eventLogPersonSearch')?.addEventListener('input', renderEventLogModalRows);
     renderEventLogModalRows();
   } catch (error) {
     const body = document.querySelector('#eventLogsModal .event-logs-body');

@@ -46,7 +46,12 @@ try:
 except ImportError:
     Compress = None
 
-from data_manager import ConcurrentDataChangeError, DataManager, MAX_LOG_LINES
+from data_manager import (
+    ConcurrentDataChangeError,
+    DataManager,
+    MAX_LOG_LINES,
+    humanize_custom_asset_references,
+)
 from maintenance_logs import (
     ASSET_CHECK_LOG_TYPE,
     DEFAULT_MAINTENANCE_LOG_TYPE,
@@ -9259,6 +9264,7 @@ def update_workforce_freelancer(freelancer_id):
         )
         if not freelancer:
             return jsonify({'error': 'Worker not found'}), 404
+        previous_freelancer = copy.deepcopy(freelancer)
         name = str(payload.get('name', freelancer.get('name')) or '').strip()
         phone = normalize_phone(payload.get('phone', freelancer.get('phone')))
         if not name:
@@ -9279,7 +9285,20 @@ def update_workforce_freelancer(freelancer_id):
             'active': bool(payload.get('active', freelancer.get('active', True))),
             'updatedAt': now_iso(),
         })
-    log_action(f"Updated worker {name}")
+    worker_changes = _audit_change_details(
+        previous_freelancer,
+        freelancer,
+        (
+            ('name', 'Name'),
+            ('phone', 'Phone'),
+            ('email', 'Email'),
+            ('company', 'Company'),
+            ('notes', 'Notes'),
+            ('active', 'Active'),
+        ),
+        sensitive_fields={'notes'},
+    )
+    log_action(f"Updated worker {name}: {worker_changes}")
     return jsonify({'success': True, 'data': freelancer})
 
 
@@ -9503,7 +9522,19 @@ def update_workforce_vendor(vendor_id):
     costing_updates = _sync_workforce_vendor_to_unconfirmed_costings(
         previous_vendor, saved_vendor or vendor
     )
-    log_action(f"Updated workforce vendor {name}")
+    vendor_changes = _audit_change_details(
+        previous_vendor,
+        saved_vendor or vendor,
+        (
+            ('name', 'Name'),
+            ('memberIds', 'Personnel'),
+            ('notes', 'Notes'),
+            ('active', 'Active'),
+            ('costingRentals', 'Costing rentals'),
+        ),
+        sensitive_fields={'notes'},
+    )
+    log_action(f"Updated workforce vendor {name}: {vendor_changes}")
     mark_realtime_change('workforce', {
         'action': 'vendor-updated',
         'vendorId': str(vendor_id),
@@ -11097,12 +11128,26 @@ def update_transport_profile(profile_id):
         profile = find_by_id(workforce.get('transportVendors'), profile_id)
         if not profile:
             return jsonify({'error': 'Transport profile not found'}), 404
+        previous_profile = copy.deepcopy(profile)
         profile.update({
             **payload,
             'name': payload['driver'],
             'updatedAt': now_iso(),
         })
-    log_action(f"Updated transport profile {payload['vehicleNumber']}")
+    profile_changes = _audit_change_details(
+        previous_profile,
+        profile,
+        (
+            ('vehicleNumber', 'Vehicle number'),
+            ('vehicleType', 'Vehicle type'),
+            ('driver', 'Driver'),
+            ('contactNumber', 'Contact number'),
+            ('company', 'Company'),
+        ),
+    )
+    log_action(
+        f"Updated transport profile {payload['vehicleNumber']}: {profile_changes}"
+    )
     return jsonify({'success': True, 'data': profile})
 
 
@@ -12158,6 +12203,186 @@ def _event_activity_category(action):
     return 'details'
 
 
+def _system_log_category(action):
+    """Return the operational area represented by a system-log action."""
+    action_lower = str(action or '').lower()
+    if re.search(r'log(?:ged)? in|log(?:ged)? out|password|login attempt|user\s', action_lower):
+        return 'access'
+    if re.search(r'asset|inventory|container|maintenance|transfer|prepare|return', action_lower):
+        return 'inventory'
+    if re.search(r'event|planning|quotation|delivery order|packing list', action_lower):
+        return 'events'
+    if re.search(r'worker|vendor|manpower|transport|personnel', action_lower):
+        return 'workforce'
+    if re.search(r'invoice|claim|expense|payment|commission|finance', action_lower):
+        return 'finance'
+    if re.search(r'company|department|settings|logo|pdf', action_lower):
+        return 'settings'
+    return 'other'
+
+
+_LOG_DETAIL_LABELS = {
+    'applyto': 'Scope',
+    'updatedassets': 'Assets updated',
+    'eventsupdated': 'Events updated',
+    'containersupdated': 'Containers updated',
+    'systemlogs': 'System logs updated',
+    'eventlogs': 'Event logs updated',
+    'maintenancelogs': 'Maintenance records updated',
+    'financedocuments': 'Finance documents updated',
+}
+
+
+def _log_detail_label(value):
+    key = re.sub(r'[^a-z0-9]', '', str(value or '').lower())
+    if key in _LOG_DETAIL_LABELS:
+        return _LOG_DETAIL_LABELS[key]
+    spaced = re.sub(r'(?<!^)(?=[A-Z])', ' ', str(value or '').strip())
+    return spaced.replace('_', ' ').strip().capitalize()
+
+
+def _log_detail_value(key, value):
+    clean_value = str(value or '').strip()
+    if re.sub(r'[^a-z0-9]', '', str(key or '').lower()) == 'applyto':
+        return {
+            'single': 'This asset',
+            'model': 'All assets of this model',
+            'all': 'All matching assets',
+        }.get(clean_value.lower(), clean_value)
+    return clean_value
+
+
+def _log_action_presentation(action, actor=''):
+    """Split an audit action into a concise heading and preserved detail."""
+    raw_action = humanize_custom_asset_references(action).strip()
+    text = raw_action.replace('\u2192', '->').replace('â†’', '->')
+    text = re.sub(r'\s+', ' ', text).strip()
+    actor = str(actor or '').strip()
+
+    login_match = re.fullmatch(
+        r'User\s+(.+?)\s+(logged in|logged out)(?:\s+(?:via|from)\s+(.+))?',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if login_match:
+        verb = login_match.group(2).lower()
+        source = str(login_match.group(3) or '').strip()
+        return {
+            'summary': 'Logged in' if verb == 'logged in' else 'Logged out',
+            'details': source.capitalize() if source else '',
+            'category': 'access',
+        }
+
+    failed_login_match = re.fullmatch(
+        r'Failed login attempt for username:\s*(.+)',
+        text,
+        flags=re.IGNORECASE,
+    )
+    if failed_login_match:
+        return {
+            'summary': 'Failed login attempt',
+            'details': f"Username: {failed_login_match.group(1).strip()}",
+            'category': 'access',
+        }
+
+    if actor:
+        text = re.sub(
+            rf'^User\s+{re.escape(actor)}\s+',
+            '',
+            text,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+    details = []
+    if re.search(r'\s+(?:via|from)\s+web interface$', text, flags=re.IGNORECASE):
+        text = re.sub(
+            r'\s+(?:via|from)\s+web interface$',
+            '',
+            text,
+            flags=re.IGNORECASE,
+        )
+        details.append('Web interface')
+
+    segments = [segment.strip() for segment in text.split(';') if segment.strip()]
+    head = segments.pop(0) if segments else text
+    if ':' in head:
+        possible_summary, possible_detail = head.split(':', 1)
+        if possible_summary.strip() and possible_detail.strip():
+            head = possible_summary.strip()
+            details.insert(0, possible_detail.strip())
+
+    for segment in segments:
+        key_value = re.fullmatch(r'([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)', segment)
+        if key_value:
+            key, value = key_value.groups()
+            details.append(
+                f"{_log_detail_label(key)}: {_log_detail_value(key, value)}"
+            )
+        else:
+            details.append(segment)
+
+    summary = re.sub(
+        r'\bevent\s+(\d+)\b',
+        r'event #\1',
+        head.strip(),
+        flags=re.IGNORECASE,
+    )
+    return {
+        'summary': summary or 'Activity recorded',
+        'details': '; '.join(detail for detail in details if detail),
+        'category': _system_log_category(text),
+    }
+
+
+def _log_user_display_name(manager, username):
+    username = str(username or '').strip()
+    if not username or username.lower() == 'system':
+        return 'System'
+    user = getattr(manager, 'users', {}).get(username) if manager else None
+    return str(getattr(user, 'name', '') or username).strip()
+
+
+def _log_record_for_response(record, manager, category=None):
+    action = str(record.get('action') or '')
+    username = str(record.get('user') or '').strip()
+    presentation = _log_action_presentation(action, username)
+    return {
+        **record,
+        **presentation,
+        'category': category or presentation['category'],
+        'username': username,
+        'userDisplayName': _log_user_display_name(manager, username),
+    }
+
+
+def _audit_change_details(before, after, fields, sensitive_fields=None):
+    """Describe changed fields without copying sensitive values into logs."""
+    sensitive_fields = set(sensitive_fields or ())
+    changes = []
+    for key, label in fields:
+        previous = before.get(key)
+        current = after.get(key)
+        if previous == current:
+            continue
+        if key in sensitive_fields:
+            changes.append(f'{label} updated')
+            continue
+        if isinstance(previous, (list, tuple, set)) or isinstance(current, (list, tuple, set)):
+            previous_count = len(previous or [])
+            current_count = len(current or [])
+            changes.append(f'{label}: {previous_count} -> {current_count}')
+            continue
+        if isinstance(previous, bool) or isinstance(current, bool):
+            previous_text = 'Yes' if bool(previous) else 'No'
+            current_text = 'Yes' if bool(current) else 'No'
+        else:
+            previous_text = str(previous or '-').strip() or '-'
+            current_text = str(current or '-').strip() or '-'
+        changes.append(f'{label}: {previous_text} -> {current_text}')
+    return '; '.join(changes) or 'No field values changed'
+
+
 def _event_activity_logs_for_response(event):
     if not _current_user_can_view_logs():
         return []
@@ -12169,7 +12394,9 @@ def _event_activity_logs_for_response(event):
         category = _event_activity_category(record.get('action'))
         if category == 'manpower' and not _current_user_is_admin():
             continue
-        result.append({**record, 'category': category})
+        result.append(
+            _log_record_for_response(record, data_manager, category=category)
+        )
     return result
 
 
@@ -14444,6 +14671,7 @@ def update_pdf_settings():
     try:
         data = request.get_json() or {}
         settings = _load_pdf_settings()
+        previous_settings = copy.deepcopy(settings)
         text_fields = (
             'footerText', 'companyName', 'registrationNumber', 'billingAddress',
             'phone', 'email', 'website', 'bankName', 'bankAccountName',
@@ -14483,7 +14711,29 @@ def update_pdf_settings():
         saved = _save_pdf_settings(settings)
         _mark_company_branding_setup_complete()
 
-        log_action("Updated company details")
+        company_detail_fields = tuple(
+            (key, re.sub(r'(?<!^)(?=[A-Z])', ' ', key).capitalize())
+            for key in (
+                *text_fields,
+                'letterheadEnabled',
+                'paymentDetailsEnabled',
+                'taxRate',
+                'defaultValidityDays',
+            )
+            if key in data
+        )
+        company_changes = _audit_change_details(
+            previous_settings,
+            saved,
+            company_detail_fields,
+            sensitive_fields={
+                'bankAccountNumber',
+                'letterheadText',
+                'paymentDetailsText',
+                'defaultTerms',
+            },
+        )
+        log_action(f"Updated company details: {company_changes}")
 
         return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
     except Exception as e:
@@ -15024,6 +15274,13 @@ def update_user(username):
             }), 403
 
         target_role = _effective_user_role(user)
+        user_audit_before = {
+            'name': str(getattr(user, 'name', '') or ''),
+            'phone': str(getattr(user, 'phone', '') or ''),
+            'role': target_role,
+            'hasSalesAccess': bool(getattr(user, 'has_sales_access', False)),
+            'isActive': bool(getattr(user, 'is_active', True)),
+        }
         if target_role == 'owner' and not _current_user_is_owner():
             return jsonify({'error': 'This protected account cannot be changed'}), 403
 
@@ -15214,7 +15471,25 @@ def update_user(username):
             if maintenance_reference_count:
                 invalidate_cache()
         else:
-            log_action(f"Updated user {user.username}")
+            user_audit_after = {
+                'name': str(getattr(user, 'name', '') or ''),
+                'phone': str(getattr(user, 'phone', '') or ''),
+                'role': _effective_user_role(user),
+                'hasSalesAccess': bool(getattr(user, 'has_sales_access', False)),
+                'isActive': bool(getattr(user, 'is_active', True)),
+            }
+            user_changes = _audit_change_details(
+                user_audit_before,
+                user_audit_after,
+                (
+                    ('name', 'Name'),
+                    ('phone', 'Phone'),
+                    ('role', 'Access level'),
+                    ('hasSalesAccess', 'Sales access'),
+                    ('isActive', 'Active'),
+                ),
+            )
+            log_action(f"Updated user {user.username}: {user_changes}")
 
         response_user = _user_payload(
             user,
@@ -16594,6 +16869,14 @@ def get_event_logs(event_id):
     records = data_manager.normalize_event_logs(
         getattr(event, 'event_logs', [])
     )[-MAX_LOG_LINES:]
+    records = [
+        _log_record_for_response(
+            record,
+            data_manager,
+            category=_event_activity_category(record.get('action')),
+        )
+        for record in records
+    ]
     records.reverse()
     return jsonify({
         'success': True,
@@ -25555,13 +25838,14 @@ def get_logs():
                 )
                 if owner_prefix and not owner:
                     continue
-                logs_data.append({
+                log_record = {
                     'timestamp': log.timestamp,
                     'user': log.user,
                     'action': action[len(owner_prefix):] if owner_prefix else action,
                     'companyCode': company_code,
                     'companyName': company_name,
-                })
+                }
+                logs_data.append(_log_record_for_response(log_record, manager))
 
         logs_data.sort(key=lambda row: str(row.get('timestamp') or ''), reverse=True)
         logs_data = logs_data[:MAX_LOG_LINES]

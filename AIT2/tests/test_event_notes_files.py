@@ -196,7 +196,14 @@ class EventNotesFilesTests(unittest.TestCase):
 
         secured_logs = self.client.get('/api/events/1/logs')
         self.assertEqual(secured_logs.status_code, 200)
-        self.assertEqual(len(secured_logs.get_json()['data']['logs']), 4)
+        secured_rows = secured_logs.get_json()['data']['logs']
+        self.assertEqual(len(secured_rows), 4)
+        prepared_row = next(row for row in secured_rows if 'Assigned specific asset' in row['action'])
+        self.assertEqual(prepared_row['category'], 'prepare')
+        self.assertEqual(prepared_row['username'], 'worker')
+        self.assertEqual(prepared_row['userDisplayName'], 'worker')
+        self.assertTrue(prepared_row['summary'])
+        self.assertIn('details', prepared_row)
 
     def test_managers_and_users_cannot_view_system_or_event_logs(self):
         for username in ('normal', 'manager'):

@@ -265,6 +265,9 @@ def test_system_logs_are_searchable_categorised_and_responsive():
     assert "function systemLogCategory(log)" in script
     assert "function renderSystemLogs()" in script
     assert 'id="systemLogSearch"' in script
+    assert 'id="systemLogUserSearch"' in script
+    assert "function refreshSystemLogRows()" in script
+    assert "function systemLogRowHtml(log, showCompany)" in script
     assert 'class="system-log-summary"' in script
     assert ".system-log-row::before" in script
     assert "@media(max-width:720px)" in script
@@ -451,6 +454,8 @@ def test_event_status_filters_hide_zero_counts_and_event_logs_are_reusable():
     assert "button.hidden = state !== 'All' && count === 0" in script
     assert "function openEventLogs(eventId, eventName = '')" in script
     assert 'id="eventLogSearch"' in script
+    assert 'id="eventLogPersonSearch"' in script
+    assert "function setEventLogCategory(category)" in script
     assert "eventLogSearchText(log)" in script
     assert "/logs`" in script
     assert 'title="View event logs"' in script
