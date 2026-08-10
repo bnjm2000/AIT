@@ -18970,8 +18970,8 @@ function maintenanceLogTypeSelectHtml(id, selectedType = DEFAULT_MAINTENANCE_LOG
 
 function maintenanceUploadLimitText() {
   const configured = window.__MAINTENANCE_UPLOAD_LIMITS__ || {};
-  const imageMb = Math.max(1, Number(configured.imageMb || 50));
-  const videoMb = Math.max(1, Number(configured.videoMb || 250));
+  const imageMb = Math.max(1, Number(configured.imageMb || 10));
+  const videoMb = Math.max(1, Number(configured.videoMb || 64));
   const requestMb = Math.max(1, Number(configured.requestMb || 256));
   return `Images: ${imageMb} MB max each · Videos: ${videoMb} MB max each · ${requestMb} MB total per submission`;
 }

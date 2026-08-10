@@ -492,11 +492,13 @@ def test_maintenance_upload_forms_show_configured_file_size_limits():
 
     assert "'imageMb': max(1, MAINTENANCE_IMAGE_MAX_BYTES // MEBIBYTE)" in app_source
     assert "'videoMb': max(1, MAINTENANCE_VIDEO_MAX_BYTES // MEBIBYTE)" in app_source
-    assert "os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 20 * MEBIBYTE)" in app_source
-    assert "os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 100 * MEBIBYTE)" in app_source
+    assert "os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 10 * MEBIBYTE)" in app_source
+    assert "os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 64 * MEBIBYTE)" in app_source
     assert "window.__MAINTENANCE_UPLOAD_LIMITS__" in template
     assert "MB max each" in template
     assert "function maintenanceUploadLimitText()" in script
+    assert "Number(configured.imageMb || 10)" in script
+    assert "Number(configured.videoMb || 64)" in script
     assert script.count("${maintenanceUploadLimitHtml()}") >= 5
 
 

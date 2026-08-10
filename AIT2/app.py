@@ -223,10 +223,10 @@ EVENT_FILE_MAX_BYTES = int(
     os.environ.get('EVENT_FILE_MAX_BYTES', 20 * MEBIBYTE)
 )
 MAINTENANCE_IMAGE_MAX_BYTES = int(
-    os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 20 * MEBIBYTE)
+    os.environ.get('MAINTENANCE_IMAGE_MAX_BYTES', 10 * MEBIBYTE)
 )
 MAINTENANCE_VIDEO_MAX_BYTES = int(
-    os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 100 * MEBIBYTE)
+    os.environ.get('MAINTENANCE_VIDEO_MAX_BYTES', 64 * MEBIBYTE)
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
