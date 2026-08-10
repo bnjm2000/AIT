@@ -9,6 +9,7 @@ import app as app_module
 from flask import session
 from data_manager import DataManager
 from models import Event, LogEntry, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class EventNotesFilesTests(unittest.TestCase):
@@ -322,11 +323,7 @@ class EventNotesFilesTests(unittest.TestCase):
 
     def test_event_file_ui_exposes_preview_and_total_limit(self):
         project_root = os.path.dirname(app_module.__file__)
-        with open(
-            os.path.join(project_root, 'static', 'js', 'app.js'),
-            encoding='utf-8',
-        ) as source:
-            script = source.read()
+        script = APP_BUNDLE_SOURCE
         with open(
             os.path.join(project_root, 'templates', 'index.html'),
             encoding='utf-8',

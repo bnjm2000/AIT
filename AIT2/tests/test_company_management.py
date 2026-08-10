@@ -445,21 +445,27 @@ class CompanyManagementTests(unittest.TestCase):
 
         record = registry['companies']['TSC']
         backend_folder = app_module._company_record_backend_folder(record)
+        documents_folder = app_module._company_record_documents_folder(record)
+        media_root = app_module._company_record_media_folder(record)
         frontend_folder = app_module._company_record_frontend_folder(record)
-        uploads_folder = os.path.join(backend_folder, 'workforce_uploads', 'event-12')
+        exports_folder = app_module._company_record_exports_folder(record)
+        uploads_folder = os.path.join(documents_folder, 'workforce_uploads', 'event-12')
         os.makedirs(uploads_folder, exist_ok=True)
         with open(os.path.join(uploads_folder, 'private-invoice.pdf'), 'wb') as upload_file:
-            upload_file.write(b'x' * 37)
+            upload_file.write(b'x' * 370)
         with open(os.path.join(frontend_folder, 'logo.png'), 'wb') as logo_file:
             logo_file.write(b'y' * 19)
-        maintenance_folder = os.path.join(backend_folder, 'maintenance_media', 'asset-1')
+        maintenance_folder = os.path.join(media_root, 'maintenance_media', 'asset-1')
         os.makedirs(maintenance_folder, exist_ok=True)
         with open(os.path.join(maintenance_folder, 'inspection.jpg'), 'wb') as media_file:
             media_file.write(b'z' * 23)
 
         expected_bytes = 0
         expected_files = 0
-        for folder in (backend_folder, frontend_folder):
+        for folder in (
+            backend_folder, documents_folder, media_root, frontend_folder,
+            exports_folder,
+        ):
             for current_root, _, filenames in os.walk(folder):
                 for filename in filenames:
                     expected_files += 1
@@ -490,10 +496,49 @@ class CompanyManagementTests(unittest.TestCase):
         uploads = next(item for item in storage['breakdown'] if item['key'] == 'uploads')
         branding = next(item for item in storage['breakdown'] if item['key'] == 'branding')
         maintenance = next(item for item in storage['breakdown'] if item['key'] == 'maintenance')
-        self.assertEqual(uploads['bytes'], 37)
+        self.assertEqual(uploads['bytes'], 370)
         self.assertGreaterEqual(branding['bytes'], 19)
         self.assertEqual(maintenance['bytes'], 23)
-        self.assertNotIn('private-invoice.pdf', storage_response.get_data(as_text=True))
+        largest_upload = next(
+            item for item in storage['largestFiles']
+            if item['name'] == 'private-invoice.pdf'
+        )
+        self.assertEqual(largest_upload['bytes'], 370)
+        self.assertEqual(
+            largest_upload['relativePath'],
+            'documents/workforce_uploads/event-12/private-invoice.pdf',
+        )
+        self.assertNotIn(self.tempdir.name, storage_response.get_data(as_text=True))
+
+    def test_current_company_storage_is_scoped_and_uses_relative_paths(self):
+        registry = app_module._load_company_registry()
+        avpl_documents = app_module._company_record_documents_folder(
+            registry['companies']['AVPL']
+        )
+        tsc_documents = app_module._company_record_documents_folder(
+            registry['companies']['TSC']
+        )
+        os.makedirs(avpl_documents, exist_ok=True)
+        os.makedirs(tsc_documents, exist_ok=True)
+        with open(os.path.join(avpl_documents, 'avpl-only.pdf'), 'wb') as output:
+            output.write(b'a' * 101)
+        with open(os.path.join(tsc_documents, 'tsc-secret.pdf'), 'wb') as output:
+            output.write(b'b' * 509)
+
+        self.login_super_admin()
+        response = self.client.get('/api/company-storage?refresh=1')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['companyCode'], 'AVPL')
+        names = {item['name'] for item in payload['largestFiles']}
+        self.assertIn('avpl-only.pdf', names)
+        self.assertNotIn('tsc-secret.pdf', names)
+        self.assertNotIn(self.tempdir.name, response.get_data(as_text=True))
+        self.assertTrue(all(
+            not os.path.isabs(item['relativePath'])
+            for item in payload['largestFiles']
+        ))
 
     def test_company_storage_breakdown_is_owner_only(self):
         with self.client.session_transaction() as session:
@@ -582,7 +627,7 @@ class CompanyManagementTests(unittest.TestCase):
         self.login_super_admin()
         original_folder = os.path.join(self.tempdir.name, 'companies', 'TSC')
         renamed_folder = os.path.join(self.tempdir.name, 'companies', 'EVT')
-        self.assertTrue(os.path.exists(os.path.join(original_folder, 'backend', 'AssetList.csv')))
+        self.assertTrue(os.path.exists(os.path.join(original_folder, 'data', 'AssetList.csv')))
 
         response = self.client.put('/api/companies/TSC', json={
             'code': 'EVT',
@@ -595,7 +640,9 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertEqual(payload['previousCode'], 'TSC')
         self.assertEqual(payload['name'], 'Events Team')
         self.assertFalse(os.path.exists(original_folder))
-        self.assertTrue(os.path.exists(os.path.join(renamed_folder, 'backend', 'AssetList.csv')))
+        self.assertTrue(os.path.exists(os.path.join(renamed_folder, 'data', 'AssetList.csv')))
+        for area in ('documents', 'media', 'branding', 'exports'):
+            self.assertTrue(os.path.isdir(os.path.join(renamed_folder, area)))
 
         registry = app_module._load_company_registry()
         self.assertNotIn('TSC', registry['companies'])

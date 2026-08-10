@@ -6,6 +6,7 @@ import unittest
 import app as app_module
 from data_manager import DataManager
 from models import Container, Event, InventoryItem, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class PlanningTemplateTests(unittest.TestCase):
@@ -681,11 +682,7 @@ class PlanningTemplateTests(unittest.TestCase):
 
     def test_plan_resolution_assignees_and_company_onboarding_controls_exist(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
-        with open(
-            os.path.join(project_root, 'static', 'js', 'app.js'),
-            encoding='utf-8',
-        ) as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn("/models/replace`, 'POST'", script)
         self.assertIn("/models/loan`, 'POST'", script)
@@ -731,11 +728,7 @@ class PlanningTemplateTests(unittest.TestCase):
 
     def test_event_detail_actions_are_shared_by_all_workspaces(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
-        with open(
-            os.path.join(project_root, 'static', 'js', 'app.js'),
-            encoding='utf-8',
-        ) as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
         with open(
             os.path.join(project_root, 'templates', 'index.html'),
             encoding='utf-8',
@@ -762,11 +755,7 @@ class PlanningTemplateTests(unittest.TestCase):
             encoding='utf-8',
         ) as finance_file:
             finance_source = finance_file.read()
-        with open(
-            os.path.join(project_root, 'static', 'js', 'app.js'),
-            encoding='utf-8',
-        ) as app_file:
-            app_source = app_file.read()
+        app_source = APP_BUNDLE_SOURCE
 
         self.assertEqual(
             template.count('<button type="button" class="nav-item" onclick="logout()">'),
@@ -825,9 +814,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn("switchEditTab('assets')", script)
 
     def test_return_inventory_rows_offer_fault_logging_but_custom_rows_do_not(self):
-        project_root = os.path.dirname(os.path.dirname(__file__))
-        with open(os.path.join(project_root, 'static', 'js', 'app.js'), encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         can_log_fault = script.split('function returnPageCanLogFault', 1)[1].split(
             'async function returnPageLogFault', 1

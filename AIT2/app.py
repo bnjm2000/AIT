@@ -82,6 +82,10 @@ from models import (
     normalize_asset_tags,
     user_role_is_adminish,
 )
+from storage_paths import storage_root as configured_storage_root
+from routes.delivery_orders import register_delivery_order_routes
+from routes.pages import register_app_page_routes
+from services.company_storage import CompanyStorageUsageService, storage_category
 from utils import sanitize_filename
 from workforce import (
     VALID_STATUSES,
@@ -196,12 +200,18 @@ _background_thread_started = False
 _active_company_code = ''
 _company_data_managers = {}
 _company_registry_cache = None
-_company_storage_cache = {}
-_company_storage_cache_lock = threading.RLock()
 _company_storage_cache_seconds = max(
     5.0,
     float(os.environ.get('COMPANY_STORAGE_CACHE_SECONDS', '30')),
 )
+_company_storage_service = CompanyStorageUsageService(
+    cache_seconds=_company_storage_cache_seconds,
+    logger=logger,
+)
+# Compatibility aliases for existing diagnostics and tests. New code should use
+# the service methods instead of mutating these collections directly.
+_company_storage_cache = _company_storage_service._cache
+_company_storage_cache_lock = _company_storage_service._lock
 
 _manager_caches = {}
 
@@ -235,7 +245,20 @@ MAINTENANCE_VIDEO_MAX_BYTES = int(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LIVE_COMPANIES_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+_INITIAL_BASE_DIR = BASE_DIR
+
+
+def _storage_root_for_app():
+    # Several isolated tests replace BASE_DIR with a temporary directory. Keep
+    # their generated company data inside that sandbox while production uses
+    # the configured durable storage root.
+    if os.path.abspath(BASE_DIR) != os.path.abspath(_INITIAL_BASE_DIR):
+        return os.path.abspath(BASE_DIR)
+    return configured_storage_root()
+
+
+STORAGE_ROOT = _storage_root_for_app()
+LIVE_COMPANIES_FOLDER = os.path.abspath(os.path.join(STORAGE_ROOT, 'companies'))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 APP_NAME = 'Showbase'
 DEFAULT_COMPANY_CODE = 'SHOWBASE'
@@ -250,7 +273,7 @@ ROLE_LABELS = {
     'manager': 'Manager',
     'user': 'User',
 }
-APP_CONFIG_FOLDER = os.path.join(BASE_DIR, 'app_data')
+APP_CONFIG_FOLDER = os.path.join(STORAGE_ROOT, 'config')
 COMPANY_REGISTRY_FILE = os.environ.get(
     'COMPANY_REGISTRY_FILE',
     os.path.join(APP_CONFIG_FOLDER, 'Companies.json')
@@ -376,7 +399,7 @@ def _path_from_config(path):
         return ''
     if os.path.isabs(path):
         return path
-    return os.path.join(BASE_DIR, path)
+    return os.path.join(_storage_root_for_app(), path)
 
 
 def _normalise_company_code(value, fallback=''):
@@ -396,8 +419,13 @@ def _new_company_record(code, name, created_by='', requires_branding_setup=False
     return {
         'code': code,
         'name': str(name or code).strip() or code,
-        'backendFolder': os.path.join(base_folder, 'backend').replace('\\', '/'),
-        'frontendFolder': os.path.join(base_folder, 'frontend').replace('\\', '/'),
+        'backendFolder': os.path.join(base_folder, 'data').replace('\\', '/'),
+        'dataFolder': os.path.join(base_folder, 'data').replace('\\', '/'),
+        'documentsFolder': os.path.join(base_folder, 'documents').replace('\\', '/'),
+        'mediaFolder': os.path.join(base_folder, 'media').replace('\\', '/'),
+        'frontendFolder': os.path.join(base_folder, 'branding').replace('\\', '/'),
+        'brandingFolder': os.path.join(base_folder, 'branding').replace('\\', '/'),
+        'exportsFolder': os.path.join(base_folder, 'exports').replace('\\', '/'),
         'createdAt': datetime.now().isoformat(timespec='seconds'),
         'createdBy': str(created_by or '').strip(),
         'brandingSetupRequired': bool(requires_branding_setup),
@@ -405,139 +433,77 @@ def _new_company_record(code, name, created_by='', requires_branding_setup=False
 
 
 def _company_record_backend_folder(record):
-    return _path_from_config((record or {}).get('backendFolder'))
+    return _path_from_config(
+        (record or {}).get('dataFolder')
+        or (record or {}).get('backendFolder')
+    )
 
 
 def _company_record_frontend_folder(record):
-    return _path_from_config((record or {}).get('frontendFolder'))
+    return _path_from_config(
+        (record or {}).get('brandingFolder')
+        or (record or {}).get('frontendFolder')
+    )
 
 
-_COMPANY_STORAGE_CATEGORIES = (
-    ('uploads', 'Invoices, claims & expense uploads'),
-    ('events', 'Events & event files'),
-    ('maintenance', 'Maintenance files'),
-    ('inventory', 'Inventory & asset data'),
-    ('workforce', 'Manpower & transport data'),
-    ('finance', 'Quotations & finance data'),
-    ('branding', 'Branding & PDF settings'),
-    ('logs', 'Logs & live state'),
-    ('company_data', 'Company settings & users'),
-    ('other', 'Other company files'),
-)
+def _company_record_documents_folder(record):
+    configured = (record or {}).get('documentsFolder')
+    if configured:
+        return _path_from_config(configured)
+    backend = _company_record_backend_folder(record)
+    if os.path.basename(backend).lower() == 'data':
+        return os.path.join(os.path.dirname(backend), 'documents')
+    return backend
+
+
+def _company_record_media_folder(record):
+    configured = (record or {}).get('mediaFolder')
+    if configured:
+        return _path_from_config(configured)
+    backend = _company_record_backend_folder(record)
+    if os.path.basename(backend).lower() == 'data':
+        return os.path.join(os.path.dirname(backend), 'media')
+    return backend
+
+
+def _company_record_exports_folder(record):
+    configured = (record or {}).get('exportsFolder')
+    if configured:
+        return _path_from_config(configured)
+    backend = _company_record_backend_folder(record)
+    if os.path.basename(backend).lower() == 'data':
+        return os.path.join(os.path.dirname(backend), 'exports')
+    return backend
 
 
 def _invalidate_company_storage_cache(*company_codes):
-    with _company_storage_cache_lock:
-        if not company_codes:
-            _company_storage_cache.clear()
-            return
-        for company_code in company_codes:
-            _company_storage_cache.pop(_normalise_company_code(company_code), None)
+    _company_storage_service.invalidate(*(
+        _normalise_company_code(company_code) for company_code in company_codes
+    ))
 
 
 def _company_storage_category(root_kind, relative_path):
-    relative_path = str(relative_path or '').replace('\\', '/').lower()
-    filename = os.path.basename(relative_path)
-    stem = os.path.splitext(filename)[0]
-
-    if root_kind == 'frontend':
-        return 'branding'
-    if relative_path.startswith('workforce_uploads/'):
-        return 'uploads'
-    if relative_path.startswith('maintenance_media/') or stem.startswith('maintenance'):
-        return 'maintenance'
-    if relative_path.startswith('events/'):
-        return 'events'
-    if stem.startswith('finance'):
-        return 'finance'
-    if stem.startswith('workforce'):
-        return 'workforce'
-    if stem in {'assetlist', 'inventory', 'containers', 'clients', 'departments'}:
-        return 'inventory'
-    if stem in {'logs', 'realtimestate'}:
-        return 'logs'
-    if stem.startswith('pdfsettings'):
-        return 'branding'
-    if stem in {'users', 'company', 'companies'}:
-        return 'company_data'
-    return 'other'
+    return storage_category(root_kind, relative_path)
 
 
 def _company_storage_usage(company_code, force=False):
     code = _normalise_company_code(company_code)
-    now = time.monotonic()
-    with _company_storage_cache_lock:
-        cached = _company_storage_cache.get(code)
-        if cached and not force and now - cached['cachedAt'] < _company_storage_cache_seconds:
-            return cached['data']
-
     registry = _load_company_registry()
     record = registry.get('companies', {}).get(code)
     if not record:
         raise KeyError(code)
-
-    totals = {
-        key: {'key': key, 'label': label, 'bytes': 0, 'fileCount': 0, 'recordCount': 0}
-        for key, label in _COMPANY_STORAGE_CATEGORIES
-    }
-    seen_paths = set()
-    for root_kind, root_path in (
-        ('backend', _company_record_backend_folder(record)),
-        ('frontend', _company_record_frontend_folder(record)),
-    ):
-        if not root_path or not os.path.isdir(root_path):
-            continue
-        root_path = os.path.abspath(root_path)
-        for current_root, dirnames, filenames in os.walk(root_path, followlinks=False):
-            dirnames[:] = [
-                dirname for dirname in dirnames
-                if not os.path.islink(os.path.join(current_root, dirname))
-            ]
-            for filename in filenames:
-                absolute_path = os.path.abspath(os.path.join(current_root, filename))
-                normalized_path = os.path.normcase(absolute_path)
-                if normalized_path in seen_paths or os.path.islink(absolute_path):
-                    continue
-                try:
-                    file_size = os.path.getsize(absolute_path)
-                except OSError:
-                    continue
-                seen_paths.add(normalized_path)
-                relative_path = os.path.relpath(absolute_path, root_path)
-                category = _company_storage_category(root_kind, relative_path)
-                totals[category]['bytes'] += max(0, int(file_size))
-                totals[category]['fileCount'] += 1
-
-    database_url = _database_url_for_runtime()
-    if database_url:
-        try:
-            from postgres_data_manager import company_storage_breakdown
-
-            for category, usage in company_storage_breakdown(database_url, code).items():
-                if category not in totals:
-                    category = 'other'
-                totals[category]['bytes'] += max(0, int(usage.get('bytes') or 0))
-                totals[category]['recordCount'] += max(0, int(usage.get('recordCount') or 0))
-        except Exception as error:
-            logger.warning('Unable to calculate PostgreSQL storage for company %s: %s', code, error)
-
-    breakdown = list(totals.values())
-    total_bytes = sum(item['bytes'] for item in breakdown)
-    for item in breakdown:
-        item['percent'] = round((item['bytes'] / total_bytes) * 100, 1) if total_bytes else 0
-    breakdown.sort(key=lambda item: (-item['bytes'], item['label']))
-
-    result = {
-        'companyCode': code,
-        'totalBytes': total_bytes,
-        'fileCount': sum(item['fileCount'] for item in breakdown),
-        'recordCount': sum(item['recordCount'] for item in breakdown),
-        'breakdown': breakdown,
-        'calculatedAt': datetime.now().isoformat(timespec='seconds'),
-    }
-    with _company_storage_cache_lock:
-        _company_storage_cache[code] = {'cachedAt': now, 'data': result}
-    return result
+    return _company_storage_service.calculate(
+        code,
+        (
+            ('data', _company_record_backend_folder(record)),
+            ('documents', _company_record_documents_folder(record)),
+            ('media', _company_record_media_folder(record)),
+            ('branding', _company_record_frontend_folder(record)),
+            ('exports', _company_record_exports_folder(record)),
+        ),
+        database_url=_database_url_for_runtime(),
+        force=force,
+    )
 
 
 def _fallback_company_code(registry):
@@ -556,7 +522,7 @@ def _standard_company_folder_for_code(code):
 
 def _safe_company_delete_folder(code, record):
     code = _normalise_company_code(code)
-    company_root = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+    company_root = os.path.abspath(os.path.join(_storage_root_for_app(), 'companies'))
     target_folder = _standard_company_folder_for_code(code)
 
     if not code:
@@ -571,7 +537,13 @@ def _safe_company_delete_folder(code, record):
     if target_folder == company_root:
         raise ValueError('Refusing to delete the companies folder')
 
-    for folder in (_company_record_backend_folder(record), _company_record_frontend_folder(record)):
+    for folder in (
+        _company_record_backend_folder(record),
+        _company_record_documents_folder(record),
+        _company_record_media_folder(record),
+        _company_record_frontend_folder(record),
+        _company_record_exports_folder(record),
+    ):
         if not folder:
             continue
         folder = os.path.abspath(folder)
@@ -594,7 +566,7 @@ def _validate_company_rename_folder(old_code, new_code, record):
 
     old_folder = _standard_company_folder_for_code(old_code)
     new_folder = _standard_company_folder_for_code(new_code)
-    company_root = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+    company_root = os.path.abspath(os.path.join(_storage_root_for_app(), 'companies'))
 
     try:
         if os.path.commonpath([company_root, new_folder]) != company_root:
@@ -606,7 +578,10 @@ def _validate_company_rename_folder(old_code, new_code, record):
         os.path.abspath(folder)
         for folder in (
             _company_record_backend_folder(record),
-            _company_record_frontend_folder(record)
+            _company_record_documents_folder(record),
+            _company_record_media_folder(record),
+            _company_record_frontend_folder(record),
+            _company_record_exports_folder(record),
         )
         if folder
     ]
@@ -687,8 +662,17 @@ def _safe_company_rename_record(old_code, new_code, record):
 
     updated = dict(record or {})
     updated['code'] = new_code
-    updated['backendFolder'] = os.path.join('companies', new_code, 'backend').replace('\\', '/')
-    updated['frontendFolder'] = os.path.join('companies', new_code, 'frontend').replace('\\', '/')
+    canonical = _new_company_record(new_code, updated.get('name') or new_code)
+    for field in (
+        'backendFolder',
+        'dataFolder',
+        'documentsFolder',
+        'mediaFolder',
+        'frontendFolder',
+        'brandingFolder',
+        'exportsFolder',
+    ):
+        updated[field] = canonical[field]
     _ensure_company_folders(updated)
     return updated
 
@@ -711,14 +695,14 @@ def _normalise_company_registry(registry):
     default_record.update({k: v for k, v in existing_default.items() if v not in (None, '')})
     default_record['code'] = DEFAULT_COMPANY_CODE
     default_record['name'] = default_record.get('name') or DEFAULT_COMPANY_NAME
-    legacy_backend = f'{LEGACY_DEFAULT_COMPANY_CODE}/backend'
-    legacy_frontend = f'{LEGACY_DEFAULT_COMPANY_CODE}/frontend'
-    if str(default_record.get('backendFolder') or '').replace('\\', '/') == legacy_backend:
-        default_record['backendFolder'] = f'companies/{LEGACY_DEFAULT_COMPANY_CODE}/backend'
-    if str(default_record.get('frontendFolder') or '').replace('\\', '/') == legacy_frontend:
-        default_record['frontendFolder'] = f'companies/{LEGACY_DEFAULT_COMPANY_CODE}/frontend'
-    default_record['backendFolder'] = default_record.get('backendFolder') or os.path.join('companies', DEFAULT_COMPANY_CODE, 'backend').replace('\\', '/')
-    default_record['frontendFolder'] = default_record.get('frontendFolder') or os.path.join('companies', DEFAULT_COMPANY_CODE, 'frontend').replace('\\', '/')
+    default_paths = _new_company_record(DEFAULT_COMPANY_CODE, DEFAULT_COMPANY_NAME)
+    for field in (
+        'dataFolder', 'documentsFolder', 'mediaFolder',
+        'brandingFolder', 'exportsFolder',
+    ):
+        default_record[field] = default_record.get(field) or default_paths[field]
+    default_record['backendFolder'] = default_record['dataFolder']
+    default_record['frontendFolder'] = default_record['brandingFolder']
     default_record['brandingSetupRequired'] = bool(default_record.get('brandingSetupRequired', False))
 
     normalised_companies = {}
@@ -732,8 +716,14 @@ def _normalise_company_registry(registry):
         company = _new_company_record(code, record.get('name') or code)
         company.update({k: v for k, v in record.items() if v not in (None, '')})
         company['code'] = code
-        company['backendFolder'] = company.get('backendFolder') or os.path.join('companies', code, 'backend').replace('\\', '/')
-        company['frontendFolder'] = company.get('frontendFolder') or os.path.join('companies', code, 'frontend').replace('\\', '/')
+        canonical = _new_company_record(code, company.get('name') or code)
+        for field in (
+            'dataFolder', 'documentsFolder', 'mediaFolder',
+            'brandingFolder', 'exportsFolder',
+        ):
+            company[field] = company.get(field) or canonical[field]
+        company['backendFolder'] = company['dataFolder']
+        company['frontendFolder'] = company['brandingFolder']
         company['brandingSetupRequired'] = bool(company.get('brandingSetupRequired', False))
         normalised_companies[code] = company
 
@@ -795,6 +785,8 @@ def _normalise_company_registry(registry):
         'userCompanies': normalised_users,
         'userCompanyMemberships': normalised_memberships,
         'superAdmins': deduped_super_admins,
+        'storageLayoutVersion': _safe_int(registry.get('storageLayoutVersion'), 0),
+        'storageMigratedAt': str(registry.get('storageMigratedAt') or '').strip(),
         'updatedAt': str(registry.get('updatedAt') or '').strip(),
     }
 
@@ -1437,12 +1429,15 @@ def require_event_access(f):
 
 
 def _ensure_company_folders(record):
-    backend_folder = _company_record_backend_folder(record)
-    frontend_folder = _company_record_frontend_folder(record)
-    if backend_folder and not os.path.exists(backend_folder):
-        os.makedirs(backend_folder)
-    if frontend_folder and not os.path.exists(frontend_folder):
-        os.makedirs(frontend_folder)
+    for folder in (
+        _company_record_backend_folder(record),
+        _company_record_documents_folder(record),
+        _company_record_media_folder(record),
+        _company_record_frontend_folder(record),
+        _company_record_exports_folder(record),
+    ):
+        if folder:
+            os.makedirs(folder, exist_ok=True)
 
 
 def _ensure_super_admin_users(manager):
@@ -1489,12 +1484,20 @@ def _get_company_data_manager(company_code=None):
             {
                 'code': SYSTEM_LOG_COMPANY_CODE,
                 'name': SYSTEM_LOG_COMPANY_NAME,
-                'backendFolder': os.path.join(APP_CONFIG_FOLDER, 'system'),
+                'backendFolder': os.path.join(_storage_root_for_app(), 'system', 'data'),
+                'dataFolder': os.path.join(_storage_root_for_app(), 'system', 'data'),
+                'documentsFolder': os.path.join(_storage_root_for_app(), 'system', 'documents'),
+                'mediaFolder': os.path.join(_storage_root_for_app(), 'system', 'media'),
+                'frontendFolder': os.path.join(_storage_root_for_app(), 'system', 'branding'),
+                'brandingFolder': os.path.join(_storage_root_for_app(), 'system', 'branding'),
+                'exportsFolder': os.path.join(_storage_root_for_app(), 'system', 'exports'),
             }
             if is_system_log_scope
             else registry['companies'][code]
         )
         backend_folder = _company_record_backend_folder(record)
+        documents_folder = _company_record_documents_folder(record)
+        media_folder = _company_record_media_folder(record)
         _assert_safe_test_company_folder(backend_folder)
         if is_system_log_scope:
             os.makedirs(backend_folder, exist_ok=True)
@@ -1512,11 +1515,15 @@ def _get_company_data_manager(company_code=None):
                 company_name=record.get('name') or code,
                 data_folder=backend_folder,
                 users_file=GLOBAL_USERS_FILE,
+                documents_folder=documents_folder,
+                media_folder=media_folder,
             )
         else:
             manager = DataManager(
                 backend_folder,
                 users_file=GLOBAL_USERS_FILE,
+                documents_folder=documents_folder,
+                media_folder=media_folder,
             )
             manager.company_code = code
         manager.setup_data_folder()
@@ -1668,8 +1675,8 @@ def _is_inherited_default_company_logo(code, logo_path):
     if not code or code in {DEFAULT_COMPANY_CODE, LEGACY_DEFAULT_COMPANY_CODE}:
         return False
     default_logo_paths = [
-        os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png'),
-        os.path.join(BASE_DIR, 'companies', LEGACY_DEFAULT_COMPANY_CODE, 'frontend', 'logo.png'),
+        os.path.join(_company_frontend_folder(DEFAULT_COMPANY_CODE), 'logo.png'),
+        os.path.join(_company_frontend_folder(LEGACY_DEFAULT_COMPANY_CODE), 'logo.png'),
     ]
     return any(_same_file_hash(logo_path, default_logo_path) for default_logo_path in default_logo_paths)
 
@@ -2567,7 +2574,9 @@ def _company_frontend_folder(company_code=None):
     folder = _company_record_frontend_folder(record)
     if folder and not os.path.exists(folder):
         os.makedirs(folder)
-    return folder or os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend')
+    return folder or os.path.join(
+        _storage_root_for_app(), 'companies', DEFAULT_COMPANY_CODE, 'branding'
+    )
 
 
 def _default_pdf_logo_path(company_code=None):
@@ -13795,44 +13804,6 @@ def _static_asset_version(filename):
         return int(time.time())
 
 
-APP_PAGE_SECTIONS = {
-    '/dashboard': 'dashboard',
-    '/events': 'events',
-    '/plan': 'plan',
-    '/manpower': 'workforce',
-    '/invoice-claims': 'invoice-claims',
-    '/prepare': 'prepare-new',
-    '/return': 'return',
-    '/transfer': 'transfer',
-    '/inventory': 'inventory',
-    '/vehicles': 'vehicles',
-    '/containers': 'containers',
-    '/maintenance': 'maintenance',
-    '/asset-check': 'asset-check',
-    '/maintenance-report': 'maintenance-report',
-    '/logs': 'logs',
-    '/costing': 'costing',
-    '/quotations': 'quotations',
-    '/invoices': 'invoices',
-    '/profit-loss': 'profit-loss',
-    '/accounting': 'accounting',
-    '/compare': 'compare',
-    '/users': 'users',
-    '/company-details': 'pdf-settings',
-    '/companies': 'companies',
-    '/change-password': 'change-password',
-    '/delivery-order': 'delivery-order',
-}
-APP_ADMIN_PAGE_SECTIONS = {
-    'plan', 'compare', 'workforce', 'invoice-claims', 'vehicles', 'logs', 'maintenance-report',
-    'users', 'pdf-settings',
-}
-APP_OWNER_PAGE_SECTIONS = {'companies', 'accounting'}
-APP_SALES_PAGE_SECTIONS = {
-    'quotations', 'invoices', 'costing', 'profit-loss', 'accounting',
-}
-
-
 def _render_app_page(section):
     return render_template(
         'index.html',
@@ -13843,6 +13814,14 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        plan_js_version=_static_asset_version('js/plan.js'),
+        prepare_js_version=_static_asset_version('js/prepare.js'),
+        admin_settings_js_version=_static_asset_version('js/admin-settings.js'),
+        delivery_order_js_version=_static_asset_version('js/delivery-order.js'),
+        events_overview_js_version=_static_asset_version('js/events-overview.js'),
+        inventory_export_js_version=_static_asset_version('js/inventory-export.js'),
+        packing_list_js_version=_static_asset_version('js/packing-list.js'),
+        transfer_js_version=_static_asset_version('js/transfer.js'),
         line_workspace_js_version=_static_asset_version('js/line-workspace.js'),
         line_workspace_css_version=_static_asset_version('css/line-workspace.css'),
         finance_js_version=_static_asset_version('js/finance.js'),
@@ -13862,111 +13841,17 @@ def _render_app_page(section):
     )
 
 
-@app.route('/')
-@require_auth
-def index():
-    """Redirect the legacy root URL to the named events workspace."""
-    return redirect('/events')
-
-
-@app.route('/dashboard')
-@app.route('/events')
-@app.route('/plan')
-@app.route('/manpower')
-@app.route('/invoice-claims')
-@app.route('/prepare')
-@app.route('/return')
-@app.route('/transfer')
-@app.route('/inventory')
-@app.route('/vehicles')
-@app.route('/containers')
-@app.route('/maintenance')
-@app.route('/asset-check')
-@app.route('/maintenance-report')
-@app.route('/logs')
-@app.route('/costing')
-@app.route('/quotations')
-@app.route('/invoices')
-@app.route('/profit-loss')
-@app.route('/accounting')
-@app.route('/compare')
-@app.route('/users')
-@app.route('/company-details')
-@app.route('/companies')
-@app.route('/change-password')
-@app.route('/delivery-order')
-@require_auth
-def app_page():
-    """Serve a named app workspace after enforcing its page permission."""
-    section = APP_PAGE_SECTIONS.get(request.path)
-    if not section:
-        abort(404)
-    if section == 'logs' and not _current_user_can_view_logs():
-        return redirect('/events')
-    if section in APP_ADMIN_PAGE_SECTIONS and not _current_user_effective_is_admin():
-        return redirect('/events')
-    if section in APP_OWNER_PAGE_SECTIONS and not _current_user_is_owner():
-        return redirect('/events')
-    if section in APP_SALES_PAGE_SECTIONS and not _current_user_has_sales_access():
-        return redirect('/events')
-    return _render_app_page(section)
-
-
-@app.route('/quotations/<document_id>')
-@require_auth
-def quotation_detail_page(document_id):
-    """Serve a quotation deep link; document access is enforced by its API."""
-    if not _current_user_has_sales_access():
-        return redirect('/events')
-    return _render_app_page('quotations')
-
-
-@app.route('/invoices/<quotation_id>')
-@require_auth
-def invoice_plan_detail_page(quotation_id):
-    """Serve an invoice-plan deep link; its API enforces document ownership."""
-    if not _current_user_has_sales_access():
-        return redirect('/events')
-    return _render_app_page('invoices')
-
-
-@app.route('/costing/<costing_id>')
-@require_auth
-def costing_detail_page(costing_id):
-    """Serve a costing deep link; document access is enforced by its API."""
-    if not _current_user_has_sales_access():
-        return redirect('/events')
-    return _render_app_page('costing')
-
-
-@app.route('/events/<int:event_id>')
-@require_auth
-def event_overview_page(event_id):
-    """Serve an event-specific operational overview deep link."""
-    event = data_manager.events.get(event_id)
-    if not event or not _current_user_can_access_event(event):
-        return redirect('/events')
-    return _render_app_page('events')
-
-
-@app.route('/delivery-order/<int:event_id>')
-@require_auth
-def delivery_order_detail_page(event_id):
-    """Serve an event-specific Delivery Order deep link."""
-    event = data_manager.events.get(event_id)
-    if not event or not _current_user_can_access_event(event):
-        return redirect('/events')
-    return _render_app_page('delivery-order')
-
-
-@app.route('/packing-list/<int:event_id>')
-@require_auth
-def packing_list_detail_page(event_id):
-    """Serve an event-specific packing-list export deep link."""
-    event = data_manager.events.get(event_id)
-    if not event or not _current_user_can_access_event(event):
-        return redirect('/events')
-    return _render_app_page('events')
+register_app_page_routes(
+    app,
+    data_manager=data_manager,
+    render_page=_render_app_page,
+    require_auth=require_auth,
+    can_access_event=_current_user_can_access_event,
+    can_view_logs=_current_user_can_view_logs,
+    is_admin=_current_user_effective_is_admin,
+    is_owner=_current_user_is_owner,
+    has_sales_access=_current_user_has_sales_access,
+)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -14287,7 +14172,7 @@ def list_companies():
 @app.route('/api/companies/<path:company_code>/storage', methods=['GET'])
 @require_super_admin
 def get_company_storage(company_code):
-    """Owner: return a category-level company storage breakdown without file names."""
+    """Owner: return a company storage breakdown and its largest files."""
     try:
         code = _normalise_company_code(unquote_plus(company_code))
         registry = _load_company_registry()
@@ -14298,6 +14183,28 @@ def get_company_storage(company_code):
         return jsonify({'success': True, 'data': _company_storage_usage(code, force=force)})
     except Exception as error:
         logger.error('Error calculating storage for company %s: %s', company_code, error, exc_info=True)
+        return jsonify({'error': 'Failed to calculate company storage'}), 500
+
+
+@app.route('/api/company-storage', methods=['GET'])
+@require_admin
+def get_current_company_storage():
+    """Return storage usage for the signed-in user's active company only."""
+    try:
+        force = str(request.args.get('refresh') or '').strip().lower() in {
+            '1', 'true', 'yes'
+        }
+        return jsonify({
+            'success': True,
+            'data': _company_storage_usage(_current_company_code(), force=force),
+        })
+    except Exception as error:
+        logger.error(
+            'Error calculating storage for current company %s: %s',
+            _current_company_code(),
+            error,
+            exc_info=True,
+        )
         return jsonify({'error': 'Failed to calculate company storage'}), 500
 
 
@@ -15772,7 +15679,8 @@ def _uploaded_maintenance_media_files():
 def _maintenance_media_root(create=False):
     if not data_manager or not getattr(data_manager, 'data_folder', ''):
         return None
-    folder = os.path.join(data_manager.data_folder, 'maintenance_media')
+    media_folder = getattr(data_manager, 'media_folder', data_manager.data_folder)
+    folder = os.path.join(media_folder, 'maintenance_media')
     if create:
         os.makedirs(folder, exist_ok=True)
     return folder
@@ -15903,10 +15811,18 @@ def _maintenance_media_abs_path(media):
     if relative_path.startswith('/') or '..' in parts:
         return None
 
-    target = os.path.abspath(os.path.join(data_manager.data_folder, *parts))
+    media_folder = os.path.abspath(
+        getattr(data_manager, 'media_folder', data_manager.data_folder)
+    )
+    target = os.path.abspath(os.path.join(media_folder, *parts))
     base = os.path.abspath(root)
-    if not target.startswith(base + os.sep):
+    if target != base and not target.startswith(base + os.sep):
         return None
+    if not os.path.isfile(target) and media_folder != os.path.abspath(data_manager.data_folder):
+        legacy_target = os.path.abspath(os.path.join(data_manager.data_folder, *parts))
+        legacy_root = os.path.abspath(os.path.join(data_manager.data_folder, 'maintenance_media'))
+        if legacy_target.startswith(legacy_root + os.sep) and os.path.isfile(legacy_target):
+            return legacy_target
     return target
 
 
@@ -16050,7 +15966,8 @@ def _save_maintenance_media_files(log_entry, uploaded_files):
                 raise ValueError(f"Could not save {uploaded_file.filename}")
 
             saved_paths.append(target_path)
-            relative_path = os.path.relpath(target_path, data_manager.data_folder).replace(os.sep, '/')
+            media_folder = getattr(data_manager, 'media_folder', data_manager.data_folder)
+            relative_path = os.path.relpath(target_path, media_folder).replace(os.sep, '/')
             media_records.append({
                 'id': media_id,
                 'name': display_name,
@@ -16984,43 +16901,14 @@ def update_event_notes(event_id):
         return jsonify({'error': 'Failed to update event notes'}), 500
 
 
-@app.route('/api/events/<int:event_id>/delivery-order', methods=['GET', 'PUT', 'DELETE'])
-@require_auth
-@require_event_access
-def event_delivery_order(event_id):
-    """Read or update the event's independent Delivery Order workspace."""
-    try:
-        event = data_manager.events.get(event_id)
-        if not event:
-            return jsonify({'error': 'Event not found'}), 404
-
-        if request.method == 'GET':
-            return jsonify({
-                'success': True,
-                'data': dict(getattr(event, 'delivery_order', {}) or {}),
-            })
-
-        if request.method == 'DELETE':
-            event.delivery_order = {}
-        else:
-            workspace = request.get_json(silent=True) or {}
-            if not isinstance(workspace, dict):
-                return jsonify({'error': 'Delivery Order workspace must be an object'}), 400
-            encoded = json.dumps(workspace, ensure_ascii=False)
-            if len(encoded.encode('utf-8')) > 1_000_000:
-                return jsonify({'error': 'Delivery Order workspace is too large'}), 413
-            event.delivery_order = json.loads(encoded)
-
-        data_manager.events[event_id] = event
-        data_manager.save_event(event)
-        mark_realtime_change('delivery-order', {'eventId': event_id})
-        return jsonify({
-            'success': True,
-            'data': dict(getattr(event, 'delivery_order', {}) or {}),
-        })
-    except Exception as exc:
-        logger.error("Error updating delivery order for event %s: %s", event_id, exc)
-        return jsonify({'error': 'Failed to update delivery order'}), 500
+event_delivery_order = register_delivery_order_routes(
+    app,
+    data_manager=data_manager,
+    logger=logger,
+    mark_realtime_change=mark_realtime_change,
+    require_auth=require_auth,
+    require_event_access=require_event_access,
+)
 
 
 @app.route('/api/events/<int:event_id>/files', methods=['POST'])
@@ -25465,9 +25353,21 @@ def _container_response(container):
 
 
 def _container_media_folder():
-    folder = os.path.join(data_manager.data_folder, 'ContainerMedia')
+    media_folder = getattr(data_manager, 'media_folder', data_manager.data_folder)
+    folder = os.path.join(media_folder, 'ContainerMedia')
     os.makedirs(folder, exist_ok=True)
     return folder
+
+
+def _container_media_path(filename, allow_legacy=True):
+    filename = os.path.basename(str(filename or ''))
+    if not filename:
+        return ''
+    canonical = os.path.join(_container_media_folder(), filename)
+    if os.path.isfile(canonical) or not allow_legacy:
+        return canonical
+    legacy = os.path.join(data_manager.data_folder, 'ContainerMedia', filename)
+    return legacy if os.path.isfile(legacy) else canonical
 
 
 def _delete_container_photo(container):
@@ -25475,7 +25375,7 @@ def _delete_container_photo(container):
         str(getattr(container, 'photo_filename', '') or '')
     )
     if filename:
-        path = os.path.join(_container_media_folder(), filename)
+        path = _container_media_path(filename)
         if os.path.isfile(path):
             os.remove(path)
     container.photo_filename = ''
@@ -25718,7 +25618,7 @@ def container_photo(container_id):
         filename = os.path.basename(
             str(getattr(container, 'photo_filename', '') or '')
         )
-        path = os.path.join(_container_media_folder(), filename) if filename else ''
+        path = _container_media_path(filename) if filename else ''
         if not path or not os.path.isfile(path):
             return jsonify({'error': 'Container photo not found'}), 404
         return send_file(
@@ -25754,7 +25654,7 @@ def container_photo(container_id):
 
     _delete_container_photo(container)
     filename = f"container_{secrets.token_hex(12)}{extension}"
-    uploaded.save(os.path.join(_container_media_folder(), filename))
+    uploaded.save(_container_media_path(filename, allow_legacy=False))
     container.photo_filename = filename
     container.photo_mime_type = mime
     container.photo_original_name = os.path.basename(uploaded.filename)[:255]

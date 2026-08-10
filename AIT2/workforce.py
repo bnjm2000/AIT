@@ -9,6 +9,8 @@ import re
 import secrets
 import threading
 import zipfile
+
+from storage_paths import documents_root_for_data_folder
 from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -315,9 +317,9 @@ def save_upload(
         str(event_id),
         str(freelancer_id or "transport"),
     )
-    absolute_folder = os.path.abspath(os.path.join(data_folder, relative_folder))
-    data_root = os.path.abspath(data_folder)
-    if os.path.commonpath([data_root, absolute_folder]) != data_root:
+    document_root = os.path.abspath(documents_root_for_data_folder(data_folder))
+    absolute_folder = os.path.abspath(os.path.join(document_root, relative_folder))
+    if os.path.commonpath([document_root, absolute_folder]) != document_root:
         raise ValueError("Invalid upload path")
     os.makedirs(absolute_folder, exist_ok=True)
 
@@ -328,7 +330,7 @@ def save_upload(
 
     return {
         "originalName": original_name,
-        "storedPath": os.path.relpath(absolute_path, data_root).replace(os.sep, "/"),
+        "storedPath": os.path.relpath(absolute_path, document_root).replace(os.sep, "/"),
         "size": len(content),
         "contentType": {
             ".pdf": "application/pdf",
@@ -345,13 +347,24 @@ def save_upload(
 
 
 def upload_absolute_path(data_folder: str, stored_path: str) -> str | None:
-    root = os.path.abspath(data_folder)
-    candidate = os.path.abspath(
-        os.path.join(root, str(stored_path or "").replace("/", os.sep))
-    )
-    if os.path.commonpath([root, candidate]) != root:
-        return None
-    return candidate
+    relative_path = str(stored_path or "").replace("/", os.sep)
+    roots = [os.path.abspath(documents_root_for_data_folder(data_folder))]
+    legacy_root = os.path.abspath(data_folder)
+    if os.path.normcase(legacy_root) != os.path.normcase(roots[0]):
+        roots.append(legacy_root)
+
+    first_safe_candidate = None
+    for root in roots:
+        candidate = os.path.abspath(os.path.join(root, relative_path))
+        try:
+            if os.path.commonpath([root, candidate]) != root:
+                continue
+        except ValueError:
+            continue
+        first_safe_candidate = first_safe_candidate or candidate
+        if os.path.isfile(candidate):
+            return candidate
+    return first_safe_candidate
 
 
 def delete_upload(data_folder: str, record: dict) -> None:

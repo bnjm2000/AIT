@@ -1,11 +1,13 @@
 from pathlib import Path
 
+from tests.static_source import APP_BUNDLE_SOURCE
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def user_management_script():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     start = script.index("function usersAdminRowMarkup")
     end = script.index("async function resetUserPasswordAdmin")
     return script, script[start:end]
@@ -43,11 +45,11 @@ def test_user_management_text_and_choice_controls_use_suitable_save_timing():
     assert "control.addEventListener('input', () => scheduleUserAdminAutosave(row))" in user_management
     assert "control.addEventListener('change', () => scheduleUserAdminAutosave(row, 0))" in user_management
     assert "control.addEventListener('blur', () => scheduleUserAdminAutosave(row, 0))" in user_management
-    assert "USERS_ADMIN_AUTOSAVE_DELAY = 700" in (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    assert "USERS_ADMIN_AUTOSAVE_DELAY = 700" in APP_BUNDLE_SOURCE
 
 
 def test_owner_role_option_is_only_rendered_for_owner_sessions():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     options_start = script.index("function userRoleOptionsMarkup")
     options_end = script.index("function userRoleSummaryMarkup", options_start)
     options = script[options_start:options_end]

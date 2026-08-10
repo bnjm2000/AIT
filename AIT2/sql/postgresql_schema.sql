@@ -137,20 +137,6 @@ CREATE INDEX IF NOT EXISTS aim_events_company_dates_idx
 CREATE INDEX IF NOT EXISTS aim_events_company_state_idx
     ON aim_events (company_code, state);
 
-CREATE TABLE IF NOT EXISTS aim_event_history (
-    history_id BIGSERIAL PRIMARY KEY,
-    company_code TEXT NOT NULL,
-    event_id BIGINT NOT NULL,
-    event_name TEXT NOT NULL,
-    source_filename TEXT NOT NULL DEFAULT '',
-    data JSONB NOT NULL,
-    source_version BIGINT NOT NULL,
-    archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS aim_event_history_lookup_idx
-    ON aim_event_history (company_code, event_id, archived_at DESC);
-
 CREATE TABLE IF NOT EXISTS aim_system_logs (
     log_id BIGSERIAL PRIMARY KEY,
     company_code TEXT NOT NULL REFERENCES aim_companies(company_code) ON DELETE CASCADE,

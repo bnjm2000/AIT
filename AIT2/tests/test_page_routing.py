@@ -5,6 +5,7 @@ import unittest
 import app as app_module
 from data_manager import DataManager
 from models import Event, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class PageRoutingTests(unittest.TestCase):
@@ -99,7 +100,7 @@ class PageRoutingTests(unittest.TestCase):
 
         self.login('sales')
         self.assertEqual(self.client.get('/quotations').status_code, 200)
-        self.assertEqual(self.client.get('/costing').status_code, 302)
+        self.assertEqual(self.client.get('/costing').status_code, 200)
         self.assertEqual(self.client.get('/profit-loss').status_code, 200)
         self.assertEqual(self.client.get('/accounting').status_code, 302)
         self.assertEqual(self.client.get('/plan').status_code, 302)
@@ -146,9 +147,7 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(self.client.get('/packing-list/999').status_code, 302)
 
     def test_client_router_supports_history_navigation(self):
-        source_path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'app.js')
-        with open(source_path, encoding='utf-8') as source_file:
-            source = source_file.read()
+        source = APP_BUNDLE_SOURCE
         self.assertIn("'prepare-new': '/prepare'", source)
         self.assertIn("plan: '/plan'", source)
         self.assertIn("vehicles: '/vehicles'", source)

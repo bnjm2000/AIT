@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from tests.static_source import APP_BUNDLE_SOURCE
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,7 +18,7 @@ def test_inventory_template_uses_grouped_responsive_catalogue():
 
 
 def test_inventory_script_groups_models_and_weights_availability_quantities():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function groupInventoryByModel(assetList)" in script
     assert "function inventoryConditionCounts(assetList)" in script
@@ -38,7 +40,7 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
 
 
 def test_flagged_inventory_statuses_show_immediate_history_tooltips():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function inventoryStatusHistoryRecord(asset, status)" in script
     assert "function inventoryShowStatusHistoryTooltip" in script
@@ -52,7 +54,7 @@ def test_flagged_inventory_statuses_show_immediate_history_tooltips():
 
 
 def test_deployed_inventory_badges_show_event_tooltips():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     stylesheet = (ROOT / "static" / "css" / "finance.css").read_text(encoding="utf-8")
 
     assert "function inventoryDeploymentRecords(asset)" in script
@@ -66,7 +68,7 @@ def test_deployed_inventory_badges_show_event_tooltips():
 
 def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "--status-deployed-color: #1769aa;" in template
     assert "background: var(--status-deployed-color, #1769aa);" in template
@@ -78,7 +80,7 @@ def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():
 
 def test_add_asset_warns_before_submitting_mismatched_serial_counts():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function addAssetSerialMismatchMessage(assetData)" in script
     assert "function addAssetPrimarySerialPreviewState(assetData)" in script
@@ -95,7 +97,7 @@ def test_add_asset_warns_before_submitting_mismatched_serial_counts():
 
 def test_asset_history_uses_timeline_and_event_cards():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".maintenance-history-shell" in template
     assert ".maintenance-timeline-item" in template
@@ -110,7 +112,7 @@ def test_asset_history_uses_timeline_and_event_cards():
 
 def test_event_overview_workspace_buttons_have_equal_emphasis():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".event-overview-link.primary" not in template
     assert "index === 0 ? 'primary'" not in script
@@ -118,7 +120,7 @@ def test_event_overview_workspace_buttons_have_equal_emphasis():
 
 def test_inventory_department_management_is_a_header_action_and_rows_are_compact():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ">Manage departments</button>" in template
     assert "onclick=\"openModal('department-admin-panel')\"" in template
@@ -131,7 +133,7 @@ def test_inventory_department_management_is_a_header_action_and_rows_are_compact
 
 def test_maintenance_log_controls_use_custom_coloured_selectors_and_drop_upload():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "Asset Status Change" in template
     assert 'id="maintenanceMediaDropzone"' in template
@@ -144,7 +146,7 @@ def test_maintenance_log_controls_use_custom_coloured_selectors_and_drop_upload(
 
 def test_update_maintenance_versions_are_detected_from_the_description():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="maintenanceNewVersion"' not in template
     assert 'id="editMaintenanceNewVersion"' not in script
@@ -154,7 +156,7 @@ def test_update_maintenance_versions_are_detected_from_the_description():
 
 
 def test_detected_version_prompt_can_log_without_updating_asset_version():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "data-dialog-alternate" in script
     assert "alternateText: 'Log Without Updating Version'" in script
@@ -164,7 +166,7 @@ def test_detected_version_prompt_can_log_without_updating_asset_version():
 
 
 def test_maintenance_status_changes_update_inventory_in_place():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "async function refreshInventoryAssetsInPlace(assetIds = [])" in script
     assert "displayFilteredInventory();" in script
@@ -187,7 +189,7 @@ def test_maintenance_status_changes_update_inventory_in_place():
 
 
 def test_asset_history_status_changes_use_status_specific_badges():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function maintenanceChangeBadgeHtml(label)" in script
     assert "value.includes('ooc')" in script
@@ -198,7 +200,7 @@ def test_asset_history_status_changes_use_status_specific_badges():
 
 def test_maintenance_dashboard_is_informative_responsive_and_keeps_actions():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="maintenance-dashboard-summary"' in template
     assert ".maintenance-activity-row" in template
@@ -218,7 +220,7 @@ def test_maintenance_dashboard_is_informative_responsive_and_keeps_actions():
 
 
 def test_maintenance_type_dropdown_uses_lighter_option_colours():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "'Fault': '#dc5965'" in script
     assert "'Update': '#8b6fd6'" in script
@@ -227,7 +229,7 @@ def test_maintenance_type_dropdown_uses_lighter_option_colours():
 
 def test_containers_use_compact_informative_responsive_catalogue():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "Organise transport cases, racks, and kits" in template
     assert "function getContainerConditionCounts(container)" in script
@@ -240,7 +242,7 @@ def test_containers_use_compact_informative_responsive_catalogue():
 
 def test_asset_check_has_guided_progress_and_mobile_rows():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "Count matching assets in Store" in template
     assert "Start a stock check" in script
@@ -258,7 +260,7 @@ def test_asset_check_has_guided_progress_and_mobile_rows():
 
 def test_system_logs_are_searchable_categorised_and_responsive():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "Review operational activity across the company" in template
     assert "function ensureSystemLogStyles()" in script
@@ -278,7 +280,7 @@ def test_system_logs_are_searchable_categorised_and_responsive():
 
 def test_maintenance_history_keeps_actions_and_adds_overview_search():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".maintenance-history-overview" in template
     assert ".maintenance-history-search" in template
@@ -293,7 +295,7 @@ def test_maintenance_history_keeps_actions_and_adds_overview_search():
 
 def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="assetDetailsModal" class="modal">\n      <div class="modal-content asset-details-shell">' in template
     assert 'id="addEventModal" class="modal">\n      <div class="modal-content asset-details-shell">' not in template
@@ -325,7 +327,7 @@ def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
 
 def test_maintenance_page_uses_filter_buttons_with_shared_tab_search():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="maintenance-log-type-filters"' in template
     assert 'id="maintenance-condition-filters"' in template
@@ -339,7 +341,7 @@ def test_maintenance_page_uses_filter_buttons_with_shared_tab_search():
 
 
 def test_maintenance_records_use_same_day_sequence_and_bound_media_delete_controls():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function compareMaintenanceLogsNewestFirst(logA, logB)" in script
     assert "maintenanceLogCreatedSortValue(logA?.createdAt)" in script
@@ -354,7 +356,7 @@ def test_maintenance_records_use_same_day_sequence_and_bound_media_delete_contro
 
 
 def test_maintenance_recent_activity_flattens_all_logs_including_repeat_assets():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function maintenanceActivityEntries(assetList)" in script
     assert "getMaintenanceLogRecords(asset).map((log, originalIndex)" in script
@@ -368,7 +370,7 @@ def test_maintenance_recent_activity_flattens_all_logs_including_repeat_assets()
 
 def test_maintenance_media_accumulates_mobile_captures_and_allows_pending_removal():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "const maintenancePendingMediaSelections = new WeakMap();" in script
     assert "function appendMaintenanceMediaSelection(" in script
@@ -381,7 +383,7 @@ def test_maintenance_media_accumulates_mobile_captures_and_allows_pending_remova
 
 def test_maintenance_report_is_responsive_informative_and_keeps_export_controls():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="maintenance-report-summary"' in template
     assert 'class="mr-filter-grid"' in template
@@ -396,7 +398,7 @@ def test_maintenance_report_is_responsive_informative_and_keeps_export_controls(
 
 
 def test_maintenance_report_pdf_uses_only_committed_assets_and_generated_timestamp():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     export_start = script.index("async function generateMaintenanceReportPdf()")
     export_end = script.index("function getPrepareEventProgressTotals", export_start)
     export_script = script[export_start:export_end]
@@ -415,7 +417,7 @@ def test_maintenance_report_pdf_uses_only_committed_assets_and_generated_timesta
 
 
 def test_inventory_summary_pdf_uses_generated_timestamp_and_asset_count():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     pdf_start = script.index("function buildInventoryPdfPages")
     pdf_end = script.index("async function generateInventoryPdf()", pdf_start)
     pdf_script = script[pdf_start:pdf_end]
@@ -434,7 +436,7 @@ def test_inventory_summary_pdf_uses_generated_timestamp_and_asset_count():
 
 
 def test_inventory_pdf_splits_bulk_condition_quantities():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function inventoryExportStatusCounts(asset, statusFilter = '')" in script
     assert "Number(asset.bulkOOCQuantity || 0)" in script
@@ -448,7 +450,7 @@ def test_inventory_pdf_splits_bulk_condition_quantities():
 
 def test_event_status_filters_hide_zero_counts_and_event_logs_are_reusable():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".events-state-filters button[hidden]" in template
     assert "button.hidden = state !== 'All' && count === 0" in script
@@ -465,7 +467,7 @@ def test_event_status_filters_hide_zero_counts_and_event_logs_are_reusable():
 
 def test_event_overview_and_asset_history_link_to_event_and_logs():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".event-overview-title-actions" in template
     assert "View event logs" in script
@@ -477,7 +479,7 @@ def test_event_overview_and_asset_history_link_to_event_and_logs():
 
 def test_event_overview_notes_autosave_and_files_support_drag_and_drop():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'class="event-overview-notes"' in script
     assert 'oninput="eventOverviewNotesChanged(this)"' in script
@@ -493,7 +495,7 @@ def test_event_overview_notes_autosave_and_files_support_drag_and_drop():
 def test_maintenance_upload_forms_show_configured_file_size_limits():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "'imageMb': max(1, MAINTENANCE_IMAGE_MAX_BYTES // MEBIBYTE)" in app_source
     assert "'videoMb': max(1, MAINTENANCE_VIDEO_MAX_BYTES // MEBIBYTE)" in app_source
@@ -509,7 +511,7 @@ def test_maintenance_upload_forms_show_configured_file_size_limits():
 
 def test_prepare_extras_stay_in_matching_requirement_rows():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function prepareNewStandaloneExtras()" in script
     assert "extrasShownInRequirements.add(String(asset.id))" in script
@@ -520,7 +522,7 @@ def test_prepare_extras_stay_in_matching_requirement_rows():
 
 
 def test_asset_group_merge_warning_requires_checkbox_confirmation():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "title: 'Asset groups will be merged'" in script
     assert "checkboxLabel: 'I understand that these assets will be merged into the existing model group.'" in script
@@ -530,7 +532,7 @@ def test_asset_group_merge_warning_requires_checkbox_confirmation():
 
 
 def test_inventory_shift_click_selects_the_visible_asset_range():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "let lastInventorySelectionAnchorId = '';" in script
     assert "function inventoryVisibleSelectableAssetIds()" in script
@@ -541,7 +543,7 @@ def test_inventory_shift_click_selects_the_visible_asset_range():
 
 def test_asset_tags_use_removable_chips_and_stay_out_of_inventory_rows():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="assetTagsEditor"' in template
     assert '.asset-tag-editor' in template
@@ -569,7 +571,7 @@ def test_asset_tags_use_removable_chips_and_stay_out_of_inventory_rows():
 
 def test_expanded_inventory_rows_show_an_aligned_version_column():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert ".inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:" in template
     assert "minmax(100px,.7fr) 90px" in template
@@ -586,7 +588,7 @@ def test_expanded_inventory_rows_show_an_aligned_version_column():
 
 def test_maintenance_forms_support_company_user_attribution():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="maintenanceUser"' in template
     assert "apiCall('/api/maintenance/users')" in script
@@ -598,7 +600,7 @@ def test_maintenance_forms_support_company_user_attribution():
 
 def test_maintenance_entries_support_inline_event_references():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function maintenanceEventReferenceContext(" in script
     assert "function maintenanceEventReferenceToken(" in script
@@ -634,7 +636,7 @@ def test_maintenance_entries_support_inline_event_references():
 
 
 def test_inventory_bulk_maintenance_button_has_no_decorative_icon():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     button = script.split('id="inventory-bulk-maintenance-button"', 1)[1].split(
         '</button>', 1
     )[0]
@@ -645,7 +647,7 @@ def test_inventory_bulk_maintenance_button_has_no_decorative_icon():
 
 
 def test_inventory_bulk_edit_supports_notes():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="bulkEditUseNotes"' in script
     assert 'id="bulkEditNotes"' in script
@@ -655,7 +657,7 @@ def test_inventory_bulk_edit_supports_notes():
 
 
 def test_inventory_selection_can_open_bulk_maintenance_workflow():
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="inventory-bulk-maintenance-button"' in script
     assert "function openMaintenanceForSelectedInventoryAssets()" in script
@@ -668,7 +670,7 @@ def test_inventory_selection_can_open_bulk_maintenance_workflow():
 
 def test_inventory_selected_count_clears_the_current_selection():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert 'id="inventory-selected-count"' in script
     assert 'class="inventory-selected-count-button"' in script
@@ -682,7 +684,7 @@ def test_inventory_selected_count_clears_the_current_selection():
 
 def test_maintenance_preselection_is_part_of_modal_initialisation():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
 
     assert "function openMaintenanceModal(initialAssetIds = [])" in script
     assert "replaceMaintenanceAssetSelection(initialAssetIds);" in script
@@ -716,7 +718,7 @@ def test_maintenance_preselection_is_part_of_modal_initialisation():
 
 def test_inventory_search_supports_plus_separated_or_terms():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
     search_parser = script.split("function inventorySearchTerms", 1)[1].split(
         "function inventorySearchTextMatches", 1
     )[0]

@@ -6,6 +6,7 @@ from urllib.parse import quote
 import app as app_module
 from data_manager import DataManager
 from models import Container, Event, InventoryItem, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
@@ -343,22 +344,14 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn('B#01', event.extra_assets)
 
     def test_prepare_ui_exposes_specific_assets_before_quantity_is_prepared(self):
-        script_path = os.path.join(
-            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js'
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            source = script_file.read()
+        source = APP_BUNDLE_SOURCE
         self.assertIn('const canAssignExactAssets = !isBulk;', source)
         self.assertIn('const showExactAssetPanel = !isBulk;', source)
         self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', source)
 
     def test_prepare_ui_preserves_container_results_and_open_asset_chooser(self):
         project_root = os.path.dirname(app_module.__file__)
-        script_path = os.path.join(
-            project_root, 'static', 'js', 'app.js'
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            source = script_file.read()
+        source = APP_BUNDLE_SOURCE
         with open(
             os.path.join(project_root, 'templates', 'index.html'),
             encoding='utf-8',

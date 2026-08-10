@@ -90,7 +90,6 @@ def company_storage_breakdown(dsn, company_code):
         'company_data': ('aim_companies', 'aim_company_revisions', 'aim_users'),
         'inventory': ('aim_inventory', 'aim_containers', 'aim_clients', 'aim_departments'),
         'events': ('aim_events',),
-        'event_backups': ('aim_event_history',),
         'logs': ('aim_system_logs',),
     }
     breakdown = {}
@@ -149,8 +148,22 @@ class PostgresDataManager(DataManager):
 
     backend = 'postgresql'
 
-    def __init__(self, dsn, company_code, data_folder, company_name='', users_file=None):
-        super().__init__(data_folder, users_file=users_file)
+    def __init__(
+        self,
+        dsn,
+        company_code,
+        data_folder,
+        company_name='',
+        users_file=None,
+        documents_folder=None,
+        media_folder=None,
+    ):
+        super().__init__(
+            data_folder,
+            users_file=users_file,
+            documents_folder=documents_folder,
+            media_folder=media_folder,
+        )
         self.dsn = dsn
         self.company_code = str(company_code or '').strip().upper()
         self.company_name = str(company_name or self.company_code).strip()
@@ -1045,21 +1058,6 @@ class PostgresDataManager(DataManager):
                     else:
                         cursor.execute(
                             """
-                            INSERT INTO aim_event_history (
-                                company_code, event_id, event_name,
-                                source_filename, data, source_version
-                            )
-                            SELECT company_code, event_id, event_name,
-                                   source_filename, data, version
-                            FROM aim_events
-                            WHERE company_code = %s
-                              AND event_id = %s
-                              AND version = %s
-                            """,
-                            (self.company_code, event_id, expected_version),
-                        )
-                        cursor.execute(
-                            """
                             UPDATE aim_events
                             SET event_name = %s,
                                 start_date = %s,
@@ -1103,23 +1101,6 @@ class PostgresDataManager(DataManager):
         self.event_file_map[event_id] = filename
         event._legacy_location_extracted = False
 
-    def backup_event_file(self, event_id):
-        event_id = int(event_id)
-        with self._connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO aim_event_history (
-                    company_code, event_id, event_name,
-                    source_filename, data, source_version
-                )
-                SELECT company_code, event_id, event_name,
-                       source_filename, data, version
-                FROM aim_events
-                WHERE company_code = %s AND event_id = %s
-                """,
-                (self.company_code, event_id),
-            )
-
     def delete_event_file(self, event_id):
         event_id = int(event_id)
         folder = self.get_event_folder(event_id)
@@ -1129,21 +1110,6 @@ class PostgresDataManager(DataManager):
             with self._connection() as connection:
                 with connection.cursor() as cursor:
                     revision = self._lock_company_revision(cursor)
-                    cursor.execute(
-                        """
-                        INSERT INTO aim_event_history (
-                            company_code, event_id, event_name,
-                            source_filename, data, source_version
-                        )
-                        SELECT company_code, event_id, event_name,
-                               source_filename, data, version
-                        FROM aim_events
-                        WHERE company_code = %s
-                          AND event_id = %s
-                          AND version = %s
-                        """,
-                        (self.company_code, event_id, expected_version),
-                    )
                     cursor.execute(
                         """
                         DELETE FROM aim_events
@@ -1632,7 +1598,6 @@ class PostgresDataManager(DataManager):
             'aim_inventory',
             'aim_containers',
             'aim_events',
-            'aim_event_history',
             'aim_system_logs',
             'aim_clients',
             'aim_departments',

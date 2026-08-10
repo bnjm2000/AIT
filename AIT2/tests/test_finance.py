@@ -13,6 +13,7 @@ from pypdf import PdfReader
 import app as app_module
 from data_manager import DataManager
 from models import Container, Event, InventoryItem, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 from workforce import save_workforce
 
 
@@ -3039,7 +3040,11 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(
             _group_display_entries(members),
-            [{'description': 'Powered loudspeaker', 'quantity': 3.0}],
+            [{
+                'description': 'Powered loudspeaker',
+                'quantity': 3.0,
+                'customText': False,
+            }],
         )
 
         prefixed = {
@@ -3299,7 +3304,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Reference: Use the invoice number', pdf_text)
         self.assertNotIn('123-456-789', pdf_text)
 
-        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        app_source = APP_BUNDLE_SOURCE
         self.assertIn('function defaultCompanyPaymentDetailsText', app_source)
         self.assertIn('populateDefaultCompanyPaymentDetails()', app_source)
 
@@ -6656,7 +6661,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(page.status_code, 302)
 
     def test_invoice_workspace_navigation_and_assets_are_wired(self):
-        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        app_source = APP_BUNDLE_SOURCE
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
         invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
         template_source = Path('templates/index.html').read_text(encoding='utf-8')

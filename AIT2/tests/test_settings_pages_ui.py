@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from tests.static_source import APP_BUNDLE_SOURCE
+
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_JS = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+APP_JS = APP_BUNDLE_SOURCE
 APP_PY = (ROOT / "app.py").read_text(encoding="utf-8")
 INDEX = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 SETTINGS_CSS = (ROOT / "static" / "css" / "settings.css").read_text(encoding="utf-8")

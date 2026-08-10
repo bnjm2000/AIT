@@ -8,6 +8,7 @@ import app as app_module
 from data_manager import DataManager
 from models import InventoryItem, User, hash_password
 from pypdf import PdfReader
+from tests.static_source import APP_BUNDLE_SOURCE
 from workforce import event_assignments, load_workforce, save_workforce
 
 
@@ -287,11 +288,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertLess(actions.index('costingOpenQuotation'), actions.index('costingExportPdf'))
         self.assertLess(actions.index('costingExportPdf'), actions.index('costingDelete'))
 
-        app_source_path = os.path.join(
-            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js'
-        )
-        with open(app_source_path, encoding='utf-8') as source_file:
-            app_source = source_file.read()
+        app_source = APP_BUNDLE_SOURCE
         vendor_management_source = app_source[
             app_source.index('function renderPlanVendorManagementCard()'):
             app_source.index('function renderPlanTemplatesCard()')
@@ -730,11 +727,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertLess(shared_index, finance_index)
         self.assertLess(finance_index, costing_index)
 
-        app_script_path = os.path.join(
-            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js',
-        )
-        with open(app_script_path, 'r', encoding='utf-8') as app_script_file:
-            app_source = app_script_file.read()
+        app_source = APP_BUNDLE_SOURCE
         self.assertIn('showbaseLineWorkspace.categoryHeaderRowMarkup({', app_source)
         self.assertIn('showbaseLineWorkspace.categoryToggleMarkup({', app_source)
         self.assertIn('showbaseLineWorkspace.categorySectionClass({', app_source)
@@ -750,11 +743,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('.showbase-category-section.is-collapsed tbody,', shared_css_source)
 
     def test_costing_deep_link_and_plan_vendor_card_sources(self):
-        app_script_path = os.path.join(
-            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js',
-        )
-        with open(app_script_path, 'r', encoding='utf-8') as script_file:
-            source = script_file.read()
+        source = APP_BUNDLE_SOURCE
         self.assertIn("return { kind: 'costing', id: decodeURIComponent(match[1]) }", source)
         self.assertIn("costingOpen(costingRoute.id, { updateHistory: false })", source)
         render = source[source.index('function renderPlanPage()'):source.index(

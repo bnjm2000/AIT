@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 APP_DIR="/c/Users/AVECp/Documents/AIT/AIT2"
-LOG_DIR="$APP_DIR/logs"
+STORAGE_ROOT="${SHOWBASE_STORAGE_ROOT:-$(dirname "$APP_DIR")/showbase-storage}"
+export SHOWBASE_STORAGE_ROOT="$STORAGE_ROOT"
+LOG_DIR="$STORAGE_ROOT/runtime/logs"
 LOG_FILE="$LOG_DIR/showbase_startup.log"
 
 mkdir -p "$LOG_DIR"

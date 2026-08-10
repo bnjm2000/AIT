@@ -1,8 +1,10 @@
 from pathlib import Path
 
+from tests.static_source import APP_BUNDLE_SOURCE
+
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = (ROOT / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+SCRIPT = APP_BUNDLE_SOURCE
 TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 
 

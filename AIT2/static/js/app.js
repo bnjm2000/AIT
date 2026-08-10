@@ -1692,7 +1692,7 @@ let processingAssets = new Set();
 // Date formatting for server-provided event dates.
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  
+
   // Handle YYYY/MM/DD format from backend
   if (dateStr.includes('/')) {
     const dateParts = dateStr.split('/');
@@ -1706,7 +1706,7 @@ function formatDate(dateStr) {
       });
     }
   }
-  
+
   // Fallback for other date formats
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
@@ -1718,7 +1718,7 @@ function formatDate(dateStr) {
 // Function to convert YYYY/MM/DD to YYYY-MM-DD for HTML date inputs
 function formatDateForInput(dateStr) {
   if (!dateStr) return '';
-  
+
   // Handle YYYY/MM/DD format from backend
   if (dateStr.includes('/')) {
     const dateParts = dateStr.split('/');
@@ -1727,7 +1727,7 @@ function formatDateForInput(dateStr) {
       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
   }
-  
+
   // Fallback: try parsing as regular date
   const date = new Date(dateStr);
   if (!isNaN(date.getTime())) {
@@ -1736,7 +1736,7 @@ function formatDateForInput(dateStr) {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
-  
+
   return '';
 }
 
@@ -1745,41 +1745,41 @@ function setupSingleAssetClickHandler() {
     if (isClickHandlerSetup) {
         return;
     }
-    
+
     // Remove ALL possible existing listeners
     const oldHandler1 = document._assetClickHandler;
     const oldHandler2 = document._customAssetHandler;
     const oldHandler3 = window.handleAssetActionClick;
     const oldHandler4 = window.handleCustomAssetClick;
-    
+
     if (oldHandler1) document.removeEventListener('click', oldHandler1);
     if (oldHandler2) document.removeEventListener('click', oldHandler2);
     if (oldHandler3) document.removeEventListener('click', oldHandler3);
     if (oldHandler4) document.removeEventListener('click', oldHandler4);
-    
+
     // Create the ONE and ONLY click handler for ALL button types
     const singleClickHandler = async function(event) {
         // Handle prepare/unprepare buttons
-        if (event.target.classList.contains('asset-action-btn') || 
+        if (event.target.classList.contains('asset-action-btn') ||
             event.target.classList.contains('custom-asset-btn')) {
-            
+
             event.preventDefault();
             event.stopPropagation();
-            
+
             const eventId = event.target.dataset.eventId;
             const assetId = decodeURIComponent(event.target.dataset.assetId);
             const action = event.target.dataset.action;
-            
+
             // Create unique key for this asset
             const assetKey = `${eventId}-${assetId}`;
-            
+
             // Check if already processing
             if (processingAssets.has(assetKey)) {
                 return false;
             }
-            
+
             processingAssets.add(assetKey);
-            
+
             if (action === 'prepare') {
                 prepareSpecificAsset(eventId, assetId).finally(() => {
                     processingAssets.delete(assetKey);
@@ -1796,28 +1796,28 @@ function setupSingleAssetClickHandler() {
                     processingAssets.delete(assetKey);
                 });
             }
-            
+
             return false;
         }
-        
+
         // Handle removal buttons (remove from event)
-        if (event.target.classList.contains('asset-remove-btn') || 
+        if (event.target.classList.contains('asset-remove-btn') ||
             event.target.classList.contains('custom-remove-btn')) {
-            
+
             event.preventDefault();
             event.stopPropagation();
-            
+
             const eventId = event.target.dataset.eventId;
             const assetId = decodeURIComponent(event.target.dataset.assetId);
-            
+
             // Create unique key for this asset
             const assetKey = `${eventId}-${assetId}`;
-            
+
             // Check if already processing
             if (processingAssets.has(assetKey)) {
                 return false;
             }
-            
+
             if (await showAppConfirm({
                 title: 'Remove Asset',
                 message: `Remove ${assetId} from this event?`,
@@ -1827,28 +1827,28 @@ function setupSingleAssetClickHandler() {
             })) {
                 // Mark as processing
                 processingAssets.add(assetKey);
-                
+
                 // Disable the button
                 event.target.disabled = true;
                 event.target.style.opacity = '0.5';
-                
+
                 // Process removal
                 const cleanup = () => {
                     processingAssets.delete(assetKey);
                 };
-                
+
                 removeAssetFromEvent(eventId, assetId).finally(cleanup);
             }
-            
+
             return false;
         }
 
     };
-    
+
     // Store reference and add listener
     document._singleAssetHandler = singleClickHandler;
     document.addEventListener('click', singleClickHandler, true); // Use capture phase
-    
+
     isClickHandlerSetup = true;
 }
 
@@ -1866,22 +1866,22 @@ function removeExistingListeners() {
 
 function setupAssetClickHandler() {
     removeExistingListeners();
-    
+
     const clickHandler = function(event) {
         if (event.target.classList.contains('asset-action-btn')) {
             event.preventDefault();
             event.stopPropagation();
-            
+
             const eventId = event.target.dataset.eventId;
             const assetId = decodeURIComponent(event.target.dataset.assetId);
             const action = event.target.dataset.action;
-            
+
             const assetKey = `${eventId}-${assetId}`;
-            
+
             if (processingAssets.has(assetKey)) {
                 return;
             }
-            
+
             processingAssets.add(assetKey);
 
             const allButtonsForAsset = document.querySelectorAll(`[data-asset-id="${encodeURIComponent(assetId)}"]`);
@@ -1889,11 +1889,11 @@ function setupAssetClickHandler() {
                 btn.disabled = true;
                 btn.style.opacity = '0.6';
             });
-            
+
             const cleanup = () => {
                 processingAssets.delete(assetKey);
             };
-            
+
             if (action === 'prepare') {
                 prepareSpecificAsset(eventId, assetId)
                     .finally(cleanup);
@@ -1903,13 +1903,13 @@ function setupAssetClickHandler() {
             } else {
                 cleanup();
             }
-            
+
             return;
         }
     };
-    
+
     document._assetClickHandler = clickHandler;
-    
+
     document.addEventListener('click', clickHandler);
 }
 
@@ -4758,3375 +4758,6 @@ async function deleteEventFile(eventId, filename) {
 }
 
 
-// ---------------- PDF Settings ----------------
-function normalisePdfSettings(settings = {}) {
-  return {
-    footerText: typeof settings.footerText === 'string' ? settings.footerText : DEFAULT_PDF_FOOTER_TEXT,
-    logoUrl: settings.logoUrl || "",
-    hasCustomLogo: !!settings.hasCustomLogo,
-    logoOriginalName: settings.logoOriginalName || "",
-    companyName: settings.companyName || "",
-    registrationNumber: settings.registrationNumber || "",
-    billingAddress: settings.billingAddress || "",
-    phone: settings.phone || "",
-    email: settings.email || "",
-    website: settings.website || "",
-    bankName: settings.bankName || "",
-    bankAccountName: settings.bankAccountName || "",
-    bankAccountNumber: settings.bankAccountNumber || "",
-    paynowUen: settings.paynowUen || "",
-    paymentDetailsText: typeof settings.paymentDetailsText === 'string' ? settings.paymentDetailsText : "",
-    paymentDetailsEnabled: settings.paymentDetailsEnabled !== false,
-    currency: settings.currency || "SGD",
-    taxLabel: settings.taxLabel || "GST",
-    taxRate: Number(settings.taxRate || 0),
-    quotationPrefix: settings.quotationPrefix || "QT",
-    invoicePrefix: settings.invoicePrefix || "INV",
-    defaultPaymentTerms: settings.defaultPaymentTerms || "30 Days",
-    defaultValidityDays: Number(settings.defaultValidityDays || 30),
-    defaultTerms: settings.defaultTerms || "",
-    themeColor: /^#[0-9A-Fa-f]{6}$/.test(settings.themeColor || '') ? settings.themeColor : "#0f766e",
-    letterheadText: typeof settings.letterheadText === 'string' ? settings.letterheadText : "",
-    letterheadEnabled: settings.letterheadEnabled !== false,
-    updatedAt: settings.updatedAt || ""
-  };
-}
-
-function getPdfLogoUrl() {
-  return (pdfSettings && pdfSettings.logoUrl) || "";
-}
-
-function getPdfFooterText() {
-  return pdfSettings && typeof pdfSettings.footerText === 'string'
-    ? pdfSettings.footerText
-    : DEFAULT_PDF_FOOTER_TEXT;
-}
-
-function renderPdfFooterHtml() {
-  const text = getPdfFooterText();
-  if (!text) return '';
-  return text.split(/\r?\n/).map(line => escapeHtml(line)).join('<br>');
-}
-
-function renderPdfLogoRowHtml(className = 'logo-row') {
-  const logoUrl = getPdfLogoUrl();
-  if (!logoUrl) return '';
-  return `<div class="${escapeHtmlAttr(className)}"><img src="${escapeHtmlAttr(logoUrl)}" alt="Company Logo"></div>`;
-}
-
-function pdfMmToPx(mm) {
-  return (Number(mm || 0) * 96) / 25.4;
-}
-
-function mountPdfMeasureBox(measureBox, measureWidthMm) {
-  // The application body is displayed with CSS zoom, but print windows render
-  // at full scale. Mount beside the body and normalise any remaining scaling.
-  const measureRoot = document.documentElement || document.body;
-  measureRoot.appendChild(measureBox);
-
-  const expectedWidth = pdfMmToPx(measureWidthMm);
-  const renderedWidth = measureBox.getBoundingClientRect().width;
-  const measurementScale = renderedWidth > 0 && expectedWidth > 0
-    ? renderedWidth / expectedWidth
-    : 1;
-
-  return height => Number(height || 0) / measurementScale;
-}
-
-function pdfFooterReserveMm(pageConfig, footerHeightPx) {
-  const pageHeightMm = Number(pageConfig.pageHeightMm || 297);
-  const pageFlowHeightMm = Number(pageConfig.pageFlowHeightMm || 276);
-  const topPaddingMm = Number(pageConfig.topPaddingMm ?? 7);
-  const footerBottomMm = Number(pageConfig.footerBottomMm ?? 7);
-  const footerGapMm = Number(pageConfig.footerGapMm ?? 2);
-  const minReserveMm = Math.max(0, Number(pageConfig.minReserveMm ?? 6));
-  const footerHeightMm = Math.max(0, Number(footerHeightPx || 0) * 25.4 / 96);
-  const safeFlowHeightMm = pageHeightMm - topPaddingMm - footerBottomMm - footerHeightMm - footerGapMm;
-  return Math.max(minReserveMm, pageFlowHeightMm - safeFlowHeightMm, 0);
-}
-
-function applyPdfSettingsToApp() {
-  const logo = document.getElementById('company-logo');
-  if (logo) {
-    const logoUrl = getPdfLogoUrl();
-    if (logoUrl) {
-      logo.src = logoUrl;
-      logo.style.display = '';
-    } else {
-      logo.removeAttribute('src');
-      logo.style.display = 'none';
-    }
-  }
-}
-
-async function loadPdfSettings(force = false) {
-  if (!force && pdfSettingsLoaded) {
-    return pdfSettings;
-  }
-
-  try {
-    const res = await apiCall('/api/pdf-settings');
-    pdfSettings = normalisePdfSettings(res.data || {});
-  } catch (error) {
-    console.warn('PDF settings not loaded:', error);
-    pdfSettings = normalisePdfSettings(pdfSettings);
-  }
-  pdfSettingsLoaded = true;
-
-  applyPdfSettingsToApp();
-  renderPdfSettingsForm();
-  return pdfSettings;
-}
-
-async function setupPdfSettingsTab() {
-  if (!isAdminUser()) {
-    removePdfSettingsTab();
-    return;
-  }
-
-  ensurePdfSettingsNavItem();
-  ensurePdfSettingsSection();
-  renderPdfSettingsForm();
-}
-
-function removePdfSettingsTab() {
-  const tab = document.querySelector(`[data-section="pdf-settings"], [onclick="showSection('pdf-settings')"]`);
-  if (tab) tab.remove();
-
-  const section = document.getElementById('pdf-settings-section');
-  if (section) section.remove();
-}
-
-function ensurePdfSettingsNavItem() {
-  if (document.querySelector(`[data-section="pdf-settings"], [onclick="showSection('pdf-settings')"]`)) return;
-
-  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
-    .find(section => {
-      const heading = section.querySelector('h3');
-      return heading && heading.textContent.trim() === 'Settings';
-    });
-
-  if (!settingsSection) {
-    console.warn('Could not find Settings section for Company Details tab');
-    return;
-  }
-
-  const pdfSettingsTab = document.createElement('button');
-  pdfSettingsTab.type = 'button';
-  pdfSettingsTab.className = 'nav-item';
-  pdfSettingsTab.dataset.section = 'pdf-settings';
-  pdfSettingsTab.textContent = '🏢 Company Details';
-
-  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
-
-  if (logoutButton) {
-    settingsSection.insertBefore(pdfSettingsTab, logoutButton);
-  } else {
-    settingsSection.appendChild(pdfSettingsTab);
-  }
-}
-
-function ensurePdfSettingsSection() {
-  if (document.getElementById('pdf-settings-section')) return;
-
-  const firstSection = document.querySelector('.content-section');
-  const sectionParent = firstSection ? firstSection.parentElement : document.body;
-
-  const section = document.createElement('div');
-  section.id = 'pdf-settings-section';
-  section.className = 'content-section';
-
-  section.innerHTML = `
-    <style>
-      #pdf-settings-section .company-letterhead-heading { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px; }
-      #pdf-settings-section .company-letterhead-heading .form-label { margin:0; }
-      #pdf-settings-section .company-letterhead-default { min-height:27px;padding:4px 9px;font-size:10px; }
-    </style>
-    <div class="content-header">
-      <div>
-        <h2 class="content-title">Company Details</h2>
-        <p style="color:#64748b;margin-top:6px;">Branding and billing details used on quotations, invoices and other PDFs.</p>
-      </div>
-    </div>
-
-    <div class="form-container company-details-form">
-      <div style="display:grid;grid-template-columns:minmax(240px,320px) minmax(360px,1fr);gap:24px;align-items:start;">
-        <section class="company-details-card">
-          <h3>Company logo</h3>
-          <div class="company-logo-dropzone">
-            <img id="pdfSettingsLogoPreview" alt="Company logo">
-            <span id="pdfSettingsLogoPlaceholder">No logo uploaded</span>
-          </div>
-          <input id="pdfSettingsLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-            <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">Upload Logo</button>
-            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Remove Logo</button>
-          </div>
-          <div id="pdfSettingsLogoName" style="font-size:12px;color:#64748b;margin-top:8px;"></div>
-        </section>
-
-        <div style="display:grid;gap:18px;">
-          <section class="company-details-card">
-            <h3>Business identity</h3>
-            <div class="company-details-grid">
-              <label class="form-group"><span class="form-label">Company name</span><input id="companyDetailsName" class="form-input"></label>
-              <label class="form-group"><span class="form-label">UEN / registration no.</span><input id="companyDetailsRegistration" class="form-input"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Billing address</span><textarea id="companyDetailsAddress" class="form-input" rows="3"></textarea></label>
-              <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
-              <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
-              <div class="form-group company-details-wide">
-                <div class="company-letterhead-heading">
-                  <label class="form-label" for="companyDetailsLetterhead">Letterhead</label>
-                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyLetterhead()">Default</button>
-                </div>
-                <textarea id="companyDetailsLetterhead" class="form-input" rows="3"></textarea>
-              </div>
-            </div>
-          </section>
-
-          <section class="company-details-card">
-            <h3>Billing &amp; document defaults</h3>
-            <div class="company-details-grid">
-              <label class="form-group company-details-wide"><span class="form-label">PDF colour theme</span>
-                <div class="company-theme-control">
-                  <input id="companyDetailsThemePicker" type="color" value="#0f766e" oninput="syncCompanyThemeColor(this.value)">
-                  <input id="companyDetailsThemeColor" class="form-input" maxlength="7" value="#0f766e" oninput="syncCompanyThemeColor(this.value)">
-                  <button type="button" class="company-theme-swatch" style="--swatch:#0f766e" onclick="syncCompanyThemeColor('#0f766e')" title="Showbase teal"></button>
-                  <button type="button" class="company-theme-swatch" style="--swatch:#1d4ed8" onclick="syncCompanyThemeColor('#1d4ed8')" title="Corporate blue"></button>
-                  <button type="button" class="company-theme-swatch" style="--swatch:#334155" onclick="syncCompanyThemeColor('#334155')" title="Slate"></button>
-                  <button type="button" class="company-theme-swatch" style="--swatch:#7c2d12" onclick="syncCompanyThemeColor('#7c2d12')" title="Warm brown"></button>
-                </div>
-              </label>
-              <label class="form-group"><span class="form-label">Bank</span><input id="companyDetailsBank" class="form-input"></label>
-              <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
-              <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
-              <label class="form-group"><span class="form-label">PayNow UEN</span><input id="companyDetailsPaynow" class="form-input"></label>
-              <div class="form-group company-details-wide">
-                <div class="company-letterhead-heading">
-                  <label class="form-label" for="companyDetailsPaymentDetails">Payment details</label>
-                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyPaymentDetails()">Default</button>
-                </div>
-                <textarea id="companyDetailsPaymentDetails" class="form-input" rows="4" placeholder="Payment instructions shown on invoices"></textarea>
-              </div>
-              <label class="form-group"><span class="form-label">Currency</span><input id="companyDetailsCurrency" class="form-input" maxlength="6"></label>
-              <label class="form-group"><span class="form-label">Tax label</span><input id="companyDetailsTaxLabel" class="form-input"></label>
-              <label class="form-group"><span class="form-label">Tax rate (%)</span><input id="companyDetailsTaxRate" class="form-input" type="number" min="0" max="100" step="0.01"></label>
-              <label class="form-group"><span class="form-label">Default validity (days)</span><input id="companyDetailsValidity" class="form-input" type="number" min="1" max="365"></label>
-              <label class="form-group"><span class="form-label">Quotation prefix</span><input id="companyDetailsQuotePrefix" class="form-input"></label>
-              <label class="form-group"><span class="form-label">Invoice prefix</span><input id="companyDetailsInvoicePrefix" class="form-input"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Default payment terms</span><input id="companyDetailsPaymentTerms" class="form-input"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Default terms &amp; conditions</span><textarea id="companyDetailsTerms" class="form-input" rows="6"></textarea></label>
-              <label class="form-group company-details-wide"><span class="form-label">PDF footer</span><textarea id="pdfSettingsFooterText" class="form-input" rows="4" maxlength="2000"></textarea></label>
-            </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
-              <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Clear Footer</button>
-              <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">Save Company Details</button>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-  `;
-
-  sectionParent.appendChild(section);
-}
-
-function renderPdfSettingsForm() {
-  const logoPreview = document.getElementById('pdfSettingsLogoPreview');
-  const logoPlaceholder = document.getElementById('pdfSettingsLogoPlaceholder');
-  const logoName = document.getElementById('pdfSettingsLogoName');
-  const footerText = document.getElementById('pdfSettingsFooterText');
-
-  if (logoPreview) {
-    const logoUrl = getPdfLogoUrl();
-    if (logoUrl) {
-      logoPreview.src = logoUrl;
-      logoPreview.hidden = false;
-    } else {
-      logoPreview.removeAttribute('src');
-      logoPreview.hidden = true;
-    }
-  }
-
-  if (logoPlaceholder) {
-    logoPlaceholder.hidden = !!getPdfLogoUrl();
-  }
-
-  if (logoName) {
-    logoName.textContent = pdfSettings.hasCustomLogo && pdfSettings.logoOriginalName
-      ? pdfSettings.logoOriginalName
-      : 'No logo uploaded';
-  }
-
-  if (footerText && footerText.value !== getPdfFooterText()) {
-    footerText.value = getPdfFooterText();
-  }
-
-  const values = {
-    companyDetailsName: pdfSettings.companyName,
-    companyDetailsRegistration: pdfSettings.registrationNumber,
-    companyDetailsAddress: pdfSettings.billingAddress,
-    companyDetailsPhone: pdfSettings.phone,
-    companyDetailsEmail: pdfSettings.email,
-    companyDetailsWebsite: pdfSettings.website,
-    companyDetailsLetterhead: pdfSettings.letterheadEnabled === false
-      ? ''
-      : (pdfSettings.letterheadText || defaultCompanyLetterheadText()),
-    companyDetailsBank: pdfSettings.bankName,
-    companyDetailsAccountName: pdfSettings.bankAccountName,
-    companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
-    companyDetailsPaynow: pdfSettings.paynowUen,
-    companyDetailsPaymentDetails: pdfSettings.paymentDetailsEnabled === false
-      ? ''
-      : (pdfSettings.paymentDetailsText || defaultCompanyPaymentDetailsText()),
-    companyDetailsCurrency: pdfSettings.currency,
-    companyDetailsTaxLabel: pdfSettings.taxLabel,
-    companyDetailsTaxRate: pdfSettings.taxRate,
-    companyDetailsValidity: pdfSettings.defaultValidityDays,
-    companyDetailsQuotePrefix: pdfSettings.quotationPrefix,
-    companyDetailsInvoicePrefix: pdfSettings.invoicePrefix,
-    companyDetailsPaymentTerms: pdfSettings.defaultPaymentTerms,
-    companyDetailsTerms: pdfSettings.defaultTerms,
-    companyDetailsThemeColor: pdfSettings.themeColor
-  };
-  Object.entries(values).forEach(([id, value]) => {
-    const field = document.getElementById(id);
-    if (field && field.value !== String(value ?? '')) field.value = value ?? '';
-  });
-  const themePicker = document.getElementById('companyDetailsThemePicker');
-  if (themePicker && /^#[0-9A-Fa-f]{6}$/.test(pdfSettings.themeColor || '')) {
-    themePicker.value = pdfSettings.themeColor;
-  }
-}
-
-function defaultCompanyLetterheadText(useFormValues = false) {
-  const settingValue = (fieldId, settingKey) => {
-    if (useFormValues) {
-      const field = document.getElementById(fieldId);
-      if (field) return field.value;
-    }
-    return pdfSettings?.[settingKey];
-  };
-  const companyName = settingValue('companyDetailsName', 'companyName');
-  const registrationNumber = settingValue('companyDetailsRegistration', 'registrationNumber');
-  const billingAddress = settingValue('companyDetailsAddress', 'billingAddress');
-  const contactLine = [
-    settingValue('companyDetailsPhone', 'phone'),
-    settingValue('companyDetailsEmail', 'email'),
-    settingValue('companyDetailsWebsite', 'website'),
-  ]
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-    .join(' | ');
-  return [
-    companyName,
-    registrationNumber ? `UEN / Reg No: ${registrationNumber}` : '',
-    billingAddress,
-    contactLine,
-  ].map(value => String(value || '').trim()).filter(Boolean).join('\n');
-}
-
-function populateDefaultCompanyLetterhead() {
-  const textarea = document.getElementById('companyDetailsLetterhead');
-  if (!textarea) return;
-  textarea.value = defaultCompanyLetterheadText(true);
-  textarea.focus();
-}
-
-function defaultCompanyPaymentDetailsText(useFormValues = false) {
-  const settingValue = (fieldId, settingKey) => {
-    if (useFormValues) {
-      const field = document.getElementById(fieldId);
-      if (field) return field.value;
-    }
-    return pdfSettings?.[settingKey];
-  };
-  return [
-    ['Bank', settingValue('companyDetailsBank', 'bankName')],
-    ['Account name', settingValue('companyDetailsAccountName', 'bankAccountName')],
-    ['Account number', settingValue('companyDetailsAccountNumber', 'bankAccountNumber')],
-    ['PayNow UEN', settingValue('companyDetailsPaynow', 'paynowUen')],
-  ]
-    .filter(([, value]) => String(value || '').trim())
-    .map(([label, value]) => `${label}: ${String(value).trim()}`)
-    .join('\n');
-}
-
-function populateDefaultCompanyPaymentDetails() {
-  const textarea = document.getElementById('companyDetailsPaymentDetails');
-  if (!textarea) return;
-  textarea.value = defaultCompanyPaymentDetailsText(true);
-  textarea.focus();
-}
-
-async function loadPdfSettingsSection() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    showSection('events');
-    return;
-  }
-
-  ensurePdfSettingsSection();
-  await loadPdfSettings(true);
-}
-
-async function uploadPdfSettingsLogo() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  const input = document.getElementById('pdfSettingsLogoInput');
-  const file = input && input.files ? input.files[0] : null;
-
-  if (!file) {
-    showNotification('warning', 'Choose a logo file first');
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('logo', file);
-
-  try {
-    const response = await fetch('/api/pdf-settings/logo', {
-      method: 'POST',
-      headers: {
-        "X-Client-Id": REALTIME_CLIENT_ID,
-      },
-      body: formData
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to upload logo');
-    }
-
-    pdfSettings = normalisePdfSettings(result.data || {});
-    if (input) input.value = '';
-    applyPdfSettingsToApp();
-    renderPdfSettingsForm();
-    showNotification('success', 'PDF logo updated');
-    await continueCompanyOnboardingIfReady();
-  } catch (error) {
-    console.error('PDF logo upload failed:', error);
-    showNotification('error', error.message || 'Failed to upload logo');
-  }
-}
-
-async function resetPdfSettingsLogo() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/pdf-settings/logo', {
-      method: 'DELETE',
-      headers: {
-        "X-Client-Id": REALTIME_CLIENT_ID,
-      },
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to remove logo');
-    }
-
-    pdfSettings = normalisePdfSettings(result.data || {});
-    applyPdfSettingsToApp();
-    renderPdfSettingsForm();
-    showNotification('success', 'PDF logo removed');
-  } catch (error) {
-    console.error('PDF logo removal failed:', error);
-    showNotification('error', error.message || 'Failed to remove logo');
-  }
-}
-
-function syncCompanyThemeColor(value) {
-  const clean = String(value || '').trim();
-  if (!/^#[0-9A-Fa-f]{6}$/.test(clean)) return;
-  const normalised = clean.toLowerCase();
-  const picker = document.getElementById('companyDetailsThemePicker');
-  const input = document.getElementById('companyDetailsThemeColor');
-  if (picker && picker.value !== normalised) picker.value = normalised;
-  if (input && input.value !== normalised) input.value = normalised;
-}
-
-async function saveCompanyDetails() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  const value = id => document.getElementById(id)?.value || '';
-  const payload = {
-    footerText: value('pdfSettingsFooterText'),
-    companyName: value('companyDetailsName'),
-    registrationNumber: value('companyDetailsRegistration'),
-    billingAddress: value('companyDetailsAddress'),
-    phone: value('companyDetailsPhone'),
-    email: value('companyDetailsEmail'),
-    website: value('companyDetailsWebsite'),
-    bankName: value('companyDetailsBank'),
-    bankAccountName: value('companyDetailsAccountName'),
-    bankAccountNumber: value('companyDetailsAccountNumber'),
-    paynowUen: value('companyDetailsPaynow'),
-    paymentDetailsText: value('companyDetailsPaymentDetails'),
-    paymentDetailsEnabled: Boolean(value('companyDetailsPaymentDetails').trim()),
-    currency: value('companyDetailsCurrency'),
-    taxLabel: value('companyDetailsTaxLabel'),
-    taxRate: Number(value('companyDetailsTaxRate') || 0),
-    quotationPrefix: value('companyDetailsQuotePrefix'),
-    invoicePrefix: value('companyDetailsInvoicePrefix'),
-    defaultPaymentTerms: value('companyDetailsPaymentTerms'),
-    defaultValidityDays: Number(value('companyDetailsValidity') || 30),
-    defaultTerms: value('companyDetailsTerms'),
-    themeColor: value('companyDetailsThemeColor') || '#0f766e',
-    letterheadText: value('companyDetailsLetterhead'),
-    letterheadEnabled: Boolean(value('companyDetailsLetterhead').trim())
-  };
-
-  try {
-    const res = await apiCall('/api/pdf-settings', 'PUT', payload);
-    pdfSettings = normalisePdfSettings(res.data || {});
-    renderPdfSettingsForm();
-    showNotification('success', 'Company details saved');
-    await continueCompanyOnboardingIfReady();
-  } catch (error) {
-    showNotification('error', error.message || 'Failed to save company details');
-  }
-}
-
-async function continueCompanyOnboardingIfReady() {
-  if (!isAdminUser() || !String(pdfSettings?.companyName || '').trim() || !pdfSettings?.hasCustomLogo) return;
-  try {
-    const response = await apiCall('/api/assets');
-    if (!(response.data || []).length) {
-      showSection('inventory', { replaceHistory: true });
-    }
-  } catch (error) {
-    console.warn('Unable to continue company onboarding:', error);
-  }
-}
-
-async function savePdfSettingsFooter() {
-  return saveCompanyDetails();
-}
-
-async function resetPdfSettingsFooter() {
-  const textarea = document.getElementById('pdfSettingsFooterText');
-  if (textarea) textarea.value = DEFAULT_PDF_FOOTER_TEXT;
-}
-
-
-// ---------------- Company Management ----------------
-function settingsIcon(name) {
-  const paths = {
-    building: '<path d="M4 21V5l8-3 8 3v16M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01M9 21v-4h6v4"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
-    refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9m2 6a7 7 0 0 0 12 2.5L20 15"/>',
-    switch: '<path d="M7 7h11l-3-3m3 3-3 3M17 17H6l3 3m-3-3 3-3"/>',
-    lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/>',
-    shield: '<path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
-    eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
-    eyeOff: '<path d="m4 4 16 16M10.7 6.2A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.3 3.1M6.3 7.3A16 16 0 0 0 2.5 12s3.5 6 9.5 6a9.6 9.6 0 0 0 3-.5M10 10a2.8 2.8 0 0 0 4 4"/>',
-    check: '<path d="m5 12 4 4L19 6"/>'
-  };
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.building}</svg>`;
-}
-
-async function fetchCompanies(force = false) {
-  if (!force && companyOptions.length) return companyOptions;
-  if (!isSuperAdminUser()) {
-    companyOptions = currentUser?.company ? [currentUser.company] : [];
-    return companyOptions;
-  }
-
-  const res = await apiCall('/api/companies');
-  companyOptions = res.data || [];
-  return companyOptions;
-}
-
-function companyOptionsMarkup(selectedCode = '') {
-  const selected = String(selectedCode || '').toUpperCase();
-  return (companyOptions || []).map(company => `
-    <option value="${escapeHtmlAttr(company.code)}" ${String(company.code).toUpperCase() === selected ? 'selected' : ''}>
-      ${escapeHtml(company.code)} - ${escapeHtml(company.name || company.code)}
-    </option>
-  `).join('');
-}
-
-function ensureCompanyActionModals() {
-  if (document.getElementById('createCompanyModal')) return;
-
-  const style = document.createElement('style');
-  style.id = 'company-action-styles';
-  style.textContent = `
-    .company-action-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-    .company-action-buttons .btn {
-      min-width: 150px;
-    }
-    .company-action-buttons .company-edit-button,
-    .company-edit-button {
-      background: #fd7e14;
-      color: #fff;
-    }
-    .company-action-buttons .company-edit-button:hover,
-    .company-edit-button:hover {
-      background: #e96b02;
-    }
-    .companies-admin-table-scroll {
-      width: 100%;
-      overflow-x: auto;
-    }
-    .companies-admin-table {
-      min-width: 760px;
-      margin-top: 0;
-    }
-    .company-people-total {
-      color: #182230;
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    .company-role-counts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-    }
-    .company-role-count {
-      background: #f2f4f7;
-      border: 1px solid #e4e7ec;
-      border-radius: 4px;
-      color: #475467;
-      font-size: 11px;
-      line-height: 1;
-      padding: 5px 6px;
-      white-space: nowrap;
-    }
-    .company-role-count.sales {
-      background: #ecfdf3;
-      border-color: #abefc6;
-      color: #067647;
-    }
-    .company-storage-button {
-      align-items: flex-start;
-      background: transparent;
-      border: 0;
-      color: #087a55;
-      cursor: pointer;
-      display: inline-flex;
-      flex-direction: column;
-      font: inherit;
-      gap: 2px;
-      padding: 4px 0;
-      text-align: left;
-    }
-    .company-storage-button:hover .company-storage-value,
-    .company-storage-button:focus-visible .company-storage-value {
-      text-decoration: underline;
-    }
-    .company-storage-value {
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .company-storage-meta {
-      color: #667085;
-      font-size: 11px;
-    }
-    .company-storage-summary {
-      align-items: baseline;
-      background: #f6fef9;
-      border: 1px solid #abefc6;
-      border-radius: 6px;
-      display: flex;
-      gap: 10px;
-      justify-content: space-between;
-      margin-bottom: 18px;
-      padding: 14px 16px;
-    }
-    .company-storage-summary strong {
-      color: #05603a;
-      font-size: 22px;
-    }
-    .company-storage-summary span {
-      color: #475467;
-      font-size: 12px;
-    }
-    .company-storage-breakdown {
-      display: grid;
-      gap: 14px;
-    }
-    .company-storage-row-header {
-      align-items: baseline;
-      display: flex;
-      gap: 12px;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .company-storage-row-label {
-      color: #182230;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .company-storage-row-value {
-      color: #344054;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .company-storage-track {
-      background: #eaecf0;
-      border-radius: 3px;
-      height: 6px;
-      overflow: hidden;
-    }
-    .company-storage-fill {
-      background: #12a675;
-      border-radius: inherit;
-      height: 100%;
-      min-width: 2px;
-      transition: width 220ms ease;
-    }
-    .company-storage-row-meta {
-      color: #667085;
-      font-size: 11px;
-      margin-top: 5px;
-    }
-    @media (max-width: 640px) {
-      .company-action-buttons .btn {
-        width: 100%;
-      }
-      .company-storage-summary {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <div id="createCompanyModal" class="modal">
-      <div class="modal-content" style="max-width:620px;">
-        <div class="modal-header">
-          <h3 class="modal-title">Create Company</h3>
-          <button type="button" class="close-btn" onclick="closeModal('createCompanyModal')" aria-label="Close">&times;</button>
-        </div>
-        <form onsubmit="event.preventDefault(); createCompanyFromUsersAdmin();">
-          <div class="modal-body">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-              <div class="form-group">
-                <label class="form-label" for="userNewCompanyCode">Code</label>
-                <input id="userNewCompanyCode" class="form-input" placeholder="e.g. CLIENTCO" autocomplete="off">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="userNewCompanyName">Name</label>
-                <input id="userNewCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="userNewCompanyFirstAdmin">First Admin *</label>
-                <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username" autocomplete="off" required>
-                <small class="form-help">Every company must retain at least one active admin.</small>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="userNewCompanyFirstAdminPassword">Password</label>
-                <input id="userNewCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for a new user" autocomplete="new-password">
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('createCompanyModal')">Cancel</button>
-            <button type="submit" class="btn btn-success">Create Company</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div id="editCompanyModal" class="modal">
-      <div class="modal-content" style="max-width:520px;">
-        <div class="modal-header">
-          <h3 class="modal-title">Edit Company</h3>
-          <button type="button" class="close-btn" onclick="closeModal('editCompanyModal')" aria-label="Close">&times;</button>
-        </div>
-        <form onsubmit="event.preventDefault(); editCompanyFromUsersAdmin();">
-          <div class="modal-body">
-            <div class="form-group">
-              <label class="form-label" for="userEditCompanyOriginalCode">Company</label>
-              <select id="userEditCompanyOriginalCode" class="form-input" onchange="populateEditCompanyFields()"></select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="userEditCompanyCode">Code</label>
-              <input id="userEditCompanyCode" class="form-input" placeholder="Company code" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="userEditCompanyName">Company Name</label>
-              <input id="userEditCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
-            </div>
-            <p style="margin:8px 0 0;color:#667085;font-size:13px;">Changing the code also updates company folders and user assignments.</p>
-          </div>
-          <div class="modal-footer modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeModal('editCompanyModal')">Cancel</button>
-            <button type="submit" class="btn company-edit-button">Save Company</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div id="deleteCompanyModal" class="modal">
-      <div class="modal-content" style="max-width:520px;">
-        <div class="modal-header">
-          <h3 class="modal-title">Delete Company</h3>
-          <button type="button" class="close-btn" onclick="closeModal('deleteCompanyModal')" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label" for="userDeleteCompanyCode">Company</label>
-            <select id="userDeleteCompanyCode" class="form-input"></select>
-          </div>
-          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned company users.</p>
-        </div>
-        <div class="modal-footer modal-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('deleteCompanyModal')">Cancel</button>
-          <button type="button" class="btn btn-danger" onclick="deleteCompanyFromUsersAdmin()">Delete Company</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="companyStorageModal" class="modal">
-      <div class="modal-content" style="max-width:620px;">
-        <div class="modal-header">
-          <div>
-            <h3 id="companyStorageModalTitle" class="modal-title">Company Storage</h3>
-            <p id="companyStorageModalSubtitle" style="margin:4px 0 0;color:#667085;font-size:12px;"></p>
-          </div>
-          <button type="button" class="close-btn" onclick="closeModal('companyStorageModal')" aria-label="Close">&times;</button>
-        </div>
-        <div id="companyStorageModalBody" class="modal-body">
-          <p style="text-align:center;color:#667085;padding:28px 0;">Calculating storage...</p>
-        </div>
-      </div>
-    </div>
-  `;
-
-  while (wrapper.firstElementChild) {
-    document.body.appendChild(wrapper.firstElementChild);
-  }
-}
-
-function companyActionButtonsMarkup() {
-  return `
-    <div class="company-action-buttons">
-      <button type="button" class="btn company-create-button" onclick="openCreateCompanyModal()">${settingsIcon('plus')}<span>Create company</span></button>
-      <button type="button" class="btn company-edit-button" onclick="openEditCompanyModal()">${settingsIcon('edit')}<span>Edit company</span></button>
-      <button type="button" class="btn company-delete-button" onclick="openDeleteCompanyModal()">${settingsIcon('trash')}<span>Delete company</span></button>
-    </div>
-  `;
-}
-
-function formatCompanyStorageBytes(value) {
-  const bytes = Math.max(0, Number(value) || 0);
-  if (bytes < 1024) return `${Math.round(bytes)} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let size = bytes / 1024;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const precision = size >= 100 ? 0 : size >= 10 ? 1 : 2;
-  return `${size.toFixed(precision)} ${units[unitIndex]}`;
-}
-
-function companyStorageItemCount(item) {
-  const parts = [];
-  const fileCount = Number(item?.fileCount || 0);
-  const recordCount = Number(item?.recordCount || 0);
-  if (fileCount) parts.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
-  if (recordCount) parts.push(`${recordCount} database record${recordCount === 1 ? '' : 's'}`);
-  return parts.join(' &middot; ') || 'No stored items';
-}
-
-async function openCompanyStorageBreakdown(companyCode) {
-  ensureCompanyActionModals();
-  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(companyCode || '').toUpperCase());
-  const title = document.getElementById('companyStorageModalTitle');
-  const subtitle = document.getElementById('companyStorageModalSubtitle');
-  const body = document.getElementById('companyStorageModalBody');
-  if (title) title.textContent = `${company?.name || companyCode} Storage`;
-  if (subtitle) subtitle.textContent = companyCode;
-  if (body) body.innerHTML = '<p style="text-align:center;color:#667085;padding:28px 0;">Calculating storage...</p>';
-  openModal('companyStorageModal');
-
-  try {
-    const response = await apiCall(`/api/companies/${encodeURIComponent(companyCode)}/storage?refresh=1`);
-    const storage = response.data || {};
-    const breakdown = (storage.breakdown || []).filter(item => Number(item.bytes || 0) > 0);
-    if (!body) return;
-    body.innerHTML = `
-      <div class="company-storage-summary">
-        <strong>${formatCompanyStorageBytes(storage.totalBytes)}</strong>
-        <span>${Number(storage.fileCount || 0)} files${Number(storage.recordCount || 0) ? ` &middot; ${Number(storage.recordCount)} database records` : ''}</span>
-      </div>
-      ${breakdown.length ? `
-        <div class="company-storage-breakdown">
-          ${breakdown.map(item => `
-            <div class="company-storage-row">
-              <div class="company-storage-row-header">
-                <span class="company-storage-row-label">${escapeHtml(item.label || item.key || 'Other')}</span>
-                <span class="company-storage-row-value">${formatCompanyStorageBytes(item.bytes)} &middot; ${Number(item.percent || 0).toFixed(1)}%</span>
-              </div>
-              <div class="company-storage-track" aria-hidden="true">
-                <div class="company-storage-fill" style="width:${Math.max(0, Math.min(100, Number(item.percent || 0)))}%;"></div>
-              </div>
-              <div class="company-storage-row-meta">${companyStorageItemCount(item)}</div>
-            </div>
-          `).join('')}
-        </div>
-      ` : '<p style="text-align:center;color:#667085;padding:18px 0;">This company is not using any storage yet.</p>'}
-    `;
-
-    company.storageBytes = Number(storage.totalBytes || 0);
-    company.storageFileCount = Number(storage.fileCount || 0);
-    company.storageRecordCount = Number(storage.recordCount || 0);
-    const tableButton = document.querySelector(`[data-company-storage-code="${CSS.escape(String(companyCode))}"]`);
-    if (tableButton) {
-      const value = tableButton.querySelector('.company-storage-value');
-      const meta = tableButton.querySelector('.company-storage-meta');
-      if (value) value.textContent = formatCompanyStorageBytes(storage.totalBytes);
-      if (meta) meta.textContent = `${Number(storage.fileCount || 0)} files`;
-    }
-  } catch (error) {
-    if (body) {
-      body.innerHTML = `<p style="color:#b42318;text-align:center;padding:28px 0;">Unable to calculate storage: ${escapeHtml(error.message)}</p>`;
-    }
-  }
-}
-
-function openCreateCompanyModal() {
-  ensureCompanyActionModals();
-  ['userNewCompanyCode', 'userNewCompanyName', 'userNewCompanyFirstAdmin', 'userNewCompanyFirstAdminPassword'].forEach(id => {
-    const input = document.getElementById(id);
-    if (input) input.value = '';
-  });
-  openModal('createCompanyModal');
-}
-
-function populateEditCompanyFields() {
-  const code = document.getElementById('userEditCompanyOriginalCode')?.value || '';
-  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
-  const codeInput = document.getElementById('userEditCompanyCode');
-  const input = document.getElementById('userEditCompanyName');
-  if (codeInput) codeInput.value = company?.code || '';
-  if (input) input.value = company?.name || '';
-}
-
-function populateEditCompanyName() {
-  populateEditCompanyFields();
-}
-
-async function openEditCompanyModal() {
-  ensureCompanyActionModals();
-  await fetchCompanies(true);
-  const select = document.getElementById('userEditCompanyOriginalCode');
-  if (select) select.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
-  populateEditCompanyFields();
-  openModal('editCompanyModal');
-}
-
-async function openDeleteCompanyModal() {
-  ensureCompanyActionModals();
-  await fetchCompanies(true);
-  const select = document.getElementById('userDeleteCompanyCode');
-  if (select) select.innerHTML = companyOptionsMarkup('');
-  openModal('deleteCompanyModal');
-}
-
-async function setupCompanyManagementTab() {
-  if (!isSuperAdminUser()) {
-    removeCompanyManagementTab();
-    return;
-  }
-
-  ensureCompanyManagementNavItem();
-  ensureCompanyManagementSection();
-  await fetchCompanies(true);
-  renderCompanySwitchControl();
-}
-
-function removeCompanyManagementTab() {
-  const tab = document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`);
-  if (tab) tab.remove();
-
-  const section = document.getElementById('companies-section');
-  if (section) section.remove();
-}
-
-function ensureCompanyManagementNavItem() {
-  const existingTab = document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`);
-  if (existingTab) {
-    existingTab.classList.add('nav-item-inline');
-    setupSidebarNavigation();
-    return;
-  }
-
-  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
-    .find(section => {
-      const heading = section.querySelector('h3');
-      return heading && heading.textContent.trim() === 'Settings';
-    });
-
-  if (!settingsSection) {
-    console.warn('Could not find Settings section for Companies tab');
-    return;
-  }
-
-  const companiesTab = document.createElement('button');
-  companiesTab.type = 'button';
-  companiesTab.className = 'nav-item nav-item-inline platform-admin-only';
-  companiesTab.dataset.section = 'companies';
-  companiesTab.dataset.label = 'Companies';
-  companiesTab.textContent = 'Companies';
-
-  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
-  if (logoutButton) {
-    settingsSection.insertBefore(companiesTab, logoutButton);
-  } else {
-    settingsSection.appendChild(companiesTab);
-  }
-  setupSidebarNavigation();
-}
-
-function ensureCompanyManagementSection() {
-  if (document.getElementById('companies-section')) return;
-
-  ensureCompanyActionModals();
-  const firstSection = document.querySelector('.content-section');
-  const sectionParent = firstSection ? firstSection.parentElement : document.body;
-
-  const section = document.createElement('div');
-  section.id = 'companies-section';
-  section.className = 'content-section';
-
-  section.innerHTML = `
-    <div class="content-header settings-page-header">
-      <div>
-        <h2 class="content-title">Companies</h2>
-        <p class="settings-page-subtitle">Manage company workspaces, access and storage.</p>
-      </div>
-      <button type="button" class="settings-icon-command" onclick="loadCompaniesAdmin()" title="Refresh companies">
-        ${settingsIcon('refresh')}<span>Refresh</span>
-      </button>
-    </div>
-
-    <section class="companies-control-band" aria-label="Company controls">
-      <div class="company-active-control">
-        <span class="settings-eyebrow">Active company</span>
-        <div class="company-switch-row">
-          <div id="activeCompanySwitcher" class="company-custom-select">
-            <input id="activeCompanySelect" type="hidden">
-            <button id="activeCompanyTrigger" type="button" class="company-select-trigger" aria-haspopup="listbox" aria-expanded="false" onclick="toggleCompanySwitcher(event)">
-              <span class="company-select-trigger-copy"><strong>Loading...</strong><small>Please wait</small></span>
-              <span class="company-select-chevron" aria-hidden="true">&#8964;</span>
-            </button>
-            <div id="activeCompanyMenu" class="company-custom-menu" role="listbox"></div>
-          </div>
-          <button type="button" class="btn company-switch-button" onclick="switchCompanyAdmin()">
-            ${settingsIcon('switch')}<span>Switch</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="company-actions-panel">
-        <span class="settings-eyebrow">Company actions</span>
-        ${companyActionButtonsMarkup()}
-      </div>
-    </section>
-
-    <section class="companies-directory">
-      <div class="settings-section-heading">
-        <div>
-          <h3>Company directory</h3>
-          <span id="companyDirectoryCount">Loading company records...</span>
-        </div>
-      </div>
-      <div id="companies-admin-table-container" aria-live="polite">
-        <div class="settings-loading-state">Loading companies...</div>
-      </div>
-    </section>
-  `;
-
-  sectionParent.appendChild(section);
-}
-
-function closeCompanySwitcher() {
-  const switcher = document.getElementById('activeCompanySwitcher');
-  const trigger = document.getElementById('activeCompanyTrigger');
-  if (switcher) switcher.classList.remove('is-open');
-  if (trigger) trigger.setAttribute('aria-expanded', 'false');
-}
-
-function toggleCompanySwitcher(event) {
-  event?.stopPropagation();
-  const switcher = document.getElementById('activeCompanySwitcher');
-  const trigger = document.getElementById('activeCompanyTrigger');
-  if (!switcher || !trigger) return;
-  const isOpen = switcher.classList.toggle('is-open');
-  trigger.setAttribute('aria-expanded', String(isOpen));
-}
-
-function chooseCompanyForSwitch(encodedCode) {
-  const code = decodeURIComponent(String(encodedCode || ''));
-  const input = document.getElementById('activeCompanySelect');
-  if (input) input.value = code;
-  renderCompanySwitchControl();
-  closeCompanySwitcher();
-}
-
-function ensureCompanySwitcherDismissal() {
-  if (document.documentElement.dataset.companySwitcherDismissal === 'ready') return;
-  document.documentElement.dataset.companySwitcherDismissal = 'ready';
-  document.addEventListener('click', event => {
-    if (!event.target.closest('#activeCompanySwitcher')) closeCompanySwitcher();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeCompanySwitcher();
-  });
-}
-
-function renderCompanySwitchControl() {
-  const select = document.getElementById('activeCompanySelect');
-  const trigger = document.getElementById('activeCompanyTrigger');
-  const menu = document.getElementById('activeCompanyMenu');
-  if (!select || !trigger || !menu) return;
-  const activeCode = currentUser?.company?.code || '';
-  const selectedCode = (companyOptions || []).some(company => String(company.code) === String(select.value))
-    ? select.value
-    : activeCode;
-  select.value = selectedCode;
-
-  const selectedCompany = (companyOptions || []).find(company => String(company.code) === String(selectedCode));
-  trigger.innerHTML = `
-    <span class="company-select-trigger-copy">
-      <strong>${escapeHtml(selectedCompany?.name || selectedCompany?.code || 'Choose a company')}</strong>
-      <small>${selectedCompany ? escapeHtml(selectedCompany.code) : 'No company selected'}</small>
-    </span>
-    <span class="company-select-chevron" aria-hidden="true">&#8964;</span>
-  `;
-  menu.innerHTML = (companyOptions || []).map(company => {
-    const selected = String(company.code) === String(selectedCode);
-    return `
-      <button type="button" class="company-select-option${selected ? ' is-selected' : ''}" role="option" aria-selected="${selected}" data-company-code="${escapeHtmlAttr(encodeURIComponent(company.code))}" onclick="chooseCompanyForSwitch(this.dataset.companyCode)">
-        <span class="company-select-option-mark">${escapeHtml(String(company.code || '?').slice(0, 2).toUpperCase())}</span>
-        <span><strong>${escapeHtml(company.name || company.code)}</strong><small>${escapeHtml(company.code)}</small></span>
-        ${selected ? settingsIcon('check') : ''}
-      </button>
-    `;
-  }).join('');
-  ensureCompanySwitcherDismissal();
-}
-
-async function loadCompaniesAdmin() {
-  if (!isSuperAdminUser()) {
-    showNotification('error', 'Administrative access required');
-    showSection('events');
-    return;
-  }
-
-  ensureCompanyManagementSection();
-  const container = document.getElementById('companies-admin-table-container');
-  if (container) {
-    container.innerHTML = '<div class="settings-loading-state">Loading companies...</div>';
-  }
-
-  try {
-    const companies = await fetchCompanies(true);
-    renderCompanySwitchControl();
-
-    if (!container) return;
-    if (!companies.length) {
-      container.innerHTML = '<div class="settings-empty-state">No companies found.</div>';
-      const count = document.getElementById('companyDirectoryCount');
-      if (count) count.textContent = 'No company records';
-      return;
-    }
-
-    const count = document.getElementById('companyDirectoryCount');
-    if (count) count.textContent = `${companies.length} compan${companies.length === 1 ? 'y' : 'ies'}`;
-
-    container.innerHTML = `
-      <div class="companies-admin-table-scroll">
-      <table class="table companies-admin-table">
-        <thead>
-          <tr>
-            <th>Company</th>
-            <th>People</th>
-            <th>Storage</th>
-            <th>Branding</th>
-            <th>State</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${companies.map(company => {
-            const roles = company.roleCounts || {};
-            return `
-            <tr class="${company.isActive ? 'is-active' : ''}">
-              <td data-label="Company">
-                <div class="company-identity">
-                  <span class="company-monogram">${escapeHtml(String(company.code || '?').slice(0, 2).toUpperCase())}</span>
-                  <span><strong>${escapeHtml(company.name || company.code)}</strong><small>${escapeHtml(company.code)}</small></span>
-                </div>
-              </td>
-              <td data-label="People">
-                <div class="company-people-total">${Number(company.userCount || 0)} account${Number(company.userCount || 0) === 1 ? '' : 's'}</div>
-                <div class="company-role-counts">
-                  <span class="company-role-count">${Number(roles.user || 0)} users</span>
-                  <span class="company-role-count">${Number(roles.manager || 0)} managers</span>
-                  <span class="company-role-count">${Number(roles.admin || 0)} admins</span>
-                  <span class="company-role-count sales">${Number(company.salesPersonnelCount || 0)} sales</span>
-                </div>
-              </td>
-              <td data-label="Storage">
-                <button type="button" class="company-storage-button" data-company-storage-code="${escapeHtmlAttr(company.code)}" onclick="openCompanyStorageBreakdown(this.dataset.companyStorageCode)" aria-label="View storage breakdown for ${escapeHtmlAttr(company.name || company.code)}">
-                  <span class="company-storage-value">${formatCompanyStorageBytes(company.storageBytes)}</span>
-                  <span class="company-storage-meta">${Number(company.storageFileCount || 0)} files</span>
-                </button>
-              </td>
-              <td data-label="Branding"><span class="company-state-badge ${company.brandingSetupRequired ? 'pending' : 'ready'}">${company.brandingSetupRequired ? 'Pending' : 'Ready'}</span></td>
-              <td data-label="State">${company.isActive ? '<span class="company-state-badge active">Active</span>' : '<span class="settings-dash">-</span>'}</td>
-            </tr>
-          `}).join('')}
-        </tbody>
-      </table>
-      </div>
-    `;
-  } catch (error) {
-    if (container) {
-      container.innerHTML = `<div class="settings-error-state">Failed to load companies: ${escapeHtml(error.message)}</div>`;
-    }
-  }
-}
-
-async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
-  if (!isSuperAdminUser()) {
-    showNotification('error', 'Administrative access required');
-    return false;
-  }
-
-  if (isActive) {
-    showNotification('warning', 'Switch to another company before deleting this one');
-    return false;
-  }
-
-  if (Number(companyCount || 0) <= 1) {
-    showNotification('warning', 'At least one company must remain');
-    return false;
-  }
-
-  const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code || '').toUpperCase());
-  const name = company?.name || code;
-
-  const confirmed = await showAppConfirm({
-    title: 'Delete Company',
-    message: `Delete ${name || code}? This permanently removes the company folder and all company assets.`,
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-
-  if (!confirmed) return false;
-
-  try {
-    const res = await apiCall(`/api/companies/${encodeURIComponent(code)}`, 'DELETE');
-    const removedUsers = res?.data?.removedUsers || [];
-    const userNote = removedUsers.length ? ` Removed ${removedUsers.length} assigned user account(s).` : '';
-    showNotification('success', `Company deleted.${userNote}`);
-    closeModal('deleteCompanyModal');
-    await loadCompaniesAdmin();
-    if (document.getElementById('users-section')) {
-      await loadUsersAdmin();
-    }
-    return true;
-  } catch (error) {
-    showNotification('error', `Failed to delete company: ${error.message}`);
-    return false;
-  }
-}
-
-async function switchCompanyAdmin() {
-  const code = document.getElementById('activeCompanySelect')?.value || '';
-  if (!code) {
-    showNotification('warning', 'Choose a company first');
-    return;
-  }
-
-  try {
-    await apiCall('/api/current-company', 'PUT', { companyCode: code });
-    showNotification('success', 'Company switched');
-    setTimeout(() => window.location.reload(), 400);
-  } catch (error) {
-    showNotification('error', `Failed to switch company: ${error.message}`);
-  }
-}
-
-function ensureCompanyBrandingPromptModal() {
-  if (document.getElementById('companyBrandingSetupModal')) return;
-
-  const modal = document.createElement('div');
-  modal.id = 'companyBrandingSetupModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:720px;">
-      <div class="modal-header">
-        <h3>Company Branding</h3>
-      </div>
-      <div class="modal-body">
-        <p style="margin-bottom:16px;color:#495057;">
-          Add a logo and footer for <strong id="companyBrandingName"></strong>, or leave them blank for now.
-        </p>
-        <div style="display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;align-items:start;">
-          <div class="form-group">
-            <label class="form-label" for="companyBrandingLogoInput">Logo</label>
-            <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;background:#fff;min-height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-              <img id="companyBrandingLogoPreview" alt="Company Logo" style="max-width:220px;max-height:80px;object-fit:contain;">
-              <span id="companyBrandingLogoPlaceholder" style="color:#64748b;font-size:12px;font-weight:700;">No logo uploaded</span>
-            </div>
-            <input id="companyBrandingLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="companyBrandingFooterText">Footer</label>
-            <textarea id="companyBrandingFooterText" class="form-input" rows="6" maxlength="2000"></textarea>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="completeCompanyBrandingSetup(true)">Skip for Now</button>
-        <button type="button" class="btn btn-primary" onclick="completeCompanyBrandingSetup(false)">Save Branding</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-}
-
-async function showCompanyBrandingPromptIfNeeded() {
-  if (!currentUser || !currentUser.isAdmin || !currentUser.company?.brandingSetupRequired) return;
-
-  await loadPdfSettings(true);
-  ensureCompanyBrandingPromptModal();
-
-  const name = document.getElementById('companyBrandingName');
-  const preview = document.getElementById('companyBrandingLogoPreview');
-  const placeholder = document.getElementById('companyBrandingLogoPlaceholder');
-  const footer = document.getElementById('companyBrandingFooterText');
-  const fileInput = document.getElementById('companyBrandingLogoInput');
-  const logoUrl = getPdfLogoUrl();
-
-  if (name) name.textContent = currentUser.company.name || currentUser.company.code || 'this company';
-  if (preview) {
-    if (logoUrl) {
-      preview.src = logoUrl;
-      preview.hidden = false;
-    } else {
-      preview.removeAttribute('src');
-      preview.hidden = true;
-    }
-  }
-  if (placeholder) placeholder.hidden = !!logoUrl;
-  if (footer) footer.value = getPdfFooterText();
-  if (fileInput) fileInput.value = '';
-
-  openModal('companyBrandingSetupModal');
-}
-
-async function completeCompanyBrandingSetup(useDefaults = false) {
-  try {
-    if (useDefaults) {
-      await apiCall('/api/company/branding-setup-complete', 'POST', {});
-    } else {
-      const input = document.getElementById('companyBrandingLogoInput');
-      const file = input && input.files ? input.files[0] : null;
-      const footerText = document.getElementById('companyBrandingFooterText')?.value || DEFAULT_PDF_FOOTER_TEXT;
-
-      if (file) {
-        const formData = new FormData();
-        formData.append('logo', file);
-        const response = await fetch('/api/pdf-settings/logo', {
-          method: 'POST',
-          headers: {
-            "X-Client-Id": REALTIME_CLIENT_ID,
-          },
-          body: formData
-        });
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to upload logo');
-        }
-        pdfSettings = normalisePdfSettings(result.data || {});
-      }
-
-      const res = await apiCall('/api/pdf-settings', 'PUT', { footerText });
-      pdfSettings = normalisePdfSettings(res.data || pdfSettings);
-    }
-
-    const currentUserRes = await apiCall('/api/current-user');
-    currentUser = currentUserRes.data;
-    await loadPdfSettings(true);
-    applyPdfSettingsToApp();
-    closeModal('companyBrandingSetupModal');
-    showNotification('success', 'Company branding saved');
-  } catch (error) {
-    showNotification('error', `Failed to save company branding: ${error.message}`);
-  }
-}
-
-
-// ---------------- Department Management ----------------
-function normalizeDepartmentCode(code) {
-  const cleaned = String(code || 'UN').trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '');
-  return cleaned || 'UN';
-}
-
-function departmentClassName(code) {
-  return `dept-${normalizeDepartmentCode(code).toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}`;
-}
-
-function getDepartmentMeta(code) {
-  const normalized = normalizeDepartmentCode(code);
-  return departments[normalized] || {
-    code: normalized,
-    name: normalized,
-    color: '#e2e3e5',
-    textColor: '#383d41',
-    assetCount: 0
-  };
-}
-
-function departmentBadgeHtml(code, showName = false) {
-  const dept = getDepartmentMeta(code);
-  const label = showName && dept.name && dept.name !== dept.code
-    ? `${dept.code} - ${dept.name}`
-    : dept.code;
-
-  return `<span class="asset-badge ${departmentClassName(dept.code)}" title="${escapeHtmlAttr(dept.name || dept.code)}">${escapeHtml(label)}</span>`;
-}
-
-function applyDepartmentStyles() {
-  let style = document.getElementById('dynamic-department-styles');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'dynamic-department-styles';
-    document.head.appendChild(style);
-  }
-
-  const rules = Object.values(departments).map(dept => {
-    const cls = departmentClassName(dept.code);
-    const bg = /^#[0-9A-Fa-f]{6}$/.test(dept.color || '') ? dept.color : '#e2e3e5';
-    const fg = /^#[0-9A-Fa-f]{6}$/.test(dept.textColor || '') ? dept.textColor : '#383d41';
-    return `.${cls} { background: ${bg} !important; color: ${fg} !important; }`;
-  });
-
-  style.textContent = rules.join('\n');
-}
-
-async function loadDepartments(force = false) {
-  if (departmentsLoaded && !force) return departments;
-
-  const res = await apiCall('/api/departments');
-  const list = res.data || [];
-  departments = {};
-  list.forEach(dept => {
-    const code = normalizeDepartmentCode(dept.code);
-    departments[code] = {
-      code,
-      name: dept.name || code,
-      color: dept.color || '#e2e3e5',
-      textColor: dept.textColor || '#383d41',
-      assetCount: Number(dept.assetCount || 0)
-    };
-  });
-
-  departmentsLoaded = true;
-  applyDepartmentStyles();
-  populateDepartmentSelects();
-  renderDepartmentManager();
-  return departments;
-}
-
-function sortedDepartmentList() {
-  return Object.values(departments).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
-}
-
-function populateDepartmentSelects() {
-  const list = sortedDepartmentList();
-
-  const filter = document.getElementById('department-filter');
-  if (filter) {
-    const options = document.getElementById('department-filter-options');
-    const existingCheckboxes = Array.from(options?.querySelectorAll('input[type="checkbox"]') || []);
-    const selectedCodes = new Set(existingCheckboxes.filter(input => input.checked).map(input => input.value));
-    const previouslySelectedAll = existingCheckboxes.length === 0 || selectedCodes.size === existingCheckboxes.length;
-    if (options) {
-      options.innerHTML = list.map(dept => {
-        const checked = previouslySelectedAll || selectedCodes.has(dept.code);
-        return `
-          <label>
-            <input type="checkbox" value="${escapeHtmlAttr(dept.code)}"${checked ? ' checked' : ''} />
-            <span>${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</span>
-          </label>
-        `;
-      }).join('');
-      updateInventoryCheckboxFilterSummary('department-filter');
-    }
-  }
-
-  const assetDeptSelect = document.getElementById('assetDepartment');
-  if (assetDeptSelect) {
-    const current = assetDeptSelect.value || 'UN';
-    assetDeptSelect.innerHTML = list.map(dept => (
-      `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</option>`
-    )).join('');
-    assetDeptSelect.value = list.some(dept => dept.code === current) ? current : (list[0]?.code || 'UN');
-  }
-
-  ensureDepartmentDatalist();
-}
-
-function ensureDepartmentDatalist() {
-  let datalist = document.getElementById('department-code-options');
-  if (!datalist) {
-    datalist = document.createElement('datalist');
-    datalist.id = 'department-code-options';
-    document.body.appendChild(datalist);
-  }
-
-  datalist.innerHTML = sortedDepartmentList().map(dept => (
-    `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.name || dept.code)}</option>`
-  )).join('');
-}
-
-function ensureDepartmentManagerPanel() {
-  if (!currentUser || !currentUser.isAdmin) return;
-  if (document.getElementById('department-admin-panel')) return;
-
-  const panel = document.createElement('div');
-  panel.id = 'department-admin-panel';
-  panel.className = 'modal';
-  panel.innerHTML = `
-    <div class="modal-content" style="max-width:900px;width:94%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;">
-      <div class="modal-header">
-        <div>
-          <h3 class="modal-title" style="margin:0;">Manage departments</h3>
-          <p style="margin:4px 0 0;color:#64748b;font-size:12px;">Department names, codes and colours</p>
-        </div>
-        <button type="button" class="close-btn" onclick="closeModal('department-admin-panel')" aria-label="Close">&times;</button>
-      </div>
-      <div class="modal-body" style="min-height:0;overflow:auto;">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-          <button type="button" class="btn btn-primary" onclick="openDepartmentModal()">Add department</button>
-        </div>
-        <div id="department-admin-table" class="responsive-table-wrap"></div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(panel);
-  enhanceModalAccessibility(panel);
-}
-
-function renderDepartmentManager() {
-  if (!currentUser || !currentUser.isAdmin) return;
-  ensureDepartmentManagerPanel();
-
-  const container = document.getElementById('department-admin-table');
-  if (!container) return;
-
-  const list = sortedDepartmentList().filter((dept) => {
-    const code = normalizeDepartmentCode(dept.code);
-    if (code === 'LOAN' || code === 'MISC') return false;
-    if (code === 'UN' && Number(dept.assetCount || 0) === 0) return false;
-    return true;
-  });
-  if (list.length === 0) {
-    container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No departments found.</p>';
-    return;
-  }
-
-  container.innerHTML = `
-    <table class="table" style="margin-top:0;">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Preview</th>
-          <th>Colour</th>
-          <th>Assets</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${list.map(dept => `
-          <tr>
-            <td><strong>${escapeHtml(dept.code)}</strong></td>
-            <td>${escapeHtml(dept.name || dept.code)}</td>
-            <td>${departmentBadgeHtml(dept.code, true)}</td>
-            <td><span style="display:inline-flex;align-items:center;gap:8px;"><span style="width:22px;height:22px;border-radius:6px;border:1px solid #ccc;background:${escapeHtmlAttr(dept.color || '#e2e3e5')};display:inline-block;"></span>${escapeHtml(dept.color || '')}</span></td>
-            <td>${Number(dept.assetCount || 0)}</td>
-            <td>
-              <button class="btn btn-warning btn-sm" onclick="openDepartmentModal('${encodeURIComponent(dept.code)}')">Edit</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteDepartment('${encodeURIComponent(dept.code)}')">Delete</button>
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
-
-function ensureDepartmentModal() {
-  if (document.getElementById('departmentModal')) return;
-
-  const modal = document.createElement('div');
-  modal.id = 'departmentModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="departmentModalTitle">Department</h3>
-        <button class="close-btn" onclick="closeModal('departmentModal')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div id="departmentRenameWarning" style="display:none;background:#fff3cd;border:1px solid #ffeaa7;color:#856404;padding:12px;border-radius:8px;margin-bottom:14px;">
-          Renaming the department code will update matching inventory rows and event model requirements so old events stay linked.
-        </div>
-        <div class="form-group">
-          <label class="form-label">Department Code</label>
-          <input id="departmentCodeInput" class="form-input" placeholder="AX / LX / VIDEO" style="text-transform:uppercase;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Display Name</label>
-          <input id="departmentNameInput" class="form-input" placeholder="Audio / Lighting / Video">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Badge Colour</label>
-          <div style="display:flex;gap:10px;align-items:center;">
-            <input id="departmentColorInput" type="color" class="form-input" style="width:80px;padding:4px;height:44px;">
-            <input id="departmentColorTextInput" class="form-input" placeholder="#667EEA">
-          </div>
-        </div>
-        <div style="margin-top:10px;">
-          <span style="color:#666;font-size:13px;margin-right:8px;">Preview:</span>
-          <span id="departmentPreviewBadge" class="asset-badge">DEPT</span>
-        </div>
-      </div>
-      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
-        <button class="btn btn-secondary" onclick="closeModal('departmentModal')">Cancel</button>
-        <button class="btn btn-success" onclick="saveDepartmentModal()">Save Department</button>
-      </div>
-    </div>
-  `;
-
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal('departmentModal');
-  });
-
-  document.body.appendChild(modal);
-
-  const colorInput = document.getElementById('departmentColorInput');
-  const colorTextInput = document.getElementById('departmentColorTextInput');
-  const codeInput = document.getElementById('departmentCodeInput');
-  const nameInput = document.getElementById('departmentNameInput');
-
-  colorInput.addEventListener('input', () => {
-    colorTextInput.value = colorInput.value.toUpperCase();
-    updateDepartmentPreview();
-  });
-  colorTextInput.addEventListener('input', () => {
-    if (/^#[0-9A-Fa-f]{6}$/.test(colorTextInput.value.trim())) {
-      colorInput.value = colorTextInput.value.trim();
-    }
-    updateDepartmentPreview();
-  });
-  codeInput.addEventListener('input', updateDepartmentPreview);
-  nameInput.addEventListener('input', updateDepartmentPreview);
-}
-
-function updateDepartmentPreview() {
-  const badge = document.getElementById('departmentPreviewBadge');
-  if (!badge) return;
-
-  const code = normalizeDepartmentCode(document.getElementById('departmentCodeInput')?.value || 'DEPT');
-  const name = document.getElementById('departmentNameInput')?.value.trim() || code;
-  const colour = document.getElementById('departmentColorTextInput')?.value.trim() || '#e2e3e5';
-
-  badge.textContent = name && name !== code ? `${code} - ${name}` : code;
-  const safeColour = /^#[0-9A-Fa-f]{6}$/.test(colour) ? colour : '#e2e3e5';
-  badge.style.background = safeColour;
-  badge.style.color = getReadableTextColour(safeColour);
-}
-
-function getReadableTextColour(colour) {
-  // Supports hex input. Browser rgb() fallback uses dark text.
-  if (!/^#[0-9A-Fa-f]{6}$/.test(colour || '')) return '#111827';
-  const r = parseInt(colour.slice(1, 3), 16);
-  const g = parseInt(colour.slice(3, 5), 16);
-  const b = parseInt(colour.slice(5, 7), 16);
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 150 ? '#111827' : '#FFFFFF';
-}
-
-function openDepartmentModal(encodedCode = '') {
-  if (!currentUser || !currentUser.isAdmin) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  ensureDepartmentModal();
-
-  const modal = document.getElementById('departmentModal');
-  const originalCode = encodedCode ? decodeURIComponent(encodedCode) : '';
-  const dept = originalCode ? getDepartmentMeta(originalCode) : { code: '', name: '', color: '#667eea' };
-
-  modal.dataset.originalCode = originalCode;
-  document.getElementById('departmentModalTitle').textContent = originalCode ? `Edit Department: ${originalCode}` : 'Add Department';
-  document.getElementById('departmentRenameWarning').style.display = originalCode ? 'block' : 'none';
-  document.getElementById('departmentCodeInput').value = dept.code || '';
-  document.getElementById('departmentNameInput').value = dept.name || '';
-  document.getElementById('departmentColorInput').value = dept.color || '#667eea';
-  document.getElementById('departmentColorTextInput').value = (dept.color || '#667eea').toUpperCase();
-
-  updateDepartmentPreview();
-  openModal('departmentModal');
-  setTimeout(() => document.getElementById('departmentCodeInput')?.focus(), 100);
-}
-
-async function saveDepartmentModal() {
-  if (!currentUser || !currentUser.isAdmin) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  const modal = document.getElementById('departmentModal');
-  const originalCode = modal.dataset.originalCode || '';
-  const code = normalizeDepartmentCode(document.getElementById('departmentCodeInput')?.value);
-  const name = document.getElementById('departmentNameInput')?.value.trim();
-  const color = document.getElementById('departmentColorTextInput')?.value.trim();
-
-  if (!code) {
-    showNotification('warning', 'Department code is required');
-    return;
-  }
-
-  if (!name) {
-    showNotification('warning', 'Department display name is required');
-    return;
-  }
-
-  if (!/^#[0-9A-Fa-f]{6}$/.test(color || '')) {
-    showNotification('warning', 'Colour must be a valid hex colour, e.g. #667EEA');
-    return;
-  }
-
-  if (originalCode && code !== normalizeDepartmentCode(originalCode)) {
-    const ok = await showAppConfirm({
-      title: 'Rename Department',
-      message: `Rename department code "${originalCode}" to "${code}"?\n\nThis will update matching inventory rows and event model requirements.`,
-      confirmText: 'Rename',
-      cancelText: 'Cancel',
-      variant: 'warning',
-    });
-    if (!ok) return;
-  }
-
-  try {
-    const endpoint = originalCode
-      ? `/api/departments/${encodeURIComponent(originalCode)}`
-      : '/api/departments';
-    const method = originalCode ? 'PUT' : 'POST';
-
-    const res = await apiCall(endpoint, method, { code, name, color });
-    closeModal('departmentModal');
-
-    const data = res.data || {};
-    let message = originalCode ? 'Department updated' : 'Department created';
-    if (data.assetsUpdated) message += `; ${data.assetsUpdated} asset(s) updated`;
-    if (data.eventsUpdated) message += `; ${data.eventsUpdated} event(s) updated`;
-    showNotification('success', message);
-
-    departmentsLoaded = false;
-    await loadDepartments(true);
-    await loadInventory();
-  } catch (error) {
-    showNotification('error', `Failed to save department: ${error.message}`);
-  }
-}
-
-async function deleteDepartment(encodedCode) {
-  if (!currentUser || !currentUser.isAdmin) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
-  const code = decodeURIComponent(encodedCode || '');
-  const dept = getDepartmentMeta(code);
-  const ok = await showAppConfirm({
-    title: 'Delete Department',
-    message: `Delete department "${dept.code}"?\n\nThis is only allowed when no assets are assigned to it.`,
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
-    variant: 'danger',
-  });
-  if (!ok) return;
-
-  try {
-    await apiCall(`/api/departments/${encodeURIComponent(dept.code)}`, 'DELETE');
-    showNotification('success', `Department ${dept.code} deleted`);
-    departmentsLoaded = false;
-    await loadDepartments(true);
-    await loadInventory();
-  } catch (error) {
-    await showAppAlert({
-      title: 'Department Not Deleted',
-      message: error.message,
-      variant: 'warning',
-    });
-  }
-}
-
-
-// ---------------- Admin User Management ----------------
-
-async function setupChangePasswordTab() {
-  if (!currentUser) {
-    const res = await apiCall('/api/current-user');
-    currentUser = res.data;
-  }
-
-  refreshSidebarUserMenu();
-  ensureChangePasswordNavItem();
-  ensureChangePasswordSection();
-}
-
-function ensureChangePasswordNavItem() {
-  if (document.querySelector(`[data-section="change-password"], [onclick="showSection('change-password')"]`)) return;
-
-  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
-    .find(section => {
-      const heading = section.querySelector('h3');
-      return heading && heading.textContent.trim() === 'Settings';
-    });
-
-  if (!settingsSection) {
-    console.warn('Could not find Settings section for Change Password tab');
-    return;
-  }
-
-  const passwordTab = document.createElement('button');
-  passwordTab.type = 'button';
-  passwordTab.className = 'nav-item';
-  passwordTab.dataset.section = 'change-password';
-  passwordTab.textContent = 'Change Password';
-
-  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
-
-  if (logoutButton) {
-    settingsSection.insertBefore(passwordTab, logoutButton);
-  } else {
-    settingsSection.appendChild(passwordTab);
-  }
-}
-
-function ensureChangePasswordSection() {
-  if (document.getElementById('change-password-section')) return;
-
-  const firstSection = document.querySelector('.content-section');
-  const sectionParent = firstSection ? firstSection.parentElement : document.body;
-
-  const section = document.createElement('div');
-  section.id = 'change-password-section';
-  section.className = 'content-section';
-
-  const userName = String(currentUser?.name || currentUser?.username || 'Showbase user').trim();
-  const username = String(currentUser?.username || '').trim();
-
-  section.innerHTML = `
-    <div class="content-header settings-page-header">
-      <div>
-        <h2 class="content-title">Change password</h2>
-        <p class="settings-page-subtitle">Update the password used for your Showbase account.</p>
-      </div>
-    </div>
-
-    <div class="password-page-layout">
-      <section class="password-security-band" aria-label="Signed-in account">
-        <span class="settings-feature-icon">${settingsIcon('shield')}</span>
-        <div>
-          <span class="settings-eyebrow">Signed in as</span>
-          <strong>${escapeHtml(userName)}</strong>
-          ${username && username !== userName ? `<small>@${escapeHtml(username)}</small>` : ''}
-        </div>
-      </section>
-
-      <section class="password-form-panel">
-        <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
-          <div class="password-form-heading">
-            <span class="settings-feature-icon compact">${settingsIcon('lock')}</span>
-            <div>
-              <h3>Set a new password</h3>
-              <p>Enter your current password before choosing a replacement.</p>
-            </div>
-          </div>
-
-          <div class="form-group password-field-current">
-            <label class="form-label" for="currentPasswordInput">Current password</label>
-            <div class="password-input-wrap">
-              <input id="currentPasswordInput" type="password" class="form-input" autocomplete="current-password">
-              <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('currentPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
-            </div>
-          </div>
-
-          <div class="password-new-grid">
-            <div class="form-group">
-              <label class="form-label" for="newPasswordInput">New password</label>
-              <div class="password-input-wrap">
-                <input id="newPasswordInput" type="password" class="form-input" autocomplete="new-password">
-                <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('newPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="confirmPasswordInput">Confirm password</label>
-              <div class="password-input-wrap">
-                <input id="confirmPasswordInput" type="password" class="form-input" autocomplete="new-password">
-                <button type="button" class="password-visibility-button" onclick="toggleSettingsPasswordVisibility('confirmPasswordInput', this)" aria-label="Show password" title="Show password">${settingsIcon('eye')}</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="password-form-actions">
-            <button type="submit" id="changePasswordSubmit" class="btn password-save-button">${settingsIcon('lock')}<span>Save new password</span></button>
-            <button type="button" class="btn password-clear-button" onclick="resetChangePasswordForm()">Clear</button>
-          </div>
-        </form>
-      </section>
-    </div>
-  `;
-
-  sectionParent.appendChild(section);
-}
-
-function toggleSettingsPasswordVisibility(inputId, button) {
-  const input = document.getElementById(inputId);
-  if (!input || !button) return;
-  const willShow = input.type === 'password';
-  input.type = willShow ? 'text' : 'password';
-  button.innerHTML = settingsIcon(willShow ? 'eyeOff' : 'eye');
-  button.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
-  button.setAttribute('title', willShow ? 'Hide password' : 'Show password');
-}
-
-function resetChangePasswordForm() {
-  const form = document.getElementById('changePasswordForm');
-  if (form) form.reset();
-}
-
-function loadChangePasswordSection() {
-  ensureChangePasswordSection();
-  const input = document.getElementById('currentPasswordInput');
-  if (input) {
-    setTimeout(() => input.focus({ preventScroll: true }), 0);
-  }
-}
-
-async function submitChangePassword(event) {
-  if (event) event.preventDefault();
-
-  const currentPassword = document.getElementById('currentPasswordInput')?.value || '';
-  const newPassword = document.getElementById('newPasswordInput')?.value || '';
-  const confirmPassword = document.getElementById('confirmPasswordInput')?.value || '';
-  const submitButton = document.getElementById('changePasswordSubmit');
-
-  if (!currentPassword) {
-    showNotification('warning', 'Current password is required');
-    return;
-  }
-
-  if (!newPassword) {
-    showNotification('warning', 'New password is required');
-    return;
-  }
-
-  if (newPassword !== confirmPassword) {
-    showNotification('warning', 'New passwords do not match');
-    return;
-  }
-
-  if (submitButton) submitButton.disabled = true;
-
-  try {
-    await apiCall('/api/current-user/password', 'PUT', {
-      currentPassword,
-      newPassword
-    });
-
-    resetChangePasswordForm();
-    showNotification('success', 'Password changed');
-  } catch (error) {
-    showNotification('error', `Failed to change password: ${error.message}`);
-  } finally {
-    if (submitButton) submitButton.disabled = false;
-  }
-}
-
-async function setupAdminUserManagementTab() {
-  try {
-    if (!currentUser) {
-      const res = await apiCall('/api/current-user');
-      currentUser = res.data;
-    }
-
-    if (!currentUser || !currentUser.isAdmin) return;
-
-    ensureUsersNavItem();
-    ensureUsersSection();
-  } catch (error) {
-    console.warn('User management tab not loaded:', error);
-  }
-}
-
-function ensureUsersNavItem() {
-  if (document.querySelector(`[data-section="users"], [onclick="showSection('users')"]`)) return;
-
-  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
-    .find(section => {
-      const heading = section.querySelector('h3');
-      return heading && heading.textContent.trim() === 'Settings';
-    });
-
-  if (!settingsSection) {
-    console.warn('Could not find Settings section for Users tab');
-    return;
-  }
-
-  const usersTab = document.createElement('button');
-  usersTab.type = 'button';
-  usersTab.className = 'nav-item';
-  usersTab.dataset.section = 'users';
-  usersTab.innerHTML = `👤 Users`;
-
-  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
-
-  if (logoutButton) {
-    settingsSection.insertBefore(usersTab, logoutButton);
-  } else {
-    settingsSection.appendChild(usersTab);
-  }
-}
-
-function userRoleOptionsMarkup(selectedRole = 'user') {
-  const selected = String(selectedRole || 'user').toLowerCase();
-  const roles = isPlatformAdminUser()
-    ? ['owner', 'admin', 'manager', 'user']
-    : (currentUserRole() === 'admin'
-      ? ['admin', 'manager', 'user']
-      : ['manager', 'user']);
-  return roles.map(role => `
-    <option value="${role}" ${role === selected ? 'selected' : ''}>${escapeHtml(userRoleLabel(role))}</option>
-  `).join('');
-}
-
-function userRoleSummaryMarkup() {
-  const roles = isPlatformAdminUser()
-    ? ['owner', 'admin', 'manager', 'user']
-    : (currentUserRole() === 'admin'
-      ? ['admin', 'manager', 'user']
-      : ['manager', 'user']);
-  return roles.map(role => `
-    <span class="user-role-chip user-role-chip-${role}">
-      <strong>${escapeHtml(userRoleLabel(role))}</strong>
-    </span>
-  `).join('<span class="user-role-arrow" aria-hidden="true">/</span>')
-    + '<span class="user-role-chip user-role-chip-sales"><strong>Sales</strong></span>';
-}
-
-function userActiveBadgeMarkup(user) {
-  return user.isActive
-    ? '<span class="user-status-badge user-status-active">Active</span>'
-    : '<span class="user-status-badge user-status-inactive">Inactive</span>';
-}
-
-function ensureUsersSection() {
-  if (document.getElementById('users-section')) return;
-
-  const firstSection = document.querySelector('.content-section');
-  const sectionParent = firstSection ? firstSection.parentElement : document.body;
-
-  const section = document.createElement('div');
-  section.id = 'users-section';
-  section.className = 'content-section';
-
-  section.innerHTML = `
-    <div class="users-admin-shell">
-      <div class="users-admin-hero">
-        <div>
-          <p class="users-admin-kicker">Settings</p>
-          <h2>User Management</h2>
-          <div class="user-role-ladder" aria-label="Role hierarchy">${userRoleSummaryMarkup()}</div>
-        </div>
-        <div class="users-admin-current">
-          <span class="users-admin-current-label">Signed in</span>
-          <strong>${escapeHtml(currentUser?.username || '')}</strong>
-          <div class="users-admin-current-meta">
-            ${roleBadgeMarkup(currentUserRole())}
-            ${currentUserHasSalesAccess() ? '<span class="user-role-badge user-role-badge-sales">Sales</span>' : ''}
-          </div>
-        </div>
-      </div>
-
-      <section class="users-admin-panel users-admin-list-panel" aria-labelledby="existingUsersHeading">
-        <div class="users-admin-toolbar">
-          <div>
-            <h3 id="existingUsersHeading">Existing Users</h3>
-            <p id="usersAdminSummary" class="users-admin-summary"></p>
-          </div>
-          <div class="users-admin-toolbar-actions">
-            <label class="users-admin-search">
-              <span class="sr-only">Search users</span>
-              <input
-                id="usersAdminSearch"
-                type="search"
-                class="form-input"
-                placeholder="Search users..."
-                oninput="renderUsersAdminTables()"
-                autocomplete="off"
-              >
-            </label>
-            <button class="btn btn-success btn-sm" onclick="openCreateUserModal()">Create User</button>
-            <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
-          </div>
-        </div>
-
-        <div id="users-admin-table-container">
-          <p class="users-admin-empty">Loading users...</p>
-        </div>
-      </section>
-    </div>
-  `;
-
-  sectionParent.appendChild(section);
-  ensureCreateUserModal();
-  applyPermissionUi();
-}
-
-function ensureCreateUserModal() {
-  if (document.getElementById('createUserModal')) return;
-
-  const modal = document.createElement('div');
-  modal.id = 'createUserModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content users-admin-create-modal">
-      <div class="modal-header">
-        <h3 class="modal-title">Create User</h3>
-        <button class="close-btn" onclick="closeModal('createUserModal')">&times;</button>
-      </div>
-
-      <form onsubmit="event.preventDefault(); createUserAdmin();">
-        <div class="users-admin-create-grid">
-          <div class="form-group">
-            <label class="form-label" for="newUserName">Name</label>
-            <input id="newUserName" class="form-input" placeholder="Full name" autocomplete="name">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="newUserUsername">Username</label>
-            <input id="newUserUsername" class="form-input" placeholder="Username" autocomplete="off">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="newUserPhone">Phone number</label>
-            <input id="newUserPhone" class="form-input" type="tel" placeholder="+65 9123 4567" autocomplete="tel">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="newUserPassword">Password</label>
-            <input id="newUserPassword" type="password" class="form-input" placeholder="Password" autocomplete="new-password">
-          </div>
-
-          ${canCurrentUserManageUsers() ? `
-            <div class="form-group">
-              <label class="form-label" for="newUserRole">Role</label>
-              <select id="newUserRole" class="form-input">${userRoleOptionsMarkup('user')}</select>
-            </div>
-
-            <label class="user-admin-switch user-admin-switch-stacked">
-              <input id="newUserHasSalesAccess" type="checkbox">
-              <span class="user-admin-switch-slider"></span>
-              <span class="user-admin-switch-text">Sales</span>
-            </label>
-          ` : ''}
-
-          <label class="user-admin-switch user-admin-switch-stacked">
-            <input id="newUserIsActive" type="checkbox" checked>
-            <span class="user-admin-switch-slider"></span>
-            <span class="user-admin-switch-text">Active</span>
-          </label>
-
-          <div class="form-group platform-admin-only" id="newUserCompanyGroup" data-platform-admin-display="block">
-            <label class="form-label" for="newUserCompanyCode">Company</label>
-            <select id="newUserCompanyCode" class="form-input"></select>
-          </div>
-        </div>
-
-        <div class="modal-actions users-admin-create-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
-          <button type="submit" class="btn btn-success">Create User</button>
-        </div>
-      </form>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-}
-
-function openCreateUserModal() {
-  ensureCreateUserModal();
-  const companySelect = document.getElementById('newUserCompanyCode');
-  if (companySelect) {
-    companySelect.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
-  }
-  openModal('createUserModal');
-  setTimeout(() => {
-    document.getElementById('newUserName')?.focus();
-  }, 100);
-}
-
-function setUsersAdminSort(key) {
-  if (!isSuperAdminUser() || !['name', 'company'].includes(key)) return;
-  if (usersAdminSort.key === key) {
-    usersAdminSort.direction = usersAdminSort.direction === 'asc' ? 'desc' : 'asc';
-  } else {
-    usersAdminSort = { key, direction: 'asc' };
-  }
-  renderUsersAdminTables();
-}
-
-function usersAdminSortHeader(label, key) {
-  if (!isSuperAdminUser()) return `<th>${label}</th>`;
-  const active = usersAdminSort.key === key;
-  const arrow = active ? (usersAdminSort.direction === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
-  const ariaSort = active ? (usersAdminSort.direction === 'asc' ? 'ascending' : 'descending') : 'none';
-  return `
-    <th aria-sort="${ariaSort}">
-      <button type="button" class="users-admin-sort" onclick="setUsersAdminSort('${key}')">
-        ${label}<span aria-hidden="true">${arrow}</span>
-      </button>
-    </th>
-  `;
-}
-
-function usersAdminTableHeader() {
-  return `
-    <thead>
-      <tr>
-        ${usersAdminSortHeader('Name', 'name')}
-        <th>Username</th>
-        <th>Phone</th>
-        <th>Role</th>
-        <th>Sales</th>
-        ${isSuperAdminUser() ? usersAdminSortHeader('Company', 'company') : ''}
-        <th>Active</th>
-        <th>Last Online</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-  `;
-}
-
-function formatUserLastOnline(value) {
-  const raw = String(value || '-').trim();
-  if (!raw || raw === '-') return '-';
-
-  const timestamp = new Date(raw);
-  if (Number.isNaN(timestamp.getTime())) return escapeHtml(raw);
-
-  try {
-    return escapeHtml(new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(timestamp));
-  } catch (error) {
-    return escapeHtml(timestamp.toLocaleString());
-  }
-}
-
-function usersAdminRowMarkup(user, index) {
-  const rowId = `userrow-${index}`;
-  const isSelf = Boolean(
-    currentUser
-    && currentUser.username === user.username
-    && String(currentUser.company?.code || currentUser.companyCode || '').toUpperCase()
-      === String(user.companyCode || '').toUpperCase()
-  );
-  const role = String(user.role || (user.isSuperAdmin || user.isAdmin ? 'admin' : 'user')).toLowerCase();
-  const isProtectedAccount = Boolean(user.isSuperAdmin);
-  const canEditUser = canCurrentUserManageUser(user);
-  const canEditRole = canEditUser && (
-    !isProtectedAccount || (isPlatformAdminUser() && !isSelf)
-  );
-  const rawLastOnline = String(user.lastOnline || '-');
-  const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
-  const displayName = String(user.name || '').trim();
-
-  return `
-    <tr data-user-admin-row data-original-username="${escapeHtmlAttr(user.username)}" data-original-company-code="${escapeHtmlAttr(user.companyCode || '')}">
-      <td>
-        <input
-          type="text"
-          id="name-${rowId}"
-          class="form-input user-admin-name-input"
-          data-user-admin-autosave="name"
-          value="${escapeHtmlAttr(displayName)}"
-          placeholder="Name"
-          ${canEditUser ? '' : 'disabled'}
-        >
-      </td>
-      <td>
-        <input
-          type="text"
-          id="username-${rowId}"
-          class="form-input user-admin-username-input"
-          data-user-admin-autosave="username"
-          value="${escapeHtmlAttr(user.username)}"
-          ${canEditUser ? '' : 'disabled'}
-        >
-        ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
-        <div class="users-admin-inline-meta">${userActiveBadgeMarkup(user)}</div>
-      </td>
-      <td>
-        <input
-          type="tel"
-          id="phone-${rowId}"
-          class="form-input user-admin-phone-input"
-          data-user-admin-autosave="phone"
-          value="${escapeHtmlAttr(user.phone || '')}"
-          placeholder="+65 9123 4567"
-          autocomplete="tel"
-          ${canEditUser ? '' : 'disabled'}
-        >
-      </td>
-      <td>
-        ${canEditRole ? `
-          <select id="role-${rowId}" class="form-input user-admin-role-select" data-user-admin-autosave="role">
-            ${userRoleOptionsMarkup(role)}
-          </select>
-        ` : roleBadgeMarkup(role)}
-      </td>
-      <td>
-        <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="sales-${rowId}" data-user-admin-autosave="sales" ${user.hasSalesAccess || user.isSales ? 'checked' : ''} ${canEditRole ? '' : 'disabled'}>
-          <span class="user-admin-switch-slider"></span>
-          <span class="user-admin-switch-text">Sales</span>
-        </label>
-      </td>
-      ${isSuperAdminUser() ? `
-        <td>
-          <select id="company-${rowId}" class="form-input" data-user-admin-autosave="company" ${canEditUser ? '' : 'disabled'}>
-            ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
-          </select>
-        </td>
-      ` : ''}
-      <td>
-        <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="active-${rowId}" data-user-admin-autosave="active" ${user.isActive ? 'checked' : ''} ${canEditUser ? '' : 'disabled'}>
-          <span class="user-admin-switch-slider"></span>
-          <span class="user-admin-switch-text">Active</span>
-        </label>
-      </td>
-      <td class="user-admin-last-online" title="${rawLastOnline === '-' ? '' : escapeHtmlAttr(rawLastOnline)}">
-        ${lastOnlineDisplay}
-      </td>
-      <td class="users-admin-actions">
-        <span class="user-admin-save-status is-saved" data-user-admin-save-status role="status" aria-live="polite"><span class="user-admin-save-mark" aria-hidden="true"></span><span data-user-admin-save-label>Saved</span></span>
-        <span class="users-admin-action-buttons">
-          <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername), this.closest('[data-user-admin-row]').dataset.originalCompanyCode)" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername), this.closest('[data-user-admin-row]').dataset.originalCompanyCode)" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
-        </span>
-      </td>
-    </tr>
-  `;
-}
-
-function sortedUsersAdmin(users) {
-  const direction = usersAdminSort.direction === 'desc' ? -1 : 1;
-  return [...users].sort((left, right) => {
-    const leftValue = usersAdminSort.key === 'company'
-      ? (left.companyName || left.companyCode || '')
-      : (left.name || left.username || '');
-    const rightValue = usersAdminSort.key === 'company'
-      ? (right.companyName || right.companyCode || '')
-      : (right.name || right.username || '');
-    const primary = String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: 'base', numeric: true });
-    if (primary) return primary * direction;
-    return String(left.username || '').localeCompare(String(right.username || ''), undefined, { sensitivity: 'base', numeric: true });
-  });
-}
-
-function renderUsersAdminTables() {
-  const container = document.getElementById('users-admin-table-container');
-  if (!container) return;
-
-  const search = (document.getElementById('usersAdminSearch')?.value || '').trim().toLocaleLowerCase();
-  const inactiveWasOpen = document.getElementById('inactiveUsersDropdown')?.open || false;
-  const filtered = usersAdminUsers.filter(user => {
-    if (!search) return true;
-    return [user.name, user.username, user.phone, user.companyCode, user.companyName, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
-      .some(value => String(value || '').toLocaleLowerCase().includes(search));
-  });
-  const sorted = isSuperAdminUser() ? sortedUsersAdmin(filtered) : filtered;
-  const activeUsers = sorted.filter(user => user.isActive);
-  const inactiveUsers = sorted.filter(user => !user.isActive);
-  const inactiveTotal = usersAdminUsers.filter(user => !user.isActive).length;
-  const inactiveLabel = search && inactiveUsers.length !== inactiveTotal
-    ? `Inactive Users (${inactiveUsers.length} of ${inactiveTotal})`
-    : `Inactive Users (${inactiveTotal})`;
-  updateUsersAdminSummary();
-
-  const activeMarkup = activeUsers.length
-    ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${activeUsers.map(usersAdminRowMarkup).join('')}</tbody></table></div>`
-    : `<p class="users-admin-empty">${search ? 'No active users match your search.' : 'No active users found.'}</p>`;
-  const inactiveMarkup = inactiveUsers.length
-    ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${inactiveUsers.map((user, index) => usersAdminRowMarkup(user, activeUsers.length + index)).join('')}</tbody></table></div>`
-    : `<p class="users-admin-empty">${search ? 'No inactive users match your search.' : 'No inactive users.'}</p>`;
-
-  container.innerHTML = `
-    ${activeMarkup}
-    <details id="inactiveUsersDropdown" class="inactive-users-dropdown" ${(inactiveWasOpen || (search && inactiveUsers.length)) ? 'open' : ''}>
-      <summary>${inactiveLabel}</summary>
-      <div class="inactive-users-content">${inactiveMarkup}</div>
-    </details>
-  `;
-  bindUsersAdminAutosave(container);
-}
-
-function updateUsersAdminSummary() {
-  const summary = document.getElementById('usersAdminSummary');
-  if (!summary) return;
-  const activeTotal = usersAdminUsers.filter(user => user.isActive).length;
-  const inactiveTotal = usersAdminUsers.length - activeTotal;
-  const salesTotal = usersAdminUsers.filter(user => user.hasSalesAccess || user.isSales).length;
-  summary.textContent = `${activeTotal} active / ${inactiveTotal} inactive / ${salesTotal} sales`;
-}
-
-function collectUserAdminRowPayload(row) {
-  const field = name => row.querySelector(`[data-user-admin-autosave="${name}"]`);
-  const payload = {
-    name: field('name')?.value.trim() || '',
-    phone: field('phone')?.value.trim() || '',
-    username: field('username')?.value.trim() || '',
-    isActive: Boolean(field('active')?.checked),
-    sourceCompanyCode: row.dataset.originalCompanyCode || '',
-  };
-  const role = field('role')?.value || '';
-  if (canCurrentUserManageUsers() && role) {
-    payload.role = role;
-    payload.hasSalesAccess = Boolean(field('sales')?.checked);
-  }
-  const companyCode = field('company')?.value || '';
-  if (isSuperAdminUser() && companyCode) payload.companyCode = companyCode;
-  return payload;
-}
-
-function userAdminPayloadFingerprint(payload) {
-  return JSON.stringify(payload);
-}
-
-function setUserAdminSaveStatus(row, status, label, detail = '') {
-  const indicator = row.querySelector('[data-user-admin-save-status]');
-  if (!indicator) return;
-  indicator.className = `user-admin-save-status is-${status}`;
-  indicator.title = detail;
-  const text = indicator.querySelector('[data-user-admin-save-label]');
-  if (text) text.textContent = label;
-}
-
-function scheduleUserAdminAutosave(row, delay = USERS_ADMIN_AUTOSAVE_DELAY) {
-  const state = row.__userAdminAutosaveState;
-  if (!state || !row.isConnected) return;
-  clearTimeout(state.timer);
-  setUserAdminSaveStatus(row, state.inFlight ? 'saving' : 'pending', state.inFlight ? 'Saving' : 'Unsaved');
-  state.timer = setTimeout(() => flushUserAdminAutosave(row), Math.max(0, delay));
-}
-
-function applyUserAdminSavedData(row, endpointUsername, submittedPayload, responseData) {
-  const saved = responseData || {};
-  const savedUsername = String(saved.username || submittedPayload.username || endpointUsername);
-  const sourceCompanyCode = String(row.dataset.originalCompanyCode || '').toUpperCase();
-  const savedCompanyCode = String(saved.companyCode || submittedPayload.companyCode || sourceCompanyCode).toUpperCase();
-  const userIndex = usersAdminUsers.findIndex(user => {
-    const usernameMatches = user.username === endpointUsername || user.username === savedUsername;
-    const userCompanyCode = String(user.companyCode || '').toUpperCase();
-    return usernameMatches && (
-      !sourceCompanyCode
-      || userCompanyCode === sourceCompanyCode
-      || userCompanyCode === savedCompanyCode
-    );
-  });
-  const companyCode = saved.companyCode || submittedPayload.companyCode || usersAdminUsers[userIndex]?.companyCode || '';
-  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(companyCode).toUpperCase());
-  const merged = {
-    ...(userIndex >= 0 ? usersAdminUsers[userIndex] : {}),
-    ...submittedPayload,
-    ...saved,
-    username: savedUsername,
-    companyCode,
-    companyName: company?.name || usersAdminUsers[userIndex]?.companyName || companyCode,
-  };
-  if (userIndex >= 0) usersAdminUsers[userIndex] = merged;
-  row.dataset.originalUsername = savedUsername;
-  row.dataset.originalCompanyCode = companyCode;
-  const activeMeta = row.querySelector('.users-admin-inline-meta');
-  if (activeMeta) activeMeta.innerHTML = userActiveBadgeMarkup(merged);
-  updateUsersAdminSummary();
-
-  if (
-    currentUser?.username === endpointUsername
-    && String(currentUser.company?.code || currentUser.companyCode || '').toUpperCase() === sourceCompanyCode
-  ) {
-    currentUser = { ...currentUser, ...saved, username: savedUsername };
-    refreshSidebarUserMenu();
-  }
-}
-
-function applyUserAdminResponseToUnchangedRow(row, responseData) {
-  if (!responseData) return;
-  const field = name => row.querySelector(`[data-user-admin-autosave="${name}"]`);
-  if (field('name')) field('name').value = responseData.name || '';
-  if (field('username')) field('username').value = responseData.username || '';
-  if (field('phone')) field('phone').value = responseData.phone || '';
-  if (field('role') && responseData.role) field('role').value = responseData.role;
-  if (field('sales')) field('sales').checked = Boolean(responseData.hasSalesAccess || responseData.isSales);
-  if (field('company') && responseData.companyCode) field('company').value = responseData.companyCode;
-  if (field('active')) field('active').checked = Boolean(responseData.isActive);
-}
-
-async function flushUserAdminAutosave(row) {
-  const state = row.__userAdminAutosaveState;
-  if (!state || !row.isConnected) return;
-  clearTimeout(state.timer);
-  state.timer = null;
-
-  const payload = collectUserAdminRowPayload(row);
-  const requestFingerprint = userAdminPayloadFingerprint(payload);
-  if (!payload.username) {
-    setUserAdminSaveStatus(row, 'error', 'Not saved', 'Username cannot be empty');
-    return;
-  }
-  if (requestFingerprint === state.lastSavedFingerprint) {
-    setUserAdminSaveStatus(row, 'saved', 'Saved');
-    return;
-  }
-  if (state.inFlight) {
-    state.queued = true;
-    return;
-  }
-
-  state.inFlight = true;
-  state.queued = false;
-  const endpointUsername = state.originalUsername;
-  let saveSucceeded = false;
-  setUserAdminSaveStatus(row, 'saving', 'Saving');
-
-  try {
-    const updateResult = await apiCall(`/api/users/${encodeURIComponent(endpointUsername)}`, 'PUT', payload);
-    const unchangedSinceRequest = userAdminPayloadFingerprint(collectUserAdminRowPayload(row)) === requestFingerprint;
-    state.originalUsername = String(updateResult?.data?.username || payload.username || endpointUsername);
-    state.lastSavedFingerprint = requestFingerprint;
-    applyUserAdminSavedData(row, endpointUsername, payload, updateResult?.data);
-    if (unchangedSinceRequest) {
-      applyUserAdminResponseToUnchangedRow(row, updateResult?.data);
-      state.lastSavedFingerprint = userAdminPayloadFingerprint(collectUserAdminRowPayload(row));
-    }
-    saveSucceeded = true;
-    setUserAdminSaveStatus(
-      row,
-      'saved',
-      updateResult?.data?.selfChangesPending ? 'Saved; re-login required' : 'Saved'
-    );
-  } catch (error) {
-    const unchangedSinceRequest = userAdminPayloadFingerprint(collectUserAdminRowPayload(row)) === requestFingerprint;
-    if (unchangedSinceRequest) {
-      try {
-        applyUserAdminResponseToUnchangedRow(
-          row,
-          JSON.parse(state.lastSavedFingerprint),
-        );
-      } catch (_parseError) {
-        // Keep the row editable if an older cached fingerprint cannot be restored.
-      }
-    }
-    setUserAdminSaveStatus(row, 'error', 'Not saved', error.message || 'Unable to save this user');
-    showNotification('warning', error.message || 'Unable to save this user');
-  } finally {
-    state.inFlight = false;
-    if (!row.isConnected) return;
-    const currentFingerprint = userAdminPayloadFingerprint(collectUserAdminRowPayload(row));
-    if (state.queued || (saveSucceeded && currentFingerprint !== state.lastSavedFingerprint)) {
-      state.queued = false;
-      scheduleUserAdminAutosave(row, 0);
-    }
-  }
-}
-
-function bindUsersAdminAutosave(root) {
-  root.querySelectorAll('[data-user-admin-row]').forEach(row => {
-    const initialPayload = collectUserAdminRowPayload(row);
-    row.__userAdminAutosaveState = {
-      timer: null,
-      inFlight: false,
-      queued: false,
-      originalUsername: row.dataset.originalUsername || initialPayload.username,
-      lastSavedFingerprint: userAdminPayloadFingerprint(initialPayload),
-    };
-
-    row.querySelectorAll('[data-user-admin-autosave]:not([disabled])').forEach(control => {
-      const field = control.dataset.userAdminAutosave;
-      if (field === 'name') {
-        control.addEventListener('input', () => scheduleUserAdminAutosave(row));
-      } else if (field === 'username' || field === 'phone') {
-        control.addEventListener('input', () => setUserAdminSaveStatus(row, 'pending', 'Unsaved'));
-      }
-      control.addEventListener('change', () => scheduleUserAdminAutosave(row, 0));
-      if (control.matches('input[type="text"], input[type="tel"]')) {
-        control.addEventListener('blur', () => scheduleUserAdminAutosave(row, 0));
-        control.addEventListener('keydown', event => {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          control.blur();
-        });
-      }
-    });
-  });
-}
-
-async function loadUsersAdmin() {
-  const container = document.getElementById('users-admin-table-container');
-  if (!container) return;
-
-  ensureUserAdminStyles();
-  container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading users...</p>';
-
-  try {
-    if (isSuperAdminUser()) {
-      await fetchCompanies(true);
-      const newUserCompany = document.getElementById('newUserCompanyCode');
-      if (newUserCompany) {
-        newUserCompany.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
-      }
-    }
-
-    const res = await apiCall('/api/users');
-    usersAdminUsers = res.data || [];
-    renderUsersAdminTables();
-  } catch (error) {
-    container.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Failed to load users: ${escapeHtml(error.message)}</p>`;
-  }
-}
-
-async function createUserAdmin() {
-  const name = document.getElementById('newUserName')?.value.trim() || '';
-  const username = document.getElementById('newUserUsername')?.value.trim();
-  const phone = document.getElementById('newUserPhone')?.value.trim() || '';
-  const password = document.getElementById('newUserPassword')?.value;
-  const role = document.getElementById('newUserRole')?.value || 'user';
-  const hasSalesAccess = document.getElementById('newUserHasSalesAccess')?.checked || false;
-  const isActive = document.getElementById('newUserIsActive')?.checked || false;
-  const companyCode = document.getElementById('newUserCompanyCode')?.value || currentUser?.company?.code || '';
-
-  if (!username) {
-    showNotification('warning', 'Username is required');
-    return;
-  }
-
-  if (!password) {
-    showNotification('warning', 'Password is required');
-    return;
-  }
-
-  try {
-    const payload = {
-      name,
-      phone,
-      username,
-      password,
-      isActive
-    };
-    if (canCurrentUserManageUsers()) {
-      payload.role = role;
-      payload.hasSalesAccess = hasSalesAccess;
-    }
-    if (isSuperAdminUser()) {
-      payload.companyCode = companyCode;
-    }
-
-    let createResponse;
-    try {
-      createResponse = await apiCall('/api/users', 'POST', payload);
-    } catch (error) {
-      if (!error.payload?.requiresHistoryInheritanceConfirmation) throw error;
-      const counts = error.payload.historyCounts || {};
-      const confirmed = await showAppConfirm({
-        title: 'Inherit prior records?',
-        message: `${error.message}\n\nFound ${counts.systemLogs || 0} system log(s), ${counts.eventLogs || 0} event log(s), ${counts.maintenanceLogs || 0} maintenance log(s), and ${counts.quotes || 0} quotation(s).`,
-        confirmText: 'Create and inherit',
-        cancelText: 'Cancel',
-        variant: 'warning',
-      });
-      if (!confirmed) return;
-      createResponse = await apiCall('/api/users', 'POST', {
-        ...payload,
-        inheritHistory: true,
-      });
-    }
-
-    showNotification('success', `User ${username} created`);
-
-    document.getElementById('newUserName').value = '';
-    document.getElementById('newUserUsername').value = '';
-    document.getElementById('newUserPhone').value = '';
-    document.getElementById('newUserPassword').value = '';
-    if (document.getElementById('newUserRole')) {
-      document.getElementById('newUserRole').value = 'user';
-    }
-    if (document.getElementById('newUserHasSalesAccess')) {
-      document.getElementById('newUserHasSalesAccess').checked = false;
-    }
-    document.getElementById('newUserIsActive').checked = true;
-    if (document.getElementById('newUserCompanyCode')) {
-      document.getElementById('newUserCompanyCode').value = currentUser?.company?.code || '';
-    }
-    closeModal('createUserModal');
-
-    await loadUsersAdmin();
-
-  } catch (error) {
-    showNotification('error', `Failed to create user: ${error.message}`);
-  }
-}
-
-async function createCompanyFromUsersAdmin() {
-  const code = document.getElementById('userNewCompanyCode')?.value.trim() || '';
-  const name = document.getElementById('userNewCompanyName')?.value.trim() || '';
-  const firstAdminUsername = document.getElementById('userNewCompanyFirstAdmin')?.value.trim() || '';
-  const firstAdminPassword = document.getElementById('userNewCompanyFirstAdminPassword')?.value || '';
-
-  if (!code && !name) {
-    showNotification('warning', 'Company code or name is required');
-    return;
-  }
-  if (!firstAdminUsername) {
-    showNotification('warning', 'A first admin username is required');
-    return;
-  }
-
-  try {
-    await apiCall('/api/companies', 'POST', {
-      code,
-      name,
-      firstAdminUsername,
-      firstAdminPassword
-    });
-
-    ['userNewCompanyCode', 'userNewCompanyName', 'userNewCompanyFirstAdmin', 'userNewCompanyFirstAdminPassword'].forEach(id => {
-      const input = document.getElementById(id);
-      if (input) input.value = '';
-    });
-
-    closeModal('createCompanyModal');
-    showNotification('success', 'Company created');
-    await loadCompaniesAdmin();
-    if (document.getElementById('users-section')) {
-      await loadUsersAdmin();
-    }
-  } catch (error) {
-    showNotification('error', `Failed to create company: ${error.message}`);
-  }
-}
-
-async function editCompanyFromUsersAdmin() {
-  const originalCode = document.getElementById('userEditCompanyOriginalCode')?.value || '';
-  const code = document.getElementById('userEditCompanyCode')?.value.trim() || '';
-  const name = document.getElementById('userEditCompanyName')?.value.trim() || '';
-
-  if (!originalCode) {
-    showNotification('warning', 'Choose a company first');
-    return;
-  }
-  if (!code) {
-    showNotification('warning', 'Company code is required');
-    return;
-  }
-  if (!name) {
-    showNotification('warning', 'Company name is required');
-    return;
-  }
-
-  try {
-    const response = await apiCall(`/api/companies/${encodeURIComponent(originalCode)}`, 'PUT', { code, name });
-    const renamedActiveCompany = String(currentUser?.company?.code || '').toUpperCase() === String(originalCode).toUpperCase()
-      && String(response?.data?.code || '').toUpperCase() !== String(originalCode).toUpperCase();
-    closeModal('editCompanyModal');
-    showNotification('success', 'Company updated');
-    if (renamedActiveCompany) {
-      window.location.reload();
-      return;
-    }
-    await loadCompaniesAdmin();
-    if (document.getElementById('users-section')) {
-      await loadUsersAdmin();
-    }
-  } catch (error) {
-    showNotification('error', `Failed to update company: ${error.message}`);
-  }
-}
-
-async function deleteCompanyFromUsersAdmin() {
-  const code = document.getElementById('userDeleteCompanyCode')?.value || '';
-  if (!code) {
-    showNotification('warning', 'Choose a company first');
-    return;
-  }
-
-  const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
-  await deleteCompanyAdmin(code, Boolean(company?.isActive), companyOptions.length);
-}
-
-async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword, companyCode = '') {
-  const originalUsername = decodeURIComponent(encodedOriginalUsername);
-
-  if (!newPassword) {
-    showNotification('warning', 'Enter a new password first');
-    return;
-  }
-
-  try {
-    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}/password?companyCode=${encodeURIComponent(companyCode)}`, 'PUT', {
-      password: newPassword
-    });
-
-    showNotification('success', `Password reset for ${originalUsername}`);
-    closeModal('resetUserPasswordModal');
-
-  } catch (error) {
-    showNotification('error', `Failed to reset password: ${error.message}`);
-  }
-}
-
-function ensureResetPasswordModal() {
-  if (document.getElementById('resetUserPasswordModal')) return;
-
-  const modal = document.createElement('div');
-  modal.id = 'resetUserPasswordModal';
-  modal.className = 'modal';
-
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:420px;">
-      <div class="modal-header">
-        <h3>Reset User Password</h3>
-      </div>
-
-      <div class="modal-body">
-        <p style="margin-bottom:12px;">
-          Enter a new password for <strong id="resetPasswordUsernameLabel"></strong>.
-        </p>
-
-        <div class="form-group">
-          <label class="form-label">New Password</label>
-          <input
-            id="resetUserPasswordInput"
-            type="password"
-            class="form-input"
-            placeholder="Enter new password"
-            onkeypress="if(event.key==='Enter') confirmResetPasswordModal()"
-          >
-        </div>
-      </div>
-
-      <div class="modal-footer modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal('resetUserPasswordModal')">Cancel</button>
-        <button class="btn btn-warning" onclick="confirmResetPasswordModal()">Reset Password</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-}
-
-function openResetPasswordModal(encodedOriginalUsername, companyCode = '') {
-  ensureResetPasswordModal();
-
-  const username = decodeURIComponent(encodedOriginalUsername);
-
-  document.getElementById('resetPasswordUsernameLabel').textContent = username;
-  document.getElementById('resetUserPasswordInput').value = '';
-
-  const modal = document.getElementById('resetUserPasswordModal');
-  modal.dataset.encodedUsername = encodedOriginalUsername;
-  modal.dataset.companyCode = companyCode;
-
-  openModal('resetUserPasswordModal');
-
-  setTimeout(() => {
-    document.getElementById('resetUserPasswordInput')?.focus();
-  }, 100);
-}
-
-function confirmResetPasswordModal() {
-  const modal = document.getElementById('resetUserPasswordModal');
-  const encodedOriginalUsername = modal.dataset.encodedUsername;
-  const newPassword = document.getElementById('resetUserPasswordInput')?.value || '';
-
-  resetUserPasswordAdmin(encodedOriginalUsername, newPassword, modal.dataset.companyCode || '');
-}
-
-async function deleteUserAdmin(encodedOriginalUsername, companyCode = '') {
-  const username = decodeURIComponent(encodedOriginalUsername);
-
-  if (currentUser && currentUser.username === username) {
-    showNotification('warning', 'You cannot delete your own account');
-    return;
-  }
-
-  const confirmed = await showAppConfirm({
-    title: 'Delete User',
-    message: `Delete user "${username}"? This cannot be undone.`,
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
-    variant: 'danger',
-  });
-  if (!confirmed) return;
-
-  try {
-    await apiCall(`/api/users/${encodeURIComponent(username)}?companyCode=${encodeURIComponent(companyCode)}`, 'DELETE');
-
-    showNotification('success', `Deleted user ${username}`);
-    await loadUsersAdmin();
-
-  } catch (error) {
-    showNotification('error', `Failed to delete user: ${error.message}`);
-  }
-}
-
-
-function ensureUserAdminStyles() {
-  if (document.getElementById('user-admin-switch-styles')) return;
-
-  const style = document.createElement('style');
-  style.id = 'user-admin-switch-styles';
-  style.textContent = `
-    .users-admin-shell {
-      display: grid;
-      gap: 18px;
-    }
-
-    .users-admin-hero {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 18px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e4e7ec;
-    }
-
-    .users-admin-kicker {
-      margin: 0 0 6px;
-      color: #667085;
-      font-size: 12px;
-      font-weight: 750;
-      text-transform: uppercase;
-      letter-spacing: 0;
-    }
-
-    .users-admin-hero h2,
-    .users-admin-panel h3 {
-      margin: 0;
-      color: #101828;
-    }
-
-    .users-admin-current {
-      min-width: min(260px, 100%);
-      padding: 12px;
-      border: 1px solid #d0d5dd;
-      border-radius: 8px;
-      background: #fff;
-    }
-
-    .users-admin-current-label,
-    .users-admin-summary,
-    .users-admin-inline-meta {
-      color: #667085;
-      font-size: 12px;
-    }
-
-    .users-admin-current strong {
-      display: block;
-      margin-top: 3px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: #101828;
-    }
-
-    .users-admin-current-meta,
-    .user-role-ladder {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-    }
-
-    .user-role-chip {
-      display: inline-flex;
-      align-items: center;
-      min-height: 26px;
-      padding: 4px 9px;
-      border: 1px solid #d0d5dd;
-      border-radius: 999px;
-      background: #fff;
-      color: #344054;
-      font-size: 12px;
-    }
-
-    .user-role-arrow {
-      color: #98a2b3;
-      font-weight: 700;
-    }
-
-    .user-role-chip-owner { border-color: #f2c879; background: #fff7e6; color: #8a4b08; }
-    .user-role-chip-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
-    .user-role-chip-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
-    .user-role-chip-sales { border-color: #fcceee; background: #fdf2fa; color: #c11574; }
-
-    .users-admin-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 18px;
-      align-items: start;
-    }
-
-    .users-admin-panel {
-      border: 1px solid #d0d5dd;
-      border-radius: 8px;
-      background: #fff;
-      padding: 16px;
-    }
-
-    .users-admin-list-panel {
-      min-width: 0;
-    }
-
-    .users-admin-create-modal {
-      max-width: 640px;
-    }
-
-    .users-admin-create-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .users-admin-create-actions {
-      margin-top: 14px;
-      display: flex;
-      justify-content: flex-end;
-    }
-
-    .user-admin-role-select {
-      min-width: 136px;
-    }
-
-    .user-status-badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 20px;
-      padding: 2px 7px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .user-status-active {
-      color: #027a48;
-      background: #ecfdf3;
-    }
-
-    .user-status-inactive {
-      color: #667085;
-      background: #f2f4f7;
-    }
-
-    .user-admin-switch {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .user-admin-switch-stacked {
-      align-self: end;
-      min-height: 44px;
-      padding-bottom: 8px;
-    }
-
-    .user-admin-switch-compact {
-      white-space: nowrap;
-    }
-
-    .user-admin-switch input {
-      position: absolute;
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .user-admin-switch-slider {
-      position: relative;
-      width: 46px;
-      height: 24px;
-      border-radius: 999px;
-      background: #ccc;
-      transition: background 0.2s ease;
-      flex-shrink: 0;
-    }
-
-    .user-admin-switch-slider::before {
-      content: "";
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      left: 2px;
-      top: 2px;
-      border-radius: 50%;
-      background: white;
-      transition: transform 0.2s ease;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
-
-    .user-admin-switch input:checked + .user-admin-switch-slider {
-      background: #28a745;
-    }
-
-    .user-admin-switch input:checked + .user-admin-switch-slider::before {
-      transform: translateX(22px);
-    }
-
-    .user-admin-switch input:disabled + .user-admin-switch-slider {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .user-admin-switch-text {
-      font-size: 13px;
-      color: #333;
-    }
-
-    .user-admin-name-input,
-    .user-admin-username-input {
-      max-width: 220px;
-      min-width: 160px;
-    }
-
-    .users-admin-toolbar,
-    .users-admin-toolbar-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .users-admin-toolbar {
-      margin-bottom: 15px;
-    }
-
-    .users-admin-search {
-      min-width: min(320px, 70vw);
-    }
-
-    .users-admin-sort {
-      appearance: none;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font: inherit;
-      font-weight: inherit;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 0;
-    }
-
-    .users-admin-sort:hover,
-    .users-admin-sort:focus-visible {
-      color: #485fc7;
-    }
-
-    .users-admin-table-scroll {
-      overflow-x: auto;
-    }
-
-    .users-admin-table-scroll .table th,
-    .users-admin-table-scroll .table td {
-      vertical-align: middle;
-    }
-
-    .users-admin-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-    }
-
-    .users-admin-action-buttons {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 6px;
-    }
-
-    .users-admin-action-buttons .btn {
-      width: 100%;
-    }
-
-    .user-admin-save-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 72px;
-      color: #667085;
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .user-admin-save-mark {
-      width: 8px;
-      height: 8px;
-      flex: 0 0 8px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    .user-admin-save-status.is-saved {
-      color: #16845b;
-    }
-
-    .user-admin-save-status.is-pending {
-      color: #b56b0b;
-    }
-
-    .user-admin-save-status.is-error {
-      color: #c43d4b;
-    }
-
-    .user-admin-save-status.is-saving {
-      color: #475467;
-    }
-
-    .user-admin-save-status.is-saving .user-admin-save-mark {
-      width: 11px;
-      height: 11px;
-      flex-basis: 11px;
-      border: 2px solid #d0d5dd;
-      border-top-color: #16845b;
-      background: transparent;
-      animation: user-admin-saving-spin 600ms linear infinite;
-    }
-
-    @keyframes user-admin-saving-spin {
-      to { transform: rotate(360deg); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .user-admin-save-status.is-saving .user-admin-save-mark {
-        animation: none;
-      }
-    }
-
-    .user-admin-last-online {
-      white-space: nowrap;
-      color: #475467;
-      font-size: 13px;
-    }
-
-    .users-admin-empty {
-      text-align: center;
-      color: #667085;
-      padding: 30px;
-      margin: 0;
-    }
-
-    .inactive-users-dropdown {
-      margin-top: 20px;
-      border: 1px solid #dfe3e8;
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fafbfc;
-    }
-
-    .inactive-users-dropdown > summary {
-      cursor: pointer;
-      padding: 14px 16px;
-      font-weight: 600;
-      color: #475467;
-      user-select: none;
-    }
-
-    .inactive-users-dropdown[open] > summary {
-      border-bottom: 1px solid #dfe3e8;
-    }
-
-    .inactive-users-content {
-      background: #fff;
-    }
-
-    .inactive-users-content .table {
-      margin-bottom: 0;
-    }
-
-    @media (max-width: 640px) {
-      .users-admin-hero,
-      .users-admin-toolbar-actions,
-      .users-admin-search {
-        width: 100%;
-      }
-
-      .users-admin-hero {
-        flex-direction: column;
-      }
-
-      .users-admin-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .users-admin-create-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
 // Tab switching functionality
 function switchEventsTab(tabName) {
   // Remove active class from all tabs and content
@@ -8163,36 +4794,36 @@ async function loadOngoingEvents(preloadedEvents = null) {
             setTimeout(() => loadOngoingEvents(), 500);
             return;
         }
-        
+
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading ongoing events...</p>';
-        
+
         const eventList = Array.isArray(preloadedEvents)
             ? preloadedEvents
             : (await apiCall('/api/events?view=summary')).data;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const ongoingEvents = eventList.filter(event => {
             if (['Pending Closure', 'Closed'].includes(String(event.state || ''))) return false;
             const startDate = new Date(event.startDate);
             const endDate = new Date(event.endDate);
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
-            
+
             return today >= startDate && today <= endDate;
         });
-        
+
         container.innerHTML = '';
-        
+
         if (ongoingEvents.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No ongoing events at the moment.</p>';
             return;
         }
-        
+
         ongoingEvents.forEach(event => {
             container.appendChild(createEventCard(event));
         });
-        
+
     } catch (error) {
         console.error('Error loading ongoing events:', error);
         const container = document.getElementById('ongoing-events');
@@ -8211,15 +4842,15 @@ async function loadUpcomingEvents(preloadedEvents = null) {
             setTimeout(() => loadUpcomingEvents(), 500);
             return;
         }
-        
+
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading upcoming events...</p>';
-        
+
         const eventList = Array.isArray(preloadedEvents)
             ? preloadedEvents
             : (await apiCall('/api/events?view=summary')).data;
         const today = new Date();
         today.setHours(23, 59, 59, 999);
-        
+
         const upcomingEvents = eventList
             .filter(event => {
                 if (['Pending Closure', 'Closed'].includes(String(event.state || ''))) return false;
@@ -8227,21 +4858,21 @@ async function loadUpcomingEvents(preloadedEvents = null) {
                 return startDate > today;
             })
             .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-        
+
         // Update the counter
         updateUpcomingEventsCounter(upcomingEvents.length);
-        
+
         container.innerHTML = '';
-        
+
         if (upcomingEvents.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No upcoming events scheduled.</p>';
             return;
         }
-        
+
         upcomingEvents.slice(0, 6).forEach(event => {
             container.appendChild(createEventCard(event));
         });
-        
+
     } catch (error) {
         console.error('Error loading upcoming events:', error);
         const container = document.getElementById('upcoming-events');
@@ -8258,7 +4889,7 @@ function updateUpcomingEventsCounter(count) {
     const counter = document.getElementById('upcoming-events-counter');
     if (counter) {
         counter.textContent = count;
-        
+
         // Update counter styling based on count
         if (count === 0) {
             counter.style.background = '#6c757d'; // Gray for 0
@@ -8373,7 +5004,7 @@ function createEventCard(event) {
     const card = document.createElement('div');
     card.className = `event-card ${getEventStateClass(event.state)}`;
     card.dataset.eventId = String(event.id);
-    
+
     // Helper function to escape HTML
     const escapeHtml = (str) => {
         if (!str) return '';
@@ -8381,7 +5012,7 @@ function createEventCard(event) {
         div.textContent = str;
         return div.innerHTML;
     };
-    
+
     // Helper function to get tag styling
     const getTagStyle = (tag) => {
         if (tag === 'dry hire') {
@@ -8389,12 +5020,12 @@ function createEventCard(event) {
         }
         return 'background: #28a745; color: white;';
     };
-    
+
     const getTagDisplay = (tag) => {
         return tag === 'dry hire' ? 'DRY HIRE' : 'EVENT';
     };
-    
-    const dateRange = event.startDate === event.endDate 
+
+    const dateRange = event.startDate === event.endDate
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
@@ -8437,9 +5068,9 @@ async function forceEventState(eventId, newState) {
 
     try {
         const response = await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
-        
+
         showNotification('success', `Event ${eventId} state forced to ${newState}`);
-        
+
         // Refresh all relevant views
         setTimeout(() => {
             if (document.getElementById('prepare-section').classList.contains('active')) {
@@ -8455,7 +5086,7 @@ async function forceEventState(eventId, newState) {
                 loadReturnEvents();
             }
         }, 500);
-        
+
     } catch (error) {
         showNotification('error', `Failed to force event state: ${error.message}`);
         console.error('Error forcing event state:', error);
@@ -8471,9 +5102,9 @@ async function removeForcedState(eventId) {
 
     try {
         const response = await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
-        
+
         showNotification('success', `Event ${eventId} returned to automatic state management`);
-        
+
         // Refresh all relevant views
         setTimeout(() => {
             if (document.getElementById('prepare-section').classList.contains('active')) {
@@ -8489,7 +5120,7 @@ async function removeForcedState(eventId) {
                 loadReturnEvents();
             }
         }, 500);
-        
+
     } catch (error) {
         showNotification('error', `Failed to remove forced state: ${error.message}`);
         console.error('Error removing forced state:', error);
@@ -8519,7 +5150,7 @@ function showForceStateModal(eventId, currentState) {
                             <p><strong>Event ID:</strong> <span id="forceStateEventId"></span></p>
                             <p><strong>Current State:</strong> <span id="forceStateCurrentState"></span> <span id="forceStateIndicator"></span></p>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="forceStateSelect">Select New State:</label>
                             <select id="forceStateSelect" class="form-input">
@@ -8547,27 +5178,27 @@ function showForceStateModal(eventId, currentState) {
                 </div>
             </div>
         `;
-        
+
         // Add modal to DOM and set up event listeners
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         modal = document.getElementById('forceStateModal');
-        
+
         // Event listeners
         modal.addEventListener('click', function(event) {
             if (event.target === modal) {
                 modal.style.display = 'none';
             }
         });
-        
+
         document.getElementById('forceStateCancelBtn').addEventListener('click', function() {
             modal.style.display = 'none';
         });
-        
+
         document.getElementById('forceStateConfirmBtn').addEventListener('click', function() {
             confirmForceState();
         });
     }
-    
+
     // Populate the modal and check if state is forced
     const eventIdSpan = document.getElementById('forceStateEventId');
     const currentStateSpan = document.getElementById('forceStateCurrentState');
@@ -8575,11 +5206,11 @@ function showForceStateModal(eventId, currentState) {
     const removeForceSection = document.getElementById('removeForceSection');
     const removeForceBtn = document.getElementById('removeForceBtn');
     const stateSelect = document.getElementById('forceStateSelect');
-    
+
     if (eventIdSpan && currentStateSpan && stateSelect) {
         eventIdSpan.textContent = eventId;
         currentStateSpan.textContent = currentState;
-        
+
         // Check if this event has a forced state by calling the API
         checkIfStateIsForced(eventId).then(isForced => {
             if (isForced) {
@@ -8592,11 +5223,11 @@ function showForceStateModal(eventId, currentState) {
                 removeForceBtn.style.display = 'none';
             }
         });
-        
+
         // Reset select and store event ID
         stateSelect.value = '';
         stateSelect.setAttribute('data-event-id', eventId);
-        
+
         // Show modal
         modal.style.display = 'block';
     } else {
@@ -8620,18 +5251,18 @@ async function checkIfStateIsForced(eventId) {
 function handleRemoveForcedState() {
     const stateSelect = document.getElementById('forceStateSelect');
     const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
-    
+
     if (!eventId) {
         showNotification('error', 'Event ID not found');
         return;
     }
-    
+
     // Close modal
     const modal = document.getElementById('forceStateModal');
     if (modal) {
         modal.style.display = 'none';
     }
-    
+
     // Remove forced state
     removeForcedState(eventId);
 }
@@ -8644,30 +5275,30 @@ function handleRemoveForcedState() {
 function confirmForceState() {
     const stateSelect = document.getElementById('forceStateSelect');
     const modal = document.getElementById('forceStateModal');
-    
+
     if (!stateSelect) {
         showNotification('error', 'State selection not found');
         return;
     }
-    
+
     const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
     const newState = stateSelect.value;
-    
+
     if (!newState) {
         showNotification('warning', 'Please select a state');
         return;
     }
-    
+
     if (!eventId) {
         showNotification('error', 'Event ID not found');
         return;
     }
-    
+
     // Close modal
     if (modal) {
         modal.style.display = 'none';
     }
-    
+
     // Force the state
     forceEventState(eventId, newState);
 }
@@ -13267,7 +9898,7 @@ async function saveContainerEdit(containerId) {
   } catch (e) {
     showNotification('error', `Failed to update container: ${e.message}`);
   }
-} 
+}
 
 async function deleteContainer(containerId) {
   const confirmed = await showAppConfirm({
@@ -14471,14 +11102,14 @@ async function openPrepareEventModal(eventId) {
             apiCall(`/api/events/${eventId}`),
             apiCall(`/api/assets/available-for-event/${eventId}`)
         ]);
-        
+
         const event = eventResponse.data;
         const availableAssets = availableAssetsResponse.data;
         const quickAddEnabled = getPrepareQuickAddEnabled();
         window.__currentPrepareEventData = event;
-        
+
         document.getElementById('prepareEventTitle').textContent = `Prepare Assets - Event ${event.id}: ${event.name}`;
-        
+
         let content = `
             <div class="prepare-event-interface">
                 <!-- Event Summary -->
@@ -14513,8 +11144,8 @@ async function openPrepareEventModal(eventId) {
                     </div>
                     <div class="form-group">
                         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:stretch;">
-                            <input type="text" class="form-input" id="universalAssetInput" 
-                                  placeholder="Enter Asset ID or Serial Number..." 
+                            <input type="text" class="form-input" id="universalAssetInput"
+                                  placeholder="Enter Asset ID or Serial Number..."
                                   onkeypress="if(event.key==='Enter') processUniversalAsset(${eventId})"
                                   autocomplete="off"
                                   style="font-size: 16px; padding: 12px; flex:1 1 260px;">
@@ -14566,12 +11197,12 @@ async function openPrepareEventModal(eventId) {
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- Existing custom assets are rendered inside their tagged department below. -->
                     </div>
                 </div>
         `;
-        
+
         // Process model assignments and custom assets together, grouped by department.
         const customAssetsByDeptForPrepare = groupCustomAssetsByDepartment(event);
         const renderedCustomDepartments = new Set();
@@ -14644,9 +11275,9 @@ async function openPrepareEventModal(eventId) {
                     }
 
                     const modelGroup = row.modelGroup;
-                    const modelAvailableAssets = availableAssets.filter(a => 
-                        a.brand === modelGroup.brand && 
-                        a.model === modelGroup.model && 
+                    const modelAvailableAssets = availableAssets.filter(a =>
+                        a.brand === modelGroup.brand &&
+                        a.model === modelGroup.model &&
                         a.department === modelGroup.department
                     );
 
@@ -14720,7 +11351,7 @@ async function openPrepareEventModal(eventId) {
         if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
             Object.keys(event.assetsByDepartment).forEach(dept => {
                 const assets = event.assetsByDepartment[dept];
-                
+
                 // Add department header if there are non-model assets
                 const nonModelAssets = assets
                     .filter(asset => !asset.id.startsWith('[MODEL]'))
@@ -14734,7 +11365,7 @@ async function openPrepareEventModal(eventId) {
                         <div id="assigned-dept-${dept}" style="display: block;">
                     `;
                 }
-                
+
                 nonModelAssets.forEach(asset => {
                     if (!asset.id.startsWith('[MODEL]')) {
                         const custom = parseCustomAsset(asset.id, asset);
@@ -14745,7 +11376,7 @@ async function openPrepareEventModal(eventId) {
                         let statusColor = isReturned ? '#dc3545' : (isPrepared ? '#28a745' : (isCollected ? '#17a2b8' : '#ffc107'));
                         let statusText = isReturned ? 'Returned' : (isPrepared ? 'Prepared' : (isCollected ? 'Collected' : 'Pending'));
                         const isExtra = event.extraAssets && event.extraAssets.includes(asset.id);
-                        const extraBadge = isExtra ? 
+                        const extraBadge = isExtra ?
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                         const safeAssetId = encodeURIComponent(asset.id);
                         const displayName = custom ? customAssetDisplayName(custom) : (asset.isBulk ? (asset.name || `${asset.brand || ''} ${asset.model || ''}`.trim() || asset.id) : asset.id);
@@ -14775,7 +11406,7 @@ async function openPrepareEventModal(eventId) {
                                     `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
                             }
                         } else {
-                            actionButton = isPrepared ? 
+                            actionButton = isPrepared ?
                                 `<button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeAssetId}" data-action="unprepare" style="padding: 4px 8px; font-size: 11px;">Unprepare</button>` :
                                 `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeAssetId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
                         }
@@ -14795,7 +11426,7 @@ async function openPrepareEventModal(eventId) {
                         `;
                     }
                 });
-                
+
                 if (nonModelAssets.length > 0) {
                     content += '</div>';
                 }
@@ -14807,7 +11438,7 @@ async function openPrepareEventModal(eventId) {
         content += `
                     </div>
                 </div>
-                
+
                 <!-- Actions -->
                 <div class="modal-actions" style="margin-top: 20px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
                     <button class="btn btn-secondary" onclick="closeModal('prepareEventModal')">Close</button>
@@ -14815,14 +11446,14 @@ async function openPrepareEventModal(eventId) {
                 </div>
             </div>
         `;
-        
+
         document.getElementById('prepareEventContent').innerHTML = content;
         setPrepareQuickAddEnabled(quickAddEnabled);
         openModal('prepareEventModal');
-        
+
         // Store available assets for the additional asset search
         window.currentAdditionalAssets = availableAssets;
-        
+
     } catch (error) {
         showNotification('error', 'Failed to load event preparation interface');
         console.error('Error loading prepare event modal:', error);
@@ -15008,11 +11639,11 @@ function renderCalendar(events) {
   const container = document.getElementById('calendar-container');
   const currentMonth = currentCalendarDate.getMonth();
   const currentYear = currentCalendarDate.getFullYear();
-  
+
   // Calendar header
   const monthNames = ["January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"];
-  
+
   const headerHTML = `
     <div class="calendar-header">
       <div class="calendar-month-heading">
@@ -15032,13 +11663,13 @@ function renderCalendar(events) {
       </div>
     </div>
   `;
-  
+
   // Days of week header
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const headerRowHTML = daysOfWeek.map(day => 
+  const headerRowHTML = daysOfWeek.map(day =>
     `<div class="calendar-day-header">${day}</div>`
   ).join('');
-  
+
   // Calculate calendar grid
   const displayRange = calendarDisplayRange(currentCalendarDate);
   const calendarDays = [];
@@ -15053,7 +11684,7 @@ function renderCalendar(events) {
       isToday: date.toDateString() === today.toDateString(),
     });
   }
-  
+
   // Process events for the calendar with proper row assignment
   const eventPlacements = processEventsForCalendar(events, calendarDays);
   const placementsByDay = new Map();
@@ -15071,20 +11702,20 @@ function renderCalendar(events) {
     const lastIndex = Math.min(calendarDays.length - 1, Math.floor((eventEnd.getTime() - calendarStartTime) / 86400000));
     for (let index = firstIndex; index <= lastIndex; index += 1) dayEventCounts[index] += 1;
   });
-  
+
   // Generate calendar HTML
   let calendarDaysHTML = '';
-  
+
   calendarDays.forEach((dayData, dayIndex) => {
     const dayPlacements = placementsByDay.get(dayIndex) || [];
-    
+
     // Create event layers HTML (max 4 visible)
     const eventLayersHTML = [];
     for (let row = 0; row < 4; row++) {
       const placement = dayPlacements.find(p => p.row === row);
       if (placement) {
         const eventClass = `calendar-event ${getEventStateClass(placement.event.state)}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
-        
+
         const spanDays = Math.max(1, placement.spanDays || 1);
         const eventName = String(placement.event.name || '');
         const eventText = eventName
@@ -15103,16 +11734,16 @@ function renderCalendar(events) {
         `);
       }
     }
-    
+
     // Count total events for this day (for "more" indicator)
     const hiddenEventCount = Math.max(0, dayEventCounts[dayIndex] - 4);
-    
+
     // More events indicator
-    const moreEventsHTML = hiddenEventCount > 0 ? 
+    const moreEventsHTML = hiddenEventCount > 0 ?
       `<div class="more-events" onpointerdown="event.stopPropagation()" onclick="showDayEvents(event, ${dayIndex}, '${dayData.date.toDateString()}')">${hiddenEventCount} more</div>` : '';
-    
+
     const dayClass = `calendar-day ${!dayData.isCurrentMonth ? 'other-month' : ''} ${dayData.isToday ? 'today' : ''}`;
-    
+
     calendarDaysHTML += `
       <div class="${dayClass}" data-calendar-date="${calendarDateKey(dayData.date)}"${isAdminUser() ? ` tabindex="0" role="button" aria-label="Create event on ${escapeHtmlAttr(dayData.date.toLocaleDateString('en-SG', { day:'numeric', month:'long', year:'numeric' }))}"` : ''}>
         <div class="calendar-day-number">${dayData.dayNum}</div>
@@ -15123,7 +11754,7 @@ function renderCalendar(events) {
       </div>
     `;
   });
-  
+
   container.innerHTML = `
     ${headerHTML}
     <div class="calendar-grid">
@@ -15131,7 +11762,7 @@ function renderCalendar(events) {
       ${calendarDaysHTML}
     </div>
   `;
-  
+
   // Store events data for popup
   window.calendarVisibleEvents = events;
   window.calendarDays = calendarDays;
@@ -15287,12 +11918,12 @@ document.addEventListener('keydown', event => {
 function processEventsForCalendar(events, calendarDays) {
   const eventPlacements = [];
   const rowOccupancy = {}; // Track which rows are occupied on which days
-  
+
   // Initialize row occupancy tracking
   calendarDays.forEach((_, dayIndex) => {
     rowOccupancy[dayIndex] = new Set();
   });
-  
+
   // Sort events by start date, then by duration (longer events first)
   const sortedEvents = [...events].sort((a, b) => {
     const startA = new Date(a.startDate);
@@ -15304,19 +11935,19 @@ function processEventsForCalendar(events, calendarDays) {
     }
     return startA - startB;
   });
-  
+
   sortedEvents.forEach(event => {
     const eventStart = new Date(event.startDate);
     const eventEnd = new Date(event.endDate);
     eventStart.setHours(0, 0, 0, 0);
     eventEnd.setHours(23, 59, 59, 999);
-    
+
     // Find all days this event spans
     const spanningDays = [];
     calendarDays.forEach((dayData, dayIndex) => {
       const dayDate = new Date(dayData.date);
       dayDate.setHours(0, 0, 0, 0);
-      
+
       if (dayDate >= eventStart && dayDate <= eventEnd) {
         spanningDays.push({
           dayIndex,
@@ -15326,9 +11957,9 @@ function processEventsForCalendar(events, calendarDays) {
         });
       }
     });
-    
+
     if (spanningDays.length === 0) return;
-    
+
     // Find the first available row that works for ALL spanning days
     let assignedRow = -1;
     for (let row = 0; row < 4; row++) {
@@ -15344,15 +11975,15 @@ function processEventsForCalendar(events, calendarDays) {
         break;
       }
     }
-    
+
     // If no row available in visible area, skip this event
     if (assignedRow === -1) return;
-    
+
     // Mark this row as occupied on all spanning days
     spanningDays.forEach(day => {
       rowOccupancy[day.dayIndex].add(assignedRow);
     });
-    
+
     // Group spanning days by calendar row to handle week breaks
     const daysByCalendarRow = {};
     spanningDays.forEach(day => {
@@ -15361,15 +11992,15 @@ function processEventsForCalendar(events, calendarDays) {
       }
       daysByCalendarRow[day.calendarRow].push(day);
     });
-    
+
     // Create placements for each calendar row
     Object.values(daysByCalendarRow).forEach(rowDays => {
       rowDays.sort((a, b) => a.calendarCol - b.calendarCol);
-      
+
       // Group consecutive days
       const consecutiveGroups = [];
       let currentGroup = [rowDays[0]];
-      
+
       for (let i = 1; i < rowDays.length; i++) {
         if (rowDays[i].calendarCol === rowDays[i-1].calendarCol + 1) {
           currentGroup.push(rowDays[i]);
@@ -15379,7 +12010,7 @@ function processEventsForCalendar(events, calendarDays) {
         }
       }
       consecutiveGroups.push(currentGroup);
-      
+
       // Each consecutive weekly group is one continuous visual bar.
       consecutiveGroups.forEach(group => {
         eventPlacements.push({
@@ -15392,19 +12023,19 @@ function processEventsForCalendar(events, calendarDays) {
       });
     });
   });
-  
+
   return eventPlacements;
 }
 
 function showDayEvents(event, dayIndex, dateString) {
   event.stopPropagation();
-  
+
   // Remove any existing popup
   const existingPopup = document.querySelector('.day-events-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
-  
+
   // Get all events for this day
   const dayDate = window.calendarDays[dayIndex].date;
   const dayEvents = (window.calendarVisibleEvents || []).filter(event => {
@@ -15416,16 +12047,16 @@ function showDayEvents(event, dayIndex, dateString) {
     checkDate.setHours(0, 0, 0, 0);
     return checkDate >= eventStart && checkDate <= eventEnd;
   });
-  
+
   // Create popup
   const popup = document.createElement('div');
   popup.className = 'day-events-popup';
-  
+
   const eventsHTML = dayEvents.map(event => {
     const eventClass = `day-event-item ${getEventStateClass(event.state)}${event.tag === 'dry hire' ? ' dry-hire' : ''}`;
     return `<div class="${eventClass}" onclick="viewEvent(${event.id}); closeDayEventsPopup();" title="${event.name}">${event.name}</div>`;
   }).join('');
-  
+
   popup.innerHTML = `
     <div class="day-events-header">
       <span>${dateString}</span>
@@ -15433,12 +12064,12 @@ function showDayEvents(event, dayIndex, dateString) {
     </div>
     ${eventsHTML}
   `;
-  
+
   // Position popup near the click
   const rect = event.target.getBoundingClientRect();
   popup.style.left = `${rect.left}px`;
   popup.style.top = `${rect.bottom + 5}px`;
-  
+
   // Adjust if popup goes off screen
   document.body.appendChild(popup);
   const popupRect = popup.getBoundingClientRect();
@@ -15448,7 +12079,7 @@ function showDayEvents(event, dayIndex, dateString) {
   if (popupRect.bottom > window.innerHeight) {
     popup.style.top = `${rect.top - popupRect.height - 5}px`;
   }
-  
+
   // Close popup when clicking outside
   setTimeout(() => {
     document.addEventListener('click', closeDayEventsPopup);
@@ -15485,11 +12116,11 @@ function goToToday() {
 function handleAssetActionClick(event) {
     if (event.target.classList.contains('asset-action-btn')) {
         event.preventDefault();
-        
+
         const eventId = event.target.dataset.eventId;
         const assetId = event.target.dataset.assetId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
         const action = event.target.dataset.action;
-        
+
         if (action === 'prepare') {
             prepareSpecificAsset(eventId, assetId);
         } else if (action === 'unprepare') {
@@ -15695,11 +12326,11 @@ async function uncollectCustomAsset(eventId, encodedAssetId) {
 function handleCustomAssetClick(event) {
     if (event.target.classList.contains('custom-asset-btn')) {
         event.preventDefault();
-        
+
         const eventId = event.target.dataset.eventId;
         const assetId = event.target.dataset.assetId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
         const action = event.target.dataset.action;
-        
+
         if (action === 'prepare') {
             prepareSpecificAsset(eventId, assetId);
         } else if (action === 'unprepare') {
@@ -15773,7 +12404,7 @@ async function addAndPrepareCustomAsset(eventId) {
 function togglePrepareSection(sectionId) {
     const section = document.getElementById(sectionId);
     const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
-    
+
     if (section && toggleIcon) {
         if (section.style.display === 'none') {
             section.style.display = 'block';
@@ -15795,21 +12426,21 @@ async function assignAdditionalAsset(eventId, assetId) {
     try {
         const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} as additional asset`);
-        
+
         // Remove from search results
         const assetElement = document.querySelector(`[onclick*="assignAdditionalAsset(${eventId}, '${assetId}')"]`).closest('div');
         if (assetElement) {
             assetElement.remove();
         }
-        
+
         // Update available assets cache
         if (window.currentAdditionalAssets) {
             window.currentAdditionalAssets = window.currentAdditionalAssets.filter(a => a.id !== assetId);
         }
-        
+
         updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
         schedulePrepareUiSync(eventId);
-        
+
     } catch (error) {
         console.error('Error in assignAdditionalAsset:', error);
         showNotification('error', `Failed to assign asset: ${error.message}`);
@@ -15824,22 +12455,22 @@ async function assignAdditionalAsset(eventId, assetId) {
 async function prepareAssignedAsset(eventId) {
     const input = document.getElementById('assignedAssetPrepare');
     const assetId = input.value.trim();
-    
+
     if (!assetId) {
         showNotification('warning', 'Please enter an asset ID');
         return;
     }
-    
+
     try {
         const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
-        
+
         // Clear input
         input.value = '';
-        
+
         updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
         schedulePrepareUiSync(eventId);
-        
+
     } catch (error) {
         console.error('Error in prepareAssignedAsset:', error);
         showNotification('error', `Failed to prepare asset: ${error.message}`);
@@ -15878,7 +12509,7 @@ async function processUniversalAsset(eventId) {
           : ''
       )
     };
-    
+
     if (!assetId) {
         showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
         return;
@@ -15896,17 +12527,17 @@ async function processUniversalAsset(eventId) {
         return;
       }
     }
-    
+
     try {
         // Get event details and available assets to check asset existence and model matching
         const [eventResponse, availableAssetsResponse] = await Promise.all([
             apiCall(`/api/events/${eventId}`),
             apiCall('/api/assets/available')
         ]);
-        
+
         const event = eventResponse.data;
         const allAssets = availableAssetsResponse.data;
-        
+
         // Find the asset in available assets or check if it exists in inventory
         let assetDetails = findAssetByIdentifier(assetId, allAssets);
 
@@ -15918,30 +12549,30 @@ async function processUniversalAsset(eventId) {
         if (assetDetails) {
             assetId = getAssetIdentifierForApi(assetDetails);
         }
-        
+
         // If not in available assets, try to get asset details from the event's actually_prepared list
         if (!assetDetails && event.actuallyPrepared && event.actuallyPrepared.includes(assetId)) {
             // Asset might already be prepared, we need to check its details differently
             // For now, we'll create a basic asset object
             assetDetails = { id: assetId };
         }
-        
+
         let isDirectlyAssigned = false;
         let isAlreadyPrepared = false;
         let isReturned = false;
         let fulfillsModelRequirement = false;
         let isExtra = false;
-        
+
         // Check if asset is directly in prepared_items (assigned)
         if (event.preparedItems && event.preparedItems.includes(assetId)) {
             isDirectlyAssigned = true;
         }
-        
+
         // Check if asset is already prepared
         if (event.actuallyPrepared && event.actuallyPrepared.includes(assetId)) {
             isAlreadyPrepared = true;
         }
-        
+
         // Check if asset is returned
         if (event.returnedItems && event.returnedItems.includes(assetId)) {
             isReturned = true;
@@ -15950,7 +12581,7 @@ async function processUniversalAsset(eventId) {
         if (event.extraAssets && event.extraAssets.includes(assetId)) {
             isExtra = true;
         }
-        
+
         // Check if asset fulfills any model requirement
         if (assetDetails && event.preparedItems) {
             for (const preparedItem of event.preparedItems) {
@@ -15961,10 +12592,10 @@ async function processUniversalAsset(eventId) {
                             const reqDept = parts[0];
                             const reqBrand = parts[1];
                             const reqModel = parts[2];
-                            
+
                             // Description is display text only; type matching uses department, brand, and model.
-                            if (assetDetails.department === reqDept && 
-                                assetDetails.brand === reqBrand && 
+                            if (assetDetails.department === reqDept &&
+                                assetDetails.brand === reqBrand &&
                                 assetDetails.model === reqModel) {
                                 fulfillsModelRequirement = true;
                                 break;
@@ -15976,15 +12607,15 @@ async function processUniversalAsset(eventId) {
                 }
             }
         }
-        
+
         // Determine if asset is considered "assigned" (either directly or through model requirement)
         const isAssigned = isDirectlyAssigned || fulfillsModelRequirement;
-        
+
         if (isReturned) {
             showFeedback(feedbackDiv, 'error', `${assetId} has already been returned from this event`);
             return;
         }
-        
+
         if (isAssigned) {
             if (isAlreadyPrepared) {
                 if (quickAddEnabled && isExtra) {
@@ -16003,11 +12634,11 @@ async function processUniversalAsset(eventId) {
                 const responseIsExtra = !!(response?.data?.isExtra);
                 updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
                 showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} assigned and prepared`);
-                
+
                 // Clear input and focus back on it
                 input.value = '';
                 input.focus();
-                
+
                 refreshPrepareUiAfterAssetChange(eventId);
             }
         } else {
@@ -16029,7 +12660,7 @@ async function processUniversalAsset(eventId) {
 
             refreshPrepareUiAfterAssetChange(eventId);
         }
-        
+
     } catch (error) {
         showFeedback(feedbackDiv, 'error', `Failed to process asset: ${error.message}`);
     }
@@ -16043,25 +12674,25 @@ async function processUniversalAsset(eventId) {
 async function assignAndPrepareAsset(eventId, assetId) {
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     const input = document.getElementById('universalAssetInput');
-    
+
     try {
         const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
-        
+
         if (feedbackDiv) {
             showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared as extra asset`);
         } else {
             showNotification('success', `${assetId} assigned and prepared as extra asset`);
         }
-        
+
         // Clear input and focus back on it
         if (input) {
             input.value = '';
             input.focus();
         }
-        
+
         updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
         schedulePrepareUiSync(eventId);
-        
+
     } catch (error) {
         console.error('Error in assignAndPrepareAsset:', error);
         if (feedbackDiv) {
@@ -16077,7 +12708,7 @@ function updateEventSummary(event) {
     const requiredEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(1) .stat-number');
     const preparedEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(2) .stat-number');
     const extraEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(3) .stat-number');
-    
+
     if (requiredEl) requiredEl.textContent = event.totalAssets;
     if (preparedEl) preparedEl.textContent = event.totalPrepared;
     if (extraEl) extraEl.textContent = getEventExtraQuantity(event);
@@ -16086,19 +12717,19 @@ function updateEventSummary(event) {
 function updateModelGroupsSection(event, eventId) {
     // Find all model requirement sections and update their status
     const modelSections = document.querySelectorAll('.model-prep-section');
-    
+
     modelSections.forEach(section => {
         // Extract model info from the section
         const titleElement = section.querySelector('h5');
         if (!titleElement) return;
-        
+
         const titleText = titleElement.textContent;
         const match = titleText.match(/(\d+)x (.+)/);
         if (!match) return;
-        
+
         const requiredQty = parseInt(match[1]);
         const modelName = match[2];
-        
+
         // Find matching model group in event data
         if (event.modelGroups) {
             Object.values(event.modelGroups).forEach(modelGroup => {
@@ -16117,7 +12748,7 @@ function updateModelSection(section, modelGroup, eventId) {
     const countableAssignedCount = getCountablePreparedQuantity(modelGroup);
     const extraAssignedCount = getExtraPreparedQuantity(modelGroup);
     const progressPercent = requiredQty > 0 ? Math.round((assignedCount / requiredQty) * 100) : 0;
-    
+
     // Update the progress info
     const statusDiv = section.querySelector('div[style*="text-align: right"] div:first-child');
     if (statusDiv) {
@@ -16129,7 +12760,7 @@ function updateModelSection(section, modelGroup, eventId) {
             </div>
         `;
     }
-    
+
     // Update the progress bar
     const progressBar = section.querySelector('div[style*="background: #e9ecef"] div');
     if (progressBar) {
@@ -16137,7 +12768,7 @@ function updateModelSection(section, modelGroup, eventId) {
         progressBar.style.background = color;
         progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
     }
-    
+
     // Update assigned assets list
     const assignedContainer = section.querySelector('div[style*="background: #d4edda"]');
     if (assignedContainer && modelGroup.assignedAssets.length > 0) {
@@ -16150,7 +12781,7 @@ function updateModelSection(section, modelGroup, eventId) {
             const isExtra = !!asset.isExtra || index >= requiredQty;
             const bgColor = isExtra ? '#fff3cd' : '#d4edda';
             const textColor = isExtra ? '#856404' : '#155724';
-            
+
             content += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
                     <span style="color: ${textColor};">
@@ -16290,22 +12921,22 @@ async function updateAssetListSection(eventId) {
     try {
         const response = await apiCall(`/api/events/${eventId}`);
         const event = response.data;
-        
+
         // Update Event Summary
         updateEventSummary(event);
-        
+
         // Update Model Groups sections
         updateModelGroupsSection(event, eventId);
-        
+
         // Update the "All Assets Assigned to Event" section
         updateAllAssetsSection(event, eventId);
-        
+
         // Ensure the input stays focused
         const input = document.getElementById('universalAssetInput');
         if (input) {
             setTimeout(() => input.focus(), 100);
         }
-        
+
     } catch (error) {
         console.error('Error updating asset list section:', error);
     }
@@ -16319,16 +12950,16 @@ function showFeedback(feedbackDiv, type, message) {
         'warning': { bg: '#fff3cd', color: '#856404', border: '#ffeaa7' },
         'info': { bg: '#d1ecf1', color: '#0c5460', border: '#bee5eb' }
     };
-    
+
     const style = colors[type] || colors.info;
-    
+
     feedbackDiv.innerHTML = `
         <div style="
-            background: ${style.bg}; 
-            color: ${style.color}; 
-            border: 1px solid ${style.border}; 
-            padding: 10px; 
-            border-radius: 4px; 
+            background: ${style.bg};
+            color: ${style.color};
+            border: 1px solid ${style.border};
+            padding: 10px;
+            border-radius: 4px;
             font-size: 14px;
             display: flex;
             align-items: center;
@@ -17955,7 +14586,7 @@ async function returnPageExit() {
 async function loadEventAssetsForReturn() {
     const selectElement = document.getElementById('returnEventSelect');
     const eventId = selectElement?.value;
-    
+
     if (!eventId) {
         document.getElementById('event-summary').style.display = 'none';
         document.getElementById('assets-return-section').style.display = 'none';
@@ -18098,7 +14729,7 @@ async function loadEventAssetsForReturn() {
         }
 
         document.getElementById('return-assets-list').innerHTML = assetsContent;
-        
+
     } catch (error) {
         showNotification('error', 'Failed to load event assets');
         console.error('Error loading event assets for return:', error);
@@ -18130,7 +14761,7 @@ async function returnSpecificAssetNew(eventId, assetId, buttonElement = null) {
     if (buttonElement && buttonElement.disabled) {
         return;
     }
-    
+
     try {
         // Disable the button immediately
         if (buttonElement) {
@@ -18138,17 +14769,17 @@ async function returnSpecificAssetNew(eventId, assetId, buttonElement = null) {
             buttonElement.style.opacity = '0.5';
             buttonElement.textContent = 'Returning...';
         }
-        
+
         await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: decodedAssetId });
         showNotification('success', `${customAssetLabelFromId(decodedAssetId)} returned successfully`);
-        
+
         // Remove the asset from the UI with animation
         const parentItem = buttonElement ? buttonElement.closest('.return-asset-item') : null;
         if (parentItem) {
             parentItem.style.transition = 'opacity 0.3s ease';
             parentItem.style.opacity = '0.3';
             parentItem.style.pointerEvents = 'none';
-            
+
             setTimeout(() => {
                 if (parentItem.parentNode) {
                     parentItem.parentNode.removeChild(parentItem);
@@ -18164,14 +14795,14 @@ async function returnSpecificAssetNew(eventId, assetId, buttonElement = null) {
                 loadEventAssetsForReturn();
             }, 500);
         }
-        
+
         // Update overdue counter
         await loadStatsCards();
-        
+
     } catch (error) {
         showNotification('error', `Failed to return asset: ${error.message}`);
         console.error('Error returning asset:', error);
-        
+
         // Re-enable button on error
         if (buttonElement) {
             buttonElement.disabled = false;
@@ -18234,12 +14865,12 @@ async function returnManualAssetNew() {
     const assetInput = document.getElementById('manualReturnAssetIdNew');
     const eventId = eventSelect.value;
     let assetId = normalizeScannedIdentifier(assetInput.value);
-    
+
     if (!eventId) {
         showNotification('warning', 'Please select an event first');
         return;
     }
-    
+
     if (!assetId) {
         showNotification('warning', 'Please enter an asset ID');
         return;
@@ -18252,21 +14883,21 @@ async function returnManualAssetNew() {
     } catch (error) {
       console.warn('Could not resolve scanned return identifier locally:', error);
     }
-    
+
     try {
         await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
         showNotification('success', `${assetId} returned successfully`);
-        
+
         // Clear input and focus back on it
         assetInput.value = '';
         assetInput.focus();
-        
+
         // Refresh the event assets display
         loadEventAssetsForReturn();
-        
+
         // Update overdue counter
         await loadStatsCards();
-        
+
     } catch (error) {
         showNotification('error', `Failed to return asset: ${error.message}`);
     }
@@ -18817,11 +15448,11 @@ async function viewEventLegacy(eventId) {
     window.currentEventDetailsMode = "view";
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
-    
+
     // Store the current event ID and data for the delivery order button
     window.currentEventId = eventId;
     window.currentEventData = event;
-    
+
 
     document.getElementById(
       "eventDetailsTitle"
@@ -18920,7 +15551,7 @@ async function viewEventLegacy(eventId) {
 
       Object.keys(modelsByDept).sort().forEach((dept) => {
         const models = modelsByDept[dept];
-        
+
         content += `
             <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="toggleViewSection('model-dept-${dept}')">
@@ -18935,11 +15566,11 @@ async function viewEventLegacy(eventId) {
           const assignedCount = getPreparedQuantity(model);
           const modelId = `model-${dept}-${index}`;
           const progressPercent = model.requiredQuantity > 0 ? Math.round((assignedCount / model.requiredQuantity) * 100) : 0;
-          
+
           // Fix status determination - if we have enough or more assets, it should be READY
           let statusColor = '#6c757d';
           let displayStatus = model.status;
-          
+
           if (assignedCount >= model.requiredQuantity && model.status !== 'returned') {
             displayStatus = 'ready';
             statusColor = '#28a745';
@@ -18953,8 +15584,8 @@ async function viewEventLegacy(eventId) {
 
           content += `
                 <div style="padding: 12px 15px; border-bottom: 1px solid #f1f1f1; cursor: pointer; transition: background-color 0.2s;"
-                     class="model-toggle" data-model-id="${modelId}" 
-                     onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                     class="model-toggle" data-model-id="${modelId}"
+                     onmouseover="this.style.backgroundColor='#f8f9fa'"
                      onmouseout="this.style.backgroundColor='white'">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div style="flex: 1;">
@@ -18976,7 +15607,7 @@ async function viewEventLegacy(eventId) {
                             <span class="toggle-icon" data-model-id="${modelId}" style="font-size: 14px; color: #999; cursor: pointer; padding: 4px; border-radius: 3px; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='rgba(0,0,0,0.1)'" onmouseout="this.style.backgroundColor='transparent'">▼</span>
                         </div>
                     </div>
-                    
+
                     <div id="${modelId}" class="model-details" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f1f1;">
           `;
 
@@ -19033,7 +15664,7 @@ async function viewEventLegacy(eventId) {
           const individualAssets = assets
             .filter(asset => !asset.id.startsWith('[MODEL]'))
             .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
-          
+
           if (individualAssets.length > 0) {
             content += `
                 <div style="border-bottom: 1px solid #f1f1f1; overflow: hidden;">
@@ -19049,7 +15680,7 @@ async function viewEventLegacy(eventId) {
               let statusIcon = '📋';
               let statusColor = '#6c757d';
               let statusText = 'Assigned';
-              
+
               // Check status in the correct order: returned first, then prepared
               if (asset.status === 'returned' || (event.returnedItems && event.returnedItems.includes(asset.id))) {
                 statusIcon = '↩️';
@@ -19061,7 +15692,7 @@ async function viewEventLegacy(eventId) {
                 statusText = 'Prepared';
               }
 
-              const extraBadge = asset.isExtra ? 
+              const extraBadge = asset.isExtra ?
                 '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 9px; margin-left: 8px; font-weight: 500;">EXTRA</span>' : '';
               const custom = parseCustomAsset(asset.id, asset);
               const displayId = custom ? customAssetDisplayName(custom) : asset.id;
@@ -19097,13 +15728,13 @@ async function viewEventLegacy(eventId) {
 
     // Add event listeners for model toggles with better event handling
     const eventDetailsContent = document.getElementById("eventDetailsContent");
-    
+
     // Remove any existing listeners to prevent duplicates
     const existingListener = eventDetailsContent.handleModelToggle;
     if (existingListener) {
       eventDetailsContent.removeEventListener('click', existingListener);
     }
-    
+
     function handleModelToggle(e) {
       // Check if clicked on toggle icon specifically
       if (e.target.classList.contains('toggle-icon')) {
@@ -19115,7 +15746,7 @@ async function viewEventLegacy(eventId) {
           return;
         }
       }
-      
+
       // Check if clicked on model toggle area
       let toggleElement = null;
       if (e.target.classList.contains('model-toggle')) {
@@ -19123,7 +15754,7 @@ async function viewEventLegacy(eventId) {
       } else if (e.target.closest('.model-toggle')) {
         toggleElement = e.target.closest('.model-toggle');
       }
-      
+
       if (toggleElement) {
         const modelId = toggleElement.getAttribute('data-model-id');
         if (modelId) {
@@ -19133,7 +15764,7 @@ async function viewEventLegacy(eventId) {
         }
       }
     }
-    
+
     // Store the listener reference for cleanup
     eventDetailsContent.handleModelToggle = handleModelToggle;
     eventDetailsContent.addEventListener('click', handleModelToggle);
@@ -19147,7 +15778,7 @@ async function viewEventLegacy(eventId) {
 function toggleViewSection(sectionId) {
     const section = document.getElementById(sectionId);
     const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
-    
+
     if (section && toggleIcon) {
         if (section.style.display === 'none') {
             section.style.display = 'block';
@@ -21302,7 +17933,7 @@ async function openEventLogs(eventId, eventName = '') {
 function toggleEventLogSection(sectionId) {
   const section = document.getElementById(sectionId);
   const toggleIcon = document.getElementById(sectionId + '-toggle');
-  
+
   if (section && toggleIcon) {
     if (section.style.display === 'none') {
       section.style.display = 'block';
@@ -21364,17 +17995,17 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
 
     function generateActionButton(eventId, asset, isPrepared) {
     const safeAssetId = encodeURIComponent(asset.id);
-    
+
     if (isPrepared) {
-        return `<button class="btn btn-warning asset-action-btn" 
-                        data-event-id="${eventId}" 
-                        data-asset-id="${safeAssetId}" 
+        return `<button class="btn btn-warning asset-action-btn"
+                        data-event-id="${eventId}"
+                        data-asset-id="${safeAssetId}"
                         data-action="unprepare"
                         style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Unprepare</button>`;
     } else {
-        return `<button class="btn btn-success asset-action-btn" 
-                        data-event-id="${eventId}" 
-                        data-asset-id="${safeAssetId}" 
+        return `<button class="btn btn-success asset-action-btn"
+                        data-event-id="${eventId}"
+                        data-asset-id="${safeAssetId}"
                         data-action="prepare"
                         style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Prepare</button>`;
     }
@@ -21406,7 +18037,7 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
       `;
     } else {
       logHTML += `<div style="max-height: 400px; overflow-y: auto;">`;
-      
+
       relevantLogs.forEach((log, index) => {
         const actionType = getActionType(log.action);
         const assetId = extractAssetId(log.action);
@@ -21434,9 +18065,9 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
           </div>
         `;
       });
-      
+
       logHTML += `</div>`;
-      
+
       logHTML += `
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef; text-align: center; color: #666; font-size: 12px;">
           Showing ${relevantLogs.length} activity record(s)
@@ -21448,7 +18079,7 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
         </div>
       </div>
     `;
-    
+
     return logHTML;
   } catch (error) {
     console.error('Error loading event logs:', error);
@@ -21809,7 +18440,7 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
   document.getElementById("editQuantityModel").value = model;
   document.getElementById("editQuantityDepartment").value = department;
   document.getElementById("editQuantityCurrentQty").value = currentQuantity;
-  
+
   // Store the full description (add this hidden field to your HTML)
   document.getElementById("editQuantityDescription").value = description;
 
@@ -21910,7 +18541,7 @@ function handleQuantityBlur(inputId) {
 // Handle special key behaviors for quantity input
 function handleQuantityKeydown(event) {
   const input = event.target;
-  
+
   // Allow: backspace, delete, tab, escape, enter
   if ([8, 9, 27, 13, 46].indexOf(event.keyCode) !== -1 ||
       // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
@@ -21922,7 +18553,7 @@ function handleQuantityKeydown(event) {
       (event.keyCode >= 35 && event.keyCode <= 39)) {
     return;
   }
-  
+
   // Ensure that it is a number and stop the keypress
   if ((event.shiftKey || (event.keyCode < 48 || event.keyCode > 57)) && (event.keyCode < 96 || event.keyCode > 105)) {
     event.preventDefault();
@@ -22096,7 +18727,7 @@ async function unassignSpecificAsset(eventId, assetId, brand, model, requestData
 function finishEventPreparation(eventId) {
     closeModal('prepareEventModal');
     showNotification('success', 'Event preparation completed');
-    
+
     // Force refresh multiple views
     setTimeout(() => {
         if (document.getElementById('prepare-section').classList.contains('active')) {
@@ -22124,16 +18755,16 @@ function getDepartmentInfo(dept) {
 async function removeAssetFromEvent(eventId, assetId) {
     try {
         let endpoint;
-        
+
         // Use different endpoints for custom vs regular assets
         if (isCustomAssetId(assetId)) {
             endpoint = `/api/events/${eventId}/custom-assets/remove`;
         } else {
             endpoint = `/api/events/${eventId}/remove-asset`;
         }
-        
+
         const response = await apiCall(endpoint, 'POST', { assetId: assetId });
-        
+
         if (response.success) {
             // Remove matching elements from UI without building an unsafe CSS selector from JSON custom IDs.
             const assetElements = Array.from(document.querySelectorAll('[data-asset-id]')).filter(element => {
@@ -22148,11 +18779,11 @@ async function removeAssetFromEvent(eventId, assetId) {
                     assetRow.remove();
                 }
             });
-            
+
             // Update the model requirements section to reflect changes
             await updateModelRequirementsSection(eventId);
             await refreshEventOverviewViews();
-            
+
             const customAsset = parseCustomAsset(assetId);
             let removedAssetLabel = customAsset ? customAssetDisplayName(customAsset) : String(assetId || '').trim();
             if (!customAsset && String(assetId || '').startsWith(CUSTOM_ASSET_PREFIX)) {
@@ -22168,7 +18799,7 @@ async function removeAssetFromEvent(eventId, assetId) {
         } else {
             throw new Error(response.error || 'Failed to remove asset');
         }
-        
+
     } catch (error) {
         console.error('Error removing asset from event:', error);
         await showAppAlert({
@@ -22837,4768 +19468,6 @@ function filterAvailableModels(searchTerm) {
   container.innerHTML = html;
 }
 
-
-// ---------------- Trial Plan page ----------------
-var planPageState = {
-  events: [],
-  event: null,
-  eventId: null,
-  assets: [],
-  availability: [],
-  containers: [],
-  templates: [],
-  search: '',
-  department: 'ALL',
-  showContainers: true,
-  loading: false,
-  templateDraft: null,
-  activeSubprojectId: '',
-  editingCustomAssetId: ''
-};
-
-var EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__';
-
-function eventSubprojects(event) {
-  return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
-}
-
-async function openAssetCheckFault(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId || '');
-  const checkAsset = assetCheckState.assets.find(item =>
-    String(item.id || item.internalId || '') === assetId
-  );
-  if (!checkAsset) {
-    showNotification('warning', 'Asset not found in this check group');
-    return;
-  }
-
-  try {
-    if (!getAssetByApiIdentifier(assetId)) {
-      const response = await apiCall('/api/assets');
-      assets = response.data || [];
-    }
-    if (!getAssetByApiIdentifier(assetId)) {
-      throw new Error(`Asset ${assetId} could not be loaded`);
-    }
-
-    openMaintenanceModalForAsset(assetId);
-    const title = document.querySelector('#maintenanceModal .modal-title');
-    const logType = document.getElementById('maintenanceLogType');
-    const description = document.getElementById('maintenanceLogEntry');
-    if (title) title.textContent = 'Log Fault';
-    if (logType) {
-      logType.value = 'Fault';
-      applyMaintenanceLogTypeSelectStyle(logType);
-    }
-    if (description) {
-      description.placeholder = 'Describe the fault or limitation...';
-      description.focus();
-    }
-  } catch (error) {
-    showNotification('error', `Unable to open the fault form: ${error.message}`);
-  }
-}
-
-function eventActiveSubproject(state, event) {
-  const rooms = eventSubprojects(event);
-  if (!rooms.length) return null;
-  if (String(state?.activeSubprojectId) === EVENT_CONSOLIDATED_SUBPROJECT_ID) return null;
-  const active = rooms.find(room => String(room.id) === String(state.activeSubprojectId));
-  if (active) return active;
-  state.activeSubprojectId = String(rooms[0].id || 'main');
-  return rooms[0];
-}
-
-function eventIsConsolidated(state, event) {
-  return (
-    eventSubprojects(event).length > 1 &&
-    String(state?.activeSubprojectId) === EVENT_CONSOLIDATED_SUBPROJECT_ID
-  );
-}
-
-function eventCustomAssetIdentity(custom) {
-  if (!custom) return '';
-  return [
-    normalizeCustomType(custom.type),
-    normalizeDepartmentCode(custom.department || 'UN'),
-    custom.name,
-    custom.company,
-    custom.description
-  ].map(value => String(value || '').trim().toLowerCase()).join('\u001f');
-}
-
-function eventCustomItemMatchesAsset(item, custom) {
-  return (
-    normalizeDepartmentCode(item?.departmentCode || item?.department || 'UN') ===
-      normalizeDepartmentCode(custom?.department || 'UN') &&
-    String(item?.description || '').trim().toLowerCase() ===
-      String(custom?.name || '').trim().toLowerCase()
-  );
-}
-
-function eventScopedCustomAssets(event, state, assets) {
-  const rooms = eventSubprojects(event);
-  const room = eventActiveSubproject(state, event);
-  if (rooms.length <= 1 || !room) return assets;
-
-  const roomItems = (room.items || []).filter(item => item?.isCustom);
-  const roomRefs = new Set(roomItems.flatMap(item => (item.assetRefs || []).map(String)));
-  const allocatedRefs = new Set(rooms.flatMap(subproject => (
-    (subproject.items || [])
-      .filter(item => item?.isCustom)
-      .flatMap(item => (item.assetRefs || []).map(String))
-  )));
-  const legacyItems = roomItems.filter(item => !(item.assetRefs || []).length);
-
-  return assets.filter(asset => {
-    const assetId = String(asset?.id || '');
-    if (roomRefs.has(assetId)) return true;
-    if (allocatedRefs.has(assetId)) return false;
-    const custom = asset?.parsedCustom || parseCustomAsset(assetId, asset);
-    return !!custom && legacyItems.some(item => eventCustomItemMatchesAsset(item, custom));
-  });
-}
-
-function groupEventCustomAssets(assets) {
-  const grouped = new Map();
-  (assets || []).forEach(asset => {
-    const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
-    if (!custom) return;
-    const key = eventCustomAssetIdentity(custom);
-    let row = grouped.get(key);
-    if (!row) {
-      row = {
-        ...asset,
-        id: String(asset.id || custom.id || ''),
-        assetIds: [],
-        members: [],
-        parsedCustom: { ...custom, quantity: 0 }
-      };
-      grouped.set(key, row);
-    }
-    row.assetIds.push(String(asset.id || custom.id || ''));
-    row.members.push(asset);
-    row.parsedCustom.quantity += Math.max(1, Number(custom.quantity || 1));
-  });
-  return Array.from(grouped.values());
-}
-
-function eventConsolidatedNotice(options = {}) {
-  const interactive = options.interactive === true;
-  return `
-    <div class="event-consolidated-notice">
-      <strong>Consolidated view</strong>
-      <span>${interactive
-        ? 'Assets from every room are combined. Return assets and log faults directly from this view.'
-        : 'Requirements from every room are combined. Select a room to make changes.'}</span>
-    </div>
-  `;
-}
-
-function eventSubprojectStateByName(stateName) {
-  if (stateName === 'planPageState') return planPageState;
-  if (stateName === 'prepareNewPageState') return prepareNewPageState;
-  if (stateName === 'returnPageState') return returnPageState;
-  return window[stateName];
-}
-
-function eventSelectSubproject(stateName, subprojectId, renderFunction) {
-  const state = eventSubprojectStateByName(stateName);
-  if (!state) return;
-  state.activeSubprojectId = planDecode(subprojectId);
-  state.department = state.department === undefined ? undefined : 'ALL';
-  state.expandedDepartments?.clear?.();
-  state.expandedModels?.clear?.();
-  window[renderFunction]?.();
-}
-
-function renderEventSubprojectTabs(stateName, event, renderFunction, label, options = {}) {
-  const storedRooms = eventSubprojects(event);
-  const showImplicitMain = options.showImplicitMain === true && storedRooms.length === 0;
-  const rooms = showImplicitMain
-    ? [{ id: '', name: 'Main Room', items: [], isImplicit: true }]
-    : storedRooms;
-  const allowAdd = options.allowAdd === true;
-  const allowDelete = options.allowDelete === true && rooms.length > 1;
-  const allowRename = options.allowRename === true;
-  const allowReorder = options.allowReorder === true && rooms.length > 1;
-  const roomNeedsAttention = typeof options.roomNeedsAttention === 'function'
-    ? options.roomNeedsAttention
-    : null;
-  const roomWarning = typeof options.roomWarning === 'function'
-    ? options.roomWarning
-    : null;
-  const attentionLabel = String(options.attentionLabel || 'Items need attention');
-  if (rooms.length <= 1 && !allowAdd) return '';
-  const state = eventSubprojectStateByName(stateName);
-  const active = showImplicitMain ? rooms[0] : eventActiveSubproject(state, event);
-  const consolidated = eventIsConsolidated(state, event);
-  return `
-    <div class="event-subproject-tabs" role="tablist" aria-label="${escapeHtmlAttr(label || 'Event sub-projects')}">
-      ${rooms.length > 1 ? `
-        <button type="button" role="tab"
-                class="event-subproject-tab event-subproject-consolidated ${consolidated ? 'active' : ''}"
-                aria-selected="${consolidated}"
-                onclick="eventSelectSubproject('${stateName}','${EVENT_CONSOLIDATED_SUBPROJECT_ID}','${renderFunction}')">
-          All requirements
-        </button>
-      ` : ''}
-      ${rooms.map(room => {
-        const warning = roomWarning?.(room, event) || null;
-        const warningType = warning?.type === 'shortage' ? 'shortage' : 'degraded';
-        const warningLabel = String(warning?.label || attentionLabel);
-        const needsAttention = Boolean(warning) || roomNeedsAttention?.(room, event) === true;
-        const roomName = String(room.name || 'Room');
-        return `
-        <span class="event-subproject-tab-wrap ${room === active ? 'active' : ''} ${allowReorder ? 'is-reorderable' : ''} ${warning ? `has-warning has-warning-${warningType}` : ''}"
-              data-subproject-drop-id="${escapeHtmlAttr(String(room.id || ''))}"
-              ${allowReorder ? `
-                draggable="true"
-                ondragstart="eventSubprojectOrderDragStart(event,${Number(event?.id || 0)},'${planEncode(room.id)}')"
-                ondragend="eventSubprojectOrderDragEnd(event)"
-              ` : ''}
-              ondragover="eventSubprojectDragOver(event)"
-              ondragleave="eventSubprojectDragLeave(event)"
-              ondrop="eventSubprojectDrop(event,'${stateName}','${planEncode(room.id)}')">
-          <button type="button" role="tab"
-                  class="event-subproject-tab ${room === active ? 'active' : ''}"
-                  aria-selected="${room === active}"
-                  aria-label="${escapeHtmlAttr(`${roomName}${needsAttention ? `, ${warningLabel}` : ''}`)}"
-                  onclick="eventSelectSubproject('${stateName}','${planEncode(room.id)}','${renderFunction}')">
-            ${escapeHtml(roomName)}
-            ${needsAttention ? `
-              <span class="event-subproject-attention ${warning ? `event-subproject-attention-${warningType}` : ''}"
-                    aria-hidden="true"
-                    title="${escapeHtmlAttr(warningLabel)}">!</span>
-            ` : ''}
-          </button>
-          ${allowRename && !room.isImplicit ? `
-            <button type="button" class="event-subproject-rename"
-                    title="Rename ${escapeHtmlAttr(roomName)}"
-                    aria-label="Rename ${escapeHtmlAttr(roomName)}"
-                    onclick="event.stopPropagation();planRenameSubproject('${planEncode(room.id)}')">
-              ${eventDetailsActionIconSvg('edit')}
-            </button>
-          ` : ''}
-          ${allowDelete ? `
-            <button type="button" class="event-subproject-delete"
-                    title="Delete ${escapeHtmlAttr(roomName)}"
-                    aria-label="Delete ${escapeHtmlAttr(roomName)}"
-                    onclick="event.stopPropagation();planOpenDeleteSubproject('${planEncode(room.id)}')">&times;</button>
-          ` : ''}
-        </span>
-      `;
-      }).join('')}
-      ${allowAdd ? `
-        <button type="button" class="event-subproject-add" onclick="planAddSubproject()">
-          <span aria-hidden="true">+</span> Sub-project
-        </button>
-      ` : ''}
-    </div>
-  `;
-}
-
-function eventSubprojectDragStart(event, encodedPayload) {
-  const payload = planDecode(encodedPayload);
-  if (!payload || !event?.dataTransfer) {
-    event?.preventDefault?.();
-    return;
-  }
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('application/x-showbase-subproject', payload);
-  event.currentTarget?.classList.add('is-dragging');
-}
-
-function eventSubprojectDragEnd(event) {
-  event.currentTarget?.classList.remove('is-dragging');
-  eventSubprojectClearDropTargets();
-}
-
-function eventSubprojectClearDropTargets() {
-  document.querySelectorAll(
-    '.event-subproject-tab-wrap.is-drop-target, ' +
-    '.event-subproject-tab-wrap.is-reorder-before, ' +
-    '.event-subproject-tab-wrap.is-reorder-after'
-  ).forEach(element => {
-    element.classList.remove(
-      'is-drop-target',
-      'is-reorder-before',
-      'is-reorder-after'
-    );
-    delete element.dataset.reorderPosition;
-  });
-}
-
-function eventSubprojectOrderDragStart(event, eventId, encodedSubprojectId) {
-  if (!event?.dataTransfer) return;
-  if (event.target?.closest?.('.event-subproject-rename, .event-subproject-delete')) {
-    event.preventDefault();
-    return;
-  }
-  const subprojectId = planDecode(encodedSubprojectId);
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData(
-    'application/x-showbase-subproject-order',
-    JSON.stringify({ eventId: Number(eventId || 0), subprojectId })
-  );
-  event.currentTarget?.classList.add('is-reordering');
-}
-
-function eventSubprojectOrderDragEnd(event) {
-  event.currentTarget?.classList.remove('is-reordering');
-  eventSubprojectClearDropTargets();
-}
-
-function eventSubprojectDragOver(event) {
-  const types = Array.from(event?.dataTransfer?.types || []);
-  if (types.includes('application/x-showbase-subproject-order')) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = event.clientX < rect.left + (rect.width / 2)
-      ? 'before'
-      : 'after';
-    event.currentTarget.classList.toggle('is-reorder-before', position === 'before');
-    event.currentTarget.classList.toggle('is-reorder-after', position === 'after');
-    event.currentTarget.classList.remove('is-drop-target');
-    event.currentTarget.dataset.reorderPosition = position;
-    return;
-  }
-  if (!types.includes('application/x-showbase-subproject')) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-  event.currentTarget?.classList.add('is-drop-target');
-}
-
-function eventSubprojectDragLeave(event) {
-  if (!event.currentTarget?.contains(event.relatedTarget)) {
-    event.currentTarget?.classList.remove(
-      'is-drop-target',
-      'is-reorder-before',
-      'is-reorder-after'
-    );
-    if (event.currentTarget?.dataset) delete event.currentTarget.dataset.reorderPosition;
-  }
-}
-
-async function eventSubprojectDrop(event, stateName, encodedTargetId) {
-  event.preventDefault();
-  const orderPayload = event.dataTransfer?.getData(
-    'application/x-showbase-subproject-order'
-  );
-  if (orderPayload) {
-    await eventSubprojectOrderDrop(
-      event,
-      stateName,
-      planDecode(encodedTargetId),
-      orderPayload
-    );
-    return;
-  }
-  event.currentTarget?.classList.remove('is-drop-target');
-  let payload;
-  try {
-    payload = JSON.parse(
-      event.dataTransfer?.getData('application/x-showbase-subproject') || ''
-    );
-  } catch (error) {
-    return;
-  }
-  const targetSubprojectId = planDecode(encodedTargetId);
-  if (
-    !payload?.eventId ||
-    !payload?.sourceSubprojectId ||
-    payload.sourceSubprojectId === targetSubprojectId
-  ) return;
-
-  try {
-    const response = await apiCall(
-      `/api/events/${payload.eventId}/subprojects/move`,
-      'POST',
-      { ...payload, targetSubprojectId }
-    );
-    showNotification('success', response.message || 'Moved to room');
-    if (stateName === 'planPageState') {
-      await refreshPlanSelectedEvent();
-    } else if (stateName === 'prepareNewPageState') {
-      await refreshPrepareNewSelectedEvent({ preserve: true });
-    } else if (stateName === 'returnPageState') {
-      await returnPageRefreshSelected();
-    }
-  } catch (error) {}
-}
-
-async function eventSubprojectOrderDrop(event, stateName, targetSubprojectId, rawPayload) {
-  const position = event.currentTarget?.dataset?.reorderPosition === 'after'
-    ? 'after'
-    : 'before';
-  eventSubprojectClearDropTargets();
-  if (stateName !== 'planPageState') return;
-
-  let payload;
-  try {
-    payload = JSON.parse(rawPayload || '');
-  } catch (error) {
-    return;
-  }
-  const currentEvent = planPageState.event;
-  const sourceSubprojectId = String(payload?.subprojectId || '');
-  if (
-    !currentEvent?.id ||
-    Number(payload?.eventId) !== Number(currentEvent.id) ||
-    !sourceSubprojectId ||
-    sourceSubprojectId === String(targetSubprojectId)
-  ) return;
-
-  const rooms = eventSubprojects(currentEvent);
-  const source = rooms.find(room => String(room.id) === sourceSubprojectId);
-  const target = rooms.find(room => String(room.id) === String(targetSubprojectId));
-  if (!source || !target) return;
-
-  const reordered = rooms.filter(room => room !== source);
-  const targetIndex = reordered.indexOf(target);
-  reordered.splice(targetIndex + (position === 'after' ? 1 : 0), 0, source);
-  const orderedSubprojectIds = reordered.map(room => String(room.id || ''));
-  if (orderedSubprojectIds.every((id, index) => id === String(rooms[index]?.id || ''))) {
-    return;
-  }
-
-  planPageState.event.subprojects = reordered;
-  renderPlanPage();
-  try {
-    const response = await apiCall(
-      `/api/events/${currentEvent.id}/subprojects/reorder`,
-      'POST',
-      { orderedSubprojectIds }
-    );
-    planPageState.event.subprojects = response.data?.subprojects || reordered;
-    renderPlanPage();
-    showNotification('success', response.message || 'Sub-project order updated');
-  } catch (error) {
-    await refreshPlanSelectedEvent();
-  }
-}
-
-function eventSubprojectDragPayload(state, event, payload) {
-  const room = eventActiveSubproject(state, event);
-  if (!room || eventIsConsolidated(state, event)) return '';
-  return planEncode(JSON.stringify({
-    eventId: Number(event?.id || 0),
-    sourceSubprojectId: String(room.id || ''),
-    ...payload
-  }));
-}
-
-async function planAddSubproject() {
-  const event = planPageState.event;
-  if (!event?.id) return;
-  const name = await showAppPrompt({
-    title: 'Add sub-project',
-    message: 'Name this room or work area.',
-    inputLabel: 'Sub-project name',
-    defaultValue: `Room ${Math.max(2, eventSubprojects(event).length + 1)}`,
-    confirmText: 'Add'
-  });
-  const cleanName = String(name || '').trim();
-  if (!cleanName) return;
-
-  try {
-    const response = await apiCall(
-      `/api/events/${event.id}/subprojects`,
-      'POST',
-      { name: cleanName }
-    );
-    const data = response.data || {};
-    planPageState.event.subprojects = data.subprojects || [];
-    planPageState.activeSubprojectId = String(data.subproject?.id || '');
-    renderPlanPage();
-    showNotification('success', `${cleanName} added`);
-  } catch (error) {}
-}
-
-async function planRenameSubproject(encodedSubprojectId) {
-  const event = planPageState.event;
-  const subprojectId = planDecode(encodedSubprojectId);
-  const room = eventSubprojects(event).find(
-    item => String(item.id) === String(subprojectId)
-  );
-  if (!event?.id || !room) return;
-
-  const name = await showAppPrompt({
-    title: 'Rename sub-project',
-    message: 'Enter a new name for this room or work area.',
-    inputLabel: 'Sub-project name',
-    defaultValue: room.name || 'Room',
-    confirmText: 'Rename'
-  });
-  const cleanName = String(name || '').trim();
-  if (!cleanName || cleanName === String(room.name || '').trim()) return;
-
-  try {
-    const response = await apiCall(
-      `/api/events/${event.id}/subprojects/${encodeURIComponent(subprojectId)}`,
-      'PATCH',
-      { name: cleanName }
-    );
-    planPageState.event.subprojects = response.data?.subprojects || [];
-    renderPlanPage();
-    showNotification('success', response.message || 'Sub-project renamed');
-  } catch (error) {}
-}
-
-var planDeleteSubprojectState = {
-  subprojectId: '',
-  mode: 'merge',
-  targetSubprojectId: ''
-};
-
-function ensurePlanDeleteSubprojectModal() {
-  let modal = document.getElementById('planDeleteSubprojectModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planDeleteSubprojectModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content event-subproject-delete-modal">
-      <div class="modal-header">
-        <div>
-          <h3>Delete sub-project</h3>
-          <small id="planDeleteSubprojectSummary"></small>
-        </div>
-        <button type="button" class="close-btn" aria-label="Close"
-                onclick="closeModal('planDeleteSubprojectModal')">&times;</button>
-      </div>
-      <div class="event-subproject-delete-options">
-        <button type="button" data-delete-mode="merge"
-                onclick="planSetDeleteSubprojectMode('merge')">
-          <strong>Merge into another room</strong>
-          <span>Keep its requirements and assigned assets.</span>
-        </button>
-        <button type="button" data-delete-mode="remove"
-                onclick="planSetDeleteSubprojectMode('remove')">
-          <strong>Remove room and assets</strong>
-          <span>Remove its requirements and unassign its assets from the event.</span>
-        </button>
-      </div>
-      <div id="planDeleteSubprojectTargets" class="event-subproject-delete-targets"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary"
-                onclick="closeModal('planDeleteSubprojectModal')">Cancel</button>
-        <button type="button" class="btn btn-danger"
-                onclick="planConfirmDeleteSubproject()">Delete sub-project</button>
-      </div>
-    </div>
-  `;
-  modal.addEventListener('click', event => {
-    if (event.target === modal) closeModal('planDeleteSubprojectModal');
-  });
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planSubprojectContentQuantity(room) {
-  const itemQuantity = (room?.items || []).reduce(
-    (total, item) => total + Math.max(0, Number(item?.quantity || 0)),
-    0
-  );
-  return itemQuantity + (room?.extraRefs || []).length;
-}
-
-function planSubprojectHasAssignedAssets(room) {
-  if ((room?.extraRefs || []).length > 0) return true;
-  return (room?.items || []).some(item => (
-    (item?.assetRefs || []).length > 0 ||
-    Math.max(0, Number(item?.preparedQuantity || 0)) > 0
-  ));
-}
-
-async function planOpenDeleteSubproject(encodedSubprojectId) {
-  const subprojectId = planDecode(encodedSubprojectId);
-  const rooms = eventSubprojects(planPageState.event);
-  const room = rooms.find(item => String(item.id) === String(subprojectId));
-  const targets = rooms.filter(item => item !== room);
-  if (!room || !targets.length) return;
-
-  if (!planSubprojectHasAssignedAssets(room)) {
-    await planDeleteSubproject({
-      subprojectId,
-      mode: 'remove',
-      targetSubprojectId: ''
-    });
-    return;
-  }
-
-  planDeleteSubprojectState = {
-    subprojectId,
-    mode: 'merge',
-    targetSubprojectId: String(targets[0].id || '')
-  };
-  ensurePlanDeleteSubprojectModal();
-  const summary = document.getElementById('planDeleteSubprojectSummary');
-  if (summary) {
-    const quantity = planSubprojectContentQuantity(room);
-    summary.textContent = quantity > 0
-      ? `${room.name} contains ${quantity} planned or assigned item(s).`
-      : `${room.name} has no planned or assigned items.`;
-  }
-  planRenderDeleteSubprojectOptions();
-  openModal('planDeleteSubprojectModal');
-}
-
-function planSetDeleteSubprojectMode(mode) {
-  planDeleteSubprojectState.mode = mode === 'remove' ? 'remove' : 'merge';
-  planRenderDeleteSubprojectOptions();
-}
-
-function planSetDeleteSubprojectTarget(encodedSubprojectId) {
-  planDeleteSubprojectState.targetSubprojectId = planDecode(encodedSubprojectId);
-  planRenderDeleteSubprojectOptions();
-}
-
-function planRenderDeleteSubprojectOptions() {
-  const modal = document.getElementById('planDeleteSubprojectModal');
-  if (!modal) return;
-  modal.querySelectorAll('[data-delete-mode]').forEach(button => {
-    button.classList.toggle(
-      'active',
-      button.dataset.deleteMode === planDeleteSubprojectState.mode
-    );
-  });
-  const targets = document.getElementById('planDeleteSubprojectTargets');
-  if (!targets) return;
-  if (planDeleteSubprojectState.mode !== 'merge') {
-    targets.innerHTML = `
-      <div class="event-subproject-remove-warning">
-        Requirements, prepared quantities, and assigned assets in this room will be removed from the event.
-      </div>
-    `;
-    return;
-  }
-  targets.innerHTML = `
-    <span>Merge into</span>
-    <div>
-      ${eventSubprojects(planPageState.event)
-        .filter(room => String(room.id) !== String(planDeleteSubprojectState.subprojectId))
-        .map(room => `
-          <button type="button"
-                  class="${String(room.id) === String(planDeleteSubprojectState.targetSubprojectId) ? 'active' : ''}"
-                  onclick="planSetDeleteSubprojectTarget('${planEncode(room.id)}')">
-            ${escapeHtml(room.name || 'Room')}
-          </button>
-        `).join('')}
-    </div>
-  `;
-}
-
-async function planDeleteSubproject(state) {
-  if (!state.subprojectId) return;
-  if (state.mode === 'merge' && !state.targetSubprojectId) {
-    showNotification('warning', 'Choose a destination room');
-    return;
-  }
-  try {
-    const response = await apiCall(
-      `/api/events/${planPageState.eventId}/subprojects/${encodeURIComponent(state.subprojectId)}`,
-      'DELETE',
-      {
-        mode: state.mode,
-        targetSubprojectId: state.mode === 'merge' ? state.targetSubprojectId : ''
-      }
-    );
-    closeModal('planDeleteSubprojectModal');
-    planPageState.event.subprojects = response.data?.subprojects || [];
-    planPageState.activeSubprojectId = state.mode === 'merge'
-      ? state.targetSubprojectId
-      : String(planPageState.event.subprojects[0]?.id || '');
-    showNotification('success', response.message || 'Sub-project deleted');
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-async function planConfirmDeleteSubproject() {
-  await planDeleteSubproject(planDeleteSubprojectState);
-}
-
-function eventSubprojectGroupKey(value) {
-  return [
-    normalizeDepartmentCode(value?.departmentCode || value?.department || 'UN'),
-    String(value?.brand || '').trim().toLowerCase(),
-    String(value?.model || '').trim().toLowerCase()
-  ].join('|');
-}
-
-function eventSubprojectModelItems(room) {
-  const groups = new Map();
-  (room?.items || []).forEach(item => {
-    if (item?.isCustom || !item?.brand || !item?.model) return;
-    const key = eventSubprojectGroupKey(item);
-    if (!groups.has(key)) {
-      groups.set(key, {
-        ...item,
-        department: normalizeDepartmentCode(item.departmentCode || item.department || 'UN'),
-        requiredQuantity: 0,
-        preparedQuantity: 0,
-        assetRefs: []
-      });
-    }
-    const group = groups.get(key);
-    group.requiredQuantity += Math.max(0, Number(item.quantity || 0));
-    group.preparedQuantity += Math.max(0, Number(item.preparedQuantity || 0));
-    group.assetRefs.push(...(item.assetRefs || []).map(String));
-  });
-  return groups;
-}
-
-function eventSubprojectAssetAllocations(event) {
-  const rooms = eventSubprojects(event);
-  const allocations = new Map(rooms.map(room => [String(room.id), new Set()]));
-  const claimed = new Set();
-
-  rooms.forEach(room => {
-    const refs = [
-      ...(room.extraRefs || []),
-      ...(room.items || []).flatMap(item => item?.assetRefs || [])
-    ].map(String);
-    refs.forEach(ref => {
-      allocations.get(String(room.id))?.add(ref);
-      claimed.add(ref);
-    });
-  });
-
-  const globalGroups = Object.values(event?.modelGroups || {});
-  globalGroups.forEach(group => {
-    const groupKey = eventSubprojectGroupKey(group);
-    const candidates = (group.assignedAssets || []).filter(asset => (
-      asset?.id && !asset?.isExtra && !claimed.has(String(asset.id))
-    ));
-    let cursor = 0;
-    rooms.forEach(room => {
-      const required = eventSubprojectModelItems(room).get(groupKey)?.requiredQuantity || 0;
-      const already = (group.assignedAssets || []).reduce((total, asset) => (
-        allocations.get(String(room.id))?.has(String(asset?.id || ''))
-          ? total + Math.max(1, Number(asset?.quantity || 1))
-          : total
-      ), 0);
-      let remaining = Math.max(0, required - already);
-      while (cursor < candidates.length && remaining > 0) {
-        const asset = candidates[cursor++];
-        allocations.get(String(room.id))?.add(String(asset.id));
-        claimed.add(String(asset.id));
-        remaining -= Math.max(1, Number(asset.quantity || 1));
-      }
-    });
-    while (cursor < candidates.length && rooms.length) {
-      const asset = candidates[cursor++];
-      allocations.get(String(rooms[0].id))?.add(String(asset.id));
-    }
-
-    (group.assignedAssets || []).filter(asset => (
-      asset?.id && asset?.isExtra && !claimed.has(String(asset.id))
-    )).forEach(asset => {
-      if (!rooms.length) return;
-      allocations.get(String(rooms[0].id))?.add(String(asset.id));
-      claimed.add(String(asset.id));
-    });
-  });
-  return allocations;
-}
-
-function eventSubprojectModelGroups(event, state) {
-  const rooms = eventSubprojects(event);
-  if (!rooms.length) return Object.values(event?.modelGroups || {});
-  const room = eventActiveSubproject(state, event);
-  if (!room) {
-    const roomExtraRefs = new Set(rooms.flatMap(row => (row.extraRefs || []).map(String)));
-    const roomOwnedRefs = new Set(rooms.flatMap(row => [
-      ...(row.extraRefs || []),
-      ...(row.items || []).flatMap(item => item?.assetRefs || [])
-    ].map(String)));
-    return Object.values(event?.modelGroups || {}).map(group => ({
-      ...group,
-      assignedAssets: (group.assignedAssets || []).map(asset => {
-        const assetId = String(asset?.id || '');
-        return {
-          ...asset,
-          isExtra: roomExtraRefs.has(assetId) || (
-            !roomOwnedRefs.has(assetId) && !!asset?.isExtra
-          )
-        };
-      })
-    }));
-  }
-  const roomItems = eventSubprojectModelItems(room);
-  const globalGroups = Object.values(event?.modelGroups || {});
-  const globalByKey = new Map(globalGroups.map(group => [eventSubprojectGroupKey(group), group]));
-  const allocations = eventSubprojectAssetAllocations(event).get(String(room.id)) || new Set();
-  const roomExtraRefs = new Set((room.extraRefs || []).map(String));
-  const explicitRoomRefs = new Set([
-    ...(room.extraRefs || []),
-    ...(room.items || []).flatMap(item => item?.assetRefs || [])
-  ].map(String));
-
-  return Array.from(roomItems.entries()).map(([key, item]) => {
-    const source = globalByKey.get(key) || item;
-    const assignedAssets = (source.assignedAssets || [])
-      .filter(asset => allocations.has(String(asset?.id || '')))
-      .map(asset => {
-        const assetId = String(asset?.id || '');
-        return {
-          ...asset,
-          isExtra: roomExtraRefs.has(assetId) || (
-            !explicitRoomRefs.has(assetId) && !!asset?.isExtra
-          )
-        };
-      });
-    const hasTrackedSlots = (room.items || []).some(row => (
-      eventSubprojectGroupKey(row) === key && Object.prototype.hasOwnProperty.call(row, 'preparedQuantity')
-    ));
-    const hasTrackedReturnedSlots = (room.items || []).some(row => (
-      eventSubprojectGroupKey(row) === key && Object.prototype.hasOwnProperty.call(row, 'returnedPreparedQuantity')
-    ));
-    let preparedSlots = Math.max(0, Number(item.preparedQuantity || 0));
-    let returnedPreparedSlots = Math.max(0, Number(item.returnedPreparedQuantity || 0));
-    if (!hasTrackedSlots) {
-      const sourceSlots = Math.max(0, Number(source.preparedSlotQuantity || 0));
-      let priorRequired = 0;
-      for (const otherRoom of rooms) {
-        if (otherRoom === room) break;
-        priorRequired += eventSubprojectModelItems(otherRoom).get(key)?.requiredQuantity || 0;
-      }
-      preparedSlots = Math.min(
-        item.requiredQuantity,
-        Math.max(0, sourceSlots - priorRequired)
-      );
-    }
-    if (!hasTrackedReturnedSlots) {
-      const sourceSlots = Math.max(0, Number(source.returnedPreparedSlotQuantity || 0));
-      let priorRequired = 0;
-      for (const otherRoom of rooms) {
-        if (otherRoom === room) break;
-        priorRequired += eventSubprojectModelItems(otherRoom).get(key)?.requiredQuantity || 0;
-      }
-      returnedPreparedSlots = Math.min(
-        item.requiredQuantity,
-        Math.max(0, sourceSlots - priorRequired)
-      );
-    }
-    const assignedSpecific = assignedAssets.reduce(
-      (total, asset) => total + Math.max(1, Number(asset?.quantity || 1)),
-      0
-    );
-    const countableAssignedSpecific = assignedAssets.reduce(
-      (total, asset) => total + (asset?.isExtra ? 0 : Math.max(1, Number(asset?.quantity || 1))),
-      0
-    );
-    const returnedSpecific = assignedAssets.reduce(
-      (total, asset) => total + (asset?.status === 'returned' ? Math.max(1, Number(asset?.quantity || 1)) : 0),
-      0
-    );
-    const countableReturnedSpecific = assignedAssets.reduce(
-      (total, asset) => total + (
-        !asset?.isExtra && asset?.status === 'returned'
-          ? Math.max(1, Number(asset?.quantity || 1))
-          : 0
-      ),
-      0
-    );
-    const activeExtraSpecific = assignedAssets.reduce(
-      (total, asset) => total + (
-        asset?.isExtra && asset?.status !== 'returned'
-          ? Math.max(1, Number(asset?.quantity || 1))
-          : 0
-      ),
-      0
-    );
-    const returned = returnedSpecific + returnedPreparedSlots;
-    const assigned = assignedSpecific + preparedSlots + returnedPreparedSlots;
-    const prepared = Math.max(0, assigned - returned);
-    const required = Math.max(0, Number(item.requiredQuantity || 0));
-    const countableAssigned = countableAssignedSpecific + preparedSlots + returnedPreparedSlots;
-    const countableReturned = countableReturnedSpecific + returnedPreparedSlots;
-    const countablePrepared = Math.max(0, countableAssigned - countableReturned);
-    return {
-      ...source,
-      department: item.department,
-      brand: item.brand,
-      model: item.model,
-      description: item.description || source.description || '',
-      requiredQuantity: required,
-      assignedAssets,
-      assignedSpecificQuantity: assignedSpecific,
-      assignedQuantity: assigned,
-      returnedQuantity: returned,
-      preparedSlotQuantity: preparedSlots,
-      returnedPreparedSlotQuantity: returnedPreparedSlots,
-      openPreparedSlots: preparedSlots,
-      preparedQuantity: prepared,
-      countableAssignedQuantity: Math.min(required, countableAssigned),
-      countableReturnedQuantity: Math.min(required, countableReturned),
-      countablePreparedQuantity: Math.min(required, countablePrepared),
-      extraPreparedQuantity: activeExtraSpecific + Math.max(
-        0,
-        preparedSlots + countableAssignedSpecific - required
-      )
-    };
-  });
-}
-
-var planEventChooserState = {
-  search: '',
-  filter: 'ALL',
-  page: 1,
-  pageSize: 8,
-  context: 'plan'
-};
-
-var PLAN_EVENT_CHOOSER_FILTERS = [
-  { key: 'ALL', label: 'All' },
-  { key: 'ACTIVE', label: 'Active' },
-  { key: 'PLANNING', label: 'Planning' },
-  { key: 'PREPARING', label: 'Preparing' },
-  { key: 'ONGOING', label: 'Ongoing' },
-  { key: 'RETURNING', label: 'Returning' },
-  { key: 'COMPLETED', label: 'Completed' }
-];
-
-function planEncode(value) {
-  const encoded = encodeURIComponent(String(value ?? ''))
-    .replace(/'/g, '%27');
-  return escapeHtmlAttr(encoded);
-}
-
-function planDecode(value) {
-  try {
-    return decodeURIComponent(String(value || ''));
-  } catch (error) {
-    return String(value || '');
-  }
-}
-
-function planCustomAssets(eventData = planPageState.event) {
-  const customAssets = getCustomAssetsFromEvent(eventData || {});
-  const visibleAssets = eventScopedCustomAssets(eventData, planPageState, customAssets);
-  return groupEventCustomAssets(visibleAssets).map(asset => ({
-    ...asset.parsedCustom,
-    id: asset.id,
-    assetIds: asset.assetIds,
-    status: asset.status || 'assigned'
-  })).sort((a, b) =>
-    compareByDisplayName(customAssetSortName(a), customAssetSortName(b))
-  );
-}
-
-function planModelGroups(eventData = planPageState.event) {
-  return eventSubprojectModelGroups(eventData, planPageState)
-    .filter(group => Number(group?.requiredQuantity || 0) > 0)
-    .sort((a, b) => (
-      compareByDisplayName(a.department, b.department) ||
-      compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
-    ));
-}
-
-function planEventSnapshot() {
-  return {
-    models: planModelGroups().map(group => ({
-      department: normalizeDepartmentCode(group.department || 'UN'),
-      brand: String(group.brand || ''),
-      model: String(group.model || ''),
-      description: String(group.description || ''),
-      quantity: Math.max(1, Number(group.requiredQuantity || 1))
-    })),
-    customAssets: planCustomAssets().map(custom => ({
-      type: normalizeCustomType(custom.type),
-      name: String(custom.name || ''),
-      quantity: Math.max(1, Number(custom.quantity || 1)),
-      department: normalizeDepartmentCode(custom.department || 'UN'),
-      company: String(custom.company || ''),
-      description: String(custom.description || '')
-    }))
-  };
-}
-
-function planEventHasRequirements() {
-  if (planModelGroups().length || planCustomAssets().length) return true;
-  return (planPageState.event?.preparedItems || []).some(ref =>
-    typeof ref === 'string' && ref.trim()
-  );
-}
-
-function planTotals() {
-  const models = planModelGroups();
-  const customAssets = planCustomAssets();
-  const departmentsInUse = new Set();
-  let totalQuantity = 0;
-
-  models.forEach(group => {
-    totalQuantity += Math.max(0, Number(group.requiredQuantity || 0));
-    departmentsInUse.add(normalizeDepartmentCode(group.department || 'UN'));
-  });
-  customAssets.forEach(custom => {
-    totalQuantity += Math.max(1, Number(custom.quantity || 1));
-    departmentsInUse.add(normalizeDepartmentCode(custom.department || 'UN'));
-  });
-
-  return {
-    lineCount: models.length + customAssets.length,
-    totalQuantity,
-    departmentCount: departmentsInUse.size,
-    templateCount: planPageState.templates.length
-  };
-}
-
-function planEventOptionLabel(event) {
-  return String(event?.name || `Event ${event?.id || ''}`);
-}
-
-function planStateSlug(value) {
-  return String(value || 'added')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-');
-}
-
-function planEventTypeBadgeHtml(event) {
-  const isDryHire = event?.tag === 'dry hire';
-  return `
-    <span class="plan-badge ${isDryHire ? 'plan-badge-type-dry-hire' : 'plan-badge-type-event'}">
-      ${isDryHire ? 'Dry Hire' : 'Event'}
-    </span>
-  `;
-}
-
-function planEventStateBadgeHtml(event) {
-  const state = String(event?.state || 'New');
-  return `
-    <span class="plan-badge plan-badge-state-${escapeHtmlAttr(planStateSlug(state))}">
-      ${escapeHtml(eventStateDisplayLabel(state))}
-    </span>
-  `;
-}
-
-function planEventChooserFilterKey(event) {
-  const state = planStateSlug(event?.state);
-  if (['new', 'added', 'planning'].includes(state)) return 'PLANNING';
-  if (['preparing', 'ready'].includes(state)) return 'PREPARING';
-  if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
-  if (['returning', 'overdue'].includes(state)) return 'RETURNING';
-  if (['pending-closure', 'closed', 'completed'].includes(state)) return 'COMPLETED';
-  return 'PLANNING';
-}
-
-function planEventChooserSearchText(event) {
-  return [
-    event?.id,
-    event?.name,
-    event?.client,
-    event?.clientName,
-    event?.client_name,
-    event?.clientCompany,
-    event?.client_company,
-    event?.location,
-    event?.venue,
-    event?.state
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
-function planEventChooserDateValue(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const normalized = /^\d{8}$/.test(raw)
-    ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
-    : raw.replace(/\//g, '-');
-  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(normalized)
-    ? new Date(`${normalized}T12:00:00`)
-    : new Date(normalized);
-  const valueOf = parsed.valueOf();
-  return Number.isFinite(valueOf) ? valueOf : Number.POSITIVE_INFINITY;
-}
-
-function planEventChooserFormattedDate(value) {
-  const dateValue = planEventChooserDateValue(value);
-  if (!Number.isFinite(dateValue)) return '';
-  return new Date(dateValue).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
-}
-
-function planCompareEventsByStartDate(a, b) {
-  const aDate = planEventChooserDateValue(a?.startDate);
-  const bDate = planEventChooserDateValue(b?.startDate);
-  const aHasDate = Number.isFinite(aDate);
-  const bHasDate = Number.isFinite(bDate);
-  if (aHasDate && bHasDate && aDate !== bDate) return bDate - aDate;
-  if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
-  return Number(a?.id || 0) - Number(b?.id || 0);
-}
-
-function planCompareEventsByEventIdDesc(a, b) {
-  return Number(b?.id || 0) - Number(a?.id || 0);
-}
-
-function planEventChooserDateRange(event) {
-  const start = planEventChooserFormattedDate(event?.startDate);
-  const end = planEventChooserFormattedDate(event?.endDate);
-  if (!start && !end) return 'Date not set';
-  return !end || start === end ? (start || end) : `${start} – ${end}`;
-}
-
-function planEventChooserRelativeDate(event) {
-  const startValue = planEventChooserDateValue(event?.startDate);
-  if (!Number.isFinite(startValue)) return '';
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
-  const days = Math.round((startValue - today.valueOf()) / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  if (days === -1) return 'Yesterday';
-  return days > 1 ? `in ${days} days` : `${Math.abs(days)} days ago`;
-}
-
-function planEventChooserSecondaryLabel(event) {
-  return String(
-    event?.client ||
-    event?.clientName ||
-    event?.client_name ||
-    event?.clientCompany ||
-    event?.client_company ||
-    ''
-  );
-}
-
-function planEventChooserSourceEvents() {
-  if (planEventChooserState.context === 'transfer-source' || planEventChooserState.context === 'transfer-target') {
-    return transferSelectableEvents();
-  }
-  if (planEventChooserState.context === 'prepare-new') {
-    return prepareNewPageState.events || [];
-  }
-  if (planEventChooserState.context === 'profit-loss' && typeof profitLossEventChooserEvents === 'function') {
-    return profitLossEventChooserEvents();
-  }
-  if (planEventChooserState.context === 'compare' && typeof compareEventChooserEvents === 'function') {
-    return compareEventChooserEvents();
-  }
-  return planPageState.events || [];
-}
-
-function planEventChooserCurrentEventId() {
-  if (planEventChooserState.context === 'transfer-source') {
-    return transferPageState.sourceEventId;
-  }
-  if (planEventChooserState.context === 'transfer-target') {
-    return transferPageState.targetEventId;
-  }
-  if (planEventChooserState.context === 'profit-loss' && typeof profitLossCurrentEventId === 'function') {
-    return profitLossCurrentEventId();
-  }
-  if (planEventChooserState.context === 'compare' && typeof compareCurrentEventId === 'function') {
-    return compareCurrentEventId();
-  }
-  return planEventChooserState.context === 'prepare-new'
-    ? prepareNewPageState.eventId
-    : planPageState.eventId;
-}
-
-function planEventChooserFilteredEvents() {
-  const search = String(planEventChooserState.search || '').trim().toLowerCase();
-  const filter = planEventChooserState.filter || 'ALL';
-  return planEventChooserSourceEvents()
-    .filter(event => (
-      (
-        filter === 'ALL' ||
-        (filter === 'ACTIVE' && !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) ||
-        planEventChooserFilterKey(event) === filter
-      ) &&
-      (!search || planEventChooserSearchText(event).includes(search))
-    ))
-    .sort(planEventChooserState.context === 'profit-loss'
-      ? planCompareEventsByEventIdDesc
-      : planCompareEventsByStartDate);
-}
-
-function ensurePlanEventChooserModal() {
-  let modal = document.getElementById('planEventChooserModal');
-  if (modal) return modal;
-
-  modal = document.createElement('div');
-  modal.id = 'planEventChooserModal';
-  modal.className = 'modal';
-  modal.setAttribute('aria-hidden', 'true');
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">Other Events <span title="Select any event to update its plan">&#9432;</span></h3>
-        <button type="button" class="close-btn" aria-label="Close event picker"
-                onclick="closeModal('planEventChooserModal')">&times;</button>
-      </div>
-      <div class="plan-event-chooser-search">
-        <span aria-hidden="true">&#128269;</span>
-        <input type="search" id="planEventChooserSearch"
-               placeholder="Search events by name, ID, client, or location..."
-               oninput="planEventChooserSearchChanged(this.value)">
-      </div>
-      <div class="plan-event-chooser-filters" id="planEventChooserFilters"></div>
-      <div class="plan-event-chooser-table">
-        <div class="plan-event-chooser-head">
-          <span>Event</span>
-          <span>Dates</span>
-          <span>Location</span>
-          <span>Status</span>
-          <span></span>
-        </div>
-        <div class="plan-event-chooser-results" id="planEventChooserResults"></div>
-      </div>
-      <div class="plan-event-chooser-footer" id="planEventChooserFooter"></div>
-    </div>
-  `;
-  modal.addEventListener('click', event => {
-    if (event.target === modal) closeModal('planEventChooserModal');
-  });
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function renderPlanEventChooser() {
-  const filters = document.getElementById('planEventChooserFilters');
-  const results = document.getElementById('planEventChooserResults');
-  const footer = document.getElementById('planEventChooserFooter');
-  if (!filters || !results || !footer) return;
-
-  const counts = planEventChooserSourceEvents().reduce((summary, event) => {
-    const key = planEventChooserFilterKey(event);
-    summary.ALL += 1;
-    if (!['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) {
-      summary.ACTIVE += 1;
-    }
-    summary[key] = (summary[key] || 0) + 1;
-    return summary;
-  }, { ALL: 0, ACTIVE: 0 });
-
-  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
-    <button type="button"
-            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
-            onclick="planSetEventChooserFilter('${filter.key}')">
-      ${escapeHtml(filter.label)}
-      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
-    </button>
-  `).join('');
-
-  const events = planEventChooserFilteredEvents();
-  const pageCount = Math.max(1, Math.ceil(events.length / planEventChooserState.pageSize));
-  planEventChooserState.page = Math.min(Math.max(1, planEventChooserState.page), pageCount);
-  const start = (planEventChooserState.page - 1) * planEventChooserState.pageSize;
-  const visibleEvents = events.slice(start, start + planEventChooserState.pageSize);
-
-  results.innerHTML = visibleEvents.length ? visibleEvents.map(event => `
-    <button type="button"
-            class="plan-event-option ${Number(event.id) === Number(planEventChooserCurrentEventId()) ? 'current' : ''}"
-            onclick="planChooseEvent(${Number(event.id)})">
-      <span class="plan-event-option-name">
-        <span class="plan-event-option-title-line">
-          <strong>#${escapeHtml(String(event.id || ''))} &nbsp; ${escapeHtml(planEventOptionLabel(event))}</strong>
-          ${planEventTypeBadgeHtml(event)}
-        </span>
-        <span>${escapeHtml(planEventChooserSecondaryLabel(event))}</span>
-      </span>
-      <span class="plan-event-option-dates">
-        ${escapeHtml(planEventChooserDateRange(event))}
-        <span>${escapeHtml(planEventChooserRelativeDate(event))}</span>
-      </span>
-      <span class="plan-event-option-location">${escapeHtml(event.location || event.venue || '—')}</span>
-      ${planEventStateBadgeHtml(event)}
-      <span class="plan-event-option-arrow" aria-hidden="true">›</span>
-    </button>
-  `).join('') : '<div class="plan-empty">No events match this search.</div>';
-
-  const firstShown = events.length ? start + 1 : 0;
-  const lastShown = Math.min(start + visibleEvents.length, events.length);
-  const visiblePages = [];
-  for (let page = 1; page <= pageCount; page += 1) {
-    if (pageCount <= 7 || page === 1 || page === pageCount || Math.abs(page - planEventChooserState.page) <= 1) {
-      visiblePages.push(page);
-    }
-  }
-  const pageControls = [];
-  let previousPage = 0;
-  visiblePages.forEach(page => {
-    if (previousPage && page - previousPage > 1) {
-      pageControls.push('<span aria-hidden="true">…</span>');
-    }
-    pageControls.push(`
-      <button type="button"
-              class="plan-event-chooser-page ${page === planEventChooserState.page ? 'active' : ''}"
-              onclick="planSetEventChooserPage(${page})">${page}</button>
-    `);
-    previousPage = page;
-  });
-
-  footer.innerHTML = `
-    <span>Showing ${firstShown} to ${lastShown} of ${events.length} events</span>
-    <div class="plan-event-chooser-pages">
-      <button type="button" class="plan-event-chooser-page"
-              ${planEventChooserState.page <= 1 ? 'disabled' : ''}
-              onclick="planSetEventChooserPage(${planEventChooserState.page - 1})"
-              aria-label="Previous page">‹</button>
-      ${pageControls.join('')}
-      <button type="button" class="plan-event-chooser-page"
-              ${planEventChooserState.page >= pageCount ? 'disabled' : ''}
-              onclick="planSetEventChooserPage(${planEventChooserState.page + 1})"
-              aria-label="Next page">›</button>
-    </div>
-  `;
-}
-
-function planOpenEventChooser(context = 'plan') {
-  const modal = ensurePlanEventChooserModal();
-  planEventChooserState.context = context;
-  planEventChooserState.search = '';
-  planEventChooserState.filter = 'ALL';
-  planEventChooserState.page = 1;
-  const title = modal.querySelector('.modal-title');
-  if (title) {
-    const titleText = context === 'transfer-source'
-      ? 'Choose From Event'
-      : context === 'transfer-target'
-        ? 'Choose To Event'
-        : context === 'profit-loss'
-          ? 'Choose Profit & Loss Event'
-          : context === 'compare'
-            ? 'Choose Event to Compare'
-            : 'Other Events';
-    const titleHelp = context === 'transfer-source'
-      ? 'Select the event assets are moving out from'
-      : context === 'transfer-target'
-        ? 'Select the event assets are moving into'
-        : context === 'profit-loss'
-          ? 'Select an event to review revenue, costs, and net profit'
-          : context === 'compare'
-            ? 'Select an event to compare against its quotation'
-            : 'Select any event to update its plan';
-    title.innerHTML = `${titleText} <span title="${escapeHtmlAttr(titleHelp)}">&#9432;</span>`;
-  }
-  const search = document.getElementById('planEventChooserSearch');
-  if (search) search.value = '';
-  renderPlanEventChooser();
-  openModal('planEventChooserModal');
-}
-
-function planEventChooserSearchChanged(value) {
-  planEventChooserState.search = value;
-  planEventChooserState.page = 1;
-  renderPlanEventChooser();
-}
-
-function planSetEventChooserFilter(filter) {
-  planEventChooserState.filter = filter || 'ALL';
-  planEventChooserState.page = 1;
-  renderPlanEventChooser();
-}
-
-function planSetEventChooserPage(page) {
-  planEventChooserState.page = Math.max(1, Number(page || 1));
-  renderPlanEventChooser();
-}
-
-async function planChooseEvent(eventId) {
-  closeModal('planEventChooserModal');
-  if (Number(eventId) === Number(planEventChooserCurrentEventId())) return;
-  if (planEventChooserState.context === 'transfer-source') {
-    await transferChooseEvent('source', eventId);
-    return;
-  }
-  if (planEventChooserState.context === 'transfer-target') {
-    await transferChooseEvent('target', eventId);
-    return;
-  }
-  if (planEventChooserState.context === 'prepare-new') {
-    await selectPrepareNewEvent(eventId);
-    return;
-  }
-  if (planEventChooserState.context === 'profit-loss' && typeof selectProfitLossEvent === 'function') {
-    await selectProfitLossEvent(eventId);
-    return;
-  }
-  if (planEventChooserState.context === 'compare' && typeof selectCompareEvent === 'function') {
-    await selectCompareEvent(eventId);
-    return;
-  }
-  await selectPlanEvent(eventId);
-}
-
-function planMetricIconSvg(kind) {
-  const icons = {
-    lines: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 8-4 8 4-8 4-8-4Z"></path><path d="M4 7v10l8 4 8-4V7"></path><path d="M12 11v10"></path></svg>',
-    quantity: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1"></rect><rect x="14" y="4" width="7" height="7" rx="1"></rect><rect x="3" y="15" width="7" height="6" rx="1"></rect><rect x="14" y="15" width="7" height="6" rx="1"></rect></svg>',
-    departments: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"></circle><circle cx="5" cy="18" r="2.5"></circle><circle cx="19" cy="18" r="2.5"></circle><path d="M12 7.5v4M5 15.5v-4h14v4"></path></svg>',
-    templates: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4M9 11h6M9 15h6"></path></svg>',
-    calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18"></path></svg>',
-    assignment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 2h3v15H5V6h3l1-2Z"></path><path d="M9 12l2 2 4-5M8 18h8"></path></svg>'
-  };
-  return icons[kind] || icons.lines;
-}
-
-function planDepartmentLabel(code) {
-  const department = getDepartmentMeta(code);
-  return department.name && department.name !== department.code
-    ? `${department.name} (${department.code})`
-    : department.code;
-}
-
-function planDepartmentColor(code) {
-  return getDepartmentMeta(code).color || '#667085';
-}
-
-function planDepartmentCodeBadgeHtml(code) {
-  const department = getDepartmentMeta(code);
-  const normalizedCode = normalizeDepartmentCode(code || 'UN');
-  return `
-    <span class="plan-dept-code-badge"
-          style="background:${escapeHtmlAttr(department.color || '#e2e3e5')};color:${escapeHtmlAttr(department.textColor || '#344054')};"
-          title="${escapeHtmlAttr(department.name || normalizedCode)}">
-      ${escapeHtml(normalizedCode)}
-    </span>
-  `;
-}
-
-function planDepartmentFilterStyle(code) {
-  const department = getDepartmentMeta(code);
-  const color = department.color || '#e2e3e5';
-  return `background:${escapeHtmlAttr(color)};color:${escapeHtmlAttr(department.textColor || '#344054')};border-color:${escapeHtmlAttr(color)};`;
-}
-
-function planAvailableModelGroups() {
-  const groups = {};
-  (planPageState.assets || []).forEach(asset => {
-    addAssetToEditModelGroup(
-      groups,
-      asset,
-      asset.isBulk ? Number(asset.quantity || 1) : 1
-    );
-  });
-  return Object.values(groups).sort((a, b) => (
-    compareByDisplayName(a.department, b.department) ||
-    compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
-  ));
-}
-
-function planAvailableModelSearchText(group) {
-  const assetDescriptions = (group?.assets || []).map(asset =>
-    String(asset?.description || '').trim()
-  );
-  const assetTags = (group?.assets || []).map(assetTagSearchText);
-  return [
-    group?.department,
-    group?.brand,
-    group?.model,
-    group?.description,
-    ...assetDescriptions,
-    ...assetTags
-  ]
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-}
-
-function planAvailabilityFor(group) {
-  const entry = (planPageState.availability || []).find(item =>
-    modelGroupMatchesEditGroup(
-      item,
-      group.department,
-      group.brand,
-      group.model
-    )
-  );
-  const physical = Number(entry?.physical ?? group.count ?? 0);
-  const overlap = Number(entry?.overlappingDemand || 0);
-  const unavailableForCondition = Number(entry?.assetOOC || 0)
-    + Number(entry?.assetMissing || 0)
-    + Number(entry?.bulkMaintenanceOOC || 0)
-    + Number(entry?.bulkMaintenanceMissing || 0);
-  const degraded = Number(entry?.degraded ?? (
-    Number(entry?.assetDegraded || 0) + Number(entry?.bulkMaintenanceDegraded || 0)
-  ));
-  const capacity = entry
-    ? Number(entry?.capacityForThisEvent ?? Math.max(physical - overlap - unavailableForCondition, 0))
-    : 0;
-  return {
-    hasEntry: !!entry,
-    available: Number(entry?.available ?? group.count ?? 0),
-    physical,
-    capacity,
-    healthyCapacity: entry
-      ? Number(entry?.healthyCapacityForThisEvent ?? Math.max(capacity - degraded, 0))
-      : 0,
-    healthy: Number(entry?.healthy ?? Math.max(capacity - degraded, 0)),
-    degraded,
-    overlap,
-    overlapEvents: entry?.overlappingEvents || [],
-    usedHere: Number(entry?.usedInThisEvent || 0),
-    preparable: Number(entry?.preparable ?? entry?.available ?? group.count ?? 0),
-    assetOOC: Number(entry?.assetOOC || 0),
-    assetMissing: Number(entry?.assetMissing || 0),
-    bulkMaintenanceOOC: Number(entry?.bulkMaintenanceOOC || 0),
-    bulkMaintenanceMissing: Number(entry?.bulkMaintenanceMissing || 0),
-    degradedDetails: Array.isArray(entry?.degradedDetails) ? entry.degradedDetails : []
-  };
-}
-
-function planDegradedReasonDetail(availability) {
-  const details = Array.isArray(availability?.degradedDetails)
-    ? availability.degradedDetails
-    : [];
-  if (details.length === 0) {
-    return '\n\nDegradation reason: No reason recorded.';
-  }
-
-  const rows = details.map(detail => {
-    const quantity = Math.max(1, Number(detail?.quantity || 1));
-    const assetId = String(detail?.assetId || '').trim();
-    const label = detail?.isBulk
-      ? `${quantity} bulk unit${quantity === 1 ? '' : 's'}`
-      : (assetId || `${quantity} asset${quantity === 1 ? '' : 's'}`);
-    const reasons = [...new Set(
-      (Array.isArray(detail?.reasons) ? detail.reasons : [])
-        .map(reason => String(reason || '').trim())
-        .filter(Boolean)
-    )];
-    return `${label}: ${reasons.join('; ') || 'No reason recorded'}`;
-  });
-
-  return `\n\nWhy the degraded assets are degraded:\n- ${rows.join('\n- ')}`;
-}
-
-function planShowAvailabilityReason(encodedReason) {
-  let detail;
-  try {
-    detail = JSON.parse(planDecode(encodedReason));
-  } catch (error) {
-    detail = { summary: planDecode(encodedReason) };
-  }
-  showAppAlert({
-    title: 'Asset Availability',
-    buildMessage: container => {
-      container.classList.add('plan-availability-dialog');
-      const summary = document.createElement('div');
-      summary.className = 'plan-availability-dialog-summary';
-      summary.textContent = detail.summary || 'No unavailable assets were detected.';
-      container.appendChild(summary);
-
-      const overlappingEvents = Array.isArray(detail.overlappingEvents)
-        ? detail.overlappingEvents
-        : [];
-      if (!overlappingEvents.length) return;
-      const heading = document.createElement('strong');
-      heading.className = 'plan-availability-dialog-heading';
-      heading.textContent = 'Used by overlapping events';
-      container.appendChild(heading);
-
-      const list = document.createElement('div');
-      list.className = 'plan-availability-event-list';
-      overlappingEvents.forEach(event => {
-        const eventId = Number(event?.eventId || 0);
-        const eventName = String(event?.eventName || `Event ${eventId || ''}`).trim();
-        const quantity = Math.max(0, Number(event?.quantity || 0));
-        const startDate = String(event?.startDate || '').trim();
-        const endDate = String(event?.endDate || '').trim();
-        const dates = startDate && endDate && startDate !== endDate
-          ? `${startDate} - ${endDate}`
-          : (startDate || endDate);
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'plan-availability-event-link';
-        button.innerHTML = `
-          <span><strong>${escapeHtml(eventId ? `#${eventId}: ${eventName}` : eventName)}</strong>
-          <small>${escapeHtml([
-            `${quantity} asset${quantity === 1 ? '' : 's'}`,
-            dates
-          ].filter(Boolean).join(' · '))}</small></span>
-          <span aria-hidden="true">View</span>
-        `;
-        button.addEventListener('click', () => {
-          document.querySelector('#appDialogModal [data-dialog-confirm]')?.click();
-          if (eventId) setTimeout(() => viewEvent(eventId, { updateHistory: false }), 0);
-        });
-        list.appendChild(button);
-      });
-      container.appendChild(list);
-    },
-    variant: 'warning'
-  });
-}
-
-function planAvailabilityDetail(group, availability, reasonTooltip = '') {
-  const allocations = planRequirementRoomAllocations(group, planPageState.event || {});
-  const allocatedQuantity = allocations.reduce(
-    (sum, allocation) => sum + allocation.quantity,
-    0
-  );
-  const usedHere = Math.max(0, Number(availability?.usedHere || 0));
-  const available = Math.max(0, Number(availability?.available || 0));
-  const physical = Math.max(0, Number(availability?.physical || 0));
-  const assetName = [group?.brand, group?.model].filter(Boolean).join(' ') || 'Asset';
-  const details = [
-    `Asset: ${assetName}`,
-    `Available: ${available} of ${physical}`,
-    `Assigned to this event: ${usedHere}`
-  ];
-
-  if (allocations.length > 0) {
-    details.push('', 'Sub-project breakdown:');
-    allocations.forEach(allocation => {
-      details.push(`- ${allocation.name}: ${allocation.quantity}`);
-    });
-    const unallocated = Math.max(usedHere - allocatedQuantity, 0);
-    if (unallocated > 0) details.push(`- Event-level or unallocated: ${unallocated}`);
-  } else if (usedHere > 0) {
-    details.push('', `- Main event plan: ${usedHere}`);
-  }
-
-  const factors = String(reasonTooltip || '')
-    .split('\n')
-    .slice(1)
-    .map(line => line.replace(/^\s*-\s*/, '').trim())
-    .filter(line => (
-      line &&
-      !line.includes('already requested for this event') &&
-      !line.includes(' used by #')
-    ));
-  if (factors.length > 0) {
-    details.push('', 'Other availability factors:');
-    factors.forEach(factor => details.push(`- ${factor}`));
-  }
-  return {
-    summary: details.join('\n'),
-    overlappingEvents: availability?.overlapEvents || []
-  };
-}
-
-function planAvailabilityLabelHtml(group, availability, reasonTooltip = '') {
-  const available = Math.max(0, Number(availability?.available || 0));
-  const physical = Math.max(0, Number(availability?.physical || 0));
-  const countText = `${available}/${physical || available} available`;
-  if (!reasonTooltip || available >= physical) return escapeHtml(countText);
-  return `
-    <button type="button"
-            class="plan-availability-count"
-            title="${escapeHtmlAttr(reasonTooltip)}"
-            aria-label="Show why only ${escapeHtmlAttr(countText)}"
-            onclick="planShowAvailabilityReason('${planEncode(JSON.stringify(planAvailabilityDetail(group, availability, reasonTooltip)))}')">
-      ${escapeHtml(countText)}
-    </button>
-  `;
-}
-
-function renderPlanAvailableResults() {
-  const results = document.getElementById('planAvailableResults');
-  if (!results) return;
-
-  const search = String(planPageState.search || '').trim().toLowerCase();
-  const department = planPageState.department || 'ALL';
-  const models = planAvailableModelGroups().filter(group => {
-    if (
-      department !== 'ALL' &&
-      normalizeDepartmentCode(group.department) !== department
-    ) {
-      return false;
-    }
-    if (!search) return true;
-    return planAvailableModelSearchText(group).includes(search);
-  });
-
-  const rows = models.slice(0, 80).map((group, index) => {
-    const availability = planAvailabilityFor(group);
-    const availabilityTooltip = modelAvailabilityReasonTooltip(
-      availability.available,
-      availability.physical,
-      availability
-    );
-    const inputId = `planAddQty${index}`;
-    return `
-      <div class="plan-result-row">
-        <div>
-          <div class="plan-item-title-line">
-            <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
-            ${planDepartmentCodeBadgeHtml(group.department)}
-          </div>
-          <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
-        </div>
-        <div class="plan-result-side">
-          ${planAvailabilityLabelHtml(group, availability, availabilityTooltip)}
-        </div>
-        <div class="plan-inline-actions">
-          <input class="plan-search-input" id="${inputId}" type="number" min="1" value="1"
-                 style="width:56px;min-height:30px;padding:5px 7px;">
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="planAddModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}','${inputId}')">
-            + Add
-          </button>
-        </div>
-      </div>
-    `;
-  });
-
-  if (planPageState.showContainers && search.length >= 2) {
-    const assetLookup = buildEditAvailableAssetLookup(planPageState.assets || []);
-    const matching = (planPageState.containers || [])
-      .map(container => ({
-        container,
-        summary: buildContainerAvailableModelSummary(container, assetLookup)
-      }))
-      .filter(item =>
-        editContainerSearchText(item.container, item.summary).includes(search)
-      )
-      .slice(0, 30);
-
-    if (matching.length) {
-      const families = new Map();
-      matching.forEach(item => {
-        const label = editContainerFamilyLabel(item.container);
-        const key = label.toLowerCase();
-        if (!families.has(key)) families.set(key, { label, items: [] });
-        families.get(key).items.push(item);
-      });
-
-      const variants = [];
-      Array.from(families.values())
-        .sort((a, b) => compareByDisplayName(a.label, b.label))
-        .forEach(family => {
-          const familyVariants = new Map();
-          family.items.forEach(item => {
-            const signature = editContainerSummarySignature(item.summary) || 'empty';
-            if (!familyVariants.has(signature)) {
-              familyVariants.set(signature, {
-                label: family.label,
-                items: [],
-                summary: item.summary
-              });
-            }
-            familyVariants.get(signature).items.push(item);
-          });
-          variants.push(...familyVariants.values());
-        });
-
-      rows.push(`
-        <div style="padding:8px 12px;background:#f8f9fc;border-bottom:1px solid #e8ebf2;font-weight:700;font-size:11px;">
-          Matching container types (${variants.length} variation${variants.length === 1 ? '' : 's'} from ${matching.length} case${matching.length === 1 ? '' : 's'})
-        </div>
-      `);
-
-      variants.forEach(variant => {
-        const representativeId = String(variant.items[0]?.container?.id || '');
-        const summaryText = variant.summary.groups
-          .slice(0, 4)
-          .map(group => `${group.count}x ${group.brand} ${group.model}`)
-          .join(', ');
-        const caseIds = variant.items
-          .map(item => String(item.container?.id || ''))
-          .filter(Boolean);
-        const caseCount = variant.items.length;
-        rows.push(`
-          <div class="plan-result-row" title="${escapeHtmlAttr(caseIds.join(', '))}">
-            <div>
-              <div class="plan-item-name">Container: ${escapeHtml(variant.label)}</div>
-              <div class="plan-item-description">${escapeHtml(summaryText || 'No available contents')}</div>
-            </div>
-            <div class="plan-result-side">
-              ${caseCount} case${caseCount === 1 ? '' : 's'} · ${variant.summary.usableCount} item${variant.summary.usableCount === 1 ? '' : 's'} each
-            </div>
-            <button type="button" class="plan-button plan-button-small"
-                    title="Add one set of these container contents"
-                    ${variant.summary.usableCount ? '' : 'disabled'}
-                    onclick="planAddContainerContents('${planEncode(representativeId)}')">
-              Add Contents
-            </button>
-          </div>
-        `);
-      });
-    }
-  }
-
-  if (!rows.length) {
-    results.innerHTML = '<div class="plan-empty">No matching asset models or containers.</div>';
-    return;
-  }
-  results.innerHTML = rows.join('');
-}
-
-function renderPlanAvailableCard() {
-  const groups = planAvailableModelGroups();
-  const departmentCodes = Array.from(new Set(
-    groups.map(group => normalizeDepartmentCode(group.department || 'UN'))
-  )).sort(compareByDisplayName);
-
-  return `
-    <section class="plan-card">
-      <div class="plan-card-header">
-        <div>
-          <h3>Available Asset Models</h3>
-          <p>Add model quantities; specific assets are assigned during Prepare.</p>
-        </div>
-      </div>
-      <div class="plan-search-panel">
-        <div class="plan-search-row">
-          <input type="search" class="plan-search-input" id="planAssetSearch"
-                 value="${escapeHtmlAttr(planPageState.search)}"
-                 placeholder="Search brand, model, description, or container..."
-                 oninput="planPageState.search=this.value;renderPlanAvailableResults();">
-          <label class="plan-toggle">
-            <input type="checkbox" ${planPageState.showContainers ? 'checked' : ''}
-                   onchange="planPageState.showContainers=this.checked;renderPlanAvailableResults();">
-            Show containers
-          </label>
-        </div>
-        <div class="plan-filter-chips">
-          <button type="button" class="plan-chip ${planPageState.department === 'ALL' ? 'active' : ''}"
-                  onclick="planSetDepartmentFilter('ALL')">All</button>
-          ${departmentCodes.map(code => `
-            <button type="button" class="plan-chip plan-chip-department ${planPageState.department === code ? 'active' : ''}"
-                    style="${planDepartmentFilterStyle(code)}"
-                    onclick="planSetDepartmentFilter('${planEncode(code)}')">
-              ${escapeHtml(getDepartmentMeta(code).name || code)}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-      <div class="plan-results" id="planAvailableResults"></div>
-    </section>
-  `;
-}
-
-function planSetDepartmentFilter(encodedDepartment) {
-  planPageState.department = planDecode(encodedDepartment) || 'ALL';
-  const card = document.getElementById('planAvailableCard');
-  if (card) card.innerHTML = renderPlanAvailableCard();
-  renderPlanAvailableResults();
-}
-
-function planRequirementQuantityControl(group) {
-  const quantity = Math.max(1, Number(group.requiredQuantity || 1));
-  if (eventIsConsolidated(planPageState, planPageState.event)) {
-    return `
-      <div class="plan-qty-total" aria-label="${quantity} required across all rooms">
-        ${quantity}
-      </div>
-    `;
-  }
-  const args = [
-    planEncode(group.department),
-    planEncode(group.brand),
-    planEncode(group.model),
-    planEncode(group.description || '')
-  ].map(value => `'${value}'`).join(',');
-  return `
-    <div class="plan-qty-control" aria-label="Required quantity">
-      <button type="button" ${quantity <= 1 ? 'disabled' : ''}
-              onclick="planSetModelQuantity(${args},${quantity - 1})">−</button>
-      <input type="number" min="1" value="${quantity}"
-             onchange="planSetModelQuantity(${args},this.value)">
-      <button type="button" onclick="planSetModelQuantity(${args},${quantity + 1})">+</button>
-    </div>
-  `;
-}
-
-function planCustomQuantityControl(custom) {
-  const quantity = Math.max(1, Number(custom.quantity || 1));
-  if (eventIsConsolidated(planPageState, planPageState.event)) {
-    return `
-      <div class="plan-qty-total" aria-label="${quantity} required across all rooms">
-        ${quantity}
-      </div>
-    `;
-  }
-  return `
-    <div class="plan-qty-control" aria-label="Required quantity">
-      <button type="button" ${quantity <= 1 ? 'disabled' : ''}
-              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity - 1})">−</button>
-      <input type="number" min="1" value="${quantity}"
-             onchange="planSetCustomQuantity('${planEncode(custom.id)}',this.value)">
-      <button type="button"
-              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity + 1})">+</button>
-    </div>
-  `;
-}
-
-function planRequirementRoomAllocations(group, event = planPageState.event) {
-  const groupKey = eventSubprojectGroupKey(group);
-  return eventSubprojects(event)
-    .map(room => {
-      const item = eventSubprojectModelItems(room).get(groupKey);
-      return {
-        id: String(room.id || ''),
-        name: String(room.name || 'Unnamed room'),
-        quantity: Math.max(0, Number(item?.requiredQuantity || 0))
-      };
-    })
-    .filter(room => room.quantity > 0);
-}
-
-function planRequirementWarning(group) {
-  return planRequirementWarningForState(group, planPageState);
-}
-
-function planRequirementWarningForState(group, state = planPageState) {
-  const visibleRequired = Math.max(1, Number(group?.requiredQuantity || 1));
-  const availability = planAvailabilityFor(group);
-  const fulfillableForThisEvent = Math.max(0, Number(availability.capacity || 0));
-  const availabilityDetail = availability.hasEntry
-    ? modelAvailabilityReasonTooltip(
-        availability.available,
-        availability.physical,
-        availability
-      )
-    : 'This asset model is not present in the current inventory.';
-  const event = state?.event || planPageState.event || {};
-  const rooms = eventSubprojects(event);
-  const room = eventActiveSubproject(state, event);
-  const roomAllocations = planRequirementRoomAllocations(group, event);
-  const allocatedRequired = roomAllocations.reduce(
-    (sum, allocation) => sum + allocation.quantity,
-    0
-  );
-  const required = Math.max(
-    visibleRequired,
-    allocatedRequired > 0 ? allocatedRequired : visibleRequired
-  );
-  const shortage = Math.max(required - fulfillableForThisEvent, 0);
-  const context = [
-    `Event #${event.id || ''}: ${event.name || 'Unnamed event'}`,
-    rooms.length > 1
-      ? (room ? `Room: ${room.name || 'Unnamed room'}` : `Consolidated across ${rooms.length} rooms`)
-      : ''
-  ].filter(Boolean).join('\n');
-  const roomAllocationDetail = roomAllocations.length > 0 && rooms.length > 1
-    ? [
-        'Assigned to sub-projects:',
-        ...roomAllocations.map(allocation => (
-          `${allocation.name}: ${allocation.quantity}`
-        ))
-      ].join('\n')
-    : '';
-  if (shortage > 0) {
-    const inventoryOverage = Math.max(required - availability.physical, 0);
-    const inventoryDetail = inventoryOverage > 0
-      ? `Required quantity is ${inventoryOverage} above the total inventory of ${availability.physical}.`
-      : '';
-    return {
-      type: 'shortage',
-      quantity: shortage,
-      availability,
-      reason: `${context}\n\n${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
-        `Usable capacity for this event is ${fulfillableForThisEvent}.` +
-        `${inventoryDetail ? `\n${inventoryDetail}` : ''}` +
-        `${roomAllocationDetail ? `\n\n${roomAllocationDetail}` : ''}\n\n${availabilityDetail}`
-    };
-  }
-
-  const healthyCapacity = Math.max(0, Number(availability.healthyCapacity || 0));
-  const degradedRequired = Math.max(required - healthyCapacity, 0);
-  if (degradedRequired <= 0) return null;
-  const degradedReasonDetail = planDegradedReasonDetail(availability);
-  return {
-    type: 'degraded',
-    quantity: degradedRequired,
-    availability,
-    reason: `${context}\n\n${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
-      `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.` +
-      `${degradedReasonDetail}` +
-      `${roomAllocationDetail ? `\n\n${roomAllocationDetail}` : ''}\n\n${availabilityDetail}`
-  };
-}
-
-function planSubprojectWarning(room, event = planPageState.event) {
-  if (!room || !event) return null;
-  const roomState = {
-    ...planPageState,
-    event,
-    activeSubprojectId: String(room.id || '')
-  };
-  const groups = eventSubprojectModelGroups(event, roomState)
-    .filter(group => Number(group?.requiredQuantity || 0) > 0);
-  let degradedWarning = null;
-  for (const group of groups) {
-    const warning = planRequirementWarningForState(group, roomState);
-    if (warning?.type === 'shortage') {
-      return { type: 'shortage', label: 'Has asset shortage' };
-    }
-    if (warning?.type === 'degraded') degradedWarning = warning;
-  }
-  return degradedWarning
-    ? { type: 'degraded', label: 'Requires degraded assets' }
-    : null;
-}
-
-function planShowRequirementWarning(encodedReason, warningType = 'shortage') {
-  showAppAlert({
-    title: warningType === 'degraded' ? 'Degraded Assets Required' : 'Shortage Detected',
-    message: planDecode(encodedReason) || 'This requirement has an availability warning.',
-    variant: 'warning',
-  });
-}
-
-var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, warningType: 'shortage', preset: '', search: '', mode: 'replace' };
-
-function ensurePlanReplacementModal() {
-  let modal = document.getElementById('planReplacementModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planReplacementModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content plan-replacement-modal-content">
-      <div class="modal-header">
-        <div><h3 id="planReplacementTitle">Resolve Shortage</h3><small id="planReplacementSourceLabel"></small></div>
-        <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('planReplacementModal')">&times;</button>
-      </div>
-      <div class="plan-resolution-mode" data-selected="replace" role="radiogroup" aria-label="Resolution method">
-        <span class="plan-resolution-mode-indicator" aria-hidden="true"></span>
-        <button type="button" role="radio" aria-checked="true" data-plan-resolution-mode="replace" onclick="planSetResolutionMode('replace')">Replace</button>
-        <button type="button" role="radio" aria-checked="false" data-plan-resolution-mode="loan" onclick="planSetResolutionMode('loan')">Loan</button>
-      </div>
-      <div class="plan-replacement-toolbar">
-        <div class="plan-replacement-quantity-panel">
-          <span>Quantity</span>
-          <div class="plan-replacement-quantity-row">
-            <div class="plan-qty-control" aria-label="Resolution quantity">
-              <button type="button" aria-label="Decrease resolution quantity" onclick="planAdjustReplacementQuantity(-1)">&minus;</button>
-              <input id="planReplacementQuantity" type="number" min="1" value="1"
-                     aria-label="Resolution quantity" onchange="planSetReplacementQuantity(this.value)">
-              <button type="button" aria-label="Increase resolution quantity" onclick="planAdjustReplacementQuantity(1)">+</button>
-            </div>
-            <div class="plan-replacement-presets" aria-label="Resolution quantity presets">
-              <button id="planReplacementShort" type="button" title="Resolve only the quantity currently short for this event period" onclick="planUseReplacementQuantity('short')">Short</button>
-              <button id="planReplacementAll" type="button" title="Resolve the full planned quantity for this item" onclick="planUseReplacementQuantity('all')">All</button>
-            </div>
-          </div>
-        </div>
-        <div id="planReplacementSearchField">
-          <input id="planReplacementSearch" class="form-input" type="search" placeholder="Search replacement assets..."
-                 aria-label="Search replacement assets"
-                 oninput="planReplacementState.search=this.value;renderPlanReplacementOptions()">
-        </div>
-      </div>
-      <div id="planReplacementPanel">
-        <div id="planReplacementOptions" class="plan-replacement-options"></div>
-      </div>
-      <div id="planLoanResolutionPanel" class="plan-loan-resolution-panel" hidden>
-        <form id="planLoanResolutionForm" class="plan-loan-resolution-card" onsubmit="planConvertRequirementToLoan(event)">
-          <div>
-            <label class="form-label" for="planLoanCompany">Loan company / source</label>
-            <input id="planLoanCompany" class="form-input" type="text" maxlength="200"
-                   autocomplete="organization" placeholder="Enter supplier or lending company" required>
-          </div>
-          <p>The selected quantity will be removed from this inventory requirement and added to the event as a loan item.</p>
-          <div class="plan-loan-resolution-actions">
-            <button id="planLoanResolutionSubmit" type="submit" class="plan-button plan-loan-resolution-submit">Convert to loan</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planOpenResolution(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage, warningType = 'shortage') {
-  const source = {
-    department: planDecode(encodedDepartment),
-    brand: planDecode(encodedBrand),
-    model: planDecode(encodedModel),
-    description: planDecode(encodedDescription)
-  };
-  const sourceGroup = planModelGroups().find(group => modelGroupMatchesEditGroup(
-    group, source.department, source.brand, source.model
-  ));
-  const maxQuantity = Math.max(1, Number(sourceGroup?.requiredQuantity || shortage || 1));
-  planReplacementState = {
-    source,
-    shortage: Math.min(Math.max(1, Number(shortage || 1)), maxQuantity),
-    sourceQuantity: maxQuantity,
-    warningType,
-    preset: 'short',
-    search: '',
-    mode: 'replace'
-  };
-  ensurePlanReplacementModal();
-  document.getElementById('planReplacementTitle').textContent = warningType === 'degraded'
-    ? 'Resolve Degraded Requirement'
-    : 'Resolve Shortage';
-  document.getElementById('planReplacementSourceLabel').textContent =
-    `${source.brand} ${source.model} needs attention`;
-  document.getElementById('planReplacementShort').title = warningType === 'degraded'
-    ? 'Resolve only the quantity that would require degraded assets'
-    : 'Resolve only the quantity currently short for this event period';
-  planUseReplacementQuantity('short');
-  document.getElementById('planReplacementSearch').value = '';
-  document.getElementById('planLoanCompany').value = '';
-  planSetResolutionMode('replace');
-  renderPlanReplacementOptions();
-  openModal('planReplacementModal');
-}
-
-function planSetResolutionMode(mode) {
-  const normalizedMode = mode === 'loan' ? 'loan' : 'replace';
-  planReplacementState.mode = normalizedMode;
-  const selector = document.querySelector('.plan-resolution-mode');
-  if (selector) selector.dataset.selected = normalizedMode;
-  document.querySelectorAll('[data-plan-resolution-mode]').forEach(button => {
-    button.setAttribute('aria-checked', button.dataset.planResolutionMode === normalizedMode ? 'true' : 'false');
-  });
-  document.getElementById('planReplacementPanel')?.toggleAttribute('hidden', normalizedMode !== 'replace');
-  document.getElementById('planReplacementSearchField')?.toggleAttribute('hidden', normalizedMode !== 'replace');
-  document.getElementById('planLoanResolutionPanel')?.toggleAttribute('hidden', normalizedMode !== 'loan');
-  document.querySelector('.plan-replacement-toolbar')?.classList.toggle('loan-mode', normalizedMode === 'loan');
-  if (normalizedMode === 'loan') {
-    requestAnimationFrame(() => document.getElementById('planLoanCompany')?.focus());
-  }
-}
-
-function planSetReplacementQuantity(value, preset = '') {
-  const input = document.getElementById('planReplacementQuantity');
-  const maximum = Math.max(1, Number(planReplacementState.sourceQuantity || 1));
-  const quantity = Math.min(maximum, Math.max(1, Math.round(Number(value || 1))));
-  if (input) {
-    input.max = maximum;
-    input.value = quantity;
-  }
-  planReplacementState.preset = preset;
-  document.getElementById('planReplacementShort')?.classList.toggle('active', preset === 'short');
-  document.getElementById('planReplacementAll')?.classList.toggle('active', preset === 'all');
-  return quantity;
-}
-
-function planAdjustReplacementQuantity(delta) {
-  const input = document.getElementById('planReplacementQuantity');
-  planSetReplacementQuantity(Number(input?.value || 1) + Number(delta || 0));
-}
-
-function planUseReplacementQuantity(mode) {
-  const quantity = mode === 'all'
-    ? planReplacementState.sourceQuantity
-    : planReplacementState.shortage;
-  planSetReplacementQuantity(quantity, mode);
-}
-
-function renderPlanReplacementOptions() {
-  const container = document.getElementById('planReplacementOptions');
-  if (!container || !planReplacementState.source) return;
-  const query = String(planReplacementState.search || '').trim().toLowerCase();
-  const source = planReplacementState.source;
-  const options = planAvailableModelGroups().filter(group => {
-    if (modelGroupMatchesEditGroup(group, source.department, source.brand, source.model)) return false;
-    if (query && !planAvailableModelSearchText(group).includes(query)) return false;
-    const availability = planAvailabilityFor(group);
-    const usable = planReplacementState.warningType === 'degraded'
-      ? availability.healthy
-      : availability.available;
-    return Math.max(0, usable) > 0;
-  }).slice(0, 60);
-
-  container.innerHTML = options.map(group => {
-    const availability = planAvailabilityFor(group);
-    const maximum = Math.max(0, planReplacementState.warningType === 'degraded'
-      ? availability.healthy
-      : availability.available);
-    const availabilityLabel = planReplacementState.warningType === 'degraded'
-      ? 'fully working available to plan'
-      : 'available to plan';
-    return `
-      <div class="plan-replacement-option">
-        <div>
-          <strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</strong>
-          <small>${escapeHtml(group.description || 'No description')} &middot; ${maximum} ${availabilityLabel}</small>
-        </div>
-        ${planDepartmentCodeBadgeHtml(group.department)}
-        <button type="button" class="plan-button plan-button-small"
-                onclick="planReplaceRequirement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${maximum})">
-          Replace
-        </button>
-      </div>
-    `;
-  }).join('') || '<div class="plan-empty">No replacement models match this search.</div>';
-}
-
-async function planReplaceRequirement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, maximum) {
-  const input = document.getElementById('planReplacementQuantity');
-  const quantity = Math.max(1, Number(input?.value || 1));
-  if (quantity > Number(maximum || 0)) {
-    showNotification('warning', `This replacement has only ${maximum} unit(s) available to plan.`);
-    input?.focus();
-    return;
-  }
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models/replace`, 'POST', {
-      source: planReplacementState.source,
-      replacement: {
-        department: planDecode(encodedDepartment),
-        brand: planDecode(encodedBrand),
-        model: planDecode(encodedModel),
-        description: planDecode(encodedDescription)
-      },
-      quantity,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    });
-    closeModal('planReplacementModal');
-    showNotification('success', `Replaced ${quantity} planned item${quantity === 1 ? '' : 's'}`);
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-async function planConvertRequirementToLoan(event) {
-  event?.preventDefault();
-  const companyInput = document.getElementById('planLoanCompany');
-  const company = String(companyInput?.value || '').trim();
-  const quantity = Math.max(1, Number(document.getElementById('planReplacementQuantity')?.value || 1));
-  if (!company) {
-    showNotification('warning', 'Enter the company or source providing the loan item.');
-    companyInput?.focus();
-    return;
-  }
-
-  const submitButton = document.getElementById('planLoanResolutionSubmit');
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = 'Converting...';
-  }
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models/loan`, 'POST', {
-      source: planReplacementState.source,
-      quantity,
-      company,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    });
-    closeModal('planReplacementModal');
-    showNotification('success', `Converted ${quantity} planned item${quantity === 1 ? '' : 's'} to loan`);
-    await refreshPlanSelectedEvent();
-  } catch (error) {
-    // apiCall displays the server validation message.
-  } finally {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent = 'Convert to loan';
-    }
-  }
-}
-
-function renderPlanRequirementsCard() {
-  const byDepartment = new Map();
-  planModelGroups().forEach(group => {
-    const code = normalizeDepartmentCode(group.department || 'UN');
-    if (!byDepartment.has(code)) byDepartment.set(code, []);
-    byDepartment.get(code).push({ type: 'model', group });
-  });
-  planCustomAssets().forEach(custom => {
-    const code = normalizeDepartmentCode(custom.department || 'UN');
-    if (!byDepartment.has(code)) byDepartment.set(code, []);
-    byDepartment.get(code).push({ type: 'custom', custom });
-  });
-
-  const departmentsHtml = Array.from(byDepartment.entries())
-    .sort(([a], [b]) => compareByDisplayName(a, b))
-    .map(([code, rows]) => {
-      const departmentQuantity = rows.reduce((total, row) => (
-        total + Math.max(
-          1,
-          Number(row.type === 'model'
-            ? row.group.requiredQuantity
-            : row.custom.quantity) || 1
-        )
-      ), 0);
-      const collapseForMobile = window.matchMedia?.('(max-width: 840px)').matches;
-      const rowHtml = rows.map(row => {
-        if (row.type === 'model') {
-          const group = row.group;
-          const warning = planRequirementWarning(group);
-          const warningReason = warning?.reason || '';
-          const dragPayload = eventSubprojectDragPayload(
-            planPageState,
-            planPageState.event,
-            {
-              kind: 'requirement',
-              group: {
-                department: group.department,
-                brand: group.brand,
-                model: group.model,
-                description: group.description || ''
-              }
-            }
-          );
-          return `
-            <div class="plan-requirement-row ${warning ? (warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage') : ''} ${dragPayload ? 'is-room-draggable' : ''}"
-                 ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
-              <div class="plan-item-title-line">
-                <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
-                ${warning ? `
-                  <button type="button" class="plan-shortage-info ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
-                          title="${escapeHtmlAttr(warningReason)}"
-                          aria-label="Show availability warning"
-                          onclick="planShowRequirementWarning('${planEncode(warningReason)}','${warning.type}')">!</button>
-                ` : ''}
-                ${planDepartmentCodeBadgeHtml(group.department)}
-              </div>
-              <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
-              <div class="plan-replace-slot">
-                ${warning ? `
-                  <button type="button" class="plan-button plan-button-small plan-swap-button ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
-                          onclick="planOpenResolution('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Resolve</button>
-                ` : ''}
-              </div>
-              ${planRequirementQuantityControl(group)}
-              <div class="plan-row-actions">
-                <button type="button" class="plan-button plan-button-danger plan-button-small"
-                        title="Remove requirement"
-                        onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
-                  &#128465;
-                </button>
-              </div>
-            </div>
-          `;
-        }
-
-        const custom = row.custom;
-        const dragPayload = eventSubprojectDragPayload(
-          planPageState,
-          planPageState.event,
-          { kind: 'asset', assetRef: custom.id }
-        );
-        const description = custom.type === 'LOAN'
-          ? (custom.company ? `From ${custom.company}` : 'Loan / rental item')
-          : (custom.description || 'Custom miscellaneous item');
-        return `
-          <div class="plan-requirement-row ${dragPayload ? 'is-room-draggable' : ''}"
-               ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
-            <div>
-              <div class="plan-item-title-line">
-                <div class="plan-item-name">${escapeHtml(custom.name)}</div>
-                ${planDepartmentCodeBadgeHtml(custom.department)}
-              </div>
-              <div class="plan-item-meta">${escapeHtml(custom.type === 'LOAN' ? 'Loan / Rental' : 'Misc')}</div>
-            </div>
-            <div class="plan-item-description">${escapeHtml(description)}</div>
-            <div class="plan-replace-slot">
-              <button type="button" class="plan-button plan-button-small"
-                      title="Edit custom asset"
-                      aria-label="Edit custom asset"
-                      onclick="planEditCustomAsset('${planEncode(custom.id)}')">
-                &#9998;
-              </button>
-            </div>
-            ${planCustomQuantityControl(custom)}
-            <div class="plan-row-actions">
-              <button type="button" class="plan-button plan-button-danger plan-button-small"
-                      title="Remove custom asset"
-                      onclick="planRemoveCustomAsset('${planEncode(custom.id)}')">
-                &#128465;
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      return `
-        <details class="plan-department-section" ${collapseForMobile ? '' : 'open'}>
-          <summary class="plan-department-summary">
-            <span>
-              <i class="plan-department-dot" style="--department-color:${escapeHtmlAttr(planDepartmentColor(code))}"></i>
-              ${escapeHtml(planDepartmentLabel(code))} (${rows.length})
-            </span>
-            <span class="plan-department-summary-end">
-              <span class="plan-department-mobile-total">Qty: ${departmentQuantity}</span>
-              <span aria-hidden="true">⌄</span>
-            </span>
-          </summary>
-          <div class="plan-requirement-head">
-            <span>Brand / Model</span>
-            <span>Description</span>
-            <span></span>
-            <span>Required Qty</span>
-            <span></span>
-          </div>
-          ${rowHtml}
-        </details>
-      `;
-    }).join('');
-
-  return `
-    <section class="plan-card">
-      <div class="plan-card-header">
-        <div>
-          <h3>Planned Requirements</h3>
-          <p>Changes save immediately. Departments appear when their first item is added.</p>
-        </div>
-      </div>
-      <div class="plan-requirements-scroll">
-        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left.</div>'}
-      </div>
-    </section>
-  `;
-}
-
-function renderPlanEventDetailsCard() {
-  const event = planPageState.event || {};
-  const notes = String(event.notes || '');
-  const eventDates = event.startDate && event.startDate === event.endDate
-    ? event.startDate
-    : [event.startDate, event.endDate].filter(Boolean).join(' – ');
-  return `
-    <section class="plan-card plan-details-card">
-      <div class="plan-card-header event-detail-card-header">
-        <h3>Event Details</h3>
-        ${eventDetailsActionsHtml(event.id)}
-      </div>
-      <div class="plan-aside-body">
-        <dl class="plan-detail-list">
-          <div><dt>Name</dt><dd>${escapeHtml(event.name || `Event ${event.id || ''}`)}</dd></div>
-          <div><dt>Location</dt><dd>${escapeHtml(event.location || '—')}</dd></div>
-          <div><dt>Date(s)</dt><dd>${escapeHtml(eventDates || '—')}</dd></div>
-          <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
-          <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
-          <div class="plan-detail-notes-row">
-            <dd>
-              <textarea class="plan-notes-textarea" id="planEventNotes"
-                        maxlength="50000"
-                        placeholder="Add notes or special requirements for this event..."
-                        oninput="planNotesChanged(this)"
-                        onblur="planFlushNotesSave()">${escapeHtml(notes)}</textarea>
-              <span class="plan-notes-footer">
-                <span id="planNotesSaveState">Saved</span>
-                <span id="planNotesCharacterCount">${notes.length}/50000</span>
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </section>
-  `;
-}
-
-function renderPlanVendorManagementCard() {
-  const rows = Array.isArray(planPageState.event?.vendorManagement)
-    ? planPageState.event.vendorManagement
-    : [];
-  if (!rows.length) return '';
-  return `
-    <section class="plan-card vendor-management-card">
-      <div class="plan-card-header"><h3>Vendor Management</h3><button type="button" class="vendor-management-open" onclick="planOpenVendorManagement()">Open</button></div>
-      <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
-    </section>
-  `;
-}
-
-function planVendorManagementDialogMarkup() {
-  const rows = Array.isArray(planPageState.event?.vendorManagement)
-    ? planPageState.event.vendorManagement
-    : [];
-  return `<div class="modal-content vendor-management-dialog">
-    <div class="modal-header">
-      <div><h3 class="modal-title">Vendor Management</h3><p>Choose how each vendor fulfils their equipment.</p></div>
-      <button type="button" class="close-btn" aria-label="Close vendor management" onclick="closeModal('planVendorManagementModal')">&times;</button>
-    </div>
-    <div class="vendor-management-list">
-      ${rows.map(row => {
-        const dryHire = row.mode !== 'outsourced';
-        return `<div class="vendor-management-row">
-          <div class="vendor-management-details"><strong>${escapeHtml(row.vendorName || 'Vendor')}</strong><small>${Number(row.itemCount || 0)} item line${Number(row.itemCount || 0) === 1 ? '' : 's'} &middot; ${financeMoney(Number(row.amount || 0))}</small></div>
-          <div class="vendor-mode-toggle" role="radiogroup" aria-label="Fulfilment for ${escapeHtmlAttr(row.vendorName || 'vendor')}">
-            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','dry-hire')">Self Pickup</button>
-            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','outsourced')">Delivered</button>
-          </div>
-        </div>`;
-      }).join('') || '<p class="vendor-management-empty">No external vendors for this event.</p>'}
-    </div>
-    <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
-  </div>`;
-}
-
-function planOpenVendorManagement() {
-  let modal = document.getElementById('planVendorManagementModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'planVendorManagementModal';
-    modal.className = 'modal vendor-management-modal';
-    modal.addEventListener('click', event => {
-      if (event.target === modal) closeModal(modal.id);
-    });
-    document.body.appendChild(modal);
-  }
-  modal.innerHTML = planVendorManagementDialogMarkup();
-  openModal(modal.id);
-}
-
-async function planSetVendorManagement(encodedKey, mode) {
-  const key = planDecode(encodedKey);
-  if (!planPageState.eventId || !['dry-hire', 'outsourced'].includes(mode)) return;
-  try {
-    const response = await apiCall(
-      `/api/events/${planPageState.eventId}/vendor-management`,
-      'PUT',
-      { key, mode }
-    );
-    planPageState.event.vendorManagement = response.data || [];
-    await refreshPlanSelectedEvent();
-    const modal = document.getElementById('planVendorManagementModal');
-    if (modal?.classList.contains('active')) {
-      modal.innerHTML = planVendorManagementDialogMarkup();
-    }
-    showNotification('success', mode === 'dry-hire'
-      ? 'Vendor items set for self pickup and added to Plan as loans'
-      : 'Vendor items marked as delivered');
-  } catch (error) {
-    // apiCall already displays the server message.
-  }
-}
-
-function renderPlanTemplatesCard() {
-  const templates = planPageState.templates || [];
-  const rows = templates.map(template => {
-    const quantity = (template.models || []).reduce(
-      (sum, row) => sum + Number(row.quantity || 0),
-      0
-    ) + (template.customAssets || []).reduce(
-      (sum, row) => sum + Number(row.quantity || 0),
-      0
-    );
-    return `
-      <div class="plan-template-row">
-        <div>
-          <strong>${escapeHtml(template.name)}</strong>
-          <span>${template.models.length} models · ${template.customAssets.length} custom · ${quantity} total</span>
-        </div>
-        <button type="button" class="plan-button plan-button-small"
-                onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
-        <button type="button" class="plan-button plan-button-small"
-                title="Edit template"
-                onclick="planOpenTemplateEditor('${planEncode(template.id)}')">&#9998;</button>
-      </div>
-    `;
-  }).join('');
-
-  return `
-    <section class="plan-card" id="planTemplatesCard">
-      <div class="plan-card-header"><h3>Templates</h3></div>
-      <div class="plan-aside-body">
-        <div class="plan-template-actions">
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="planOpenTemplateChooser()">Apply Template</button>
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="planOpenTemplateManager()">Manage Templates</button>
-        </div>
-        <div class="plan-template-list">
-          ${rows || '<div class="plan-item-meta">No templates created yet.</div>'}
-          <button type="button" class="plan-button" onclick="planOpenTemplateEditor()">Save Template</button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderPlanCustomItemCard() {
-  return `
-    <section class="plan-card plan-custom-card">
-      <div class="plan-card-header">
-        <h3>Add Custom Item</h3>
-      </div>
-      <div class="plan-aside-body">
-        <form class="plan-custom-form" id="planCustomAssetForm"
-              onsubmit="planSubmitCustomAsset(event)">
-          <input type="hidden" id="planCustomType" value="MISC">
-          <div class="plan-custom-type-toggle" aria-label="Custom item type">
-            <button type="button" id="planCustomTypeMisc" class="active"
-                    aria-pressed="true" onclick="planSetCustomType('MISC')">Misc</button>
-            <button type="button" id="planCustomTypeLoan"
-                    aria-pressed="false" onclick="planSetCustomType('LOAN')">Loan</button>
-          </div>
-          <div class="plan-custom-field-grid">
-            <div class="plan-custom-field">
-              <label for="planCustomName">Item Name</label>
-              <input id="planCustomName" maxlength="160"
-                     placeholder="e.g. Wireless Handheld" required>
-            </div>
-            <div class="plan-custom-field">
-              <label for="planCustomQuantity">Quantity</label>
-              <input id="planCustomQuantity" type="number" min="1" value="1" required>
-            </div>
-          </div>
-          <div class="plan-custom-field-grid plan-custom-field-grid-secondary">
-            <div class="plan-custom-field">
-              <label for="planCustomDepartment">Department</label>
-              <select id="planCustomDepartment" required>
-                ${customDepartmentOptionsHtml('UN')}
-              </select>
-            </div>
-            <div class="plan-custom-field" id="planCustomCompanyGroup">
-              <label for="planCustomCompany" id="planCustomDetailLabel">Description</label>
-              <input id="planCustomCompany" maxlength="160"
-                     placeholder="Optional description">
-            </div>
-          </div>
-          <div class="plan-custom-form-actions">
-            <button type="submit" id="planCustomSubmitButton" class="plan-button plan-button-primary plan-custom-submit">
-              Add Custom Item
-            </button>
-            <button type="button" id="planCustomCancelEdit" class="plan-button plan-button-small"
-                    style="display:none" onclick="planCancelCustomAssetEdit()">Cancel edit</button>
-          </div>
-          <div class="plan-custom-help">
-            <span aria-hidden="true">&#9432;</span>
-            <span>Custom items are not part of core inventory.</span>
-          </div>
-        </form>
-      </div>
-    </section>
-  `;
-}
-
-var planNotesSaveTimer = null;
-var planPendingNotesSave = null;
-
-function planNotesChanged(textarea) {
-  const notes = String(textarea?.value || '');
-  const counter = document.getElementById('planNotesCharacterCount');
-  const state = document.getElementById('planNotesSaveState');
-  if (counter) counter.textContent = `${notes.length}/50000`;
-  if (state) state.textContent = 'Unsaved changes';
-
-  planPendingNotesSave = {
-    eventId: Number(planPageState.eventId),
-    notes
-  };
-  clearTimeout(planNotesSaveTimer);
-  planNotesSaveTimer = setTimeout(() => {
-    planFlushNotesSave();
-  }, 700);
-}
-
-async function planFlushNotesSave() {
-  clearTimeout(planNotesSaveTimer);
-  planNotesSaveTimer = null;
-  const pending = planPendingNotesSave;
-  if (!pending?.eventId) return;
-  planPendingNotesSave = null;
-
-  const state = document.getElementById('planNotesSaveState');
-  if (state) state.textContent = 'Saving…';
-  try {
-    const response = await apiCall(
-      `/api/events/${pending.eventId}/notes`,
-      'PUT',
-      { notes: pending.notes }
-    );
-    if (Number(planPageState.eventId) === Number(pending.eventId)) {
-      planPageState.event.notes = response.data?.notes ?? pending.notes;
-      if (state) state.textContent = 'Saved';
-    }
-  } catch (error) {
-    planPendingNotesSave = pending;
-    if (state) state.textContent = 'Save failed';
-  }
-}
-
-function renderPlanPage() {
-  const root = document.getElementById('plan-page-root');
-  if (!root) return;
-
-  if (!isAdminUser()) {
-    root.innerHTML = '<div class="plan-empty">Admin access is required.</div>';
-    return;
-  }
-  if (!planPageState.event) {
-    root.innerHTML = '<div class="plan-empty">There are no events available to plan.</div>';
-    return;
-  }
-
-  const event = planPageState.event;
-  const consolidated = eventIsConsolidated(planPageState, event);
-  root.classList.toggle('event-consolidated-mode', consolidated);
-  const totals = planTotals();
-  root.innerHTML = `
-    <div class="plan-page-heading">
-      <div><h2>Plan Event Assets</h2><p>Add required asset models and quantities for this event.</p></div>
-    </div>
-
-    <div class="plan-layout">
-      <div class="plan-primary">
-        <div class="plan-event-bar">
-          <button type="button" class="plan-event-select-wrap"
-                  aria-haspopup="dialog" aria-label="Choose an event to plan"
-                  onclick="planOpenEventChooser()">
-            <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
-            <div style="min-width:0;flex:1;">
-              <div class="plan-event-title-row">
-                <span class="plan-event-id">#${escapeHtml(String(event.id || ''))}</span>
-                <span class="plan-event-name">${escapeHtml(planEventOptionLabel(event))}</span>
-              </div>
-              <div class="plan-event-meta">
-                <span>${escapeHtml([event.startDate, event.endDate].filter(Boolean).join(' – '))}</span>
-                ${event.location ? `<span aria-hidden="true">•</span><span>${escapeHtml(event.location)}</span>` : ''}
-                ${planEventTypeBadgeHtml(event)}
-                ${planEventStateBadgeHtml(event)}
-              </div>
-            </div>
-            <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
-          </button>
-
-          <div class="plan-metrics">
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
-            ${event.quotationId ? `
-              <button type="button" class="plan-metric plan-compare-launch"
-                      onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0}, '${escapeJs(String(event.quotationId))}')">
-                <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
-                <div><strong>Compare</strong><span>To Quotation</span></div>
-              </button>
-            ` : ''}
-          </div>
-        </div>
-
-        ${renderEventSubprojectTabs(
-          'planPageState',
-          event,
-          'renderPlanPage',
-          'Planning sub-projects',
-          {
-            allowAdd: true,
-            allowDelete: true,
-            allowRename: true,
-            allowReorder: true,
-            showImplicitMain: true,
-            roomWarning: planSubprojectWarning
-          }
-        )}
-        ${consolidated ? eventConsolidatedNotice() : ''}
-        <div class="plan-workspace">
-          <div class="plan-available-stack">
-            <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
-            <div id="planCustomItemCard">${renderPlanCustomItemCard()}</div>
-          </div>
-          <div id="planRequirementsCard">${renderPlanRequirementsCard()}</div>
-        </div>
-
-      </div>
-      <aside class="plan-aside">
-        ${renderPlanEventDetailsCard()}
-        ${renderPlanVendorManagementCard()}
-        <button type="button" class="plan-button plan-button-primary plan-aside-proceed"
-                onclick="planProceedToPrepare()">Proceed to Prepare →</button>
-      </aside>
-      <div class="plan-mobile-actionbar">
-        <button type="button" class="plan-button plan-button-primary" onclick="planProceedToPrepare()">
-          Proceed to Prepare →
-        </button>
-      </div>
-    </div>
-  `;
-  renderPlanAvailableResults();
-}
-
-async function loadPlanPage() {
-  const root = document.getElementById('plan-page-root');
-  if (!root || !isAdminUser() || planPageState.loading) return;
-  planPageState.loading = true;
-  root.innerHTML = '<div class="loading">Loading planning workspace...</div>';
-
-  try {
-    const [eventOptionsLoad, assetsResponse, templatesResponse, containerCache] = await Promise.all([
-      startProgressiveEventOptions(planPageState.eventId, loaded => {
-        planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
-        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-      }),
-      apiCall('/api/assets/available'),
-      apiCall('/api/planning-templates'),
-      refreshContainersCache(true)
-    ]);
-    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
-    eventOptionsLoad.completion.then(loaded => {
-      planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
-      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-    }).catch(error => console.warn('Unable to load more event options:', error));
-    planPageState.assets = assetsResponse.data || [];
-    planPageState.templates = templatesResponse.data || [];
-    planPageState.containers = Object.values(containerCache || {});
-
-    const preferredId = planPageState.eventId;
-    const selected = planPageState.events.find(item =>
-      Number(item.id) === Number(preferredId)
-    ) || planPageState.events[0];
-
-    if (selected) {
-      await selectPlanEvent(selected.id, { renderLoading: false });
-    } else {
-      planPageState.event = null;
-      renderPlanPage();
-    }
-  } catch (error) {
-    root.innerHTML = `<div class="plan-empty">Failed to load Plan: ${escapeHtml(error.message || String(error))}</div>`;
-  } finally {
-    planPageState.loading = false;
-  }
-}
-
-async function selectPlanEvent(eventId, options = {}) {
-  await planFlushNotesSave();
-  const id = Number(eventId);
-  if (!id) return;
-  planPageState.eventId = id;
-  const root = document.getElementById('plan-page-root');
-  if (options.renderLoading !== false && root) {
-    root.innerHTML = '<div class="loading">Loading event plan...</div>';
-  }
-
-  try {
-    const [eventResponse, availabilityResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/events/${id}/availability`)
-    ]);
-    planPageState.event = eventResponse.data;
-    planPageState.availability = availabilityResponse.data || [];
-    renderPlanPage();
-  } catch (error) {
-    if (root) {
-      root.innerHTML = `<div class="plan-empty">Failed to load event: ${escapeHtml(error.message || String(error))}</div>`;
-    }
-  }
-}
-
-async function refreshPlanSelectedEvent(options = {}) {
-  if (!planPageState.eventId) return;
-  const pageScrollTop = window.scrollY;
-  const requirementsScrollTop = document.querySelector('.plan-requirements-scroll')?.scrollTop || 0;
-  const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
-    apiCall(`/api/events/${planPageState.eventId}`),
-    apiCall(`/api/events/${planPageState.eventId}/availability`),
-    options.templates ? apiCall('/api/planning-templates') : Promise.resolve(null)
-  ]);
-  planPageState.event = eventResponse.data;
-  planPageState.availability = availabilityResponse.data || [];
-  if (templatesResponse) planPageState.templates = templatesResponse.data || [];
-  renderPlanPage();
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: pageScrollTop, behavior: 'auto' });
-    const requirements = document.querySelector('.plan-requirements-scroll');
-    if (requirements) requirements.scrollTop = requirementsScrollTop;
-  });
-  refreshEventOverviewViews().catch(() => {});
-}
-
-async function planAddModel(encodedDepartment, encodedBrand, encodedModel, encodedDescription, inputId) {
-  const input = document.getElementById(inputId);
-  const quantity = Math.max(1, Number(input?.value || 1));
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models`, 'POST', {
-      department: planDecode(encodedDepartment),
-      brand: planDecode(encodedBrand),
-      model: planDecode(encodedModel),
-      description: planDecode(encodedDescription),
-      quantity,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    });
-    showNotification('success', 'Asset requirement added');
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-async function planSetModelQuantity(encodedDepartment, encodedBrand, encodedModel, encodedDescription, quantity) {
-  const nextQuantity = Math.max(1, Number(quantity || 1));
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models`, 'PUT', {
-      department: planDecode(encodedDepartment),
-      brand: planDecode(encodedBrand),
-      model: planDecode(encodedModel),
-      description: planDecode(encodedDescription),
-      quantity: nextQuantity,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    });
-    await refreshPlanSelectedEvent();
-  } catch (error) {
-    renderPlanPage();
-  }
-}
-
-async function planRemoveModel(encodedDepartment, encodedBrand, encodedModel, encodedDescription) {
-  const brand = planDecode(encodedBrand);
-  const model = planDecode(encodedModel);
-  const confirmed = await showAppConfirm({
-    title: 'Remove Requirement',
-    message: `Remove ${brand} ${model} from this event? Prepared units will remain attached and be shown as extra.`,
-    confirmText: 'Remove',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-  if (!confirmed) return;
-
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models`, 'DELETE', {
-      department: planDecode(encodedDepartment),
-      brand,
-      model,
-      description: planDecode(encodedDescription),
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    });
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-async function planAddContainerContents(encodedContainerId) {
-  const containerId = planDecode(encodedContainerId);
-  try {
-    const response = await apiCall(
-      `/api/events/${planPageState.eventId}/container-models`,
-      'POST',
-      {
-        containerId,
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    const added = response.data || {};
-    showNotification(
-      'success',
-      `Added ${added.assetCount || 0} item(s) from ${containerId} as model requirements`
-    );
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-function planSyncCustomCompanyField() {
-  const isLoan = document.getElementById('planCustomType')?.value === 'LOAN';
-  const input = document.getElementById('planCustomCompany');
-  const label = document.getElementById('planCustomDetailLabel');
-  if (input) {
-    input.required = isLoan;
-    input.placeholder = isLoan ? 'Company Pte Ltd' : 'Optional description';
-  }
-  if (label) label.textContent = isLoan ? 'Company / Source' : 'Description';
-}
-
-function planSetCustomType(type) {
-  const normalizedType = normalizeCustomType(type);
-  const input = document.getElementById('planCustomType');
-  const miscButton = document.getElementById('planCustomTypeMisc');
-  const loanButton = document.getElementById('planCustomTypeLoan');
-  if (input) input.value = normalizedType;
-  if (miscButton) {
-    miscButton.classList.toggle('active', normalizedType === 'MISC');
-    miscButton.setAttribute('aria-pressed', normalizedType === 'MISC' ? 'true' : 'false');
-  }
-  if (loanButton) {
-    loanButton.classList.toggle('active', normalizedType === 'LOAN');
-    loanButton.setAttribute('aria-pressed', normalizedType === 'LOAN' ? 'true' : 'false');
-  }
-  planSyncCustomCompanyField();
-}
-
-async function planSubmitCustomAsset(event) {
-  event.preventDefault();
-  const type = normalizeCustomType(document.getElementById('planCustomType')?.value);
-  const detail = document.getElementById('planCustomCompany')?.value.trim() || '';
-  const company = type === 'LOAN' ? detail : '';
-  const description = type === 'MISC' ? detail : '';
-  if (type === 'LOAN' && !company) {
-    showNotification('warning', 'Please enter the loan or rental company');
-    return;
-  }
-
-  try {
-    const assetId = planPageState.editingCustomAssetId;
-    const payload = {
-      name: document.getElementById('planCustomName')?.value.trim(),
-      quantity: Math.max(1, Number(document.getElementById('planCustomQuantity')?.value || 1)),
-      type,
-      department: normalizeDepartmentCode(document.getElementById('planCustomDepartment')?.value || 'UN'),
-      company,
-      description,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-    };
-    if (assetId) {
-      await apiCall(
-        `/api/events/${planPageState.eventId}/custom-assets/update-quantity`,
-        'PUT',
-        { ...payload, assetId, newQuantity: payload.quantity }
-      );
-    } else {
-      await apiCall(`/api/events/${planPageState.eventId}/custom-assets`, 'POST', payload);
-    }
-    planPageState.editingCustomAssetId = '';
-    showNotification('success', assetId ? 'Custom asset updated' : 'Custom asset added');
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-function planEditCustomAsset(encodedAssetId) {
-  const assetId = planDecode(encodedAssetId);
-  const custom = parseCustomAsset(assetId);
-  if (!custom) return;
-  planPageState.editingCustomAssetId = assetId;
-  planSetCustomType(custom.type);
-  const setValue = (id, value) => {
-    const input = document.getElementById(id);
-    if (input) input.value = value == null ? '' : String(value);
-  };
-  setValue('planCustomName', custom.name);
-  setValue('planCustomQuantity', custom.quantity);
-  const departmentInput = document.getElementById('planCustomDepartment');
-  const customDepartment = normalizeDepartmentCode(custom.department || 'UN');
-  if (
-    departmentInput &&
-    !Array.from(departmentInput.options).some(option => option.value === customDepartment)
-  ) {
-    departmentInput.add(new Option(customDepartment, customDepartment));
-  }
-  setValue('planCustomDepartment', customDepartment);
-  setValue('planCustomCompany', custom.type === 'LOAN' ? custom.company : custom.description);
-  const submit = document.getElementById('planCustomSubmitButton');
-  const cancel = document.getElementById('planCustomCancelEdit');
-  if (submit) submit.textContent = 'Save Changes';
-  if (cancel) cancel.style.display = 'inline-flex';
-  document.getElementById('planCustomAssetForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function planCancelCustomAssetEdit() {
-  planPageState.editingCustomAssetId = '';
-  const form = document.getElementById('planCustomAssetForm');
-  form?.reset();
-  planSetCustomType('MISC');
-  const submit = document.getElementById('planCustomSubmitButton');
-  const cancel = document.getElementById('planCustomCancelEdit');
-  if (submit) submit.textContent = 'Add Custom Item';
-  if (cancel) cancel.style.display = 'none';
-}
-
-async function planSetCustomQuantity(encodedAssetId, quantity) {
-  try {
-    await apiCall(
-      `/api/events/${planPageState.eventId}/custom-assets/update-quantity`,
-      'PUT',
-      {
-        assetId: planDecode(encodedAssetId),
-        newQuantity: Math.max(1, Number(quantity || 1)),
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    await refreshPlanSelectedEvent();
-  } catch (error) {
-    renderPlanPage();
-  }
-}
-
-async function planRemoveCustomAsset(encodedAssetId) {
-  const assetId = planDecode(encodedAssetId);
-  const custom = parseCustomAsset(assetId);
-  const confirmed = await showAppConfirm({
-    title: 'Remove Custom Asset',
-    message: `Remove ${custom?.name || 'this custom asset'} from the event?`,
-    confirmText: 'Remove',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-  if (!confirmed) return;
-
-  try {
-    await apiCall(
-      `/api/events/${planPageState.eventId}/custom-assets/remove`,
-      'POST',
-      {
-        assetId,
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-function planTemplateDraftRows() {
-  const draft = planPageState.templateDraft || { models: [], customAssets: [] };
-  return [
-    ...(draft.models || []).map((row, index) => ({ kind: 'models', index, row })),
-    ...(draft.customAssets || []).map((row, index) => ({ kind: 'customAssets', index, row }))
-  ];
-}
-
-function ensurePlanTemplateEditorModal() {
-  let modal = document.getElementById('planTemplateEditorModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateEditorModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:720px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="planTemplateEditorTitle">Save Template</h3>
-        <button type="button" class="close-btn" onclick="closeModal('planTemplateEditorModal')">&times;</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="planTemplateName">Template Name</label>
-        <input class="form-input" id="planTemplateName" maxlength="120">
-      </div>
-      <div class="plan-inline-actions">
-        <button type="button" class="plan-button plan-button-small" onclick="planUseCurrentEventForTemplate()">
-          Use Current Event Assets
-        </button>
-        <span class="plan-item-meta">This replaces the template editor list, not the event.</span>
-      </div>
-      <div class="plan-template-editor-list" id="planTemplateEditorRows"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-danger" id="planDeleteTemplateButton" onclick="planDeleteTemplate()">Delete</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateEditorModal')">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="planSaveTemplate()">Save Template</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function renderPlanTemplateEditorRows() {
-  const container = document.getElementById('planTemplateEditorRows');
-  if (!container) return;
-  const rows = planTemplateDraftRows();
-  container.innerHTML = rows.length ? rows.map(({ kind, index, row }) => {
-    const isModel = kind === 'models';
-    const title = isModel
-      ? [row.brand, row.model].filter(Boolean).join(' ')
-      : row.name;
-    const description = isModel
-      ? (row.description || 'No description')
-      : (row.type === 'LOAN' ? (row.company || 'Loan / rental') : 'Misc item');
-    return `
-      <div class="plan-template-editor-row">
-        <div>
-          <div class="plan-item-name">${escapeHtml(title)}</div>
-          <div class="plan-item-description">${escapeHtml(description)} · ${escapeHtml(planDepartmentLabel(row.department))}</div>
-        </div>
-        <input class="form-input" type="number" min="1" value="${Math.max(1, Number(row.quantity || 1))}"
-               onchange="planUpdateTemplateDraftQuantity('${kind}',${index},this.value)">
-        <button type="button" class="plan-button plan-button-danger plan-button-small"
-                onclick="planRemoveTemplateDraftRow('${kind}',${index})">&#128465;</button>
-      </div>
-    `;
-  }).join('') : '<div class="plan-empty">This template has no assets. Use the current event to populate it.</div>';
-}
-
-function planOpenTemplateEditor(encodedTemplateId = '') {
-  const templateId = planDecode(encodedTemplateId);
-  const existing = (planPageState.templates || []).find(item => item.id === templateId);
-  const snapshot = planEventSnapshot();
-  planPageState.templateDraft = existing
-    ? JSON.parse(JSON.stringify(existing))
-    : {
-        id: '',
-        name: '',
-        models: snapshot.models,
-        customAssets: snapshot.customAssets
-      };
-
-  ensurePlanTemplateEditorModal();
-  document.getElementById('planTemplateEditorTitle').textContent =
-    existing ? 'Edit Template' : 'Save Template';
-  document.getElementById('planTemplateName').value =
-    planPageState.templateDraft.name || '';
-  document.getElementById('planDeleteTemplateButton').style.display =
-    existing ? 'inline-flex' : 'none';
-  renderPlanTemplateEditorRows();
-  openModal('planTemplateEditorModal');
-}
-
-function planUseCurrentEventForTemplate() {
-  if (!planPageState.templateDraft) return;
-  const snapshot = planEventSnapshot();
-  planPageState.templateDraft.models = snapshot.models;
-  planPageState.templateDraft.customAssets = snapshot.customAssets;
-  renderPlanTemplateEditorRows();
-}
-
-function planUpdateTemplateDraftQuantity(kind, index, quantity) {
-  const rows = planPageState.templateDraft?.[kind];
-  if (!rows?.[index]) return;
-  rows[index].quantity = Math.max(1, Number(quantity || 1));
-}
-
-function planRemoveTemplateDraftRow(kind, index) {
-  const rows = planPageState.templateDraft?.[kind];
-  if (!rows) return;
-  rows.splice(index, 1);
-  renderPlanTemplateEditorRows();
-}
-
-async function planSaveTemplate() {
-  const draft = planPageState.templateDraft;
-  if (!draft) return;
-  const name = document.getElementById('planTemplateName')?.value.trim();
-  if (!name) {
-    showNotification('warning', 'Please enter a template name');
-    return;
-  }
-  const payload = {
-    name,
-    models: draft.models || [],
-    customAssets: draft.customAssets || []
-  };
-
-  try {
-    if (draft.id) {
-      await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'PUT', payload);
-    } else {
-      await apiCall('/api/planning-templates', 'POST', payload);
-    }
-    closeModal('planTemplateEditorModal');
-    showNotification('success', 'Template saved');
-    await refreshPlanSelectedEvent({ templates: true });
-  } catch (error) {}
-}
-
-async function planDeleteTemplate() {
-  const draft = planPageState.templateDraft;
-  if (!draft?.id) return;
-  const confirmed = await showAppConfirm({
-    title: 'Delete Template',
-    message: `Delete "${draft.name}" for everyone in this company?`,
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-  if (!confirmed) return;
-
-  try {
-    await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'DELETE');
-    closeModal('planTemplateEditorModal');
-    showNotification('success', 'Template deleted');
-    await refreshPlanSelectedEvent({ templates: true });
-  } catch (error) {}
-}
-
-var planTemplateModeResolver = null;
-
-function ensurePlanTemplateModeModal() {
-  let modal = document.getElementById('planTemplateModeModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateModeModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="planTemplateChooserTitle">Apply Template</h3>
-        <button type="button" class="close-btn" onclick="planResolveTemplateMode('')">&times;</button>
-      </div>
-      <p id="planTemplateModeMessage"></p>
-      <div style="display:grid;gap:10px;margin:16px 0;">
-        <button type="button" class="plan-button" onclick="planResolveTemplateMode('merge')">
-          <span><strong>Merge</strong><br><small>Add template quantities to the existing plan.</small></span>
-        </button>
-        <button type="button" class="plan-button plan-button-danger" onclick="planResolveTemplateMode('replace')">
-          <span><strong>Replace</strong><br><small>Replace model and custom requirements. Prepared physical assets remain attached.</small></span>
-        </button>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="planResolveTemplateMode('')">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planChooseTemplateMode(templateName) {
-  ensurePlanTemplateModeModal();
-  document.getElementById('planTemplateModeMessage').textContent =
-    `"${templateName}" can be merged with or replace the current requirements.`;
-  openModal('planTemplateModeModal');
-  return new Promise(resolve => {
-    planTemplateModeResolver = resolve;
-  });
-}
-
-function planResolveTemplateMode(mode) {
-  closeModal('planTemplateModeModal');
-  if (planTemplateModeResolver) {
-    const resolve = planTemplateModeResolver;
-    planTemplateModeResolver = null;
-    resolve(mode);
-  }
-}
-
-async function planApplyTemplate(encodedTemplateId) {
-  const templateId = planDecode(encodedTemplateId);
-  const template = planPageState.templates.find(item => item.id === templateId);
-  if (!template) return;
-  const mode = planEventHasRequirements()
-    ? await planChooseTemplateMode(template.name)
-    : 'merge';
-  if (!mode) return;
-
-  try {
-    await apiCall(
-      `/api/events/${planPageState.eventId}/apply-planning-template`,
-      'POST',
-      {
-        templateId,
-        mode,
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    closeModal('planTemplateChooserModal');
-    showNotification('success', `Template ${mode === 'merge' ? 'merged' : 'applied'}`);
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-function ensurePlanTemplateChooserModal() {
-  let modal = document.getElementById('planTemplateChooserModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateChooserModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:620px;">
-      <div class="modal-header">
-        <h3 class="modal-title">Apply Template</h3>
-        <button type="button" class="close-btn" onclick="closeModal('planTemplateChooserModal')">&times;</button>
-      </div>
-      <div class="plan-template-list" id="planTemplateChooserRows"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateChooserModal')">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planOpenTemplateChooser(mode = 'apply') {
-  ensurePlanTemplateChooserModal();
-  const manageMode = mode === 'manage';
-  const title = document.getElementById('planTemplateChooserTitle');
-  if (title) title.textContent = manageMode ? 'Manage Templates' : 'Apply Template';
-  const rows = document.getElementById('planTemplateChooserRows');
-  rows.innerHTML = planPageState.templates.length
-    ? planPageState.templates.map(template => `
-        <div class="plan-template-row">
-          <div>
-            <strong>${escapeHtml(template.name)}</strong>
-            <span>${template.models.length} models · ${template.customAssets.length} custom assets</span>
-          </div>
-          ${manageMode ? '' : `
-            <button type="button" class="plan-button plan-button-small"
-                    onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
-          `}
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="closeModal('planTemplateChooserModal');planOpenTemplateEditor('${planEncode(template.id)}')">
-            ${manageMode ? 'Edit' : '&#9998;'}
-          </button>
-        </div>
-      `).join('')
-    : '<div class="plan-empty">No templates yet. Save one from the current event.</div>';
-  openModal('planTemplateChooserModal');
-}
-
-function planOpenTemplateManager() {
-  planOpenTemplateChooser('manage');
-}
-
-function planScrollToTemplates() {
-  document.getElementById('planTemplatesCard')?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center'
-  });
-}
-
-function planProceedToPrepare() {
-  prepareNewPageState.eventId = Number(planPageState.eventId) || null;
-  showSection('prepare-new');
-}
-
-// ---------------- Trial Prepare page ----------------
-var prepareNewPageState = {
-  events: [],
-  event: null,
-  eventId: null,
-  availableAssets: [],
-  loading: false,
-  refreshing: false,
-  refreshQueued: false,
-  requestSequence: 0,
-  scanRevision: 0,
-  renderVersion: 0,
-  expandedDepartments: new Set(),
-  expandedModels: new Set(),
-  activeSubprojectId: ''
-};
-
-var prepareNewNotesTimer = null;
-var prepareNewPendingNotes = null;
-
-function prepareNewModelKey(group) {
-  return [
-    normalizeDepartmentCode(group?.department || 'UN'),
-    String(group?.brand || ''),
-    String(group?.model || '')
-  ].join('|');
-}
-
-function prepareNewEventDates(event) {
-  const start = String(event?.startDate || '');
-  const end = String(event?.endDate || '');
-  if (!start && !end) return 'Not set';
-  return !end || start === end ? (start || end) : `${start} \u2013 ${end}`;
-}
-
-function prepareNewModelGroups(event = prepareNewPageState.event, state = prepareNewPageState) {
-  return eventSubprojectModelGroups(event, state)
-    .filter(group => (
-      Number(group?.requiredQuantity || 0) > 0
-      || Number(group?.extraPreparedQuantity || 0) > 0
-      || (group?.assignedAssets || []).some(asset => asset?.isExtra)
-    ))
-    .sort((a, b) => {
-      const departmentCompare = normalizeDepartmentCode(a.department || 'UN').localeCompare(
-        normalizeDepartmentCode(b.department || 'UN'),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-      return departmentCompare || modelGroupSortName(a).localeCompare(
-        modelGroupSortName(b),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-    });
-}
-
-function prepareNewSnapshot(event = prepareNewPageState.event) {
-  return buildPackingListSnapshot(event || {});
-}
-
-function prepareNewIsComplete(event = prepareNewPageState.event) {
-  const totals = prepareNewTotals(event);
-  return totals.lineCount > 0 && totals.prepared >= totals.required;
-}
-
-function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewPageState) {
-  const groups = prepareNewModelGroups(event, state);
-  const customAssets = prepareNewCustomAssets(event, state);
-  const departmentsInUse = new Set(
-    [
-      ...groups.map(row => normalizeDepartmentCode(row.department || 'UN')),
-      ...customAssets.map(row => normalizeDepartmentCode(row.parsedCustom?.department || 'UN'))
-    ]
-  );
-  const required = groups.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0) +
-    customAssets.reduce((sum, row) => sum + Number(row.parsedCustom?.quantity || 1), 0);
-  const prepared = groups.reduce((sum, row) => sum + Number(row.countablePreparedQuantity || 0), 0) +
-    customAssets.reduce((sum, row) => (
-      (event?.actuallyPrepared || []).includes(row.id) || (event?.returnedItems || []).includes(row.id)
-        ? sum + Number(row.parsedCustom?.quantity || 1)
-        : sum
-    ), 0);
-  return {
-    lineCount: groups.length + customAssets.length,
-    required,
-    prepared,
-    extra: groups.reduce((sum, row) => sum + Number(row.extraPreparedQuantity || 0), 0),
-    departments: departmentsInUse.size
-  };
-}
-
-function prepareNewSubprojectNeedsAttention(room, event = prepareNewPageState.event) {
-  if (!room || !event) return false;
-  const roomState = { ...prepareNewPageState, activeSubprojectId: String(room.id || '') };
-  const totals = prepareNewTotals(event, roomState);
-  return totals.lineCount > 0 && totals.prepared < totals.required;
-}
-
-function prepareNewStatusBadge(status, label = '') {
-  const slug = String(status || 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const text = label || status || 'Pending';
-  return `<span class="prepare-new-status prepare-new-status-${escapeHtmlAttr(slug)}">${escapeHtml(text)}</span>`;
-}
-
-function prepareNewInitialExpansion() {
-  // Sections are intentionally closed by default; user-opened sections are
-  // tracked through ontoggle and restored during realtime refreshes.
-}
-
-function prepareNewSetDepartmentExpanded(encodedDepartment, open, detailsElement = null) {
-  if (
-    detailsElement && (
-      !detailsElement.isConnected ||
-      Number(detailsElement.dataset.prepareRenderVersion || 0) !== prepareNewPageState.renderVersion
-    )
-  ) return;
-  const department = planDecode(encodedDepartment);
-  if (open) prepareNewPageState.expandedDepartments.add(department);
-  else prepareNewPageState.expandedDepartments.delete(department);
-}
-
-function prepareNewSetModelExpanded(encodedKey, open, detailsElement = null) {
-  if (
-    detailsElement && (
-      !detailsElement.isConnected ||
-      Number(detailsElement.dataset.prepareRenderVersion || 0) !== prepareNewPageState.renderVersion
-    )
-  ) return;
-  const key = planDecode(encodedKey);
-  if (open) prepareNewPageState.expandedModels.add(key);
-  else prepareNewPageState.expandedModels.delete(key);
-}
-
-function prepareNewRenderAfterModelToggle(encodedKey) {
-  const key = planDecode(encodedKey);
-  prepareNewPageState.expandedModels.add(key);
-  renderPrepareNewPage();
-}
-
-function prepareNewAvailableAssetsForGroup(group) {
-  const department = normalizeDepartmentCode(group?.department || 'UN');
-  return (prepareNewPageState.availableAssets || [])
-    .filter(asset =>
-      normalizeDepartmentCode(asset?.department || 'UN') === department &&
-      String(asset?.brand || '') === String(group?.brand || '') &&
-      String(asset?.model || '') === String(group?.model || '')
-    )
-    .sort((a, b) => String(a?.id || '').localeCompare(
-      String(b?.id || ''),
-      undefined,
-      { numeric: true, sensitivity: 'base' }
-    ));
-}
-
-function prepareNewGroupPayload(group) {
-  return {
-    department: normalizeDepartmentCode(group?.department || 'UN'),
-    brand: String(group?.brand || ''),
-    model: String(group?.model || ''),
-    description: String(group?.description || '')
-  };
-}
-
-function prepareNewGroupIsBulk(group) {
-  if (typeof group?.isBulkQuantity !== 'undefined') return !!group.isBulkQuantity;
-  const matching = prepareNewAvailableAssetsForGroup(group)
-    .concat(group?.assignedAssets || []);
-  return matching.some(asset => asset?.isBulk) && !matching.some(asset => !asset?.isBulk);
-}
-
-function prepareNewOpenPreparedSlots(group) {
-  if (typeof group?.openPreparedSlots !== 'undefined') {
-    return Number(group.openPreparedSlots || 0);
-  }
-  return Math.max(0, getPreparedQuantity(group) - Number(group?.assignedSpecificQuantity || 0));
-}
-
-function prepareNewToggleActionMenu(event, encodedKey) {
-  event.preventDefault();
-  event.stopPropagation();
-  const key = planDecode(encodedKey);
-  document.querySelectorAll('.prepare-new-action-menu.open').forEach(menu => {
-    if (menu.dataset.modelKey !== key) menu.classList.remove('open');
-  });
-  const menu = Array.from(document.querySelectorAll('.prepare-new-action-menu'))
-    .find(node => node.dataset.modelKey === key);
-  menu?.classList.toggle('open');
-}
-
-async function prepareNewPromptQuantity({ title, message, confirmText, max = 0 }) {
-  const value = await showAppPrompt({
-    title,
-    message,
-    inputType: 'number',
-    inputLabel: 'Quantity',
-    placeholder: max > 0 ? `Max ${max}` : 'Quantity',
-    defaultValue: '1',
-    confirmText,
-    cancelText: 'Cancel',
-    required: true
-  });
-  if (value === null || value === false) return 0;
-  const quantity = Number.parseInt(String(value || '').trim(), 10);
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    showNotification('warning', 'Enter a quantity greater than 0');
-    return 0;
-  }
-  if (max > 0 && quantity > max) {
-    showNotification('warning', `Only ${max} can be selected`);
-    return 0;
-  }
-  return quantity;
-}
-
-async function prepareNewChangeModelQuantity(group, action, quantity, options = {}) {
-  const eventId = Number(prepareNewPageState.eventId);
-  if (!eventId) return;
-  try {
-    const response = await apiCall(`/api/events/${eventId}/prepare-model-quantity`, 'POST', {
-      ...prepareNewGroupPayload(group),
-      action,
-      quantity,
-      all: !!options.all,
-      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-    });
-    showNotification('success', response.message || 'Prepared quantity updated');
-    schedulePrepareUiSync(eventId);
-    await refreshPrepareNewSelectedEvent({ preserve: true });
-  } catch (error) {
-    showNotification('error', error.message || 'Failed to update prepared quantity');
-  }
-}
-
-async function prepareNewPrepareAll(encodedKey) {
-  const key = planDecode(encodedKey);
-  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
-  if (!group) return;
-  await prepareNewChangeModelQuantity(group, 'prepare', 0, { all: true });
-}
-
-async function prepareNewPrepareQty(encodedKey) {
-  const key = planDecode(encodedKey);
-  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
-  if (!group) return;
-  const quantity = await prepareNewPromptQuantity({
-    title: 'Prepare Qty',
-    message: `How many ${[group.brand, group.model].filter(Boolean).join(' ') || 'items'} would you like to prepare?`,
-    confirmText: 'Prepare'
-  });
-  if (quantity > 0) await prepareNewChangeModelQuantity(group, 'prepare', quantity);
-}
-
-async function prepareNewUnprepareQty(encodedKey) {
-  const key = planDecode(encodedKey);
-  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
-  if (!group) return;
-  const max = prepareNewGroupIsBulk(group)
-    ? getPreparedQuantity(group)
-    : prepareNewOpenPreparedSlots(group);
-  if (max <= 0) {
-    showNotification('info', 'There are no unassigned prepared units to unprepare');
-    return;
-  }
-  const quantity = await prepareNewPromptQuantity({
-    title: 'Unprepare Qty',
-    message: `How many unassigned prepared unit(s) would you like to unprepare?`,
-    confirmText: 'Unprepare',
-    max
-  });
-  if (quantity > 0) await prepareNewChangeModelQuantity(group, 'unprepare', quantity);
-}
-
-function prepareNewAssetCard(asset, options = {}) {
-  const eventId = Number(prepareNewPageState.eventId);
-  const id = String(asset?.id || asset?.bulkId || '');
-  const encodedId = planEncode(id);
-  const assigned = !!options.assigned;
-  const canAssign = options.canAssign !== false;
-  const returned = (prepareNewPageState.event?.returnedItems || []).includes(id);
-  const missing = !!(asset?.isMissing || String(asset?.status || '').toLowerCase() === 'missing');
-  const degraded = !!(asset?.isDegraded || String(asset?.status || '').toLowerCase() === 'degraded');
-  const label = asset?.displayId || asset?.bulkId || id || 'Inventory asset';
-  const serial = asset?.serial || (asset?.isBulk ? `Qty: ${Number(asset?.quantity || 1)}` : 'No serial');
-  const status = returned
-    ? prepareNewStatusBadge('returned', 'Returned')
-    : (assigned
-      ? prepareNewStatusBadge(options.extra ? 'extra' : 'assigned', options.extra ? 'Extra' : 'Prepared')
-      : missing
-        ? prepareNewStatusBadge('missing', 'Missing')
-        : prepareNewStatusBadge('available', 'Available'));
-  const flagBadges = [
-    degraded ? prepareNewStatusBadge('degraded', 'Degraded') : '',
-    missing ? prepareNewStatusBadge('missing', 'Missing') : ''
-  ].filter(Boolean).join('');
-  const dragPayload = assigned
-    ? eventSubprojectDragPayload(
-        prepareNewPageState,
-        prepareNewPageState.event,
-        { kind: 'asset', assetRef: id }
-      )
-    : '';
-  const action = returned
-    ? ''
-    : (assigned
-      ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 onclick="event.stopPropagation();prepareNewUnassignAsset(${eventId}, '${encodedId}', '${escapeHtmlAttr(options.modelKey || '')}')">Unassign</button>`
-      : missing
-        ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                   ${canAssign ? '' : 'disabled'}
-                   onclick="event.stopPropagation();prepareNewAssignMissingAsset(${eventId}, '${encodedId}')">Found &amp; Assign</button>`
-      : `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 ${canAssign ? '' : 'disabled'}
-                 onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Assign</button>`);
-  return `
-    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${options.extra ? 'extra' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
-         ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
-      <div title="${escapeHtmlAttr(label)}">
-        <strong>${escapeHtml(label)}</strong>
-        <small>${escapeHtml(serial)}</small>
-        ${flagBadges ? `<div class="prepare-new-asset-flags">${flagBadges}</div>` : ''}
-      </div>
-      <div class="prepare-new-asset-controls">${options.extra ? status : ''}${action || (options.extra ? '' : status)}</div>
-    </div>
-  `;
-}
-
-function prepareNewModelSection(group) {
-  const required = Number(group.requiredQuantity || 0);
-  const preparedQuantity = getPreparedQuantity(group);
-  const countablePrepared = getCountablePreparedQuantity(group);
-  const extraPrepared = getExtraPreparedQuantity(group);
-  const isBulk = prepareNewGroupIsBulk(group);
-  const openSlots = prepareNewOpenPreparedSlots(group);
-  const available = prepareNewAvailableAssetsForGroup(group).filter(asset => !asset?.isBulk);
-  const assigned = [...(group.assignedAssets || [])].sort((a, b) =>
-    String(a?.id || '').localeCompare(String(b?.id || ''), undefined, {
-      numeric: true,
-      sensitivity: 'base'
-    })
-  ).filter(asset => !asset?.isBulk);
-  const key = prepareNewModelKey(group);
-  const complete = countablePrepared >= required;
-  const hasReturnedAnonymousSlots = Number(group.returnedPreparedSlotQuantity || 0) > 0;
-  const isOpen = !isBulk && prepareNewPageState.expandedModels.has(key);
-  const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
-  const canAssignExactAssets = !isBulk;
-  const encodedKey = planEncode(key);
-  const allCards = [
-    ...assigned.map(asset => prepareNewAssetCard(asset, {
-      assigned: true,
-      extra: !!asset?.isExtra,
-      modelKey: encodedKey
-    })),
-    ...(canAssignExactAssets
-      ? available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))
-      : [])
-  ];
-  const primaryAction = isBulk
-    ? (complete
-      ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
-      : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
-                 onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`)
-    : (complete || hasReturnedAnonymousSlots
-      ? `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
-                 onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
-      : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
-                 onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`);
-  const menu = `
-    <span class="prepare-new-action-wrap">
-      <button type="button" class="prepare-new-more-button" aria-label="More prepare actions"
-              onclick="prepareNewToggleActionMenu(event, '${encodedKey}')">...</button>
-      <span class="prepare-new-action-menu" data-model-key="${escapeHtmlAttr(key)}">
-        <button type="button" onclick="event.stopPropagation();prepareNewPrepareQty('${encodedKey}')">Prepare qty</button>
-        ${(isBulk ? preparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
-      </span>
-    </span>
-  `;
-  const spareLabel = extraPrepared > 0
-    ? `<span class="prepare-new-spare-label">${extraPrepared} spare</span>`
-    : '';
-  const showExactAssetPanel = !isBulk;
-  return `
-    <details class="prepare-new-model" ${isOpen ? 'open' : ''}
-             data-prepare-render-version="${prepareNewPageState.renderVersion}"
-             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open, this)">
-      <summary>
-        <span class="prepare-new-model-title">
-          <strong>${escapeHtml(modelName)}</strong>
-          <span>${escapeHtml(group.description || '')}</span>
-        </span>
-        <span class="prepare-new-model-count"><strong>${required}</strong>Required</span>
-        <span class="prepare-new-model-count"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
-        <span class="prepare-new-model-actions">${primaryAction}${menu}</span>
-      </summary>
-      ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
-        <div class="prepare-new-model-assets-head">
-          <span>Select exact assets from inventory</span>
-          <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · ${extraPrepared} spare` : ''}</span>
-        </div>
-        <div class="prepare-new-asset-grid">
-          ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
-        </div>
-      </div>` : ''}
-    </details>
-  `;
-}
-
-function prepareNewDirectAssetCard(asset, encodedPanelKey = '') {
-  const eventId = Number(prepareNewPageState.eventId);
-  const id = String(asset?.id || '');
-  const encodedId = planEncode(id);
-  const label = asset?.label || id || 'Assigned asset';
-  const detail = asset?.serial || (asset?.isBulk ? `Qty: ${Number(asset?.quantity || 1)}` : 'No serial');
-  const status = String(asset?.status || 'pending');
-  let badge = prepareNewStatusBadge('pending', 'Pending');
-  let action = `
-    <button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-            onclick="prepareNewPrepareAsset(${eventId}, '${encodedId}')">Prepare</button>
-  `;
-  if (status === 'packed') {
-    badge = prepareNewStatusBadge('complete', 'Prepared');
-    action = `
-      <button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-              onclick="prepareNewUnprepareAsset(${eventId}, '${encodedId}', '${escapeHtmlAttr(encodedPanelKey)}')">Undo</button>
-    `;
-  } else if (status === 'returned') {
-    badge = prepareNewStatusBadge('returned', 'Returned');
-    action = '';
-  }
-  const dragPayload = eventSubprojectDragPayload(
-    prepareNewPageState,
-    prepareNewPageState.event,
-    { kind: 'asset', assetRef: id }
-  );
-  return `
-    <div class="prepare-new-asset-card ${status === 'packed' ? 'assigned' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
-         ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
-      <div title="${escapeHtmlAttr(label)}">
-        <strong>${escapeHtml(label)}</strong>
-        <small>${escapeHtml(detail)}</small>
-      </div>
-      <div>${action || badge}</div>
-    </div>
-  `;
-}
-
-function renderPrepareNewDirectRequirements(rows) {
-  const physicalRows = rows.filter(row =>
-    (row.assets || []).some(asset => !parseCustomAsset(asset.id, asset))
-  );
-  if (!physicalRows.length) {
-    return '<div class="prepare-new-empty">Custom requirements can be prepared from the Misc / Loan Items panel.</div>';
-  }
-  return physicalRows.map((row, index) => {
-    const assets = (row.assets || []).filter(asset => !parseCustomAsset(asset.id, asset));
-    const complete = Number(row.packed || 0) >= Number(row.required || 0);
-    const panelKey = `direct|${normalizeDepartmentCode(row.department || 'UN')}|${row.description || ''}|${index}`;
-    const encodedPanelKey = planEncode(panelKey);
-    const isOpen = prepareNewPageState.expandedModels.has(panelKey);
-    return `
-      <details class="prepare-new-model" ${isOpen ? 'open' : ''}
-               data-prepare-render-version="${prepareNewPageState.renderVersion}"
-               ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
-        <summary>
-          <span class="prepare-new-model-title">
-            <strong>${escapeHtml(row.description || 'Assigned assets')}</strong>
-            <span>${escapeHtml(row.detail || '')}</span>
-          </span>
-          <span class="prepare-new-model-count"><strong>${Number(row.required || 0)}</strong>Required</span>
-          <span class="prepare-new-model-count"><strong>${Number(row.packed || 0)}</strong>Prepared</span>
-          ${prepareNewStatusBadge(complete ? 'complete' : 'pending', complete ? 'Complete' : 'Prepare')}
-        </summary>
-        <div class="prepare-new-model-assets">
-          <div class="prepare-new-asset-grid">
-            ${assets.map(asset => prepareNewDirectAssetCard(asset, encodedPanelKey)).join('')}
-          </div>
-        </div>
-      </details>
-    `;
-  }).join('');
-}
-
-function prepareNewStandaloneExtras() {
-  const extrasShownInRequirements = new Set();
-  prepareNewModelGroups().forEach(group => {
-    (group.assignedAssets || []).forEach(asset => {
-      if (asset?.isExtra && asset?.id) extrasShownInRequirements.add(String(asset.id));
-    });
-  });
-  const event = prepareNewPageState.event || {};
-  const rooms = eventSubprojects(event);
-  const snapshotExtras = prepareNewSnapshot().extras || [];
-  if (!rooms.length) {
-    return snapshotExtras.filter(
-      asset => !extrasShownInRequirements.has(String(asset?.id || ''))
-    );
-  }
-
-  const consolidated = eventIsConsolidated(prepareNewPageState, event);
-  const activeRoom = eventActiveSubproject(prepareNewPageState, event);
-  const scopedExtraRefs = new Set(
-    consolidated
-      ? rooms.flatMap(room => (room.extraRefs || []).map(String))
-      : (activeRoom?.extraRefs || []).map(String)
-  );
-  if (rooms.length === 1) {
-    snapshotExtras.forEach(asset => scopedExtraRefs.add(String(asset?.id || '')));
-  }
-
-  const assetsById = new Map();
-  Object.values(event?.modelGroups || {}).forEach(group => {
-    (group.assignedAssets || []).forEach(asset => {
-      if (asset?.id) assetsById.set(String(asset.id), asset);
-    });
-  });
-  Object.values(event?.assetsByDepartment || {}).forEach(assets => {
-    (assets || []).forEach(asset => {
-      if (asset?.id && !assetsById.has(String(asset.id))) {
-        assetsById.set(String(asset.id), asset);
-      }
-    });
-  });
-  snapshotExtras.forEach(asset => {
-    if (asset?.id && !assetsById.has(String(asset.id))) {
-      assetsById.set(String(asset.id), asset);
-    }
-  });
-
-  return Array.from(scopedExtraRefs)
-    .filter(assetId => !extrasShownInRequirements.has(assetId))
-    .map(assetId => assetsById.get(assetId))
-    .filter(Boolean)
-    .map(asset => ({ ...asset, isExtra: true }));
-}
-
-function prepareNewExtrasSection() {
-  const extras = prepareNewStandaloneExtras();
-  const panelKey = 'standalone-extra-assets';
-  const encodedPanelKey = planEncode(panelKey);
-  const isOpen = prepareNewPageState.expandedModels.has(panelKey);
-  if (!extras.length && !isOpen) return '';
-  return `
-    <details class="prepare-new-department" ${isOpen ? 'open' : ''}
-             data-prepare-render-version="${prepareNewPageState.renderVersion}"
-             ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
-      <summary>
-        <span class="prepare-new-department-name">
-          <span class="plan-department-dot" style="--department-color:#7c3aed"></span>
-          Extra Assets
-        </span>
-        <span class="prepare-new-progress">${extras.length} item${extras.length === 1 ? '' : 's'}</span>
-        <span aria-hidden="true">\u2304</span>
-      </summary>
-      <div class="prepare-new-model-assets">
-        <div class="prepare-new-asset-grid">
-          ${extras.length
-            ? extras.map(asset => prepareNewAssetCard(asset, {
-                assigned: true,
-                extra: true,
-                modelKey: encodedPanelKey
-              })).join('')
-            : '<div class="prepare-new-empty">No extra assets remain assigned to this event.</div>'}
-        </div>
-      </div>
-    </details>
-  `;
-}
-
-function renderPrepareNewAssignment() {
-  const groups = prepareNewModelGroups();
-  if (!groups.length) {
-    const snapshot = prepareNewSnapshot();
-    if (!snapshot.rows.length) {
-      return '<div class="prepare-new-empty">This event has no planned requirements yet.</div>';
-    }
-    return renderPrepareNewDirectRequirements(snapshot.rows) + prepareNewExtrasSection();
-  }
-
-  const byDepartment = new Map();
-  groups.forEach(group => {
-    const department = normalizeDepartmentCode(group.department || 'UN');
-    if (!byDepartment.has(department)) byDepartment.set(department, []);
-    byDepartment.get(department).push(group);
-  });
-
-  const departments = Array.from(byDepartment.entries()).map(([department, departmentGroups]) => {
-    const required = departmentGroups.reduce(
-      (sum, group) => sum + Number(group.requiredQuantity || 0),
-      0
-    );
-    const assigned = departmentGroups.reduce(
-      (sum, group) => sum + getCountablePreparedQuantity(group),
-      0
-    );
-    const percent = required ? Math.min(100, Math.round((assigned / required) * 100)) : 0;
-    const info = getDepartmentMeta(department);
-    return `
-      <details class="prepare-new-department"
-               ${prepareNewPageState.expandedDepartments.has(department) ? 'open' : ''}
-               data-prepare-render-version="${prepareNewPageState.renderVersion}"
-               ontoggle="prepareNewSetDepartmentExpanded('${planEncode(department)}', this.open, this)">
-        <summary>
-          <span class="prepare-new-department-name">
-            <span class="plan-department-dot" style="--department-color:${escapeHtmlAttr(info.color || '#667085')}"></span>
-            ${escapeHtml(department)} \u00b7 ${escapeHtml(info.name || department)}
-            <span class="plan-badge">${departmentGroups.length} line${departmentGroups.length === 1 ? '' : 's'}</span>
-          </span>
-          <span class="prepare-new-progress">
-            ${assigned} / ${required} prepared
-            <span class="prepare-new-progress-track"><span style="width:${percent}%"></span></span>
-          </span>
-          <span aria-hidden="true">\u2304</span>
-        </summary>
-        ${departmentGroups.map(prepareNewModelSection).join('')}
-      </details>
-    `;
-  }).join('');
-  return departments + prepareNewExtrasSection();
-}
-
-function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepareNewPageState) {
-  const assets = getCustomAssetsFromEvent(event || {})
-    .map(asset => ({
-      ...asset,
-      parsedCustom: asset.parsedCustom || parseCustomAsset(asset.id, asset)
-    }))
-    .filter(asset => !!asset.parsedCustom)
-    .sort((a, b) => customAssetDisplayName(a.parsedCustom, false).localeCompare(
-      customAssetDisplayName(b.parsedCustom, false),
-      undefined,
-      { numeric: true, sensitivity: 'base' }
-    ));
-  return groupEventCustomAssets(eventScopedCustomAssets(event, state, assets));
-}
-
-function renderPrepareNewCustomList() {
-  const customAssets = prepareNewCustomAssets();
-  if (!customAssets.length) {
-    return '<div class="prepare-new-empty">No miscellaneous or loan items.</div>';
-  }
-  const event = prepareNewPageState.event || {};
-  const consolidated = eventIsConsolidated(prepareNewPageState, event);
-  const prepared = new Set(event.actuallyPrepared || []);
-  const collected = new Set(event.customCollected || []);
-  const returned = new Set(event.returnedItems || []);
-  const renderRow = asset => {
-    const custom = asset.parsedCustom;
-    const ids = (asset.assetIds || [asset.id]).map(String).filter(Boolean);
-    const id = ids[0] || '';
-    const encodedId = planEncode(id);
-    const preparedCount = ids.filter(assetId => prepared.has(assetId)).length;
-    const collectedCount = ids.filter(assetId => collected.has(assetId)).length;
-    const returnedCount = ids.filter(assetId => returned.has(assetId)).length;
-    const isPrepared = preparedCount === ids.length;
-    const isCollected = collectedCount === ids.length;
-    const isReturned = returnedCount === ids.length;
-    const collectedIds = ids.filter(assetId => collected.has(assetId) && !prepared.has(assetId));
-    const dragPayload = eventSubprojectDragPayload(
-      prepareNewPageState,
-      prepareNewPageState.event,
-      { kind: 'asset', assetRef: id }
-    );
-    let status = prepareNewStatusBadge('pending', 'Pending');
-    let action = '';
-    if (consolidated) {
-      if (isReturned) {
-        status = prepareNewStatusBadge('returned', 'Returned');
-      } else if (isPrepared) {
-        status = prepareNewStatusBadge('complete', 'Prepared');
-      } else if (custom.type === 'LOAN') {
-        if (isCollected) {
-          status = prepareNewStatusBadge('collected', 'Collected');
-          action = `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
-                            onclick="prepareNewUncollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(collectedIds))}')">Uncollect</button>`;
-        } else {
-          if (collectedCount > 0) {
-            status = prepareNewStatusBadge('collected', `${collectedCount} / ${ids.length} collected`);
-          }
-          const pendingIds = ids.filter(assetId => !collected.has(assetId) && !returned.has(assetId));
-          const consolidatedActions = [];
-          if (collectedIds.length) consolidatedActions.push(
-            `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
-                     onclick="prepareNewUncollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(collectedIds))}')">Uncollect</button>`
-          );
-          if (pendingIds.length) consolidatedActions.push(
-            `<button type="button" class="plan-button plan-button-small prepare-new-consolidated-loan-action"
-                     onclick="prepareNewCollectCustomMany(${Number(event.id)}, '${planEncode(JSON.stringify(pendingIds))}')">Collect</button>`
-          );
-          action = consolidatedActions.join('');
-        }
-      }
-    } else if (isReturned) {
-      status = prepareNewStatusBadge('returned', 'Returned');
-    } else if (isPrepared) {
-      status = prepareNewStatusBadge('complete', 'Prepared');
-      action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}')">Unprepare</button>`;
-    } else if (custom.type === 'LOAN' && !isCollected) {
-      action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collect</button>`;
-    } else {
-      if (isCollected) status = prepareNewStatusBadge('collected', 'Collected');
-      action = custom.type === 'LOAN'
-        ? `<button type="button" class="plan-button plan-button-small plan-button-secondary"
-                   onclick="prepareNewUncollectCustom(${Number(event.id)}, '${encodedId}')">Uncollect</button>
-           <button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`
-        : `<button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`;
-    }
-    const detail = custom.type === 'LOAN'
-      ? (custom.company ? `From ${custom.company}` : '')
-      : (custom.description || '');
-    return `
-      <div class="prepare-new-custom-row ${dragPayload ? 'is-room-draggable' : ''}"
-           ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
-        <div>
-          <div class="prepare-new-custom-title">
-            <strong>${Math.max(1, Number(custom.quantity || 1))}x ${escapeHtml(customAssetDisplayName(custom, false))}</strong>
-            ${planDepartmentCodeBadgeHtml(custom.department)}
-          </div>
-          ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
-          <div style="margin-top:4px;">${status}</div>
-        </div>
-        ${action ? `<div class="prepare-new-custom-actions">${action}</div>` : ''}
-      </div>
-    `;
-  };
-
-  const misc = customAssets.filter(asset => asset.parsedCustom?.type !== 'LOAN');
-  const loanGroups = new Map();
-  customAssets.filter(asset => asset.parsedCustom?.type === 'LOAN').forEach(asset => {
-    const company = String(asset.parsedCustom?.company || 'Unspecified company').trim();
-    if (!loanGroups.has(company)) loanGroups.set(company, []);
-    loanGroups.get(company).push(asset);
-  });
-  const sections = [];
-  if (misc.length) sections.push({ label: 'Miscellaneous', rows: misc });
-  Array.from(loanGroups.entries())
-    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
-    .forEach(([company, rows]) => sections.push({ label: company, rows, loan: true }));
-
-  return sections.map(section => `
-    <details class="prepare-new-custom-group">
-      <summary>
-        <span>${section.loan ? 'Loan from ' : ''}${escapeHtml(section.label)}</span>
-        <span class="plan-badge">${section.rows.length}</span>
-        <span aria-hidden="true">\u2304</span>
-      </summary>
-      <div class="prepare-new-custom-group-rows">${section.rows.map(renderRow).join('')}</div>
-    </details>
-  `).join('');
-}
-
-function renderPrepareNewEventDetails() {
-  const event = prepareNewPageState.event || {};
-  return `
-    <section class="prepare-new-card prepare-new-event-card">
-      <div class="prepare-new-card-header event-detail-card-header">
-        <h3>&#128203; Event Details</h3>
-        ${eventDetailsActionsHtml(event.id)}
-      </div>
-      <div class="plan-aside-body">
-        <dl class="plan-detail-list">
-          <div><dt>Name</dt><dd>${escapeHtml(event.name || '\u2014')}</dd></div>
-          <div><dt>Location</dt><dd>${escapeHtml(event.location || '\u2014')}</dd></div>
-          <div><dt>Date(s)</dt><dd>${escapeHtml(prepareNewEventDates(event))}</dd></div>
-          <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
-          <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
-          <div class="plan-detail-notes-row">
-            <dt>Notes</dt>
-            <dd>
-              <textarea id="prepareNewNotes" class="plan-notes-textarea"
-                        maxlength="30000"
-                        placeholder="Add notes or special requirements for this event\u2026"
-                        oninput="prepareNewNotesChanged(this.value)">${escapeHtml(event.notes || '')}</textarea>
-              <div class="plan-notes-footer">
-                <span id="prepareNewNotesSaveState">Saved</span>
-                <span>${String(event.notes || '').length} / 30000</span>
-              </div>
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </section>
-  `;
-}
-
-function renderPrepareNewCustomForm() {
-  return `
-    <section class="prepare-new-card prepare-new-custom-card">
-      <div class="prepare-new-card-header"><h3>&#10133; Add Custom Item</h3></div>
-      <div class="plan-aside-body">
-        <div class="plan-custom-form">
-          <div class="plan-custom-type-toggle">
-            <button type="button" id="prepareNewCustomMisc" class="active"
-                    onclick="prepareNewSetCustomType('MISC')">Misc</button>
-            <button type="button" id="prepareNewCustomLoan"
-                    onclick="prepareNewSetCustomType('LOAN')">Loan</button>
-          </div>
-          <input type="hidden" id="prepareNewCustomType" value="MISC">
-          <div class="plan-custom-field-grid">
-            <div class="plan-custom-field">
-              <label for="prepareNewCustomName">Item Name</label>
-              <input id="prepareNewCustomName" type="text" placeholder="e.g. Wireless Handheld Mic">
-            </div>
-            <div class="plan-custom-field">
-              <label for="prepareNewCustomQuantity">Quantity</label>
-              <input id="prepareNewCustomQuantity" type="number" min="1" value="1">
-            </div>
-          </div>
-          <div class="plan-custom-field-grid plan-custom-field-grid-secondary">
-            <div class="plan-custom-field">
-              <label for="prepareNewCustomDepartment">Department</label>
-              <select id="prepareNewCustomDepartment">${customDepartmentOptionsHtml('AX')}</select>
-            </div>
-            <div class="plan-custom-field">
-              <label for="prepareNewCustomCompany" id="prepareNewCustomDetailLabel">Description</label>
-              <input id="prepareNewCustomCompany" type="text" placeholder="Optional description">
-            </div>
-          </div>
-          <button type="button" class="plan-button plan-button-primary plan-custom-submit"
-                  onclick="prepareNewAddCustomItem()">Add Custom Item</button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderPrepareNewOverallProgressCard() {
-  const totals = prepareNewTotals();
-  const percent = totals.required > 0
-    ? Math.min(100, Math.round((totals.prepared / totals.required) * 100))
-    : 0;
-  return `
-    <section class="prepare-new-card prepare-new-progress-card">
-      <div class="prepare-new-card-header">
-        <h3>Overall Progress</h3>
-        <span class="prepare-new-status prepare-new-status-${percent >= 100 ? 'complete' : 'pending'}">${percent}%</span>
-      </div>
-      <div class="prepare-new-card-body">
-        <div class="prepare-new-overall-copy">
-          <strong>${Number(totals.prepared || 0)} / ${Number(totals.required || 0)}</strong>
-          <span>prepared</span>
-        </div>
-        <div class="prepare-new-overall-track" aria-hidden="true">
-          <span style="width:${percent}%"></span>
-        </div>
-        ${totals.extra > 0 ? `<small>${Number(totals.extra)} extra item${totals.extra === 1 ? '' : 's'} prepared</small>` : ''}
-      </div>
-    </section>
-  `;
-}
-
-function renderPrepareNewExitButton(mobile = false) {
-  const complete = prepareNewIsComplete();
-  return `
-    <button type="button"
-            class="plan-button prepare-new-finish ${complete ? 'plan-button-primary' : 'prepare-new-finish-outline'}"
-            onclick="prepareNewExit(${complete ? 'true' : 'false'})">
-      ${complete ? 'Finish Preparing \u2192' : 'Save and Exit'}
-    </button>
-  `;
-}
-
-function renderPrepareNewPage() {
-  const root = document.getElementById('prepare-new-page-root');
-  if (!root) return;
-  // Invalidate toggle events dispatched by <details> elements removed during
-  // this render before they can overwrite the remembered open state.
-  prepareNewPageState.renderVersion += 1;
-  const event = prepareNewPageState.event;
-  if (!event) {
-    root.innerHTML = '<div class="plan-empty">There are no events available to prepare.</div>';
-    return;
-  }
-  const consolidated = eventIsConsolidated(prepareNewPageState, event);
-  root.classList.toggle('event-consolidated-mode', consolidated);
-  prepareNewInitialExpansion();
-  const totals = prepareNewTotals(event);
-  const quickAddEnabled = getPrepareQuickAddEnabled();
-  root.innerHTML = `
-    <div class="prepare-new-heading">
-      <div>
-        <h2>Prepare Event Assets</h2>
-        <p>Assign exact assets by scanning, typing, or selecting them manually.</p>
-      </div>
-      <div class="prepare-new-heading-actions">
-        <button type="button" class="plan-button" onclick="prepareNewReturnToPlan()">\u2190 Return to Planning</button>
-      </div>
-    </div>
-    <div class="prepare-new-top">
-      <button type="button" class="plan-event-select-wrap"
-              aria-haspopup="dialog" aria-label="Choose an event to prepare"
-              onclick="planOpenEventChooser('prepare-new')">
-        <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
-        <div style="min-width:0;flex:1;">
-          <div class="plan-event-title-row">
-            <span class="plan-event-id">#${escapeHtml(String(event.id || ''))}</span>
-            <span class="plan-event-name">${escapeHtml(planEventOptionLabel(event))}</span>
-          </div>
-          <div class="plan-event-meta">
-            <span>${escapeHtml(prepareNewEventDates(event))}</span>
-            ${event.location ? `<span aria-hidden="true">\u2022</span><span>${escapeHtml(event.location)}</span>` : ''}
-            ${planEventTypeBadgeHtml(event)}
-            ${planEventStateBadgeHtml(event)}
-          </div>
-        </div>
-        <span class="plan-event-picker-chevron" aria-hidden="true">\u2304</span>
-      </button>
-      <div class="plan-metrics prepare-new-metrics">
-        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
-        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.required}</strong><span>Total Required</span></div></div>
-        <div class="plan-metric"><div class="plan-metric-icon" style="color:#15803d;background:#dcfce7;">&#10003;</div><div><strong>${totals.prepared}</strong><span>Prepared</span></div></div>
-        <div class="plan-metric"><div class="plan-metric-icon">&#8857;</div><div><strong>${totals.extra}</strong><span>Extra</span></div></div>
-        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departments}</strong><span>Active Departments</span></div></div>
-      </div>
-    </div>
-    ${renderEventSubprojectTabs(
-      'prepareNewPageState',
-      event,
-      'renderPrepareNewPage',
-      'Preparation sub-projects',
-      {
-        roomNeedsAttention: prepareNewSubprojectNeedsAttention,
-        attentionLabel: 'Has unprepared items'
-      }
-    )}
-    ${consolidated ? eventConsolidatedNotice() : ''}
-    <div class="prepare-new-workspace">
-      <div class="prepare-new-column prepare-new-left">
-        <section class="prepare-new-card prepare-new-scan-card">
-          <div class="prepare-new-card-header">
-            <h3>&#9889; Scan &amp; Prepare</h3>
-            <label class="prepare-new-toggle" title="Unplanned scanned assets become requirements">
-              <span>Quick-add</span>
-              <input type="checkbox" id="prepareQuickAddToggle" ${quickAddEnabled ? 'checked' : ''}
-                     onchange="handlePrepareQuickAddToggle(this)">
-              <i class="prepare-new-toggle-track" aria-hidden="true"></i>
-              <span id="prepareQuickAddToggleState">${quickAddEnabled ? 'On' : 'Off'}</span>
-            </label>
-          </div>
-          <div class="prepare-new-card-body">
-            <label class="prepare-new-scan-label" for="universalAssetInput">Enter Asset ID or Serial Number</label>
-            <div class="prepare-new-scan-input">
-              <input id="universalAssetInput" type="text"
-                     placeholder="Enter Asset ID or Serial Number\u2026"
-                     autocomplete="off"
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();processUniversalAsset(${Number(event.id)})}">
-              <button type="button" class="plan-button" onclick="scanForPrepare(${Number(event.id)})" aria-label="Scan with camera">&#128247;</button>
-            </div>
-            <div class="prepare-new-scan-actions">
-              <button type="button" class="plan-button prepare-new-process"
-                      onclick="processUniversalAsset(${Number(event.id)})">&#10003; Process Asset</button>
-              <button type="button" class="plan-button plan-button-primary"
-                      onclick="scanForPrepare(${Number(event.id)})">&#128247; Scan with Camera</button>
-              <button type="button" class="plan-button" onclick="clearUniversalInput()">Clear</button>
-            </div>
-            <div id="universal-asset-feedback" class="prepare-new-feedback" aria-live="polite"></div>
-          </div>
-        </section>
-        <section class="prepare-new-card prepare-new-custom-list-card">
-          <div class="prepare-new-card-header">
-            <h3>&#128230; Misc / Loan Items</h3>
-            <span class="plan-badge">${prepareNewCustomAssets().length} items</span>
-          </div>
-          <div class="prepare-new-custom-list">${renderPrepareNewCustomList()}</div>
-        </section>
-      </div>
-      <div class="prepare-new-column prepare-new-center">
-        <section class="prepare-new-card prepare-new-assignment-card">
-          <div class="prepare-new-card-header">
-            <h3><span class="prepare-new-heading-icon">${planMetricIconSvg('assignment')}</span>Assignment Workspace</h3>
-            <span class="prepare-new-status prepare-new-status-${prepareNewIsComplete() ? 'complete' : 'pending'}">
-              ${totals.prepared} / ${totals.required} prepared
-            </span>
-          </div>
-          <div class="prepare-new-assignment-scroll">${renderPrepareNewAssignment()}</div>
-        </section>
-      </div>
-      <div class="prepare-new-column prepare-new-right">
-        ${renderPrepareNewEventDetails()}
-        ${renderPrepareNewCustomForm()}
-        ${renderPrepareNewOverallProgressCard()}
-        ${renderPrepareNewExitButton()}
-      </div>
-      <div class="prepare-new-mobile-action">${renderPrepareNewExitButton(true)}</div>
-    </div>
-  `;
-}
-
-function prepareNewCaptureViewState() {
-  const active = document.activeElement;
-  const root = document.getElementById('prepare-new-page-root');
-  return {
-    pageX: window.scrollX,
-    pageY: window.scrollY,
-    scanTop: root?.querySelector('.prepare-new-left')?.scrollTop || 0,
-    assignmentTop: root?.querySelector('.prepare-new-assignment-scroll')?.scrollTop || 0,
-    customTop: root?.querySelector('.prepare-new-custom-list')?.scrollTop || 0,
-    activeId: active && root?.contains(active) ? active.id : '',
-    selectionStart: typeof active?.selectionStart === 'number' ? active.selectionStart : null,
-    selectionEnd: typeof active?.selectionEnd === 'number' ? active.selectionEnd : null,
-    scanValue: document.getElementById('universalAssetInput')?.value || '',
-    scanRevision: prepareNewPageState.scanRevision,
-    scanFeedbackHtml: document.getElementById('universal-asset-feedback')?.innerHTML || '',
-    notesValue: document.getElementById('prepareNewNotes')?.value || '',
-    customName: document.getElementById('prepareNewCustomName')?.value || '',
-    customQuantity: document.getElementById('prepareNewCustomQuantity')?.value || '1',
-    customCompany: document.getElementById('prepareNewCustomCompany')?.value || '',
-    customDepartment: document.getElementById('prepareNewCustomDepartment')?.value || 'AX',
-    customType: document.getElementById('prepareNewCustomType')?.value || 'MISC'
-  };
-}
-
-function prepareNewRestoreViewState(state) {
-  if (!state) return;
-  const setValue = (id, value) => {
-    const element = document.getElementById(id);
-    if (element && typeof value === 'string') element.value = value;
-  };
-  setValue('universalAssetInput', state.scanValue);
-  const feedback = document.getElementById('universal-asset-feedback');
-  if (feedback && state.scanRevision === prepareNewPageState.scanRevision) {
-    feedback.innerHTML = state.scanFeedbackHtml || '';
-  }
-  setValue('prepareNewNotes', state.notesValue);
-  setValue('prepareNewCustomName', state.customName);
-  setValue('prepareNewCustomQuantity', state.customQuantity);
-  setValue('prepareNewCustomCompany', state.customCompany);
-  setValue('prepareNewCustomDepartment', state.customDepartment);
-  prepareNewSetCustomType(state.customType || 'MISC');
-  const root = document.getElementById('prepare-new-page-root');
-  const scan = root?.querySelector('.prepare-new-left');
-  const assignment = root?.querySelector('.prepare-new-assignment-scroll');
-  const custom = root?.querySelector('.prepare-new-custom-list');
-  if (scan) scan.scrollTop = state.scanTop;
-  if (assignment) assignment.scrollTop = state.assignmentTop;
-  if (custom) custom.scrollTop = state.customTop;
-  window.scrollTo(state.pageX, state.pageY);
-  const active = state.activeId ? document.getElementById(state.activeId) : null;
-  if (active) {
-    active.focus({ preventScroll: true });
-    if (
-      state.selectionStart !== null &&
-      typeof active.setSelectionRange === 'function'
-    ) {
-      active.setSelectionRange(state.selectionStart, state.selectionEnd);
-    }
-  }
-}
-
-async function loadPrepareNewPage() {
-  const root = document.getElementById('prepare-new-page-root');
-  if (!root || prepareNewPageState.loading) return;
-  prepareNewPageState.loading = true;
-  root.innerHTML = '<div class="loading">Loading preparation workspace...</div>';
-  try {
-    const eventOptionsLoad = await startProgressiveEventOptions(
-      prepareNewPageState.eventId,
-      loaded => {
-        prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
-        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-      }
-    );
-    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
-    eventOptionsLoad.completion.then(loaded => {
-      prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
-      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-    }).catch(error => console.warn('Unable to load more event options:', error));
-    const selected = prepareNewPageState.events.find(event =>
-      Number(event.id) === Number(prepareNewPageState.eventId)
-    ) || prepareNewPageState.events.find(event =>
-      !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))
-    ) || prepareNewPageState.events[0];
-    if (selected) {
-      await selectPrepareNewEvent(selected.id, { renderLoading: false });
-    } else {
-      prepareNewPageState.event = null;
-      renderPrepareNewPage();
-    }
-  } catch (error) {
-    root.innerHTML = `<div class="plan-empty">Failed to load Prepare: ${escapeHtml(error.message || String(error))}</div>`;
-  } finally {
-    prepareNewPageState.loading = false;
-  }
-}
-
-async function selectPrepareNewEvent(eventId, options = {}) {
-  await prepareNewFlushNotes();
-  const id = Number(eventId);
-  if (!id) return;
-  prepareNewPageState.eventId = id;
-  prepareNewPageState.expandedDepartments.clear();
-  prepareNewPageState.expandedModels.clear();
-  const root = document.getElementById('prepare-new-page-root');
-  if (options.renderLoading !== false && root) {
-    root.innerHTML = '<div class="loading">Loading event preparation\u2026</div>';
-  }
-  const requestSequence = ++prepareNewPageState.requestSequence;
-  try {
-    const [eventResponse, assetsResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/assets/available-for-event/${id}`)
-    ]);
-    if (requestSequence !== prepareNewPageState.requestSequence) return;
-    prepareNewPageState.event = eventResponse.data;
-    prepareNewPageState.availableAssets = assetsResponse.data || [];
-    renderPrepareNewPage();
-  } catch (error) {
-    if (root) {
-      root.innerHTML = `<div class="plan-empty">Failed to load event: ${escapeHtml(error.message || String(error))}</div>`;
-    }
-  }
-}
-
-async function refreshPrepareNewSelectedEvent(options = {}) {
-  const id = Number(prepareNewPageState.eventId);
-  if (!id) return;
-  if (prepareNewPageState.refreshing) {
-    prepareNewPageState.refreshQueued = true;
-    return;
-  }
-  prepareNewPageState.refreshing = true;
-  const viewState = options.preserve === false ? null : prepareNewCaptureViewState();
-  const requestSequence = ++prepareNewPageState.requestSequence;
-  try {
-    const [eventResponse, assetsResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/assets/available-for-event/${id}`)
-    ]);
-    if (requestSequence !== prepareNewPageState.requestSequence) return;
-    prepareNewPageState.event = eventResponse.data;
-    prepareNewPageState.availableAssets = assetsResponse.data || [];
-    renderPrepareNewPage();
-    if (viewState) requestAnimationFrame(() => prepareNewRestoreViewState(viewState));
-  } catch (error) {
-    console.warn('Prepare live update failed:', error);
-  } finally {
-    prepareNewPageState.refreshing = false;
-    if (prepareNewPageState.refreshQueued) {
-      prepareNewPageState.refreshQueued = false;
-      queueMicrotask(() => refreshPrepareNewSelectedEvent({ preserve: true }));
-    }
-  }
-}
-
-async function prepareNewApplyRealtimeEvent(event) {
-  if (
-    !document.getElementById('prepare-new-section')?.classList.contains('active') ||
-    Number(event?.id) !== Number(prepareNewPageState.eventId)
-  ) {
-    return;
-  }
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
-  const assetId = planDecode(encodedAssetId);
-  const confirmed = await showAppConfirm({
-    title: 'Missing Asset',
-    message: `${assetId} is currently marked as missing. Mark it as found and prepare it for this event?`,
-    confirmText: 'Mark Found & Prepare',
-    cancelText: 'Cancel',
-    variant: 'warning',
-  });
-  if (!confirmed) return;
-
-  let actionStarted = false;
-  try {
-    actionStarted = beginPrepareAssetAction(assetId, 'Marking found...');
-    if (!actionStarted) return;
-    const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
-      assetId,
-      markFound: true,
-      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || '',
-    });
-    await showApiWarning(response);
-    const preparedAssetId = response?.data?.assetId || assetId;
-    showNotification('success', `${preparedAssetId} marked found and assigned`);
-    updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
-    schedulePrepareUiSync(eventId);
-    await refreshPrepareNewSelectedEvent({ preserve: true });
-  } catch (error) {
-    showNotification('error', `Failed to prepare missing asset: ${error.message}`);
-    updateAllButtonsForAsset(assetId, false);
-  } finally {
-    if (actionStarted) endPrepareAssetAction(assetId);
-  }
-}
-
-async function prepareNewAssignAsset(eventId, encodedAssetId) {
-  await assignSpecificAsset(eventId, planDecode(encodedAssetId), '', '', {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-  });
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewPrepareAsset(eventId, encodedAssetId) {
-  await prepareSpecificAsset(eventId, planDecode(encodedAssetId), {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-  });
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '') {
-  const panelKey = encodedPanelKey ? planDecode(encodedPanelKey) : '';
-  if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
-  const changed = await unprepareSpecificAsset(eventId, planDecode(encodedAssetId), {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-  });
-  if (!changed) return;
-  if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey = '') {
-  const assetId = planDecode(encodedAssetId);
-  const modelKey = encodedModelKey ? planDecode(encodedModelKey) : '';
-  const group = modelKey
-    ? prepareNewModelGroups().find(item => prepareNewModelKey(item) === modelKey)
-    : null;
-  const department = group ? normalizeDepartmentCode(group.department || 'UN') : '';
-  if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
-  if (department) prepareNewPageState.expandedDepartments.add(department);
-
-  const changed = await unassignSpecificAsset(eventId, assetId, '', '', {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-  });
-  if (!changed) return;
-
-  // Keep the exact-asset chooser open while the refreshed card changes back
-  // to Available, proving that it is no longer assigned or prepared.
-  if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
-  if (department) prepareNewPageState.expandedDepartments.add(department);
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewCollectCustom(eventId, encodedAssetId) {
-  await prepareNewCollectCustomMany(eventId, planEncode(JSON.stringify([planDecode(encodedAssetId)])));
-}
-
-async function prepareNewCollectCustomMany(eventId, encodedAssetIds) {
-  let assetIds = [];
-  try {
-    assetIds = JSON.parse(planDecode(encodedAssetIds));
-  } catch (error) {
-    assetIds = [];
-  }
-  assetIds = Array.isArray(assetIds) ? assetIds.map(String).filter(Boolean) : [];
-  if (!assetIds.length) return;
-  try {
-    const response = await apiCall(`/api/events/${eventId}/custom-assets/collect`, 'POST', { assetIds });
-    const collectedCount = Number(response?.data?.collectedCount || assetIds.length);
-    showNotification('success', `${collectedCount} loan item${collectedCount === 1 ? '' : 's'} collected`);
-  } catch (error) {
-    showNotification('error', `Failed to collect item: ${error.message}`);
-    return;
-  }
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-async function prepareNewUncollectCustom(eventId, encodedAssetId) {
-  await prepareNewUncollectCustomMany(eventId, planEncode(JSON.stringify([planDecode(encodedAssetId)])));
-}
-
-async function prepareNewUncollectCustomMany(eventId, encodedAssetIds) {
-  let assetIds = [];
-  try {
-    assetIds = JSON.parse(planDecode(encodedAssetIds));
-  } catch (error) {
-    assetIds = [];
-  }
-  assetIds = Array.isArray(assetIds) ? assetIds.map(String).filter(Boolean) : [];
-  if (!assetIds.length) return;
-  try {
-    const response = await apiCall(`/api/events/${eventId}/custom-assets/uncollect`, 'POST', { assetIds });
-    const uncollectedCount = Number(response?.data?.uncollectedCount || assetIds.length);
-    showNotification('success', `${uncollectedCount} loan item${uncollectedCount === 1 ? '' : 's'} uncollected`);
-  } catch (error) {
-    showNotification('error', `Failed to uncollect item: ${error.message}`);
-    return;
-  }
-  await refreshPrepareNewSelectedEvent({ preserve: true });
-}
-
-function prepareNewSetCustomType(type) {
-  const normalized = normalizeCustomType(type);
-  const value = normalized === 'LOAN' ? 'LOAN' : 'MISC';
-  const input = document.getElementById('prepareNewCustomType');
-  if (input) input.value = value;
-  document.getElementById('prepareNewCustomMisc')?.classList.toggle('active', value === 'MISC');
-  document.getElementById('prepareNewCustomLoan')?.classList.toggle('active', value === 'LOAN');
-  const detail = document.getElementById('prepareNewCustomCompany');
-  const label = document.getElementById('prepareNewCustomDetailLabel');
-  if (detail) {
-    detail.required = value === 'LOAN';
-    detail.placeholder = value === 'LOAN' ? 'Company Pte Ltd' : 'Optional description';
-  }
-  if (label) label.textContent = value === 'LOAN' ? 'Company / Source' : 'Description';
-}
-
-async function prepareNewAddCustomItem() {
-  const eventId = Number(prepareNewPageState.eventId);
-  const name = document.getElementById('prepareNewCustomName')?.value.trim() || '';
-  const quantity = Math.max(
-    1,
-    Number.parseInt(document.getElementById('prepareNewCustomQuantity')?.value || '1', 10) || 1
-  );
-  const type = normalizeCustomType(document.getElementById('prepareNewCustomType')?.value || 'MISC');
-  const department = normalizeDepartmentCode(
-    document.getElementById('prepareNewCustomDepartment')?.value || 'UN'
-  );
-  const detail = document.getElementById('prepareNewCustomCompany')?.value.trim() || '';
-  const company = type === 'LOAN' ? detail : '';
-  const description = type === 'MISC' ? detail : '';
-  if (!name) {
-    showNotification('warning', 'Enter a custom item name');
-    document.getElementById('prepareNewCustomName')?.focus();
-    return;
-  }
-  if (type === 'LOAN' && !company) {
-    showNotification('warning', 'Enter the loan or rental company');
-    document.getElementById('prepareNewCustomCompany')?.focus();
-    return;
-  }
-  try {
-    await apiCall(`/api/events/${eventId}/custom-assets`, 'POST', {
-      name,
-      quantity,
-      type,
-      department,
-      company,
-      description,
-      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-    });
-    showNotification('success', `${name} added`);
-    await refreshPrepareNewSelectedEvent({ preserve: false });
-  } catch (error) {
-    showNotification('error', `Failed to add custom item: ${error.message}`);
-  }
-}
-
-function prepareNewNotesChanged(value) {
-  const state = document.getElementById('prepareNewNotesSaveState');
-  const footerCount = document.querySelector('#prepareNewNotes + .plan-notes-footer span:last-child');
-  if (footerCount) footerCount.textContent = `${String(value || '').length} / 30000`;
-  if (state) state.textContent = 'Unsaved';
-  prepareNewPendingNotes = {
-    eventId: Number(prepareNewPageState.eventId),
-    notes: String(value || '')
-  };
-  clearTimeout(prepareNewNotesTimer);
-  prepareNewNotesTimer = setTimeout(prepareNewFlushNotes, 700);
-}
-
-async function prepareNewFlushNotes() {
-  clearTimeout(prepareNewNotesTimer);
-  prepareNewNotesTimer = null;
-  const pending = prepareNewPendingNotes;
-  if (!pending?.eventId) return;
-  prepareNewPendingNotes = null;
-  const state = document.getElementById('prepareNewNotesSaveState');
-  if (state) state.textContent = 'Saving\u2026';
-  try {
-    const response = await apiCall(
-      `/api/events/${pending.eventId}/notes`,
-      'PUT',
-      { notes: pending.notes }
-    );
-    if (Number(prepareNewPageState.eventId) === Number(pending.eventId)) {
-      prepareNewPageState.event.notes = response.data?.notes ?? pending.notes;
-      if (state) state.textContent = 'Saved';
-    }
-  } catch (error) {
-    prepareNewPendingNotes = pending;
-    if (state) state.textContent = 'Save failed';
-  }
-}
-
-async function prepareNewExit(completed) {
-  await prepareNewFlushNotes();
-  if (completed) showNotification('success', 'All event assets are prepared');
-  showSection('events');
-}
-
-function prepareNewReturnToPlan() {
-  planPageState.eventId = Number(prepareNewPageState.eventId) || null;
-  showSection('plan');
-}
 
 // Toggle model details in edit interface
 function toggleModelDetailsInEdit(modelId) {
@@ -28461,19 +20330,19 @@ document.addEventListener("DOMContentLoaded", function () {
           const assetId = e.target.getAttribute('data-asset-id');
           const brand = e.target.getAttribute('data-brand');
           const model = e.target.getAttribute('data-model');
-          
+
           if (eventId && assetId && brand && model) {
               assignSpecificAsset(parseInt(eventId), assetId, brand, model);
           }
       }
-      
+
       if (e.target.classList.contains('unassign-btn')) {
           e.preventDefault();
           const eventId = e.target.getAttribute('data-event-id');
           const assetId = e.target.getAttribute('data-asset-id');
           const brand = e.target.getAttribute('data-brand');
           const model = e.target.getAttribute('data-model');
-          
+
           if (eventId && assetId && brand && model) {
               unassignSpecificAsset(parseInt(eventId), assetId, brand, model);
           }
@@ -28486,7 +20355,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const model = e.target.getAttribute('data-model');
           const department = e.target.getAttribute('data-department');
           const description = e.target.getAttribute('data-description');
-          
+
           if (eventId && brand && model && department) {
               addModelToEvent(eventId, brand, model, department, description);
           }
@@ -28508,13 +20377,13 @@ document.addEventListener("DOMContentLoaded", function () {
           const brand = e.target.getAttribute('data-brand');
           const model = e.target.getAttribute('data-model');
           const department = e.target.getAttribute('data-department');
-          
+
           if (eventId && brand && model && department) {
               const description = e.target.getAttribute('data-description') || '';
               editModelQuantity(eventId, brand, model, department, description);
           }
       }
-    
+
     if (e.target.classList.contains('remove-model-btn')) {
       e.preventDefault();
       const eventId = parseInt(e.target.getAttribute('data-event-id'));
@@ -28527,12 +20396,12 @@ document.addEventListener("DOMContentLoaded", function () {
           removeModelFromEvent(eventId, brand, model, department, description);
       }
     }
-    
+
     if (e.target.classList.contains('remove-asset-btn')) {
         e.preventDefault();
         const eventId = parseInt(e.target.getAttribute('data-event-id'));
         const assetId = e.target.getAttribute('data-asset-id');
-        
+
         if (eventId && assetId) {
             removeAssetFromEvent(eventId, assetId);
         }
@@ -28544,7 +20413,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const assetId = e.target.getAttribute('data-asset-id');
         const assetName = e.target.getAttribute('data-asset-name');
         const assetType = e.target.getAttribute('data-asset-type');
-        
+
         if (eventId && assetId && assetName && assetType) {
             editCustomAssetQuantity(eventId, assetId, assetName, assetType);
         }
@@ -28709,7 +20578,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const newSerialElement = document.getElementById("maintenanceNewSerial");
       const newSerial = newSerialElement ? newSerialElement.value.trim() : '';
       const maintenanceCost = document.getElementById("maintenanceCost")?.value.trim() || '';
-      
+
       // Get the requested asset status from the cleaned-up selector.
       const statusValue = document.getElementById('maintenanceAssetStatus')?.value || 'nochange';
 
@@ -28854,7 +20723,7 @@ document.addEventListener("DOMContentLoaded", function () {
           }
           showNotification("success", `Maintenance logged for ${successCount} asset${successCount > 1 ? 's' : ''}${statusMessage}`);
         }
-        
+
         if (errorCount > 0) {
           console.error('Maintenance errors:', errors);
           showNotification("error", `Failed to log maintenance for ${errorCount} asset${errorCount > 1 ? 's' : ''}. Check console for details.`);
@@ -28940,13 +20809,13 @@ document.addEventListener("DOMContentLoaded", function () {
     assetSearch.addEventListener("input", displayFilteredInventory);
   }
 
-  // Maintenance Asset Search functionality  
+  // Maintenance Asset Search functionality
   const maintenanceAssetSearch = document.getElementById("maintenanceAssetSearch");
   if (maintenanceAssetSearch) {
     maintenanceAssetSearch.addEventListener("input", function (e) {
       searchMaintenanceAssets();
     });
-    
+
     // Enter accepts an exact asset or container identifier without listing containers.
     maintenanceAssetSearch.addEventListener(
       "keydown",
@@ -28976,7 +20845,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Add to the existing event delegation
   document.addEventListener('click', function(e) {
-      
+
       if (e.target.classList.contains('select-maintenance-btn')) {
           e.preventDefault();
           e.stopPropagation();
@@ -28985,7 +20854,7 @@ document.addEventListener("DOMContentLoaded", function () {
               selectAssetForMaintenance(assetId);
           }
       }
-      
+
       if (e.target.classList.contains('maintenance-asset-item')) {
           const assetId = e.target.getAttribute('data-asset-id');
           if (assetId) {
@@ -28995,7 +20864,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Container selector (used in Containers create/edit modal)
       if (handleContainerAssetSelectionClick(e)) return;
   });
-  
+
   // Edit Quantity Form
   document.addEventListener("submit", async function (e) {
     if (e.target.id === "editQuantityForm") {
@@ -29015,7 +20884,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const assetType = document.getElementById("editQuantityDepartment").value;
 
         await updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetType, newQuantity);
-        
+
         // Clear the custom asset flag
         delete e.target.dataset.customAsset;
       } else {
@@ -29024,7 +20893,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const model = document.getElementById("editQuantityModel").value;
           const department = document.getElementById("editQuantityDepartment").value;
           const description = document.getElementById("editQuantityDescription").value;
-          
+
           await updateModelQuantity(eventId, brand, model, department, newQuantity, description);
         }
 
@@ -29043,7 +20912,7 @@ function openMaintenanceModal(initialAssetIds = []) {
   const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
   const logTypeEl = document.getElementById('maintenanceLogType');
   const modalTitleEl = document.querySelector('#maintenanceModal .modal-title');
-  
+
   if (!logEntryEl || !newLocationEl || !maintenanceDateEl || !assetSearchEl || !availableAssetsEl) {
     console.error('Maintenance modal elements not found');
     showNotification('error', 'Maintenance modal not properly loaded');
@@ -29059,11 +20928,11 @@ function openMaintenanceModal(initialAssetIds = []) {
   const submitProgressBarEl = document.getElementById('maintenanceSubmitProgressBar');
   if (submitProgressEl) submitProgressEl.style.display = 'none';
   if (submitProgressBarEl) submitProgressBarEl.style.width = '8%';
-  
+
   // Reset and populate in one pass so callers cannot lose their preselection
   // to a later modal initialisation step.
   replaceMaintenanceAssetSelection(initialAssetIds);
-  
+
   // Clear form
   if (modalTitleEl) modalTitleEl.textContent = 'Log Maintenance';
   logEntryEl.value = '';
@@ -29082,24 +20951,24 @@ function openMaintenanceModal(initialAssetIds = []) {
   }
   void populateMaintenanceUserSelect('maintenanceUser', currentUser?.username || '', true);
   setupMaintenanceEventReferenceInput('maintenanceLogEntry');
-  
+
   // Set current date as default
   const today = new Date().toISOString().split('T')[0];
   maintenanceDateEl.value = today;
-  
+
   // Reset status selector to "No Change"
   const statusSelect = document.getElementById('maintenanceAssetStatus');
   if (statusSelect) {
     statusSelect.value = 'nochange';
     applyMaintenanceStatusSelectStyle(statusSelect);
   }
-  
+
   assetSearchEl.value = '';
-  
+
   // Clear search results
-  availableAssetsEl.innerHTML = 
+  availableAssetsEl.innerHTML =
     '<div style="padding: 20px; text-align: center; color: #666;">Type to search for assets or containers...</div>';
-  
+
   openModal('maintenanceModal');
 }
 
@@ -29109,24 +20978,24 @@ function openMaintenanceModalForAsset(assetId) {
 function searchMaintenanceAssets() {
   const searchEl = document.getElementById('maintenanceAssetSearch');
   const container = document.getElementById('availableMaintenanceAssets');
-  
+
   if (!searchEl || !container) {
     console.error('Search elements not found');
     return;
   }
-  
+
   const searchTerm = searchEl.value.toLowerCase().trim();
-  
+
   if (!searchTerm || searchTerm.length < 2) {
     container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Type at least 2 characters to search...</div>';
     return;
   }
-  
+
   if (!assets || assets.length === 0) {
     container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No assets loaded. Please refresh the page.</div>';
     return;
   }
-  
+
   const filteredAssets = assets.filter(asset => {
     const assetId = getAssetIdentifierForApi(asset);
     const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${escapeJs(asset.description || '')} ${assetTagSearchText(asset)}`.toLowerCase();
@@ -29137,7 +21006,7 @@ function searchMaintenanceAssets() {
     container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching individual assets. Enter an exact container ID and press Enter to add its assets.</div>';
     return;
   }
-  
+
   let html = '';
   filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
     const assetId = getAssetIdentifierForApi(asset);
@@ -29151,10 +21020,10 @@ function searchMaintenanceAssets() {
     const quantityText = asset.isBulk
       ? `<span style="color: #666; font-size: 12px; margin-left: 8px;">Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}</span>`
       : '';
-    
+
     html += `
       <div style="padding: 8px 10px; border-bottom: 1px solid #f1f1f1; display: flex; gap: 12px; align-items: center; cursor: pointer; transition: background-color 0.2s;"
-           onmouseover="this.style.backgroundColor='#f8f9fa'" 
+           onmouseover="this.style.backgroundColor='#f8f9fa'"
            onmouseout="this.style.backgroundColor='white'"
            onclick="selectAssetForMaintenance('${escapeJs(assetId)}')">
         <div style="flex: 1 1 300px; min-width: 0;">
@@ -29177,7 +21046,7 @@ function searchMaintenanceAssets() {
       </div>
     `;
   });
-  
+
   container.innerHTML = html;
 }
 
@@ -29186,13 +21055,13 @@ function selectAssetForMaintenance(assetId) {
     showNotification('error', 'Assets not loaded');
     return;
   }
-  
+
   const asset = getAssetByApiIdentifier(assetId);
   if (!asset) {
     showNotification('error', `Asset ${assetId} not found`);
     return;
   }
-  
+
   const apiId = getAssetIdentifierForApi(asset);
   if (asset.isBulk) {
     closeModal('maintenanceModal');
@@ -29201,10 +21070,10 @@ function selectAssetForMaintenance(assetId) {
   }
 
   const selectionResult = addAssetsToMaintenanceSelection([apiId]);
-  
+
   // Remove from search results
   searchMaintenanceAssets();
-  
+
   if (selectionResult.added) {
     showNotification('success', `Selected ${assetMaintenanceDisplayName(asset)} for maintenance`);
   }
@@ -29213,10 +21082,10 @@ function selectAssetForMaintenance(assetId) {
 function removeAssetFromMaintenance(assetId) {
   selectedMaintenanceAssets.delete(assetId);
   updateSelectedAssetsDisplay();
-  
+
   // Refresh search results
   searchMaintenanceAssets();
-  
+
   showNotification('info', `Removed ${assetId} from selection`);
 }
 
@@ -29255,19 +21124,19 @@ function replaceMaintenanceAssetSelection(assetIds = []) {
 function updateSelectedAssetsDisplay() {
   const countElement = document.getElementById('selectedCount');
   const listElement = document.getElementById('selectedAssetsList');
-  
+
   if (!countElement || !listElement) {
     console.error('Selected assets display elements not found');
     return;
   }
-  
+
   countElement.textContent = selectedMaintenanceAssets.size;
-  
+
   if (selectedMaintenanceAssets.size === 0) {
     listElement.innerHTML = '<span style="color: #666; font-style: italic;">No assets selected</span>';
     return;
   }
-  
+
   let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
   selectedMaintenanceAssets.forEach(assetId => {
     const asset = getAssetByApiIdentifier(assetId);
@@ -29292,7 +21161,7 @@ function updateSelectedAssetsDisplay() {
     }
   });
   html += '</div>';
-  
+
   listElement.innerHTML = html;
 }
 
@@ -29339,9 +21208,9 @@ async function loadOOCAssets() {
     maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
     renderMaintenanceDashboardSummary(assets);
     renderMaintenanceFilterButtons();
-    
+
     filterOOCAssets();
-    
+
   } catch (error) {
     console.error("Error loading flagged assets:", error);
     document.getElementById("ooc-assets-list").innerHTML =
@@ -30308,7 +22177,7 @@ function showMaintenanceLogModalLegacy(asset) {
   }
 
   const maintenanceRecords = getMaintenanceLogRecords(asset);
-  
+
   // Start building modal content
   const assetSafeId = asset.id.replace(/[^a-zA-Z0-9]/g, '_');
   const eventHistoryContainerId = `assetEventHistory_${assetSafeId}`;
@@ -30397,19 +22266,19 @@ function showMaintenanceLogModalLegacy(asset) {
       } catch (e) {
         dateObj = new Date(0);
       }
-      
+
       return {
         ...log,
         dateObj: dateObj
       };
     }).sort((a, b) => b.dateObj - a.dateObj); // Sort newest first
-    
-    
-    
+
+
+
     sortedData.forEach((log, displayIndex) => {
       const logId = `log_${asset.id.replace(/[^a-zA-Z0-9]/g, '_')}_${log.originalIndex}`;
       const displayNumber = displayIndex + 1;
-      
+
       // Format status changes for display
       let statusChangesDisplay = '';
       const changes = getMaintenanceChangeLabels(log.changes);
@@ -30417,10 +22286,10 @@ function showMaintenanceLogModalLegacy(asset) {
         statusChangesDisplay = changes.map(change => {
           let color = '#667eea'; // Default blue
           let icon = '';
-          
+
           // More comprehensive status change detection
           const changeLower = change.toLowerCase();
-          
+
           if (changeLower.includes('marked ooc') || changeLower.includes('mark ooc')) {
             color = '#dc3545';
             icon = '⚠️';
@@ -30452,13 +22321,13 @@ function showMaintenanceLogModalLegacy(asset) {
             color = '#6f42c1';
             icon = '🔢';
           }
-          
+
           return `<span style="color: ${color}; font-weight: 500; font-size: 12px; display: block; margin-bottom: 2px;">${icon} ${escapeHtml(change)}</span>`;
         }).join('');
       } else {
         statusChangesDisplay = '<span style="color: #999; font-style: italic; font-size: 12px;">No changes</span>';
       }
-      
+
       const canEditThisLog = canCurrentUserModifyMaintenanceLog(log);
       const containerOrigin = isContainerMaintenanceLog(log);
       const canDeleteThisLog = isAdminUser() && !containerOrigin;
@@ -30474,9 +22343,9 @@ function showMaintenanceLogModalLegacy(asset) {
             >✎</button>
       ` : '';
       const deleteButtonHtml = canDeleteThisLog ? `
-            <button 
+            <button
               type="button"
-              class="delete-log-btn" 
+              class="delete-log-btn"
               data-asset-id="${escapeHtmlAttr(asset.id)}"
               data-log-index="${log.originalIndex}"
               data-log-id="${escapeHtmlAttr(logId)}"
@@ -30531,7 +22400,7 @@ function showMaintenanceLogModalLegacy(asset) {
         </tr>
       `;
     });
-    
+
   } else {
     modalContent += `
       <tr>
@@ -30548,7 +22417,7 @@ function showMaintenanceLogModalLegacy(asset) {
                 </table>
               </div>
             </div>
-            
+
             <!-- Action Buttons -->
             <div class="modal-actions maintenance-log-footer" style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center; flex-shrink: 0;">
               <button type="button" class="btn btn-primary maintenance-log-footer-add" onclick="addNewLogEntryFromModal('${asset.id}')">
@@ -30585,30 +22454,30 @@ function showMaintenanceLogModalLegacy(asset) {
   focusModalStart(modal);
     // Load prepared event/dry hire history
   setTimeout(() => loadAssetEventHistory(asset.id, eventHistoryContainerId), 0);
-  
+
   // Add event listener for clicking outside modal
   modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       closeMaintenanceLogModal();
     }
   });
-  
+
   // Add event listeners for delete buttons
 
   setTimeout(() => {
     if (!isAdminUser()) return;
     const deleteButtons = modal.querySelectorAll('.delete-log-btn');
-    
+
     deleteButtons.forEach(button => {
       // Remove any existing click handlers and use a single handler
       button.onclick = function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const assetId = this.dataset.assetId;
         const logIndex = parseInt(this.dataset.logIndex);
         const logId = this.dataset.logId;
-        
+
         deleteMaintenanceLog(assetId, logIndex, logId);
       };
     });
@@ -30755,7 +22624,7 @@ function addNewLogEntryFromModal(assetId) {
     openBulkMaintenanceFaultModal(getAssetIdentifierForApi(asset));
     return;
   }
-  
+
   // Open the maintenance modal with the asset pre-selected
   openMaintenanceModalForAsset(assetId);
 }
@@ -30768,23 +22637,23 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
 
   // Show custom confirmation dialog
   const shouldDelete = await showCustomConfirm(
-    'Delete Maintenance Log', 
+    'Delete Maintenance Log',
     'Are you sure you want to delete this maintenance log entry? Attached media will be deleted too. This action cannot be undone and will recalculate the asset status.'
   );
-  
+
   if (!shouldDelete) {
     return;
   }
-  
+
   try {
     const encodedAssetId = encodeURIComponent(assetId);
     const url = `/api/assets/${encodedAssetId}/maintenance-log/${logIndex}`;
-    
+
     const response = await apiCall(url, 'DELETE');
-    
+
     if (response && response.success) {
       showNotification('success', 'Maintenance log deleted and asset status updated');
-      
+
       try {
         const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
         if (updatedAsset) {
@@ -30800,7 +22669,7 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
       console.error('API returned error or no response:', response);
       showNotification('error', (response && response.message) || 'Failed to delete maintenance log');
     }
-    
+
   } catch (error) {
     console.error('Error deleting maintenance log:', error);
     showNotification('error', `Failed to delete maintenance log: ${error.message}`);
@@ -30893,7 +22762,7 @@ function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
   if (editModal) {
     editModal.remove();
   }
-  
+
   // Then call the delete function
   deleteMaintenanceLog(assetId, logIndex, logId);
 }
@@ -31004,7 +22873,7 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
       assetId: oldAssetId,
       newQuantity: newQuantity
     };
-    
+
     // Try a dedicated custom asset quantity update endpoint
     await apiCall(`/api/events/${eventId}/custom-assets/update-quantity`, "PUT", updateData);
 
@@ -31017,7 +22886,7 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
 
   } catch (error) {
     console.error("Error in updateCustomAssetQuantity:", error);
-    
+
     // If the dedicated endpoint doesn't exist, show a helpful error
     if (error.message.includes('Not found') || error.message.includes('404')) {
       showNotification("error", "Custom asset quantity update endpoint not available. This feature needs to be implemented on the backend.");
@@ -31055,7 +22924,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
     const currentLogId = editDiv.id.replace('_edit', '');
     cancelEditMaintenanceLogModal(currentLogId);
   });
-  
+
   // Get the asset data
   const asset = getAssetByApiIdentifier(assetId);
   const maintenanceRecords = getMaintenanceLogRecords(asset || {});
@@ -31070,7 +22939,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
     showNotification('error', 'You can only edit maintenance logs that you wrote within the last 7 days');
     return;
   }
-  
+
   // Parse the current log entry
   const logEntry = maintenanceRecords[logIndex];
   const currentDate = logEntry.date || '';
@@ -31081,10 +22950,10 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   const logLocationFromThisEntry = getMaintenanceChangeValue(logEntry, 'location');
   const hasLocationChangeInThisLog = Boolean(logLocationFromThisEntry);
 
-  
+
   // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
   const dateForInput = currentDate.replace(/\//g, '-');
-  
+
   // Determine status selector value from THIS log entry, not current asset status.
   // Older logs may only contain one clear action (e.g. Clear OOC). In this
   // cleaned-up UI, any clear action means the dropdown should show OK / Clear Status.
@@ -31107,7 +22976,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   if (defaultStatusValue === 'nochange' && hasAnyClearStatusChange) {
     defaultStatusValue = 'ok';
   }
-  
+
   // Create the enhanced edit modal
   const modalContent = `
     <div class="modal" id="editMaintenanceLogModal" style="display: flex; align-items: center; justify-content: center; z-index: 1100;">
@@ -31273,9 +23142,9 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               </button>
 
               ${isAdminUser() ? `
-              <button 
-                type="button" 
-                class="btn btn-danger" 
+              <button
+                type="button"
+                class="btn btn-danger"
                 onclick="deleteMaintenanceLogFromModal('${assetId}', ${logIndex}, '${logId}')"
                 style="margin-right: auto;"
               >
@@ -31318,21 +23187,21 @@ function editMaintenanceLog(assetId, logIndex, logId) {
       appendMaintenanceMediaSelection('editMaintenanceMediaFiles', 'editMaintenanceMediaFileList');
     });
   }
-  
+
   // Add form submit handler
   const form = document.getElementById('editMaintenanceLogForm');
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     saveEnhancedMaintenanceLog(assetId, logIndex, logId);
   });
-  
+
   // Add event listeners for clicking outside modal and escape key
   modal.addEventListener('click', function(e) {
     if (e.target === modal) {
       cancelEditMaintenanceLogModal();
     }
   });
-  
+
   document.addEventListener('keydown', function escapeHandler(e) {
     if (e.key === 'Escape') {
       cancelEditMaintenanceLogModal();
@@ -31344,10 +23213,10 @@ function editMaintenanceLog(assetId, logIndex, logId) {
 function handleClickOutside(event) {
   // Find all currently editing textareas
   const editingTextareas = document.querySelectorAll('textarea[id$="_input"]');
-  
+
   editingTextareas.forEach(async (textarea) => {
     const editDiv = textarea.closest('div[id$="_edit"]');
-    
+
     // Check if click was outside this specific edit area
     if (editDiv && !editDiv.contains(event.target)) {
       const assetId = textarea.dataset.assetId;
@@ -31355,7 +23224,7 @@ function handleClickOutside(event) {
       const logId = textarea.dataset.logId;
       const originalValue = textarea.dataset.originalValue;
       const currentValue = textarea.value.trim();
-      
+
       // If value changed and is not empty, save it
       if (currentValue && currentValue !== originalValue) {
         await saveMaintenanceLogSilent(assetId, logIndex, logId);
@@ -31368,7 +23237,7 @@ function handleClickOutside(event) {
       }
     }
   });
-  
+
   // Remove the global click listener after processing
   document.removeEventListener('click', handleClickOutside);
 }
@@ -31388,7 +23257,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       showNotification('error', 'Asset not found');
       return;
     }
-    
+
     // Get form values
     const date = document.getElementById('editMaintenanceDate').value;
     const user = isAdminUser()
@@ -31400,7 +23269,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     const repairCost = document.getElementById('editMaintenanceCost')?.value.trim() || '';
     const statusValue = document.getElementById('editMaintenanceAssetStatus')?.value || 'nochange';
     const logType = normalizeMaintenanceLogType(document.getElementById('editMaintenanceLogType')?.value, true);
-    
+
     if (!date || !user || !description) {
       showNotification('warning', 'Date, user, and description are required');
       return;
@@ -31412,7 +23281,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       1
     );
     if (!versionDecision.confirmed) return;
-    
+
     // Extract the original location from this specific log for comparison
     let originalLogLocation = null;
     let hadLocationChangeOriginally = false;
@@ -31443,7 +23312,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     if (newSerial !== currentSerial) {
       serialToUpdate = newSerial || null;
     }
-    
+
     // Prepare the data for the enhanced maintenance update
     const updateData = {
       logIndex: logIndex,
@@ -31467,15 +23336,15 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       markDecommissioned: statusValue === 'decommissioned',
       unmarkDecommissioned: statusValue === 'ok'
     };
-    
+
     // Call the enhanced update API
     const requestData = maintenancePayloadToRequestData(updateData, 'editMaintenanceMediaFiles');
     const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log-enhanced/${logIndex}`, 'PUT', requestData);
-    
+
     if (response.success) {
       showNotification('success', 'Maintenance log updated successfully');
       cancelEditMaintenanceLogModal();
-      
+
       const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
       if (updatedAsset) {
         const fn =
@@ -31497,38 +23366,38 @@ async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
   const displayDiv = document.getElementById(`${logId}_display`);
   const editDiv = document.getElementById(`${logId}_edit`);
   const textarea = document.getElementById(`${logId}_input`);
-  
+
   if (!displayDiv || !editDiv || !textarea) {
     return false;
   }
-  
+
   const newDescription = textarea.value.trim();
-  
+
   if (!newDescription) {
     cancelEditMaintenanceLogModal(logId);
     return false;
   }
-  
+
   try {
     // Call API to update the maintenance log
     const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log/${logIndex}`, 'PUT', {
       description: newDescription
     });
-    
+
     if (response.success) {
       // Update the display with new text
       displayDiv.textContent = newDescription;
-      
+
       // Show display, hide edit
       displayDiv.style.display = 'block';
       editDiv.style.display = 'none';
-      
+
       // Clear dataset
       delete textarea.dataset.originalValue;
       delete textarea.dataset.assetId;
       delete textarea.dataset.logIndex;
       delete textarea.dataset.logId;
-      
+
       // Update the assets array if it exists
       if (window.assets) {
         const asset = window.assets.find(a => a.id === assetId);
@@ -31538,13 +23407,13 @@ async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
           asset.maintenanceLogRecords = records;
         }
       }
-      
+
       // Only remove click-outside listener if no other logs are being edited
       const stillEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
       if (stillEditing.length === 0) {
         document.removeEventListener('click', handleClickOutside);
       }
-      
+
       return true;
     } else {
       showNotification('error', response.message || 'Failed to update maintenance log');
@@ -31684,7 +23553,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
         .replace(/[^a-zA-Z0-9_-]/g, '');
     const modelId = `model-${makeDomSafe(department)}-${makeDomSafe(brand)}-${makeDomSafe(model)}-${makeDomSafe(description)}-${eventId}`;
     const modelKey = `${department || ''}|${brand || ''}|${model || ''}`;
-    
+
     let section = `
         <div class="model-prep-section" data-prepare-model-key="${escapeHtmlAttr(modelKey)}" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; cursor: pointer;" onclick="togglePrepareSection('${modelId}')">
@@ -31705,10 +23574,10 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                     <span class="toggle-icon" style="font-size: 16px; font-weight: bold; color: #666;">▼</span>
                 </div>
             </div>
-            
+
             <div id="${modelId}" style="display: none; padding: 15px; border-top: 1px solid #e9ecef;">
     `;
-    
+
     // Available assets section
     if (availableAssets.length > 0) {
         section += `
@@ -31716,10 +23585,10 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Available Assets (${availableAssets.length})</h6>
                 <div style="background: #e8f5e8; border-radius: 6px; padding: 10px; max-height: 200px; overflow-y: auto;">
         `;
-        
+
           availableAssets.forEach(asset => {
               const apiId = getAssetIdentifierForApi(asset);
-              const isAlreadyAssigned = assignedAssets.some(assigned => 
+              const isAlreadyAssigned = assignedAssets.some(assigned =>
                   typeof assigned === 'string' ? assigned === apiId : (assigned.id === apiId || assigned.bulkId === apiId)
               );
               const buttonText = isAlreadyAssigned ? 'Assigned ✓' : 'Prepare';
@@ -31730,7 +23599,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 ? `Available Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}${Number(asset.healthyQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Healthy: ${escapeHtml(String(asset.healthyQuantity ?? asset.availableQuantity ?? 0))}` : ''}${Number(asset.preparableQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Preparable: ${escapeHtml(String(asset.preparableQuantity ?? asset.availableQuantity ?? 0))}` : ''}`
                 : `SN: ${escapeHtml(asset.serial || 'N/A')}`;
               const displayId = asset.isBulk ? 'Bulk quantity item' : escapeHtml(asset.id);
-            
+
             section += `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: white; border-radius: 4px; margin-bottom: 5px; border: 1px solid #c3e6cb;">
                     <div>
@@ -31747,7 +23616,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 </div>
             `;
         });
-        
+
         section += '</div></div>';
     } else {
         section += `
@@ -31759,7 +23628,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
             </div>
         `;
     }
-    
+
     // Assigned/Prepared assets section (made bigger)
     const assignedAssetsForDisplay = [...(assignedAssets || [])].sort((a, b) => {
         const aExtra = typeof a === 'string' ? false : !!a.isExtra;
@@ -31776,24 +23645,24 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Assigned Assets (${assignedAssetsForDisplay.length})</h6>
                 <div style="background: #d4edda; border-radius: 6px; padding: 12px;">
         `;
-        
+
         assignedAssetsForDisplay.forEach((asset, index) => {
             // Handle both old format (just ID strings) and new format (asset objects)
             const assetId = typeof asset === 'string' ? asset : asset.id;
             const assetSerial = typeof asset === 'string' ? 'N/A' : (asset.isBulk ? `Qty: ${asset.quantity || 1}` : (asset.serial || 'N/A'));
             const assetLabel = typeof asset === 'string' ? assetId : getAssignedAssetDisplay(asset);
-            
+
             const isExtra = (typeof asset !== 'string' && !!asset.isExtra) || index >= requiredQty;
             const bgColor = isExtra ? '#fff3cd' : '#d4edda';
             const textColor = isExtra ? '#856404' : '#155724';
             const statusIcon = isExtra ? '➕' : '✅';
             const statusText = isExtra ? 'Extra' : 'Required';
-            
+
             section += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 10px 12px; background: ${bgColor}; border-radius: 4px; border: 1px solid ${isExtra ? '#ffeaa7' : '#c3e6cb'};">
                     <div>
                         <span style="color: ${textColor}; font-weight: 500; font-size: 15px;">
-                            ${statusIcon} ${escapeHtml(assetLabel)} 
+                            ${statusIcon} ${escapeHtml(assetLabel)}
                         </span>
                         <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">${asset.isBulk ? escapeHtml(assetSerial) : `SN: ${escapeHtml(assetSerial)}`} • ${statusText}</div>
                     </div>
@@ -31805,7 +23674,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 </div>
             `;
         });
-        
+
         section += '</div></div>';
     } else {
         section += `
@@ -31817,2917 +23686,10 @@ function createModelPreparationSection(eventId, department, brand, model, descri
             </div>
         `;
     }
-    
+
     section += '</div></div>';
-    
+
     return section;
-}
-
-function packingListQuantity(value) {
-  const quantity = Number(value || 0);
-  return Number.isFinite(quantity) ? Math.max(0, quantity) : 0;
-}
-
-function packingListAssetQuantity(asset) {
-  return Math.max(1, packingListQuantity(asset?.quantity || 1));
-}
-
-function packingListDateRange(event) {
-  if (!event?.startDate) return '-';
-  return event.startDate === event.endDate
-    ? formatDate(event.startDate)
-    : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-}
-
-function packingListAssetStatus(asset, event) {
-  const id = String(asset?.id || '');
-  if (asset?.status === 'returned' || (event?.returnedItems || []).includes(id)) return 'returned';
-  if (asset?.status === 'prepared' || (event?.actuallyPrepared || []).includes(id)) return 'packed';
-  if (
-    asset?.status === 'collected' ||
-    asset?.isCollected ||
-    (event?.customCollected || []).includes(id)
-  ) return 'collected';
-  return 'pending';
-}
-
-function packingListAssetRecord(asset, event, department = 'UN') {
-  const custom = parseCustomAsset(asset?.id, asset);
-  const quantity = custom
-    ? Math.max(1, Number(custom.quantity || 1))
-    : packingListAssetQuantity(asset);
-  const status = packingListAssetStatus(asset, event);
-
-  return {
-    id: String(asset?.id || ''),
-    label: custom
-      ? customAssetDisplayName(custom, false)
-      : String(asset?.displayId || asset?.bulkId || asset?.id || asset?.name || 'Asset'),
-    serial: custom ? '' : String(asset?.serial || ''),
-    company: custom ? customAssetDetailText(custom) : '',
-    quantity,
-    status,
-    department: normalizeDepartmentCode(custom?.department || department || 'UN'),
-    isBulk: !!asset?.isBulk,
-    isExtra: !!asset?.isExtra
-  };
-}
-
-function packingListRowState(row) {
-  if (row.required > 0 && row.packed >= row.required) return 'packed';
-  if (row.packed > 0) return 'partial';
-  if (row.required > 0 && row.returned >= row.required) return 'returned';
-  if (row.assets.some(asset => asset.status === 'collected')) return 'collected';
-  return 'pending';
-}
-
-function buildPackingListSnapshot(event) {
-  const rows = [];
-  const extras = new Map();
-  const assetsById = new Map();
-
-  Object.entries(event?.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
-    (departmentAssets || []).forEach(asset => {
-      const record = packingListAssetRecord(asset, event, department);
-      if (record.id) assetsById.set(record.id, record);
-      if (record.isExtra && record.id) extras.set(record.id, record);
-    });
-  });
-
-  const modelGroups = Object.values(event?.modelGroups || {})
-    .filter(group => packingListQuantity(group.requiredQuantity) > 0)
-    .sort((a, b) => {
-      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
-        inventoryDepartmentLabel(b.department),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-      return deptCompare || modelGroupSortName(a).localeCompare(
-        modelGroupSortName(b),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-    });
-
-  modelGroups.forEach(group => {
-    const required = packingListQuantity(group.requiredQuantity);
-    const assignedAssets = (group.assignedAssets || [])
-      .map(asset => packingListAssetRecord(asset, event, group.department))
-      .filter(asset => {
-        if (asset.isExtra) {
-          if (asset.id) extras.set(asset.id, asset);
-          return false;
-        }
-        return true;
-      });
-    const packed = Math.min(
-      required,
-      typeof group.countablePreparedQuantity !== 'undefined'
-        ? packingListQuantity(group.countablePreparedQuantity)
-        : assignedAssets
-            .filter(asset => asset.status === 'packed')
-            .reduce((sum, asset) => sum + asset.quantity, 0)
-    );
-    const returned = Math.min(
-      required,
-      typeof group.countableReturnedQuantity !== 'undefined'
-        ? packingListQuantity(group.countableReturnedQuantity)
-        : assignedAssets
-            .filter(asset => asset.status === 'returned')
-            .reduce((sum, asset) => sum + asset.quantity, 0)
-    );
-    const row = {
-      department: normalizeDepartmentCode(group.department || 'UN'),
-      description: [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified item',
-      detail: String(group.description || ''),
-      required,
-      packed,
-      returned,
-      pending: Math.max(0, required - packed - returned),
-      assets: assignedAssets
-    };
-    row.state = packingListRowState(row);
-    rows.push(row);
-  });
-
-  const customRows = new Map();
-  (event?.preparedItems || []).forEach(marker => {
-    const custom = parseCustomAsset(marker);
-    if (!custom) return;
-
-    const asset = assetsById.get(marker) || packingListAssetRecord({
-      id: marker,
-      isCustom: true,
-      customType: custom.type,
-      model: custom.name,
-      quantity: custom.quantity,
-      department: custom.department,
-      company: custom.company,
-      customDescription: custom.description,
-      status: (event?.returnedItems || []).includes(marker)
-        ? 'returned'
-        : ((event?.actuallyPrepared || []).includes(marker) ? 'prepared' : 'assigned'),
-      isCollected: (event?.customCollected || []).includes(marker),
-      isExtra: (event?.extraAssets || []).includes(marker)
-    }, event, custom.department);
-
-    if (asset.isExtra) {
-      if (asset.id) extras.set(asset.id, asset);
-      return;
-    }
-
-    const key = JSON.stringify([
-      asset.department,
-      custom.type,
-      custom.name,
-      custom.company,
-      custom.description
-    ]);
-    if (!customRows.has(key)) {
-      customRows.set(key, {
-        department: asset.department,
-        description: custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
-        detail: [
-          custom.type === 'LOAN' ? 'Loan/Rental' : 'Miscellaneous',
-          customAssetDetailText(custom)
-        ].filter(Boolean).join(' - '),
-        required: 0,
-        packed: 0,
-        returned: 0,
-        pending: 0,
-        assets: []
-      });
-    }
-
-    const row = customRows.get(key);
-    row.required += asset.quantity;
-    if (asset.status === 'packed') row.packed += asset.quantity;
-    else if (asset.status === 'returned') row.returned += asset.quantity;
-    row.assets.push(asset);
-  });
-
-  customRows.forEach(row => {
-    row.pending = Math.max(0, row.required - row.packed - row.returned);
-    row.state = packingListRowState(row);
-    rows.push(row);
-  });
-
-  // Legacy/direct events have no model requirements. Group their specifically
-  // assigned physical assets by model so the checklist remains compact.
-  if (modelGroups.length === 0) {
-    const directRows = new Map();
-    Object.entries(event?.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
-      (departmentAssets || []).forEach(asset => {
-        if (parseCustomAsset(asset?.id, asset)) return;
-        const record = packingListAssetRecord(asset, event, department);
-        if (record.isExtra) {
-          if (record.id) extras.set(record.id, record);
-          return;
-        }
-
-        const key = JSON.stringify([
-          record.department,
-          asset?.brand || '',
-          asset?.model || '',
-          asset?.description || asset?.name || ''
-        ]);
-        if (!directRows.has(key)) {
-          directRows.set(key, {
-            department: record.department,
-            description: [asset?.brand, asset?.model].filter(Boolean).join(' ') || record.label,
-            detail: String(asset?.description || ''),
-            required: 0,
-            packed: 0,
-            returned: 0,
-            pending: 0,
-            assets: []
-          });
-        }
-
-        const row = directRows.get(key);
-        row.required += record.quantity;
-        if (record.status === 'packed') row.packed += record.quantity;
-        else if (record.status === 'returned') row.returned += record.quantity;
-        row.assets.push(record);
-      });
-    });
-
-    directRows.forEach(row => {
-      row.pending = Math.max(0, row.required - row.packed - row.returned);
-      row.state = packingListRowState(row);
-      rows.push(row);
-    });
-  }
-
-  // Some extras only appear inside model groups (including orphan 0-required
-  // groups), so collect those after the required rows have been built.
-  Object.values(event?.modelGroups || {}).forEach(group => {
-    (group.assignedAssets || []).forEach(asset => {
-      if (!asset?.isExtra) return;
-      const record = packingListAssetRecord(asset, event, group.department);
-      if (record.id) extras.set(record.id, record);
-    });
-  });
-
-  rows.sort((a, b) => {
-    const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
-      inventoryDepartmentLabel(b.department),
-      undefined,
-      { numeric: true, sensitivity: 'base' }
-    );
-    return deptCompare || a.description.localeCompare(
-      b.description,
-      undefined,
-      { numeric: true, sensitivity: 'base' }
-    );
-  });
-
-  const required = packingListQuantity(event?.totalAssets);
-  const packed = packingListQuantity(event?.totalPrepared);
-  const returned = packingListQuantity(event?.totalReturned);
-
-  return {
-    rows,
-    extras: Array.from(extras.values()).sort((a, b) => {
-      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
-        inventoryDepartmentLabel(b.department),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-      return deptCompare || a.label.localeCompare(b.label, undefined, {
-        numeric: true,
-        sensitivity: 'base'
-      });
-    }),
-    totals: {
-      required,
-      packed,
-      pending: Math.max(0, required - packed - returned),
-      returned,
-      extras: packingListQuantity(event?.totalExtraAssets)
-    }
-  };
-}
-
-function packingListStatusBadge(status) {
-  const palette = {
-    packed: ['PACKED', '#dcfce7', '#14532d'],
-    partial: ['PARTIAL', '#fef3c7', '#78350f'],
-    pending: ['PENDING', '#fee2e2', '#7f1d1d'],
-    returned: ['RETURNED', '#e5e7eb', '#374151'],
-    collected: ['COLLECTED', '#dbeafe', '#1e3a8a']
-  };
-  const [label, background, colour] = palette[status] || palette.pending;
-  return pdfInlineBadgeHtml(label, background, colour, {
-    style: 'margin:0;white-space:nowrap;'
-  });
-}
-
-function packingListAssetHtml(asset) {
-  const quantity = asset.quantity > 1 ? ` x${asset.quantity}` : '';
-  const serial = asset.serial ? ` / SN ${asset.serial}` : '';
-  const company = asset.company ? ` / ${asset.company}` : '';
-  return `
-    <div class="asset-line">
-      ${packingListStatusBadge(asset.status)}
-      <span><strong>${escapeHtml(asset.label || 'Asset')}${escapeHtml(quantity)}</strong>${escapeHtml(serial)}${escapeHtml(company)}</span>
-    </div>
-  `;
-}
-
-function packingListTableHead() {
-  return `
-    <colgroup>
-      <col style="width:25%;">
-      <col style="width:35%;">
-      <col style="width:7%;">
-      <col style="width:7%;">
-      <col style="width:7%;">
-      <col style="width:7%;">
-      <col style="width:12%;">
-    </colgroup>
-    <thead>
-      <tr>
-        <th>Item</th>
-        <th>Assigned / Packed Assets</th>
-        <th class="number-cell">Req.</th>
-        <th class="number-cell">Packed</th>
-        <th class="number-cell">Pending</th>
-        <th class="number-cell">Returned</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-  `;
-}
-
-function packingListModelRowHtml(row, assetHtml, continued = false) {
-  const pendingNote = row.pending > 0
-    ? `<div class="pending-note">${escapeHtml(String(row.pending))} unit${row.pending === 1 ? '' : 's'} still to pack</div>`
-    : '';
-  const itemCell = continued
-    ? `
-      <strong>${escapeHtml(row.description)}</strong>
-      <div class="continued-label">Continued</div>
-    `
-    : `
-      <strong>${escapeHtml(row.description)}</strong>
-      ${row.detail ? `<div class="muted">${escapeHtml(row.detail)}</div>` : ''}
-    `;
-  const assetCell = assetHtml || pendingNote || '<span class="muted">No asset assigned</span>';
-
-  if (continued) {
-    return `
-      <tr class="continuation-row">
-        <td>${itemCell}</td>
-        <td>${assetCell}</td>
-        <td class="number-cell">-</td>
-        <td class="number-cell">-</td>
-        <td class="number-cell">-</td>
-        <td class="number-cell">-</td>
-        <td><span class="continued-label">CONTINUED</span></td>
-      </tr>
-    `;
-  }
-
-  return `
-    <tr>
-      <td>${itemCell}</td>
-      <td>${assetCell}</td>
-      <td class="number-cell">${row.required}</td>
-      <td class="number-cell packed-number">${row.packed}</td>
-      <td class="number-cell ${row.pending > 0 ? 'pending-number' : ''}">${row.pending}</td>
-      <td class="number-cell">${row.returned}</td>
-      <td>${packingListStatusBadge(row.state)}</td>
-    </tr>
-  `;
-}
-
-function packingListExtrasRowHtml(snapshot, assetHtml, continued = false) {
-  const status = snapshot.extras.some(asset => asset.status === 'packed')
-    ? 'packed'
-    : snapshot.extras[0]?.status;
-  return `
-    <tr class="${continued ? 'continuation-row' : ''}">
-      <td>
-        <strong>Additional assets</strong>
-        ${continued ? '<div class="continued-label">Continued</div>' : ''}
-      </td>
-      <td colspan="5">${assetHtml}</td>
-      <td>${continued ? '<span class="continued-label">CONTINUED</span>' : packingListStatusBadge(status)}</td>
-    </tr>
-  `;
-}
-
-function packingListRowRecords(snapshot) {
-  const records = [];
-  let currentDepartment = null;
-
-  snapshot.rows.forEach(row => {
-    if (row.department !== currentDepartment) {
-      currentDepartment = row.department;
-      records.push({
-        html: `<tr class="department-row"><td colspan="7">${inventoryDepartmentLabel(currentDepartment)}</td></tr>`,
-        keepWithNext: true,
-        height: 0
-      });
-    }
-
-    const assetParts = row.assets.map(packingListAssetHtml);
-    records.push({
-      html: packingListModelRowHtml(row, assetParts.join('')),
-      parts: assetParts,
-      renderChunk: (parts, continued) => packingListModelRowHtml(row, parts.join(''), continued),
-      height: 0
-    });
-  });
-
-  if (snapshot.extras.length > 0) {
-    records.push({
-      html: `
-        <tr class="extras-row">
-          <td colspan="7">EXTRAS - Not included in required or packed totals</td>
-        </tr>
-      `,
-      keepWithNext: true,
-      height: 0
-    });
-
-    const extraParts = snapshot.extras.map(packingListAssetHtml);
-    records.push({
-      html: packingListExtrasRowHtml(snapshot, extraParts.join('')),
-      parts: extraParts,
-      renderChunk: (parts, continued) => packingListExtrasRowHtml(snapshot, parts.join(''), continued),
-      height: 0
-    });
-  }
-
-  if (records.length === 0) {
-    records.push({
-      html: '<tr><td colspan="7" class="empty-row">No items are assigned to this event.</td></tr>',
-      height: 0
-    });
-  }
-
-  return records;
-}
-
-function buildPackingListPdfPages(event, snapshot, context) {
-  const safe = value => escapeHtml(String(value ?? ''));
-  const logoRowHtml = renderPdfLogoRowHtml();
-  const footerHtml = renderPdfFooterHtml();
-  const headerHtml = `
-    ${logoRowHtml}
-    <div class="header">
-      <div class="header-left">
-        EVENT:<br>
-        <span class="event-name">#${safe(event.id)} ${safe(event.name)}</span><br>
-        ${safe(packingListDateRange(event))}<br>
-        Event state: ${safe(event.state || '-')}
-      </div>
-      <div class="header-right">
-        <div class="report-title">PACKING LIST</div>
-        Generated by: ${safe(context.generatedBy || '-')}<br>
-        Generated on: ${safe(context.generatedAt)}
-      </div>
-    </div>
-  `;
-  const totals = snapshot.totals;
-  const completion = totals.required > 0
-    ? Math.min(100, Math.round((totals.packed / totals.required) * 100))
-    : 100;
-  const summaryHtml = `
-    <div class="summary-grid">
-      <div class="summary-card"><span>Required</span><strong>${totals.required}</strong></div>
-      <div class="summary-card packed"><span>Packed now</span><strong>${totals.packed}</strong></div>
-      <div class="summary-card pending"><span>Pending</span><strong>${totals.pending}</strong></div>
-      <div class="summary-card returned"><span>Returned</span><strong>${totals.returned}</strong></div>
-      <div class="summary-card extras"><span>Active extras</span><strong>${totals.extras}</strong></div>
-      <div class="summary-card completion"><span>Packed</span><strong>${completion}%</strong></div>
-    </div>
-    <div class="snapshot-note">
-      Live event snapshot. Packed means currently prepared; returned items are no longer packed.
-      Extras are shown separately and do not count toward the requirement.
-    </div>
-  `;
-  const rowRecords = packingListRowRecords(snapshot);
-  const measureBox = document.createElement('div');
-  measureBox.id = '__packingListMeasureBox';
-  measureBox.style.cssText = `
-    position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
-    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.25;
-    background:white;z-index:-1;
-  `;
-  measureBox.innerHTML = `
-    <style>
-      #__packingListMeasureBox * { box-sizing:border-box; }
-      #__packingListMeasureBox .logo-row { display:flex;justify-content:flex-end;margin-bottom:7px;height:39px; }
-      #__packingListMeasureBox .logo-row img { height:39px;width:auto;object-fit:contain; }
-      #__packingListMeasureBox .header { display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:12px; }
-      #__packingListMeasureBox .header-left,#__packingListMeasureBox .header-right { font-size:8pt;font-weight:bold;line-height:1.35; }
-      #__packingListMeasureBox .header-left { flex:1; }
-      #__packingListMeasureBox .header-right { min-width:190px;text-align:right; }
-      #__packingListMeasureBox .event-name { font-size:10pt; }
-      #__packingListMeasureBox .report-title { font-size:14pt;margin-bottom:4px; }
-      #__packingListMeasureBox .summary-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px; }
-      #__packingListMeasureBox .summary-card { border:1px solid #cbd5e1;padding:6px;text-align:center; }
-      #__packingListMeasureBox .summary-card span { display:block;font-size:6.5pt;text-transform:uppercase; }
-      #__packingListMeasureBox .summary-card strong { display:block;font-size:12pt; }
-      #__packingListMeasureBox .snapshot-note { padding:5px 7px;background:#f8fafc;border:1px solid #cbd5e1;font-size:7pt;margin-bottom:8px; }
-      #__packingListMeasureBox .packing-table { width:100%;border-collapse:collapse;border:2px solid #111;table-layout:fixed; }
-      #__packingListMeasureBox .packing-table th { padding:5px;background:#333;color:#fff;border:1px solid #333;font-size:7pt;text-align:left; }
-      #__packingListMeasureBox .packing-table td { padding:5px;border:1px solid #333;font-size:7.5pt;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
-      #__packingListMeasureBox .number-cell { text-align:center; }
-      #__packingListMeasureBox .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
-      #__packingListMeasureBox .asset-line:last-child { margin-bottom:0; }
-      #__packingListMeasureBox .muted { color:#64748b;font-size:6.8pt; }
-      #__packingListMeasureBox .continued-label { color:#64748b;font-size:6.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.03em; }
-      #__packingListMeasureBox .continuation-row td { background:#f8fafc; }
-      #__packingListMeasureBox .pending-note { color:#991b1b;font-weight:bold; }
-      #__packingListMeasureBox .department-row td,#__packingListMeasureBox .extras-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0; }
-      #__packingListMeasureBox .footer-measure { width:100%;text-align:center;font-size:7pt;font-weight:bold;line-height:1.2;overflow-wrap:anywhere; }
-    </style>
-    <div id="__packingFirstBase">${headerHtml}${summaryHtml}<table class="packing-table">${packingListTableHead()}</table></div>
-    <div id="__packingNextBase">${headerHtml}<table class="packing-table">${packingListTableHead()}</table></div>
-    <table class="packing-table">${packingListTableHead()}<tbody id="__packingMeasureBody"></tbody></table>
-    <div id="__packingFooterMeasure" class="footer-measure">${footerHtml}</div>
-  `;
-
-  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
-  const measureBody = measureBox.querySelector('#__packingMeasureBody');
-  const firstBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__packingFirstBase').getBoundingClientRect().height
-  );
-  const nextBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__packingNextBase').getBoundingClientRect().height
-  );
-  const footerHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__packingFooterMeasure')?.getBoundingClientRect().height || 0
-  );
-  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm: 276 }, footerHeight);
-  const firstBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - firstBaseHeight);
-  const nextBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - nextBaseHeight);
-
-  const measureRecordHtml = html => {
-    measureBody.innerHTML = html;
-    const row = measureBody.querySelector('tr');
-    return row
-      ? normaliseMeasuredHeight(row.getBoundingClientRect().height)
-      : 0;
-  };
-
-  rowRecords.forEach(record => {
-    record.height = measureRecordHtml(record.html);
-  });
-
-  // A model can contain dozens of individual asset IDs. A browser cannot split
-  // one table row around a fixed footer, so divide only oversized asset lists
-  // into measured continuation rows before assigning rows to pages.
-  const keepWithNextReserve = rowRecords.reduce(
-    (largest, record) => record.keepWithNext ? Math.max(largest, record.height) : largest,
-    0
-  );
-  const splitBudget = Math.max(
-    40,
-    Math.min(firstBudget, nextBudget) - keepWithNextReserve
-  );
-  const fittedRecords = [];
-
-  rowRecords.forEach(record => {
-    if (!record.renderChunk || record.parts.length < 2 || record.height <= splitBudget) {
-      fittedRecords.push(record);
-      return;
-    }
-
-    let offset = 0;
-    let continued = false;
-    while (offset < record.parts.length) {
-      let low = 1;
-      let high = record.parts.length - offset;
-      let fittingCount = 0;
-      let fittingHtml = '';
-      let fittingHeight = 0;
-
-      while (low <= high) {
-        const count = Math.floor((low + high) / 2);
-        const html = record.renderChunk(
-          record.parts.slice(offset, offset + count),
-          continued
-        );
-        const height = measureRecordHtml(html);
-        if (height <= splitBudget) {
-          fittingCount = count;
-          fittingHtml = html;
-          fittingHeight = height;
-          low = count + 1;
-        } else {
-          high = count - 1;
-        }
-      }
-
-      // One unusually long asset label may itself be taller than the normal
-      // budget. Keep it visible as a single row rather than dropping it.
-      if (fittingCount === 0) {
-        fittingCount = 1;
-        fittingHtml = record.renderChunk(
-          record.parts.slice(offset, offset + 1),
-          continued
-        );
-        fittingHeight = measureRecordHtml(fittingHtml);
-      }
-
-      fittedRecords.push({
-        html: fittingHtml,
-        height: fittingHeight
-      });
-      offset += fittingCount;
-      continued = true;
-    }
-  });
-  measureBox.remove();
-
-  const pages = [];
-  let index = 0;
-  while (index < fittedRecords.length) {
-    const budget = pages.length === 0 ? firstBudget : nextBudget;
-    const pageRows = [];
-    let height = 0;
-
-    while (index < fittedRecords.length) {
-      const record = fittedRecords[index];
-      const nextHeight = record.keepWithNext ? (fittedRecords[index + 1]?.height || 0) : 0;
-      if (pageRows.length > 0 && height + record.height + nextHeight > budget) break;
-
-      pageRows.push(record);
-      height += record.height;
-      index += 1;
-
-      if (pageRows.length === 1 && record.height > budget) break;
-    }
-    pages.push(pageRows);
-  }
-
-  const totalPages = pages.length;
-  return pages.map((pageRows, pageIndex) => `
-    <div class="page">
-      ${headerHtml}
-      ${pageIndex === 0 ? summaryHtml : ''}
-      <table class="packing-table">
-        ${packingListTableHead()}
-        <tbody>${pageRows.map(record => record.html).join('')}</tbody>
-      </table>
-      <div class="footer">${footerHtml}</div>
-      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
-    </div>
-  `).join('');
-}
-
-function openPackingListPage(eventId) {
-  const id = Number(eventId || 0);
-  if (!id) {
-    showNotification('error', 'No event selected');
-    return;
-  }
-  const opened = window.open(`/packing-list/${id}`, '_blank');
-  if (opened) opened.opener = null;
-  else showNotification('error', 'Pop-up blocked. Please allow pop-ups to open the packing list.');
-}
-
-async function generatePackingList(eventId, options = {}) {
-  if (!eventId) {
-    showNotification('error', 'No event selected');
-    return;
-  }
-
-  const packingWindow = options.targetWindow || window.open('', '_blank', 'width=950,height=1000');
-  if (!packingWindow) {
-    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the packing list PDF.');
-    return;
-  }
-
-  if (!options.targetWindow) {
-    packingWindow.document.write(`<!DOCTYPE html><html><head><title>Preparing Packing List</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing the latest packing list...</body></html>`);
-    packingWindow.document.close();
-  }
-
-  try {
-    const [response] = await Promise.all([
-      apiCall(`/api/events/${eventId}`),
-      loadPdfSettings(true)
-    ]);
-    const event = response.data;
-    const snapshot = buildPackingListSnapshot(event);
-    const now = new Date();
-    const context = {
-      generatedAt: now.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      generatedBy: currentUserPdfDisplayName()
-    };
-    const pagesHtml = buildPackingListPdfPages(event, snapshot, context);
-    const title = `Packing List - ${escapeHtml(String(event.name || `Event ${event.id}`))}`;
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
-      @page { size:A4; margin:0; }
-      * { box-sizing:border-box; }
-      body { margin:0;font-family:'Century Gothic',Arial,sans-serif;color:#111;background:#f0f0f0;font-size:8pt;line-height:1.25; }
-      .page { width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;position:relative;overflow:hidden;page-break-after:always;break-after:page; }
-      .page:last-child { page-break-after:auto;break-after:auto; }
-      .print-btn { position:fixed;top:20px;right:20px;background:#16a34a;color:#fff;border:0;padding:10px 18px;border-radius:6px;cursor:pointer;z-index:999;font-size:12px; }
-      .logo-row { display:flex;justify-content:flex-end;margin-bottom:7px;height:39px; }
-      .logo-row img { height:39px;width:auto;object-fit:contain; }
-      .header { display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:12px; }
-      .header-left,.header-right { font-size:8pt;font-weight:bold;line-height:1.35; }
-      .header-left { flex:1; }
-      .header-right { min-width:190px;text-align:right; }
-      .event-name { font-size:10pt; }
-      .report-title { font-size:14pt;margin-bottom:4px; }
-      .summary-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px; }
-      .summary-card { border:1px solid #cbd5e1;padding:6px;text-align:center;background:#f8fafc; }
-      .summary-card span { display:block;font-size:6.5pt;text-transform:uppercase;color:#475569; }
-      .summary-card strong { display:block;font-size:12pt; }
-      .summary-card.packed { background:#dcfce7; }
-      .summary-card.pending { background:#fee2e2; }
-      .summary-card.returned { background:#e5e7eb; }
-      .summary-card.extras { background:#fef3c7; }
-      .summary-card.completion { background:#dbeafe; }
-      .snapshot-note { padding:5px 7px;background:#f8fafc;border:1px solid #cbd5e1;font-size:7pt;margin-bottom:8px; }
-      .packing-table { width:100%;border-collapse:collapse;border:2px solid #111;table-layout:fixed; }
-      .packing-table thead { display:table-header-group; }
-      .packing-table tr { break-inside:avoid;page-break-inside:avoid; }
-      .packing-table th { padding:5px;background:#333;color:#fff;border:1px solid #333;font-size:7pt;text-align:left; }
-      .packing-table td { padding:5px;border:1px solid #333;font-size:7.5pt;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
-      .number-cell { text-align:center!important;white-space:nowrap; }
-      .packed-number { color:#166534;font-weight:bold; }
-      .pending-number { color:#991b1b;font-weight:bold;background:#fff7f7; }
-      .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
-      .asset-line:last-child { margin-bottom:0; }
-      .muted { color:#64748b;font-size:6.8pt; }
-      .continued-label { color:#64748b;font-size:6.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.03em; }
-      .continuation-row td { background:#f8fafc; }
-      .pending-note { color:#991b1b;font-weight:bold; }
-      .department-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0;letter-spacing:.03em; }
-      .extras-row td { padding:5px 7px;font-weight:bold;background:#fef3c7;color:#78350f; }
-      .empty-row { text-align:center;color:#64748b;padding:18px!important; }
-      .footer { position:absolute;bottom:7mm;left:7mm;right:7mm;text-align:center;font-size:7pt;font-weight:bold;line-height:1.2;overflow-wrap:anywhere; }
-      .page-number { position:absolute;bottom:3mm;right:7mm;font-size:7pt; }
-      @media print {
-        body,body * { -webkit-print-color-adjust:exact;print-color-adjust:exact; }
-        body { background:#fff; }
-        .page { margin:0;page-break-after:always;break-after:page; }
-        .page:last-child { page-break-after:auto;break-after:auto; }
-        .print-btn { display:none; }
-      }
-    </style></head><body>
-      <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
-      ${pagesHtml}
-    </body></html>`;
-
-    packingWindow.document.open();
-    packingWindow.document.write(html);
-    packingWindow.document.close();
-    packingWindow.focus();
-    if (!options.targetWindow) {
-      showNotification('success', 'Packing list PDF generated from the latest event state');
-    }
-  } catch (error) {
-    console.error('Packing list PDF generation failed:', error);
-    if (!packingWindow.closed) {
-      packingWindow.document.open();
-      packingWindow.document.write(`<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:24px;">Failed to generate packing list: ${escapeHtml(error.message)}</body></html>`);
-      packingWindow.document.close();
-    }
-    showNotification('error', `Failed to generate packing list: ${error.message}`);
-  }
-}
-
-let currentDeliveryOrderEvent = null;
-const deliveryOrderEditorState = {
-  activeSubprojectId: '',
-  dragSubprojectId: '',
-  catalog: [],
-  catalogMatches: [],
-  selectedCatalogItem: null,
-  editMode: false,
-  collapsedCategories: {}
-};
-let deliveryOrderSubprojectWorkspace = null;
-
-function deliveryOrderSubprojects(event = currentDeliveryOrderEvent) {
-  const source = eventSubprojects(event);
-  const rows = source.length
-    ? source.map(room => ({ id: String(room.id || 'main'), name: room.name || 'Main Room' }))
-    : [{ id: 'main', name: 'Main Room' }];
-  const eventId = event?.id || event?.event_id || '0';
-  const order = getDoEdits(eventId).subprojectOrder || [];
-  const positions = new Map(order.map((id, index) => [String(id), index]));
-  return [...rows].sort((left, right) => {
-    const leftIndex = positions.has(left.id) ? positions.get(left.id) : Number.MAX_SAFE_INTEGER;
-    const rightIndex = positions.has(right.id) ? positions.get(right.id) : Number.MAX_SAFE_INTEGER;
-    return leftIndex - rightIndex;
-  });
-}
-
-function deliveryOrderActiveSubprojectId(event = currentDeliveryOrderEvent) {
-  const rows = deliveryOrderSubprojects(event);
-  if (!rows.some(row => row.id === deliveryOrderEditorState.activeSubprojectId)) {
-    deliveryOrderEditorState.activeSubprojectId = rows[0]?.id || 'main';
-  }
-  return deliveryOrderEditorState.activeSubprojectId;
-}
-
-function ensureDeliveryOrderSubprojectWorkspace() {
-  if (deliveryOrderSubprojectWorkspace) return deliveryOrderSubprojectWorkspace;
-  deliveryOrderSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
-    state: deliveryOrderEditorState,
-    getRows: () => deliveryOrderSubprojects(),
-    mimeType: 'application/x-showbase-delivery-order-room',
-    commit: reordered => {
-      if (!reordered || !currentDeliveryOrderEvent) return false;
-      const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
-      const workspace = getDoEdits(eventId);
-      workspace.subprojectOrder = reordered.map(row => row.id);
-      saveDoEdits(eventId, workspace);
-      populateDeliveryItemsPreview(currentDeliveryOrderEvent);
-      return true;
-    }
-  });
-  return deliveryOrderSubprojectWorkspace;
-}
-
-function deliveryOrderSubprojectTabsMarkup(event) {
-  return showbaseLineWorkspace.subprojectTabsMarkup({
-    rows: deliveryOrderSubprojects(event),
-    activeId: deliveryOrderActiveSubprojectId(event),
-    handlerPrefix: 'deliveryOrder',
-    allowManage: false,
-    ariaLabel: 'Delivery Order sub-projects',
-    className: 'do-subproject-tabs'
-  });
-}
-
-function deliveryOrderSelectSubproject(subprojectId) {
-  if (!deliveryOrderSubprojects().some(row => row.id === subprojectId)) return;
-  deliveryOrderEditorState.activeSubprojectId = subprojectId;
-  populateDeliveryItemsPreview(currentDeliveryOrderEvent);
-}
-
-function deliveryOrderSubprojectDragStart(event, subprojectId) {
-  ensureDeliveryOrderSubprojectWorkspace().dragStart(event, subprojectId);
-}
-function deliveryOrderSubprojectDragOver(event, targetId) {
-  ensureDeliveryOrderSubprojectWorkspace().dragOver(event, targetId);
-}
-function deliveryOrderSubprojectDragLeave(event) {
-  ensureDeliveryOrderSubprojectWorkspace().dragLeave(event);
-}
-function deliveryOrderSubprojectEndDragOver(event) {
-  ensureDeliveryOrderSubprojectWorkspace().endDragOver(event);
-}
-function deliveryOrderSubprojectEndDragLeave(event) {
-  ensureDeliveryOrderSubprojectWorkspace().endDragLeave(event);
-}
-function deliveryOrderSubprojectSlotDragOver(event, targetIndex) {
-  ensureDeliveryOrderSubprojectWorkspace().slotDragOver(event, targetIndex);
-}
-function deliveryOrderSubprojectSlotDragLeave(event) {
-  ensureDeliveryOrderSubprojectWorkspace().slotDragLeave(event);
-}
-function deliveryOrderSubprojectDropAtIndex(event, targetIndex) {
-  ensureDeliveryOrderSubprojectWorkspace().dropAtIndex(event, targetIndex);
-}
-function deliveryOrderSubprojectDrop(event, targetId) {
-  ensureDeliveryOrderSubprojectWorkspace().drop(event, targetId);
-}
-function deliveryOrderSubprojectDropAtEnd(event) {
-  ensureDeliveryOrderSubprojectWorkspace().dropAtEnd(event);
-}
-function deliveryOrderSubprojectDragEnd() {
-  ensureDeliveryOrderSubprojectWorkspace().dragEnd();
-}
-function deliveryOrderSubprojectDragKeydown(event, subprojectId) {
-  ensureDeliveryOrderSubprojectWorkspace().dragKeydown(event, subprojectId);
-}
-
-async function openDeliveryOrderTab(eventId, options = {}) {
-    // Use stored event data if available, otherwise fetch it
-    if (window.currentEventData && window.currentEventData.id === eventId) {
-        currentDeliveryOrderEvent = window.currentEventData;
-        await populateDeliveryOrderForm(window.currentEventData);
-        showSection('delivery-order', { updateHistory: false, loadDetail: false });
-        if (options.updateHistory !== false) {
-          updateAppDetailHistory(`/delivery-order/${Number(eventId)}`, options.replaceHistory === true);
-        }
-    } else {
-        // Fallback: fetch event data
-        try {
-            const response = await apiCall(`/api/events/${eventId}`);
-            currentDeliveryOrderEvent = response.data;
-            await populateDeliveryOrderForm(response.data);
-            showSection('delivery-order', { updateHistory: false, loadDetail: false });
-            if (options.updateHistory !== false) {
-              updateAppDetailHistory(`/delivery-order/${Number(eventId)}`, options.replaceHistory === true);
-            }
-        } catch (error) {
-            console.error('Error fetching event data:', error);
-            showNotification('error', 'Failed to load event data');
-        }
-    }
-}
-
-const DELIVERY_ORDER_DOCUMENT_FIELDS = [
-  'doNumber', 'doDate', 'clientName', 'clientCompany', 'deliveryAddress1',
-  'deliveryAddress2', 'deliveryAddress3', 'clientPhone', 'jobTitle',
-  'jobLocation', 'additionalComments'
-];
-
-function deliveryOrderCaptureDocument(eventId) {
-  const workspace = getDoEdits(eventId);
-  const documentData = {};
-  DELIVERY_ORDER_DOCUMENT_FIELDS.forEach(field => {
-    documentData[field] = document.getElementById(field)?.value || '';
-  });
-  documentData.showAssetIds = !!document.getElementById('showAssetIds')?.checked;
-  workspace.document = documentData;
-  saveDoEdits(eventId, workspace);
-}
-
-function deliveryOrderBindDocumentAutosave(eventId) {
-  [...DELIVERY_ORDER_DOCUMENT_FIELDS, 'showAssetIds'].forEach(field => {
-    const input = document.getElementById(field);
-    if (!input || input.dataset.doAutosaveBound === 'true') return;
-    input.dataset.doAutosaveBound = 'true';
-    input.addEventListener(field === 'showAssetIds' ? 'change' : 'input', () => {
-      deliveryOrderCaptureDocument(eventId);
-    });
-  });
-}
-
-async function populateDeliveryOrderForm(event) {
-    // Auto-populate form with event data and defaults
-    const doNumberEl = document.getElementById('doNumber');
-    const doDateEl = document.getElementById('doDate');
-    const clientNameEl = document.getElementById('clientName');
-    const clientCompanyEl = document.getElementById('clientCompany');
-    const deliveryAddress1El = document.getElementById('deliveryAddress1');
-    const deliveryAddress2El = document.getElementById('deliveryAddress2');
-    const deliveryAddress3El = document.getElementById('deliveryAddress3');
-    const clientPhoneEl = document.getElementById('clientPhone');
-    const jobTitleEl = document.getElementById('jobTitle');
-    const jobLocationEl = document.getElementById('jobLocation');
-    const additionalCommentsEl = document.getElementById('additionalComments');
-    const eventContextEl = document.getElementById('doEventContext');
-    const eventId = event && (event.event_id ?? event.id);
-    const workspace = await loadDoEdits(eventId || '0');
-    const savedDocument = workspace.document || {};
-    const savedValue = (field, fallback) => (
-      Object.prototype.hasOwnProperty.call(savedDocument, field)
-        ? savedDocument[field]
-        : fallback
-    );
-
-    if (eventContextEl) {
-      eventContextEl.textContent = [eventId ? `Event #${eventId}` : '', event?.name || ''].filter(Boolean).join(' / ');
-    }
-
-    if (doNumberEl) {
-      const year = new Date().getFullYear();
-      const eid = (event && (event.event_id ?? event.id)) ? String(event.event_id ?? event.id).padStart(4, '0') : '0000';
-      doNumberEl.value = savedValue('doNumber', `DO-${year}${eid}`);
-    }
-    
-    if (doDateEl) doDateEl.value = savedValue('doDate', new Date().toISOString().split('T')[0]);
-    if (clientNameEl) clientNameEl.value = savedValue('clientName', event.client_name || event.name || '');
-    if (clientCompanyEl) clientCompanyEl.value = savedValue('clientCompany', event.client_company || '');
-    if (deliveryAddress1El) deliveryAddress1El.value = savedValue('deliveryAddress1', event.location || event.venue || '');
-    if (deliveryAddress2El) deliveryAddress2El.value = savedValue('deliveryAddress2', event.venue_address || '');
-    if (deliveryAddress3El) deliveryAddress3El.value = savedValue('deliveryAddress3', event.venue_city || '');
-    if (clientPhoneEl) clientPhoneEl.value = savedValue('clientPhone', event.client_phone || '');
-    if (jobTitleEl) jobTitleEl.value = savedValue('jobTitle', event.name || '');
-    if (jobLocationEl) jobLocationEl.value = savedValue('jobLocation', event.location || event.venue || '');
-    if (additionalCommentsEl) additionalCommentsEl.value = savedValue('additionalComments', '');
-    
-    if (document.getElementById('showAssetIds')) {
-      document.getElementById('showAssetIds').checked = !!savedValue('showAssetIds', false);
-    }
-    deliveryOrderBindDocumentAutosave(eventId || '0');
-
-    // Populate items preview (now async)
-    await populateDeliveryItemsPreview(event);
-    await setupClientAutocomplete();    // NEW
-    ensureKnownClientsButton();
-}
-
-async function generateDeliveryOrder() {
-    if (!currentDeliveryOrderEvent) {
-        showNotification('error', 'No event selected');
-        return;
-    }
-    
-    // Get form data
-    const deliveryOrderData = {
-        doNumber: document.getElementById('doNumber').value,
-        doDate: document.getElementById('doDate').value,
-        clientName: document.getElementById('clientName').value,
-        clientCompany: document.getElementById('clientCompany').value,
-        deliveryAddress1: document.getElementById('deliveryAddress1').value,
-        deliveryAddress2: document.getElementById('deliveryAddress2').value,
-        deliveryAddress3: document.getElementById('deliveryAddress3').value,
-        clientPhone: document.getElementById('clientPhone').value,
-        jobTitle: document.getElementById('jobTitle').value,
-        jobLocation: document.getElementById('jobLocation').value,
-        additionalComments: document.getElementById('additionalComments').value,
-        showAssetIds: document.getElementById('showAssetIds').checked,
-        event: currentDeliveryOrderEvent
-    };
-    
-    // Validate required fields
-    if (!deliveryOrderData.doNumber || !deliveryOrderData.doDate || !deliveryOrderData.clientName) {
-        showNotification('error', 'Please fill in DO Number, Date, and Client Name');
-        return;
-    }
-
-    deliveryOrderCaptureDocument(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
-    await flushDoEdits(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
-    await loadPdfSettings(true);
-    
-    generatePdfDO(deliveryOrderData);
-}
-
-function generatePdfDO(data) {
-    // Format the date for display
-    const formattedDate = new Date(data.doDate).toLocaleDateString('en-GB', { 
-        day: '2-digit', 
-        month: 'short', 
-        year: 'numeric' 
-    });
-    const themeColor = deliveryOrderPdfThemeColor();
-    
-    // Create a new window for the delivery order
-    const doWindow = window.open('', '_blank', 'width=800,height=1000');
-    
-    // Generate pages content
-    const pagesContent = generatePagesContent(data, formattedDate);
-    
-    // Get the HTML template with populated data
-    const template = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Delivery Order - ${escapeHtml(data.jobTitle)}</title>
-    <style>
-        @page {
-            size: A4;
-            margin: 20mm;
-            @top-left { content: ""; }
-            @top-center { content: ""; }
-            @top-right { content: ""; }
-            @bottom-left { content: ""; }
-            @bottom-center { content: ""; }
-            @bottom-right { content: ""; }
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            line-height: 1.2;
-            color: black;
-            background: white;
-        }
-        
-        .page {
-            min-height: 240mm;
-            page-break-after: avoid;
-            position: relative;
-            padding-bottom: 1mm;
-        }
-
-        .page-break {
-            page-break-before: always;
-            height: 0;
-            margin: 0;
-            padding: 0;
-        }
-
-        .page-break + .page {
-            padding-top: 12mm;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 25px;
-        }
-        
-        .header-left {
-            flex: 1;
-        }
-        
-        .header-right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 5px;
-            margin-right: 0;
-            margin-top: -5px;
-            margin-bottom: 2px;
-        }
-        
-        .do-logo-row {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 7px;
-            height: 39px;
-        }
-
-        .do-logo-row img {
-            height: 39px;
-            width: auto;
-            object-fit: contain;
-        }
-        
-        .delivery-order-title {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 14pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 5;
-            text-align: right;
-            margin-top: 5;
-        }
-        
-        .do-number {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            text-align: left;
-            margin-right: 46px;
-            font-weight: bold;
-            margin-bottom: 1;
-        }
-        
-        .deliver-to {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 2px;
-        }
-        
-        .client-info {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            font-weight: bold;
-            margin-bottom: 1px;
-        }
-        
-        .client-phone {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 1px;
-        }
-        
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-            border: 2px solid black;
-        }
-        
-        .items-table th {
-            background-color: #333;
-            color: white;
-            padding: 8px;
-            text-align: left;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            border: 1px solid #333;
-        }
-        
-        .items-table td {
-            padding: 6px 8px;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            vertical-align: top;
-            word-break: break-word;
-            overflow-wrap: anywhere;
-        }
-
-        .items-table td:first-child {
-            border-right: 1px solid black;
-            border-left: 1px solid black;
-        }
-
-        .items-table td:last-child {
-            border-right: 1px solid black;
-        } 
-        
-        .job-title {
-            font-weight: bold;
-            background-color: #f5f5f5;
-        }
-        
-        .department-header {
-            font-weight: bold;
-            color: black;
-            background-color: #f0f0f0;
-        }
-        
-        .quantity-col {
-            text-align: center;
-            width: 80px;
-        }
-        
-        .comments-section {
-            position: absolute;
-            bottom: 5mm;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 30px;
-            margin-bottom: 30px;
-        }
-
-        .other-comments {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-        }
-        
-        .received-text {
-            bottom: 5mm; 
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-        }
-        
-        .signature-line {
-            bottom: 2mm;
-            width: 210px;
-            height: 60px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-items: center;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            margin-top: 20px;
-        }
-        
-        .signature-line::before {
-            content: "";
-            border-bottom: 2px solid black;
-            width: 100%;
-            margin-bottom: 5px;
-        }
-        
-        .footer {
-            position: absolute;
-            bottom: 10mm;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-family: 'Calibri', sans-serif;
-            font-size: 7pt;
-            color: black;
-            line-height: 1.2;
-            z-index: 100;
-            overflow-wrap: anywhere;
-        }
-
-        .page-number {
-            position: fixed;
-            bottom: 5mm;
-            right: 0;
-            margin-right: 20px;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 7pt;
-            color: black;
-        }
-        
-        @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            
-            .page {
-                page-break-after: avoid;
-                page-break-inside: avoid;
-            }
-            
-            .page-break {
-                page-break-before: always;
-                display: block;
-                height: 0;
-            }
-
-            @page { margin: 0; }
-            html, body { margin: 0 !important; padding: 7mm !important; }
-        }
-        
-        /* Delivery Order measured pagination and client-facing theme */
-        body {
-            margin: 0;
-            padding: 0;
-            background: white;
-            color: #172033;
-        }
-
-        .page {
-            width: 210mm;
-            height: 297mm;
-            min-height: 297mm;
-            position: relative;
-            padding: 10mm 13mm 18mm;
-            overflow: hidden;
-            page-break-after: always;
-            break-after: page;
-            background: white;
-        }
-
-        .page:last-child {
-            page-break-after: auto;
-            break-after: auto;
-        }
-
-        .page-break {
-            display: none !important;
-        }
-
-        .page-break + .page {
-            padding-top: 10mm;
-        }
-
-        .do-letterhead {
-            min-height: 15mm;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12mm;
-            margin-bottom: 8mm;
-        }
-
-        .do-letterhead-brand {
-            flex: 0 0 auto;
-            min-width: 40mm;
-        }
-
-        .do-letterhead-brand img {
-            display: block;
-            width: auto;
-            max-width: 42mm;
-            height: auto;
-            max-height: 14mm;
-            object-fit: contain;
-        }
-
-        .do-wordmark {
-            max-width: 75mm;
-            color: #172033;
-            font-size: 15pt;
-            line-height: 1.05;
-            font-weight: 700;
-        }
-
-        .do-letterhead-details {
-            max-width: 88mm;
-            color: #64748b;
-            font-size: 6.5pt;
-            line-height: 1.35;
-            text-align: right;
-        }
-
-        .do-letterhead-details strong {
-            display: block;
-            margin-bottom: 1mm;
-            color: #172033;
-            font-size: 8.5pt;
-            line-height: 1.2;
-        }
-
-        .do-title-row {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 10mm;
-            padding-bottom: 3mm;
-            border-bottom: 0.6pt solid #cbd5e1;
-        }
-
-        .delivery-order-title {
-            margin: 0;
-            color: #172033;
-            font-size: 20pt;
-            line-height: 1;
-            text-align: left;
-        }
-
-        .do-number {
-            margin: 0;
-            color: ${themeColor};
-            font-size: 12pt;
-            line-height: 1.1;
-            text-align: right;
-        }
-
-        .do-recipient-panel {
-            display: grid;
-            grid-template-columns: minmax(0, 1.4fr) minmax(52mm, .75fr);
-            margin-top: 5mm;
-            border: 0.5pt solid #cbd5e1;
-        }
-
-        .do-recipient,
-        .do-document-meta {
-            min-height: 0;
-            padding: 3.5mm 5mm;
-        }
-
-        .do-document-meta {
-            border-left: 0.5pt solid #cbd5e1;
-        }
-
-        .do-label {
-            display: block;
-            margin-bottom: 1.2mm;
-            color: #64748b;
-            font-size: 7pt;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .do-recipient strong {
-            display: block;
-            margin-bottom: 0.5mm;
-            color: #172033;
-            font-size: 9pt;
-        }
-
-        .do-recipient-copy {
-            color: #334155;
-            font-size: 8pt;
-            line-height: 1.4;
-        }
-
-        .do-meta-row {
-            display: grid;
-            grid-template-columns: 30mm minmax(0, 1fr);
-            gap: 3mm;
-            margin-bottom: 1mm;
-            font-size: 8pt;
-        }
-
-        .do-meta-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .do-meta-row span {
-            color: #64748b;
-            font-weight: 700;
-        }
-
-        .do-meta-row strong {
-            color: #172033;
-            font-weight: 400;
-        }
-
-        .do-job-band {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 8mm;
-            margin: 4mm 0 5mm;
-            padding: 3.5mm 5mm;
-            border: 0.5pt solid #cbd5e1;
-            background: #f1f5f9;
-            color: #334155;
-            font-size: 8pt;
-        }
-
-        .do-job-band strong {
-            color: #172033;
-        }
-
-        .items-table {
-            table-layout: fixed;
-            margin: 0;
-            border: 0.5pt solid #cbd5e1;
-        }
-
-        .items-table th {
-            padding: 2mm 2.7mm;
-            border: 0;
-            background: ${themeColor};
-            color: white;
-            font-size: 7pt;
-            letter-spacing: 0;
-        }
-
-        .items-table th:last-child {
-            border-left: 0.5pt solid rgba(255, 255, 255, 0.45);
-            text-align: right;
-        }
-
-        .items-table td {
-            padding: 1.35mm 2.7mm;
-            border: 0;
-            border-bottom: 0.35pt solid #e2e8f0;
-            color: #172033;
-            font-size: 8pt;
-            line-height: 1.2;
-        }
-
-        .items-table td:first-child,
-        .items-table td:last-child {
-            border-right: 0;
-            border-left: 0;
-        }
-
-        .items-table tr:last-child td {
-            border-bottom: 0;
-        }
-
-        .department-header {
-            padding: 1.5mm 2.7mm !important;
-            border-top: 0.5pt solid #cbd5e1 !important;
-            border-bottom: 0.5pt solid #cbd5e1 !important;
-            background: #f1f5f9;
-            color: #172033;
-            font-size: 7.2pt !important;
-            text-transform: uppercase;
-        }
-
-        .quantity-col {
-            width: 22mm;
-            border-left: 0.5pt solid #cbd5e1 !important;
-            text-align: right;
-        }
-
-        .quantity-column {
-            width: 22mm;
-        }
-
-        .asset-id-line {
-            display: block;
-            margin-top: 0.5mm;
-            color: #64748b;
-            font-size: 6.5pt;
-            font-style: normal;
-        }
-
-        .comments-section {
-            position: absolute;
-            left: 13mm;
-            right: 13mm;
-            bottom: 43mm;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            justify-content: space-between;
-            align-items: start;
-            gap: 10mm;
-            padding-top: 3mm;
-            border-top: 0.5pt solid #cbd5e1;
-            margin: 0;
-        }
-
-        .other-comments,
-        .received-text {
-            color: #475569;
-            font-size: 7.5pt;
-            line-height: 1.35;
-        }
-
-        .other-comments {
-            font-weight: 400;
-        }
-
-        .received-text {
-            font-weight: 700;
-        }
-
-        .signature-holder {
-            position: absolute;
-            right: 13mm;
-            bottom: 21mm;
-        }
-
-        .signature-line {
-            width: 62mm;
-            height: 16mm;
-            margin: 0;
-            color: #475569;
-            font-size: 7.5pt;
-        }
-
-        .signature-line::before {
-            border-bottom: 0.7pt solid #172033;
-        }
-
-        .footer {
-            position: absolute;
-            bottom: 8mm;
-            left: 13mm;
-            right: 13mm;
-            padding-top: 2mm;
-            border-top: 0.5pt solid #cbd5e1;
-            color: #64748b;
-            font-family: 'Century Gothic', Arial, sans-serif;
-            font-size: 6.2pt;
-            line-height: 1.25;
-            text-align: left;
-            z-index: 100;
-            overflow-wrap: anywhere;
-        }
-
-        .page-number {
-            position: absolute;
-            bottom: 8mm;
-            right: 13mm;
-            margin-right: 0;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 6.2pt;
-            color: #64748b;
-            z-index: 101;
-        }
-
-        @media print {
-            @page {
-                size: A4;
-                margin: 0;
-            }
-
-            html,
-            body {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 210mm;
-                background: white;
-            }
-
-            .page {
-                width: 210mm;
-                height: 297mm;
-                min-height: 297mm;
-                padding: 10mm 13mm 18mm;
-                page-break-after: always;
-                break-after: page;
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-
-            .page:last-child {
-                page-break-after: auto;
-                break-after: auto;
-            }
-        }
-    </style>
-</head>
-<body>
-    ${pagesContent}
-    
-    <script>
-        // Calculate total pages and update page numbers
-        function updatePageNumbers() {
-            const pages = document.querySelectorAll('.page');
-            const totalPages = pages.length;
-            
-            pages.forEach((page, index) => {
-                const pageNum = index + 1;
-                let pageNumberDiv = page.querySelector('.page-number');
-                if (!pageNumberDiv) {
-                    pageNumberDiv = document.createElement('div');
-                    pageNumberDiv.className = 'page-number';
-                    page.appendChild(pageNumberDiv);
-                }
-                pageNumberDiv.textContent = 'Page ' + pageNum + ' of ' + totalPages;
-            });
-        }
-        
-        // Wait for content to load before updating page numbers
-        setTimeout(() => {
-            updatePageNumbers();
-        }, 100);
-    </script>
-</body>
-</html>`;
-    
-    doWindow.document.write(template);
-    doWindow.document.close();
-    
-    // Add print functionality
-    setTimeout(() => {
-        doWindow.focus();
-        doWindow.print();
-    }, 1000);
-    
-    showNotification('success', 'PDF delivery order generated successfully');
-}
-
-function deliveryOrderPdfThemeColor() {
-    const value = String(pdfSettings?.themeColor || '').trim();
-    return /^#[0-9a-f]{6}$/i.test(value) ? value : '#0f766e';
-}
-
-function renderDeliveryOrderLetterheadHtml() {
-    const safe = value => escapeHtml(String(value ?? ''));
-    const logoUrl = getPdfLogoUrl();
-    const letterheadEnabled = pdfSettings?.letterheadEnabled !== false;
-    if (!letterheadEnabled) {
-        return logoUrl ? `
-            <div class="do-letterhead">
-                <div class="do-letterhead-brand"><img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo"></div>
-            </div>
-        ` : '';
-    }
-    const companyName = String(pdfSettings?.companyName || '').trim();
-    const customLines = String(pdfSettings?.letterheadText || '')
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(Boolean);
-    const fallbackLines = [
-        pdfSettings?.registrationNumber ? `UEN / Reg No: ${pdfSettings.registrationNumber}` : '',
-        pdfSettings?.billingAddress || '',
-        [pdfSettings?.phone, pdfSettings?.email, pdfSettings?.website].filter(Boolean).join(' | ')
-    ].filter(Boolean);
-    const detailLines = (customLines.length ? customLines : fallbackLines)
-        .filter(line => !companyName || line.toLocaleLowerCase() !== companyName.toLocaleLowerCase())
-        .slice(0, 4);
-    const brandHtml = logoUrl
-        ? `<img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo">`
-        : `<div class="do-wordmark">${safe(companyName || 'Delivery Order')}</div>`;
-
-    return `
-        <div class="do-letterhead">
-            <div class="do-letterhead-brand">${brandHtml}</div>
-            <div class="do-letterhead-details">
-                ${logoUrl && companyName ? `<strong>${safe(companyName)}</strong>` : ''}
-                ${detailLines.map(line => `<div>${safe(line)}</div>`).join('')}
-            </div>
-        </div>
-    `;
-}
-
-function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate) {
-    const safe = value => escapeHtml(String(value ?? ''));
-    const addressLines = [
-        data.clientCompany,
-        data.deliveryAddress1,
-        data.deliveryAddress2,
-        data.deliveryAddress3
-    ].filter(value => String(value || '').trim());
-
-    return `
-        ${renderDeliveryOrderLetterheadHtml()}
-        <div class="do-title-row">
-            <div class="delivery-order-title">DELIVERY ORDER</div>
-            <div class="do-number">${safe(data.doNumber)}</div>
-        </div>
-        <div class="do-recipient-panel">
-            <div class="do-recipient">
-                <span class="do-label">Deliver to</span>
-                <strong>${safe(data.clientName)}</strong>
-                <div class="do-recipient-copy">${addressLines.map(line => safe(line)).join('<br>') || '-'}</div>
-            </div>
-            <div class="do-document-meta">
-                <div class="do-meta-row"><span>Date of delivery/collection</span><strong>${safe(formattedDate)}</strong></div>
-                <div class="do-meta-row"><span>Phone no.</span><strong>${safe(data.clientPhone || 'N/A')}</strong></div>
-            </div>
-        </div>
-        <div class="do-job-band">
-            <div><strong>Job:</strong> ${safe(data.jobTitle || '-')}</div>
-            <div><strong>Location:</strong> ${safe(data.jobLocation || '-')}</div>
-        </div>
-    `;
-}
-
-function deliveryOrderDepartmentHeaderLabel(department) {
-    const value = String(department || '').trim();
-    const standardNames = {
-        audio: 'Audio Department',
-        lighting: 'Lighting Department',
-        video: 'Video Department',
-        misc: 'Miscellaneous'
-    };
-    return standardNames[value.toLocaleLowerCase()] || value || 'Miscellaneous';
-}
-
-function generatePagesContent(data, formattedDate) {
-    const departments = groupItemsByDepartment(data.event);
-    const documentHeaderHtml = renderDeliveryOrderDocumentHeaderHtml(data, formattedDate);
-    const footerHtml = renderPdfFooterHtml();
-    const themeColor = deliveryOrderPdfThemeColor();
-    const tableColumnsHtml = '<colgroup><col><col class="quantity-column"></colgroup>';
-
-    // A4 is 210mm x 297mm.
-    // Page padding is 10mm top, 13mm left/right and 18mm bottom.
-    // Normal pages reserve the measured footer height.
-    // Last page reserves comments + signature + footer space.
-    const PAGE_BODY_HEIGHT_MM = 269;
-    const LAST_RESERVED_MM = 55;
-
-    const FOOTER_HTML = `
-        <div class="footer">
-            ${footerHtml}
-        </div>
-    `;
-
-    const safe = (value) => escapeHtml(String(value ?? ''));
-
-    const renderAssetIdsLine = (assetIds) => {
-        if (!assetIds || assetIds.length === 0) return '';
-
-        return `
-            <br>
-            <span class="asset-id-line">
-                Asset IDs: ${assetIds.map(id => safe(id)).join(', ')}
-            </span>
-        `;
-    };
-
-    const renderItemRow = (record) => {
-        return `
-            <tr>
-                <td>
-                    ${safe(record.item.description)}
-                    ${renderAssetIdsLine(record.item.assetIds)}
-                </td>
-                <td class="quantity-col">${safe(record.item.quantity)}</td>
-            </tr>
-        `;
-    };
-
-    const renderDeptRow = (dept) => {
-        return `
-            <tr>
-                <td class="department-header">${safe(deliveryOrderDepartmentHeaderLabel(dept))}</td>
-                <td class="department-header quantity-col" aria-hidden="true"></td>
-            </tr>
-        `;
-    };
-
-    // Hidden measuring box: lets the browser calculate real row heights
-    // instead of guessing based on row count.
-    const measureBox = document.createElement('div');
-    measureBox.id = '__doMeasureBox';
-    measureBox.style.cssText = `
-        position:absolute;
-        left:-10000px;
-        top:0;
-        visibility:hidden;
-        width:184mm;
-        font-family:'Century Gothic', sans-serif;
-        font-size:9pt;
-        line-height:1.2;
-        background:white;
-        z-index:-1;
-    `;
-
-    measureBox.innerHTML = `
-        <style>
-            #__doMeasureBox * {
-                box-sizing: border-box;
-            }
-
-            #__doMeasureBox .do-logo-row {
-                display: flex;
-                justify-content: flex-end;
-                margin-bottom: 7px;
-                height: 39px;
-            }
-
-            #__doMeasureBox .do-logo-row img {
-                height: 39px;
-                width: auto;
-                object-fit: contain;
-            }
-
-            #__doMeasureBox .header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 25px;
-            }
-
-            #__doMeasureBox .header-left {
-                flex: 1;
-            }
-
-            #__doMeasureBox .header-right {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 5px;
-                margin-right: 0;
-                margin-top: -5px;
-                margin-bottom: 2px;
-            }
-
-            #__doMeasureBox .delivery-order-title {
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 14pt;
-                font-weight: bold;
-                color: black;
-                margin-bottom: 5px;
-                text-align: right;
-                margin-top: 5px;
-            }
-
-            #__doMeasureBox .do-number,
-            #__doMeasureBox .deliver-to,
-            #__doMeasureBox .client-info,
-            #__doMeasureBox .client-phone {
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                color: black;
-                font-weight: bold;
-            }
-
-            #__doMeasureBox .items-table,
-            #__doMeasureBox .do-measure-table {
-                width: 100%;
-                border-collapse: collapse;
-                border: 2px solid black;
-                margin-bottom: 0;
-            }
-
-            #__doMeasureBox .items-table th,
-            #__doMeasureBox .do-measure-table th {
-                background-color: #333;
-                color: white;
-                padding: 8px;
-                text-align: left;
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                font-weight: bold;
-                border: 1px solid #333;
-            }
-
-            #__doMeasureBox .items-table td,
-            #__doMeasureBox .do-measure-table td {
-                padding: 6px 8px;
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                color: black;
-                vertical-align: top;
-                word-break: break-word;
-                overflow-wrap: anywhere;
-            }
-
-            #__doMeasureBox .items-table td:first-child,
-            #__doMeasureBox .do-measure-table td:first-child {
-                border-right: 1px solid black;
-                border-left: 1px solid black;
-            }
-
-            #__doMeasureBox .items-table td:last-child,
-            #__doMeasureBox .do-measure-table td:last-child {
-                border-right: 1px solid black;
-            }
-
-            #__doMeasureBox .job-title {
-                font-weight: bold;
-                background-color: #f5f5f5;
-            }
-
-            #__doMeasureBox .department-header {
-                font-weight: bold;
-                color: black;
-                background-color: #f0f0f0;
-            }
-
-            #__doMeasureBox .quantity-col {
-                text-align: center;
-                width: 80px;
-            }
-
-            #__doMeasureBox .footer-measure {
-                width: 100%;
-                text-align: center;
-                font-family: 'Calibri', sans-serif;
-                font-size: 7pt;
-                line-height: 1.2;
-                overflow-wrap: anywhere;
-            }
-
-            #__doMeasureBox .do-letterhead { min-height:15mm;display:flex;justify-content:space-between;align-items:flex-start;gap:12mm;margin-bottom:8mm; }
-            #__doMeasureBox .do-letterhead-brand { flex:0 0 auto;min-width:40mm; }
-            #__doMeasureBox .do-letterhead-brand img { display:block;width:auto;max-width:42mm;height:auto;max-height:14mm;object-fit:contain; }
-            #__doMeasureBox .do-wordmark { max-width:75mm;color:#172033;font-size:15pt;line-height:1.05;font-weight:700; }
-            #__doMeasureBox .do-letterhead-details { max-width:88mm;color:#64748b;font-size:6.5pt;line-height:1.35;text-align:right; }
-            #__doMeasureBox .do-letterhead-details strong { display:block;margin-bottom:1mm;color:#172033;font-size:8.5pt;line-height:1.2; }
-            #__doMeasureBox .do-title-row { display:flex;align-items:flex-end;justify-content:space-between;gap:10mm;padding-bottom:3mm;border-bottom:.6pt solid #cbd5e1; }
-            #__doMeasureBox .delivery-order-title { margin:0;color:#172033;font-size:20pt;line-height:1;text-align:left; }
-            #__doMeasureBox .do-number { margin:0;color:${themeColor};font-size:12pt;line-height:1.1;text-align:right; }
-            #__doMeasureBox .do-recipient-panel { display:grid;grid-template-columns:minmax(0,1.4fr) minmax(52mm,.75fr);margin-top:5mm;border:.5pt solid #cbd5e1; }
-            #__doMeasureBox .do-recipient,#__doMeasureBox .do-document-meta { min-height:0;padding:3.5mm 5mm; }
-            #__doMeasureBox .do-document-meta { border-left:.5pt solid #cbd5e1; }
-            #__doMeasureBox .do-label { display:block;margin-bottom:1.2mm;color:#64748b;font-size:7pt;font-weight:700;text-transform:uppercase; }
-            #__doMeasureBox .do-recipient strong { display:block;margin-bottom:.5mm;color:#172033;font-size:9pt; }
-            #__doMeasureBox .do-recipient-copy { color:#334155;font-size:8pt;line-height:1.4; }
-            #__doMeasureBox .do-meta-row { display:grid;grid-template-columns:30mm minmax(0,1fr);gap:3mm;margin-bottom:1mm;font-size:8pt; }
-            #__doMeasureBox .do-meta-row:last-child { margin-bottom:0; }
-            #__doMeasureBox .do-meta-row span { color:#64748b;font-weight:700; }
-            #__doMeasureBox .do-meta-row strong { color:#172033;font-weight:400; }
-            #__doMeasureBox .do-job-band { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8mm;margin:4mm 0 5mm;padding:3.5mm 5mm;border:.5pt solid #cbd5e1;background:#f1f5f9;color:#334155;font-size:8pt; }
-            #__doMeasureBox .do-job-band strong { color:#172033; }
-            #__doMeasureBox .items-table,#__doMeasureBox .do-measure-table { width:100%;table-layout:fixed;border-collapse:collapse;border:.5pt solid #cbd5e1;margin:0; }
-            #__doMeasureBox .items-table th { padding:2mm 2.7mm;border:0;background:${themeColor};color:#fff;font-size:7pt; }
-            #__doMeasureBox .items-table th:last-child { border-left:.5pt solid rgba(255,255,255,.45);text-align:right; }
-            #__doMeasureBox .items-table td,#__doMeasureBox .do-measure-table td { padding:1.35mm 2.7mm;border:0;border-bottom:.35pt solid #e2e8f0;color:#172033;font-size:8pt;line-height:1.2;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
-            #__doMeasureBox .department-header { padding:1.5mm 2.7mm!important;border-top:.5pt solid #cbd5e1!important;border-bottom:.5pt solid #cbd5e1!important;background:#f1f5f9;color:#172033;font-size:7.2pt!important;text-transform:uppercase; }
-            #__doMeasureBox .quantity-col { width:22mm;border-left:.5pt solid #cbd5e1!important;text-align:right; }
-            #__doMeasureBox .quantity-column { width:22mm; }
-            #__doMeasureBox .asset-id-line { display:block;margin-top:.5mm;color:#64748b;font-size:6.5pt;font-style:normal; }
-            #__doMeasureBox .footer-measure { width:100%;color:#64748b;font-size:6.2pt;line-height:1.25;text-align:left;overflow-wrap:anywhere; }
-        </style>
-
-        <div id="__doBaseMeasure">
-            ${documentHeaderHtml}
-            <table class="items-table">
-                ${tableColumnsHtml}
-                <thead>
-                    <tr>
-                        <th class="description-header">DESCRIPTION</th>
-                        <th class="quantity-header">QUANTITY</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <table class="do-measure-table">
-            ${tableColumnsHtml}
-            <tbody id="__doMeasureBody"></tbody>
-        </table>
-
-        <div id="__doFooterMeasure" class="footer-measure">${footerHtml}</div>
-    `;
-
-    const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 184);
-
-    const measureBody = measureBox.querySelector('#__doMeasureBody');
-    const baseHeight = normaliseMeasuredHeight(
-        measureBox.querySelector('#__doBaseMeasure').getBoundingClientRect().height
-    );
-    const footerHeight = normaliseMeasuredHeight(
-        measureBox.querySelector('#__doFooterMeasure')?.getBoundingClientRect().height || 0
-    );
-    const normalReservedMm = pdfFooterReserveMm({
-        pageFlowHeightMm: PAGE_BODY_HEIGHT_MM,
-        topPaddingMm: 10,
-        footerBottomMm: 8
-    }, footerHeight);
-
-    const normalPageRowBudget = Math.max(
-        50,
-        pdfMmToPx(PAGE_BODY_HEIGHT_MM - normalReservedMm) - baseHeight
-    );
-
-    const lastPageRowBudget = Math.max(
-        50,
-        pdfMmToPx(PAGE_BODY_HEIGHT_MM - Math.max(LAST_RESERVED_MM, normalReservedMm)) - baseHeight
-    );
-
-    function measureRow(rowHtml) {
-        measureBody.innerHTML = rowHtml;
-        const row = measureBody.querySelector('tr');
-        return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
-    }
-
-    const deptHeights = {};
-    const records = [];
-
-    Object.keys(departments).forEach(dept => {
-        const deptItems = departments[dept] || [];
-        if (deptItems.length === 0) return;
-
-        deptHeights[dept] = measureRow(renderDeptRow(dept));
-
-        deptItems.forEach(item => {
-            const assetIds = data.showAssetIds
-                ? getAssetIdsByItem(data.event, item, dept)
-                : [];
-
-            const record = {
-                dept,
-                item: {
-                    ...item,
-                    assetIds
-                },
-                height: 0
-            };
-
-            record.height = measureRow(renderItemRow(record));
-            records.push(record);
-        });
-    });
-
-    measureBox.remove();
-
-    function costToAdd(page, record) {
-        const needsDeptHeader = page.lastDept !== record.dept;
-        return (needsDeptHeader ? deptHeights[record.dept] : 0) + record.height;
-    }
-
-    function canFitRemaining(startIndex, budget) {
-        const testPage = {
-            records: [],
-            height: 0,
-            lastDept: null
-        };
-
-        for (let i = startIndex; i < records.length; i++) {
-            const record = records[i];
-            const cost = costToAdd(testPage, record);
-
-            if (testPage.height + cost > budget) {
-                return false;
-            }
-
-            testPage.records.push(record);
-            testPage.height += cost;
-            testPage.lastDept = record.dept;
-        }
-
-        return true;
-    }
-
-    function fillPage(startIndex, budget) {
-        const page = {
-            records: [],
-            height: 0,
-            lastDept: null
-        };
-
-        let i = startIndex;
-
-        while (i < records.length) {
-            const record = records[i];
-            const cost = costToAdd(page, record);
-
-            if (page.records.length > 0 && page.height + cost > budget) {
-                break;
-            }
-
-            // If one single row is taller than the available area,
-            // keep it on the page instead of creating an infinite loop.
-            if (page.records.length === 0 && cost > budget) {
-                page.records.push(record);
-                page.height += cost;
-                page.lastDept = record.dept;
-                i++;
-                break;
-            }
-
-            page.records.push(record);
-            page.height += cost;
-            page.lastDept = record.dept;
-            i++;
-        }
-
-        return {
-            page,
-            nextIndex: i
-        };
-    }
-
-    const pages = [];
-
-    if (records.length === 0) {
-        pages.push({
-            records: [],
-            height: 0,
-            lastDept: null
-        });
-    } else {
-        let index = 0;
-
-        while (index < records.length) {
-            const remainingCanBeLastPage = canFitRemaining(index, lastPageRowBudget);
-            const budget = remainingCanBeLastPage ? lastPageRowBudget : normalPageRowBudget;
-
-            const result = fillPage(index, budget);
-            pages.push(result.page);
-            index = result.nextIndex;
-        }
-    }
-
-    let pagesHtml = '';
-    const totalPages = pages.length;
-
-    pages.forEach((page, pageIndex) => {
-        const isLastPage = pageIndex === totalPages - 1;
-        const pageNumber = pageIndex + 1;
-
-        pagesHtml += `
-            <div class="page">
-                ${documentHeaderHtml}
-                <table class="items-table">
-                    ${tableColumnsHtml}
-                    <thead>
-                        <tr>
-                            <th class="description-header">DESCRIPTION</th>
-                            <th class="quantity-header">QUANTITY</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        let currentDept = null;
-
-        page.records.forEach(record => {
-            if (record.dept !== currentDept) {
-                pagesHtml += renderDeptRow(record.dept);
-                currentDept = record.dept;
-            }
-
-            pagesHtml += renderItemRow(record);
-        });
-
-        pagesHtml += `
-                    </tbody>
-                </table>
-        `;
-
-        if (isLastPage) {
-            pagesHtml += `
-                <div class="comments-section">
-                    <div class="other-comments"><strong>Other comments:</strong> ${safe(data.additionalComments || '-')}</div>
-                    <div class="received-text">Received in good order & condition</div>
-                </div>
-
-                <div class="signature-holder">
-                    <div class="signature-line">
-                        Company's Stamp & Signature
-                    </div>
-                </div>
-            `;
-        }
-
-        pagesHtml += `
-                ${FOOTER_HTML}
-                <div class="page-number">Page ${pageNumber} of ${totalPages}</div>
-            </div>
-        `;
-    });
-
-    return pagesHtml;
-}
-
-// Delivery order generation helpers
-async function ensureAssetsLoaded() {
-    if (!assets || assets.length === 0) {
-        try {
-            const response = await apiCall('/api/assets');
-            if (response.success) {
-                assets = response.data;
-            } else {
-                console.error('Failed to load assets:', response);
-            }
-        } catch (error) {
-            console.error('Error loading assets:', error);
-        }
-    }
-}
-
-// Delivery order item ordering
-function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', subprojectId = '') {
-  const state = getDoEdits(eventId);
-
-  const event = currentDeliveryOrderEvent
-    || events.find(e => e.id === eventId || e.event_id === eventId);
-  if (!event) return false;
-
-  const depts = groupItemsByDepartment(event, subprojectId || deliveryOrderActiveSubprojectId(event));
-  const items = depts[dept] || [];
-
-  if (fromIndex < 0 || toIndex < 0 ||
-      fromIndex >= items.length || toIndex >= items.length) {
-    return false;
-  }
-
-  const orderingKey = deliveryOrderOrderingKey(subprojectId, dept);
-  const ordering = [...(state.ordering[orderingKey] || items.map(item => item.key))];
-  const [movedKey] = ordering.splice(fromIndex, 1);
-  let insertionIndex = toIndex + (position === 'after' ? 1 : 0);
-  if (fromIndex < insertionIndex) insertionIndex -= 1;
-  ordering.splice(Math.max(0, Math.min(insertionIndex, ordering.length)), 0, movedKey);
-  if (ordering.every((key, index) => key === items[index]?.key)) return false;
-
-  state.ordering[orderingKey] = ordering;
-  saveDoEdits(eventId, state);
-  return true;
-}
-
-function applyDoOrdering(items, dept, eventId, subprojectId = '') {
-  const state = getDoEdits(eventId);
-  const ordering = state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)];
-  if (!ordering) return items;
-  const orderedItems = [];
-  const itemsMap = new Map(items.map(item => [item.key, item]));
-  ordering.forEach(key => {
-    const item = itemsMap.get(key);
-    if (item) {
-      orderedItems.push(item);
-      itemsMap.delete(key);
-    }
-  });
-  itemsMap.forEach(item => orderedItems.push(item));
-  return orderedItems;
-}
-
-function setupDoItemDragHandlers(previewContainer, eventId) {
-  let draggedIndex = null;
-  let draggedDept = null;
-  let draggedSubprojectId = '';
-
-  previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
-    row.addEventListener('dragstart', (e) => {
-      draggedIndex = Number(row.dataset.index);
-      draggedDept = row.dataset.dept;
-      draggedSubprojectId = row.dataset.subprojectId || '';
-      row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('application/x-showbase-delivery-order-line', String(draggedIndex));
-    });
-
-    row.addEventListener('dragend', () => {
-      row.classList.remove('dragging');
-      draggedIndex = null;
-      draggedDept = null;
-      draggedSubprojectId = '';
-      previewContainer.querySelectorAll('.do-item-row').forEach(target => {
-        target.classList.remove('drag-over-before', 'drag-over-after');
-        delete target.dataset.dropPosition;
-      });
-    });
-
-    row.addEventListener('dragover', (e) => {
-      if (row.dataset.dept !== draggedDept || row.dataset.subprojectId !== draggedSubprojectId) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const position = showbaseLineWorkspace.dropPosition(e);
-      row.dataset.dropPosition = position;
-      row.classList.toggle('drag-over-before', position === 'before');
-      row.classList.toggle('drag-over-after', position === 'after');
-    });
-
-    row.addEventListener('dragleave', () => {
-      row.classList.remove('drag-over-before', 'drag-over-after');
-      delete row.dataset.dropPosition;
-    });
-
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const targetIndex = Number(row.dataset.index);
-      const position = row.dataset.dropPosition || showbaseLineWorkspace.dropPosition(e);
-      row.classList.remove('drag-over-before', 'drag-over-after');
-      if (row.dataset.dept !== draggedDept || row.dataset.subprojectId !== draggedSubprojectId) return;
-      if (!reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex, position, draggedSubprojectId)) return;
-      populateDeliveryItemsPreview(currentDeliveryOrderEvent);
-    });
-  });
-}
-
-function getDeliveryOrderAssetCatalog() {
-  const grouped = new Map();
-  (assets || []).forEach(asset => {
-    if (!asset || isCustomAssetId(asset.id)) return;
-    const department = departmentCodeToDoName(asset.department || 'UN');
-    const brand = String(asset.brand || '').trim();
-    const model = String(asset.model || asset.name || '').trim();
-    const description = String(asset.description || '').trim();
-    const label = [brand, model].filter(Boolean).join(' ') || description || String(asset.id || 'Asset');
-    const detail = description && description.toLowerCase() !== label.toLowerCase() ? description : '';
-    const key = [department, brand, model, description].map(value => value.toLowerCase()).join('|');
-    if (!grouped.has(key)) grouped.set(key, { department, brand, model, description, label, detail, tags: [] });
-    grouped.get(key).tags = normalizeAssetTags([
-      ...grouped.get(key).tags,
-      ...normalizeAssetTags(asset.tags),
-    ]);
-  });
-  return Array.from(grouped.values()).sort((a, b) =>
-    a.department.localeCompare(b.department) || a.label.localeCompare(b.label, undefined, { numeric: true })
-  );
-}
-
-function deliveryOrderDepartmentOptions(selected, names = []) {
-  const options = new Set([...getDefaultDoDepartments(), ...names, selected].filter(Boolean));
-  return Array.from(options).sort((a, b) => a.localeCompare(b)).map(name =>
-    `<option value="${escapeHtmlAttr(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`
-  ).join('');
-}
-
-function removeDeliveryOrderItem(eventId, { key, kind, customId }) {
-  const state = getDoEdits(eventId);
-  if (kind === 'do-custom') {
-    const stableId = customId || String(key || '').replace(/^DOCUSTOM\|/, '');
-    let removed = false;
-    Object.keys(state.custom || {}).forEach(department => {
-      const before = state.custom[department].length;
-      state.custom[department] = state.custom[department].filter(item => item.id !== stableId);
-      if (state.custom[department].length !== before) removed = true;
-    });
-    if (!removed) return false;
-  } else if (key) {
-    state.deleted[key] = true;
-  } else {
-    return false;
-  }
-  saveDoEdits(eventId, state);
-  return true;
-}
-
-function removeDeliveryOrderRow(button) {
-  const row = button?.closest('.do-item-row');
-  const event = currentDeliveryOrderEvent;
-  if (!row || !event) {
-    showNotification('error', 'Could not identify that delivery order line.');
-    return false;
-  }
-  const eventId = event.id || event.event_id || window.currentEventId || '0';
-  const removed = removeDeliveryOrderItem(eventId, {
-    key: row.getAttribute('data-key'),
-    kind: row.getAttribute('data-kind'),
-    customId: row.getAttribute('data-custom-id')
-  });
-  if (!removed) {
-    showNotification('error', 'Could not find that delivery order line. Please reopen the editor and try again.');
-    return false;
-  }
-  showNotification('success', 'Item removed from the delivery order');
-  populateDeliveryItemsPreview(event);
-  return false;
-}
-
-// Delivery order preview and inline editing
-function deliveryOrderRenderCatalogResults() {
-  const search = document.getElementById('doCatalogSearch');
-  const results = document.getElementById('doCatalogResults');
-  if (!search || !results) return;
-  const query = search.value.trim().toLowerCase();
-  deliveryOrderEditorState.selectedCatalogItem = null;
-  if (!query) {
-    results.innerHTML = '';
-    return;
-  }
-  deliveryOrderEditorState.catalogMatches = deliveryOrderEditorState.catalog.filter(item =>
-    [item.label, item.detail, item.brand, item.model, item.department, ...(item.tags || [])]
-      .join(' ').toLowerCase().includes(query)
-  ).slice(0, 12);
-  results.innerHTML = deliveryOrderEditorState.catalogMatches.map((item, index) => `
-    <button type="button" class="do-catalog-result" onclick="deliveryOrderSelectCatalogItem(${index})">
-      <strong>${escapeHtml(item.label)}</strong>
-      <span>${escapeHtml([item.detail, item.department].filter(Boolean).join(' / '))}</span>
-    </button>
-  `).join('') || '<div class="do-empty-dept">No inventory match. This can be added as a custom DO item.</div>';
-}
-
-function deliveryOrderSelectCatalogItem(index) {
-  const item = deliveryOrderEditorState.catalogMatches[Number(index)];
-  if (!item) return;
-  deliveryOrderEditorState.selectedCatalogItem = item;
-  const search = document.getElementById('doCatalogSearch');
-  const category = document.getElementById('doCatalogDepartment');
-  const results = document.getElementById('doCatalogResults');
-  if (search) search.value = [item.label, item.detail].filter(Boolean).join(' - ');
-  if (category) category.value = item.department;
-  if (results) results.innerHTML = '';
-}
-
-function deliveryOrderRenderDepartmentSuggestions() {
-  const input = document.getElementById('doCatalogDepartment');
-  const results = document.getElementById('doCatalogDepartmentResults');
-  if (!input || !results || !currentDeliveryOrderEvent) return;
-  const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
-  const grouped = groupItemsByDepartment(
-    currentDeliveryOrderEvent,
-    deliveryOrderActiveSubprojectId(currentDeliveryOrderEvent)
-  );
-  const query = input.value.trim().toLowerCase();
-  const names = getDoDepartmentList(grouped, getDoEdits(eventId))
-    .filter(name => !query || name.toLowerCase().includes(query));
-  results.innerHTML = names.map(name => `
-    <button type="button" onclick="deliveryOrderSelectDepartment('${escapeHtmlAttr(name)}')">${escapeHtml(name)}</button>
-  `).join('');
-}
-
-function deliveryOrderSelectDepartment(name) {
-  const input = document.getElementById('doCatalogDepartment');
-  const results = document.getElementById('doCatalogDepartmentResults');
-  if (input) input.value = name;
-  if (results) results.innerHTML = '';
-}
-
-function deliveryOrderAddCatalogItem() {
-  const event = currentDeliveryOrderEvent;
-  if (!event) return;
-  const eventId = event.id || event.event_id || '0';
-  const search = document.getElementById('doCatalogSearch');
-  const category = document.getElementById('doCatalogDepartment');
-  const quantityInput = document.getElementById('doCatalogQuantity');
-  const description = search?.value.trim();
-  if (!description) {
-    showNotification('warning', 'Enter or select an asset first');
-    search?.focus();
-    return;
-  }
-  const selected = deliveryOrderEditorState.selectedCatalogItem;
-  const department = category?.value.trim() || selected?.department || 'MISC';
-  const state = getDoEdits(eventId);
-  state.custom[department] ||= [];
-  state.custom[department].push({
-    id: makeDoCustomItemId(),
-    description,
-    quantity: Math.max(1, Number(quantityInput?.value) || 1),
-    brand: selected?.brand || '',
-    model: selected?.model || '',
-    subprojectId: deliveryOrderActiveSubprojectId(event)
-  });
-  saveDoEdits(eventId, state);
-  showNotification('success', 'Item added to the delivery order');
-  populateDeliveryItemsPreview(event);
-}
-
-function deliveryOrderToggleCategory(encodedCategory) {
-  const category = decodeURIComponent(encodedCategory);
-  const subprojectId = deliveryOrderActiveSubprojectId();
-  const eventId = currentDeliveryOrderEvent?.id || currentDeliveryOrderEvent?.event_id || '0';
-  const key = `${eventId}::${subprojectId}::${category}`;
-  const collapsed = !deliveryOrderEditorState.collapsedCategories[key];
-  deliveryOrderEditorState.collapsedCategories[key] = collapsed;
-  const section = document.querySelector(`[data-do-category="${CSS.escape(encodedCategory)}"]`);
-  showbaseLineWorkspace.setCategoryCollapsed(section, collapsed);
-}
-
-async function populateDeliveryItemsPreview(event) {
-  const previewContainer = document.getElementById('deliveryItemsPreview');
-  if (!previewContainer) return;
-
-  try {
-    await ensureAssetsLoaded();
-  } catch {}
-
-  currentDeliveryOrderEvent = event;
-  const eventId = event.id || event.event_id || window.currentEventId || '0';
-  const subprojectId = deliveryOrderActiveSubprojectId(event);
-  const edits = getDoEdits(eventId);
-  const depts = groupItemsByDepartment(event, subprojectId);
-  const editMode = !!deliveryOrderEditorState.editMode;
-  const populatedDepartments = Object.values(depts).filter(items => items.length);
-  const lineCount = populatedDepartments.reduce((total, items) => total + items.length, 0);
-  const unitCount = populatedDepartments.reduce((total, items) => (
-    total + items.reduce((subtotal, item) => subtotal + (Number(item.quantity) || 0), 0)
-  ), 0);
-  const escA = value => (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(value) : escapeHtml(value));
-
-  const addRow = editMode ? showbaseLineWorkspace.addRowMarkup({
-    mode: 'delivery-order',
-    className: 'do-catalog-composer',
-    search: {
-      id: 'doCatalogSearch',
-      resultsId: 'doCatalogResults',
-      placeholder: 'Search inventory or enter an item',
-      oninput: 'deliveryOrderRenderCatalogResults()',
-      onkeydown: "if(event.key==='Enter'){event.preventDefault();deliveryOrderAddCatalogItem();}"
-    },
-    category: {
-      id: 'doCatalogDepartment',
-      resultsId: 'doCatalogDepartmentResults',
-      value: 'MISC',
-      placeholder: 'Category',
-      oninput: 'deliveryOrderRenderDepartmentSuggestions()',
-      onfocus: 'deliveryOrderRenderDepartmentSuggestions()',
-      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||'MISC'),120)"
-    },
-    extraMarkup: '<input id="doCatalogQuantity" class="finance-input do-catalog-quantity" type="number" min="1" max="999" value="1" aria-label="Quantity">',
-    addAction: 'deliveryOrderAddCatalogItem()',
-    showGroup: false
-  }) : '';
-
-  const sectionMarkup = (department, items) => {
-    const encodedDepartment = encodeURIComponent(department);
-    const collapseKey = `${eventId}::${subprojectId}::${department}`;
-    const collapsed = !!deliveryOrderEditorState.collapsedCategories[collapseKey];
-    const rows = items.map((item, index) => editMode ? `
-      <tr class="do-item-row do-edit-row" draggable="true"
-          data-key="${escA(item.key)}"
-          data-custom-id="${escA(item.customId || '')}"
-          data-kind="${escA(item.source || '')}"
-          data-dept="${escA(department)}"
-          data-subproject-id="${escA(subprojectId)}"
-          data-index="${index}">
-        <td class="do-item-cell">
-          <div class="do-edit-item">
-            <span class="do-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-            <div class="do-edit-fields">
-              <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item">
-              <select class="do-dept form-input" aria-label="Category">${deliveryOrderDepartmentOptions(department, getDoDepartmentList(depts, edits))}</select>
-            </div>
-          </div>
-        </td>
-        <td class="do-quantity-cell"><input type="number" class="do-qty form-input" value="${escA(item.quantity)}" min="1" max="999"></td>
-        <td class="do-action-cell">
-          <button type="button" class="btn do-save">Save</button>
-          <button type="button" class="btn do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>
-        </td>
-      </tr>
-    ` : `
-      <tr class="do-item-row">
-        <td class="do-item-cell">${escapeHtml(item.description)}</td>
-        <td class="do-quantity-cell"><span class="do-quantity-badge">${escapeHtml(item.quantity)}</span></td>
-      </tr>
-    `).join('');
-
-    const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
-      colspan: editMode ? 3 : 2,
-      className: 'do-category-row',
-      content: `<div class="do-category-heading-main">${showbaseLineWorkspace.categoryToggleMarkup({
-        label: `${department} category`,
-        collapsed,
-        action: `deliveryOrderToggleCategory(${JSON.stringify(encodedDepartment)})`
-      })}<span>${escapeHtml(department)} Department</span></div><span class="do-dept-count">${items.length}</span>`
-    });
-    return `
-      <section class="${showbaseLineWorkspace.categorySectionClass({ className: 'do-department-section', collapsed })}" data-do-category="${escA(encodedDepartment)}">
-        <table class="do-line-table showbase-category-table">
-          <thead>
-            ${categoryHeader}
-            <tr class="do-column-row showbase-category-column-header">
-              <th>Item</th>
-              <th>Quantity</th>
-              ${editMode ? '<th aria-label="Actions"></th>' : ''}
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </section>
-    `;
-  };
-
-  let body = getDoDepartmentList(depts, edits)
-    .filter(department => (depts[department] || []).length)
-    .map(department => sectionMarkup(department, depts[department]))
-    .join('');
-  if (!body) body = '<div class="no-items-message">No event items are assigned to this room.</div>';
-
-  previewContainer.innerHTML = `
-    <div class="do-items-container">
-      <div class="do-toolbar">
-        <div class="do-items-title">
-          <h3>Items</h3>
-          <span>${lineCount} line${lineCount === 1 ? '' : 's'} / ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
-        </div>
-        <div class="do-items-actions">
-          <label class="do-edit-toggle">
-            <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}>
-            <span class="do-toggle-control" aria-hidden="true"></span>
-            <span>Edit</span>
-          </label>
-          <button type="button" class="btn do-reset-button" id="doResetEdits">Reset</button>
-        </div>
-      </div>
-      ${deliveryOrderSubprojectTabsMarkup(event)}
-      ${addRow ? `<div class="do-composer-toolbar">${addRow}</div>` : ''}
-      <div class="do-category-list showbase-category-stack">${body}</div>
-    </div>
-  `;
-
-  document.getElementById('doEditToggle')?.addEventListener('change', eventChange => {
-    deliveryOrderEditorState.editMode = !!eventChange.currentTarget.checked;
-    populateDeliveryItemsPreview(event);
-  });
-  document.getElementById('doResetEdits')?.addEventListener('click', async () => {
-    if (!await showAppConfirm({
-      title: 'Reset Delivery Order',
-      message: 'Reset all Delivery Order item and document changes for this event?',
-      confirmText: 'Reset',
-      cancelText: 'Cancel',
-      variant: 'warning'
-    })) return;
-    clearDoEdits(eventId);
-    deliveryOrderEditorState.activeSubprojectId = '';
-    deliveryOrderEditorState.collapsedCategories = {};
-    showNotification('success', 'Delivery Order changes reset');
-    await populateDeliveryOrderForm(event);
-  });
-
-  deliveryOrderEditorState.catalog = getDeliveryOrderAssetCatalog();
-  previewContainer.querySelectorAll('.do-save').forEach(button => {
-    button.addEventListener('click', () => {
-      const row = button.closest('.do-item-row');
-      const key = row?.dataset.key || '';
-      const kind = row?.dataset.kind || '';
-      const customId = row?.dataset.customId || '';
-      const sourceDepartment = row?.dataset.dept || 'MISC';
-      const targetDepartment = row?.querySelector('.do-dept')?.value || sourceDepartment;
-      const description = row?.querySelector('.do-desc')?.value.trim() || '';
-      const quantity = Math.max(1, Number(row?.querySelector('.do-qty')?.value) || 1);
-      if (!description) {
-        showNotification('warning', 'Item is required');
-        return;
-      }
-
-      const state = getDoEdits(eventId);
-      if (kind.startsWith('do-custom')) {
-        let savedItem = null;
-        Object.keys(state.custom || {}).some(department => {
-          const index = state.custom[department].findIndex(item => item.id === customId);
-          if (index < 0) return false;
-          savedItem = { ...state.custom[department][index], description, quantity };
-          state.custom[department].splice(index, 1);
-          return true;
-        });
-        if (savedItem) {
-          state.custom[targetDepartment] ||= [];
-          state.custom[targetDepartment].push(savedItem);
-        }
-      } else {
-        state.overrides[key] = { description, quantity, department: targetDepartment };
-      }
-      saveDoEdits(eventId, state);
-      showNotification('success', 'Delivery Order item updated');
-      populateDeliveryItemsPreview(event);
-    });
-  });
-
-  if (editMode) setupDoItemDragHandlers(previewContainer, eventId);
-}
-
-function groupItemsByDepartment(event, subprojectId = null) {
-  const departments = {};
-  const ensureDept = (dept) => {
-    const name = departmentCodeToDoName(dept);
-    if (!departments[name]) departments[name] = [];
-    return name;
-  };
-
-  getDefaultDoDepartments().forEach(ensureDept);
-
-  const rooms = eventSubprojects(event);
-  const selectedRooms = rooms.length
-    ? (subprojectId == null
-        ? rooms
-        : rooms.filter(room => String(room.id || 'main') === String(subprojectId || 'main')))
-    : [];
-
-  if (selectedRooms.length) {
-    selectedRooms.forEach(room => {
-      const roomId = String(room.id || 'main');
-      (room.items || []).forEach((line, index) => {
-        const dname = ensureDept(line.departmentCode || line.department || 'UN');
-        const description = line.isCustom
-          ? String(line.description || line.name || 'Custom item').trim()
-          : [line.brand, line.model, line.description].filter(Boolean).join(' ').trim();
-        departments[dname].push({
-          key: `ROOM|${roomId}|${line.lineId || `${dname}|${line.brand || ''}|${line.model || ''}|${index}`}`,
-          description,
-          quantity: String(line.quantity || 0),
-          source: line.isCustom ? 'event-custom' : 'model',
-          subprojectId: roomId
-        });
-      });
-    });
-  } else if (event.modelGroups && Object.keys(event.modelGroups).length) {
-    Object.values(event.modelGroups).forEach(mg => {
-      const dname = ensureDept(mg.department);
-      const baseDesc = `${mg.brand || ''} ${mg.model || ''}${mg.description ? ' - ' + mg.description : ''}`.trim();
-      departments[dname].push({
-        key: makeModelKey(mg),
-        description: baseDesc,
-        quantity: String(mg.requiredQuantity || 0),
-        source: 'model'
-      });
-    });
-  }
-
-  // Legacy events without room requirements may only expose prepared custom markers.
-  const groupedCustom = {};
-  const addCustomToDo = (custom) => {
-    if (!custom) return;
-    const dname = ensureDept(custom.department || 'UN');
-    const desc = custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item');
-    const key = `CUSTOM|${dname}|${custom.type}|${desc}`;
-    if (!groupedCustom[key]) {
-      groupedCustom[key] = {
-        dept: dname,
-        item: {
-          key,
-          description: desc,
-          quantity: 0,
-          source: 'custom-prepared'
-        }
-      };
-    }
-    groupedCustom[key].item.quantity += Number(custom.quantity || 1);
-  };
-
-  const preparedList = event.preparedItems || event.prepared_items || [];
-  if (!rooms.length) preparedList.forEach(id => addCustomToDo(parseCustomAsset(id)));
-
-  if (!rooms.length && event.assetsByDepartment) {
-    Object.values(event.assetsByDepartment).forEach(list => {
-      (list || []).forEach(asset => {
-        const custom = parseCustomAsset(asset.id, asset);
-        if (custom && !preparedList.includes(asset.id)) addCustomToDo(custom);
-      });
-    });
-  }
-
-  Object.values(groupedCustom).forEach(({ dept, item }) => {
-    if (!departments[dept]) departments[dept] = [];
-    departments[dept].push({ ...item, quantity: String(item.quantity) });
-  });
-
-  // These overlays belong only to the DO document; event requirements stay untouched.
-  const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
-  const edits = getDoEdits(eventId, Object.keys(departments));
-
-  const regrouped = {};
-  Object.keys(departments).forEach(d => {
-    departments[d].forEach(item => {
-      if (edits.deleted[item.key]) return;
-      const ov = edits.overrides[item.key];
-      const targetDepartment = ov?.department || d;
-      regrouped[targetDepartment] ||= [];
-      regrouped[targetDepartment].push({
-        ...item,
-        description: ov?.description || item.description,
-        quantity: String(ov?.quantity ?? item.quantity)
-      });
-    });
-  });
-  Object.keys(departments).forEach(department => { departments[department] = []; });
-  Object.entries(regrouped).forEach(([department, items]) => { departments[department] = items; });
-
-  if (edits && edits.custom) {
-    Object.keys(edits.custom).forEach(d => {
-      if (!departments[d]) departments[d] = [];
-      (edits.custom[d] || []).forEach(ci => {
-        const itemSubprojectId = String(ci.subprojectId || 'main');
-        if (subprojectId != null && itemSubprojectId !== String(subprojectId || 'main')) return;
-        departments[d].push({
-          key: `DOCUSTOM|${ci.id}`,
-          customId: ci.id,
-          description: ci.description,
-          quantity: String(ci.quantity || 1),
-          source: 'do-custom',
-          subprojectId: itemSubprojectId
-        });
-      });
-    });
-  }
-
-  getDoDepartmentList(departments, edits).forEach(d => {
-    departments[d] ||= [];
-    departments[d] = applyDoOrdering(departments[d], d, eventId, subprojectId || 'all');
-  });
-
-  return departments;
-}
-
-function getAssetIdsByItem(event, item, department) {
-    const assetIds = [];
-    if (!event.assetsByDepartment || !item || item.source !== 'model') return assetIds;
-
-    const keyParts = String(item.key || '').split('|');
-    if (keyParts.length < 4) return assetIds;
-
-    // makeModelKey format: MG|department|brand|model
-    const deptCodeFromKey = normalizeDepartmentCode(keyParts[1] || getDepartmentCodeForDoName(department));
-    const brand = keyParts[2] || '';
-    const model = keyParts[3] || '';
-
-    const departmentAssets = event.assetsByDepartment[deptCodeFromKey] || [];
-    departmentAssets.forEach(asset => {
-        if (!asset || !asset.id) return;
-        if (asset.isBulk || String(asset.id).startsWith('[BULK]') || isCustomAssetId(asset.id) || String(asset.id).startsWith('[MODEL]')) return;
-        if (asset.status === 'returned') return;
-
-        if (asset.brand === brand && asset.model === model) {
-            assetIds.push(asset.id);
-        }
-    });
-
-    return assetIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
 
 function exportLogs() {
@@ -35589,7 +24551,7 @@ async function initializeApp() {
   try {
     // Set today's date as default for event forms
     const today = new Date().toISOString().split("T")[0];
-    
+
     // Check if elements exist before setting values
     const startDateEl = document.getElementById("eventStartDate");
     const endDateEl = document.getElementById("eventEndDate");
@@ -35601,7 +24563,7 @@ async function initializeApp() {
     // Also set defaults for edit form if it exists
     const editStartDateEl = document.getElementById("editEventStartDate");
     const editEndDateEl = document.getElementById("editEventEndDate");
-    
+
     if (editStartDateEl) editStartDateEl.value = today;
     if (editEndDateEl) editEndDateEl.value = today;
 
@@ -35816,7 +24778,7 @@ async function openClientsManager() {
         <h3 class="modal-title">Known Clients</h3>
         <button class="close-btn" id="kcClose">&times;</button>
       </div>
-      
+
       <div class="modal-body">
         <!-- Client Form -->
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
@@ -35862,7 +24824,7 @@ async function openClientsManager() {
             <label class="form-label">Search Clients</label>
             <input class="form-input" id="kcSearch" placeholder="Search by name, company, phone, or postal code...">
           </div>
-          
+
           <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; max-height: 400px; overflow-y: auto;">
             <table class="table" style="margin: 0;">
               <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 1;">
@@ -35887,17 +24849,17 @@ async function openClientsManager() {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
 
   const close = () => modal.remove();
   modal.querySelector('#kcClose').onclick = close;
-  
+
   // Close on backdrop click
   modal.addEventListener('click', (e) => {
     if (e.target === modal) close();
   });
-  
+
   // Close on Escape key
   document.addEventListener('keydown', function escapeHandler(e) {
     if (e.key === 'Escape') {
@@ -35911,7 +24873,7 @@ async function openClientsManager() {
   async function refreshList(query = '') {
     const list = await fetchClients(query);
     const tbody = modal.querySelector('#kcBody');
-    
+
     if (list.length === 0) {
       tbody.innerHTML = `
         <tr>
@@ -35922,7 +24884,7 @@ async function openClientsManager() {
       `;
       return;
     }
-    
+
     tbody.innerHTML = list.map(c => `
       <tr style="cursor: pointer; transition: background-color 0.2s;" data-name="${escapeHtmlAttr(c.name)}">
         <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; font-weight: 500;">${escapeHtml(c.name)}</td>
@@ -35953,7 +24915,7 @@ async function openClientsManager() {
       tr.onclick = async (e) => {
         // Don't trigger row click if clicking on buttons
         if (e.target.closest('button')) return;
-        
+
         const name = tr.getAttribute('data-name');
         const rec = await fetchClientByName(name);
         if (rec) {
@@ -35982,7 +24944,7 @@ async function openClientsManager() {
         modal.querySelector('#kcPostal').value = rec.postalCode || '';
         modal.querySelector('#kcPhone').value = rec.phone || '';
         modal.querySelector('#kcName').focus();
-        
+
         // Update button text to indicate editing
         modal.querySelector('#kcSave').textContent = 'Update Client';
       };
@@ -35995,12 +24957,12 @@ async function openClientsManager() {
         const name = btn.getAttribute('data-name');
         const ok = await showCustomConfirm('Delete Client', `Are you sure you want to delete client "${name}"? This action cannot be undone.`);
         if (!ok) return;
-        
+
         try {
           const done = await deleteClient(name);
           if (done) {
             showNotification('success', `Deleted client ${name}`);
-            
+
             // If we were editing this one, clear the form
             if (editingName === name) {
               clearClientForm();
@@ -36044,7 +25006,7 @@ async function openClientsManager() {
       postalCode: modal.querySelector('#kcPostal').value.trim(),
       phone: modal.querySelector('#kcPhone').value.trim(),
     };
-    
+
     if (!client.name) {
       showNotification('warning', 'Name is required');
       modal.querySelector('#kcName').focus();
@@ -36060,7 +25022,7 @@ async function openClientsManager() {
         // Rename: create new + offer to delete old
         await saveClient(client);
         const removeOld = await showCustomConfirm(
-          'Replace Client', 
+          'Replace Client',
           `Created new client "${client.name}". Would you like to delete the old client "${editingName}"?`
         );
         if (removeOld) {
@@ -36072,7 +25034,7 @@ async function openClientsManager() {
         await saveClient(client);
         showNotification('success', `Saved ${client.name}`);
       }
-      
+
       clearClientForm();
       await refreshList(modal.querySelector('#kcSearch').value.trim());
     } catch (e) {
@@ -36082,4443 +25044,4 @@ async function openClientsManager() {
 
   // Initial load
   await refreshList('');
-}
-
-// Event list view controls and transfer state
-let transferReturnToOfficeCache = [];
-let transferPanelMode = 'common';
-
-function ensureEventListViewStyles() {
-  if (document.getElementById('event-list-view-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'event-list-view-styles';
-  style.textContent = `
-    .event-view-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-      background: #fff;
-      border: 1px solid #edf0f5;
-      border-radius: 12px;
-      padding: 12px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.04);
-    }
-    .event-view-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
-    .event-view-toggle .btn.active { background: #764ba2; color: white; }
-    .event-list-table-wrap { overflow: auto; border: 1px solid #dfe8e4; border-radius: 8px; background: white; box-shadow:0 3px 12px rgba(15,23,42,.045); }
-    .event-list-table { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; margin: 0; color:#263b35; font-size:10px; }
-    .event-list-table th { position:sticky;top:0;z-index:3;background:#f2f7f5;color:#60736d;font-size:9px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #dfe8e4;text-align:left;white-space:nowrap; }
-    .event-list-table td { padding:6px 9px;border-bottom:2px solid #e8efec;vertical-align:middle;line-height:1.25; }
-    .event-list-table tbody tr { --event-state:#64748b;--event-soft:#f8fafc;background:#fff;transition:background .14s ease; }
-    .event-list-table tbody tr:hover { background:color-mix(in srgb,var(--event-soft) 68%,white); }
-    .event-list-table tbody tr:last-child td { border-bottom:0; }
-    .event-list-table tbody tr td:first-child { border-left:3px solid var(--event-state); }
-    .event-list-id { color:var(--event-state);white-space:nowrap; }
-    .event-list-title { min-width:180px;max-width:310px;color:#1f352f;font-weight:750; }
-    .event-list-location { margin-top:1px!important;color:#71817c!important;font-size:9px!important;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-    .event-list-table .event-assignee-summary { margin-top:2px;gap:4px;font-size:9px;line-height:1.15; }
-    .event-list-table .event-assignee-summary span { font-size:8px; }
-    .event-list-table :is(.event-type-badge,.event-state) { padding:3px 6px;border-radius:4px;font-size:8px; }
-    .event-progress-track { background:#e4ece9;border-radius:999px;height:4px;width:88px;overflow:hidden;margin-top:3px; }
-    .event-progress-bar { background: var(--event-state, #16a34a); height: 100%; transition: width .2s ease; }
-    .event-list-actions-cell { width:1%;white-space:nowrap; }
-    .event-list-table .event-card-controls { gap:4px; }
-    .event-list-table .event-primary-action { min-height:29px;padding:5px 9px;border-radius:5px;font-size:9px; }
-    .event-list-table .event-overflow-button { width:29px;min-height:29px;border-radius:5px;font-size:14px; }
-    .event-list-table .event-card-menu { max-height:min(430px,calc(100vh - 20px));overflow-y:auto;z-index:2000; }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
-      --event-state: #ec407a;
-      --event-soft: #fff0f5;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-planning {
-      --event-state: #6d28d9;
-      --event-soft: #f3efff;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-preparing {
-      --event-state: #0877e8;
-      --event-soft: #edf6ff;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ready {
-      --event-state: #16a34a;
-      --event-soft: #edf9f0;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ongoing,
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-last-day {
-      --event-state: #0b97a4;
-      --event-soft: #edfafa;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-returning {
-      --event-state: #f97316;
-      --event-soft: #fff5ea;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-overdue {
-      --event-state: #ef3340;
-      --event-soft: #fff0f1;
-    }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-closed {
-      --event-state: #64748b;
-      --event-soft: #f1f5f9;
-    }
-    :is(#prepare-section, #return-section) .event-card {
-      border: 1px solid #e5e7eb;
-      border-left: 5px solid var(--event-state, #64748b);
-      background: var(--event-soft, #f1f5f9);
-      color: #111827;
-    }
-    :is(#prepare-section, #return-section) .event-state {
-      background: var(--event-soft, #f1f5f9);
-      color: var(--event-state, #64748b);
-    }
-    :is(#prepare-section, #return-section) .event-card-progress-bar {
-      background: var(--event-state, #16a34a) !important;
-    }
-    .events-workflow-card { container-type: inline-size; }
-    .event-workflow-progress { min-width: 0; gap: 8px; }
-    .event-progress-summary { flex-basis: 82px; min-width: 0; }
-    .event-progress-value { font-size: .95rem; white-space: nowrap; }
-    .event-department-progress { min-width: 0; overflow: hidden; }
-    .event-department-row {
-      grid-template-columns: minmax(0, 42px) minmax(18px, 1fr) max-content;
-      column-gap: 2px;
-      min-width: 0;
-      width: 100%;
-    }
-    .event-department-row > span:first-child {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .event-department-track { width: 100%; min-width: 0; }
-    .event-department-row > span:last-child { white-space: nowrap; }
-    @container (max-width: 360px) {
-      .event-workflow-progress {
-        align-items: flex-start;
-        flex-wrap: wrap;
-        row-gap: 10px;
-      }
-      .event-department-progress {
-        flex: 1 1 100%;
-        width: 100%;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function getEventSortMode(scope) {
-  const idMap = {
-    all: 'allEventsSortSelect',
-    prepare: 'prepareEventsSortSelect',
-    return: 'returnEventsSortSelect'
-  };
-  return document.getElementById(idMap[scope])?.value || 'startDate';
-}
-
-
-function sortEventsForView(list, scope = 'all') {
-  const mode = getEventSortMode(scope);
-  const arr = [...(list || [])];
-  if (mode === 'eventId') {
-    return arr.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-  }
-  return sortEventsStartDateFutureTop(arr);
-}
-
-function eventDateRangeText(event) {
-  const start = parseEventOverviewDate(event.startDate);
-  const end = parseEventOverviewDate(event.endDate);
-  if (!start || !end) {
-    return event.startDate === event.endDate
-      ? formatDate(event.startDate)
-      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-  }
-
-  const startDay = start.getDate();
-  const endDay = end.getDate();
-  const startYear = start.getFullYear();
-  const endYear = end.getFullYear();
-  const sameDay = startYear === endYear
-    && start.getMonth() === end.getMonth()
-    && startDay === endDay;
-  const sameMonth = startYear === endYear && start.getMonth() === end.getMonth();
-  const shortMonth = date => date.toLocaleDateString('en-GB', { month: 'short' });
-  const longMonth = date => date.toLocaleDateString('en-GB', { month: 'long' });
-
-  if (sameDay) return `${startDay} ${shortMonth(start)} ${startYear}`;
-  if (sameMonth) return `${startDay} - ${endDay} ${shortMonth(end)} ${endYear}`;
-  if (startYear === endYear) {
-    return `${startDay} ${longMonth(start)} - ${endDay} ${longMonth(end)} ${endYear}`;
-  }
-  return `${startDay} ${longMonth(start)} ${startYear} - ${endDay} ${longMonth(end)} ${endYear}`;
-}
-
-function eventLocationIconHtml() {
-  return `
-    <svg class="event-location-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"></path>
-      <circle cx="12" cy="9" r="2.3"></circle>
-    </svg>
-  `;
-}
-
-function parseEventOverviewDate(value) {
-  const text = String(value || '').trim();
-  const parts = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (parts) {
-    const parsed = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12, 0, 0, 0);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function eventTagBadgeHtml(event) {
-  const type = overviewEventType(event);
-  return `<span class="event-type-badge ${type === 'dry hire' ? 'dry-hire' : ''}">${type === 'dry hire' ? 'Dry Hire' : 'Events'}</span>`;
-}
-
-function getEventWorkflowPalette(state) {
-  const palettes = {
-    New: { main: '#ec407a', soft: '#fff0f5' },
-    Planning: { main: '#6d28d9', soft: '#f3efff' },
-    Preparing: { main: '#0877e8', soft: '#edf6ff' },
-    Ready: { main: '#16a34a', soft: '#edf9f0' },
-    Ongoing: { main: '#0b97a4', soft: '#edfafa' },
-    'Last Day': { main: '#0b97a4', soft: '#edfafa' },
-    Returning: { main: '#f97316', soft: '#fff5ea' },
-    'Pending Closure': { main: '#334155', soft: '#e2e8f0' },
-    Overdue: { main: '#ef3340', soft: '#fff0f1' },
-    Closed: { main: '#64748b', soft: '#f1f5f9' }
-  };
-  return palettes[state] || palettes.Closed;
-}
-
-function eventStateBadgeHtml(event, displayState = null) {
-  const state = displayState || event.state || '';
-  const palette = getEventWorkflowPalette(state);
-  return `<span class="event-state ${getEventStateClass(state)}" style="background:${palette.soft};color:${palette.main};">${escapeHtml(eventStateDisplayLabel(state))}</span>`;
-}
-
-function renderProgressCell(done, total) {
-  const safeTotal = Math.max(Number(total || 0), 0);
-  const safeDone = Math.max(Number(done || 0), 0);
-  const pct = safeTotal > 0 ? Math.min(100, Math.round((safeDone / safeTotal) * 100)) : 0;
-  return `
-    <div style="white-space:nowrap;">${safeDone}/${safeTotal}</div>
-    <div class="event-progress-track"><div class="event-progress-bar" style="width:${pct}%;"></div></div>
-  `;
-}
-
-let allEventsStateFilter = 'Active';
-let allEventsTypeFilter = 'all';
-let eventOverviewDocumentHandlersBound = false;
-
-function overviewDisplayState(event) {
-  return event?.state === 'Last Day' ? 'Ongoing' : eventStateDisplayLabel(event?.state || 'New');
-}
-
-function overviewEventType(event) {
-  return String(event?.tag || 'events').toLowerCase() === 'dry hire' ? 'dry hire' : 'events';
-}
-
-function ensureAllEventsViewTabs() {
-  ensureEventListViewStyles();
-  if (eventOverviewDocumentHandlersBound) return;
-  eventOverviewDocumentHandlersBound = true;
-
-  document.addEventListener('click', event => {
-    if (!event.target.closest('.event-card-controls')) {
-      closeEventCardMenus();
-    }
-    if (!event.target.closest('.event-type-filter')) {
-      document.getElementById('eventTypeFilterMenu')?.classList.remove('open');
-      document.getElementById('eventTypeFilterButton')?.setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  setAllEventsOverviewView(localStorage.getItem('allEventsOverviewView') || 'card', false);
-}
-
-function getActiveAllEventsTab() {
-  return document.querySelector('.events-view-toggle [data-events-view].active')?.dataset.eventsView
-    || localStorage.getItem('allEventsOverviewView')
-    || 'card';
-}
-
-function setAllEventsOverviewView(view, shouldRender = true) {
-  const validView = ['card', 'event-list', 'calendar'].includes(view) ? view : 'card';
-  const previousView = getActiveAllEventsTab();
-  localStorage.setItem('allEventsOverviewView', validView);
-
-  document.querySelectorAll('.events-view-toggle [data-events-view]').forEach(button => {
-    const active = button.dataset.eventsView === validView;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-
-  const idMap = {
-    card: 'all-events-list-view',
-    'event-list': 'all-events-table-view',
-    calendar: 'all-events-calendar-view'
-  };
-  Object.entries(idMap).forEach(([key, id]) => {
-    const content = document.getElementById(id);
-    if (!content) return;
-    const active = key === validView;
-    content.classList.toggle('active', active);
-    content.style.display = active ? 'block' : 'none';
-  });
-
-  if (!shouldRender) return;
-  if (validView === 'calendar') {
-    __allEventsLoadVersion += 1;
-    __allEventsProgressiveLoading = false;
-    loadCalendarView();
-  } else if (previousView === 'calendar') {
-    loadAllEvents();
-  } else {
-    renderAllEventsList(events);
-  }
-}
-
-function switchAllEventsTab(tabName) {
-  setAllEventsOverviewView(tabName === 'list' ? 'card' : tabName);
-}
-
-function toggleEventTypeFilterMenu(event) {
-  event?.stopPropagation();
-  const menu = document.getElementById('eventTypeFilterMenu');
-  const button = document.getElementById('eventTypeFilterButton');
-  if (!menu || !button) return;
-  const open = !menu.classList.contains('open');
-  menu.classList.toggle('open', open);
-  button.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-function setEventTypeFilter(type) {
-  allEventsTypeFilter = ['events', 'dry hire'].includes(type) ? type : 'all';
-  const labels = { all: 'Filters', events: 'Events', 'dry hire': 'Dry Hire' };
-  const label = document.getElementById('eventTypeFilterLabel');
-  if (label) label.textContent = labels[allEventsTypeFilter];
-
-  document.querySelectorAll('#eventTypeFilterMenu [data-event-type]').forEach(button => {
-    button.setAttribute('aria-checked', button.dataset.eventType === allEventsTypeFilter ? 'true' : 'false');
-  });
-  document.getElementById('eventTypeFilterMenu')?.classList.remove('open');
-  document.getElementById('eventTypeFilterButton')?.setAttribute('aria-expanded', 'false');
-  updateEventStateFilterCounts(events);
-  renderAllEventsList(events);
-}
-
-function setEventStateFilter(state) {
-  allEventsStateFilter = state || 'All';
-  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
-    button.classList.toggle('active', button.dataset.eventState === allEventsStateFilter);
-  });
-  renderAllEventsList(events);
-}
-
-function eventMatchesOverviewStateFilter(event, stateFilter = allEventsStateFilter) {
-  if (!stateFilter || stateFilter === 'All') return true;
-  const displayState = overviewDisplayState(event);
-  if (stateFilter === 'Active') return !['Closed', 'Pending Closure'].includes(displayState);
-  return displayState === stateFilter;
-}
-
-function updateEventStateFilterCounts(list, preferCalendarTotals = false) {
-  const useCalendarTotals = (
-    preferCalendarTotals
-    && calendarStateCounts
-    && typeof calendarStateCounts === 'object'
-  );
-  if (useCalendarTotals) {
-    const sourceCounts = allEventsTypeFilter === 'all'
-      ? calendarStateCounts
-      : (calendarStateCountsByTag?.[allEventsTypeFilter] || {});
-    const counts = { ...sourceCounts };
-    counts.All = Object.values(sourceCounts).reduce((sum, value) => sum + Number(value || 0), 0);
-    counts.Active = Math.max(
-      0,
-      counts.All - Number(sourceCounts.Closed || 0) - Number(sourceCounts['Pending Closure'] || 0),
-    );
-    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
-      const state = button.dataset.eventState;
-      const count = Number(counts[state] || 0);
-      const span = button.querySelector('span');
-      if (span) span.textContent = String(count);
-      button.hidden = state !== 'All' && count === 0;
-    });
-    if (allEventsStateFilter !== 'All' && !Number(counts[allEventsStateFilter] || 0)) {
-      allEventsStateFilter = 'All';
-      document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
-        button.classList.toggle('active', button.dataset.eventState === 'All');
-      });
-    }
-    return;
-  }
-  const source = (list || []).filter(event => {
-    if (allEventsTypeFilter === 'all') return true;
-    return overviewEventType(event) === allEventsTypeFilter;
-  });
-  const counts = {
-    All: source.length,
-    Active: source.filter(event => eventMatchesOverviewStateFilter(event, 'Active')).length
-  };
-  source.forEach(event => {
-    const state = overviewDisplayState(event);
-    counts[state] = (counts[state] || 0) + 1;
-  });
-  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
-    const state = button.dataset.eventState;
-    const count = counts[state] || 0;
-    const span = button.querySelector('span');
-    if (span) span.textContent = String(count);
-    button.hidden = state !== 'All' && count === 0;
-  });
-  if (
-    !__allEventsProgressiveLoading &&
-    allEventsStateFilter !== 'All' &&
-    (counts[allEventsStateFilter] || 0) === 0
-  ) {
-    allEventsStateFilter = 'All';
-    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
-      button.classList.toggle('active', button.dataset.eventState === 'All');
-    });
-  }
-}
-
-function filterEventsBySearch(list) {
-  const searchTerm = document.getElementById('event-search')?.value.toLowerCase().trim() || '';
-  return (list || []).filter(event => {
-    const tag = overviewEventType(event);
-    if (allEventsTypeFilter !== 'all' && tag !== allEventsTypeFilter) return false;
-    if (!eventMatchesOverviewStateFilter(event)) return false;
-    if (!searchTerm) return true;
-    return (`${event.id} ${event.name || ''} ${event.location || ''} ${event.state || ''} ${event.tag || ''} ${event.startDate || ''} ${event.endDate || ''}`)
-      .toLowerCase()
-      .includes(searchTerm);
-  });
-}
-
-function getFilteredEventsForOverview(list) {
-  return sortEventsForView(filterEventsBySearch(list || []), 'all');
-}
-
-function eventOverviewProgress(event) {
-  const state = event.state || 'New';
-  if (['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(state)) {
-    if (state === 'Closed' && event.forceStateOverride) {
-      const done = Math.max(0, Number(event.returnedCount || 0));
-      const total = Math.max(done, Number(event.returnableTotalCount || event.assetCount || 0));
-      return { done, total, label: 'Returned' };
-    }
-
-    const physicalTotal = Number(event.returnableTotalCount);
-    if (Number.isFinite(physicalTotal) && physicalTotal >= 0) {
-      const total = Math.max(0, physicalTotal);
-      return { done: getEventPhysicallyReturnedCount(event), total, label: 'Returned' };
-    }
-
-    const done = Math.max(0, Number(event.returnedCount || 0));
-    const total = Math.max(done, Number(event.assetCount || 0));
-    return { done, total, label: 'Returned' };
-  }
-  if (state === 'Ongoing' || state === 'Last Day') {
-    const out = Math.max(0, Number(event.returnableCount ?? event.preparedCount ?? 0));
-    const total = Math.max(out, Number(event.assetCount || out));
-    return { done: out, total, label: 'Out' };
-  }
-  if (state === 'New') {
-    return { done: 0, total: Math.max(0, Number(event.assetCount || 0)), label: 'Items added', added: true };
-  }
-  return {
-    done: Math.max(0, Number(event.preparedCount || 0)),
-    total: Math.max(0, Number(event.assetCount || 0)),
-    label: state === 'Planning' ? 'Planned' : 'Packed'
-  };
-}
-
-function eventDepartmentProgress(event) {
-  if (Array.isArray(event.departmentProgress) && event.departmentProgress.length) {
-    return event.departmentProgress;
-  }
-
-  const phaseUsesReturns = ['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(event.state);
-  const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
-  const totals = new Map();
-
-  const addProgress = (department, done, total) => {
-    const code = normalizeDepartmentCode(department || 'UN');
-    const current = totals.get(code) || { code, done: 0, total: 0 };
-    current.done += Math.max(0, Number(done || 0));
-    current.total += Math.max(0, Number(total || 0));
-    totals.set(code, current);
-  };
-
-  Object.values(event.modelGroups || {}).forEach(group => {
-    const code = normalizeDepartmentCode(group.department || 'UN');
-    const required = Math.max(0, Number(group.requiredQuantity || 0));
-    const prepared = Math.max(0, Number(group.countablePreparedQuantity ?? getCountablePreparedQuantity(group) ?? 0));
-    const returned = Math.max(0, Number(group.countableReturnedQuantity || 0));
-    addProgress(code, phaseUsesReturns ? returned : (phaseUsesOut ? Math.max(prepared - returned, 0) : prepared), required);
-  });
-
-  const returnedRefs = new Set(event.returnedItems || []);
-  const preparedRefs = new Set([
-    ...(event.actuallyPrepared || []),
-    ...(event.returnableRefs || [])
-  ]);
-  const collectedRefs = new Set(event.customCollected || []);
-  const seenCustomRefs = new Set();
-
-  (event.preparedItems || []).forEach(ref => {
-    const custom = parseCustomAsset(ref);
-    if (!custom || seenCustomRefs.has(ref)) return;
-    seenCustomRefs.add(ref);
-
-    const quantity = Math.max(1, Number(custom.quantity || 1));
-    const isReturned = returnedRefs.has(ref);
-    const isPrepared = preparedRefs.has(ref);
-    const isCollectedLoan = custom.type === 'LOAN' && collectedRefs.has(ref);
-    let done = 0;
-
-    if (phaseUsesReturns) {
-      done = isReturned ? quantity : 0;
-    } else if (phaseUsesOut) {
-      done = !isReturned && (isPrepared || isCollectedLoan) ? quantity : 0;
-    } else if (event.state !== 'New') {
-      done = (isPrepared || isReturned || isCollectedLoan) ? quantity : 0;
-    }
-
-    addProgress(custom.department || 'UN', done, quantity);
-  });
-
-  const overviewProgress = eventOverviewProgress(event);
-  let accountedTotal = [...totals.values()].reduce((sum, row) => sum + row.total, 0);
-  let remainingTotal = Math.max(overviewProgress.total - accountedTotal, 0);
-
-  // Required totals deliberately exclude manual extras. When the event-level
-  // progress includes those deployed extras, add them back to their department.
-  if (remainingTotal > 0) {
-    Object.values(event.modelGroups || {}).forEach(group => {
-      if (remainingTotal <= 0) return;
-      const assigned = Math.max(0, Number(group.assignedQuantity || 0));
-      const countableAssigned = Math.max(0, Number(group.countableAssignedQuantity || 0));
-      const extraTotal = Math.max(assigned - countableAssigned, 0);
-      if (!extraTotal) return;
-
-      const returned = Math.max(0, Number(group.returnedQuantity || 0));
-      const countableReturned = Math.max(0, Number(group.countableReturnedQuantity || 0));
-      const prepared = Math.max(0, Number(group.preparedQuantity || 0));
-      const countablePrepared = Math.max(0, Number(group.countablePreparedQuantity || 0));
-      const quantity = Math.min(extraTotal, remainingTotal);
-      const extraDone = phaseUsesReturns
-        ? Math.max(returned - countableReturned, 0)
-        : Math.max(prepared - countablePrepared, 0);
-
-      addProgress(group.department || 'UN', Math.min(extraDone, quantity), quantity);
-      remainingTotal -= quantity;
-    });
-  }
-
-  if (remainingTotal > 0) {
-    addProgress('UN', 0, remainingTotal);
-  }
-
-  if (!totals.size) {
-    totals.set('UN', { code: 'UN', done: overviewProgress.done, total: overviewProgress.total });
-  }
-
-  const rows = [...totals.values()]
-    .filter(row => row.total > 0)
-    .map(row => ({ ...row, done: Math.min(row.done, row.total) }))
-    .sort((a, b) => b.total - a.total);
-
-  if (rows.length <= 4) return rows;
-
-  const visible = rows.slice(0, 3);
-  const remainder = rows.slice(3).reduce((combined, row) => ({
-    code: 'OTHER',
-    label: 'Other',
-    done: combined.done + row.done,
-    total: combined.total + row.total
-  }), { code: 'OTHER', label: 'Other', done: 0, total: 0 });
-  return [...visible, remainder];
-}
-
-function eventOverviewNotice(event, progress) {
-  const remaining = Math.max(progress.total - progress.done, 0);
-  switch (event.state) {
-    case 'New': return progress.total ? `${progress.total} requirements added` : 'Ready to start planning';
-    case 'Planning': return `${progress.total} asset requirements planned`;
-    case 'Preparing': return `${remaining} item${remaining === 1 ? '' : 's'} left to pack`;
-    case 'Ready': return 'All items ready';
-    case 'Last Day': return 'In progress  ·  Last Day!';
-    case 'Ongoing': {
-      const end = parseEventOverviewDate(event.endDate);
-      if (!end) return 'In progress';
-      const today = new Date();
-      today.setHours(12, 0, 0, 0);
-      const days = Math.max(0, Math.ceil((end - today) / 86400000));
-      return days
-        ? `In progress  ·  Ends in ${days} day${days === 1 ? '' : 's'}`
-        : 'In progress  ·  Ends today';
-    }
-    case 'Returning': {
-      const returnable = Math.max(0, Number(event.returnableCount || 0));
-      return `${returnable} asset${returnable === 1 ? '' : 's'} still out`;
-    }
-    case 'Overdue': return 'Overdue return';
-    case 'Closed': {
-      const remaining = Math.max(progress.total - progress.done, 0);
-      return remaining
-        ? `${remaining} item${remaining === 1 ? '' : 's'} not returned`
-        : 'All items returned';
-    }
-    default: return '';
-  }
-}
-
-function getEventPrimaryAction(event) {
-  if (event.state === 'New') {
-    return isAdminUser()
-      ? { label: 'Start Planning', onclick: `openEventPlanning(${event.id})` }
-      : { label: 'Start Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
-  }
-  if (event.state === 'Planning') {
-    return { label: 'Prepare', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
-  }
-  if (event.state === 'Preparing') return { label: 'Continue Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
-  if (event.state === 'Ready') return { label: 'Generate DO', onclick: `openDeliveryOrderTab(${event.id})` };
-  if (['Ongoing', 'Last Day'].includes(event.state)) return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
-  if (event.state === 'Returning') return { label: 'Continue Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
-  if (event.state === 'Overdue') return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
-  return { label: 'View', onclick: `viewEvent(${event.id})` };
-}
-
-function eventNextActionText(event) {
-  switch (event.state) {
-    case 'New': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
-    case 'Planning': return 'Prepare the planned requirements.';
-    case 'Preparing': return 'Continue packing remaining items.';
-    case 'Ready': return 'Generate delivery order and dispatch.';
-    case 'Ongoing':
-    case 'Last Day': return event.state === 'Last Day' ? 'Prioritise return today.' : 'Monitor event and provide on-site support.';
-    case 'Returning': return 'Continue returning outstanding items.';
-    case 'Overdue': return 'Resolve overdue returns immediately.';
-    case 'Closed': return 'Review completed event details.';
-    default: return 'Review event details.';
-  }
-}
-
-function eventAssigneeSummaryHtml(event) {
-  const rows = Array.isArray(event.assignedUsers) ? event.assignedUsers : [];
-  if (!rows.length) {
-    return '<div class="event-assignee-summary muted"><span>Assigned</span><strong>Unassigned</strong></div>';
-  }
-  const visible = rows.slice(0, 3);
-  const names = visible
-    .map(user => eventAssigneeDisplayName(user) || user.username)
-    .filter(Boolean);
-  const more = rows.length > visible.length ? ` +${rows.length - visible.length}` : '';
-  return `
-    <div class="event-assignee-summary">
-      <span>Assigned</span>
-      <strong>${escapeHtml(names.join(', ') + more)}</strong>
-    </div>
-  `;
-}
-
-async function openEventPlanning(eventId) {
-  if (!isAdminUser()) {
-    openPrepareWorkspaceForEvent(eventId);
-    return;
-  }
-  planPageState.eventId = Number(eventId) || null;
-  showSection('plan');
-}
-
-function openPrepareWorkspaceForEvent(eventId) {
-  prepareNewPageState.eventId = Number(eventId) || null;
-  showSection('prepare-new');
-}
-
-function openReturnWorkspaceForEvent(eventId) {
-  returnPageState.eventId = Number(eventId) || null;
-  showSection('return');
-}
-
-function closeEventCardMenus() {
-  document.querySelectorAll('.event-card-menu.open, .event-card-menu[data-event-menu-portal="true"]').forEach(menu => {
-    menu.classList.remove('open');
-    menu.style.position = '';
-    menu.style.top = '';
-    menu.style.left = '';
-    menu.style.right = '';
-    menu.style.bottom = '';
-    menu.style.zIndex = '';
-    menu.style.maxHeight = '';
-    menu.style.overflowY = '';
-
-    if (menu.dataset.eventMenuPortal === 'true') {
-      const origin = menu.__eventMenuOriginParent;
-      const nextSibling = menu.__eventMenuOriginNextSibling;
-      if (origin?.isConnected) {
-        origin.insertBefore(menu, nextSibling?.parentNode === origin ? nextSibling : null);
-      } else {
-        menu.remove();
-      }
-      delete menu.dataset.eventMenuPortal;
-      delete menu.__eventMenuOriginParent;
-      delete menu.__eventMenuOriginNextSibling;
-    }
-  });
-}
-
-function toggleEventCardMenu(event, eventId, context = 'card') {
-  event?.stopPropagation();
-  const target = document.getElementById(`event-card-menu-${context}-${eventId}`);
-  const shouldOpen = target && !target.classList.contains('open');
-  closeEventCardMenus();
-  if (!shouldOpen || !target?.isConnected) return;
-  if (target) {
-    target.style.position = '';
-    target.style.top = '';
-    target.style.left = '';
-    target.style.right = '';
-    target.style.bottom = '';
-    target.style.zIndex = '';
-  }
-  target.classList.add('open');
-  if (target && shouldOpen) {
-    const buttonRect = event?.currentTarget?.getBoundingClientRect();
-    if (buttonRect) {
-      target.__eventMenuOriginParent = target.parentElement;
-      target.__eventMenuOriginNextSibling = target.nextSibling;
-      document.body.appendChild(target);
-      target.dataset.eventMenuPortal = 'true';
-      const menuRect = target.getBoundingClientRect();
-      const margin = 10;
-      const gap = 6;
-      const roomBelow = window.innerHeight - buttonRect.bottom;
-      const preferredTop = roomBelow >= menuRect.height + gap + margin
-        ? buttonRect.bottom + gap
-        : buttonRect.top - menuRect.height - gap;
-      target.style.position = 'fixed';
-      target.style.top = `${Math.max(margin, Math.min(preferredTop, window.innerHeight - menuRect.height - margin))}px`;
-      target.style.left = `${Math.max(margin, Math.min(buttonRect.right - menuRect.width, window.innerWidth - menuRect.width - margin))}px`;
-      target.style.right = 'auto';
-      target.style.bottom = 'auto';
-      target.style.zIndex = '2000';
-      target.style.maxHeight = `calc(100vh - ${margin * 2}px)`;
-      target.style.overflowY = 'auto';
-    }
-  }
-}
-
-function eventMenuIconHtml(icon) {
-  const paths = {
-    edit: `
-      <path d="M12 20h9"></path>
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-      <path d="m15 5 4 4"></path>
-    `,
-    view: `
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
-      <circle cx="12" cy="12" r="3"></circle>
-    `,
-    logs: `
-      <path d="M5 4h14v16H5z"></path>
-      <path d="M8 8h8M8 12h8M8 16h5"></path>
-    `,
-    plan: `
-      <rect x="5" y="4" width="14" height="17" rx="2"></rect>
-      <path d="M9 4V2h6v2"></path>
-      <path d="m9 13 2 2 4-4"></path>
-    `,
-    workforce: `
-      <circle cx="9" cy="8" r="3"></circle>
-      <path d="M3 20v-2a6 6 0 0 1 12 0v2"></path>
-      <path d="M16 6h5"></path>
-      <path d="M18.5 3.5v5"></path>
-      <path d="M17 13h4"></path>
-      <path d="M19 11v4"></path>
-    `,
-    force: `
-      <path d="m13 2-9 12h8l-1 8 9-12h-8Z"></path>
-    `,
-    delivery: `
-      <path d="M7 3h7l4 4v14H7z"></path>
-      <path d="M14 3v5h4"></path>
-      <path d="M9 13h6M9 17h4"></path>
-    `,
-    packing: `
-      <path d="m3 7 9-4 9 4-9 4z"></path>
-      <path d="M3 7v10l9 4 9-4V7M12 11v10"></path>
-    `,
-    delete: `
-      <path d="M3 6h18"></path>
-      <path d="M8 6V4h8v2"></path>
-      <path d="M19 6l-1 15H6L5 6"></path>
-      <path d="M10 11v5"></path>
-      <path d="M14 11v5"></path>
-    `
-  };
-  return `<svg class="event-card-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[icon] || ''}</svg>`;
-}
-
-function eventCardMenuHtml(event, context = 'card') {
-  const detailsAction = context !== 'card' && event.state === 'Closed'
-    ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
-    : (context !== 'card' && !isAdminUser()
-      ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
-      : '');
-  const logsAction = context !== 'card' && canCurrentUserManageRoles()
-    ? `<button type="button" onclick="openEventLogs(${event.id}, '${escapeJs(event.name || '')}')">${eventMenuIconHtml('logs')}<span>View logs</span></button>`
-    : '';
-  const adminActions = isAdminUser() ? `
-    <button type="button" onclick="openDeliveryOrderTab(${event.id})">${eventMenuIconHtml('delivery')}<span>Generate DO</span></button>
-    <button type="button" onclick="openPackingListPage(${event.id})">${eventMenuIconHtml('packing')}<span>Packing List</span></button>
-    <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
-    <button type="button" onclick="openEventWorkforce(${event.id})">${eventMenuIconHtml('workforce')}<span>Manpower &amp; Transport</span></button>
-    <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
-    <button type="button" class="danger" onclick="deleteEvent(${event.id})">${eventMenuIconHtml('delete')}<span>Delete</span></button>
-  ` : '';
-  if (!detailsAction && !logsAction && !adminActions) return '';
-
-  return `
-    <div class="event-card-menu" id="event-card-menu-${context}-${event.id}">
-      ${detailsAction}
-      ${logsAction}
-      ${adminActions}
-    </div>
-  `;
-}
-
-function createEventsOverviewCard(event) {
-  const card = document.createElement('article');
-  const displayState = overviewDisplayState(event);
-  card.className = `events-workflow-card ${getEventStateClass(displayState)}`;
-  card.dataset.eventId = String(event.id);
-
-  const progress = eventOverviewProgress(event);
-  const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
-  const action = getEventPrimaryAction(event);
-  const menuHtml = eventCardMenuHtml(event, 'card');
-  const progressVisualHtml = progress.added
-    ? `
-      <button
-        type="button"
-        class="event-progress-add-button"
-        aria-label="Plan assets for ${escapeHtmlAttr(event.name || `event ${event.id}`)}"
-        title="Plan assets"
-        onclick="openEventPlanning(${event.id})"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 8v8"></path>
-          <path d="M8 12h8"></path>
-        </svg>
-      </button>
-    `
-    : `
-      <div class="event-progress-ring">
-        <svg viewBox="0 0 72 72" aria-hidden="true" focusable="false">
-          <circle class="event-progress-track-circle" cx="36" cy="36" r="29"></circle>
-          <circle class="event-progress-value-circle" cx="36" cy="36" r="29" pathLength="100" style="stroke-dashoffset:${100 - percent}"></circle>
-        </svg>
-        <span>${percent}%</span>
-      </div>
-    `;
-  const departmentsHtml = eventDepartmentProgress(event).map(row => {
-    const total = Math.max(0, Number(row.total || 0));
-    const done = Math.max(0, Number(row.done || 0));
-    const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
-    const meta = getDepartmentMeta(row.code);
-    const label = row.label || meta.code || row.code;
-    const fullLabel = row.label || meta.name || label;
-    return `
-      <div class="event-department-row" title="${escapeHtmlAttr(fullLabel)}">
-        <span>${escapeHtml(label)}</span>
-        <span class="event-department-track"><span style="width:${pct}%"></span></span>
-        <span>${done}/${total}</span>
-      </div>
-    `;
-  }).join('');
-  const locationHtml = event.location
-    ? `<span>${eventLocationIconHtml()}${escapeHtml(event.location)}</span>`
-    : '';
-  const assigneeSummary = eventAssigneeSummaryHtml(event);
-
-  card.innerHTML = `
-    <div class="event-workflow-main">
-      <div class="event-workflow-heading">
-        <div class="event-workflow-kicker">
-          <span>#${escapeHtml(String(event.id))}</span>
-          <span class="event-type-badge ${overviewEventType(event) === 'dry hire' ? 'dry-hire' : ''}">${overviewEventType(event) === 'dry hire' ? 'Dry Hire' : 'Events'}</span>
-        </div>
-        <div class="event-card-top-actions">
-          <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
-          <button type="button" class="event-top-icon-button" title="View event" aria-label="View ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}</button>
-          ${canCurrentUserManageRoles() ? `<button type="button" class="event-top-icon-button" title="View event logs" aria-label="View logs for ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="openEventLogs(${event.id}, '${escapeJs(event.name || '')}')">${eventMenuIconHtml('logs')}</button>` : ''}
-          ${isAdminUser() ? `<button type="button" class="event-top-icon-button" title="Edit event" aria-label="Edit ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}</button>` : ''}
-        </div>
-      </div>
-      <h3 class="event-workflow-title">${escapeHtml(event.name || '')}</h3>
-      <div class="event-workflow-meta">
-        <span><span aria-hidden="true">&#128197;</span>${escapeHtml(eventDateRangeText(event))}</span>
-        ${locationHtml}
-      </div>
-      ${assigneeSummary}
-      <div class="event-workflow-progress">
-        ${progressVisualHtml}
-        <div class="event-progress-summary">
-          <div class="event-progress-value" style="color:#111827;">${progress.done} / ${progress.total}</div>
-          <div class="event-progress-label">${escapeHtml(progress.label)}</div>
-        </div>
-        <div class="event-department-progress">${departmentsHtml}</div>
-      </div>
-      <div class="event-workflow-notice">${escapeHtml(eventOverviewNotice(event, progress))}</div>
-    </div>
-    <div class="event-workflow-footer">
-      <div class="event-next-action">
-        <strong>Next action</strong>
-        ${escapeHtml(eventNextActionText(event))}
-      </div>
-      <div class="event-card-controls">
-        <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
-        ${menuHtml ? `<button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'card')">&#8230;</button>` : ''}
-        ${menuHtml}
-      </div>
-    </div>
-  `;
-  return card;
-}
-
-function renderAllEventsCards(list) {
-  const container = document.getElementById('all-events');
-  if (!container) return;
-  const sorted = getFilteredEventsForOverview(list || events);
-  container.innerHTML = '';
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;grid-column:1/-1;">No matching events found.</p>';
-    return;
-  }
-  sorted.forEach(event => container.appendChild(createEventsOverviewCard(event)));
-}
-
-function renderAllEventsTable(list) {
-  const container = document.getElementById('all-events-table-container');
-  if (!container) return;
-  closeEventCardMenus();
-  const sorted = getFilteredEventsForOverview(list || events);
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No matching events found.</p>';
-    return;
-  }
-  const rows = sorted.map(event => {
-    const progress = eventOverviewProgress(event);
-    const action = getEventPrimaryAction(event);
-    const location = event.location ? `<div class="event-list-location">${escapeHtml(event.location)}</div>` : '';
-    const assigneeSummary = eventAssigneeSummaryHtml(event);
-    const displayState = overviewDisplayState(event);
-    const palette = getEventWorkflowPalette(displayState);
-    return `
-      <tr class="${getEventStateClass(displayState)}" style="--event-state:${palette.main};--event-soft:${palette.soft}">
-        <td class="event-list-id"><strong>#${escapeHtml(String(event.id))}</strong></td>
-        <td>${eventTagBadgeHtml(event)}</td>
-        <td class="event-list-title">${escapeHtml(event.name || '')}${location}${assigneeSummary}</td>
-        <td>${escapeHtml(eventDateRangeText(event))}</td>
-        <td>${eventStateBadgeHtml(event, displayState)}</td>
-        <td>${renderProgressCell(progress.done, progress.total)}</td>
-        <td class="event-list-actions-cell">
-          <div class="event-card-controls">
-            <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
-            <button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'list')">&#8230;</button>
-            ${eventCardMenuHtml(event, 'list')}
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-  container.innerHTML = `
-    <div class="event-list-table-wrap">
-      <table class="event-list-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Event</th><th>Date</th><th>State</th><th>Progress</th><th>Next action</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderAllEventsList(eventsToRender = null) {
-  const source = eventsToRender || events;
-  const active = getActiveAllEventsTab();
-  const calendarSource = active === 'calendar' && Array.isArray(calendarRawEvents)
-    ? calendarRawEvents
-    : source;
-  updateEventStateFilterCounts(calendarSource, active === 'calendar');
-  if (active === 'event-list') {
-    renderAllEventsTable(source);
-  } else if (active === 'calendar') {
-    renderCalendar(getFilteredEventsForOverview(calendarSource));
-  } else {
-    renderAllEventsCards(source);
-  }
-}
-
-function showAllEventsProgress(loaded, total) {
-  if (!Number.isFinite(total) || loaded >= total) return;
-  const active = getActiveAllEventsTab();
-  const target = active === 'event-list'
-    ? document.getElementById('all-events-table-container')
-    : active === 'calendar'
-      ? document.getElementById('calendar-container')
-      : document.getElementById('all-events');
-  if (!target) return;
-
-  const indicator = document.createElement('div');
-  indicator.className = 'loading events-progressive-loading';
-  indicator.style.gridColumn = '1 / -1';
-  indicator.textContent = `Loading more events (${loaded} of ${total})...`;
-  target.appendChild(indicator);
-}
-
-async function loadAllEvents() {
-  const loadVersion = ++__allEventsLoadVersion;
-  __allEventsProgressiveLoading = true;
-  let statsPromise = null;
-
-  try {
-    ensureAllEventsViewTabs();
-    if (getActiveAllEventsTab() === 'calendar') {
-      statsPromise = loadStatsCards();
-      await loadCalendarView();
-      return;
-    }
-    events = [];
-    let offset = 0;
-    let total = Number.POSITIVE_INFINITY;
-
-    while (offset < total) {
-      const response = await apiCall(
-        `/api/events?view=summary&limit=${EVENT_OVERVIEW_PAGE_SIZE}&offset=${offset}`
-      );
-      if (loadVersion !== __allEventsLoadVersion) return;
-
-      const page = response.data || [];
-      const byId = new Map(events.map(event => [Number(event.id), event]));
-      page.forEach(event => byId.set(Number(event.id), event));
-      events = Array.from(byId.values());
-      total = Math.max(0, Number(response.meta?.total ?? events.length));
-      offset = Number(response.meta?.nextOffset ?? total);
-
-      updateOverdueCounter(countOverdueEvents(events));
-      renderAllEventsList(events);
-      showAllEventsProgress(events.length, total);
-      if (!statsPromise) statsPromise = loadStatsCards();
-
-      if (!page.length || !response.meta?.hasMore) break;
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      if (getActiveSectionId() !== 'events') break;
-    }
-  } catch (error) {
-    if (loadVersion !== __allEventsLoadVersion) return;
-    console.error('Error loading events overview:', error);
-    const active = getActiveAllEventsTab();
-    const target = active === 'event-list'
-      ? document.getElementById('all-events-table-container')
-      : active === 'calendar'
-        ? document.getElementById('calendar-container')
-        : document.getElementById('all-events');
-    if (target) target.innerHTML = '<p style="color:red;text-align:center;padding:30px;">Error loading events</p>';
-  } finally {
-    await (statsPromise || loadStatsCards());
-    if (loadVersion === __allEventsLoadVersion) {
-      __allEventsProgressiveLoading = false;
-      if (getActiveSectionId() === 'events') renderAllEventsList(events);
-    }
-  }
-}
-
-function ensureEventPageToolbar(scope) {
-  ensureEventListViewStyles();
-  const containerId = scope === 'prepare' ? 'prepare-events' : 'return-events';
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const toolbarId = `${scope}-events-toolbar`;
-  if (document.getElementById(toolbarId)) return;
-
-  const toolbar = document.createElement('div');
-  toolbar.id = toolbarId;
-  toolbar.className = 'event-view-toolbar';
-  toolbar.innerHTML = `
-    <div class="event-view-toggle">
-      <button class="btn btn-secondary active" id="${scope}CardViewBtn" onclick="setEventPageView('${scope}', 'card')">▦ Card View</button>
-      <button class="btn btn-secondary" id="${scope}ListViewBtn" onclick="setEventPageView('${scope}', 'list')">☰ List View</button>
-    </div>
-    <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;">
-      Sort by
-      <select id="${scope}EventsSortSelect" class="form-input" style="width:auto;min-width:160px;" onchange="${scope === 'prepare' ? 'loadPrepareEvents()' : 'loadReturnEvents()'}">
-        <option value="startDate">Start Date</option>
-        <option value="eventId">Event ID</option>
-      </select>
-    </label>
-  `;
-  container.parentNode.insertBefore(toolbar, container);
-}
-
-function getEventPageView(scope) {
-  return localStorage.getItem(`${scope}EventsView`) || 'card';
-}
-
-function setEventPageView(scope, view) {
-  localStorage.setItem(`${scope}EventsView`, view);
-  if (scope === 'prepare') loadPrepareEvents();
-  if (scope === 'return') loadReturnEvents();
-}
-
-function updateEventPageToolbarState(scope) {
-  const view = getEventPageView(scope);
-  document.getElementById(`${scope}CardViewBtn`)?.classList.toggle('active', view === 'card');
-  document.getElementById(`${scope}ListViewBtn`)?.classList.toggle('active', view === 'list');
-}
-
-function renderPrepareEventsTable(list) {
-  const container = document.getElementById('prepare-events');
-  if (!container) return;
-  container.classList.remove('events-grid');
-  const sorted = sortEventsForView(list, 'prepare');
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
-    return;
-  }
-  const rows = sorted.map(event => {
-    const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
-    return `
-      <tr class="${getEventStateClass(event.state)}">
-        <td><strong>${escapeHtml(String(event.id))}</strong></td>
-        <td>${eventTagBadgeHtml(event)}</td>
-        <td class="event-list-title">${escapeHtml(event.name || '')}</td>
-        <td>${escapeHtml(eventDateRangeText(event))}</td>
-        <td>${eventStateBadgeHtml(event)}</td>
-        <td>${renderProgressCell(totalAssigned, totalRequired)}</td>
-        <td style="white-space:nowrap;"><button class="btn btn-success btn-sm" onclick="openPrepareWorkspaceForEvent(${event.id})">Prepare Assets</button> <button class="btn btn-primary btn-sm" onclick="viewEvent(${event.id})">View Details</button></td>
-      </tr>
-    `;
-  }).join('');
-  container.innerHTML = `
-    <div class="event-list-table-wrap">
-      <table class="event-list-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Date</th><th>State</th><th>Progress</th><th>Actions</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderPrepareEventsCards(list) {
-  const container = document.getElementById('prepare-events');
-  if (!container) return;
-  container.classList.add('events-grid');
-  container.innerHTML = '';
-  const sorted = sortEventsForView(list, 'prepare');
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
-    return;
-  }
-  sorted.forEach(event => container.appendChild(createPrepareEventCard(event)));
-}
-
-async function loadPrepareEvents() {
-  try {
-    ensureEventPageToolbar('prepare');
-    updateEventPageToolbarState('prepare');
-    const response = await apiCall('/api/events?view=summary');
-    events = response.data || [];
-    updateOverdueCounter(countOverdueEvents(events));
-    const preparableEvents = events.filter(event =>
-      !['Pending Closure', 'Closed', 'Overdue'].includes(event.state)
-      && event.assetCount >= 0
-    );
-    if (getEventPageView('prepare') === 'list') renderPrepareEventsTable(preparableEvents);
-    else renderPrepareEventsCards(preparableEvents);
-  } catch (error) {
-    const container = document.getElementById('prepare-events');
-    if (container) container.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
-  }
-}
-
-async function loadReturnEvents(options = {}) {
-  return loadReturnWorkspace(options);
-}
-
-window.__preparePendingActions = window.__preparePendingActions || {};
-let __prepareUiSyncTimer = null;
-
-function prepareButtonsForAsset(assetId, includeSource = false) {
-  const encodedAssetId = encodeURIComponent(String(assetId || ''));
-  const root = document.getElementById('prepareEventContent') || document;
-  return Array.from(root.querySelectorAll('[data-asset-id], [data-prepare-source-id]')).filter(button => (
-    button.dataset.assetId === encodedAssetId ||
-    (includeSource && button.dataset.prepareSourceId === encodedAssetId)
-  ));
-}
-
-function beginPrepareAssetAction(assetId, label = 'Working...') {
-  const key = String(assetId || '');
-  if (!key || window.__preparePendingActions[key]) return false;
-  window.__preparePendingActions[key] = true;
-  prepareButtonsForAsset(key, true).forEach(button => {
-    button.disabled = true;
-    button.style.opacity = '0.65';
-    button.dataset.preparePreviousText = button.textContent;
-    button.textContent = label;
-  });
-  return true;
-}
-
-function endPrepareAssetAction(assetId) {
-  delete window.__preparePendingActions[String(assetId || '')];
-}
-
-function updatePrepareRowStatus(button, assetId, isPrepared) {
-  let assetRow = button.parentElement;
-  while (assetRow && !assetRow.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]')) {
-    assetRow = assetRow.parentElement;
-  }
-  if (!assetRow) return;
-
-  const statusText = assetRow.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]');
-  if (statusText) {
-    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-  }
-
-  const assetNameSpan = assetRow.querySelector('span');
-  if (assetNameSpan && assetNameSpan.textContent.includes(assetId)) {
-    assetNameSpan.dataset.prepareState = isPrepared ? 'prepared' : 'pending';
-  }
-}
-
-function updateAllButtonsForAsset(assetId, isPrepared, options = {}) {
-  const sourceAssetId = String(options.sourceAssetId || assetId || '');
-  const effectiveAssetId = String(assetId || sourceAssetId);
-  const buttons = prepareButtonsForAsset(effectiveAssetId, true)
-    .concat(sourceAssetId === effectiveAssetId ? [] : prepareButtonsForAsset(sourceAssetId, true))
-    .filter((button, index, all) => all.indexOf(button) === index);
-
-  buttons.forEach(button => {
-    button.disabled = false;
-    button.style.opacity = '1';
-    delete button.dataset.preparePreviousText;
-
-    if (isPrepared) {
-      button.textContent = 'Unprepare';
-      button.classList.remove('btn-success', 'btn-secondary');
-      button.classList.add('btn-warning', 'asset-action-btn');
-      button.dataset.assetId = encodeURIComponent(effectiveAssetId);
-      button.dataset.action = 'unprepare';
-      button.removeAttribute('onclick');
-      button.onclick = null;
-    } else {
-      button.textContent = 'Prepare';
-      button.classList.remove('btn-warning', 'btn-secondary');
-      button.classList.add('btn-success');
-
-      const assignSourceId = button.dataset.prepareSourceId
-        ? decodeURIComponent(button.dataset.prepareSourceId)
-        : '';
-      if (assignSourceId) {
-        const buttonEventId = Number(button.dataset.eventId || window.currentPrepareEventId);
-        const brand = button.dataset.prepareBrand || '';
-        const model = button.dataset.prepareModel || '';
-        button.classList.remove('asset-action-btn');
-        delete button.dataset.action;
-        button.removeAttribute('onclick');
-        button.onclick = () => assignSpecificAsset(buttonEventId, assignSourceId, brand, model);
-      } else {
-        button.classList.add('asset-action-btn');
-        button.dataset.assetId = encodeURIComponent(effectiveAssetId);
-        button.dataset.action = 'prepare';
-        button.removeAttribute('onclick');
-        button.onclick = null;
-      }
-    }
-
-    updatePrepareRowStatus(button, effectiveAssetId, isPrepared);
-  });
-}
-
-function prepareModelProgress(group) {
-  const required = Math.max(0, Number(group?.requiredQuantity || 0));
-  const prepared = Math.max(0, Number(
-    group?.countablePreparedQuantity ??
-    getCountablePreparedQuantity(group || {})
-  ));
-  return { required, prepared };
-}
-
-function applyPrepareCanonicalProgress(event) {
-  if (!event || Number(event.id) !== Number(window.currentPrepareEventId)) return;
-  window.__currentPrepareEventData = event;
-  const root = document.getElementById('prepareEventContent') || document;
-
-  const requiredEl = document.getElementById('prepare-required-count');
-  const preparedEl = document.getElementById('prepare-prepared-count');
-  const extraEl = document.getElementById('prepare-extra-count');
-  if (requiredEl) requiredEl.textContent = String(event.totalAssets ?? 0);
-  if (preparedEl) preparedEl.textContent = String(event.totalPrepared ?? 0);
-  if (extraEl) extraEl.textContent = String(getEventExtraQuantity(event));
-
-  const modelGroups = Object.values(event.modelGroups || {});
-  root.querySelectorAll('[data-prepare-model-key]').forEach(section => {
-    const group = modelGroups.find(item => (
-      `${item.department || ''}|${item.brand || ''}|${item.model || ''}` === section.dataset.prepareModelKey
-    ));
-    if (!group) return;
-    const { required, prepared } = prepareModelProgress(group);
-    const color = prepared >= required && required > 0 ? '#28a745' : '#ffc107';
-    const text = section.querySelector('.prepare-model-progress-text');
-    const bar = section.querySelector('.prepare-model-progress-bar');
-    if (text) {
-      text.textContent = `${prepared}/${required} prepared`;
-      text.style.color = color;
-    }
-    if (bar) {
-      bar.style.width = `${required > 0 ? Math.min(100, Math.round((prepared / required) * 100)) : 0}%`;
-      bar.style.background = color;
-    }
-  });
-
-  const customByDepartment = groupCustomAssetsByDepartment(event);
-  root.querySelectorAll('[data-prepare-department]').forEach(section => {
-    const department = section.dataset.prepareDepartment || '';
-    const modelTotals = modelGroups
-      .filter(group => normalizeDepartmentCode(group.department || 'UN') === department)
-      .reduce((totals, group) => {
-        const progress = prepareModelProgress(group);
-        totals.required += progress.required;
-        totals.prepared += progress.prepared;
-        return totals;
-      }, { required: 0, prepared: 0 });
-    const customAssets = customByDepartment[department] || [];
-    const required = modelTotals.required + getCustomRequiredQuantityForProgress(customAssets);
-    const prepared = modelTotals.prepared + getCustomPreparedQuantityForProgress(customAssets);
-    const color = prepared >= required && required > 0 ? '#28a745' : '#ffc107';
-    const text = section.querySelector('.prepare-dept-progress-text');
-    const bar = section.querySelector('.prepare-dept-progress-bar');
-    if (text) {
-      text.textContent = `${prepared}/${required} prepared`;
-      text.style.color = color;
-    }
-    if (bar) {
-      bar.style.width = `${required > 0 ? Math.min(100, Math.round((prepared / required) * 100)) : 0}%`;
-      bar.style.background = color;
-    }
-  });
-}
-
-function schedulePrepareUiSync(eventId, delay = 600) {
-  clearTimeout(__prepareUiSyncTimer);
-  __prepareUiSyncTimer = setTimeout(async () => {
-    try {
-      const response = await apiCall(`/api/events/${eventId}`);
-      applyPrepareCanonicalProgress(response.data || {});
-      if (document.getElementById('prepare-section')?.classList.contains('active')) {
-        await loadPrepareEvents();
-      }
-      if (
-        document.getElementById('prepare-new-section')?.classList.contains('active') &&
-        Number(prepareNewPageState.eventId) === Number(eventId)
-      ) {
-        await refreshPrepareNewSelectedEvent({ preserve: true });
-      }
-    } catch (error) {
-      console.warn('Quiet prepare UI sync failed:', error);
-    }
-  }, delay);
-}
-
-async function prepareSpecificAsset(eventId, assetId, requestData = {}) {
-  let actionStarted = false;
-  try {
-    await ensureAssetsLoaded();
-    if (!(await confirmDegradedAssetUse(assetId))) {
-      updateAllButtonsForAsset(assetId, false);
-      return;
-    }
-    actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
-    if (!actionStarted) return;
-    const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', {
-      assetId,
-      ...requestData
-    });
-    await showApiWarning(response);
-    const preparedAssetId = response?.data?.assetId || assetId;
-    showNotification('success', `${customAssetLabelFromId(preparedAssetId)} marked as prepared`);
-    updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
-    schedulePrepareUiSync(eventId);
-  } catch (error) {
-    console.error('Error in prepareSpecificAsset:', error);
-    showNotification('error', `Failed to prepare asset: ${error.message}`);
-    updateAllButtonsForAsset(assetId, false);
-  } finally {
-    if (actionStarted) endPrepareAssetAction(assetId);
-  }
-}
-
-async function unprepareSpecificAsset(eventId, assetId, requestData = {}) {
-  if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return false;
-  try {
-    await apiCall(`/api/events/${eventId}/unprepare`, 'POST', {
-      assetId,
-      ...requestData
-    });
-    showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
-    updateAllButtonsForAsset(assetId, false);
-    schedulePrepareUiSync(eventId);
-    return true;
-  } catch (error) {
-    console.error('Error in unprepareSpecificAsset:', error);
-    showNotification('error', `Failed to unprepare asset: ${error.message}`);
-    updateAllButtonsForAsset(assetId, true);
-    return false;
-  } finally {
-    endPrepareAssetAction(assetId);
-  }
-}
-
-function parseContainerBulkPreparedMarker(value) {
-  const match = String(value || '').match(/^\[BULK\]([^|]+)\|(\d+)(?:\|([^|]+))?$/);
-  if (!match) return null;
-  return {
-    bulkId: match[1],
-    quantity: Math.max(1, Number.parseInt(match[2], 10) || 1),
-    subprojectId: String(match[3] || '')
-  };
-}
-
-function eventContainerBulkQuantity(event, bulkId, subprojectId = '', returned = false) {
-  const returnedRefs = new Set(event?.returnedItems || []);
-  return (event?.actuallyPrepared || []).reduce((sum, ref) => {
-    const marker = parseContainerBulkPreparedMarker(ref);
-    if (!marker || marker.bulkId !== bulkId) return sum;
-    if (subprojectId && marker.subprojectId !== String(subprojectId)) return sum;
-    if (returnedRefs.has(ref) !== returned) return sum;
-    return sum + marker.quantity;
-  }, 0);
-}
-
-async function processUniversalContainer(eventId, containerId) {
-  const feedbackDiv = document.getElementById('universal-asset-feedback');
-  const input = document.getElementById('universalAssetInput');
-  const quickAddEnabled = getPrepareQuickAddEnabled();
-  const container = await getContainerById(containerId, true);
-  if (!container) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
-    return;
-  }
-
-  const containerLabel = container.id || containerId;
-  const assetIds = (container.assetIds || []).map(a => String(a || '').trim()).filter(Boolean);
-  const bulkItems = containerBulkItems(container);
-  const total = assetIds.length + bulkItems.reduce((sum, item) => sum + item.quantity, 0);
-  if (!total) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerLabel} has no assets`);
-    return;
-  }
-
-  if (feedbackDiv) {
-    showFeedback(
-      feedbackDiv,
-      'info',
-      `Processing container <strong>${escapeHtml(containerLabel)}</strong> (${total} asset units)…<br>` +
-      (quickAddEnabled
-        ? `Scanned container assets will be added into this event.`
-        : `Extra container assets will remain listed as extra assets.`)
-    );
-  }
-
-  let event;
-  try {
-    const eventRes = await apiCall(`/api/events/${eventId}`);
-    event = eventRes.data || {};
-  } catch (e) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Failed to load event: ${escapeHtml(e.message || String(e))}`);
-    return;
-  }
-
-  const preparedSet = new Set(event.actuallyPrepared || []);
-  const returnedSet = new Set(event.returnedItems || []);
-  const activeSubprojectId = (
-    Number(prepareNewPageState.eventId) === Number(eventId)
-      ? eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-      : ''
-  );
-  const results = {
-    prepared: [], addedToEvent: [], extra: [], skippedPrepared: [], skippedReturned: [], failed: [],
-    preparedQuantity: 0, addedToEventQuantity: 0, extraQuantity: 0,
-    skippedPreparedQuantity: 0, skippedReturnedQuantity: 0, failedQuantity: 0
-  };
-
-  window.__processingContainerBatch = true;
-  try {
-    for (const aid of assetIds) {
-      if (returnedSet.has(aid)) { results.skippedReturned.push(aid); results.skippedReturnedQuantity += 1; continue; }
-      if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); results.skippedPreparedQuantity += 1; continue; }
-      try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
-          quickAdd: quickAddEnabled,
-          addScannedAssetsToEvent: quickAddEnabled,
-          assetId: aid,
-          fromContainer: true,
-          source: quickAddEnabled ? 'quick-add-container' : 'container',
-          subprojectId: activeSubprojectId
-        }).then((response) => {
-          updateAllButtonsForAsset(response?.data?.assetId || aid, true, { sourceAssetId: aid });
-          if (response?.data?.isExtra) {
-            results.extra.push(aid);
-            results.extraQuantity += 1;
-          } else {
-            results.addedToEvent.push(aid);
-            results.addedToEventQuantity += 1;
-          }
-        });
-        results.prepared.push(aid);
-        results.preparedQuantity += 1;
-        preparedSet.add(aid);
-      } catch (err) {
-        results.failed.push({ id: aid, error: err?.message || String(err) });
-        results.failedQuantity += 1;
-      }
-    }
-
-    for (const item of bulkItems) {
-      const asset = getAssetFromCache(item.assetId);
-      const label = [asset?.brand, asset?.model].filter(Boolean).join(' ') || 'Bulk asset';
-      const returnedQuantity = eventContainerBulkQuantity(
-        event,
-        item.assetId,
-        activeSubprojectId,
-        true
-      );
-      const returnedFromContainer = Math.min(item.quantity, returnedQuantity);
-      if (returnedFromContainer > 0) {
-        results.skippedReturned.push(`${returnedFromContainer}x ${label}`);
-        results.skippedReturnedQuantity += returnedFromContainer;
-      }
-
-      const alreadyPrepared = eventContainerBulkQuantity(
-        event,
-        item.assetId,
-        activeSubprojectId,
-        false
-      );
-      const activeContainerQuantity = Math.max(0, item.quantity - returnedFromContainer);
-      const quantity = Math.max(0, activeContainerQuantity - alreadyPrepared);
-      if (alreadyPrepared > 0) {
-        const skipped = Math.min(activeContainerQuantity, alreadyPrepared);
-        results.skippedPrepared.push(`${skipped}x ${label}`);
-        results.skippedPreparedQuantity += skipped;
-      }
-      if (quantity <= 0) continue;
-
-      try {
-        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
-          quickAdd: quickAddEnabled,
-          addScannedAssetsToEvent: quickAddEnabled,
-          assetId: item.assetId,
-          quantity,
-          fromContainer: true,
-          source: quickAddEnabled ? 'quick-add-container' : 'container',
-          subprojectId: activeSubprojectId
-        });
-        const preparedQuantity = Math.max(
-          1,
-          Number(response?.data?.preparedQuantity || quantity)
-        );
-        const preparedLabel = `${preparedQuantity}x ${label}`;
-        results.prepared.push(preparedLabel);
-        results.preparedQuantity += preparedQuantity;
-        updateAllButtonsForAsset(
-          response?.data?.assetId || item.assetId,
-          true,
-          { sourceAssetId: item.assetId }
-        );
-        if (response?.data?.isExtra) {
-          results.extra.push(preparedLabel);
-          results.extraQuantity += preparedQuantity;
-        } else {
-          results.addedToEvent.push(preparedLabel);
-          results.addedToEventQuantity += preparedQuantity;
-        }
-      } catch (err) {
-        results.failed.push({ id: `${quantity}x ${label}`, error: err?.message || String(err) });
-        results.failedQuantity += quantity;
-      }
-    }
-  } finally {
-    window.__processingContainerBatch = false;
-    if (input) { input.value = ''; input.focus(); }
-  }
-
-  const failed = results.failedQuantity;
-  const listToHtml = (title, items) => items && items.length ? `
-    <section class="prepare-new-container-list">
-      <h5>${escapeHtml(title)}</h5>
-      <ul>${items.slice(0, 50).map(item => `<li>${escapeHtml(String(item))}</li>`).join('')}</ul>
-      ${items.length > 50 ? `<small>...and ${items.length - 50} more</small>` : ''}
-    </section>
-  ` : '';
-  const failuresToHtml = (items) => items && items.length ? `
-    <section class="prepare-new-container-list">
-      <h5 class="prepare-new-container-failure">Failures</h5>
-      ${items.slice(0, 30).map(item => `
-        <div class="prepare-new-container-failure">${escapeHtml(item.id)} - ${escapeHtml(item.error)}</div>
-      `).join('')}
-      ${items.length > 30 ? `<small>...and ${items.length - 30} more failures</small>` : ''}
-    </section>
-  ` : '';
-
-  const detailsHtml = `
-    <div class="prepare-new-container-result">
-      <div class="prepare-new-container-title">
-        <strong>Container ${escapeHtml(containerLabel)}</strong>
-        <span>${results.preparedQuantity} / ${total} prepared</span>
-      </div>
-      <dl class="prepare-new-container-stats">
-        <div><dt>Added into event requirements</dt><dd>${results.addedToEventQuantity}</dd></div>
-        <div><dt>Extra assets</dt><dd>${results.extraQuantity}</dd></div>
-        <div><dt>Already prepared</dt><dd>${results.skippedPreparedQuantity}</dd></div>
-        <div><dt>Returned in this event</dt><dd>${results.skippedReturnedQuantity}</dd></div>
-        <div class="${failed ? 'has-failures' : ''}"><dt>Failed</dt><dd>${failed}</dd></div>
-      </dl>
-      <details class="prepare-new-container-details" ${failed ? 'open' : ''}>
-        <summary>Asset details</summary>
-        <div class="prepare-new-container-detail-scroll">
-          ${failuresToHtml(results.failed)}
-          ${listToHtml('Prepared / added', results.prepared)}
-          ${listToHtml('Added into event requirements', results.addedToEvent)}
-          ${listToHtml('Extra assets', results.extra)}
-          ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
-          ${listToHtml('Skipped (returned)', results.skippedReturned)}
-        </div>
-      </details>
-    </div>
-  `;
-
-  if (feedbackDiv) {
-    showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
-    requestAnimationFrame(() => feedbackDiv.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest'
-    }));
-  }
-  schedulePrepareUiSync(eventId, 350);
-}
-
-
-
-
-
-
-(function initialisePatchedEventViews() {
-  document.addEventListener('DOMContentLoaded', () => {
-    ensureAllEventsViewTabs();
-    const eventSearch = document.getElementById('event-search');
-    if (eventSearch) eventSearch.oninput = () => renderAllEventsList(events);
-  });
-})();
-
-// Inventory sorting and export helpers
-function getInventorySortValue(asset, sortBy) {
-  if (!asset) return '';
-  if (sortBy === 'id') return asset.isBulk ? (asset.internalId || asset.bulkId || `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''}`) : (asset.id || asset.internalId || '');
-  if (sortBy === 'serial') return asset.isBulk ? '' : (asset.serial || '');
-  if (sortBy === 'department') return asset.department || '';
-  if (sortBy === 'status') return asset.status || '';
-  if (sortBy === 'location') return asset.location || '';
-  if (sortBy === 'dateOfPurchase' || sortBy === 'purchaseDate') return normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
-  if (sortBy === 'dateAdded') return normalizeAssetAuditDateTime(asset.dateAdded || '');
-  if (sortBy === 'dateModified') return normalizeAssetAuditDateTime(asset.dateModified || '');
-  return asset[sortBy] || '';
-}
-
-function inventorySearchTerms(searchTerm) {
-  return String(searchTerm || '')
-    .toLowerCase()
-    .split('+')
-    .map(term => term.trim())
-    .filter(Boolean);
-}
-
-function inventorySearchTextMatches(searchableText, searchTerms) {
-  return !searchTerms.length || searchTerms.some(term => searchableText.includes(term));
-}
-
-function getInventoryFilterState() {
-  const searchTerm = document.getElementById('asset-search')?.value || '';
-  const departmentSelection = getInventoryCheckboxFilterValues('department-filter');
-  const statusSelection = getInventoryCheckboxFilterValues('status-filter');
-
-  return {
-    searchTerm: searchTerm.toLowerCase(),
-    searchTerms: inventorySearchTerms(searchTerm),
-    searchLabel: searchTerm.trim(),
-    deptFilters: departmentSelection.values,
-    departmentFilterTotal: departmentSelection.total,
-    statusFilters: statusSelection.values,
-    statusFilterTotal: statusSelection.total,
-    sortBy: document.getElementById('sort-select')?.value || 'id',
-    sortDesc: document.getElementById('sort-descending')?.checked || false
-  };
-}
-
-function getFilteredInventoryData() {
-  const filters = getInventoryFilterState();
-  const sourceAssets = Array.isArray(assets) ? assets : [];
-
-  let filteredAssets = sourceAssets.filter((asset) => {
-    const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.version || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${assetTagSearchText(asset)} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
-    const matchesSearch = inventorySearchTextMatches(searchableText, filters.searchTerms);
-    const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
-    const condition = getAssetConditionStatus(asset);
-    const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.some(status => {
-      if (status === 'available') return condition === 'available' && asset.status !== 'deployed';
-      if (status === 'deployed') return asset.status === 'deployed';
-      if (status === condition) return true;
-      if (!asset.isBulk) return false;
-      if (status === 'ooc') return Number(asset.bulkOOCQuantity || 0) > 0;
-      if (status === 'missing') return Number(asset.bulkMissingQuantity || 0) > 0;
-      if (status === 'degraded') return Number(asset.bulkDegradedQuantity || 0) > 0;
-      return false;
-    });
-    return matchesSearch && matchesDept && matchesStatus;
-  });
-
-  filteredAssets.sort((a, b) => {
-    let aVal = String(getInventorySortValue(a, filters.sortBy) ?? '').toLowerCase();
-    let bVal = String(getInventorySortValue(b, filters.sortBy) ?? '').toLowerCase();
-    const primary = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
-    if (primary !== 0) return filters.sortDesc ? -primary : primary;
-    const fallbackA = `${a.brand || ''} ${a.model || ''} ${a.description || ''} ${a.internalId || a.id || ''}`.toLowerCase();
-    const fallbackB = `${b.brand || ''} ${b.model || ''} ${b.description || ''} ${b.internalId || b.id || ''}`.toLowerCase();
-    const secondary = fallbackA.localeCompare(fallbackB, undefined, { numeric: true, sensitivity: 'base' });
-    return filters.sortDesc ? -secondary : secondary;
-  });
-
-  return {
-    filters,
-    filteredAssets,
-    totalAssets: sourceAssets.length
-  };
-}
-
-function displayFilteredInventory() {
-  const { filteredAssets, totalAssets } = getFilteredInventoryData();
-  renderInventorySummary();
-  const countElement = document.getElementById('asset-count');
-  if (countElement) {
-    const groups = groupInventoryByModel(filteredAssets).length;
-    countElement.textContent = `${groups} model${groups === 1 ? '' : 's'} · ${filteredAssets.length} of ${totalAssets} records`;
-  }
-  displayInventoryTable(filteredAssets);
-}
-
-function inventoryPlainText(value, fallback = '-') {
-  const text = String(value ?? '').trim();
-  return text || fallback;
-}
-
-function inventoryStatusText(status) {
-  const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
-  if (cleanStatus === 'disposed') return 'Decommissioned';
-  if (cleanStatus === 'ooc') return 'OOC';
-  return cleanStatus
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, char => char.toUpperCase());
-}
-
-function inventoryStatusPdfMeta(status) {
-  const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
-  const palette = {
-    available: { background: '#dcfce7', color: '#14532d' },
-    deployed: { background: ASSET_DEPLOYED_COLOR, color: '#ffffff' },
-    degraded: { background: '#fef3c7', color: '#78350f' },
-    missing: { background: '#fee2e2', color: '#7f1d1d' },
-    ooc: { background: '#fee2e2', color: '#7f1d1d' },
-    decommissioned: { background: '#e5e7eb', color: '#374151' },
-    disposed: { background: '#e5e7eb', color: '#374151' }
-  };
-  return {
-    label: inventoryStatusText(cleanStatus),
-    ...(palette[cleanStatus] || palette.available)
-  };
-}
-
-function inventoryStatusPdfBadgeHtml(status, label = null) {
-  const meta = inventoryStatusPdfMeta(status);
-  return pdfInlineBadgeHtml(label || meta.label, meta.background, meta.color, { style: 'margin:0 3px 3px 0;' });
-}
-
-function inventoryDepartmentLabel(code) {
-  const dept = getDepartmentMeta(code);
-  const deptCode = normalizeDepartmentCode(dept.code || code || 'UN');
-  return dept.name && dept.name !== deptCode ? `${deptCode} - ${dept.name}` : deptCode;
-}
-
-function inventoryDepartmentPdfBadgeHtml(code) {
-  const dept = getDepartmentMeta(code);
-  const bg = safePdfHexColour(dept.color, '#e2e3e5');
-  const fg = safePdfHexColour(dept.textColor, getReadableTextColour(bg));
-  return pdfInlineBadgeHtml(inventoryDepartmentLabel(dept.code || code || 'UN'), bg, fg, {
-    title: dept.name || dept.code,
-    style: 'margin:0 3px 3px 0;'
-  });
-}
-
-function inventoryExportQuantity(asset, statusFilter = '') {
-  return Object.values(inventoryExportStatusCounts(asset, statusFilter))
-    .reduce((sum, quantity) => sum + quantity, 0);
-}
-
-function inventoryExportStatusCounts(asset, statusFilter = '') {
-  if (!asset) return {};
-
-  const counts = {};
-  const addCount = (status, quantity) => {
-    const normalizedStatus = status === 'disposed' ? 'decommissioned' : status;
-    const safeQuantity = Math.max(0, Number(quantity || 0) || 0);
-    if (safeQuantity > 0) {
-      counts[normalizedStatus] = (counts[normalizedStatus] || 0) + safeQuantity;
-    }
-  };
-
-  if (!asset.isBulk) {
-    const condition = getAssetConditionStatus(asset);
-    const status = condition === 'available' && asset.status === 'deployed'
-      ? 'deployed'
-      : condition;
-    addCount(status, 1);
-  } else {
-    const total = Math.max(1, Number(asset.quantity || 1) || 1);
-    const condition = getAssetConditionStatus(asset);
-
-    if (condition === 'decommissioned') {
-      addCount('decommissioned', total);
-    } else {
-      let remaining = total;
-      const deployed = Math.min(
-        remaining,
-        Math.max(0, Number(asset.deployedQuantity || 0) || 0)
-      );
-      addCount('deployed', deployed);
-      remaining -= deployed;
-
-      if (asset.isMissing) {
-        addCount('missing', remaining);
-        remaining = 0;
-      } else if (asset.isOOC) {
-        addCount('ooc', remaining);
-        remaining = 0;
-      } else {
-        const missing = Math.min(
-          remaining,
-          Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0)
-        );
-        addCount('missing', missing);
-        remaining -= missing;
-
-        const ooc = Math.min(
-          remaining,
-          Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0)
-        );
-        addCount('ooc', ooc);
-        remaining -= ooc;
-
-        const degraded = asset.isDegraded
-          ? remaining
-          : Math.min(
-              remaining,
-              Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0)
-            );
-        addCount('degraded', degraded);
-        remaining -= degraded;
-        addCount('available', remaining);
-      }
-    }
-
-  }
-
-  const normalizedFilter = statusFilter === 'disposed' ? 'decommissioned' : statusFilter;
-  return normalizedFilter
-    ? (counts[normalizedFilter] ? { [normalizedFilter]: counts[normalizedFilter] } : {})
-    : counts;
-}
-
-function inventoryAssetFlagsText(asset) {
-  const flags = [];
-  if (asset?.isMissing) flags.push('Missing');
-  if (asset?.isOOC) flags.push('OOC');
-  if (asset?.isUntagged) flags.push('Untagged');
-  if (asset?.isDegraded) flags.push('Degraded');
-  if (asset?.isBulk) {
-    const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
-    const missingQty = Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0);
-    const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
-    if (!asset?.isOOC && oocQty > 0) flags.push(`${oocQty} OOC`);
-    if (!asset?.isMissing && missingQty > 0) flags.push(`${missingQty} Missing`);
-    if (!asset?.isDegraded && degradedQty > 0) flags.push(`${degradedQty} Degraded`);
-  }
-  if (asset?.isDisposed || asset?.isDecommissioned) flags.push('Decommissioned');
-  return flags.length ? flags.join(', ') : 'OK';
-}
-
-function inventoryAssetFlagsPdfHtml(asset) {
-  if (asset?.isBulk) {
-    const flagCounts = inventoryExportStatusCounts(asset);
-    const entries = ['ooc', 'missing', 'degraded', 'decommissioned']
-      .filter(status => Number(flagCounts[status] || 0) > 0);
-    return entries.length
-      ? entries.map(status => inventoryStatusPdfBadgeHtml(
-          status,
-          `${inventoryStatusText(status)}: ${flagCounts[status]}`
-        )).join('')
-      : inventoryStatusPdfBadgeHtml('available', 'OK');
-  }
-  const status = getAssetConditionStatus(asset);
-  const label = status === 'available' ? 'OK' : inventoryStatusText(status);
-  return inventoryStatusPdfBadgeHtml(status, label);
-}
-
-function inventoryAssetQuantityText(asset) {
-  if (!asset?.isBulk) return '1';
-  const total = Math.max(1, Number(asset.quantity || 1) || 1);
-  const available = Math.max(0, Number(asset.availableQuantity ?? total) || 0);
-  return `${available}/${total}`;
-}
-
-function inventoryFilterSummary(filters, rowCount) {
-  const parts = [];
-  if (filters.searchLabel) parts.push(`Search: ${filters.searchLabel}`);
-  if (filters.departmentFilterTotal > 0 && filters.deptFilters.length < filters.departmentFilterTotal) {
-    const departmentsText = filters.deptFilters.length
-      ? filters.deptFilters.map(inventoryDepartmentLabel).join(', ')
-      : 'None selected';
-    parts.push(`Departments: ${departmentsText}`);
-  }
-  if (filters.statusFilterTotal > 0 && filters.statusFilters.length < filters.statusFilterTotal) {
-    const statusesText = filters.statusFilters.length
-      ? filters.statusFilters.map(inventoryStatusText).join(', ')
-      : 'None selected';
-    parts.push(`Statuses: ${statusesText}`);
-  }
-  if (parts.length === 0) parts.push('Filters: All inventory assets');
-
-  const sortLabelMap = {
-    id: 'Asset ID',
-    brand: 'Brand',
-    model: 'Model',
-    department: 'Department',
-    status: 'Status',
-    location: 'Location'
-  };
-  parts.push(`Sort: ${sortLabelMap[filters.sortBy] || filters.sortBy}${filters.sortDesc ? ' descending' : ' ascending'}`);
-  parts.push(`No. of assets: ${rowCount}`);
-  return parts;
-}
-
-function groupInventoryAssetsForExport(filteredAssets, filters) {
-  const groups = new Map();
-
-  filteredAssets.forEach(asset => {
-    const department = normalizeDepartmentCode(asset.department || 'UN');
-    const brand = inventoryPlainText(asset.brand);
-    const model = inventoryPlainText(asset.model);
-    const key = JSON.stringify([department, brand, model]);
-    const statusFilter = filters.statusFilters.length === 1 ? filters.statusFilters[0] : '';
-    const assetStatusCounts = inventoryExportStatusCounts(asset, statusFilter);
-    const quantity = Object.values(assetStatusCounts)
-      .reduce((sum, statusQuantity) => sum + statusQuantity, 0);
-    if (quantity <= 0) return;
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        department,
-        departmentLabel: inventoryDepartmentLabel(department),
-        brand,
-        model,
-        descriptions: new Set(),
-        count: 0,
-        statusCounts: {}
-      });
-    }
-
-    const group = groups.get(key);
-    if (asset.description) group.descriptions.add(asset.description);
-    group.count += quantity;
-    Object.entries(assetStatusCounts).forEach(([status, statusQuantity]) => {
-      group.statusCounts[status] = (group.statusCounts[status] || 0) + statusQuantity;
-    });
-  });
-
-  return Array.from(groups.values()).sort((a, b) => {
-    const aKey = `${a.departmentLabel} ${a.brand} ${a.model}`.toLowerCase();
-    const bKey = `${b.departmentLabel} ${b.brand} ${b.model}`.toLowerCase();
-    return aKey.localeCompare(bKey, undefined, { numeric: true, sensitivity: 'base' });
-  });
-}
-
-function inventoryStatusSummaryText(statusCounts) {
-  return Object.entries(statusCounts || {})
-    .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)))
-    .map(([status, count]) => `${inventoryStatusText(status)}: ${count}`)
-    .join(', ');
-}
-
-function inventoryStatusSummaryPdfHtml(statusCounts) {
-  const entries = Object.entries(statusCounts || {})
-    .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)));
-  return entries.length
-    ? entries.map(([status, count]) => inventoryStatusPdfBadgeHtml(status, `${inventoryStatusText(status)}: ${count}`)).join('')
-    : '-';
-}
-
-function inventoryGroupedRowRecords(filteredAssets, filters) {
-  const groups = groupInventoryAssetsForExport(filteredAssets, filters);
-  if (groups.length === 0) {
-    return [{ html: '<tr><td colspan="6" class="empty-row">No assets match the selected filters.</td></tr>', height: 0 }];
-  }
-
-  return groups.map(group => {
-    const descriptionText = Array.from(group.descriptions).sort((a, b) => a.localeCompare(b)).join('; ');
-    return {
-      html: `
-      <tr>
-        <td>${inventoryDepartmentPdfBadgeHtml(group.department)}</td>
-        <td>${escapeHtml(group.brand)}</td>
-        <td>${escapeHtml(group.model)}</td>
-        <td>${escapeHtml(descriptionText || '-')}</td>
-        <td class="number-cell">${escapeHtml(String(group.count))}</td>
-        <td>${inventoryStatusSummaryPdfHtml(group.statusCounts)}</td>
-      </tr>
-      `,
-      height: 0
-    };
-  });
-}
-
-function inventoryGroupedRowsHtml(filteredAssets, filters) {
-  return inventoryGroupedRowRecords(filteredAssets, filters).map(record => record.html).join('');
-}
-
-function inventoryIndividualRowRecords(filteredAssets) {
-  if (filteredAssets.length === 0) {
-    return [{ html: '<tr><td colspan="11" class="empty-row">No assets match the selected filters.</td></tr>', height: 0 }];
-  }
-
-  return filteredAssets.map(asset => {
-    const assetId = asset.isBulk
-      ? inventoryPlainText(asset.internalId || asset.bulkId, 'Bulk Item')
-      : inventoryPlainText(asset.id || asset.internalId);
-    const currentLocation = inventoryPlainText(asset.currentLocation || asset.location || asset.defaultLocation || 'Store');
-    const defaultLocation = inventoryPlainText(asset.defaultLocation || 'Store');
-
-    return {
-      html: `
-      <tr>
-        <td><strong>${escapeHtml(assetId)}</strong></td>
-        <td>${escapeHtml(inventoryPlainText(asset.brand))}</td>
-        <td>${escapeHtml(inventoryPlainText(asset.model))}</td>
-        <td>${escapeHtml(inventoryPlainText(asset.description))}</td>
-        <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial))}</td>
-        <td class="number-cell">${escapeHtml(inventoryAssetQuantityText(asset))}</td>
-        <td>${inventoryDepartmentPdfBadgeHtml(asset.department)}</td>
-        <td>${inventoryStatusSummaryPdfHtml(inventoryExportStatusCounts(asset))}</td>
-        <td>${escapeHtml(defaultLocation)}</td>
-        <td>${escapeHtml(currentLocation)}</td>
-        <td>${inventoryAssetFlagsPdfHtml(asset)}</td>
-      </tr>
-      `,
-      height: 0
-    };
-  });
-}
-
-function inventoryIndividualRowsHtml(filteredAssets) {
-  return inventoryIndividualRowRecords(filteredAssets).map(record => record.html).join('');
-}
-
-function inventoryPdfPageConfig(showIndividual) {
-  return showIndividual
-    ? {
-        orientation: 'landscape',
-        widthMm: 297,
-        heightMm: 210,
-        measureWidthMm: 283,
-        pageFlowHeightMm: 189,
-        minFooterReserveMm: 6,
-        pagePaddingTopMm: 7,
-        footerBottomMm: 7,
-        footerGapMm: 2,
-        bodyFontSize: '7.2pt',
-        tableFontSize: '6.8pt',
-        tablePadding: '4px'
-      }
-    : {
-        orientation: 'portrait',
-        widthMm: 210,
-        heightMm: 297,
-        measureWidthMm: 196,
-        pageFlowHeightMm: 276,
-        minFooterReserveMm: 6,
-        pagePaddingTopMm: 7,
-        footerBottomMm: 7,
-        footerGapMm: 2,
-        bodyFontSize: '8.4pt',
-        tableFontSize: '8pt',
-        tablePadding: '5px'
-      };
-}
-
-function inventoryPdfColGroup(showIndividual) {
-  if (showIndividual) {
-    return `
-      <col style="width:9%;">
-      <col style="width:9%;">
-      <col style="width:10%;">
-      <col style="width:20%;">
-      <col style="width:9%;">
-      <col style="width:4%;">
-      <col style="width:10%;">
-      <col style="width:7%;">
-      <col style="width:8%;">
-      <col style="width:8%;">
-      <col style="width:6%;">
-    `;
-  }
-
-  return `
-    <col style="width:16%;">
-    <col style="width:17%;">
-    <col style="width:17%;">
-    <col style="width:26%;">
-    <col style="width:7%;">
-    <col style="width:17%;">
-  `;
-}
-
-function inventoryPdfTableHead(showIndividual) {
-  if (showIndividual) {
-    return `
-      ${inventoryPdfColGroup(true)}
-      <thead>
-        <tr>
-          <th>Asset ID</th>
-          <th>Brand</th>
-          <th>Model</th>
-          <th>Description</th>
-          <th>Serial</th>
-          <th>Qty</th>
-          <th>Department</th>
-          <th>Status</th>
-          <th>Default Location</th>
-          <th>Current Location</th>
-          <th>Flags</th>
-        </tr>
-      </thead>
-    `;
-  }
-
-  return `
-    ${inventoryPdfColGroup(false)}
-    <thead>
-      <tr>
-        <th>Department</th>
-        <th>Brand</th>
-        <th>Model</th>
-        <th>Description</th>
-        <th>Count</th>
-        <th>Status Counts</th>
-      </tr>
-    </thead>
-  `;
-}
-
-function inventoryPdfTableHtml(filteredAssets, filters, showIndividual) {
-  if (showIndividual) {
-    return `
-      <table class="inventory-table detail-table">
-        ${inventoryPdfTableHead(true)}
-        <tbody>${inventoryIndividualRowsHtml(filteredAssets)}</tbody>
-      </table>
-    `;
-  }
-
-  return `
-    <table class="inventory-table grouped-table">
-      ${inventoryPdfTableHead(false)}
-      <tbody>${inventoryGroupedRowsHtml(filteredAssets, filters)}</tbody>
-    </table>
-  `;
-}
-
-function buildInventoryPdfPages(filteredAssets, filters, context) {
-  const safe = value => escapeHtml(String(value ?? ''));
-  const logoRowHtml = renderPdfLogoRowHtml();
-  const footerHtml = renderPdfFooterHtml();
-  const showIndividual = !!context.showIndividual;
-  const pageConfig = inventoryPdfPageConfig(showIndividual);
-
-  const headerHtml = `
-    ${logoRowHtml}
-    <div class="header">
-      <div class="header-left">
-        FILTERS:<br>
-        ${context.filterSummary.map(safe).join('<br>')}
-      </div>
-      <div class="header-right">
-        <div class="report-title">${safe(context.reportTitle)}</div>
-        Generated by: ${safe(context.generatedBy)}<br>
-        Generated on: ${safe(context.generatedAt)}
-      </div>
-    </div>
-  `;
-
-  const rowRecords = showIndividual
-    ? inventoryIndividualRowRecords(filteredAssets)
-    : inventoryGroupedRowRecords(filteredAssets, filters);
-
-  const measureBox = document.createElement('div');
-  measureBox.id = '__inventoryMeasureBox';
-  measureBox.style.cssText = `
-    position:absolute;
-    left:-10000px;
-    top:0;
-    visibility:hidden;
-    width:${pageConfig.measureWidthMm}mm;
-    font-family:'Century Gothic', Arial, sans-serif;
-    font-size:${pageConfig.bodyFontSize};
-    line-height:1.25;
-    background:white;
-    z-index:-1;
-  `;
-
-  measureBox.innerHTML = `
-    <style>
-      #__inventoryMeasureBox * { box-sizing:border-box; }
-      #__inventoryMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
-      #__inventoryMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
-      #__inventoryMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:18px; }
-      #__inventoryMeasureBox .header-left { flex:1; font-size:8.5pt; font-weight:bold; line-height:1.35; }
-      #__inventoryMeasureBox .header-right { text-align:right; font-size:8.5pt; font-weight:bold; line-height:1.35; min-width:180px; }
-      #__inventoryMeasureBox .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-      #__inventoryMeasureBox .inventory-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; margin-bottom:0; }
-      #__inventoryMeasureBox .inventory-table th { background:#333; color:white; padding:${pageConfig.tablePadding}; text-align:left; font-size:${pageConfig.tableFontSize}; border:1px solid #333; }
-      #__inventoryMeasureBox .inventory-table td { border:1px solid #333; padding:${pageConfig.tablePadding}; font-size:${pageConfig.tableFontSize}; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
-      #__inventoryMeasureBox .inventory-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
-      #__inventoryMeasureBox .number-cell { text-align:center; white-space:nowrap; }
-      #__inventoryMeasureBox .empty-row { text-align:center; color:#666; padding:18px; }
-      #__inventoryMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
-    </style>
-    <div id="__inventoryBase">
-      ${headerHtml}
-      <table class="inventory-table">${inventoryPdfTableHead(showIndividual)}</table>
-    </div>
-    <table class="inventory-table">
-      ${inventoryPdfColGroup(showIndividual)}
-      <tbody id="__inventoryMeasureBody"></tbody>
-    </table>
-    <div id="__inventoryFooterMeasure" class="footer-measure">${footerHtml}</div>
-  `;
-
-  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, pageConfig.measureWidthMm);
-
-  const measureBody = measureBox.querySelector('#__inventoryMeasureBody');
-  const baseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__inventoryBase').getBoundingClientRect().height
-  );
-  const footerHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__inventoryFooterMeasure')?.getBoundingClientRect().height || 0
-  );
-  const footerReserveMm = pdfFooterReserveMm({
-    pageHeightMm: pageConfig.heightMm,
-    pageFlowHeightMm: pageConfig.pageFlowHeightMm,
-    topPaddingMm: pageConfig.pagePaddingTopMm,
-    footerBottomMm: pageConfig.footerBottomMm,
-    footerGapMm: pageConfig.footerGapMm,
-    minReserveMm: pageConfig.minFooterReserveMm
-  }, footerHeight);
-  const rowBudget = Math.max(36, pdfMmToPx(pageConfig.pageFlowHeightMm - footerReserveMm) - baseHeight);
-
-  function measureRow(rowHtml) {
-    measureBody.innerHTML = rowHtml;
-    const row = measureBody.querySelector('tr');
-    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
-  }
-
-  rowRecords.forEach(record => {
-    record.height = measureRow(record.html);
-  });
-
-  measureBox.remove();
-
-  const pages = [];
-  let index = 0;
-  while (index < rowRecords.length) {
-    const pageRows = [];
-    let pageHeight = 0;
-
-    while (index < rowRecords.length) {
-      const record = rowRecords[index];
-      if (pageRows.length > 0 && pageHeight + record.height > rowBudget) break;
-
-      pageRows.push(record);
-      pageHeight += record.height;
-      index++;
-
-      if (pageRows.length === 1 && record.height > rowBudget) break;
-    }
-
-    pages.push(pageRows);
-  }
-
-  const totalPages = pages.length;
-  return pages.map((pageRows, pageIndex) => `
-    <div class="page">
-      ${headerHtml}
-      <table class="inventory-table ${showIndividual ? 'detail-table' : 'grouped-table'}">
-        ${inventoryPdfTableHead(showIndividual)}
-        <tbody>${pageRows.map(row => row.html).join('')}</tbody>
-      </table>
-      <div class="footer">${footerHtml}</div>
-      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
-    </div>
-  `).join('');
-}
-
-async function generateInventoryPdf() {
-  let win = null;
-
-  try {
-    if (!isAdminUser()) {
-      showNotification('error', 'Admin privileges required');
-      return;
-    }
-
-    const { filteredAssets, filters } = getFilteredInventoryData();
-    if (filteredAssets.length === 0) {
-      showNotification('warning', 'No assets match the selected filters');
-      return;
-    }
-
-    win = window.open('', '_blank', 'width=1000,height=1000');
-    if (!win) {
-      showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the inventory PDF.');
-      return;
-    }
-
-    win.document.write(`<!DOCTYPE html><html><head><title>Preparing Inventory PDF</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing inventory PDF...</body></html>`);
-    win.document.close();
-
-    await loadPdfSettings(true);
-
-    const showIndividual = document.getElementById('inventory-export-individual')?.checked || false;
-    const filterSummary = inventoryFilterSummary(filters, filteredAssets.length);
-    const reportTitle = showIndividual ? 'INVENTORY DETAIL REPORT' : 'INVENTORY SUMMARY REPORT';
-    const pageConfig = inventoryPdfPageConfig(showIndividual);
-    const pagesHtml = buildInventoryPdfPages(filteredAssets, filters, {
-      showIndividual,
-      generatedBy: currentUserPdfDisplayName(),
-      generatedAt: reportGeneratedAt(),
-      filterSummary,
-      reportTitle,
-    });
-
-    const html = `<!DOCTYPE html><html><head><title>${reportTitle}</title><style>
-      @page { size: A4 ${pageConfig.orientation}; margin: 0; }
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; font-size: ${pageConfig.bodyFontSize}; line-height: 1.25; }
-      .page { width: ${pageConfig.widthMm}mm; height: ${pageConfig.heightMm}mm; min-height: ${pageConfig.heightMm}mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
-      .page:last-child { page-break-after: auto; break-after: auto; }
-      .print-btn { position: fixed; top: 20px; right: 20px; background: #667eea; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; z-index: 999; font-size: 12px; }
-      .logo-row { display: flex; justify-content: flex-end; margin-bottom: 7px; height: 39px; }
-      .logo-row img { height: 39px; width: auto; object-fit: contain; }
-      .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 18px; }
-      .header-left { flex: 1; font-size: 8.5pt; font-weight: bold; line-height: 1.35; }
-      .header-right { text-align: right; font-size: 8.5pt; font-weight: bold; line-height: 1.35; min-width: 180px; }
-      .report-title { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
-      .inventory-table { width: 100%; border-collapse: collapse; border: 2px solid black; table-layout: fixed; margin-bottom: 0; }
-      .inventory-table thead { display: table-header-group; }
-      .inventory-table tr { break-inside: avoid; page-break-inside: avoid; }
-      .inventory-table th { background: #333; color: #fff; padding: ${pageConfig.tablePadding}; text-align: left; border: 1px solid #333; font-size: ${pageConfig.tableFontSize}; }
-      .inventory-table td { border: 1px solid #333; padding: ${pageConfig.tablePadding}; font-size: ${pageConfig.tableFontSize}; vertical-align: top; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
-      .inventory-table td > span { max-width: 100%; white-space: normal !important; overflow-wrap: anywhere; }
-      .number-cell { text-align: center; white-space: nowrap; }
-      .empty-row { text-align: center; color: #666; padding: 18px; }
-      .footer { position: absolute; bottom: 7mm; left: 7mm; right: 7mm; text-align: center; font-size: 7pt; font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; }
-      .page-number { position: absolute; bottom: 3mm; right: 7mm; font-size: 7pt; }
-      @media print {
-        body, body * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        body { background: #fff; }
-        .page { margin: 0; page-break-after: always; break-after: page; }
-        .page:last-child { page-break-after: auto; break-after: auto; }
-        .print-btn { display: none; }
-      }
-    </style></head><body>
-      <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
-      ${pagesHtml}
-    </body></html>`;
-
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    showNotification('success', 'Inventory PDF generated successfully');
-  } catch (error) {
-    console.error('Inventory PDF export failed:', error);
-    if (win && !win.closed) {
-      win.document.open();
-      win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:24px;">Failed to generate inventory PDF: ${escapeHtml(error.message)}</body></html>`);
-      win.document.close();
-    }
-    showNotification('error', `Failed to generate inventory PDF: ${error.message}`);
-  }
-}
-
-// Transfer grouping, actions, and grouped PDFs
-window.__transferActionState = window.__transferActionState || {};
-window.__transferPendingActions = window.__transferPendingActions || {};
-
-
-function setTransferActionState(assetId, state) {
-  if (!assetId) return;
-  if (state) window.__transferActionState[String(assetId)] = state;
-  else delete window.__transferActionState[String(assetId)];
-}
-
-function resetTransferActionState() {
-  window.__transferActionState = {};
-  window.__transferPendingActions = {};
-  window.__transferSelections = {
-    transfer: new Set(),
-    returnOffice: new Set(),
-    officePrepare: new Set()
-  };
-}
-
-function getTransferPendingAction(assetId) {
-  return window.__transferPendingActions?.[String(assetId || '')] || '';
-}
-
-function beginTransferPendingAction(assetId, action) {
-  if (!assetId || getTransferPendingAction(assetId)) return false;
-  window.__transferPendingActions[String(assetId)] = action;
-  return true;
-}
-
-function endTransferPendingAction(assetId) {
-  if (!assetId) return;
-  delete window.__transferPendingActions[String(assetId)];
-}
-
-function transferAssetTypeKey(item) {
-  return [
-    normalizeDepartmentCode(item.department || 'UN'),
-    String(item.brand || '').trim().toLocaleLowerCase(),
-    String(item.model || '').trim().toLocaleLowerCase()
-  ].join('|');
-}
-
-function transferAssetTypeName(group) {
-  return `${group.brand || ''} ${group.model || ''} ${group.description || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Asset Type';
-}
-
-
-function transferProgressHtml(done, total) {
-  const safeDone = Math.max(0, Number(done || 0));
-  const safeTotal = Math.max(0, Number(total || 0));
-  const pct = safeTotal > 0 ? Math.min(100, Math.round((safeDone / safeTotal) * 100)) : 0;
-  return `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-      <small style="color:#666;">Progress</small>
-      <small style="color:#666;">${safeDone}/${safeTotal}</small>
-    </div>
-    <div style="background:#e9ecef;border-radius:10px;height:6px;overflow:hidden;">
-      <div style="background:#28a745;height:100%;width:${pct}%;transition:width .25s ease;"></div>
-    </div>
-  `;
-}
-
-
-
-function renderLegacyTransferWorkspace() {
-  const container = document.getElementById('transfer-history');
-  if (!container) return;
-
-  const sourceEvents = transferOptionsCache?.sourceEvents || [];
-  const targetEvents = transferOptionsCache?.targetEvents || [];
-
-  const sourceOptions = sourceEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))} · ${event.unreturnedCount || 0} out</option>`;
-  }).join('');
-
-  const targetOptions = targetEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))}</option>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="transfer-page">
-      <div class="transfer-page-header">
-        <div>
-          <h2>Transfer Assets</h2>
-          <p>Move selected physical assets from one event directly into another event workflow.</p>
-        </div>
-        <div class="transfer-page-tools">
-          <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">↻ Refresh</button>
-          <button type="button" class="transfer-tool-button" onclick="generateTransferPdf()">▣ Export PDF</button>
-        </div>
-      </div>
-
-      <div class="transfer-event-bar">
-        <div class="transfer-event-card">
-          <div class="transfer-event-icon" aria-hidden="true">□</div>
-          <div class="transfer-event-copy">
-            <label class="transfer-event-kicker" for="transferSourceSelect">From event</label>
-            <select id="transferSourceSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
-              <option value="">Choose source event…</option>
-              ${sourceOptions}
-            </select>
-          </div>
-          <div class="transfer-event-count">
-            <strong>${sourceEvents.length}</strong>
-            <span>eligible<br>events</span>
-          </div>
-        </div>
-        <div class="transfer-direction" aria-label="Transfer direction">
-          <span>→</span>
-        </div>
-        <div class="transfer-event-card">
-          <div class="transfer-event-icon" aria-hidden="true">◇</div>
-          <div class="transfer-event-copy">
-            <label class="transfer-event-kicker" for="transferTargetSelect">To event</label>
-            <select id="transferTargetSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
-              <option value="">Choose destination event…</option>
-              ${targetOptions}
-            </select>
-          </div>
-          <div class="transfer-event-count">
-            <strong>${targetEvents.length}</strong>
-            <span>planning /<br>preparing</span>
-          </div>
-        </div>
-      </div>
-
-      <div id="transfer-candidates-panel">
-        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
-      </div>
-    </div>
-  `;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-function renderTransferInitialMessage() {
-  const selectableEvents = transferSelectableEvents();
-  if (!selectableEvents.length) {
-    return `
-      <div class="transfer-empty">
-        <strong>No events found</strong>
-        <div>Create an event first, then return here to choose From and To events.</div>
-      </div>
-    `;
-  }
-  return '<div class="transfer-empty"><strong>Choose both events</strong><span>Select a source and destination above to compare assets and choose exact Asset IDs.</span></div>';
-}
-
-function transferSelectableEvents() {
-  const options = transferOptionsCache || {};
-  const rawEvents = Array.isArray(options.events) && options.events.length
-    ? options.events
-    : [...(options.sourceEvents || []), ...(options.targetEvents || [])];
-  const byId = new Map();
-  rawEvents.forEach(event => {
-    if (!event?.id) return;
-    byId.set(String(event.id), event);
-  });
-  return Array.from(byId.values()).sort(planCompareEventsByStartDate);
-}
-
-function transferEventById(eventId) {
-  const id = String(eventId || '');
-  if (!id) return null;
-  return transferSelectableEvents().find(event => String(event.id || '') === id) || null;
-}
-
-function transferTargetSubprojects(event) {
-  return Array.isArray(event?.subprojects)
-    ? event.subprojects.filter(room => room && String(room.id || '').trim())
-    : [];
-}
-
-function transferEnsureTargetSubproject(event) {
-  const rooms = transferTargetSubprojects(event);
-  if (!rooms.length) {
-    transferPageState.targetSubprojectId = '';
-    return null;
-  }
-  const selected = rooms.find(room => (
-    String(room.id) === String(transferPageState.targetSubprojectId)
-  ));
-  if (selected) return selected;
-  transferPageState.targetSubprojectId = String(rooms[0].id || '');
-  return rooms[0];
-}
-
-function transferSelectedTargetSubproject() {
-  return transferEnsureTargetSubproject(
-    transferEventById(transferPageState.targetEventId)
-  );
-}
-
-function renderTransferTargetSubprojects(event) {
-  const rooms = transferTargetSubprojects(event);
-  if (!rooms.length) return '';
-  const selected = transferEnsureTargetSubproject(event);
-  return `
-    <div class="transfer-target-subprojects">
-      <span class="transfer-target-subprojects-label">Prepare for</span>
-      <div class="transfer-target-subproject-tabs" role="tablist" aria-label="Destination sub-project">
-        ${rooms.map(room => `
-          <button type="button" role="tab"
-                  class="transfer-target-subproject-tab ${room === selected ? 'active' : ''}"
-                  aria-selected="${room === selected}"
-                  onclick="transferChooseTargetSubproject('${planEncode(room.id)}')">
-            ${escapeHtml(room.name || 'Unnamed room')}
-          </button>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-async function transferChooseTargetSubproject(encodedSubprojectId) {
-  const subprojectId = planDecode(encodedSubprojectId);
-  if (!subprojectId || subprojectId === String(transferPageState.targetSubprojectId)) return;
-  transferPageState.targetSubprojectId = subprojectId;
-  resetTransferActionState();
-  renderTransferWorkspace();
-  if (transferPageState.sourceEventId && transferPageState.targetEventId) {
-    await loadTransferCandidates();
-  }
-}
-
-function transferUpdateCachedEventSummary(summary) {
-  if (!summary?.id || !transferOptionsCache) return;
-  ['events', 'sourceEvents', 'targetEvents'].forEach(listName => {
-    const list = transferOptionsCache[listName];
-    if (!Array.isArray(list)) return;
-    const index = list.findIndex(event => String(event.id || '') === String(summary.id));
-    if (index >= 0) list[index] = { ...list[index], ...summary };
-  });
-}
-
-function transferEventIconSvg(kind) {
-  if (kind === 'to') {
-    return `
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path>
-        <path d="M12 12v9M4.5 8 12 12l7.5-4"></path>
-        <path d="M9 7h4.5a2.5 2.5 0 0 1 0 5H11"></path>
-        <path d="m12.5 9.5-2 2 2 2"></path>
-      </svg>
-    `;
-  }
-  return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path>
-      <path d="M12 12v9M4.5 8 12 12l7.5-4"></path>
-      <path d="M10.5 8H15a2.5 2.5 0 0 1 0 5h-4"></path>
-      <path d="m13 10.5 2 2-2 2"></path>
-    </svg>
-  `;
-}
-
-function transferUiIconSvg(kind) {
-  const paths = {
-    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path>',
-    export: '<path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M5 20h14"></path>',
-    arrow: '<path d="M5 12h14"></path><path d="m14 7 5 5-5 5"></path>',
-    return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
-    prepare: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="M12 3v9"></path>',
-  };
-  return `<svg class="transfer-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[kind] || paths.arrow}</svg>`;
-}
-
-function renderTransferEventPickerCard(role, event) {
-  const isSource = role === 'source';
-  const pickerContext = isSource ? 'transfer-source' : 'transfer-target';
-  const kicker = isSource ? 'From event' : 'To event';
-  const placeholder = isSource ? 'Choose source event' : 'Choose destination event';
-  const metricValue = isSource
-    ? Number(event?.unreturnedCount || 0)
-    : Number(event?.requiredCount || event?.assetCount || 0);
-  const metricLabel = isSource ? 'assets currently out' : 'assets required';
-  const dateLabel = event ? transferEventDateLabel(event) : '';
-  const location = event?.location || event?.venue || '';
-
-  return `
-    <button type="button"
-            class="transfer-event-card transfer-event-picker ${event ? 'has-metric' : 'is-empty'}"
-            aria-haspopup="dialog"
-            onclick="planOpenEventChooser('${pickerContext}')">
-      <div class="transfer-event-icon ${isSource ? 'from' : 'to'}" aria-hidden="true">${transferEventIconSvg(isSource ? 'from' : 'to')}</div>
-      <div class="transfer-event-copy">
-        <span class="transfer-event-kicker">${kicker}</span>
-        ${event ? `
-          <div class="transfer-event-title-row">
-            <span class="transfer-event-id">#${escapeHtml(String(event.id || ''))}</span>
-            <span class="transfer-event-name">${escapeHtml(event.name || `Event ${event.id || ''}`)}</span>
-          </div>
-          <div class="transfer-event-meta">
-            ${dateLabel ? `<span>${escapeHtml(dateLabel)}</span>` : ''}
-            ${location ? `<span aria-hidden="true">•</span><span>${escapeHtml(location)}</span>` : ''}
-            ${planEventTypeBadgeHtml(event)}
-            ${planEventStateBadgeHtml(event)}
-          </div>
-        ` : `
-          <div class="transfer-event-placeholder">${placeholder}</div>
-          <div class="transfer-event-meta">
-            <span>Search by event name, ID, status, client, or location</span>
-          </div>
-        `}
-      </div>
-      ${event ? `<div class="transfer-event-count">
-        <strong>${metricValue}</strong>
-        <span>${escapeHtml(metricLabel)}</span>
-      </div>` : ''}
-      <span class="transfer-event-chevron" aria-hidden="true">⌄</span>
-    </button>
-  `;
-}
-
-async function transferChooseEvent(role, eventId) {
-  const id = Number(eventId);
-  if (!id) return;
-
-  if (role === 'source') {
-    transferPageState.sourceEventId = id;
-    if (Number(transferPageState.targetEventId) === id) {
-      transferPageState.targetEventId = null;
-      transferPageState.targetSubprojectId = '';
-      showNotification('info', 'Choose a different To Event for this transfer');
-    }
-  } else {
-    transferPageState.targetEventId = id;
-    transferPageState.targetSubprojectId = '';
-    if (Number(transferPageState.sourceEventId) === id) {
-      transferPageState.sourceEventId = null;
-      showNotification('info', 'Choose a different From Event for this transfer');
-    }
-    transferEnsureTargetSubproject(transferEventById(id));
-  }
-
-  renderTransferWorkspace();
-  if (transferPageState.sourceEventId && transferPageState.targetEventId) {
-    await loadTransferCandidates();
-  }
-}
-
-function renderTransferWorkspace() {
-  const container = document.getElementById('transfer-history');
-  if (!container) return;
-
-  const selectedSource = transferEventById(transferPageState.sourceEventId);
-  const selectedTarget = transferEventById(transferPageState.targetEventId);
-  transferEnsureTargetSubproject(selectedTarget);
-
-  container.innerHTML = `
-    <div class="transfer-page">
-      <input type="hidden" id="transferSourceSelect" value="${escapeHtmlAttr(selectedSource?.id || '')}">
-      <input type="hidden" id="transferTargetSelect" value="${escapeHtmlAttr(selectedTarget?.id || '')}">
-      <div class="transfer-page-header">
-        <div>
-          <h2>Transfer Assets</h2>
-        </div>
-        <div class="transfer-page-tools">
-          <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">${transferUiIconSvg('refresh')}<span>Refresh</span></button>
-          <button type="button" class="transfer-tool-button transfer-tool-button-primary" onclick="openTransferPdfExportDialog()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
-        </div>
-      </div>
-
-      <div class="transfer-event-bar">
-        ${renderTransferEventPickerCard('source', selectedSource)}
-        <div class="transfer-direction" aria-label="Transfer direction">
-          <span>${transferUiIconSvg('arrow')}</span>
-        </div>
-        ${renderTransferEventPickerCard('target', selectedTarget)}
-      </div>
-      ${renderTransferTargetSubprojects(selectedTarget)}
-
-      <div id="transfer-candidates-panel">
-        ${renderTransferInitialMessage()}
-      </div>
-    </div>
-  `;
-}
-
-// Preserve prepare and transfer panel state during async refreshes.
-function __aitCapturePrepareOpenState() {
-  const state = {
-    expandedSections: [],
-    visiblePanels: [],
-    openDetails: [],
-    scrollTop: 0,
-    activeTabText: ''
-  };
-
-  document.querySelectorAll('[onclick*="togglePrepareSection"]').forEach(el => {
-    const onclickAttr = el.getAttribute('onclick') || '';
-    const match = onclickAttr.match(/togglePrepareSection\('([^']+)'\)/);
-    if (!match) return;
-    const section = document.getElementById(match[1]);
-    if (section && section.style.display !== 'none') {
-      state.expandedSections.push(match[1]);
-    }
-  });
-
-  document.querySelectorAll('#prepareEventContent [id]').forEach(el => {
-    const id = el.id || '';
-    if (!id) return;
-    const looksLikeDropdown = id.startsWith('model-') || id.startsWith('dept-') || id.startsWith('assigned-dept-') || id === 'model-requirements' || id === 'custom-assets' || id === 'all-assigned-assets';
-    if (looksLikeDropdown && el.style && el.style.display && el.style.display !== 'none') {
-      state.visiblePanels.push(id);
-    }
-  });
-
-  document.querySelectorAll('#prepareEventContent details[open]').forEach(details => {
-    if (details.id) state.openDetails.push(details.id);
-  });
-
-  const modalContent = document.querySelector('#prepareEventModal .modal-content');
-  state.scrollTop = modalContent ? modalContent.scrollTop : 0;
-
-  const activeTab = document.querySelector('.nav-link.active');
-  state.activeTabText = activeTab ? activeTab.textContent.trim() : '';
-  return state;
-}
-
-function __aitRestorePrepareOpenState(state) {
-  if (!state) return;
-  const idsToOpen = Array.from(new Set([...(state.expandedSections || []), ...(state.visiblePanels || [])]));
-  idsToOpen.forEach(sectionId => {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-    section.style.display = 'block';
-    const toggleIcon = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
-    if (toggleIcon) toggleIcon.textContent = '▼';
-  });
-
-  (state.openDetails || []).forEach(id => {
-    const details = document.getElementById(id);
-    if (details && details.tagName && details.tagName.toLowerCase() === 'details') {
-      details.open = true;
-    }
-  });
-
-  const modalContent = document.querySelector('#prepareEventModal .modal-content');
-  if (modalContent) modalContent.scrollTop = state.scrollTop || 0;
-
-  if (state.activeTabText) {
-    document.querySelectorAll('.nav-link').forEach(tab => {
-      if (tab.textContent.trim() === state.activeTabText) tab.classList.add('active');
-    });
-  }
-}
-
-function preserveModalState(callback) {
-  const state = __aitCapturePrepareOpenState();
-  const result = typeof callback === 'function' ? callback() : null;
-  Promise.resolve(result)
-    .catch(err => console.error('preserveModalState callback failed:', err))
-    .finally(() => {
-      // Restore more than once because the modal content is rebuilt after an async API refresh.
-      // This keeps the same model/department dropdown open after Prepare/Unprepare clicks.
-      [50, 180, 400, 800].forEach(delay => {
-        setTimeout(() => __aitRestorePrepareOpenState(state), delay);
-      });
-    });
-  return result;
-}
-
-function getTransferActionState(assetOrId) {
-  if (assetOrId && typeof assetOrId === 'object') {
-    return assetOrId.transferState || assetOrId.actionState || window.__transferActionState?.[String(assetOrId.assetId || '')] || '';
-  }
-  return window.__transferActionState?.[String(assetOrId || '')] || '';
-}
-
-function getTransferItemState(item) {
-  return getTransferActionState(item) || item?.transferState || item?.actionState || '';
-}
-
-function transferGroupDetailsId(group) {
-  const raw = `${group.mode || ''}|${group.key || ''}`;
-  return `transfer-group-${encodeURIComponent(raw).replace(/%/g, '_').replace(/[^A-Za-z0-9_-]/g, '_')}`;
-}
-
-function getOpenTransferDropdownIds() {
-  return Array.from(document.querySelectorAll('#transfer-candidates-panel details[open]'))
-    .map(details => details.id)
-    .filter(Boolean);
-}
-
-function restoreOpenTransferDropdownIds(ids) {
-  (ids || []).forEach(id => {
-    const details = document.getElementById(id);
-    if (details && details.tagName && details.tagName.toLowerCase() === 'details') {
-      details.open = true;
-    }
-  });
-}
-
-function getTransferSelections(kind) {
-  if (!window.__transferSelections) {
-    window.__transferSelections = {
-      transfer: new Set(),
-      returnOffice: new Set(),
-      officePrepare: new Set()
-    };
-  }
-  if (!window.__transferSelections.officePrepare) {
-    window.__transferSelections.officePrepare = new Set();
-  }
-  if (kind === 'officePrepare') return window.__transferSelections.officePrepare;
-  return kind === 'returnOffice'
-    ? window.__transferSelections.returnOffice
-    : window.__transferSelections.transfer;
-}
-
-function selectedTransferCountForGroup(group, kind) {
-  const selected = getTransferSelections(kind);
-  return transferSelectableItemsForGroup(group, kind)
-    .filter(item => selected.has(String(item.assetId || item.id || ''))).length;
-}
-
-function transferGroupSelectionLimit(group) {
-  return Math.max(0, Number(group.actionQty || 0) - Number(group.doneQty || 0));
-}
-
-function transferSelectableItemsForGroup(group, kind) {
-  if (kind === 'officePrepare') return group.officeCandidates || [];
-  return group.items || [];
-}
-
-function toggleTransferAssetSelection(encodedAssetId, kind, checked) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const selected = getTransferSelections(kind);
-  if (!checked) {
-    selected.delete(assetId);
-    renderTransferCandidatesInPlace();
-    return;
-  }
-
-  const mode = kind === 'returnOffice'
-    ? 'return-office'
-    : (kind === 'officePrepare' ? 'office-needed' : 'common');
-  const groups = buildTransferGroups(getTransferListForMode(mode, window.__lastTransferData || {}), mode);
-  const group = groups.find(candidate => transferSelectableItemsForGroup(candidate, kind)
-    .some(item => String(item.assetId || item.id || '') === assetId));
-  if (!group) return;
-
-  const selectedInGroup = selectedTransferCountForGroup(group, kind);
-  const limit = transferGroupSelectionLimit(group);
-  if (selectedInGroup >= limit) {
-    showNotification('warning', `Only ${limit} ${transferAssetTypeName(group)} asset(s) are needed for this action`);
-    renderTransferCandidatesInPlace();
-    return;
-  }
-
-  selected.add(assetId);
-  renderTransferCandidatesInPlace();
-}
-
-function toggleTransferGroupSelection(encodedKey, kind) {
-  const key = decodeURIComponent(encodedKey);
-  const mode = kind === 'returnOffice'
-    ? 'return-office'
-    : (kind === 'officePrepare' ? 'office-needed' : 'common');
-  const groups = buildTransferGroups(getTransferListForMode(mode, window.__lastTransferData || {}), mode);
-  const group = groups.find(candidate => candidate.key === key);
-  if (!group) return;
-
-  const selected = getTransferSelections(kind);
-  const selectable = transferSelectableItemsForGroup(group, kind)
-    .filter(item => !getTransferItemState(item) && !getTransferPendingAction(item.assetId || item.id));
-  const currentlySelected = selectable.filter(item => selected.has(String(item.assetId || item.id || '')));
-  const limit = transferGroupSelectionLimit(group);
-
-  if (currentlySelected.length >= Math.min(limit, selectable.length)) {
-    selectable.forEach(item => selected.delete(String(item.assetId || item.id || '')));
-  } else {
-    selectable.forEach(item => selected.delete(String(item.assetId || item.id || '')));
-    selectable.slice(0, limit).forEach(item => selected.add(String(item.assetId || item.id || '')));
-  }
-  renderTransferCandidatesInPlace();
-}
-
-
-
-function transferAssetDropdownRows(group) {
-  const transferLimitReached = group.mode === 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
-  const returnLimitReached = group.mode !== 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
-
-  return group.items.map(item => {
-    const encodedAssetId = encodeURIComponent(item.assetId || '');
-    const state = getTransferItemState(item);
-    const pendingAction = getTransferPendingAction(item.assetId);
-    const isTransferred = state === 'transferred';
-    const isReturnedOffice = state === 'returnedOffice';
-
-    let actionHtml = '';
-    let statusHtml = '<span class="asset-badge status-available">Ready</span>';
-
-    if (pendingAction) {
-      const pendingLabels = {
-        transfer: 'Transferring...',
-        undoTransfer: 'Undoing...',
-        returnOffice: 'Returning...',
-        undoReturnOffice: 'Undoing...'
-      };
-      statusHtml = `<span class="asset-badge status-deployed">${pendingLabels[pendingAction] || 'Updating...'}</span>`;
-      actionHtml = '<button class="btn btn-secondary btn-sm" disabled>Working...</button>';
-    } else if (group.mode === 'common') {
-      if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else if (isReturnedOffice) {
-        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
-        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been returned to office">Transfer</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-success btn-sm" ${transferLimitReached ? 'disabled title="Required transfer quantity reached"' : ''} onclick="transferDropdownAsset('${encodedAssetId}')">Transfer</button>`;
-      }
-    } else {
-      if (isReturnedOffice) {
-        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been transferred">Return</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-primary btn-sm" ${returnLimitReached ? 'disabled title="Required return quantity reached"' : ''} onclick="returnOfficeDropdownAsset('${encodedAssetId}')">Return</button>`;
-      }
-    }
-
-    return `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 10px;border-bottom:1px solid #f1f1f1;background:white;">
-        <div style="min-width:0;">
-          <div style="font-weight:700;color:#333;">${escapeHtml(item.assetId || '')}</div>
-          <div style="font-size:12px;color:#666;">${item.serial ? `SN: ${escapeHtml(item.serial)}` : 'No serial'}${item.currentLocation ? ` • ${escapeHtml(item.currentLocation)}` : ''}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;white-space:nowrap;">
-          ${statusHtml}
-          ${actionHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-
-function renderTransferCandidatesInPlace() {
-  const openDropdowns = getOpenTransferDropdownIds();
-  renderTransferCandidates(window.__lastTransferData || {});
-  restoreOpenTransferDropdownIds(openDropdowns);
-}
-
-function setTransferCachedItemState(assetId, state) {
-  const data = window.__lastTransferData || {};
-  ['candidates', 'returnToOffice'].forEach(listName => {
-    (data[listName] || []).forEach(item => {
-      if (String(item.assetId || '') === String(assetId || '')) {
-        item.transferState = state || '';
-      }
-    });
-  });
-  setTransferActionState(assetId, state);
-}
-
-function adjustTransferCandidateRequirement(assetId, remainingDelta, preparedDelta) {
-  const data = window.__lastTransferData || {};
-  const sourceItem = (data.candidates || []).find(item => String(item.assetId || '') === String(assetId || ''));
-  if (!sourceItem) return;
-  const key = transferAssetTypeKey(sourceItem);
-
-  (data.candidates || []).forEach(item => {
-    if (transferAssetTypeKey(item) !== key) return;
-    const remaining = Math.max(
-      0,
-      Number(item.targetRemainingBeforeThisAsset ?? item.targetRemaining ?? 0) + remainingDelta
-    );
-    item.targetRemainingBeforeThisAsset = remaining;
-    item.targetRemaining = remaining;
-    item.targetPrepared = Math.max(0, Number(item.targetPrepared || 0) + preparedDelta);
-  });
-}
-
-function updateTransferSummaryAfterMove(direction, responseData = null) {
-  const data = window.__lastTransferData || {};
-  if (responseData?.fromEvent) {
-    data.fromEvent = { ...(data.fromEvent || {}), ...responseData.fromEvent };
-    transferUpdateCachedEventSummary(data.fromEvent);
-  } else if (data.fromEvent) {
-    data.fromEvent.unreturnedCount = Math.max(0, Number(data.fromEvent.unreturnedCount || 0) - direction);
-    transferUpdateCachedEventSummary(data.fromEvent);
-  }
-  if (responseData?.toEvent) {
-    data.toEvent = { ...(data.toEvent || {}), ...responseData.toEvent };
-    transferUpdateCachedEventSummary(data.toEvent);
-  }
-}
-
-async function transferDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'transfer')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    const response = await apiCall('/api/transfers/execute', 'POST', {
-      fromEventId: Number(fromEventId),
-      toEventId: Number(toEventId),
-      toSubprojectId: transferSelectedTargetSubproject()?.id || '',
-      assetIds: [assetId]
-    });
-    setTransferCachedItemState(assetId, 'transferred');
-    adjustTransferCandidateRequirement(assetId, -1, 1);
-    updateTransferSummaryAfterMove(1, response.data);
-    showNotification('success', `${assetId} transferred`);
-  } catch (error) {
-    showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function undoTransferDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'undoTransfer')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    await apiCall('/api/transfers/undo', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
-    setTransferCachedItemState(assetId, '');
-    adjustTransferCandidateRequirement(assetId, 1, -1);
-    updateTransferSummaryAfterMove(-1);
-    showNotification('success', `${assetId} transfer undone`);
-  } catch (error) {
-    showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function returnOfficeDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId || !beginTransferPendingAction(assetId, 'returnOffice')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    setTransferCachedItemState(assetId, 'returnedOffice');
-    updateTransferSummaryAfterMove(1);
-    showNotification('success', `${assetId} marked to return to office`);
-  } catch (error) {
-    showNotification('error', `Failed to return ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function undoReturnOfficeDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId || !beginTransferPendingAction(assetId, 'undoReturnOffice')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    await apiCall('/api/transfers/undo-return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    setTransferCachedItemState(assetId, '');
-    updateTransferSummaryAfterMove(-1);
-    showNotification('success', `${assetId} return-to-office undone`);
-  } catch (error) {
-    showNotification('error', `Failed to undo return for ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function executeSelectedTransfers() {
-  const assetIds = Array.from(getTransferSelections('transfer'));
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetIds.length) return;
-
-  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'transfer'));
-  renderTransferCandidatesInPlace();
-  try {
-    const response = await apiCall('/api/transfers/execute', 'POST', {
-      fromEventId: Number(fromEventId),
-      toEventId: Number(toEventId),
-      toSubprojectId: transferSelectedTargetSubproject()?.id || '',
-      assetIds
-    });
-    getTransferSelections('transfer').clear();
-    const transferred = response.data?.transferred?.length || assetIds.length;
-    const skipped = response.data?.skipped?.length || 0;
-    showNotification(skipped ? 'warning' : 'success', `${transferred} exact asset${transferred === 1 ? '' : 's'} transferred${skipped ? `; ${skipped} skipped` : ''}`);
-    await loadTransferCandidates({ quiet: true });
-  } catch (error) {
-    showNotification('error', `Transfer failed: ${error.message}`);
-  } finally {
-    assetIds.forEach(assetId => endTransferPendingAction(assetId));
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function executeSelectedReturns() {
-  const assetIds = Array.from(getTransferSelections('returnOffice'));
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetIds.length) return;
-
-  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'returnOffice'));
-  renderTransferCandidatesInPlace();
-  try {
-    const response = await apiCall('/api/transfers/return-office', 'POST', {
-      fromEventId: Number(fromEventId),
-      assetIds
-    });
-    getTransferSelections('returnOffice').clear();
-    const returned = response.data?.returned?.length || assetIds.length;
-    const skipped = response.data?.skipped?.length || 0;
-    showNotification(skipped ? 'warning' : 'success', `${returned} exact asset${returned === 1 ? '' : 's'} returned to office${skipped ? `; ${skipped} skipped` : ''}`);
-    await loadTransferCandidates({ quiet: true });
-  } catch (error) {
-    showNotification('error', `Return failed: ${error.message}`);
-  } finally {
-    assetIds.forEach(assetId => endTransferPendingAction(assetId));
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function executeSelectedOfficePrepares() {
-  const assetIds = Array.from(getTransferSelections('officePrepare'));
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!toEventId || !assetIds.length) return;
-
-  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'officePrepare'));
-  renderTransferCandidatesInPlace();
-
-  const prepared = [];
-  const failed = [];
-  try {
-    for (const assetId of assetIds) {
-      try {
-        await apiCall(`/api/events/${toEventId}/prepare`, 'POST', {
-          assetId,
-          subprojectId: transferSelectedTargetSubproject()?.id || ''
-        });
-        prepared.push(assetId);
-      } catch (error) {
-        failed.push({ assetId, error });
-      }
-    }
-
-    getTransferSelections('officePrepare').clear();
-    if (prepared.length) {
-      showNotification(
-        failed.length ? 'warning' : 'success',
-        `${prepared.length} office asset${prepared.length === 1 ? '' : 's'} prepared${failed.length ? `; ${failed.length} failed` : ''}`
-      );
-    } else if (failed.length) {
-      showNotification('error', `No office assets were prepared; ${failed.length} failed`);
-    }
-
-    await loadTransferCandidates({ quiet: true });
-  } catch (error) {
-    showNotification('error', `Prepare from office failed: ${error.message || error}`);
-  } finally {
-    assetIds.forEach(assetId => endTransferPendingAction(assetId));
-    renderTransferCandidatesInPlace();
-  }
-}
-
-// Transfer assets needed from office for the destination event.
-var transferNeededFromOfficeCache = [];
-
-function transferModeMeta(mode) {
-  const normalized = mode === 'return-office' || mode === 'office-needed' ? mode : 'common';
-  if (normalized === 'return-office') {
-    return {
-      mode: normalized,
-      title: 'RETURN TO OFFICE ASSETS',
-      numberPrefix: 'RTO',
-      qtyNoun: 'asset(s) to return',
-      emptyText: 'There are no excess source-event asset types that should go back to office.',
-      buttonLabel: 'Not Common / Return to Office',
-      doneSuffix: 'marked to return'
-    };
-  }
-  if (normalized === 'office-needed') {
-    return {
-      mode: normalized,
-      title: 'NEEDED FROM OFFICE',
-      numberPrefix: 'NFO',
-      qtyNoun: 'asset(s) needed from office',
-      emptyText: 'The destination event can be completed using what is already prepared and what can transfer from the source event.',
-      buttonLabel: 'Needed from Office',
-      doneSuffix: 'needed from office'
-    };
-  }
-  return {
-    mode: 'common',
-    title: 'TRANSFER ASSETS',
-    numberPrefix: 'TR',
-    qtyNoun: 'asset(s) to transfer',
-    emptyText: 'There are no unreturned source asset types that match the destination event’s remaining model requirements.',
-    buttonLabel: 'Common / Transferable',
-    doneSuffix: 'transferred'
-  };
-}
-
-function setTransferPanelMode(mode) {
-  transferPanelMode = transferModeMeta(mode).mode;
-  renderTransferCandidates(window.__lastTransferData || {});
-}
-
-async function loadTransferCandidates(options = {}) {
-  const sourceSelect = document.getElementById('transferSourceSelect');
-  const targetSelect = document.getElementById('transferTargetSelect');
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!sourceSelect || !targetSelect || !panel) return;
-
-  const fromEventId = sourceSelect.value;
-  const toEventId = targetSelect.value;
-  const toSubprojectId = transferSelectedTargetSubproject()?.id || '';
-  const pairKey = `${fromEventId || ''}|${toEventId || ''}|${toSubprojectId}`;
-  const pairChanged = window.__lastTransferPairKey !== pairKey;
-  const openDropdowns = pairChanged
-    ? []
-    : (options.openDropdowns || getOpenTransferDropdownIds());
-
-  if (pairChanged) {
-    resetTransferActionState();
-    window.__lastTransferPairKey = pairKey;
-  }
-
-  if (!fromEventId || !toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transferable assets, return-to-office assets, and what is still needed from office.</p>';
-    return;
-  }
-  if (fromEventId === toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
-    return;
-  }
-
-  if (!options.quiet) {
-    panel.innerHTML = '<div class="loading">Comparing events...</div>';
-  }
-
-  try {
-    const response = await apiCall(
-      `/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}` +
-      `&toEventId=${encodeURIComponent(toEventId)}` +
-      `&toSubprojectId=${encodeURIComponent(toSubprojectId)}`
-    );
-    transferUpdateCachedEventSummary(response.data?.fromEvent);
-    transferUpdateCachedEventSummary(response.data?.toEvent);
-    transferCandidateCache = response.data?.candidates || [];
-    transferReturnToOfficeCache = response.data?.returnToOffice || [];
-    transferNeededFromOfficeCache = response.data?.neededFromOffice || [];
-    renderTransferCandidates(response.data || {});
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 50);
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 200);
-  } catch (error) {
-    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
-  }
-}
-
-function getTransferListForMode(mode, data = {}) {
-  const normalized = transferModeMeta(mode).mode;
-  if (normalized === 'return-office') {
-    return (data.returnToOffice || transferReturnToOfficeCache || [])
-      .filter(item => getTransferItemState(item) !== 'transferred');
-  }
-  if (normalized === 'office-needed') return data.neededFromOffice || transferNeededFromOfficeCache || [];
-  return data.candidates || transferCandidateCache || [];
-}
-
-function buildTransferGroups(items, mode) {
-  const normalizedMode = transferModeMeta(mode).mode;
-  const map = new Map();
-
-  (items || []).forEach(item => {
-    const key = transferAssetTypeKey(item);
-    if (!map.has(key)) {
-      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-      map.set(key, {
-        key,
-        mode: normalizedMode,
-        department: normalizeDepartmentCode(item.department || 'UN'),
-        brand: item.brand || '',
-        model: item.model || '',
-        description: item.description || '',
-        reason: item.reason || '',
-        targetRequired: Number(item.targetRequired || 0),
-        targetPrepared: Number(item.targetPrepared || 0),
-        targetRemaining: remaining,
-        returnQuantity: Number(item.returnQuantity || 0),
-        officeQuantity: Number(item.officeQuantity || 0),
-        sourceQuantity: Number(item.sourceQuantity || 0),
-        officeCandidates: [],
-        items: []
-      });
-    }
-
-    const group = map.get(key);
-    group.items.push(item);
-    (item.officeCandidates || []).forEach(candidate => {
-      const candidateId = String(candidate?.assetId || candidate?.id || '');
-      if (candidateId && !group.officeCandidates.some(existing => String(existing.assetId || existing.id || '') === candidateId)) {
-        group.officeCandidates.push(candidate);
-      }
-    });
-    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
-    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
-    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
-    group.officeQuantity = Math.max(group.officeQuantity || 0, Number(item.officeQuantity || 0));
-    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
-    if (item.reason && !group.reason) group.reason = item.reason;
-  });
-
-  const groups = Array.from(map.values()).map(group => {
-    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
-
-    if (normalizedMode === 'common') {
-      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'transferred').length;
-      group.pendingQty = group.items.filter(item => getTransferPendingAction(item.assetId) === 'transfer').length;
-      const currentRemaining = Math.max(0, Number(group.targetRemaining || 0));
-      const totalNeededForThisComparison = group.doneQty + currentRemaining;
-      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, totalNeededForThisComparison, group.doneQty ? group.doneQty : 1));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
-      group.helpText = `${group.items.length} source option(s) available${currentRemaining ? `; destination still needs ${currentRemaining}` : ''}.`;
-    } else if (normalizedMode === 'return-office') {
-      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
-      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'returnedOffice').length;
-      group.pendingQty = group.items.filter(item => getTransferPendingAction(item.assetId) === 'returnOffice').length;
-      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, returnQty));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
-      group.helpText = group.reason || (group.targetRemaining > 0
-        ? `Destination needs ${group.targetRemaining}; source has ${group.sourceQuantity || group.items.length}; ${group.actionQty} should return to office.`
-        : 'Not required by destination event.');
-    } else {
-      const officeQty = group.officeQuantity > 0 ? group.officeQuantity : group.items.length;
-      group.doneQty = 0;
-      group.pendingQty = group.officeCandidates.filter(item => getTransferPendingAction(item.assetId || item.id) === 'officePrepare').length;
-      group.actionQty = officeQty;
-      group.progressLabel = `${officeQty} needed from office${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
-      group.helpText = group.reason || `Destination still needs ${group.targetRemaining}; source can provide ${group.sourceQuantity || 0}; ${officeQty} should be packed from office.`;
-      group.officeCandidates.sort((a, b) => String(a.assetId || a.id || '').localeCompare(String(b.assetId || b.id || ''), undefined, { numeric: true, sensitivity: 'base' }));
-    }
-
-    return group;
-  });
-
-  return groups.sort((a, b) => (
-    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
-    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
-  ));
-}
-
-function renderTransferModeButtons(data) {
-  const commonGroups = buildTransferGroups(getTransferListForMode('common', data), 'common');
-  const returnGroups = buildTransferGroups(getTransferListForMode('return-office', data), 'return-office');
-  const officeGroups = buildTransferGroups(getTransferListForMode('office-needed', data), 'office-needed');
-  const active = transferModeMeta(transferPanelMode).mode;
-
-  const button = (mode, label, count) => `
-    <button class="btn btn-${active === mode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('${mode}')">
-      ${label} (${count})
-    </button>`;
-
-  return `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      ${button('common', 'Common / Transferable', commonGroups.length)}
-      ${button('return-office', 'Not Common / Return to Office', returnGroups.length)}
-      ${button('office-needed', 'Needed from Office', officeGroups.length)}
-    </div>
-  `;
-}
-
-function transferEventDateLabel(event) {
-  if (!event?.startDate) return '';
-  return event.startDate === event.endDate
-    ? formatDate(event.startDate)
-    : `${formatDate(event.startDate)} – ${formatDate(event.endDate)}`;
-}
-
-function buildTransferSourceGroups(data) {
-  const map = new Map();
-  const seenIds = new Set();
-  [...(data.candidates || []), ...(data.returnToOffice || [])].forEach(item => {
-    const assetId = String(item.assetId || '');
-    if (!assetId || seenIds.has(assetId)) return;
-    seenIds.add(assetId);
-    const key = transferAssetTypeKey(item);
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        department: normalizeDepartmentCode(item.department || 'UN'),
-        brand: item.brand || '',
-        model: item.model || '',
-        description: item.description || '',
-        items: []
-      });
-    }
-    map.get(key).items.push(item);
-  });
-  return Array.from(map.values()).sort((a, b) => (
-    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
-    transferAssetTypeName(a).localeCompare(transferAssetTypeName(b), undefined, { numeric: true, sensitivity: 'base' })
-  ));
-}
-
-function renderTransferSourcePanel(data) {
-  const groups = buildTransferSourceGroups(data);
-  const rows = groups.length ? groups.map(group => `
-    <div class="transfer-source-row">
-      <div class="transfer-model-line">
-        <div>
-          <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
-          <small>${escapeHtml(group.department)} · ${group.items.length} exact Asset ID${group.items.length === 1 ? '' : 's'}</small>
-        </div>
-        <span class="transfer-qty">${group.items.length}</span>
-      </div>
-    </div>
-  `).join('') : '<div class="transfer-empty-section">No source assets found.</div>';
-
-  return `
-    <section class="transfer-panel transfer-panel-source">
-      <div class="transfer-panel-heading">
-        <h3>From Event</h3>
-        <p>#${escapeHtml(data.fromEvent?.id || '')} · ${escapeHtml(data.fromEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.fromEvent))}</p>
-      </div>
-      <div>${rows}</div>
-    </section>
-  `;
-}
-
-function renderTransferAssetSelectionRows(group, kind) {
-  const selected = getTransferSelections(kind);
-  const selectedInGroup = selectedTransferCountForGroup(group, kind);
-  const limit = transferGroupSelectionLimit(group);
-  const encodedKey = encodeURIComponent(group.key);
-  const rowItems = transferSelectableItemsForGroup(group, kind);
-  const allSelectable = rowItems.filter(item => !getTransferItemState(item) && !getTransferPendingAction(item.assetId || item.id));
-  const allSelected = allSelectable.length > 0 && allSelectable.slice(0, limit).every(item => selected.has(String(item.assetId || item.id || '')));
-
-  const rows = rowItems.map(item => {
-    const assetId = String(item.assetId || item.id || '');
-    const encodedAssetId = encodeURIComponent(assetId);
-    const state = getTransferItemState(item);
-    const pendingAction = getTransferPendingAction(assetId);
-    const checked = selected.has(assetId);
-    const disabled = !!state || !!pendingAction || (!checked && selectedInGroup >= limit);
-    let action = '';
-    if (state === 'transferred') {
-      action = `<button type="button" class="transfer-row-action undo" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo transfer</button>`;
-    } else if (state === 'returnedOffice') {
-      action = `<button type="button" class="transfer-row-action undo" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo return</button>`;
-    } else if (pendingAction) {
-      action = '<span class="transfer-selection-pill">Updating…</span>';
-    } else {
-      action = `<span class="transfer-selection-pill">${checked ? 'Selected' : 'Ready'}</span>`;
-    }
-
-    return `
-      <label class="transfer-id-row">
-        <input type="checkbox"
-          aria-label="Select Asset ID ${escapeHtml(assetId)}"
-          ${checked ? 'checked' : ''}
-          ${disabled ? 'disabled' : ''}
-          onchange="toggleTransferAssetSelection('${encodedAssetId}', '${kind}', this.checked)">
-        <span>
-          <strong>${escapeHtml(assetId)}</strong>
-          <small>${item.serial ? `Serial: ${escapeHtml(item.serial)}` : 'No serial recorded'}${item.currentLocation ? ` · ${escapeHtml(item.currentLocation)}` : ''}</small>
-        </span>
-        ${action}
-      </label>
-    `;
-  }).join('');
-
-  return `
-    <div class="transfer-id-list">
-      <div class="transfer-id-toolbar">
-        <span>Select the physical Asset IDs (${selectedInGroup}/${limit})</span>
-        ${allSelectable.length ? `<button type="button" onclick="toggleTransferGroupSelection('${encodedKey}', '${kind}')">${allSelected ? 'Clear group' : 'Select required'}</button>` : ''}
-      </div>
-      ${rows || '<div class="transfer-empty-section">No matching office Asset IDs are currently available.</div>'}
-    </div>
-  `;
-}
-
-function renderTransferDecisionGroup(group, kind, index) {
-  const selectedCount = selectedTransferCountForGroup(group, kind);
-  const remainingAction = transferGroupSelectionLimit(group);
-  const detailsId = transferGroupDetailsId(group);
-  const targetNeed = kind === 'officePrepare'
-    ? Number(group.actionQty || 0)
-    : group.mode === 'return-office'
-      ? Number(group.returnQuantity || group.actionQty || 0)
-      : Math.max(0, Number(group.targetRemaining || 0));
-  const fromQty = kind === 'officePrepare'
-    ? Number(group.officeCandidates?.length || 0)
-    : Number(group.items?.length || 0);
-  const subtitle = kind === 'officePrepare' ? 'choose office Asset IDs' : 'choose exact IDs';
-  return `
-    <details class="transfer-decision-group" id="${detailsId}">
-      <summary class="transfer-decision-summary">
-        <span class="transfer-decision-model">
-          <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
-          <small>${escapeHtml(group.department)} · ${subtitle}</small>
-        </span>
-        <span class="transfer-number">${fromQty}</span>
-        <span class="transfer-number">${targetNeed}</span>
-        <span class="transfer-number"><span class="transfer-selection-pill">${selectedCount}/${remainingAction}</span></span>
-        <span class="transfer-choose-label">Choose IDs ▾</span>
-      </summary>
-      ${renderTransferAssetSelectionRows(group, kind)}
-    </details>
-  `;
-}
-
-function renderTransferDecisionSection(title, stepClass, groups, kind, emptyText) {
-  const rows = groups.length
-    ? groups.map((group, index) => renderTransferDecisionGroup(group, kind, index)).join('')
-    : `<div class="transfer-empty-section">${escapeHtml(emptyText)}</div>`;
-  return `
-    <div class="transfer-decision-section">
-      <div class="transfer-decision-title">
-        <span class="transfer-step ${stepClass}">${stepClass === 'office' ? '3' : (stepClass === 'return' ? '2' : '1')}</span>
-        ${escapeHtml(title)}
-      </div>
-      ${groups.length ? `
-        <div class="transfer-decision-head">
-          <span>Asset / Model</span>
-          <span>${kind === 'officePrepare' ? 'In office' : 'From out'}</span>
-          <span>${kind === 'returnOffice' ? 'Return qty' : (kind === 'officePrepare' ? 'Need qty' : 'To needed')}</span>
-          <span>Selected</span>
-          <span>Action</span>
-        </div>` : ''}
-      ${rows}
-    </div>
-  `;
-}
-
-function renderTransferOfficeNeededSection(groups) {
-  const rows = groups.length ? groups.map(group => `
-    <div class="transfer-decision-summary">
-      <span class="transfer-decision-model">
-        <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
-        <small>${escapeHtml(group.department)}</small>
-      </span>
-      <span class="transfer-number">${group.sourceQuantity || 0}</span>
-      <span class="transfer-number">${group.targetRemaining || 0}</span>
-      <span class="transfer-number"><span class="transfer-selection-pill">${group.actionQty}</span></span>
-      <span class="transfer-choose-label">Prepare</span>
-    </div>
-  `).join('') : '<div class="transfer-empty-section">Nothing additional is needed from office.</div>';
-  return `
-    <div class="transfer-decision-section">
-      <div class="transfer-decision-title">
-        <span class="transfer-step office">3</span>
-        Needed From Office
-      </div>
-      ${rows}
-    </div>
-  `;
-}
-
-function renderTransferTargetPanel(data, commonGroups) {
-  const requirements = data.destinationRequirements || [];
-  const selected = getTransferSelections('transfer');
-  const selectedByKey = new Map();
-  commonGroups.forEach(group => {
-    selectedByKey.set(group.key, group.items.filter(item => selected.has(String(item.assetId || ''))).length);
-  });
-
-  const rows = requirements.length ? requirements.map(requirement => {
-    const key = transferAssetTypeKey(requirement);
-    const required = Number(requirement.required || 0);
-    const prepared = Number(requirement.prepared || 0);
-    const newlySelected = Number(selectedByKey.get(key) || 0);
-    const matched = Math.min(required, prepared + newlySelected);
-    const stillNeeded = Math.max(0, required - matched);
-    const pct = required ? Math.round((matched / required) * 100) : 100;
-    return `
-      <div class="transfer-target-row">
-        <div class="transfer-model-line">
-          <div>
-            <strong>${escapeHtml(transferAssetTypeName(requirement))}</strong>
-            <small>${escapeHtml(requirement.department || 'UN')}</small>
-          </div>
-          <span class="transfer-qty">${required}</span>
-        </div>
-        <div class="transfer-match-copy">
-          <span>${matched} matched${newlySelected ? ` (${newlySelected} selected)` : ''}</span>
-          ${stillNeeded ? `<span class="needed">${stillNeeded} still needed</span>` : ''}
-        </div>
-        <div class="transfer-progress ${stillNeeded ? 'warning' : ''}"><span style="width:${pct}%"></span></div>
-      </div>
-    `;
-  }).join('') : '<div class="transfer-empty-section">No model requirements found for this event.</div>';
-
-  return `
-    <section class="transfer-panel transfer-panel-target">
-      <div class="transfer-panel-heading">
-        <h3>To Event</h3>
-        <p>#${escapeHtml(data.toEvent?.id || '')} · ${escapeHtml(data.toEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.toEvent))}${data.targetSubproject?.name ? `<br>${escapeHtml(data.targetSubproject.name)}` : ''}</p>
-      </div>
-      <div class="transfer-target-list">${rows}</div>
-    </section>
-  `;
-}
-
-function renderTransferSummarySchematic(data, commonGroups, returnGroups, officeGroups) {
-  const directQty = commonGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-  const returnQty = returnGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-  const officeQty = officeGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-  const sourceOut = Number(data.fromEvent?.unreturnedCount || 0);
-  const destinationRequired = (data.destinationRequirements || [])
-    .reduce((sum, item) => sum + Number(item.required || 0), 0);
-  const destinationMatched = (data.destinationRequirements || [])
-    .reduce((sum, item) => sum + Math.min(Number(item.required || 0), Number(item.prepared || 0)), 0);
-  const destinationNet = Math.max(0, destinationMatched + directQty + officeQty);
-
-  return `
-    <section class="transfer-schematic" aria-label="Transfer summary schematic">
-      <div class="transfer-schematic-heading">
-        <div>
-          <h3>Transfer Summary</h3>
-          <p>Overview of asset movement between events and office inventory.</p>
-        </div>
-      </div>
-      <div class="transfer-schematic-flow">
-        <div class="transfer-schematic-node source">
-          <span>Source Event</span>
-          <strong>#${escapeHtml(data.fromEvent?.id || '')}</strong>
-          <small>${escapeHtml(data.fromEvent?.name || '')}</small>
-          <em>${sourceOut} assets out</em>
-        </div>
-        <div class="transfer-schematic-lanes">
-          <div class="transfer-schematic-lane direct">
-            <i></i>
-            <div><strong>${directQty}</strong><span>Direct Transfer</span><small>to destination</small></div>
-            <b>→</b>
-          </div>
-          <div class="transfer-schematic-lane return">
-            <i></i>
-            <div><strong>${returnQty}</strong><span>Return To Office</span><small>not needed</small></div>
-            <b>→</b>
-          </div>
-          <div class="transfer-schematic-lane office">
-            <i></i>
-            <div><strong>${officeQty}</strong><span>Prepare From Office</span><small>still needed</small></div>
-            <b>→</b>
-          </div>
-        </div>
-        <div class="transfer-schematic-destinations">
-          <div class="transfer-schematic-node destination">
-            <span>Destination Event</span>
-            <strong>#${escapeHtml(data.toEvent?.id || '')}</strong>
-            <small>${escapeHtml(data.toEvent?.name || '')}</small>
-            <em>${Math.min(destinationRequired, destinationNet)} / ${destinationRequired} matched</em>
-          </div>
-          <div class="transfer-schematic-node office">
-            <span>Office Inventory</span>
-            <strong>${returnQty}</strong>
-            <small>asset${returnQty === 1 ? '' : 's'} returning</small>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderTransferCandidates(data) {
-  window.__lastTransferData = data;
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!panel) return;
-
-  const commonGroups = buildTransferGroups(getTransferListForMode('common', data), 'common');
-  const returnGroups = buildTransferGroups(getTransferListForMode('return-office', data), 'return-office');
-  const officeGroups = buildTransferGroups(getTransferListForMode('office-needed', data), 'office-needed');
-  const transferSelected = getTransferSelections('transfer').size;
-  const returnSelected = getTransferSelections('returnOffice').size;
-  const officePrepareSelected = getTransferSelections('officePrepare').size;
-  const officeNeeded = officeGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-
-  panel.innerHTML = `
-    <div class="transfer-board">
-      ${renderTransferSourcePanel(data)}
-      <section class="transfer-panel">
-        <div class="transfer-panel-heading">
-          <h3>Transfer Decision</h3>
-        </div>
-        ${renderTransferDecisionSection('Common / Transferable', '', commonGroups, 'transfer', 'No matching transferable assets.')}
-        ${renderTransferDecisionSection('Return To Office', 'return', returnGroups, 'returnOffice', 'No unused source assets need to return.')}
-        ${renderTransferDecisionSection('Needed From Office', 'office', officeGroups, 'officePrepare', 'Nothing additional is needed from office.')}
-        <div class="transfer-summary-strip">
-          <div class="transfer-summary-card"><strong>${transferSelected}</strong><span>selected for direct transfer</span></div>
-          <div class="transfer-summary-card"><strong>${returnSelected}</strong><span>selected to return to office</span></div>
-          <div class="transfer-summary-card"><strong>${officePrepareSelected}</strong><span>selected to prepare from office</span></div>
-        </div>
-      </section>
-      ${renderTransferTargetPanel(data, commonGroups)}
-    </div>
-    ${renderTransferSummarySchematic(data, commonGroups, returnGroups, officeGroups)}
-    <div class="transfer-action-bar">
-      <button type="button" class="transfer-primary-action" onclick="executeSelectedTransfers()" ${transferSelected ? '' : 'disabled'}>
-        <span>Transfer Selected (${transferSelected})</span>${transferUiIconSvg('arrow')}
-      </button>
-      <button type="button" class="transfer-return-action" onclick="executeSelectedReturns()" ${returnSelected ? '' : 'disabled'}>
-        ${transferUiIconSvg('return')}<span>Return Selected (${returnSelected})</span>
-      </button>
-      <button type="button" class="transfer-office-action" onclick="executeSelectedOfficePrepares()" ${officePrepareSelected ? '' : 'disabled'}>
-        ${transferUiIconSvg('prepare')}<span>Prepare Selected (${officePrepareSelected})</span>
-      </button>
-      <button type="button" class="transfer-export-action" onclick="openTransferPdfExportDialog()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
-    </div>
-  `;
-}
-
-var transferPdfExportModes = new Set(['common']);
-
-function transferPdfExportOptions(data = window.__lastTransferData || {}) {
-  return [
-    { mode: 'common', label: 'Common / Transferable', tone: 'common' },
-    { mode: 'return-office', label: 'Uncommon / Return to Office', tone: 'return' },
-    { mode: 'office-needed', label: 'Needed From Office', tone: 'office' }
-  ].map(option => {
-    const groups = buildTransferGroups(
-      getTransferListForMode(option.mode, data),
-      option.mode
-    );
-    return {
-      ...option,
-      groups,
-      typeCount: groups.length,
-      quantity: groups.reduce(
-        (sum, group) => sum + Number(group.actionQty || 0),
-        0
-      )
-    };
-  });
-}
-
-function ensureTransferPdfExportDialog() {
-  if (document.getElementById('transferPdfExportModal')) return;
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="transferPdfExportModal" class="modal">
-      <div class="modal-content transfer-export-dialog" role="dialog" aria-modal="true" aria-labelledby="transferPdfExportTitle">
-        <div class="modal-header">
-          <div>
-            <h3 id="transferPdfExportTitle">Export Transfer PDF</h3>
-            <span>PDF contents</span>
-          </div>
-          <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('transferPdfExportModal')">&times;</button>
-        </div>
-        <div id="transferPdfExportOptions" class="transfer-export-options"></div>
-        <div id="transferPdfExportError" class="transfer-export-error" role="alert"></div>
-        <div class="modal-actions transfer-export-dialog-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('transferPdfExportModal')">Cancel</button>
-          <button type="button" class="btn btn-primary" onclick="exportSelectedTransferPdf()">Create PDF</button>
-        </div>
-      </div>
-    </div>
-  `);
-}
-
-function renderTransferPdfExportOptions() {
-  const container = document.getElementById('transferPdfExportOptions');
-  if (!container) return;
-  container.innerHTML = transferPdfExportOptions().map(option => `
-    <label class="transfer-export-option is-${option.tone}">
-      <input type="checkbox" value="${option.mode}"
-        ${transferPdfExportModes.has(option.mode) ? 'checked' : ''}
-        onchange="toggleTransferPdfExportMode(this)">
-      <span class="transfer-export-option-mark" aria-hidden="true"></span>
-      <span class="transfer-export-option-copy">
-        <strong>${escapeHtml(option.label)}</strong>
-        <small>${option.typeCount} asset type${option.typeCount === 1 ? '' : 's'} &middot; ${option.quantity} asset${option.quantity === 1 ? '' : 's'}</small>
-      </span>
-    </label>
-  `).join('');
-}
-
-function openTransferPdfExportDialog() {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events first');
-    return;
-  }
-  ensureTransferPdfExportDialog();
-  if (!transferPdfExportModes.size) transferPdfExportModes.add('common');
-  document.getElementById('transferPdfExportError').textContent = '';
-  renderTransferPdfExportOptions();
-  openModal('transferPdfExportModal');
-}
-
-function toggleTransferPdfExportMode(input) {
-  if (input.checked) transferPdfExportModes.add(input.value);
-  else transferPdfExportModes.delete(input.value);
-  document.getElementById('transferPdfExportError').textContent = '';
-}
-
-async function exportSelectedTransferPdf() {
-  if (!transferPdfExportModes.size) {
-    document.getElementById('transferPdfExportError').textContent = 'Select at least one section.';
-    return;
-  }
-  const modes = Array.from(transferPdfExportModes);
-  closeModal('transferPdfExportModal');
-  await generateTransferPdf(modes);
-}
-
-function groupedTransferPdfRows(groups) {
-  if (!groups.length) {
-    return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
-  }
-
-  return groups.map((group, index) => transferPdfRowHtml(group, index + 1)).join('');
-}
-
-const TRANSFER_PDF_COLGROUP = `
-  <col style="width:8mm;">
-  <col style="width:16mm;">
-  <col style="width:20mm;">
-  <col style="width:54mm;">
-  <col>
-`;
-
-function transferPdfTableHead() {
-  return `
-    ${TRANSFER_PDF_COLGROUP}
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Qty</th>
-        <th>Dept</th>
-        <th>Brand / Model</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-  `;
-}
-
-function transferPdfRowHtml(group, rowNumber) {
-  return `
-    <tr>
-      <td>${rowNumber}</td>
-      <td>${escapeHtml(String(group.actionQty || 0))}</td>
-      <td>${escapeHtml(group.department || 'UN')}</td>
-      <td>${escapeHtml(`${group.brand || ''} ${group.model || ''}`.trim())}</td>
-      <td>${escapeHtml(group.description || '')}</td>
-    </tr>
-  `;
-}
-
-function buildLegacyTransferPdfPages(groups, context) {
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const logoRowHtml = renderPdfLogoRowHtml();
-  const footerHtml = renderPdfFooterHtml();
-
-  const fromDate = context.fromDateRange ? ` | ${safe(context.fromDateRange)}` : '';
-  const toDate = context.toDateRange ? ` | ${safe(context.toDateRange)}` : '';
-
-  const headerHtml = `
-    ${logoRowHtml}
-    <div class="header">
-      <div class="header-left">
-        FROM EVENT:<br>
-        ${safe(context.fromEvent.id || context.fromEventId)} - ${safe(context.fromEvent.name || '')}<br>
-        ${safe(context.fromEvent.state || '')}${fromDate}<br><br>
-        TO EVENT:<br>
-        ${safe(context.toEvent.id || context.toEventId)} - ${safe(context.toEvent.name || '')}<br>
-        ${safe(context.toEvent.state || '')}${toDate}
-      </div>
-      <div class="header-right">
-        <div class="transfer-title">${safe(context.title)}</div>
-        No. : ${safe(context.transferNumber)}<br>
-        Date : ${safe(context.formattedDate)}
-      </div>
-    </div>
-  `;
-
-  const summaryHtml = `
-    <table class="summary-table">
-      <tr>
-        <td><strong>Source unreturned assets:</strong><br>${safe(context.fromEvent.unreturnedCount || 0)}</td>
-        <td><strong>Asset type count:</strong><br>${safe(groups.length)}</td>
-        <td><strong>Total quantity:</strong><br>${safe(context.totalQty)}</td>
-      </tr>
-    </table>
-  `;
-
-  const emptyRow = '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
-  const rowRecords = groups.length
-    ? groups.map((group, index) => ({ html: transferPdfRowHtml(group, index + 1), height: 0 }))
-    : [{ html: emptyRow, height: 0 }];
-
-  const measureBox = document.createElement('div');
-  measureBox.id = '__transferMeasureBox';
-  measureBox.style.cssText = `
-    position:absolute;
-    left:-10000px;
-    top:0;
-    visibility:hidden;
-    width:196mm;
-    font-family:'Century Gothic', Arial, sans-serif;
-    font-size:8.5pt;
-    line-height:1.25;
-    background:white;
-    z-index:-1;
-  `;
-
-  measureBox.innerHTML = `
-    <style>
-      #__transferMeasureBox * { box-sizing: border-box; }
-      #__transferMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
-      #__transferMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
-      #__transferMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-      #__transferMeasureBox .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
-      #__transferMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-      #__transferMeasureBox .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-      #__transferMeasureBox .summary-table,
-      #__transferMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; }
-      #__transferMeasureBox .summary-table { margin-bottom:16px; }
-      #__transferMeasureBox .items-table { margin-bottom:0; }
-      #__transferMeasureBox .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
-      #__transferMeasureBox .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-      #__transferMeasureBox .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
-      #__transferMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
-    </style>
-    <div id="__transferFirstBase">
-      ${headerHtml}
-      ${summaryHtml}
-      <table class="items-table">${transferPdfTableHead()}</table>
-    </div>
-    <div id="__transferNextBase">
-      ${headerHtml}
-      <table class="items-table">${transferPdfTableHead()}</table>
-    </div>
-    <table class="items-table">
-      ${TRANSFER_PDF_COLGROUP}
-      <tbody id="__transferMeasureBody"></tbody>
-    </table>
-    <div id="__transferFooterMeasure" class="footer-measure">${footerHtml}</div>
-  `;
-
-  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
-
-  const measureBody = measureBox.querySelector('#__transferMeasureBody');
-  const firstBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferFirstBase').getBoundingClientRect().height
-  );
-  const nextBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferNextBase').getBoundingClientRect().height
-  );
-  const footerHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferFooterMeasure')?.getBoundingClientRect().height || 0
-  );
-  const pageFlowHeightMm = 276;
-  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
-  const firstPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - firstBaseHeight);
-  const nextPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - nextBaseHeight);
-
-  function measureRow(rowHtml) {
-    measureBody.innerHTML = rowHtml;
-    const row = measureBody.querySelector('tr');
-    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
-  }
-
-  rowRecords.forEach(record => {
-    record.height = measureRow(record.html);
-  });
-
-  measureBox.remove();
-
-  const pages = [];
-  let index = 0;
-
-  while (index < rowRecords.length) {
-    const isFirstPage = pages.length === 0;
-    const budget = isFirstPage ? firstPageBudget : nextPageBudget;
-    const pageRows = [];
-    let pageHeight = 0;
-
-    while (index < rowRecords.length) {
-      const record = rowRecords[index];
-
-      if (pageRows.length > 0 && pageHeight + record.height > budget) {
-        break;
-      }
-
-      pageRows.push(record);
-      pageHeight += record.height;
-      index++;
-
-      if (pageRows.length === 1 && record.height > budget) {
-        break;
-      }
-    }
-
-    pages.push({
-      includeSummary: isFirstPage,
-      rows: pageRows
-    });
-  }
-
-  const totalPages = pages.length;
-
-  return pages.map((page, pageIndex) => `
-    <div class="page">
-      ${headerHtml}
-      ${page.includeSummary ? summaryHtml : ''}
-      <table class="items-table">
-        ${transferPdfTableHead()}
-        <tbody>
-          ${page.rows.map(row => row.html).join('')}
-        </tbody>
-      </table>
-      <div class="footer">${footerHtml}</div>
-      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
-    </div>
-  `).join('');
-}
-
-function transferPdfTextColor(background) {
-  const match = String(background || '').match(/^#([0-9a-f]{6})$/i);
-  if (!match) return '#ffffff';
-  const value = match[1];
-  const red = parseInt(value.slice(0, 2), 16);
-  const green = parseInt(value.slice(2, 4), 16);
-  const blue = parseInt(value.slice(4, 6), 16);
-  return ((red * 299 + green * 587 + blue * 114) / 1000) > 158
-    ? '#172033'
-    : '#ffffff';
-}
-
-function transferPdfSectionHeadingHtml(section) {
-  return `<tr class="transfer-section-row"><td colspan="5">${escapeHtml(section.label)}</td></tr>`;
-}
-
-function transferPdfReportRows(sections) {
-  let rowNumber = 0;
-  return sections.flatMap(section => {
-    const rows = [{
-      kind: 'heading',
-      html: transferPdfSectionHeadingHtml(section),
-      height: 0
-    }];
-    if (!section.groups.length) {
-      rows.push({
-        kind: 'empty',
-        html: '<tr><td colspan="5" class="transfer-empty-row">No assets in this section.</td></tr>',
-        height: 0
-      });
-      return rows;
-    }
-    section.groups.forEach(group => {
-      rowNumber += 1;
-      rows.push({
-        kind: 'item',
-        html: transferPdfRowHtml(group, rowNumber),
-        height: 0
-      });
-    });
-    return rows;
-  });
-}
-
-function buildTransferPdfPagesV2(sections, context) {
-  const safe = value => escapeHtml(String(value ?? ''));
-  const logoHtml = renderPdfLogoRowHtml('transfer-report-logo');
-  const footerHtml = renderPdfFooterHtml();
-  const themeColor = /^#[0-9a-f]{6}$/i.test(context.themeColor || '')
-    ? context.themeColor
-    : '#0f766e';
-  const themeText = transferPdfTextColor(themeColor);
-  const eventMeta = event => [
-    transferEventDateLabel(event),
-    event.location || event.venue || '',
-    eventStateDisplayLabel(event.state || '')
-  ].filter(Boolean).map(safe).join(' &middot; ');
-
-  const showLetterheadText = pdfSettings?.letterheadEnabled !== false;
-  const letterheadHtml = (showLetterheadText || logoHtml) ? `
-    <div class="transfer-report-letterhead">
-      ${showLetterheadText ? `<div>
-        <strong>${safe(context.companyName || 'Showbase')}</strong>
-        <span>Asset Operations</span>
-      </div>` : '<div></div>'}
-      ${logoHtml}
-    </div>
-  ` : '';
-  const reportHeaderHtml = `
-    ${letterheadHtml}
-    <div class="transfer-report-header">
-      <div>
-        <span class="transfer-report-kicker">OPERATIONS REPORT</span>
-        <div class="transfer-report-title">ASSET TRANSFER REPORT</div>
-      </div>
-      <div class="transfer-report-generated">
-        <span>Generated by</span><strong>${safe(context.generatedBy || '-')}</strong>
-        <span>Generated on</span><strong>${safe(context.generatedAt)}</strong>
-      </div>
-    </div>
-    <div class="transfer-report-route">
-      <div class="transfer-report-event from">
-        <span>FROM EVENT</span>
-        <strong>#${safe(context.fromEvent.id || context.fromEventId)} ${safe(context.fromEvent.name || '')}</strong>
-        <small>${eventMeta(context.fromEvent)}</small>
-      </div>
-      <div class="transfer-report-arrow" aria-hidden="true">&rarr;</div>
-      <div class="transfer-report-event to">
-        <span>TO EVENT</span>
-        <strong>#${safe(context.toEvent.id || context.toEventId)} ${safe(context.toEvent.name || '')}</strong>
-        <small>${eventMeta(context.toEvent)}${context.targetSubproject?.name ? ` &middot; ${safe(context.targetSubproject.name)}` : ''}</small>
-      </div>
-    </div>
-  `;
-  const summaryHtml = `
-    <div class="transfer-report-summary">
-      <div><span>Included</span><strong>${sections.map(section => safe(section.label)).join(', ')}</strong></div>
-      <div><span>Asset types</span><strong>${safe(context.totalTypes)}</strong></div>
-      <div><span>Total quantity</span><strong>${safe(context.totalQty)}</strong></div>
-    </div>
-  `;
-
-  const rowRecords = transferPdfReportRows(sections);
-  const measureBox = document.createElement('div');
-  measureBox.id = '__transferReportMeasureBox';
-  measureBox.style.cssText = `position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
-    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.3;background:#fff;z-index:-1;`;
-  measureBox.innerHTML = `
-    <style>
-      #__transferReportMeasureBox *{box-sizing:border-box}
-      #__transferReportMeasureBox .transfer-report-letterhead{display:flex;align-items:center;justify-content:space-between;min-height:34px;margin-bottom:6px;border-bottom:1px solid #dbe5e3;padding-bottom:6px}
-      #__transferReportMeasureBox .transfer-report-letterhead strong{display:block;color:${themeColor};font-size:13pt}
-      #__transferReportMeasureBox .transfer-report-letterhead span{display:block;margin-top:1px;color:#65736f;font-size:7pt;text-transform:uppercase}
-      #__transferReportMeasureBox .transfer-report-logo{height:32px}.transfer-report-logo img{max-height:32px;max-width:62mm;object-fit:contain}
-      #__transferReportMeasureBox .transfer-report-header{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;margin:8px 0 10px}
-      #__transferReportMeasureBox .transfer-report-kicker{color:#667085;font-size:7pt;font-weight:700}
-      #__transferReportMeasureBox .transfer-report-title{margin-top:2px;color:#172033;font-size:15pt;font-weight:800}
-      #__transferReportMeasureBox .transfer-report-generated{display:grid;grid-template-columns:auto auto;gap:2px 8px;text-align:right;font-size:7.5pt}
-      #__transferReportMeasureBox .transfer-report-generated span{color:#667085}.transfer-report-generated strong{color:#172033}
-      #__transferReportMeasureBox .transfer-report-route{display:grid;grid-template-columns:minmax(0,1fr) 12mm minmax(0,1fr);gap:5px;align-items:stretch;margin-bottom:10px}
-      #__transferReportMeasureBox .transfer-report-event{border:1px solid #dce6e4;border-radius:5px;background:#f8fbfa;padding:7px 9px}
-      #__transferReportMeasureBox .transfer-report-event.to{border-color:${themeColor};background:${themeColor}12}
-      #__transferReportMeasureBox .transfer-report-event span{display:block;color:#667085;font-size:6.8pt;font-weight:800}
-      #__transferReportMeasureBox .transfer-report-event strong{display:block;margin-top:3px;color:#172033;font-size:9pt}
-      #__transferReportMeasureBox .transfer-report-event small{display:block;margin-top:3px;color:#667085;font-size:7pt}
-      #__transferReportMeasureBox .transfer-report-arrow{display:grid;place-items:center;color:${themeColor};font-size:18pt;font-weight:800}
-      #__transferReportMeasureBox .transfer-report-summary{display:grid;grid-template-columns:minmax(0,1fr) 25mm 27mm;margin-bottom:10px;border:1px solid #dce6e4;border-radius:5px;overflow:hidden}
-      #__transferReportMeasureBox .transfer-report-summary>div{padding:6px 8px;border-right:1px solid #dce6e4}.transfer-report-summary>div:last-child{border-right:0}
-      #__transferReportMeasureBox .transfer-report-summary span{display:block;color:#667085;font-size:6.8pt}.transfer-report-summary strong{display:block;margin-top:2px;color:#172033;font-size:8pt}
-      #__transferReportMeasureBox .items-table{width:100%;border-collapse:collapse;table-layout:fixed}
-      #__transferReportMeasureBox .items-table th{border:0;background:${themeColor};color:${themeText};padding:6px 7px;font-size:7.4pt;text-align:left}
-      #__transferReportMeasureBox .items-table td{border-bottom:1px solid #dfe7e5;padding:5px 7px;color:#24312e;font-size:7.5pt;vertical-align:top;overflow-wrap:anywhere}
-      #__transferReportMeasureBox .items-table th:first-child,#__transferReportMeasureBox .items-table td:first-child{text-align:center}
-      #__transferReportMeasureBox .items-table th:nth-child(2),#__transferReportMeasureBox .items-table td:nth-child(2){text-align:right}
-      #__transferReportMeasureBox .transfer-section-row td{background:${themeColor}14;color:${themeColor};font-weight:800;text-transform:uppercase;padding:6px 7px;border-top:2px solid #fff}
-      #__transferReportMeasureBox .transfer-empty-row{text-align:center;color:#667085!important;padding:12px!important}
-      #__transferReportMeasureBox .footer-measure{width:100%;font-size:7pt;line-height:1.2;text-align:center}
-    </style>
-    <div id="__transferReportFirstBase">${reportHeaderHtml}${summaryHtml}<table class="items-table">${transferPdfTableHead()}</table></div>
-    <div id="__transferReportNextBase">${reportHeaderHtml}<table class="items-table">${transferPdfTableHead()}</table></div>
-    <table class="items-table">${TRANSFER_PDF_COLGROUP}<tbody id="__transferReportMeasureBody"></tbody></table>
-    <div id="__transferReportFooterMeasure" class="footer-measure">${footerHtml}</div>
-  `;
-
-  const normalise = mountPdfMeasureBox(measureBox, 196);
-  const measureBody = measureBox.querySelector('#__transferReportMeasureBody');
-  const firstBaseHeight = normalise(measureBox.querySelector('#__transferReportFirstBase').getBoundingClientRect().height);
-  const nextBaseHeight = normalise(measureBox.querySelector('#__transferReportNextBase').getBoundingClientRect().height);
-  const footerHeight = normalise(measureBox.querySelector('#__transferReportFooterMeasure')?.getBoundingClientRect().height || 0);
-  rowRecords.forEach(record => {
-    measureBody.innerHTML = record.html;
-    record.height = normalise(measureBody.querySelector('tr')?.getBoundingClientRect().height || 0);
-  });
-  measureBox.remove();
-
-  const pageFlowHeightMm = 276;
-  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
-  const pages = [];
-  let recordIndex = 0;
-  while (recordIndex < rowRecords.length) {
-    const firstPage = pages.length === 0;
-    const baseHeight = firstPage ? firstBaseHeight : nextBaseHeight;
-    const budget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
-    const pageRows = [];
-    let pageHeight = 0;
-    while (recordIndex < rowRecords.length) {
-      const record = rowRecords[recordIndex];
-      const nextRecord = rowRecords[recordIndex + 1];
-      const headingBundleHeight = record.kind === 'heading' && nextRecord
-        ? record.height + nextRecord.height
-        : record.height;
-      if (pageRows.length && pageHeight + headingBundleHeight > budget) break;
-      if (pageRows.length && pageHeight + record.height > budget) break;
-      pageRows.push(record);
-      pageHeight += record.height;
-      recordIndex += 1;
-      if (pageRows.length === 1 && record.height > budget) break;
-    }
-    pages.push({ includeSummary: firstPage, rows: pageRows });
-  }
-
-  const totalPages = pages.length;
-  return pages.map((page, pageIndex) => `
-    <div class="page">
-      ${reportHeaderHtml}
-      ${page.includeSummary ? summaryHtml : ''}
-      <table class="items-table">
-        ${transferPdfTableHead()}
-        <tbody>${page.rows.map(record => record.html).join('')}</tbody>
-      </table>
-      <div class="footer">${footerHtml}</div>
-      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
-    </div>
-  `).join('');
-}
-
-async function generateTransferPdf(selectedModes = ['common']) {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  const fromEvent = transferEventById(fromEventId) || {};
-  const toEvent = transferEventById(toEventId) || {};
-
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events first');
-    return;
-  }
-
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) {
-    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
-    return;
-  }
-  win.document.write('<!doctype html><title>Preparing transfer report...</title><p style="font:14px Arial;padding:24px">Preparing transfer report...</p>');
-
-  try {
-    const optionMap = new Map(
-      transferPdfExportOptions().map(option => [option.mode, option])
-    );
-    const sections = selectedModes
-      .map(mode => optionMap.get(transferModeMeta(mode).mode))
-      .filter(Boolean);
-    if (!sections.length) throw new Error('Select at least one PDF section');
-
-    const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
-    deliveryOrderCaptureDocument(eventId);
-    await flushDoEdits(eventId);
-    await loadPdfSettings(true);
-    const totalQty = sections.reduce(
-      (sum, section) => sum + Number(section.quantity || 0),
-      0
-    );
-    const totalTypes = sections.reduce(
-      (sum, section) => sum + Number(section.typeCount || 0),
-      0
-    );
-    const generatedBy = (
-      typeof eventAssigneeDisplayName === 'function'
-        ? eventAssigneeDisplayName(currentUser)
-        : ''
-    ) || currentUser?.username || '';
-    const themeColor = /^#[0-9a-f]{6}$/i.test(pdfSettings?.themeColor || '')
-      ? pdfSettings.themeColor
-      : '#0f766e';
-    const themeText = transferPdfTextColor(themeColor);
-    const pagesHtml = buildTransferPdfPagesV2(sections, {
-      fromEvent,
-      toEvent,
-      fromEventId,
-      toEventId,
-      targetSubproject: transferSelectedTargetSubproject(),
-      companyName: pdfSettings?.companyName || currentUser?.company?.name || '',
-      generatedBy,
-      generatedAt: reportGeneratedAt(),
-      totalQty,
-      totalTypes,
-      themeColor
-    });
-    const safe = value => escapeHtml(String(value ?? ''));
-    const html = `<!DOCTYPE html><html><head><title>Asset Transfer Report - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
-      @page{size:A4;margin:0}
-      *{box-sizing:border-box}
-      body{margin:0;background:#eef2f1;color:#172033;font-family:'Century Gothic',Arial,sans-serif}
-      .page{position:relative;width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;overflow:hidden;page-break-after:always;break-after:page}
-      .page:last-child{page-break-after:auto;break-after:auto}
-      .transfer-report-letterhead{display:flex;align-items:center;justify-content:space-between;min-height:34px;margin-bottom:6px;border-bottom:1px solid #dbe5e3;padding-bottom:6px}
-      .transfer-report-letterhead strong{display:block;color:${themeColor};font-size:13pt}.transfer-report-letterhead span{display:block;margin-top:1px;color:#65736f;font-size:7pt;text-transform:uppercase}
-      .transfer-report-logo{height:32px}.transfer-report-logo img{max-width:62mm;max-height:32px;object-fit:contain}
-      .transfer-report-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:8px 0 10px}
-      .transfer-report-kicker{color:#667085;font-size:7pt;font-weight:700}.transfer-report-title{margin-top:2px;color:#172033;font-size:15pt;font-weight:800}
-      .transfer-report-generated{display:grid;grid-template-columns:auto auto;gap:2px 8px;text-align:right;font-size:7.5pt}.transfer-report-generated span{color:#667085}.transfer-report-generated strong{color:#172033}
-      .transfer-report-route{display:grid;grid-template-columns:minmax(0,1fr) 12mm minmax(0,1fr);gap:5px;align-items:stretch;margin-bottom:10px}
-      .transfer-report-event{border:1px solid #dce6e4;border-radius:5px;background:#f8fbfa;padding:7px 9px}.transfer-report-event.to{border-color:${themeColor};background:${themeColor}12}
-      .transfer-report-event span{display:block;color:#667085;font-size:6.8pt;font-weight:800}.transfer-report-event strong{display:block;margin-top:3px;color:#172033;font-size:9pt}.transfer-report-event small{display:block;margin-top:3px;color:#667085;font-size:7pt}
-      .transfer-report-arrow{display:grid;place-items:center;color:${themeColor};font-size:18pt;font-weight:800}
-      .transfer-report-summary{display:grid;grid-template-columns:minmax(0,1fr) 25mm 27mm;margin-bottom:10px;border:1px solid #dce6e4;border-radius:5px;overflow:hidden}
-      .transfer-report-summary>div{padding:6px 8px;border-right:1px solid #dce6e4}.transfer-report-summary>div:last-child{border-right:0}.transfer-report-summary span{display:block;color:#667085;font-size:6.8pt}.transfer-report-summary strong{display:block;margin-top:2px;color:#172033;font-size:8pt}
-      .items-table{width:100%;border-collapse:collapse;table-layout:fixed}.items-table th{border:0;background:${themeColor};color:${themeText};padding:6px 7px;font-size:7.4pt;text-align:left}.items-table td{border-bottom:1px solid #dfe7e5;padding:5px 7px;color:#24312e;font-size:7.5pt;vertical-align:top;line-height:1.3;overflow-wrap:anywhere}
-      .items-table th:first-child,.items-table td:first-child{text-align:center}.items-table th:nth-child(2),.items-table td:nth-child(2){text-align:right}.transfer-section-row td{border-top:2px solid #fff;background:${themeColor}14;color:${themeColor};font-weight:800;text-transform:uppercase;padding:6px 7px}.transfer-empty-row{text-align:center!important;color:#667085!important;padding:12px!important}
-      .footer{position:absolute;right:7mm;bottom:7mm;left:7mm;text-align:center;font-size:7pt;font-weight:700;line-height:1.2}.page-number{position:absolute;right:7mm;bottom:3mm;color:#667085;font-size:7pt}
-      .print-btn{position:fixed;z-index:999;top:20px;right:20px;min-height:40px;border:0;border-radius:6px;background:${themeColor};color:${themeText};padding:0 17px;cursor:pointer;font-weight:800}
-      @media print{body,body *{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff}.page{margin:0;page-break-after:always;break-after:page}.page:last-child{page-break-after:auto;break-after:auto}.print-btn{display:none}}
-    </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    showNotification('success', 'Transfer PDF generated');
-  } catch (error) {
-    win.close();
-    showNotification('error', `Failed to generate transfer PDF: ${error.message || error}`);
-  }
 }

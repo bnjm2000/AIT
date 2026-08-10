@@ -201,9 +201,22 @@ def _replace_generated_username_references(text, old_username, new_username):
 class DataManager:
     """Owns the in-memory data model and its CSV persistence format."""
 
-    def __init__(self, data_folder, users_file=None):
-        self.data_folder = data_folder
-        self.events_folder = os.path.join(data_folder, 'events')
+    def __init__(
+        self,
+        data_folder,
+        users_file=None,
+        documents_folder=None,
+        media_folder=None,
+    ):
+        self.data_folder = os.path.abspath(data_folder)
+        self.documents_folder = os.path.abspath(documents_folder or data_folder)
+        self.media_folder = os.path.abspath(media_folder or data_folder)
+        self.events_folder = os.path.join(self.data_folder, 'events')
+        self.event_documents_folder = (
+            os.path.join(self.documents_folder, 'events')
+            if self.documents_folder != self.data_folder
+            else self.events_folder
+        )
         self.users_file = users_file
         self.users = {}
         self.inventory = {}
@@ -228,13 +241,43 @@ class DataManager:
         if not filename:
             return None
         stem, _ = os.path.splitext(filename)
+        return os.path.join(self.event_documents_folder, stem)
+
+    def _legacy_event_folder_for_filename(self, filename):
+        if not filename or self.event_documents_folder == self.events_folder:
+            return None
+        stem, _ = os.path.splitext(filename)
         return os.path.join(self.events_folder, stem)
+
+    def _event_folder_by_id(self, event_id, root):
+        if event_id in (None, '') or not root or not os.path.isdir(root):
+            return None
+        prefix = f"{event_id}."
+        matches = []
+        try:
+            for entry in os.scandir(root):
+                if entry.is_dir() and entry.name.startswith(prefix):
+                    matches.append(entry.path)
+        except OSError:
+            return None
+        return sorted(matches)[0] if matches else None
 
     def get_event_folder(self, event_id, create=False):
         filename = self.event_file_map.get(event_id)
         if not filename and event_id in self.events:
             filename = self._event_filename(self.events[event_id])
         folder = self._event_folder_for_filename(filename)
+        legacy_folder = self._legacy_event_folder_for_filename(filename)
+        if folder and not os.path.isdir(folder):
+            folder = (
+                self._event_folder_by_id(event_id, self.event_documents_folder)
+                or (
+                    legacy_folder
+                    if legacy_folder and os.path.isdir(legacy_folder)
+                    else self._event_folder_by_id(event_id, self.events_folder)
+                )
+                or folder
+            )
         if create and folder:
             os.makedirs(folder, exist_ok=True)
         return folder
@@ -251,6 +294,24 @@ class DataManager:
     def _move_event_folder(self, old_filename, new_filename):
         old_folder = self._event_folder_for_filename(old_filename)
         new_folder = self._event_folder_for_filename(new_filename)
+        legacy_old_folder = self._legacy_event_folder_for_filename(old_filename)
+        if (
+            old_folder
+            and not os.path.isdir(old_folder)
+            and legacy_old_folder
+            and os.path.isdir(legacy_old_folder)
+        ):
+            old_folder = legacy_old_folder
+            legacy_new_folder = self._legacy_event_folder_for_filename(new_filename)
+            if legacy_new_folder:
+                new_folder = legacy_new_folder
+        if old_folder and not os.path.isdir(old_folder):
+            old_event_id = str(old_filename or '').split('.', 1)[0]
+            old_folder = (
+                self._event_folder_by_id(old_event_id, self.event_documents_folder)
+                or self._event_folder_by_id(old_event_id, self.events_folder)
+                or old_folder
+            )
         if not old_folder or not new_folder or old_folder == new_folder:
             return
         if not os.path.isdir(old_folder):
@@ -272,10 +333,14 @@ class DataManager:
     # ---------------- Application bootstrap ----------------
 
     def setup_data_folder(self):
-        if not os.path.exists(self.data_folder):
-            os.makedirs(self.data_folder)
-        if not os.path.exists(self.events_folder):
-            os.makedirs(self.events_folder)
+        for folder in (
+            self.data_folder,
+            self.events_folder,
+            self.documents_folder,
+            self.event_documents_folder,
+            self.media_folder,
+        ):
+            os.makedirs(folder, exist_ok=True)
 
     def check_and_initialize_files(self):
         missing_files = []

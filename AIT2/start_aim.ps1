@@ -1,7 +1,13 @@
 $ErrorActionPreference = 'Stop'
 
 $appDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-$logDirectory = Join-Path $appDirectory 'logs'
+$storageRoot = if ($env:SHOWBASE_STORAGE_ROOT) {
+    $env:SHOWBASE_STORAGE_ROOT
+} else {
+    Join-Path (Split-Path -Parent $appDirectory) 'showbase-storage'
+}
+$env:SHOWBASE_STORAGE_ROOT = $storageRoot
+$logDirectory = Join-Path $storageRoot 'runtime\logs'
 $logFile = Join-Path $logDirectory 'showbase_startup.log'
 $python = Join-Path $appDirectory '.venv\Scripts\python.exe'
 

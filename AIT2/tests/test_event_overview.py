@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from tests.static_source import APP_BUNDLE_SOURCE
 from unittest.mock import patch
 
 import app as app_module
@@ -646,9 +648,7 @@ class TransferWorkspaceSourceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         root = Path(__file__).resolve().parents[1]
-        cls.source = (root / 'static' / 'js' / 'app.js').read_text(
-            encoding='utf-8'
-        )
+        cls.source = APP_BUNDLE_SOURCE
         cls.template = (root / 'templates' / 'index.html').read_text(
             encoding='utf-8'
         )
