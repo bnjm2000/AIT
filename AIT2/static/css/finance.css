@@ -904,7 +904,7 @@
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: thin;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: auto;
 }
 
 .finance-go-costing {

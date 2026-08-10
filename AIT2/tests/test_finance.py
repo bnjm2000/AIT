@@ -5358,6 +5358,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('height: 24px;', css_source)
         self.assertIn('.finance-lines-table .finance-money-input', css_source)
         self.assertIn('padding: 1px 2px;', css_source)
+        side_column_css = css_source.split('.finance-side-column {', 2)[2].split('}', 1)[0]
+        self.assertIn('overflow-y: auto;', side_column_css)
+        self.assertIn('overscroll-behavior-y: auto;', side_column_css)
+        self.assertNotIn('overscroll-behavior: contain;', side_column_css)
         self.assertIn('window.open(pdfurl', source)
         self.assertNotIn('window.location.href = pdfurl', source)
         self.assertNotIn('link.download', source)
