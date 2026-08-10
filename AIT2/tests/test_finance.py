@@ -4344,6 +4344,107 @@ class FinanceFeatureTests(unittest.TestCase):
             ],
         )
 
+    def test_profit_loss_pdf_exports_project_summary_and_expense_details(self):
+        self.login('sales-admin')
+        event = Event(
+            event_id=138, name='P&L Export Event', location='Grand Ballroom',
+            start_date='20260821', end_date='20260822', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        self.data_manager.events[138] = event
+        quotation = self.create_quote('P&L Export Event')
+        quotation['eventId'] = 138
+        quotation['client'] = {
+            'name': 'Jordan Lee',
+            'company': 'Example Client Pte Ltd',
+        }
+        quotation['lineItems'] = [{
+            'id': 'package', 'catalogKey': '', 'description': 'Event package',
+            'department': 'Audio System', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 2000,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(saved_quote.status_code, 200, saved_quote.get_data(as_text=True))
+        quotation_number = saved_quote.get_json()['data']['number']
+
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['freelancers'] = [{
+            'id': 'worker-pdf',
+            'name': 'Wesley Tan',
+            'active': True,
+        }]
+        workforce['assignments'] = {
+            '138': [{
+                'freelancerId': 'worker-pdf',
+                'department': 'AX',
+                'dailyRate': 400,
+                'days': 1,
+            }],
+        }
+        workforce['submissions'] = {
+            '138': {
+                'worker-pdf': {
+                    'invoices': [{
+                        'id': 'invoice-pdf',
+                        'amount': 425,
+                        'status': 'Approved',
+                        'submittedAt': '2026-08-22T12:00:00',
+                    }],
+                    'claims': [],
+                },
+            },
+        }
+        save_workforce(app_module._workforce_folder(), workforce)
+        expense = self.client.post(
+            '/api/finance/profit-loss/138/expenses',
+            json={
+                'description': 'Additional consumables',
+                'category': 'Consumables',
+                'vendor': 'Supply House',
+                'amount': 75.50,
+                'expenseDate': '2026-08-21',
+            },
+        )
+        self.assertEqual(expense.status_code, 201, expense.get_data(as_text=True))
+        commission = self.client.put(
+            '/api/finance/profit-loss/138/commissions',
+            json={'commissions': [{
+                'recipient': 'Sales Team',
+                'calculationMode': 'percent',
+                'percent': 5,
+            }]},
+        )
+        self.assertEqual(commission.status_code, 200, commission.get_data(as_text=True))
+
+        response = self.client.get('/api/finance/profit-loss/138/pdf')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'application/pdf')
+        self.assertIn('Profit-Loss-Event-138', response.headers['Content-Disposition'])
+        self.assertIn('no-store', response.headers['Cache-Control'])
+        reader = PdfReader(io.BytesIO(response.data))
+        report_text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        for expected in (
+            'PROJECT PROFIT & LOSS',
+            'P&L Export Event',
+            quotation_number,
+            'PROFIT CALCULATION',
+            'Budget Performance',
+            'Cost Sources',
+            'Commission Recipients',
+            'Invoices, Claims & Expenses',
+            'Wesley Tan - Invoice',
+            'Additional consumables',
+            'Supply House',
+            'Page 1 of',
+        ):
+            self.assertIn(expected, report_text)
+
     def test_profit_loss_requires_sales_then_applies_financial_permissions(self):
         event = Event(
             event_id=137, name='Restricted Event', location='Studio',
@@ -4369,6 +4470,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.login('manager-no-sales')
         self.assertEqual(
             self.client.get('/api/finance/profit-loss/137').status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get('/api/finance/profit-loss/137/pdf').status_code,
             403,
         )
 

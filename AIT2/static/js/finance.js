@@ -6457,6 +6457,32 @@ function profitLossRenderCensored(root, data) {
   `;
 }
 
+function profitLossExportPdf(button) {
+  const eventId = Number(profitLossState.eventId || profitLossState.data?.event?.id || 0);
+  if (!eventId) {
+    showNotification('error', 'Select an event before exporting Profit & Loss');
+    return;
+  }
+  const original = button?.innerHTML || '';
+  if (button) {
+    button.disabled = true;
+    button.classList.add('is-loading');
+    button.innerHTML = '<span class="finance-button-spinner" aria-hidden="true"></span>Preparing PDF';
+  }
+  const opened = window.open(
+    `/api/finance/profit-loss/${encodeURIComponent(eventId)}/pdf?v=${encodeURIComponent(Date.now())}`,
+    '_blank',
+    'noopener'
+  );
+  if (!opened) showNotification('warning', 'Please allow pop-ups to preview the PDF');
+  window.setTimeout(() => {
+    if (!button) return;
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    button.innerHTML = original;
+  }, 900);
+}
+
 function renderProfitLossPage() {
   const root = profitLossRoot();
   const data = profitLossState.data;
@@ -6536,7 +6562,10 @@ function renderProfitLossPage() {
         <h2>Profit &amp; Loss</h2>
         <p class="finance-subtitle">Track revenue, expenses, and net profit for each event.</p>
       </div>
-      <button type="button" class="btn btn-primary" onclick="window.print()">Export</button>
+      <button type="button" class="btn btn-primary" onclick="profitLossExportPdf(this)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"></path><path d="M5 19h14"></path></svg>
+        Export PDF
+      </button>
     </div>
 
     <div class="plan-event-bar pnl-event-bar">

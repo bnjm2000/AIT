@@ -35802,6 +35802,68 @@ def finance_profit_loss_event(event_id):
     return jsonify({'success': True, 'data': payload})
 
 
+@app.route('/api/finance/profit-loss/<int:event_id>/pdf', methods=['GET'])
+@require_sales
+def finance_profit_loss_pdf(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        permissions = _finance_profit_loss_access(finance_data, event_id)
+        if not permissions['canViewFinancials']:
+            return _finance_profit_loss_expense_access_denied()
+        payload = _finance_profit_loss_payload(event, finance_data)
+
+    departments = _load_departments()
+    department_colours = {}
+    for code, row in departments.items():
+        colour = str((row or {}).get('color') or '').strip()
+        name = str((row or {}).get('name') or '').strip()
+        if not colour:
+            continue
+        for key in (str(code), str(code).casefold(), name, name.casefold()):
+            if key:
+                department_colours[key] = colour
+    payload['departmentColours'] = department_colours
+
+    try:
+        from io import BytesIO
+        from profit_loss_pdf import build_profit_loss_pdf
+        from quotation_pdf import safe_pdf_filename
+
+        settings = _normalise_pdf_settings(_load_pdf_settings())
+        pdf_bytes = build_profit_loss_pdf(
+            payload,
+            settings,
+            _pdf_logo_path(settings),
+            generated_by=_finance_current_user_display_name(),
+        )
+    except ImportError:
+        logger.error("ReportLab is required for Profit & Loss PDF export", exc_info=True)
+        return jsonify({'error': 'PDF export dependency is not installed'}), 503
+    except Exception as exc:
+        logger.error("Failed to render Profit & Loss PDF: %s", exc, exc_info=True)
+        return jsonify({'error': 'Failed to generate Profit & Loss PDF'}), 500
+
+    response = send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=request.args.get('download') == '1',
+        download_name=safe_pdf_filename(
+            f"Profit-Loss-Event-{event_id}-{event.name}",
+            'profit-loss',
+        ),
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
+
+
 @app.route('/api/finance/profit-loss/<int:event_id>/revenue', methods=['PUT'])
 @require_sales
 def finance_profit_loss_update_revenue(event_id):
