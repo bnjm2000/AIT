@@ -2381,6 +2381,157 @@ class FinanceFeatureTests(unittest.TestCase):
             for line in saved['lineItems']
         ))
 
+    def test_misc_line_uses_renamed_category_majority_department_in_event_and_compare(self):
+        self.data_manager.inventory.update({
+            'AX#02': InventoryItem(
+                asset_id='AX#02', brand='Shure', model_number='SM58',
+                serial_number='SM58-2', description='Dynamic microphone',
+                is_missing=False, maintenance_logs=[], department_code='AX',
+            ),
+            'AX#03': InventoryItem(
+                asset_id='AX#03', brand='Shure', model_number='SM81',
+                serial_number='SM81-3', description='Condenser microphone',
+                is_missing=False, maintenance_logs=[], department_code='AX',
+            ),
+        })
+        self.data_manager.save_inventory()
+        quotation = self.create_quote('Renamed Audio Category')
+        quotation['lineItems'] = [{
+            'id': 'sm58-line',
+            'catalogKey': 'inventory:ax|shure|sm58',
+            'sourceAssetIds': ['AX#02'],
+            'brand': 'Shure', 'model': 'SM58',
+            'description': 'Dynamic microphone',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'systemName': 'Audio Works',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 20,
+        }, {
+            'id': 'sm81-line',
+            'catalogKey': 'inventory:ax|shure|sm81',
+            'sourceAssetIds': ['AX#03'],
+            'brand': 'Shure', 'model': 'SM81',
+            'description': 'Condenser microphone',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 30,
+        }, {
+            'id': 'lighting-in-audio-works',
+            'catalogKey': 'inventory:lx|robe|spiider',
+            'sourceAssetIds': ['LX#01'],
+            'brand': 'Robe', 'model': 'Spiider',
+            'description': 'LED wash fixture',
+            'department': 'Lighting Department', 'departmentCode': 'LX',
+            'systemName': 'Audio Works',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 40,
+        }, {
+            'id': 'battery-line',
+            'catalogKey': '', 'sourceAssetIds': [],
+            'description': 'AA Battery',
+            'department': 'Audio Works', 'departmentCode': '',
+            'systemName': 'Audio Works',
+            'days': 1, 'quantity': 4, 'uom': 'units', 'unitPrice': 1,
+            'isCustom': True, 'customType': 'MISC',
+        }]
+
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        by_id = {line['id']: line for line in saved['lineItems']}
+        self.assertEqual(by_id['sm81-line']['systemName'], 'Audio Works')
+        self.assertEqual(by_id['sm81-line']['departmentCode'], 'AX')
+        self.assertEqual(by_id['lighting-in-audio-works']['departmentCode'], 'LX')
+        self.assertEqual(by_id['battery-line']['systemName'], 'Audio Works')
+        self.assertEqual(by_id['battery-line']['departmentCode'], 'AX')
+        self.assertEqual(by_id['battery-line']['department'], 'Audio Department')
+
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}", json={'status': 'accepted'},
+        ).get_json()['data']
+        event = self.data_manager.events[accepted['eventId']]
+        battery_marker = next(
+            app_module._parse_custom_marker(ref)
+            for ref in event.prepared_items
+            if (app_module._parse_custom_marker(ref) or {}).get('name') == 'AA Battery'
+        )
+        self.assertEqual(battery_marker['department'], 'AX')
+        battery_item = next(
+            item for room in event.subprojects
+            for item in room.get('items') or []
+            if item.get('description') == 'AA Battery'
+        )
+        self.assertEqual(battery_item['departmentCode'], 'AX')
+
+        self.login('sales-admin')
+        comparison = self.client.get('/api/finance/compare', query_string={
+            'eventId': event.event_id,
+            'quotationId': accepted['id'],
+        }).get_json()['data']
+        battery_row = next(
+            row for row in comparison['rows']
+            if row['quotationItem']['title'] == 'AA Battery'
+        )
+        self.assertEqual(battery_row['status'], 'matched')
+        self.assertEqual(battery_row['quotationItem']['departmentCode'], 'AX')
+        self.assertEqual(battery_row['eventItem']['departmentCode'], 'AX')
+
+    def test_compare_adds_event_items_to_existing_renamed_category(self):
+        event = Event(
+            event_id=206,
+            name='Compare Category Mapping',
+            location='Studio C',
+            start_date='20260721',
+            end_date='20260721',
+            asset_models=[],
+            prepared_items=[
+                '[MODEL]AX|Shure|SM81|1|Condenser microphone',
+                app_module._make_custom_marker('MISC', 'AA Battery', 4, 'AX'),
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'sales-admin'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.data_manager.save_event(event)
+        quotation = self.create_quote('Compare Category Mapping')
+        quotation['eventId'] = event.event_id
+        quotation['lineItems'] = [{
+            'id': 'existing-audio-category',
+            'catalogKey': 'inventory:ax|l-acoustics|sb18 iii',
+            'sourceAssetIds': ['AX#01'],
+            'brand': 'L-Acoustics', 'model': 'SB18 III',
+            'description': 'Subwoofer',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'systemName': 'Audio Works',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        self.login('sales-admin')
+        comparison = self.client.get('/api/finance/compare', query_string={
+            'eventId': event.event_id,
+            'quotationId': saved['id'],
+        }).get_json()['data']
+        extra_keys = [
+            row['key'] for row in comparison['rows']
+            if row['status'] == 'extra_in_event'
+        ]
+        response = self.client.post(
+            f'/api/finance/compare/{event.event_id}/add-to-quotation',
+            json={'quotationId': saved['id'], 'keys': extra_keys},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        added = [
+            line for line in response.get_json()['quotation']['lineItems']
+            if line['id'] != 'existing-audio-category'
+        ]
+        self.assertEqual(len(added), 2)
+        self.assertTrue(all(line['systemName'] == 'Audio Works' for line in added))
+        self.assertTrue(all(line['departmentCode'] == 'AX' for line in added))
+        battery = next(line for line in added if line['description'] == 'AA Battery')
+        self.assertTrue(battery['isCustom'])
+
     def test_department_suggestion_selection_suppresses_stale_change_event(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
@@ -2770,6 +2921,49 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('1x Rack Tom 10x8 Rack tom', text)
         self.assertIn('1x Floor Tom 14x14 Floor tom', text)
         self.assertIn('J120 Guitar Amp', text)
+
+    def test_group_custom_text_preserves_new_lines_in_editor_and_pdf(self):
+        quotation = self.create_quote('Multiline Group Text')
+        quotation['lineItems'] = [{
+            'id': 'custom-package-details',
+            'description': 'Package includes:\nDigital console\nStage box',
+            'department': 'Audio Department',
+            'systemName': 'Audio',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 500,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+            'groupId': 'custom-package',
+            'groupTitle': 'Audio Package',
+            'groupDisplayFields': ['description'],
+            'groupCustomText': True,
+            'groupLeader': True,
+            'groupItemQuantity': 1,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.assertEqual(
+            saved['lineItems'][0]['description'],
+            'Package includes:\nDigital console\nStage box',
+        )
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf")
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf.data)).pages
+        )
+        self.assertIn('Package includes:\nDigital console\nStage box', text)
+        self.assertNotIn('1x Package includes:', text)
+
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        costing_source = Path('static/js/costing.js').read_text(encoding='utf-8')
+        shared_css = Path('static/css/line-workspace.css').read_text(encoding='utf-8')
+        self.assertIn("bucket.customText ? 'showbase-group-custom-text' : ''", finance_source)
+        self.assertIn("line.groupCustomText ? 'showbase-group-custom-text' : ''", costing_source)
+        self.assertIn('.showbase-group-custom-text {', shared_css)
+        self.assertIn('white-space: pre-line;', shared_css)
 
     def test_group_description_only_consolidates_matching_asset_labels(self):
         from quotation_pdf import (
@@ -5077,6 +5271,15 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('data-group-boundary="before"', finance_source)
         self.assertIn('function financeRenameLineGroup(', finance_source)
         self.assertIn('function financeGroupDisplayBuckets(', finance_source)
+        self.assertIn(
+            'showbaseLineWorkspace.draggedWholeGroup(lines, sourceIndexes)',
+            finance_source,
+        )
+        self.assertIn(
+            'const sourceIndexes = financeDraggedLineIndexes(event)',
+            finance_source,
+        )
+        self.assertIn('draggedWholeGroup(lines, indexes)', shared_source)
 
     def test_optional_categories_are_visible_but_excluded_from_totals(self):
         quotation = self.create_quote('Optional Systems')

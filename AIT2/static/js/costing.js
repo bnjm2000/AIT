@@ -24,7 +24,12 @@ const costingState = {
   dragSubprojectId: '',
   activeSubprojectId: '',
   quotationSyncMode: '',
-  contextDocumentId: ''
+  contextDocumentId: '',
+  contextLineId: '',
+  inventoryLinkLineId: '',
+  inventoryLinkCatalog: [],
+  inventoryLinkTimer: null,
+  inventoryLinkSelection: null
 };
 
 function costingRoot() {
@@ -201,13 +206,49 @@ function costingEqualiseSaleGroups(lines) {
   });
 }
 
+function costingPriceState(actualPrice, costPrice, targetPrice) {
+  const actual = costingNumber(actualPrice);
+  const cost = costingNumber(costPrice);
+  const target = costingNumber(targetPrice);
+  if (actual < cost - 0.005) return 'is-below-cost';
+  if (actual < target - 0.005) return 'is-below-margin';
+  return 'is-above-margin';
+}
+
+function costingUnitPriceState(line) {
+  return costingPriceState(
+    costingLineUnitSale(line),
+    line.itemCost,
+    costingLineUnitSale(line, 'calculatedSalePrice')
+  );
+}
+
 function costingSaleState(line) {
-  const sale = costingLineUnitSale(line);
-  const calculated = costingLineUnitSale(line, 'calculatedSalePrice');
-  if (sale < costingNumber(line.itemCost) - 0.005) return 'is-below-cost';
-  if (sale > calculated + 0.005) return 'is-above-calculation';
-  if (sale < calculated - 0.005) return 'is-below-calculation';
-  return '';
+  return costingPriceState(
+    line.salePrice,
+    line.costTotal,
+    line.calculatedSalePrice
+  );
+}
+
+function costingComparisonMoney(actualPrice, costPrice) {
+  const difference = costingNumber(actualPrice) - costingNumber(costPrice);
+  return difference
+    ? `${difference > 0 ? '+' : ''}${costingMoney(difference)}`
+    : '$0.00';
+}
+
+const COSTING_PRICE_STATE_CLASSES = [
+  'is-above-margin',
+  'is-below-margin',
+  'is-below-cost'
+];
+
+function costingApplyPriceState(element, state) {
+  if (!element) return;
+  COSTING_PRICE_STATE_CLASSES.forEach(className => {
+    element.classList.toggle(className, className === state);
+  });
 }
 
 function costingMultiplierHeaderLabel(category) {
@@ -336,7 +377,7 @@ function costingVendorManagementMarkup(readOnly = false) {
   if (!rows.length) return '';
   return `<section class="costing-side-card vendor-management-card">
     <header><h3>Vendor Management</h3><button type="button" class="vendor-management-open" onclick="costingOpenVendorManagement()">Open</button></header>
-    <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+    <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
   </section>`;
 }
 
@@ -355,13 +396,13 @@ function costingVendorManagementDialogMarkup() {
         return `<div class="vendor-management-row" data-vendor-management-key="${costingAttr(row.key || '')}">
           <div class="vendor-management-details"><strong>${costingEscape(row.vendorName || 'Vendor')}</strong><small data-vendor-management-meta>${Number(row.itemCount || 0)} item line${Number(row.itemCount || 0) === 1 ? '' : 's'} &middot; ${costingEscape(costingMoney(row.amount))}</small></div>
           <div class="vendor-mode-toggle" role="radiogroup" aria-label="Fulfilment for ${costingAttr(row.vendorName || 'vendor')}">
-            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" ${readOnly ? 'disabled' : ''} onclick="costingSetVendorManagement('${costingAttr(key)}','dry-hire')">Dry Hire</button>
-            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" ${readOnly ? 'disabled' : ''} onclick="costingSetVendorManagement('${costingAttr(key)}','outsourced')">Outsourced</button>
+            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" ${readOnly ? 'disabled' : ''} onclick="costingSetVendorManagement('${costingAttr(key)}','dry-hire')">Self Pickup</button>
+            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" ${readOnly ? 'disabled' : ''} onclick="costingSetVendorManagement('${costingAttr(key)}','outsourced')">Delivered</button>
           </div>
         </div>`;
       }).join('') || '<p class="vendor-management-empty">No external vendors in this costing.</p>'}
     </div>
-    <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+    <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
   </div>`;
 }
 
@@ -715,12 +756,213 @@ function costingVendorHue(value) {
   return hash % 360;
 }
 
-function costingVendorColourChanged(input) {
+function costingLineIsInventoryLinked(line) {
+  if (typeof line?.inventoryLinked === 'boolean') return line.inventoryLinked;
+  return Array.isArray(line?.sourceAssetIds) && line.sourceAssetIds.some(
+    assetId => String(assetId || '').trim()
+  );
+}
+
+function costingSelfLinkClass(line) {
+  if (String(line?.vendorName || '').trim().toLowerCase() !== 'self') return '';
+  return costingLineIsInventoryLinked(line) ? 'is-self-linked' : 'is-self-unlinked';
+}
+
+function costingVendorColourChanged(input, lineIndex = -1) {
   if (!input) return;
   const name = String(input.value || '').trim();
-  input.classList.toggle('is-self', name.toLowerCase() === 'self');
+  const isSelf = name.toLowerCase() === 'self';
+  const linked = costingLineIsInventoryLinked(costingLines()[lineIndex]);
+  input.classList.toggle('is-self', isSelf);
+  input.classList.toggle('is-self-linked', isSelf && linked);
+  input.classList.toggle('is-self-unlinked', isSelf && !linked);
   input.classList.toggle('is-empty', !name);
   input.style.setProperty('--vendor-hue', String(costingVendorHue(name)));
+}
+
+function costingEnsureLineContextMenu() {
+  let menu = document.getElementById('costingLineContextMenu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'costingLineContextMenu';
+  menu.className = 'finance-quotation-context-menu';
+  menu.setAttribute('role', 'menu');
+  document.body.appendChild(menu);
+  return menu;
+}
+
+function costingCloseLineContextMenu() {
+  document.getElementById('costingLineContextMenu')?.classList.remove('open');
+  document.querySelectorAll('.costing-line.context-open').forEach(
+    row => row.classList.remove('context-open')
+  );
+  costingState.contextLineId = '';
+}
+
+function costingOpenLineContextMenu(event, lineId) {
+  const line = costingLines().find(row => String(row.id) === String(lineId));
+  const linked = costingLineIsInventoryLinked(line);
+  const self = String(line?.vendorName || '').trim().toLowerCase() === 'self';
+  if (
+    !line
+    || costingState.current?.status === 'converted'
+    || (!self && !linked)
+  ) return;
+  event.preventDefault();
+  event.stopPropagation();
+  costingCloseLineContextMenu();
+  const menu = costingEnsureLineContextMenu();
+  costingState.contextLineId = String(lineId);
+  document.querySelector(`.costing-line[data-costing-line-id="${CSS.escape(String(lineId))}"]`)?.classList.add('context-open');
+  menu.innerHTML = `${linked
+    ? `${self ? '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Change inventory link</span></button>' : ''}<button type="button" class="danger" role="menuitem" onclick="event.stopPropagation();costingBreakInventoryLinkFromMenu()"><span>Break inventory link</span></button>`
+    : '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Link to inventory</span></button>'}`;
+  menu.classList.add('open');
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
+  menu.querySelector('button')?.focus();
+}
+
+function costingBreakInventoryLink(line) {
+  if (!line) return;
+  line.catalogKey = '';
+  line.sourceAssetIds = [];
+  line.brand = '';
+  line.model = '';
+  line.inventoryNameMode = 'costing';
+  line.isCustom = true;
+  line.inventoryLinked = false;
+}
+
+async function costingBreakInventoryLinkFromMenu() {
+  const lineId = costingState.contextLineId;
+  const line = costingLines().find(row => String(row.id) === String(lineId));
+  costingCloseLineContextMenu();
+  if (!line || !costingLineIsInventoryLinked(line)) return;
+  const confirmed = await showAppConfirm({
+    title: 'Break inventory link?',
+    message: `${line.description || 'This costing item'} will keep its current costing name and values, but it will no longer refer to the inventory asset.`,
+    confirmText: 'Break Link',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  costingBreakInventoryLink(line);
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+  showNotification('success', 'Inventory link removed');
+}
+
+function costingInventoryLinkDialogMarkup(line) {
+  return `<div class="modal-content costing-inventory-link-dialog">
+    <div class="modal-header">
+      <div><h3 class="modal-title">Link to inventory</h3><p>Attach ${costingEscape(line.description || 'this costing item')} to an inventory model.</p></div>
+      <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('costingInventoryLinkModal')">&times;</button>
+    </div>
+    <div class="costing-inventory-link-body">
+      <label class="costing-inventory-link-search"><span>Search inventory</span><input id="costingInventoryLinkSearch" type="search" autocomplete="off" placeholder="Search brand, model, description or tag" oninput="costingSearchInventoryLinks(this.value)"></label>
+      <div id="costingInventoryLinkResults" class="costing-inventory-link-results"><p>Start typing to find an inventory item.</p></div>
+      <div id="costingInventoryLinkChoice" class="costing-inventory-link-choice" hidden></div>
+    </div>
+  </div>`;
+}
+
+function costingOpenInventoryLinkFromMenu() {
+  const lineId = costingState.contextLineId;
+  const line = costingLines().find(row => String(row.id) === String(lineId));
+  costingCloseLineContextMenu();
+  if (!line) return;
+  costingState.inventoryLinkLineId = lineId;
+  costingState.inventoryLinkCatalog = [];
+  costingState.inventoryLinkSelection = null;
+  let modal = document.getElementById('costingInventoryLinkModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'costingInventoryLinkModal';
+    modal.className = 'modal costing-inventory-link-modal';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) closeModal(modal.id);
+    });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = costingInventoryLinkDialogMarkup(line);
+  openModal(modal.id);
+}
+
+function costingSearchInventoryLinks(value) {
+  const query = String(value || '').trim();
+  const results = document.getElementById('costingInventoryLinkResults');
+  clearTimeout(costingState.inventoryLinkTimer);
+  costingState.inventoryLinkSelection = null;
+  document.getElementById('costingInventoryLinkChoice')?.setAttribute('hidden', '');
+  if (query.length < 2) {
+    costingState.inventoryLinkCatalog = [];
+    if (results) results.innerHTML = '<p>Enter at least two characters.</p>';
+    return;
+  }
+  if (results) results.innerHTML = '<p>Searching inventory...</p>';
+  costingState.inventoryLinkTimer = setTimeout(async () => {
+    try {
+      const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(query)}`);
+      costingState.inventoryLinkCatalog = (response.data || []).filter(
+        row => !row.isCustom && !row.isContainer && Array.isArray(row.sourceAssetIds) && row.sourceAssetIds.length
+      );
+    } catch {
+      costingState.inventoryLinkCatalog = [];
+    }
+    const currentResults = document.getElementById('costingInventoryLinkResults');
+    if (!currentResults) return;
+    currentResults.innerHTML = costingState.inventoryLinkCatalog.map((row, index) => `<button type="button" onclick="costingChooseInventoryLink(${index})"><span><strong>${costingEscape(row.description || 'Inventory item')}</strong><small>${costingEscape(row.department || 'General')} &middot; ${costingNumber(row.availableQuantity)} in inventory</small></span><b>Select</b></button>`).join('') || '<p>No matching inventory items.</p>';
+  }, 180);
+}
+
+function costingChooseInventoryLink(index) {
+  const selected = costingState.inventoryLinkCatalog[index];
+  const choice = document.getElementById('costingInventoryLinkChoice');
+  if (!selected || !choice) return;
+  costingState.inventoryLinkSelection = selected;
+  document.querySelectorAll('#costingInventoryLinkResults button').forEach(
+    (button, buttonIndex) => button.classList.toggle('selected', buttonIndex === index)
+  );
+  const line = costingLines().find(
+    row => String(row.id) === String(costingState.inventoryLinkLineId)
+  );
+  choice.removeAttribute('hidden');
+  choice.innerHTML = `<span>Name shown in this costing</span><div>
+    <button type="button" onclick="costingApplyInventoryLink('inventory')"><strong>Use inventory name</strong><small>${costingEscape(selected.description || 'Inventory item')}</small></button>
+    <button type="button" onclick="costingApplyInventoryLink('costing')"><strong>Keep current name</strong><small>${costingEscape(line?.description || 'Current costing item')}</small></button>
+  </div>`;
+}
+
+function costingApplyInventoryLink(nameMode) {
+  const line = costingLines().find(
+    row => String(row.id) === String(costingState.inventoryLinkLineId)
+  );
+  const selected = costingState.inventoryLinkSelection;
+  if (!line || !selected || !['inventory', 'costing'].includes(nameMode)) return;
+  const currentName = {
+    brand: line.brand || '',
+    model: line.model || '',
+    description: line.description || ''
+  };
+  line.catalogKey = selected.catalogKey || '';
+  line.sourceAssetIds = [...new Set(selected.sourceAssetIds || [])];
+  line.departmentCode = selected.departmentCode || '';
+  line.brand = selected.brand || '';
+  line.model = selected.model || '';
+  line.description = selected.description || 'Inventory item';
+  line.inventoryNameMode = nameMode;
+  line.isCustom = false;
+  line.inventoryLinked = true;
+  if (nameMode === 'costing') Object.assign(line, currentName);
+  costingState.inventoryLinkLineId = '';
+  closeModal('costingInventoryLinkModal');
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+  showNotification('success', 'Costing item linked to inventory');
 }
 
 function costingDiscrepancyMarkup() {
@@ -824,6 +1066,7 @@ function costingRenderEditor() {
         ${costingVendorManagementMarkup(readOnly)}
         <section class="costing-side-card costing-side-actions">
           <button type="button" class="costing-action-primary" onclick="${hasLinkedQuotation ? 'costingOpenQuotation()' : 'costingMakeQuotation()'}">${hasLinkedQuotation ? 'Go to Quotation' : 'Convert to Quotation'} <span>&#8250;</span></button>
+          <button type="button" class="costing-action-outline" onclick="costingExportPdf(this)">Export PDF</button>
           <button type="button" class="costing-action-danger" onclick="costingDelete()">Delete costing</button>
           <small id="costingSaveState">${readOnly ? 'Read-only costing' : 'All changes saved'}</small>
         </section>
@@ -856,10 +1099,10 @@ function costingCategoryMarkup(category, readOnly) {
   });
   return `<section class="${showbaseLineWorkspace.categorySectionClass({ className: 'costing-category-card', collapsed })}" data-category-total="${costingAttr(encoded)}" ondragover="costingDragCategoryOver(event,'${costingAttr(encoded)}')" ondragleave="costingDragCategoryLeave(event)" ondrop="costingDropCategory(event,'${costingAttr(encoded)}')">
     <div class="costing-table-wrap"><table class="costing-table showbase-category-table">
-      <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-sale"><col class="col-subtotal"><col class="col-menu"></colgroup>
+      <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-unit-price"><col class="col-sale"><col class="col-menu"></colgroup>
       <thead>
         ${categoryHeader}
-        <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Sale Price</th><th>Line Subtotal</th><th></th></tr>
+        <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Unit Price</th><th>Sale Price</th><th></th></tr>
       </thead>
       <tbody>${costingGroupedLinesMarkup(lines, readOnly)}</tbody>
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
@@ -895,23 +1138,24 @@ function costingGroupedLinesMarkup(lines, readOnly) {
 
 function costingLineMarkup(line, index, readOnly) {
   costingLineRecalculate(line);
-  const difference = line.salePrice - line.calculatedSalePrice;
+  const unitPrice = costingLineUnitSale(line);
+  const unitPriceState = costingUnitPriceState(line);
   const saleState = costingSaleState(line);
   const itemControl = line.groupId
-    ? `<div class="costing-group-item-display"><span>${costingEscape(line.groupCustomText ? line.description : financeGroupedLineDisplay(line))}</span>${line.groupCustomText ? '<small>Custom text</small>' : ''}</div>`
-    : `<input class="costing-item-name" title="${line.sourceAssetIds?.length ? 'Linked to inventory' : 'Custom item'}" value="${costingAttr(line.description)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'description',this.value)">`;
-  return `<tr class="costing-line" data-costing-line="${index}" ondragover="costingDragLineOver(event,${index})" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLine(event,${index},'${costingAttr(encodeURIComponent(line.category || 'General'))}')" ondragend="costingDragEnd()">
+    ? `<div class="costing-group-item-display"><span class="${line.groupCustomText ? 'showbase-group-custom-text' : ''}">${costingEscape(line.groupCustomText ? line.description : financeGroupedLineDisplay(line))}</span>${line.groupCustomText ? '<small>Custom text</small>' : ''}</div>`
+    : `<input class="costing-item-name" title="${line.sourceAssetIds?.length ? 'Linked to inventory' : 'Custom item'}" value="${costingAttr(line.description)}" data-original-value="${costingAttr(line.description)}" ${readOnly ? 'disabled' : ''} oninput="costingLineDescriptionDraft(${index},this.value)" onchange="costingLineDescriptionChanged(${index},this.value,this)">`;
+  return `<tr class="costing-line" data-costing-line="${index}" data-costing-line-id="${costingAttr(line.id || '')}" oncontextmenu="costingOpenLineContextMenu(event,'${costingAttr(line.id || '')}')" ondragover="costingDragLineOver(event,${index})" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLine(event,${index},'${costingAttr(encodeURIComponent(line.category || 'General'))}')" ondragend="costingDragEnd()">
     <td class="costing-item-cell"><div class="costing-item-entry">${readOnly ? '' : `<span class="finance-drag-handle costing-line-drag-handle" draggable="true" title="Drag to reorder" ondragstart="costingDragLineStart(event,${index})" ondragend="costingDragEnd()">&#9776;</span>`}${itemControl}</div></td>
     <td><input class="costing-number costing-stepper-input" aria-label="Quantity" type="number" min="0" step="1" value="${costingAttr(line.quantity)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'quantity',this.value)"></td>
     <td><div class="costing-multiplier"><input class="costing-stepper-input" aria-label="${line.multiplierLabel === 'Day' ? 'Days' : 'Multiplier'}" type="number" min="0" step=".5" value="${costingAttr(line.multiplier)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'multiplier',this.value)"></div></td>
-    <td><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" list="costingVendorOptions" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" ${readOnly ? 'disabled' : ''} oninput="costingVendorColourChanged(this)" onchange="costingVendorChanged(${index},this.value,this)"></td>
+    <td><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${costingSelfLinkClass(line)} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" list="costingVendorOptions" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" ${readOnly ? 'disabled' : ''} oninput="costingVendorColourChanged(this,${index})" onchange="costingVendorChanged(${index},this.value,this)"></td>
     <td><textarea class="costing-remarks-input" rows="1" placeholder="Add note" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'remarks',this.value)">${costingEscape(line.remarks || '')}</textarea></td>
     <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.itemCost).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.costTotal).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="number" step=".01" value="${costingAttr(line.calculatedMarginAmount.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
     <td><strong data-line-calculated>${costingEscape(costingMoney(line.calculatedSalePrice))}</strong></td>
-    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale type="number" min="0" step=".01" value="${costingAttr(line.salePrice.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-difference>${difference ? `${difference > 0 ? '+' : ''}${costingMoney(difference)}` : '$0.00'}</small></div></td>
-    <td><strong data-line-subtotal>${costingEscape(costingMoney(line.salePrice))}</strong></td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="number" min="0" step=".01" value="${costingAttr(unitPrice.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="number" min="0" step=".01" value="${costingAttr(line.salePrice.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
     <td>${readOnly ? '' : `<button type="button" class="costing-remove" aria-label="Remove item" title="Remove item" onclick="costingRemoveLine(${index})">&times;</button>`}</td>
   </tr>`;
 }
@@ -1120,7 +1364,9 @@ function costingMoveLines(sourceIndexes, targetIndex, targetCategory, options = 
 
   const position = options.position || 'before';
   const outsideGroupBoundary = !!options.outsideGroupBoundary;
-  if (!costingState.dragWholeLineGroup) {
+  const wholeGroup = !!costingState.dragWholeLineGroup
+    || showbaseLineWorkspace.draggedWholeGroup(lines, selectedIndexes);
+  if (!wholeGroup) {
     movedItems.forEach(moved => {
       const sameGroup = !!target
         && String(moved.groupId || '') === String(target.groupId || '')
@@ -1150,13 +1396,13 @@ function costingMoveLines(sourceIndexes, targetIndex, targetCategory, options = 
     if (insertIndex < 0) insertIndex = lines.length;
   } else {
     let anchor = target;
-    if (target.groupId && (costingState.dragWholeLineGroup || outsideGroupBoundary)) {
+    if (target.groupId && (wholeGroup || outsideGroupBoundary)) {
       const targetMembers = lines.filter(line => (
         String(line.groupId || '') === String(target.groupId || '')
         && String(line.subprojectId || 'main') === String(target.subprojectId || 'main')
       ));
       if (targetMembers.length) {
-        anchor = position === 'after' && costingState.dragWholeLineGroup
+        anchor = position === 'after' && wholeGroup
           ? targetMembers.at(-1)
           : targetMembers[0];
       }
@@ -1423,17 +1669,53 @@ async function costingDeleteSubproject(subprojectId) {
   costingRenderEditor();
 }
 
+function costingLineDescriptionDraft(index, value) {
+  const line = costingLines()[index];
+  if (line) line.description = value;
+}
+
+async function costingLineDescriptionChanged(index, value, input) {
+  const line = costingLines()[index];
+  if (!line) return;
+  const previous = String(input?.dataset.originalValue ?? line.description ?? '');
+  const next = String(value || '').trim();
+  line.description = next;
+  if (next === previous) return;
+  if (costingLineIsInventoryLinked(line)) {
+    const decision = await showAppConfirm({
+      title: 'Keep inventory link?',
+      message: 'Choose whether this new costing name should remain linked to the original inventory asset.',
+      confirmText: 'Keep Link',
+      confirmValue: 'keep',
+      alternateText: 'Break Link',
+      alternateValue: 'break',
+      alternateClass: 'btn-warning',
+      cancelText: 'Cancel Rename',
+      variant: 'warning'
+    });
+    if (!decision) {
+      line.description = previous;
+      if (input) input.value = previous;
+      return;
+    }
+    if (decision === 'break') {
+      costingBreakInventoryLink(line);
+    } else {
+      line.inventoryNameMode = 'costing';
+    }
+  } else {
+    costingBreakInventoryLink(line);
+  }
+  if (input) input.dataset.originalValue = next;
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+}
+
 function costingLineInput(index, field, value) {
   const line = costingLines()[index];
   if (!line) return;
-  if (field === 'description') {
-    line.description = value;
-    line.catalogKey = '';
-    line.sourceAssetIds = [];
-    line.brand = '';
-    line.model = '';
-    line.isCustom = true;
-  } else if (field === 'remarks') {
+  if (field === 'remarks') {
     line.remarks = value;
   } else {
     const previousUnitSale = costingLineUnitSale(line);
@@ -1462,6 +1744,14 @@ function costingLineSale(index, value) {
   const divisor = Math.max(0, costingNumber(line.quantity))
     * Math.max(0, costingNumber(line.multiplier));
   costingSetSaleGroupUnitPrice(index, divisor ? totalSale / divisor : totalSale);
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRefreshCalculations();
+}
+
+function costingLineUnitPrice(index, value) {
+  if (!costingLines()[index]) return;
+  costingSetSaleGroupUnitPrice(index, Math.max(0, costingNumber(value)));
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRefreshCalculations();
@@ -1521,9 +1811,12 @@ async function costingVendorChanged(index, value, input) {
   line.vendorName = selected?.name || name;
   line.vendorId = selected?.id || '';
   line.vendorType = selected?.type || 'vendor';
+  if (name && name.toLowerCase() !== 'self' && costingLineIsInventoryLinked(line)) {
+    costingBreakInventoryLink(line);
+  }
   if (input) {
     input.value = line.vendorName;
-    costingVendorColourChanged(input);
+    costingVendorColourChanged(input, index);
   }
   const followedCalculation = Math.abs(costingNumber(line.salePrice) - costingNumber(line.calculatedSalePrice)) < 0.005;
   if (name.toLowerCase() === 'self') line.itemCost = 0;
@@ -1679,7 +1972,7 @@ function costingRemoveLine(index) {
 function costingRefreshCalculations() {
   costingLines().forEach((line, index) => {
     costingLineRecalculate(line, 'sale');
-    const row = document.querySelector(`[data-costing-line="${index}"]`);
+    const row = document.querySelector(`.costing-line[data-costing-line="${index}"]`);
     if (!row) return;
     const unitCost = row.querySelector('[data-line-unit-cost]');
     const costTotal = row.querySelector('[data-line-cost-total]');
@@ -1687,31 +1980,27 @@ function costingRefreshCalculations() {
     if (costTotal && document.activeElement !== costTotal) costTotal.value = line.costTotal.toFixed(2);
     const marginAmount = row.querySelector('[data-line-margin-amount]');
     const marginPercent = row.querySelector('[data-line-margin-percent]');
+    const unitPrice = row.querySelector('[data-line-unit-price]');
+    const unitPriceWrap = row.querySelector('[data-line-unit-price-wrap]');
     const sale = row.querySelector('[data-line-sale]');
     const saleWrap = row.querySelector('[data-line-sale-wrap]');
     const calculated = row.querySelector('[data-line-calculated]');
-    const subtotal = row.querySelector('[data-line-subtotal]');
     if (marginAmount && document.activeElement !== marginAmount) marginAmount.value = line.calculatedMarginAmount.toFixed(2);
     if (marginPercent && document.activeElement !== marginPercent) marginPercent.value = line.targetMarginPercent.toFixed(2);
+    const currentUnitPrice = costingLineUnitSale(line);
+    const unitPriceState = costingUnitPriceState(line);
     const saleState = costingSaleState(line);
+    if (unitPrice && document.activeElement !== unitPrice) unitPrice.value = currentUnitPrice.toFixed(2);
     if (sale && document.activeElement !== sale) sale.value = line.salePrice.toFixed(2);
-    if (saleWrap) {
-      saleWrap.classList.toggle('is-above-calculation', saleState === 'is-above-calculation');
-      saleWrap.classList.toggle('is-below-calculation', saleState === 'is-below-calculation');
-      saleWrap.classList.toggle('is-below-cost', saleState === 'is-below-cost');
-    }
+    costingApplyPriceState(unitPriceWrap, unitPriceState);
+    costingApplyPriceState(saleWrap, saleState);
     if (calculated) calculated.textContent = costingMoney(line.calculatedSalePrice);
-    if (subtotal) subtotal.textContent = costingMoney(line.salePrice);
-    const difference = row.querySelector('[data-line-difference]');
-    if (difference) {
-      const lineDifference = line.salePrice - line.calculatedSalePrice;
-      difference.textContent = lineDifference
-        ? `${lineDifference > 0 ? '+' : ''}${costingMoney(lineDifference)}`
-        : '$0.00';
-      difference.classList.toggle('is-above-calculation', saleState === 'is-above-calculation');
-      difference.classList.toggle('is-below-calculation', saleState === 'is-below-calculation');
-      difference.classList.toggle('is-below-cost', saleState === 'is-below-cost');
-    }
+    const unitDifference = row.querySelector('[data-line-unit-difference]');
+    if (unitDifference) unitDifference.textContent = costingComparisonMoney(currentUnitPrice, line.itemCost);
+    costingApplyPriceState(unitDifference, unitPriceState);
+    const saleDifference = row.querySelector('[data-line-sale-difference]');
+    if (saleDifference) saleDifference.textContent = costingComparisonMoney(line.salePrice, line.costTotal);
+    costingApplyPriceState(saleDifference, saleState);
   });
   costingCategories().forEach(category => {
     const encoded = encodeURIComponent(category);
@@ -1946,6 +2235,32 @@ async function costingSaveDraft() {
   }
 }
 
+async function costingExportPdf(button) {
+  const current = costingState.current;
+  if (!current) return;
+  const originalLabel = button?.textContent || 'Export PDF';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Preparing PDF...';
+  }
+  try {
+    const saved = await costingFlushSave();
+    const cacheKey = saved?.updatedAt || Date.now();
+    const pdfUrl = `/api/costings/${encodeURIComponent(current.id)}/pdf?v=${encodeURIComponent(cacheKey)}`;
+    const opened = window.open(pdfUrl, '_blank', 'noopener');
+    if (!opened) {
+      showNotification('warning', 'Please allow pop-ups to preview the PDF');
+    }
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to export costing PDF');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
+
 async function costingBackToList() {
   try { await costingFlushSave(); } catch {}
   costingState.current = null;
@@ -2004,4 +2319,5 @@ async function costingOpenQuotation() {
 
 document.addEventListener('click', event => {
   if (!event.target.closest('#costingContextMenu')) costingCloseContextMenu();
+  if (!event.target.closest('#costingLineContextMenu')) costingCloseLineContextMenu();
 });

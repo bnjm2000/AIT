@@ -1,5 +1,5 @@
 .showbase-category-stack {
-  display: grid;
+  display: block;
   min-width: 0;
   max-width: 100%;
   gap: 0;
@@ -8,14 +8,22 @@
 }
 
 .showbase-category-stack > .showbase-category-section {
+  display: block;
   min-width: 0;
   max-width: 100%;
   margin: 0 !important;
+  padding: 0 !important;
   border-radius: 0;
 }
 
 .showbase-category-stack > .showbase-category-section + .showbase-category-section {
   margin-top: 0 !important;
+}
+
+.showbase-category-stack > .showbase-category-section > div,
+.showbase-category-stack > .showbase-category-section .showbase-category-table {
+  margin: 0 !important;
+  padding: 0;
 }
 
 .showbase-category-table {
@@ -70,4 +78,8 @@
 .showbase-category-section.is-collapsed tbody,
 .showbase-category-section.is-collapsed tfoot {
   display: none;
+}
+
+.showbase-group-custom-text {
+  white-space: pre-line;
 }

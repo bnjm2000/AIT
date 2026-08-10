@@ -130,6 +130,29 @@
       return sourceIndex == null ? [] : [sourceIndex];
     },
 
+    draggedWholeGroup(lines, indexes) {
+      const selectedIndexes = [...new Set((indexes || []).map(value => numberValue(value, -1)))]
+        .filter(index => index >= 0 && !!lines[index]);
+      if (!selectedIndexes.length) return false;
+      const selected = selectedIndexes.map(index => lines[index]);
+      const first = selected[0];
+      const groupId = String(first?.groupId || '');
+      const subprojectId = String(first?.subprojectId || 'main');
+      if (!groupId || selected.some(line => (
+        String(line.groupId || '') !== groupId
+        || String(line.subprojectId || 'main') !== subprojectId
+      ))) return false;
+      const selectedSet = new Set(selectedIndexes);
+      const memberIndexes = lines.map((line, index) => ({ line, index }))
+        .filter(row => (
+          String(row.line.groupId || '') === groupId
+          && String(row.line.subprojectId || 'main') === subprojectId
+        ))
+        .map(row => row.index);
+      return memberIndexes.length === selectedIndexes.length
+        && memberIndexes.every(index => selectedSet.has(index));
+    },
+
     dropPosition(event) {
       const rect = event.currentTarget.getBoundingClientRect();
       return event.currentTarget.dataset.dropPosition

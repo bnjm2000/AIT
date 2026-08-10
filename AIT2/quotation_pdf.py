@@ -114,11 +114,13 @@ def _group_display_entries(lines):
     by_key = {}
     for line in lines or []:
         description = _group_line_description(line).strip() or 'Item'
-        key = (bool(line.get('groupCustomText')), description.casefold())
+        custom_text = bool(line.get('groupCustomText'))
+        key = (custom_text, description.casefold())
         if key not in by_key:
             by_key[key] = {
                 'description': description,
                 'quantity': 0.0,
+                'customText': custom_text,
             }
             entries.append(by_key[key])
         by_key[key]['quantity'] += max(
@@ -248,7 +250,7 @@ def _text(value):
 def _paragraph(value, style):
     from reportlab.platypus import Paragraph
 
-    safe = escape(_text(value)).replace('\n', '<br/>')
+    safe = _escaped_line_breaks(value)
     return Paragraph(
         _cjk_markup(
             safe,
@@ -256,6 +258,11 @@ def _paragraph(value, style):
         ),
         style,
     )
+
+
+def _escaped_line_breaks(value):
+    normalised = _text(value).replace('\r\n', '\n').replace('\r', '\n')
+    return escape(normalised).replace('\n', '<br/>')
 
 
 def _money(value, currency='SGD'):
@@ -1259,8 +1266,10 @@ def build_finance_pdf(document, company, logo_path=''):
                     bold=True,
                 )
                 content_markup = '<br/>'.join(
-                    _cjk_markup(escape(
-                        f"{entry['quantity']:g}x {entry['description']}"
+                    _cjk_markup(_escaped_line_breaks(
+                        entry['description']
+                        if entry.get('customText')
+                        else f"{entry['quantity']:g}x {entry['description']}"
                     ))
                     for entry in _group_display_entries(line_unit)
                 )

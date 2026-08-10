@@ -24856,7 +24856,7 @@ function renderPlanVendorManagementCard() {
   return `
     <section class="plan-card vendor-management-card">
       <div class="plan-card-header"><h3>Vendor Management</h3><button type="button" class="vendor-management-open" onclick="planOpenVendorManagement()">Open</button></div>
-      <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+      <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
     </section>
   `;
 }
@@ -24876,13 +24876,13 @@ function planVendorManagementDialogMarkup() {
         return `<div class="vendor-management-row">
           <div class="vendor-management-details"><strong>${escapeHtml(row.vendorName || 'Vendor')}</strong><small>${Number(row.itemCount || 0)} item line${Number(row.itemCount || 0) === 1 ? '' : 's'} &middot; ${financeMoney(Number(row.amount || 0))}</small></div>
           <div class="vendor-mode-toggle" role="radiogroup" aria-label="Fulfilment for ${escapeHtmlAttr(row.vendorName || 'vendor')}">
-            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','dry-hire')">Dry Hire</button>
-            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','outsourced')">Outsourced</button>
+            <button type="button" role="radio" aria-checked="${dryHire}" class="${dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','dry-hire')">Self Pickup</button>
+            <button type="button" role="radio" aria-checked="${!dryHire}" class="${!dryHire ? 'selected' : ''}" onclick="planSetVendorManagement('${planEncode(row.key)}','outsourced')">Delivered</button>
           </div>
         </div>`;
       }).join('') || '<p class="vendor-management-empty">No external vendors for this event.</p>'}
     </div>
-    <p class="vendor-management-help">Dry-hire items appear as loans in Plan. Outsourced vendors deliver directly to the venue.</p>
+    <p class="vendor-management-help">Self pickup items appear as loans in Plan. Delivered items go directly to the venue.</p>
   </div>`;
 }
 
@@ -24917,8 +24917,8 @@ async function planSetVendorManagement(encodedKey, mode) {
       modal.innerHTML = planVendorManagementDialogMarkup();
     }
     showNotification('success', mode === 'dry-hire'
-      ? 'Vendor items added to Plan as loans'
-      : 'Vendor items marked as outsourced');
+      ? 'Vendor items set for self pickup and added to Plan as loans'
+      : 'Vendor items marked as delivered');
   } catch (error) {
     // apiCall already displays the server message.
   }

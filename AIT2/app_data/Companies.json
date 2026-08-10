@@ -74,7 +74,8 @@
     "Alicia": "TSC",
     "bnjm2000": "AVPL",
     "ac-inventory": "ARUP",
-    "admin": "TSC"
+    "admin": "DEMO",
+    "manager": "DEMO"
   },
   "userCompanyMemberships": {
     "feezahmnsr": [
@@ -114,5 +115,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-08-10T00:08:08"
+  "updatedAt": "2026-08-10T19:01:51"
 }

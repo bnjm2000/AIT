@@ -1548,6 +1548,35 @@ function financeCatalogCategory(selected, explicitCategory = '') {
   return existing ? financeLineSystem(existing) : financeDefaultSystemName(selected?.department);
 }
 
+function financeCategoryOperationalDepartment(category, subprojectId = financeCurrentSubprojectId()) {
+  const target = String(category || '').trim().toLocaleLowerCase();
+  if (!target) return null;
+  const totals = new Map();
+  (financeState.current?.lineItems || []).forEach((line, index) => {
+    if (
+      line.isCustom
+      || String(line.subprojectId || 'main') !== String(subprojectId || 'main')
+      || financeLineSystem(line).toLocaleLowerCase() !== target
+    ) return;
+    const key = financeDepartmentIdentity(line);
+    const quantity = Math.max(0, financeNumber(
+      line.groupId ? line.groupItemQuantity : line.quantity,
+      0
+    )) * (line.groupId ? Math.max(0, financeNumber(line.quantity, 1)) : 1);
+    const current = totals.get(key) || {
+      department: String(line.department || 'General'),
+      departmentCode: String(line.departmentCode || ''),
+      quantity: 0,
+      firstIndex: index
+    };
+    current.quantity += quantity || 1;
+    totals.set(key, current);
+  });
+  return [...totals.values()].sort((left, right) => (
+    right.quantity - left.quantity || left.firstIndex - right.firstIndex
+  ))[0] || null;
+}
+
 function financeIsOptionalCategory(value) {
   return /\boptional\b/i.test(String(value || ''));
 }
@@ -3839,7 +3868,7 @@ function financeRenderLineGroups() {
               ondrop="financeDropLine(event,${representativeIndex})"
               ondragend="financeDragLineEnd()">
               <td class="finance-line-number"><span class="finance-drag-handle" draggable="true" title="Drag to reorder or move out of group" ondragstart="financeDragLineBundleStart(event,'${financeEscapeAttr(indexes)}')" ondragend="financeDragLineEnd()">&#9776;</span></td>
-              <td><div class="finance-group-item-display"><span>${financeEscape(bucket.description)}</span>${bucket.customText ? '<small>Custom text</small>' : ''}${isConsolidated ? `<small>${bucket.rows.length} matching line items consolidated</small>` : ''}</div></td><td></td><td></td>
+              <td><div class="finance-group-item-display"><span class="${bucket.customText ? 'showbase-group-custom-text' : ''}">${financeEscape(bucket.description)}</span>${bucket.customText ? '<small>Custom text</small>' : ''}${isConsolidated ? `<small>${bucket.rows.length} matching line items consolidated</small>` : ''}</div></td><td></td><td></td>
               <td>${quantityControl}</td>
               <td></td><td></td><td></td><td></td>
               <td><button type="button" class="finance-delete-line" title="Remove ${isConsolidated ? 'matching items' : 'item'} from group" onclick="financeDeleteGroupChildren('${financeEscapeAttr(indexes)}')">&times;</button></td>
@@ -4362,6 +4391,7 @@ function financeClearLineDropTargets() {
 
 function financeDropLine(event, targetIndex) {
   event.preventDefault();
+  event.stopPropagation();
   const lines = financeState.current?.lineItems || [];
   const sourceIndexes = financeDraggedLineIndexes(event)
     .filter(index => index >= 0 && !!lines[index]);
@@ -4373,7 +4403,8 @@ function financeDropLine(event, targetIndex) {
   }
   const position = showbaseLineWorkspace.dropPosition(event);
   const outsideGroupBoundary = event.currentTarget.dataset.groupBoundary === 'before' && position === 'before';
-  const wholeGroup = !!financeState.dragWholeLineGroup;
+  const wholeGroup = !!financeState.dragWholeLineGroup
+    || showbaseLineWorkspace.draggedWholeGroup(lines, sourceIndexes);
   if (!wholeGroup) {
     movedItems.forEach(moved => {
       const sameGroup = String(moved.groupId || '') === String(target.groupId || '')
@@ -4419,6 +4450,7 @@ function financeDragLineEndOver(event) {
 
 function financeDropLineAtEnd(event, encodedDepartment) {
   event.preventDefault();
+  event.stopPropagation();
   const lines = financeState.current?.lineItems || [];
   const sourceIndexes = financeDraggedLineIndexes(event)
     .filter(index => index >= 0 && !!lines[index]);
@@ -4429,7 +4461,9 @@ function financeDropLineAtEnd(event, encodedDepartment) {
   }
   const department = decodeURIComponent(encodedDepartment);
   const subprojectId = financeCurrentSubprojectId();
-  if (!financeState.dragWholeLineGroup) {
+  const wholeGroup = !!financeState.dragWholeLineGroup
+    || showbaseLineWorkspace.draggedWholeGroup(lines, sourceIndexes);
+  if (!wholeGroup) {
     movedItems.forEach(moved => {
       if (moved.groupId) financeDetachLineFromGroup(moved);
     });
@@ -4491,14 +4525,19 @@ function financeDragDepartmentLeave(event) {
 
 function financeDropDepartment(event, encodedTargetDepartment) {
   event.preventDefault();
+  event.stopPropagation();
   const targetDepartment = decodeURIComponent(encodedTargetDepartment);
-  if (financeState.dragLineIndex !== null) {
-    const lines = financeState.current?.lineItems || [];
-    const movedItems = (financeState.dragLineIndexes || [])
+  const lines = financeState.current?.lineItems || [];
+  const sourceIndexes = financeDraggedLineIndexes(event)
+    .filter(index => index >= 0 && !!lines[index]);
+  if (sourceIndexes.length) {
+    const movedItems = sourceIndexes
       .map(index => lines[index])
       .filter(Boolean);
     if (movedItems.length) {
-      if (!financeState.dragWholeLineGroup) {
+      const wholeGroup = !!financeState.dragWholeLineGroup
+        || showbaseLineWorkspace.draggedWholeGroup(lines, sourceIndexes);
+      if (!wholeGroup) {
         movedItems.forEach(line => {
           if (line.groupId) financeDetachLineFromGroup(line);
         });
@@ -5495,7 +5534,15 @@ async function financeAddCustomItem() {
     row.isCustom && String(row.description || '').trim().toLowerCase() === description.toLowerCase()
   ) || {};
   const departmentOverride = financeAddDepartmentOverride();
-  const department = departmentOverride || exactLoaded.department || 'General';
+  const category = departmentOverride
+    || (exactLoaded.department ? financeLineSystem(exactLoaded) : '')
+    || exactLoaded.department
+    || 'General';
+  const categoryDepartment = financeCategoryOperationalDepartment(category);
+  const department = categoryDepartment?.department
+    || exactLoaded.department
+    || departmentOverride
+    || 'General';
   const lineId = `line_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   financeState.current.lineItems.push({
     id: lineId,
@@ -5505,7 +5552,8 @@ async function financeAddCustomItem() {
     model: '',
     description,
     department,
-    departmentCode: exactLoaded.departmentCode || '',
+    departmentCode: categoryDepartment?.departmentCode || exactLoaded.departmentCode || '',
+    systemName: category,
     days: financeEventDays(),
     quantity: 1,
     uom: financeDefaultUom(department, exactLoaded.uom),
@@ -5525,8 +5573,13 @@ async function financeAddCustomItem() {
     const remembered = (await apiCall(`/api/finance/price-suggestion?description=${encodeURIComponent(description)}`)).data || {};
     const line = financeState.current?.lineItems?.find(row => row.id === lineId);
     if (!line || financeNumber(line.unitPrice) > 0 || !financeNumber(remembered.unitPrice)) return;
-    line.department = departmentOverride || remembered.department || line.department;
-    line.departmentCode = remembered.departmentCode || line.departmentCode || '';
+    line.department = categoryDepartment?.department
+      || remembered.department
+      || line.department;
+    line.departmentCode = categoryDepartment?.departmentCode
+      || remembered.departmentCode
+      || line.departmentCode
+      || '';
     line.uom = remembered.uom || line.uom || 'units';
     line.unitPrice = financeNumber(remembered.unitPrice);
     line.totalMode = 'calculated';

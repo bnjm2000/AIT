@@ -27240,6 +27240,16 @@ def _normalise_finance_line(value):
             if str(value.get('costingMultiplierLabel') or '').strip()
             else 'Day'
         ),
+        'costingInventoryNameMode': (
+            'costing'
+            if str(value.get('costingInventoryNameMode') or '').strip().lower()
+            == 'costing'
+            else 'inventory'
+        ),
+        'costingPricingBindingId': re.sub(
+            r'[^A-Za-z0-9_-]+', '',
+            str(value.get('costingPricingBindingId') or ''),
+        )[:120],
         'quantity': round(quantity, 4),
         'uom': uom,
         'unitPrice': round(unit_price, 2),
@@ -27295,6 +27305,69 @@ def _normalise_finance_line(value):
             r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
         )[:80] or 'main',
     }
+
+
+def _finance_apply_category_department_majorities(lines):
+    """Assign misc lines to the dominant inventory department in their category."""
+    category_totals = {}
+    for index, line in enumerate(lines or []):
+        if not isinstance(line, dict) or line.get('isCustom'):
+            continue
+        department, department_code = _finance_department_details(
+            line.get('department'), line.get('departmentCode')
+        )
+        category = _finance_system_name(
+            line.get('department'), line.get('systemName')
+        )
+        category_key = (
+            str(line.get('subprojectId') or 'main'),
+            category.casefold(),
+        )
+        department_key = _finance_department_identity(
+            department, department_code
+        )
+        quantity = max(0, _safe_float(
+            line.get('groupItemQuantity')
+            if line.get('groupId')
+            else line.get('quantity'),
+            0,
+        ))
+        if line.get('groupId'):
+            quantity *= max(0, _safe_float(line.get('quantity'), 1))
+        bucket = category_totals.setdefault(category_key, {})
+        row = bucket.setdefault(department_key, {
+            'department': department,
+            'departmentCode': department_code,
+            'quantity': 0.0,
+            'firstIndex': index,
+        })
+        row['quantity'] += quantity or 1
+
+    majorities = {
+        category_key: sorted(
+            bucket.values(),
+            key=lambda row: (-row['quantity'], row['firstIndex']),
+        )[0]
+        for category_key, bucket in category_totals.items()
+        if bucket
+    }
+    for line in lines or []:
+        if not isinstance(line, dict) or not line.get('isCustom'):
+            continue
+        if _normalise_custom_type(line.get('customType') or 'MISC') != 'MISC':
+            continue
+        category = _finance_system_name(
+            line.get('department'), line.get('systemName')
+        )
+        majority = majorities.get((
+            str(line.get('subprojectId') or 'main'),
+            category.casefold(),
+        ))
+        if not majority:
+            continue
+        line['department'] = majority['department']
+        line['departmentCode'] = majority['departmentCode']
+    return majorities
 
 
 def _normalise_finance_line_groups(lines):
@@ -27837,6 +27910,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             existing.get('lineItems') or [],
         )
     _normalise_finance_line_groups(lines)
+    _finance_apply_category_department_majorities(lines)
     subprojects = _normalise_finance_subprojects(
         value.get('subprojects')
         if 'subprojects' in value
@@ -28257,6 +28331,7 @@ def _costing_refresh_inventory_line(line):
     assets = [data_manager.inventory.get(asset_id) for asset_id in source_ids]
     assets = [asset for asset in assets if asset and not _is_disposed(asset)]
     if not assets:
+        line['inventoryLinked'] = False
         return line
     asset = assets[0]
     department_code = (
@@ -28268,6 +28343,12 @@ def _costing_refresh_inventory_line(line):
     brand = str(getattr(asset, 'brand', '') or '').strip()
     model = str(getattr(asset, 'model_number', '') or '').strip()
     description = str(getattr(asset, 'description', '') or '').strip()
+    keep_costing_name = line.get('inventoryNameMode') == 'costing'
+    costing_name = {
+        'brand': line.get('brand') or '',
+        'model': line.get('model') or '',
+        'description': line.get('description') or '',
+    }
     line.update({
         'catalogKey': _finance_catalog_key(
             department_code, brand, model, description
@@ -28283,7 +28364,10 @@ def _costing_refresh_inventory_line(line):
         )[:1000],
         'departmentCode': department_code,
         'isCustom': False,
+        'inventoryLinked': True,
     })
+    if keep_costing_name:
+        line.update(costing_name)
     if not str(line.get('category') or '').strip():
         line['category'] = department
     return line
@@ -28344,6 +28428,19 @@ def _normalise_costing_line(value):
         'remarks': str(value.get('remarks') or '').strip()[:2000],
         'category': category,
         'departmentCode': _normalise_department_code(value.get('departmentCode')),
+        'inventoryNameMode': (
+            'costing'
+            if str(
+                value.get('inventoryNameMode')
+                or value.get('costingInventoryNameMode')
+                or ''
+            ).strip().lower() == 'costing'
+            else 'inventory'
+        ),
+        'pricingBindingId': re.sub(
+            r'[^A-Za-z0-9_-]+', '',
+            str(value.get('pricingBindingId') or value.get('costingPricingBindingId') or ''),
+        )[:120],
         'quantity': quantity,
         'multiplier': multiplier,
         'multiplierLabel': 'Day'
@@ -28503,6 +28600,15 @@ def _normalise_costing_document(value, existing=None):
         if isinstance(existing.get('vendorManagement'), list)
         else None,
     )
+    unbound_price_names = []
+    for name in (
+        value.get('unboundPriceNames')
+        if isinstance(value.get('unboundPriceNames'), list)
+        else existing.get('unboundPriceNames') or []
+    ):
+        normalised_name = re.sub(r'\s+', ' ', str(name or '').strip()).casefold()
+        if normalised_name and normalised_name not in unbound_price_names:
+            unbound_price_names.append(normalised_name[:1000])
     return {
         'id': existing.get('id')
         or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80]
@@ -28532,6 +28638,7 @@ def _normalise_costing_document(value, existing=None):
         },
         'vendorSnapshots': copy.deepcopy(vendor_snapshots),
         'vendorManagement': vendor_management,
+        'unboundPriceNames': unbound_price_names,
         'salesperson': str(
             value.get('salesperson')
             if 'salesperson' in value
@@ -28649,6 +28756,8 @@ def _costing_line_from_quotation_line(quote_line):
         'description': quote_line.get('description') or '',
         'category': category,
         'departmentCode': quote_line.get('departmentCode') or '',
+        'inventoryNameMode': quote_line.get('costingInventoryNameMode') or 'inventory',
+        'pricingBindingId': quote_line.get('costingPricingBindingId') or '',
         'quantity': (
             quote_line.get('groupItemQuantity', quote_line.get('quantity', 1))
             if quote_line.get('groupId')
@@ -28720,6 +28829,8 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'description': costing_line.get('description') or '',
         'department': underlying_department,
         'departmentCode': costing_line.get('departmentCode') or '',
+        'costingInventoryNameMode': costing_line.get('inventoryNameMode') or 'inventory',
+        'costingPricingBindingId': costing_line.get('pricingBindingId') or '',
         'systemName': costing_line.get('category') or 'General',
         'subprojectId': costing_line.get('subprojectId') or 'main',
         'days': days,
@@ -28762,6 +28873,9 @@ def _costing_line_quote_identity(line):
         r'\s+', ' ', str(line.get('description') or '').strip()
     ).casefold()
     catalog_key = str(line.get('catalogKey') or '').strip().casefold()
+    pricing_binding_id = str(
+        line.get('pricingBindingId') or line.get('costingPricingBindingId') or ''
+    ).strip().casefold()
     # A manually entered costing allocation may describe the same item as an
     # inventory-linked allocation. The quotation must still show one client-
     # facing line when its displayed item name is the same.
@@ -28785,6 +28899,8 @@ def _costing_line_quote_identity(line):
                 str(line.get('departmentCode') or '').strip().casefold(),
                 str(line.get('category') or 'General').strip().casefold(),
             ))
+    if pricing_binding_id:
+        item_key = f'{item_key}::pricing:{pricing_binding_id}'
     category_key = str(
         line.get('category') or line.get('department') or 'General'
     ).strip().casefold()
@@ -28925,6 +29041,7 @@ def _costing_grouped_quotation_lines(costing, quotation):
                 group = linked_group
             elif linked_group:
                 quote_id = ''
+                linked_id = ''
         if group is None:
             quote_id = quote_id or linked_id or str(line.get('id') or new_id('line'))
             group = {'id': quote_id, 'identity': identity, 'lines': []}
@@ -29036,6 +29153,8 @@ def _sync_costing_from_quotation(finance_data, quotation):
                 'quotationLineId', 'subprojectId', 'catalogKey',
                 'sourceAssetIds', 'brand', 'model', 'description', 'category',
                 'departmentCode', 'multiplier', 'multiplierLabel', 'isCustom',
+                'inventoryNameMode',
+                'pricingBindingId',
                 'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
                 'groupItemQuantity', 'groupLeader',
                 'groupHeaderQuantity',
@@ -29164,6 +29283,8 @@ def _costing_quote_sync_fingerprint(costing, quotation):
                     'description', 'department', 'departmentCode',
                     'systemName', 'subprojectId', 'days', 'quantity',
                     'costingMultiplierLabel',
+                    'costingInventoryNameMode',
+                    'costingPricingBindingId',
                     'unitPrice', 'discountPercent', 'totalMode', 'total',
                     'isCustom', 'groupId', 'groupTitle',
                     'groupDisplayFields', 'groupCustomText',
@@ -29250,6 +29371,9 @@ def _linked_cost_line_from_record(public_line, allocation):
         'description': public_line.get('description') or '',
         'category': category,
         'departmentCode': public_line.get('departmentCode') or '',
+        'inventoryNameMode': (
+            public_line.get('costingInventoryNameMode') or 'inventory'
+        ),
         'isCustom': bool(public_line.get('isCustom')),
         'groupId': public_line.get('groupId') or '',
         'groupTitle': public_line.get('groupTitle') or '',
@@ -29300,6 +29424,13 @@ def _linked_cost_line_from_record(public_line, allocation):
         'groupItemCommercialStored': bool(public_line.get('groupItemCommercialStored')),
         'category': category,
         'departmentCode': str(public_line.get('departmentCode') or ''),
+        'inventoryNameMode': (
+            'costing'
+            if str(
+                public_line.get('costingInventoryNameMode') or ''
+            ).strip().lower() == 'costing'
+            else 'inventory'
+        ),
         'isCustom': bool(public_line.get('isCustom')),
     })
     return line
@@ -29732,7 +29863,7 @@ def _costing_workforce_department(line):
 
 
 def _sync_costing_vendor_assignments(costing, event_id):
-    """Expose Costing vendor totals as normal event service assignments."""
+    """Expose Costing vendor and worker totals as event assignments."""
     event_id = _safe_int(event_id, 0)
     event = data_manager.events.get(event_id) if event_id else None
     if not event:
@@ -29745,29 +29876,35 @@ def _sync_costing_vendor_assignments(costing, event_id):
         vendor_name = str(line.get('vendorName') or '').strip()
         if (
             not vendor_id
-            or vendor_type != 'vendor'
+            or vendor_type not in {'vendor', 'worker'}
             or not vendor_name
             or vendor_name.casefold() == 'self'
         ):
             continue
         department, category = _costing_workforce_department(line)
         subproject_id = str(line.get('subprojectId') or 'main').strip() or 'main'
-        key = f'{vendor_id}:{department}:{subproject_id}'
+        key = f'{vendor_type}:{vendor_id}:{department}:{subproject_id}'
         allocation = allocations.setdefault(key, {
             'vendorId': vendor_id,
+            'vendorType': vendor_type,
             'vendorName': vendor_name,
             'department': department,
             'category': category,
             'subprojectId': subproject_id,
             'amount': 0.0,
+            'roles': [],
         })
         allocation['amount'] = round(
             allocation['amount'] + max(0, _safe_float(line.get('costTotal'), 0)),
             2,
         )
+        role_name = str(line.get('description') or '').strip()
+        if role_name and role_name not in allocation['roles']:
+            allocation['roles'].append(role_name)
 
     start_date = _event_date_for_input(event.start_date)
     costing_id = str(costing.get('id') or '')
+    changed = False
     with mutate_workforce(_workforce_folder()) as workforce:
         rows = workforce.setdefault('assignments', {}).setdefault(str(event_id), [])
         existing_by_key = {
@@ -29780,54 +29917,97 @@ def _sync_costing_vendor_assignments(costing, event_id):
         active_keys = set()
 
         for key, allocation in allocations.items():
-            vendor = find_by_id(workforce.get('vendors'), allocation['vendorId'])
-            if not vendor:
+            profile_kind, profile = _costing_find_vendor(
+                workforce,
+                allocation['vendorName'],
+                allocation['vendorType'],
+                allocation['vendorId'],
+            )
+            if not profile or profile_kind not in {'vendor', 'worker'}:
                 continue
             active_keys.add(key)
             expected = round(allocation['amount'], 2)
             assignment = existing_by_key.get(key)
+            if assignment is None and allocation['vendorType'] == 'vendor':
+                legacy_key = (
+                    f"{allocation['vendorId']}:{allocation['department']}:"
+                    f"{allocation['subprojectId']}"
+                )
+                assignment = existing_by_key.get(legacy_key)
             if assignment is None:
                 assignment = {
                     'id': new_id('assignment'),
                     'freelancerId': allocation['vendorId'],
-                    'vendorId': allocation['vendorId'],
-                    'subjectType': 'vendor',
-                    'providerType': 'service',
                     'sourceType': 'costing',
                     'sourceCostingId': costing_id,
                     'costingAllocationKey': key,
                     'createdAt': now_iso(),
                 }
                 rows.append(assignment)
+                changed = True
 
             previously_synced = assignment.get('costingSyncedAmount')
-            current_amount = round(
-                max(0, _safe_float(assignment.get('serviceCost'), 0)), 2
-            )
+            if allocation['vendorType'] == 'worker':
+                current_amount = round(
+                    max(0, _safe_float(assignment.get('dailyRate'), 0))
+                    * max(1, _safe_int(assignment.get('days'), 1)),
+                    2,
+                )
+            else:
+                current_amount = round(
+                    max(0, _safe_float(assignment.get('serviceCost'), 0)), 2
+                )
             may_sync_amount = (
                 previously_synced is None
                 or abs(current_amount - _safe_float(previously_synced, 0)) < 0.005
             )
-            assignment.update({
+            role_name = ' / '.join(allocation['roles'])[:500] or allocation['category']
+            updates = {
                 'freelancerId': allocation['vendorId'],
-                'vendorId': allocation['vendorId'],
-                'subjectType': 'vendor',
-                'providerType': 'service',
                 'department': allocation['department'],
                 'subprojectId': allocation['subprojectId'],
-                'serviceName': allocation['category'],
-                'roleName': allocation['category'],
                 'days': 1,
                 'workDates': [start_date] if start_date else [],
                 'sourceType': 'costing',
                 'sourceCostingId': costing_id,
                 'costingAllocationKey': key,
-                'updatedAt': now_iso(),
-            })
+                'costingVendorType': allocation['vendorType'],
+            }
+            if allocation['vendorType'] == 'worker':
+                updates.update({
+                    'subjectType': 'worker',
+                    'providerType': 'worker',
+                    'roleName': role_name,
+                })
+                assignment.pop('vendorId', None)
+                assignment.pop('serviceName', None)
+                assignment.pop('serviceCost', None)
+            else:
+                updates.update({
+                    'vendorId': allocation['vendorId'],
+                    'subjectType': 'vendor',
+                    'providerType': 'service',
+                    'serviceName': allocation['category'],
+                    'roleName': allocation['category'],
+                })
+            if any(assignment.get(field) != value for field, value in updates.items()):
+                assignment.update(updates)
+                assignment['updatedAt'] = now_iso()
+                changed = True
             if may_sync_amount:
-                assignment['serviceCost'] = expected
-                assignment['dailyRate'] = expected
-                assignment['costingSyncedAmount'] = expected
+                amount_updates = {
+                    'dailyRate': expected,
+                    'costingSyncedAmount': expected,
+                }
+                if allocation['vendorType'] == 'vendor':
+                    amount_updates['serviceCost'] = expected
+                if any(
+                    assignment.get(field) != value
+                    for field, value in amount_updates.items()
+                ):
+                    assignment.update(amount_updates)
+                    assignment['updatedAt'] = now_iso()
+                    changed = True
 
             manual_rows = workforce.setdefault('manualDepartments', {}).setdefault(
                 str(event_id), []
@@ -29844,6 +30024,7 @@ def _sync_costing_vendor_assignments(costing, event_id):
                     'createdAt': now_iso(),
                     'sourceCostingId': costing_id,
                 })
+                changed = True
 
         kept = []
         for row in rows:
@@ -29854,9 +30035,16 @@ def _sync_costing_vendor_assignments(costing, event_id):
             ):
                 kept.append(row)
                 continue
-            current_amount = round(
-                max(0, _safe_float(row.get('serviceCost'), 0)), 2
-            )
+            if str(row.get('costingVendorType') or '') == 'worker':
+                current_amount = round(
+                    max(0, _safe_float(row.get('dailyRate'), 0))
+                    * max(1, _safe_int(row.get('days'), 1)),
+                    2,
+                )
+            else:
+                current_amount = round(
+                    max(0, _safe_float(row.get('serviceCost'), 0)), 2
+                )
             synced_amount = round(
                 max(0, _safe_float(row.get('costingSyncedAmount'), 0)), 2
             )
@@ -29866,7 +30054,12 @@ def _sync_costing_vendor_assignments(costing, event_id):
                 row.pop('costingSyncedAmount', None)
                 row['sourceType'] = 'manual'
                 kept.append(row)
+                changed = True
+            else:
+                changed = True
         workforce['assignments'][str(event_id)] = kept
+    if changed:
+        _workforce_changed(event_id, 'costing-assignments-updated')
 
 
 def _sync_costing_vendors(costing, event_id=None):
@@ -30007,13 +30200,27 @@ def _costing_vendor_discrepancies(costing):
                 != str(costing.get('id') or '')
             ):
                 continue
-            key = _costing_vendor_key(
-                '', 'vendor', assignment.get('vendorId')
+            assignment_type = str(
+                assignment.get('costingVendorType')
+                or ('worker' if assignment.get('subjectType') == 'worker' else 'vendor')
+            ).strip().lower()
+            assignment_id = (
+                assignment.get('freelancerId')
+                if assignment_type == 'worker'
+                else assignment.get('vendorId') or assignment.get('freelancerId')
             )
+            key = _costing_vendor_key('', assignment_type, assignment_id)
             if key:
+                if assignment_type == 'worker':
+                    amount = (
+                        max(0, _safe_float(assignment.get('dailyRate'), 0))
+                        * max(1, _safe_int(assignment.get('days'), 1))
+                    )
+                else:
+                    amount = max(0, _safe_float(assignment.get('serviceCost'), 0))
                 assignment_totals[key] = round(
                     assignment_totals.get(key, 0)
-                    + max(0, _safe_float(assignment.get('serviceCost'), 0)),
+                    + amount,
                     2,
                 )
     aggregate = {}
@@ -30044,7 +30251,7 @@ def _costing_vendor_discrepancies(costing):
             continue
         if event_id:
             actual = assignment_totals.get(
-                _costing_vendor_key('', 'vendor', profile.get('id'))
+                _costing_vendor_key('', kind, profile.get('id'))
             )
         else:
             rental = next((
@@ -30667,7 +30874,7 @@ def _costing_event_loan_marker(costing, line):
     ), 1))
     return _make_custom_marker(
         'LOAN',
-        str((line or {}).get('description') or 'Dry-hire equipment'),
+        str((line or {}).get('description') or 'Self pickup equipment'),
         quantity,
         _normalise_department_code((line or {}).get('departmentCode')) or 'UN',
         str((line or {}).get('vendorName') or 'Vendor'),
@@ -30749,7 +30956,7 @@ def _costing_event_subprojects(costing, subprojects=None):
                     ) or 'UN',
                     'brand': '',
                     'model': '',
-                    'description': line.get('description') or 'Dry-hire equipment',
+                    'description': line.get('description') or 'Self pickup equipment',
                     'customDescription': 'Managed from Event Costing',
                     'company': line.get('vendorName') or 'Vendor',
                     'quantity': max(1, _safe_int(round(quantity), 1)),
@@ -30800,6 +31007,155 @@ def _costing_event_subprojects(costing, subprojects=None):
             'items': items,
         })
     return result
+
+
+def _costing_event_item_signature(item):
+    """Return only the event fields owned by a Costing requirement line."""
+    if not isinstance(item, dict):
+        return ''
+    payload = {
+        key: item.get(key)
+        for key in (
+            'lineId', 'department', 'departmentCode', 'brand', 'model',
+            'description', 'customDescription', 'company', 'quantity',
+            'isCustom', 'assetRefs', 'preparedQuantity',
+            'returnedPreparedQuantity',
+        )
+    }
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+
+
+def _costing_line_event_vendor_signature(costing, line):
+    if not _costing_line_is_external(line):
+        return ('self', '', '')
+    return (
+        'external',
+        _costing_vendor_key(
+            line.get('vendorName'), line.get('vendorType'), line.get('vendorId')
+        ),
+        _costing_vendor_management_mode(costing, line),
+    )
+
+
+def _costing_event_projection_by_line(costing, subprojects):
+    projection = {}
+    for room in _costing_event_subprojects(costing, subprojects):
+        room_id = str(room.get('id') or 'main')
+        for item in room.get('items') or []:
+            line_id = str(item.get('lineId') or '')
+            if line_id.startswith('costing_vendor_'):
+                source_line_id = line_id.removeprefix('costing_vendor_')
+            else:
+                source_line_id = line_id
+            if source_line_id:
+                projection[source_line_id] = (room_id, item)
+    return projection
+
+
+def _finance_sync_changed_costing_event_vendors(
+    document, previous_costing, costing
+):
+    """Apply vendor-source changes to untouched event requirements only."""
+    event_id = _safe_int((document or {}).get('eventId'), 0)
+    event = data_manager.events.get(event_id) if event_id else None
+    if not event:
+        return 0
+
+    previous_lines = {
+        str(line.get('id') or ''): line
+        for line in (previous_costing or {}).get('lineItems') or []
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    current_lines = {
+        str(line.get('id') or ''): line
+        for line in (costing or {}).get('lineItems') or []
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    changed_line_ids = {
+        line_id
+        for line_id in previous_lines.keys() & current_lines.keys()
+        if _costing_line_event_vendor_signature(
+            previous_costing, previous_lines[line_id]
+        ) != _costing_line_event_vendor_signature(costing, current_lines[line_id])
+    }
+    if not changed_line_ids:
+        return 0
+
+    subprojects = (document or {}).get('subprojects') or [
+        {'id': 'main', 'name': 'Main Room'}
+    ]
+    previous_projection = _costing_event_projection_by_line(
+        previous_costing, subprojects
+    )
+    current_projection = _costing_event_projection_by_line(costing, subprojects)
+    event_rooms = {
+        str(room.get('id') or 'main'): room
+        for room in getattr(event, 'subprojects', []) or []
+        if isinstance(room, dict)
+    }
+    updated = 0
+    for line_id in changed_line_ids:
+        previous_entry = previous_projection.get(line_id)
+        if not previous_entry:
+            continue
+        room_id, previous_item = previous_entry
+        room = event_rooms.get(room_id)
+        if not room:
+            continue
+        items = room.get('items') or []
+        item_index = next((
+            index for index, item in enumerate(items)
+            if isinstance(item, dict)
+            and str(item.get('lineId') or '') == str(previous_item.get('lineId') or '')
+        ), None)
+        if item_index is None:
+            continue
+        stored_item = items[item_index]
+        if (
+            _costing_event_item_signature(stored_item)
+            != _costing_event_item_signature(previous_item)
+        ):
+            continue
+        operational_refs = set(getattr(event, 'actually_prepared', []) or [])
+        operational_refs.update(getattr(event, 'returned_items', []) or [])
+        operational_refs.update(getattr(event, 'extra_assets', []) or [])
+        operational_refs.update(getattr(event, 'custom_collected', []) or [])
+        if any(
+            ref in operational_refs for ref in previous_item.get('assetRefs') or []
+        ):
+            continue
+
+        for ref in previous_item.get('assetRefs') or []:
+            event.prepared_items = [
+                value for value in event.prepared_items if value != ref
+            ]
+        current_entry = current_projection.get(line_id)
+        if current_entry and current_entry[0] == room_id:
+            replacement = copy.deepcopy(current_entry[1])
+            items[item_index] = replacement
+            for ref in replacement.get('assetRefs') or []:
+                if ref not in event.prepared_items:
+                    event.prepared_items.append(ref)
+        else:
+            del items[item_index]
+        room['items'] = items
+        updated += 1
+
+    if not updated:
+        return 0
+    _sync_event_model_markers_from_subprojects(event)
+    data_manager.save_event(event)
+    invalidate_cache()
+    mark_realtime_change('events', {
+        'eventId': event_id,
+        'action': 'costing-vendor-updated',
+    })
+    return updated
 
 
 def _finance_event_asset_fingerprint(event):
@@ -33296,8 +33652,10 @@ def _finance_compare_item_from_line(line):
         line.get('department'), line.get('systemName')
     )
     default_system_name = _finance_system_name(line.get('department'))
+    generic_department = department in {'UN', 'GENERAL'}
     if (
-        system_name
+        generic_department
+        and system_name
         and system_name.casefold() != default_system_name.casefold()
     ):
         department = _normalise_department_code(system_name) or department
@@ -34211,6 +34569,20 @@ def _finance_compare_line_from_event_item(event_item, quantity, event, finance_d
     })
 
 
+def _finance_category_for_department(document, department, department_code, subproject_id):
+    identity = _finance_department_identity(department, department_code)
+    for line in (document or {}).get('lineItems') or []:
+        if str(line.get('subprojectId') or 'main') != str(subproject_id or 'main'):
+            continue
+        if _finance_department_identity(
+            line.get('department'), line.get('departmentCode')
+        ) == identity:
+            return _finance_system_name(
+                line.get('department'), line.get('systemName')
+            )
+    return ''
+
+
 def _finance_compare_apply_to_quotation(
     finance_data,
     quotation,
@@ -34270,6 +34642,14 @@ def _finance_compare_apply_to_quotation(
             event_item, delta, event, finance_data
         )
         new_line['subprojectId'] = str(target_subproject_id or 'main')
+        inherited_category = _finance_category_for_department(
+            quotation,
+            new_line.get('department'),
+            new_line.get('departmentCode'),
+            new_line['subprojectId'],
+        )
+        if inherited_category:
+            new_line['systemName'] = inherited_category
         quotation.setdefault('lineItems', []).append(new_line)
 
 
@@ -35983,13 +36363,14 @@ def costing_item(costing_id):
             or existing.get('convertedQuotationId')
         ):
             payload['status'] = 'linked'
+        previous_costing = _normalise_costing_document(existing, existing)
         costing = _normalise_costing_document(payload, existing)
         linked_quotation = _linked_quotation_for_costing(finance_data, costing)
         sync_mode = str(payload.get('quotationSyncMode') or '').strip().lower()
         quote_visible_changed = bool(
             linked_quotation
             and _costing_quote_sync_fingerprint(
-                _normalise_costing_document(existing, existing),
+                previous_costing,
                 linked_quotation,
             )
             != _costing_quote_sync_fingerprint(costing, linked_quotation)
@@ -36050,6 +36431,9 @@ def costing_item(costing_id):
             _remember_finance_prices(finance_data, linked_quotation)
         if linked_quotation and linked_quotation.get('eventId'):
             _finance_sync_managed_event(linked_quotation, finance_data)
+            _finance_sync_changed_costing_event_vendors(
+                linked_quotation, previous_costing, costing
+            )
             _sync_costing_vendor_assignments(
                 costing, linked_quotation.get('eventId')
             )
@@ -36068,6 +36452,53 @@ def costing_item(costing_id):
             'status': linked_quotation.get('status'),
         } if linked_quotation else None,
     })
+
+
+@app.route('/api/costings/<costing_id>/pdf', methods=['GET'])
+@require_super_admin
+def costing_pdf_export(costing_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, costing_id, 'costing')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Costing not found'}), 404
+        costing = _normalise_costing_document(stored, stored)
+
+    costing['vendorDiscrepancies'] = _costing_vendor_discrepancies(costing)
+    try:
+        from io import BytesIO
+        from costing_pdf import build_costing_pdf
+        from quotation_pdf import safe_pdf_filename
+
+        settings = _normalise_pdf_settings(_load_pdf_settings())
+        pdf_bytes = build_costing_pdf(
+            costing,
+            settings,
+            _pdf_logo_path(settings),
+            generated_by=_finance_current_user_display_name(),
+        )
+    except ImportError:
+        logger.error("ReportLab is required for costing PDF export", exc_info=True)
+        return jsonify({'error': 'PDF export dependency is not installed'}), 503
+    except Exception as exc:
+        logger.error("Failed to render costing PDF: %s", exc, exc_info=True)
+        return jsonify({'error': 'Failed to generate costing PDF'}), 500
+
+    response = send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=request.args.get('download') == '1',
+        download_name=safe_pdf_filename(
+            f"Costing-{costing.get('projectName') or costing_id}",
+            'costing',
+        ),
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = (
+        'no-store, no-cache, must-revalidate, max-age=0'
+    )
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 
 @app.route('/api/costings/<costing_id>/duplicate', methods=['POST'])
@@ -36124,7 +36555,7 @@ def update_event_vendor_management(event_id):
     key = str(payload.get('key') or '').strip()
     mode = str(payload.get('mode') or '').strip().lower()
     if not key or mode not in {'dry-hire', 'outsourced'}:
-        return jsonify({'error': 'Choose Dry Hire or Outsourced for a vendor'}), 400
+        return jsonify({'error': 'Choose Self Pickup or Delivered for a vendor'}), 400
 
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36157,7 +36588,7 @@ def update_event_vendor_management(event_id):
 
     log_action(
         f"Changed {selected.get('vendorName') or 'vendor'} to "
-        f"{'Dry Hire' if mode == 'dry-hire' else 'Outsourced'} for event {event_id}"
+        f"{'Self Pickup' if mode == 'dry-hire' else 'Delivered'} for event {event_id}"
     )
     mark_realtime_change('finance', {
         'action': 'vendor-management-updated',
