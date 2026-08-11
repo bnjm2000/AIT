@@ -1946,6 +1946,9 @@ function costingLineInput(index, field, value) {
     const previousUnitSale = costingLineUnitSale(line);
     const followedCalculation = Math.abs(costingNumber(line.salePrice) - costingNumber(line.calculatedSalePrice)) < 0.005;
     line[field] = costingNumber(value);
+    if (field === 'quantity' && line.groupId) {
+      line.groupItemQuantity = Math.max(0, costingNumber(value));
+    }
     costingLineRecalculate(line, 'cost');
     if (followedCalculation) {
       costingLineRecalculate(line, 'margin-percent');

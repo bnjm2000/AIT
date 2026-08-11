@@ -2912,6 +2912,16 @@ def _asset_group_key(asset):
     )
 
 
+def _event_asset_group_key(asset):
+    """Asset identity used by event planning, preparation, and availability."""
+    return _model_key_from_parts(
+        getattr(asset, 'department_code', ''),
+        getattr(asset, 'brand', ''),
+        getattr(asset, 'model_number', ''),
+        getattr(asset, 'description', ''),
+    )
+
+
 def _asset_family_key_from_values(brand, model):
     return (
         _clean_group_value(brand).lower(),
@@ -4315,6 +4325,7 @@ def _event_planning_template_contents(event):
                 marker['department'],
                 marker['brand'],
                 marker['model'],
+                marker.get('description'),
             )
             if key not in model_groups:
                 model_groups[key] = {
@@ -4380,6 +4391,7 @@ def _apply_planning_template_to_event(event, template, mode):
                 marker['department'],
                 marker['brand'],
                 marker['model'],
+                marker.get('description'),
             )
             if key not in current_models:
                 current_models[key] = {
@@ -4402,6 +4414,7 @@ def _apply_planning_template_to_event(event, template, mode):
             row['department'],
             row['brand'],
             row['model'],
+            row.get('description'),
         )
         if key in current_models:
             current_models[key]['quantity'] += row['quantity']
@@ -4704,7 +4717,7 @@ def _model_key_from_parts(dept, brand, model, description=''):
         _clean_group_value(dept, True),
         _clean_group_value(brand),
         _clean_group_value(model),
-        ''
+        _clean_group_value(description),
     )
 
 
@@ -4716,6 +4729,7 @@ def _event_physical_ref_group_key(value):
             prepared_marker['department'],
             prepared_marker['brand'],
             prepared_marker['model'],
+            prepared_marker.get('description'),
         )
 
     marker = _parse_bulk_marker(value)
@@ -4723,7 +4737,7 @@ def _event_physical_ref_group_key(value):
     asset = data_manager.inventory.get(asset_id) if data_manager else None
     if not asset:
         return None
-    return _asset_group_key(asset)
+    return _event_asset_group_key(asset)
 
 
 def _group_from_request(data):
@@ -4743,7 +4757,12 @@ def _group_from_request(data):
 
 
 def _event_model_group_key(group):
-    return _model_key_from_parts(group['department'], group['brand'], group['model'])
+    return _model_key_from_parts(
+        group['department'],
+        group['brand'],
+        group['model'],
+        group.get('description'),
+    )
 
 
 def _event_model_required_quantity(event, group):
@@ -4754,7 +4773,10 @@ def _event_model_required_quantity(event, group):
         marker = _parse_model_marker(ref)
         if not marker:
             continue
-        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        marker_key = _model_key_from_parts(
+            marker['department'], marker['brand'], marker['model'],
+            marker.get('description'),
+        )
         if marker_key != group_key:
             continue
         total += max(0, _safe_int(marker.get('quantity'), 0))
@@ -4920,7 +4942,7 @@ def _event_allocate_existing_refs_to_initial_subproject(event, subproject):
             asset = data_manager.inventory.get(ref)
 
         item = (
-            items_by_group.get(_asset_group_key(asset))
+            items_by_group.get(_event_asset_group_key(asset))
             if asset
             else None
         )
@@ -5516,7 +5538,9 @@ def _event_prepared_slot_quantity(event, group):
         marker = _parse_prepared_model_marker(ref)
         if not marker:
             continue
-        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        marker_key = _model_key_from_parts(
+            marker['department'], marker['brand'], marker['model'], marker.get('description')
+        )
         if marker_key == group_key:
             total += marker['quantity']
     return total
@@ -5529,7 +5553,9 @@ def _event_returned_prepared_slot_quantity(event, group):
         marker = _parse_prepared_model_marker(ref)
         if not marker:
             continue
-        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        marker_key = _model_key_from_parts(
+            marker['department'], marker['brand'], marker['model'], marker.get('description')
+        )
         if marker_key == group_key:
             total += marker['quantity']
     return total
@@ -5552,7 +5578,7 @@ def _event_specific_asset_quantity(event, group, include_returned=False, include
         if _is_bulk_ref(ref) or _is_prepared_model_ref(ref) or _is_custom_ref(ref):
             continue
         asset = data_manager.inventory.get(ref) if data_manager else None
-        if asset and _asset_group_key(asset) == group_key:
+        if asset and _event_asset_group_key(asset) == group_key:
             total += 1
     return total
 
@@ -5598,7 +5624,9 @@ def _decrement_prepared_model_marker_list(event, list_name, group, quantity=1):
         if not marker:
             rebuilt.append(ref)
             continue
-        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        marker_key = _model_key_from_parts(
+            marker['department'], marker['brand'], marker['model'], marker.get('description')
+        )
         if marker_key != group_key or remaining <= 0:
             rebuilt.append(ref)
             continue
@@ -5622,7 +5650,9 @@ def _increment_prepared_model_marker_list(event, list_name, group, quantity):
         if not marker:
             rebuilt.append(ref)
             continue
-        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        marker_key = _model_key_from_parts(
+            marker['department'], marker['brand'], marker['model'], marker.get('description')
+        )
         if marker_key == group_key and not added:
             marker['quantity'] += quantity
             if not marker.get('description') and group.get('description'):
@@ -5665,7 +5695,7 @@ def _matching_bulk_assets_for_group(group):
     group_key = _event_model_group_key(group)
     return [
         asset for asset in (data_manager.inventory.values() if data_manager else [])
-        if asset and _is_bulk_asset(asset) and _asset_group_key(asset) == group_key
+        if asset and _is_bulk_asset(asset) and _event_asset_group_key(asset) == group_key
     ]
 
 
@@ -5673,7 +5703,7 @@ def _matching_specific_assets_for_group(group):
     group_key = _event_model_group_key(group)
     return [
         asset for asset in (data_manager.inventory.values() if data_manager else [])
-        if asset and not _is_bulk_asset(asset) and _asset_group_key(asset) == group_key
+        if asset and not _is_bulk_asset(asset) and _event_asset_group_key(asset) == group_key
     ]
 
 
@@ -5869,7 +5899,7 @@ def _bulk_quantity_in_values_for_key(values, group_key):
         if not bulk_asset or not _is_bulk_asset(bulk_asset):
             continue
 
-        if _asset_group_key(bulk_asset) == group_key:
+        if _event_asset_group_key(bulk_asset) == group_key:
             total += marker['quantity']
 
     return total
@@ -6109,7 +6139,7 @@ def _event_active_specific_quantities_by_key(event):
                     continue
                 if getattr(bulk_asset, 'is_missing', False) or _is_disposed(bulk_asset):
                     continue
-                totals[_asset_group_key(bulk_asset)] += marker['quantity']
+                totals[_event_asset_group_key(bulk_asset)] += marker['quantity']
                 continue
 
             if ref.startswith('[MODEL]') or _is_prepared_model_ref(ref) or _is_custom_ref(ref):
@@ -6124,7 +6154,7 @@ def _event_active_specific_quantities_by_key(event):
                 continue
             if getattr(asset, 'is_missing', False) or _is_disposed(asset):
                 continue
-            totals[_asset_group_key(asset)] += 1
+            totals[_event_asset_group_key(asset)] += 1
 
     return totals
 
@@ -6312,7 +6342,7 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
         if not bulk_asset or not _is_bulk_asset(bulk_asset):
             continue
 
-        group_key = '|'.join(_asset_group_key(bulk_asset))
+        group_key = '|'.join(_event_asset_group_key(bulk_asset))
         if group_key not in model_groups:
             model_groups[group_key] = {
                 'department': bulk_asset.department_code,
@@ -6363,6 +6393,7 @@ def _append_prepared_slots_to_model_groups(model_groups, event):
                 marker['department'],
                 marker['brand'],
                 marker['model'],
+                marker.get('description'),
             ))
             if group_key not in model_groups:
                 model_groups[group_key] = {
@@ -6432,7 +6463,7 @@ def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
         if not asset or _is_bulk_asset(asset):
             continue
 
-        dept, brand, model, description = _asset_group_key(asset)
+        dept, brand, model, description = _event_asset_group_key(asset)
         model_key = f"{dept}|{brand}|{model}|{description}"
 
         if model_key not in model_groups:
@@ -6459,7 +6490,7 @@ def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
 
 
 def _bulk_remaining_for_event_group(event, bulk_asset):
-    group_key = _asset_group_key(bulk_asset)
+    group_key = _event_asset_group_key(bulk_asset)
     required = 0
     for item in getattr(event, 'prepared_items', []) or []:
         key, quantity = _parse_model_assignment_key(item)
@@ -6599,7 +6630,7 @@ def _parse_model_assignment_key(value):
         _clean_group_value(parts[0], True),
         _clean_group_value(parts[1]),
         _clean_group_value(parts[2]),
-        ''
+        _clean_group_value(parts[4] if len(parts) > 4 else ''),
     )
 
     return key, quantity
@@ -6696,6 +6727,7 @@ def get_available_assets_for_event(event_id):
                 marker['department'],
                 marker['brand'],
                 marker['model'],
+                marker.get('description'),
             )
             for ref in (getattr(event, 'returned_items', []) or [])
             for marker in [_parse_prepared_model_marker(ref)]
@@ -6729,7 +6761,7 @@ def get_available_assets_for_event(event_id):
                 continue
 
             is_returned_reconciliation_candidate = (
-                _asset_group_key(asset) in returned_anonymous_group_keys
+                _event_asset_group_key(asset) in returned_anonymous_group_keys
                 and asset_id not in returned_event_refs
             )
 
@@ -12719,6 +12751,14 @@ def _asset_matches_group(asset, group):
     )
 
 
+def _event_asset_matches_group(asset, group):
+    return (
+        _asset_matches_group(asset, group) and
+        (asset.description or '').strip().casefold() ==
+        str(group.get('description') or '').strip().casefold()
+    )
+
+
 def _is_real_asset_ref(value):
     if not isinstance(value, str):
         return False
@@ -12837,7 +12877,9 @@ def _model_marker_matches_group(marker, group):
         marker and
         marker['department'] == group['department'] and
         marker['brand'] == group['brand'] and
-        marker['model'] == group['model']
+        marker['model'] == group['model'] and
+        str(marker.get('description') or '').strip().casefold() ==
+        str(group.get('description') or '').strip().casefold()
     )
 
 
@@ -12968,7 +13010,7 @@ def _event_has_specific_group_asset_reference(event, group):
             else:
                 asset = data_manager.inventory.get(value) if data_manager else None
 
-            if asset and _asset_matches_group(asset, group):
+            if asset and _event_asset_matches_group(asset, group):
                 return True
 
     return False
@@ -13086,7 +13128,7 @@ def _event_real_asset_count_for_group(event, group):
             if asset_id in seen:
                 continue
             asset = data_manager.inventory.get(asset_id) if data_manager else None
-            if asset and _asset_matches_group(asset, group):
+            if asset and _event_asset_matches_group(asset, group):
                 seen.add(asset_id)
 
     return len(seen)
@@ -13510,7 +13552,7 @@ def update_event_state(event, workforce=None):
                     brand = parts[1]
                     model = parts[2]
                     required_quantity = max(0, _safe_int(parts[3], 0))
-                    description = parts[4] if len(parts) > 4 else ''
+                    description = '|'.join(parts[4:]) if len(parts) > 4 else ''
                     group_key = _model_key_from_parts(dept, brand, model, description)
 
                     required_total += required_quantity
@@ -16376,9 +16418,11 @@ def get_events():
                             brand = parts[1]
                             model = parts[2]
                             quantity = int(parts[3])
-                            description = parts[4] if len(parts) > 4 else ''
+                            description = '|'.join(parts[4:]) if len(parts) > 4 else ''
                             
-                            model_key = '|'.join(_model_key_from_parts(dept, brand, model))
+                            model_key = '|'.join(
+                                _model_key_from_parts(dept, brand, model, description)
+                            )
                             
                             if model_key not in model_groups:
                                 model_groups[model_key] = {
@@ -16404,7 +16448,9 @@ def get_events():
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    str(specific_asset.description or '').strip().casefold() ==
+                                        description.strip().casefold()):
                                     
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
                                     
@@ -16711,9 +16757,11 @@ def get_event(event_id):
                         brand = parts[1]
                         model = parts[2]
                         quantity = int(parts[3])
-                        description = parts[4] if len(parts) > 4 else ''
+                        description = '|'.join(parts[4:]) if len(parts) > 4 else ''
 
-                        model_key = '|'.join(_model_key_from_parts(dept, brand, model))
+                        model_key = '|'.join(
+                            _model_key_from_parts(dept, brand, model, description)
+                        )
 
                         if model_key not in model_groups:
                             model_groups[model_key] = {
@@ -16748,11 +16796,12 @@ def get_event(event_id):
                                 logger.debug(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
                                 logger.debug(f"Looking for: brand={brand}, model={model}, dept={dept}")
                                 
-                                description = parts[4] if len(parts) > 4 else ''
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    str(specific_asset.description or '').strip().casefold() ==
+                                        description.strip().casefold()):
 
                                     # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
@@ -17163,7 +17212,7 @@ def get_event_model_availability(event_id):
     Compute model availability for an event.
 
     Rules:
-    - Group by department + brand + model. Description is display text only.
+    - Group by department + brand + model + description.
     - Exclude decommissioned assets.
     - Keep OOC and Missing assets in the physical total, but do not count them as available.
     - Include Degraded assets as available because they can still be prepared with a warning.
@@ -17203,7 +17252,7 @@ def get_event_model_availability(event_id):
             if _is_disposed(asset):
                 continue
 
-            key = _asset_group_key(asset)
+            key = _event_asset_group_key(asset)
             inventory_quantity = _asset_inventory_quantity(asset)
             physical_by_key[key] += inventory_quantity
 
@@ -18324,7 +18373,9 @@ def manage_event_models(event_id):
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
-            group_key = _model_key_from_parts(department, brand, model)
+            group_key = _model_key_from_parts(
+                department, brand, model, provided_description
+            )
 
             matching_indexes = []
             existing_quantity = 0
@@ -18338,6 +18389,7 @@ def manage_event_models(event_id):
                     marker['department'],
                     marker['brand'],
                     marker['model'],
+                    marker.get('description'),
                 )
                 if marker_key != group_key:
                     continue
@@ -18429,8 +18481,8 @@ def manage_event_models(event_id):
             # Log current prepared_items
             logger.info(f"Current prepared_items: {event.prepared_items}")
 
-            # Check if this model already exists in the event. Description is
-            # display text only and does not split model type quantities.
+            # Description is part of event-side identity: visually distinct
+            # variants of the same inventory model remain separate requirements.
             existing_model_ids = []
             existing_quantity = 0
             display_description = full_description
@@ -18444,13 +18496,15 @@ def manage_event_models(event_id):
                         item_dept = parts[0]
                         item_brand = parts[1]
                         item_model = parts[2]
-                        item_description = parts[4] if len(parts) > 4 else ''
+                        item_description = '|'.join(parts[4:]) if len(parts) > 4 else ''
                         
                         logger.info(f"Item details - Dept: '{item_dept}', Brand: '{item_brand}', Model: '{item_model}', Desc: '{item_description}'")
                         
                         if (item_dept == department and 
                             item_brand == brand and 
-                            item_model == model):
+                            item_model == model and
+                            item_description.strip().casefold() ==
+                                display_description.strip().casefold()):
                             existing_model_ids.append(item)
                             existing_quantity += _safe_int(parts[3], 0)
                             if not display_description and item_description:
@@ -18466,8 +18520,7 @@ def manage_event_models(event_id):
                 logger.info("Creating new model assignment")
                 new_quantity = quantity
 
-            # Create consolidated model assignment identifier. The description
-            # remains for display only; identity is department + brand + model.
+            # Create a consolidated marker for this exact described asset type.
             model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{display_description}"
             logger.info(f"Creating model assignment: '{model_id}'")
             event.prepared_items.append(model_id)
@@ -18522,7 +18575,7 @@ def manage_event_models(event_id):
                 item_dept = parts[0]
                 item_brand = parts[1]
                 item_model = parts[2]
-                item_description = parts[4] if len(parts) > 4 else ''
+                item_description = '|'.join(parts[4:]) if len(parts) > 4 else ''
 
                 if item_dept == department and item_brand == brand and item_model == model:
                     candidates.append((item, item_description))
@@ -18531,13 +18584,25 @@ def manage_event_models(event_id):
                 return jsonify({'error': 'Model assignment not found'}), 404
 
             if description_to_match:
-                items_to_remove = [it for (it, desc) in candidates if desc == description_to_match]
+                items_to_remove = [
+                    item for item, description in candidates
+                    if description.strip().casefold() == description_to_match.casefold()
+                ]
                 if not items_to_remove:
-                    items_to_remove = [it for (it, _desc) in candidates]
+                    return jsonify({'error': 'Model assignment not found'}), 404
             else:
-                items_to_remove = [it for (it, _desc) in candidates]
+                descriptions = {
+                    description.strip().casefold() for _item, description in candidates
+                }
+                if len(descriptions) > 1:
+                    return jsonify({
+                        'error': 'Description is required to identify this model assignment'
+                    }), 400
+                items_to_remove = [item for item, _description in candidates]
 
-            group_key = _model_key_from_parts(department, brand, model)
+            group_key = _model_key_from_parts(
+                department, brand, model, description_to_match
+            )
 
             for item in items_to_remove:
                 event.prepared_items.remove(item)
@@ -18601,8 +18666,12 @@ def replace_event_model_requirement(event_id):
 
         source_department, source_brand, source_model, source_description = model_details(source)
         target_department, target_brand, target_model, target_description = model_details(replacement)
-        source_key = _model_key_from_parts(source_department, source_brand, source_model)
-        target_key = _model_key_from_parts(target_department, target_brand, target_model)
+        source_key = _model_key_from_parts(
+            source_department, source_brand, source_model, source_description
+        )
+        target_key = _model_key_from_parts(
+            target_department, target_brand, target_model, target_description
+        )
         if source_key == target_key:
             return jsonify({'error': 'Choose a different replacement model'}), 400
 
@@ -18630,7 +18699,7 @@ def replace_event_model_requirement(event_id):
             physical_target = sum(
                 _asset_inventory_quantity(asset)
                 for asset in data_manager.inventory.values()
-                if asset and not _is_disposed(asset) and _asset_group_key(asset) == target_key
+                if asset and not _is_disposed(asset) and _event_asset_group_key(asset) == target_key
             )
             if aggregate_target + quantity > physical_target:
                 return jsonify({'error': f'Only {physical_target} total {target_brand} {target_model} unit(s) exist'}), 400
@@ -18668,7 +18737,8 @@ def replace_event_model_requirement(event_id):
             if not marker:
                 continue
             marker_key = _model_key_from_parts(
-                marker.get('department'), marker.get('brand'), marker.get('model')
+                marker.get('department'), marker.get('brand'), marker.get('model'),
+                marker.get('description')
             )
             marker_quantity = max(0, _safe_int(marker.get('quantity'), 0))
             if marker_key == source_key:
@@ -18688,7 +18758,7 @@ def replace_event_model_requirement(event_id):
         physical_target_quantity = sum(
             _asset_inventory_quantity(asset)
             for asset in data_manager.inventory.values()
-            if asset and not _is_disposed(asset) and _asset_group_key(asset) == target_key
+            if asset and not _is_disposed(asset) and _event_asset_group_key(asset) == target_key
         )
         if target_quantity + quantity > physical_target_quantity:
             return jsonify({
@@ -18769,7 +18839,9 @@ def convert_event_model_requirement_to_loan(event_id):
         if not company:
             return jsonify({'error': 'Loan company/source is required'}), 400
 
-        source_key = _model_key_from_parts(source_department, source_brand, source_model)
+        source_key = _model_key_from_parts(
+            source_department, source_brand, source_model, source_description
+        )
         subproject = _event_subproject(event, payload.get('subprojectId'))
         if str(payload.get('subprojectId') or '').strip() and not subproject:
             return jsonify({'error': 'Sub-project not found'}), 404
@@ -18828,7 +18900,8 @@ def convert_event_model_requirement_to_loan(event_id):
             if not marker:
                 continue
             marker_key = _model_key_from_parts(
-                marker.get('department'), marker.get('brand'), marker.get('model')
+                marker.get('department'), marker.get('brand'), marker.get('model'),
+                marker.get('description')
             )
             if marker_key != source_key:
                 continue
@@ -19155,7 +19228,7 @@ def add_container_models_to_event(event_id):
                 skipped.append(asset_id)
                 continue
 
-            key = _asset_group_key(asset)
+            key = _event_asset_group_key(asset)
             if key not in grouped:
                 grouped[key] = {
                     'department': asset.department_code,
@@ -19171,7 +19244,7 @@ def add_container_models_to_event(event_id):
             if not asset or getattr(asset, 'is_missing', False) or _is_disposed(asset):
                 skipped.append(asset_id)
                 continue
-            key = _asset_group_key(asset)
+            key = _event_asset_group_key(asset)
             if key not in grouped:
                 grouped[key] = {
                     'department': asset.department_code,
@@ -19232,6 +19305,7 @@ def add_container_models_to_event(event_id):
                 row['department'],
                 row['brand'],
                 row['model'],
+                row.get('description'),
             )
             for ref in list(event.prepared_items):
                 marker = _parse_model_marker(ref)
@@ -19241,6 +19315,7 @@ def add_container_models_to_event(event_id):
                     marker['department'],
                     marker['brand'],
                     marker['model'],
+                    marker.get('description'),
                 )
                 if marker_key == key:
                     existing_refs.append(ref)
@@ -21210,7 +21285,7 @@ def _asset_match_key(asset):
         _norm(getattr(asset, 'department_code', ''), True),
         _norm(getattr(asset, 'brand', '')),
         _norm(getattr(asset, 'model_number', '')),
-        '',
+        _norm(getattr(asset, 'description', '')),
     )
 
 
@@ -21237,7 +21312,7 @@ def _model_marker_to_requirement(marker):
             _norm(parsed['department'], True),
             _norm(parsed['brand']),
             _norm(parsed['model']),
-            '',
+            _norm(parsed.get('description', '')),
         )
     }
 
@@ -21299,7 +21374,7 @@ def _target_model_requirements(event, subproject=None):
                 _norm(group['department'], True),
                 _norm(group['brand']),
                 _norm(group['model']),
-                '',
+                _norm(group.get('description', '')),
             )
             if key not in requirements:
                 requirements[key] = {
@@ -27408,6 +27483,14 @@ def _finance_catalog_key(department='', brand='', model='', description=''):
     return 'inventory:' + '|'.join(parts).lower()
 
 
+def _finance_container_item_key(catalog_key, description=''):
+    """Keep distinct container pieces separate without changing model identity."""
+    return '|'.join((
+        str(catalog_key or '').strip().casefold(),
+        str(description or '').strip().casefold(),
+    ))
+
+
 def _finance_display_description(brand='', model='', description=''):
     identity = ' '.join(
         value for value in (
@@ -31336,6 +31419,7 @@ def _finance_inventory_group_from_line(line):
 
     catalog_key = str(line.get('catalogKey') or '').strip().lower()
     if catalog_key:
+        catalog_matches = []
         for asset in data_manager.inventory.values():
             if _is_disposed(asset):
                 continue
@@ -31354,12 +31438,23 @@ def _finance_inventory_group_from_line(line):
                 asset_model,
                 asset_description,
             ).lower() == catalog_key:
-                return {
+                catalog_matches.append({
                     'department': asset_department,
                     'brand': asset_brand,
                     'model': asset_model,
                     'description': asset_description,
+                })
+        if catalog_matches:
+            line_description = str(line.get('description') or '').strip().casefold()
+            return next((
+                row for row in catalog_matches
+                if line_description in {
+                    str(row.get('description') or '').strip().casefold(),
+                    _finance_display_description(
+                        row.get('brand'), row.get('model'), row.get('description')
+                    ).casefold(),
                 }
+            ), catalog_matches[0])
 
     if line.get('isCustom'):
         return None
@@ -31379,7 +31474,7 @@ def _finance_inventory_group_from_line(line):
     )
     target_brand = brand.casefold()
     target_model = model.casefold()
-    matching_asset = next((
+    matching_assets = [
         asset for asset in data_manager.inventory.values()
         if asset
         and not _is_disposed(asset)
@@ -31392,7 +31487,19 @@ def _finance_inventory_group_from_line(line):
         == target_brand
         and str(getattr(asset, 'model_number', '') or '').strip().casefold()
         == target_model
-    ), None)
+    ]
+    line_description = str(line.get('description') or '').strip().casefold()
+    matching_asset = next((
+        asset for asset in matching_assets
+        if line_description in {
+            str(getattr(asset, 'description', '') or '').strip().casefold(),
+            _finance_display_description(
+                getattr(asset, 'brand', ''),
+                getattr(asset, 'model_number', ''),
+                getattr(asset, 'description', ''),
+            ).casefold(),
+        }
+    ), matching_assets[0] if matching_assets else None)
     if matching_asset:
         return {
             'department': target_department,
@@ -34269,19 +34376,23 @@ def _finance_compare_identity_key(identity):
             else re.sub(r'\s+', ' ', str(value or '').strip()).casefold()
         )
         for key, value in (identity or {}).items()
-        if key in {'kind', 'department', 'brand', 'model', 'name', 'type', 'company'}
+        if key in {
+            'kind', 'department', 'brand', 'model', 'description',
+            'name', 'type', 'company'
+        }
     }
     return hashlib.sha1(
         json.dumps(clean, sort_keys=True, separators=(',', ':')).encode('utf-8')
     ).hexdigest()[:18]
 
 
-def _finance_compare_model_identity(department='', brand='', model=''):
+def _finance_compare_model_identity(department='', brand='', model='', description=''):
     return {
         'kind': 'model',
         'department': _normalise_department_code(department) or 'UN',
         'brand': str(brand or '').strip(),
         'model': str(model or '').strip(),
+        'description': str(description or '').strip(),
     }
 
 
@@ -34348,6 +34459,7 @@ def _finance_compare_item_from_line(line):
             group.get('department'),
             group.get('brand'),
             group.get('model'),
+            group.get('description'),
         )
         title = _finance_display_description(
             group.get('brand'),
@@ -34445,6 +34557,7 @@ def _finance_compare_item_from_event_ref(ref):
             marker.get('department'),
             marker.get('brand'),
             marker.get('model'),
+            marker.get('description'),
         )
         description = str(marker.get('description') or '').strip()
         return identity, max(1, _safe_int(marker.get('quantity'), 1)), {
@@ -34485,6 +34598,7 @@ def _finance_compare_item_from_event_ref(ref):
         group.get('department'),
         group.get('brand'),
         group.get('model'),
+        group.get('description'),
     )
     return identity, quantity, {
         'title': _finance_display_description(group.get('brand'), group.get('model'), group.get('description')),
@@ -34541,6 +34655,7 @@ def _finance_compare_item_from_subproject_item(item):
             group.get('department'),
             group.get('brand'),
             group.get('model'),
+            group.get('description'),
         )
         description = str(group.get('description') or '').strip()
         return identity, quantity, {
@@ -34947,7 +35062,8 @@ def _finance_compare_set_event_quantity(
                 'brand': identity.get('brand') or '',
                 'model': identity.get('model') or '',
                 'description': (
-                    (display_item or {}).get('description')
+                    identity.get('description')
+                    or (display_item or {}).get('description')
                     or (display_item or {}).get('subtitle')
                     or ''
                 ),
@@ -36171,10 +36287,14 @@ def finance_catalog():
             description = str(getattr(asset, 'description', '') or '').strip()
             display = _finance_display_description(brand, model, description) or model or description or asset_id
             haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
-            key = _finance_catalog_key(department_code, brand, model, description)
+            catalog_key = _finance_catalog_key(
+                department_code, brand, model, description
+            )
+            key = _finance_container_item_key(catalog_key, description)
             if key not in container_items:
                 container_items[key] = {
-                    'catalogKey': key,
+                    'catalogKey': catalog_key,
+                    'containerItemKey': key,
                     'description': display or 'Container item',
                     'department': department,
                     'departmentCode': department_code,
@@ -36213,10 +36333,14 @@ def finance_catalog():
                 or model or description or 'Bulk item'
             )
             haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
-            key = _finance_catalog_key(department_code, brand, model, description)
+            catalog_key = _finance_catalog_key(
+                department_code, brand, model, description
+            )
+            key = _finance_container_item_key(catalog_key, description)
             if key not in container_items:
                 container_items[key] = {
-                    'catalogKey': key,
+                    'catalogKey': catalog_key,
+                    'containerItemKey': key,
                     'description': display,
                     'department': department,
                     'departmentCode': department_code,

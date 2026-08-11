@@ -1678,26 +1678,53 @@ function financeLineSystem(line) {
   return String(line?.systemName || '').trim() || financeDefaultSystemName(line?.department);
 }
 
-function financeDepartmentIdentity(line) {
-  const code = String(line?.departmentCode || '').trim().toLocaleLowerCase();
-  if (code && code !== 'un') return `code:${code}`;
-  const department = String(line?.department || '')
+function financeNormalisedDepartmentName(value) {
+  return String(value || '')
     .trim()
     .replace(/\s+(department|system)$/i, '')
     .trim()
     .toLocaleLowerCase();
-  return `name:${department || 'unknown'}`;
+}
+
+function financeSameOperationalDepartment(left, right) {
+  const leftCode = String(left?.departmentCode || '').trim().toLocaleLowerCase();
+  const rightCode = String(right?.departmentCode || '').trim().toLocaleLowerCase();
+  if (leftCode && rightCode && leftCode !== 'un' && rightCode !== 'un') {
+    return leftCode === rightCode;
+  }
+  const leftName = financeNormalisedDepartmentName(left?.department);
+  const rightName = financeNormalisedDepartmentName(right?.department);
+  return !!leftName && leftName === rightName;
+}
+
+function financeIsRenamedCategory(line) {
+  const category = financeLineSystem(line).toLocaleLowerCase();
+  const defaultCategory = financeDefaultSystemName(line?.department).toLocaleLowerCase();
+  return !!category && category !== defaultCategory;
+}
+
+function financePreferredCatalogCategory(selected, document = financeState.current) {
+  const subprojectId = financeCurrentSubprojectId(document);
+  const matches = (document?.lineItems || []).filter(line => (
+    financeSameOperationalDepartment(line, selected)
+  ));
+  const inCurrentSubproject = matches.filter(line => (
+    String(line.subprojectId || 'main') === String(subprojectId)
+  ));
+  const newest = rows => [...rows].reverse();
+  return (
+    newest(inCurrentSubproject).find(financeIsRenamedCategory)
+    || newest(matches).find(financeIsRenamedCategory)
+    || newest(inCurrentSubproject)[0]
+    || newest(matches)[0]
+    || null
+  );
 }
 
 function financeCatalogCategory(selected, explicitCategory = '') {
   const requested = String(explicitCategory || '').trim();
   if (requested) return requested;
-  const identity = financeDepartmentIdentity(selected);
-  const subprojectId = financeCurrentSubprojectId();
-  const existing = (financeState.current?.lineItems || []).find(line => (
-    String(line.subprojectId || 'main') === String(subprojectId)
-    && financeDepartmentIdentity(line) === identity
-  ));
+  const existing = financePreferredCatalogCategory(selected);
   return existing ? financeLineSystem(existing) : financeDefaultSystemName(selected?.department);
 }
 
@@ -1936,6 +1963,26 @@ function financeAdjustGroupPrice(leader, delta) {
   }
 }
 
+function financeSetGroupItemQuantityValue(line, value) {
+  if (!line) return 0;
+  const previousQuantity = Math.max(0, financeNumber(line.groupItemQuantity, 1));
+  const previousContribution = financeGroupItemPriceContribution(line);
+  const nextQuantity = Math.max(0, financeNumber(value, 1));
+  const unitContribution = previousQuantity
+    ? previousContribution / previousQuantity
+    : Math.max(0, financeNumber(line.groupItemUnitPrice));
+  const previousItemTotal = Math.max(0, financeNumber(line.groupItemTotal));
+  line.groupItemQuantity = nextQuantity;
+  if (line.groupItemTotalMode === 'amount') {
+    line.groupItemTotal = previousQuantity
+      ? previousItemTotal / previousQuantity * nextQuantity
+      : Math.max(0, financeNumber(line.groupItemUnitPrice))
+        * Math.max(0, financeNumber(line.groupItemDays, 1)) * nextQuantity;
+  }
+  line.groupItemPriceContribution = unitContribution * nextQuantity;
+  return line.groupItemPriceContribution - previousContribution;
+}
+
 function financeDetachLineFromGroup(line) {
   if (!line?.groupId) return line;
   const members = financeLineGroupMembers(line.groupId, line.subprojectId);
@@ -1998,22 +2045,42 @@ function financeGroupItemQuantityChange(index, value) {
   if (!line?.groupId) return;
   const members = financeLineGroupMembers(line.groupId, line.subprojectId);
   const leader = members.find(member => member.groupLeader) || members[0];
-  const previousQuantity = Math.max(0, financeNumber(line.groupItemQuantity, 1));
-  const previousContribution = financeGroupItemPriceContribution(line);
-  const nextQuantity = Math.max(0, financeNumber(value, 1));
-  const unitContribution = previousQuantity
-    ? previousContribution / previousQuantity
-    : Math.max(0, financeNumber(line.groupItemUnitPrice));
-  const previousItemTotal = Math.max(0, financeNumber(line.groupItemTotal));
-  line.groupItemQuantity = nextQuantity;
-  if (line.groupItemTotalMode === 'amount') {
-    line.groupItemTotal = previousQuantity
-      ? previousItemTotal / previousQuantity * nextQuantity
-      : Math.max(0, financeNumber(line.groupItemUnitPrice))
-        * Math.max(0, financeNumber(line.groupItemDays, 1)) * nextQuantity;
+  financeAdjustGroupPrice(leader, financeSetGroupItemQuantityValue(line, value));
+  financeSyncDocumentDepartments();
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeGroupBucketQuantityChange(encodedIndexes, value) {
+  const indexes = String(encodedIndexes || '').split(',')
+    .map(index => Number(index))
+    .filter(index => Number.isInteger(index) && financeState.current?.lineItems?.[index]?.groupId);
+  const lines = indexes.map(index => financeState.current.lineItems[index]);
+  if (!lines.length) return;
+  const target = Math.max(0, Math.round(financeNumber(value)));
+  const quantities = lines.map(line => Math.max(0, financeNumber(line.groupItemQuantity, 1)));
+  const currentTotal = quantities.reduce((sum, quantity) => sum + quantity, 0);
+  let allocations;
+  if (!currentTotal) {
+    allocations = lines.map((_line, index) => index === 0 ? target : 0);
+  } else {
+    const raw = quantities.map(quantity => target * quantity / currentTotal);
+    allocations = raw.map(quantity => Math.floor(quantity));
+    let remainder = target - allocations.reduce((sum, quantity) => sum + quantity, 0);
+    raw.map((quantity, index) => ({ index, fraction: quantity - allocations[index] }))
+      .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
+      .forEach(row => {
+        if (remainder <= 0) return;
+        allocations[row.index] += 1;
+        remainder -= 1;
+      });
   }
-  line.groupItemPriceContribution = unitContribution * nextQuantity;
-  financeAdjustGroupPrice(leader, line.groupItemPriceContribution - previousContribution);
+  const leader = lines.find(line => line.groupLeader) || lines[0];
+  const contributionDelta = lines.reduce(
+    (sum, line, index) => sum + financeSetGroupItemQuantityValue(line, allocations[index]),
+    0
+  );
+  financeAdjustGroupPrice(leader, contributionDelta);
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
@@ -3536,12 +3603,25 @@ async function financeOpenComparePage() {
 
 function financeDepartmentSuggestions(query) {
   const clean = String(query || '').trim().toLowerCase();
-  const values = [...new Set([
-    ...(financeState.departments || []),
-    ...financeActiveDepartments(financeState.current),
+  const documentLines = financeState.current?.lineItems || [];
+  const currentCategories = financeActiveDepartments(financeState.current);
+  const allCategories = documentLines.map(line => financeLineSystem(line));
+  const renamedCategories = documentLines
+    .filter(financeIsRenamedCategory)
+    .map(line => financeLineSystem(line));
+  const values = [];
+  [
+    ...renamedCategories,
+    ...currentCategories,
+    ...allCategories,
+    ...(financeState.departments || []).map(financeDefaultSystemName),
     'Manpower',
     'Transportation'
-  ])];
+  ].forEach(value => {
+    const label = String(value || '').trim();
+    if (!label || values.some(existing => existing.toLocaleLowerCase() === label.toLocaleLowerCase())) return;
+    values.push(label);
+  });
   return values.filter(value => !clean || value.toLowerCase().includes(clean)).slice(0, 10);
 }
 
@@ -3712,7 +3792,10 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
     : ['brand', 'model', 'description'];
   financeLineGroupState.selected = existing
     .filter(line => !line.groupCustomText)
-    .map(line => ({ key: String(line.id), line: JSON.parse(JSON.stringify(line)) }));
+    .map(line => ({
+      key: financeLineGroupResultKey(line),
+      line: JSON.parse(JSON.stringify(line))
+    }));
   financeLineGroupState.customText = String(existing.find(line => line.groupCustomText)?.description || '');
   financeLineGroupState.commercialHeader = existing.length && mode === 'finance' ? {
     days: financeNumber(commercialLeader.days, 1),
@@ -3804,7 +3887,18 @@ async function financeSearchLineGroupCatalog(value) {
 }
 
 function financeLineGroupResultKey(row) {
-  return String(row.catalogKey || row.containerId || `${row.brand || ''}|${row.model || ''}|${row.description || ''}`).toLowerCase();
+  const catalogIdentity = String(
+    row.catalogKey
+    || row.containerItemKey
+    || row.containerId
+    || 'custom'
+  );
+  return [
+    catalogIdentity,
+    row.brand || '',
+    row.model || '',
+    row.description || ''
+  ].map(value => String(value).trim().toLowerCase()).join('|');
 }
 
 function financeAddLineGroupResult(index) {
@@ -3816,12 +3910,31 @@ function financeAddLineGroupResult(index) {
   })) : [selected];
   rows.forEach(row => {
     const key = financeLineGroupResultKey(row);
-    if (!financeLineGroupState.selected.some(item => item.key === key)) {
+    const existing = financeLineGroupState.selected.find(item => item.key === key);
+    if (existing) {
+      const addedQuantity = Math.max(0, financeNumber(row.quantityOverride, 1));
+      const existingIndex = financeLineGroupState.selected.indexOf(existing);
+      financeLineGroupSelectionQuantityChange(
+        existingIndex,
+        financeLineGroupSelectionQuantity(existing) + addedQuantity
+      );
+      if (existing.line) {
+        existing.line.sourceAssetIds = [...new Set([
+          ...(existing.line.sourceAssetIds || []),
+          ...(row.sourceAssetIds || [])
+        ])];
+      } else {
+        existing.catalog.sourceAssetIds = [...new Set([
+          ...(existing.catalog.sourceAssetIds || []),
+          ...(row.sourceAssetIds || [])
+        ])];
+      }
+    } else if (!existing) {
       financeLineGroupState.selected.push({ key, catalog: JSON.parse(JSON.stringify(row)) });
     }
   });
   if (!financeLineGroupState.title && selected.isContainer) {
-    financeLineGroupState.title = selected.containerFamily || selected.description || selected.containerId || 'Container';
+    financeLineGroupState.title = selected.containerId || selected.description || 'Container';
     const title = document.getElementById('financeLineGroupTitle');
     if (title) title.value = financeLineGroupState.title;
   }
@@ -3831,6 +3944,45 @@ function financeAddLineGroupResult(index) {
 function financeRemoveLineGroupSelection(index) {
   financeLineGroupState.selected.splice(index, 1);
   financeRenderLineGroupSelection();
+}
+
+function financeLineGroupSelectionQuantity(entry) {
+  const row = entry?.line || entry?.catalog || {};
+  if (financeLineGroupState.mode === 'costing') {
+    return Math.max(0, financeNumber(row.quantity, row.groupItemQuantity ?? 1));
+  }
+  return Math.max(0, financeNumber(
+    entry?.line ? row.groupItemQuantity : row.quantityOverride,
+    row.quantity ?? 1
+  ));
+}
+
+function financeLineGroupSelectionQuantityChange(index, value) {
+  const entry = financeLineGroupState.selected[index];
+  if (!entry) return;
+  const quantity = Math.max(0, financeNumber(value, 1));
+  if (entry.line) {
+    if (financeLineGroupState.mode === 'costing') {
+      const line = entry.line;
+      const previousQuantity = Math.max(0, financeNumber(line.quantity, 1));
+      const previousUnitSale = previousQuantity
+        ? Math.max(0, financeNumber(line.salePrice)) / previousQuantity
+        : 0;
+      line.quantity = quantity;
+      line.groupItemQuantity = quantity;
+      if (typeof costingLineRecalculate === 'function') {
+        costingLineRecalculate(line, 'cost');
+        if (previousUnitSale) {
+          line.salePrice = previousUnitSale * quantity;
+          costingLineRecalculate(line, 'sale');
+        }
+      }
+    } else {
+      financeSetGroupItemQuantityValue(entry.line, quantity);
+    }
+  } else if (entry.catalog) {
+    entry.catalog.quantityOverride = quantity;
+  }
 }
 
 function financeLineGroupFieldsChanged() {
@@ -3843,7 +3995,7 @@ function financeRenderLineGroupSelection() {
   if (!root) return;
   root.innerHTML = financeLineGroupState.selected.map((entry, index) => {
     const row = entry.line || entry.catalog || {};
-    return `<div><span><strong>${financeEscape(financeGroupedLineDisplay({ ...row, groupDisplayFields: financeLineGroupState.displayFields }))}</strong><small>${financeEscape(row.department || row.category || 'General')}</small></span><button type="button" aria-label="Remove item" onclick="financeRemoveLineGroupSelection(${index})">&times;</button></div>`;
+    return `<div><span><strong>${financeEscape(financeGroupedLineDisplay({ ...row, groupDisplayFields: financeLineGroupState.displayFields }))}</strong><small>${financeEscape(row.department || row.category || 'General')}</small></span><label class="finance-line-group-quantity"><span>Qty</span><input type="number" min="0" step="1" value="${financeEscapeAttr(financeLineGroupSelectionQuantity(entry))}" aria-label="Child asset quantity" onchange="financeLineGroupSelectionQuantityChange(${index},this.value)"></label><button type="button" aria-label="Remove item" onclick="financeRemoveLineGroupSelection(${index})">&times;</button></div>`;
   }).join('') || '<p>No assets selected. Add assets above or enter custom text below.</p>';
 }
 
@@ -3897,6 +4049,9 @@ function financeSaveLineGroup() {
       line.category = category;
     } else {
       line = financeNewGroupedQuotationLine(entry.catalog || {}, category);
+    }
+    if (mode === 'costing') {
+      line.groupItemQuantity = Math.max(0, financeNumber(line.quantity, 1));
     }
     return { ...line, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: false };
   });
@@ -4069,8 +4224,8 @@ function financeRenderLineGroups() {
           const indexes = bucket.rows.map(row => row.index).join(',');
           const isConsolidated = bucket.rows.length > 1;
           const quantityControl = isConsolidated
-            ? `<span class="finance-group-consolidated-count" title="${bucket.rows.length} matching asset lines">${financeEscape(bucket.quantity.toLocaleString())}</span>`
-            : `<input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(bucket.quantity)}" aria-label="Item quantity" onchange="financeGroupItemQuantityChange(${representativeIndex},this.value)">`;
+            ? `<input class="finance-line-input finance-group-child-quantity" type="number" min="0" step="1" value="${financeEscapeAttr(bucket.quantity)}" aria-label="Consolidated item quantity" title="${bucket.rows.length} matching asset lines" onchange="financeGroupBucketQuantityChange('${financeEscapeAttr(indexes)}',this.value)">`
+            : `<input class="finance-line-input finance-group-child-quantity" type="number" min="0" step="1" value="${financeEscapeAttr(bucket.quantity)}" aria-label="Item quantity" onchange="financeGroupItemQuantityChange(${representativeIndex},this.value)">`;
           return `
             <tr class="finance-line-row finance-group-child-row" data-line-index="${representativeIndex}"
               oncontextmenu="financeEditLineGroup(event,'finance','${financeEscapeAttr(groupId)}')"
@@ -5467,6 +5622,21 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
   const current = financeState.current;
   if (!current) return null;
   if (financeState.discardingRevision) return current;
+  if (financeState.activeSaves.size) {
+    const pendingDocumentId = String(current.id || '');
+    clearTimeout(financeState.saveTimer);
+    financeState.saveTimer = null;
+    const state = document.getElementById('financeSaveState');
+    if (state) state.textContent = 'Waiting to save...';
+    await Promise.allSettled([...financeState.activeSaves]);
+    if (
+      financeState.discardingRevision
+      || String(financeState.current?.id || '') !== pendingDocumentId
+    ) {
+      return financeState.current;
+    }
+    return financeSaveCurrent(notify, conflictRetry);
+  }
   financeSyncDocumentDepartments(current);
   financeApplyLockedTotalAdjustment(current);
   clearTimeout(financeState.saveTimer);
@@ -5497,9 +5667,7 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
       financeState.activeSaves.delete(requestPromise);
     }
     financeSyncClientCache(response.data, previousClientRecordName);
-    if (financeState.current?.id === current.id) {
-      financeState.baseDocument = financeCloneDocument(response.data);
-    }
+    let hasPendingChanges = false;
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
       const previousStatus = financeState.current.status;
@@ -5507,14 +5675,35 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
       response.data._initialQuotationDate = current._initialQuotationDate;
       if (editingSentRevision) response.data._editingSentRevision = editingSentRevision;
       financeState.current = response.data;
+      financeState.baseDocument = financeCloneDocument(response.data);
       financeState.automaticDraftDateRefresh = false;
       if (previousNumber !== response.data.number || previousStatus !== response.data.status || notify) financeRenderEditor();
     } else if (financeState.current?.id === current.id && !financeState.discardingRevision) {
+      const newestLocal = financeCloneDocument(financeState.current);
+      const rebased = financeMergeDocumentConflict(
+        localSnapshot,
+        newestLocal,
+        response.data
+      );
+      rebased.documentVersion = response.data.documentVersion;
+      const serverHeaderChanged = (
+        newestLocal.number !== rebased.number
+        || newestLocal.status !== rebased.status
+        || newestLocal.revision !== rebased.revision
+      );
+      financeState.current = rebased;
+      financeState.baseDocument = financeCloneDocument(response.data);
+      hasPendingChanges = true;
+      if (serverHeaderChanged) financeRenderEditor();
       clearTimeout(financeState.saveTimer);
       financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 300);
     }
     const nextState = document.getElementById('financeSaveState');
-    if (nextState) nextState.textContent = editingSentRevision ? 'Version changes saved' : 'All changes saved';
+    if (nextState) {
+      nextState.textContent = hasPendingChanges
+        ? 'Unsaved changes'
+        : editingSentRevision ? 'Version changes saved' : 'All changes saved';
+    }
     if (notify) showNotification('success', 'Quotation saved');
     return response.data;
   } catch (error) {
@@ -5761,19 +5950,37 @@ function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOver
   return line;
 }
 
+function financeAddContainerAsGroup(selected) {
+  const containerId = String(selected?.containerId || '').trim();
+  const containerItems = Array.isArray(selected?.containerItems)
+    ? selected.containerItems
+    : [];
+  if (!containerId || !containerItems.length) return [];
+
+  const containerDepartment = financeContainerMajorityDepartment(selected);
+  const containerCategory = financeCatalogCategory(containerDepartment);
+  const groupId = `container_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const subprojectId = financeCurrentSubprojectId();
+  const grouped = containerItems.map(item => ({
+    ...financeNewGroupedQuotationLine({
+      ...item,
+      quantityOverride: item.containerQuantity || item.availableQuantity || 1
+    }, containerCategory),
+    subprojectId,
+    groupId,
+    groupTitle: containerId,
+    groupDisplayFields: ['brand', 'model', 'description'],
+    groupCustomText: false
+  }));
+  financeState.current.lineItems.push(...grouped);
+  return grouped;
+}
+
 function financeSelectCatalog(index) {
   const selected = financeState.catalog[index];
   if (!selected) return;
   if (selected.isContainer) {
-    const containerDepartment = financeContainerMajorityDepartment(selected);
-    const containerCategory = financeCatalogCategory(containerDepartment);
-    (selected.containerItems || []).forEach(item => {
-      financeAddLineFromCatalog(
-        item,
-        containerCategory,
-        item.containerQuantity || item.availableQuantity || 1
-      );
-    });
+    financeAddContainerAsGroup(selected);
   } else {
     financeAddLineFromCatalog(selected);
   }

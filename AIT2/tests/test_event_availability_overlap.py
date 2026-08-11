@@ -128,7 +128,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         bulk = self.availability_entry(100, 'BulkModel', 'Bulk item')
 
         self.assertEqual(regular['physical'], 6)
-        self.assertEqual(regular['description'], '')
+        self.assertEqual(regular['description'], 'Regular item')
         self.assertEqual(regular['overlappingDemand'], 4)
         self.assertEqual(regular['capacityForThisEvent'], 2)
         self.assertEqual(regular['available'], 2)
@@ -144,6 +144,42 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(bulk['capacityForThisEvent'], 2)
         self.assertEqual(bulk['available'], 2)
         self.assertEqual(bulk['overlappingEvents'][0]['eventId'], 102)
+
+    def test_event_models_with_different_descriptions_remain_separate(self):
+        self.data_manager.inventory['A-ALT#01'] = self.make_asset(
+            'A-ALT#01',
+            brand='TestBrand',
+            model='RegularModel',
+            description='Lectern item',
+        )
+        event = self.make_event(100, prepared=[
+            '[MODEL]AX|TestBrand|RegularModel|2|Regular item',
+            '[MODEL]AX|TestBrand|RegularModel|1|Lectern item',
+        ])
+        self.login_as()
+
+        detail_response = self.client.get('/api/events/100')
+        self.assertEqual(
+            detail_response.status_code, 200, detail_response.get_data(as_text=True)
+        )
+        groups = list(detail_response.get_json()['data']['modelGroups'].values())
+        by_description = {
+            row['description']: row['requiredQuantity'] for row in groups
+        }
+
+        self.assertEqual(by_description, {
+            'Regular item': 2,
+            'Lectern item': 1,
+        })
+        self.assertEqual(
+            app_module._event_model_required_quantity(event, {
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'RegularModel',
+                'description': 'Lectern item',
+            }),
+            1,
+        )
 
     def test_regular_ooc_asset_stays_in_total_but_is_not_available(self):
         self.make_event(100)

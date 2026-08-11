@@ -683,7 +683,8 @@ function eventSubprojectGroupKey(value) {
   return [
     normalizeDepartmentCode(value?.departmentCode || value?.department || 'UN'),
     String(value?.brand || '').trim().toLowerCase(),
-    String(value?.model || '').trim().toLowerCase()
+    String(value?.model || '').trim().toLowerCase(),
+    String(value?.description || '').trim().toLowerCase()
   ].join('|');
 }
 
@@ -1468,7 +1469,8 @@ function planAvailabilityFor(group) {
       item,
       group.department,
       group.brand,
-      group.model
+      group.model,
+      group.description
     )
   );
   const physical = Number(entry?.physical ?? group.count ?? 0);
@@ -2069,7 +2071,7 @@ function planOpenResolution(encodedDepartment, encodedBrand, encodedModel, encod
     description: planDecode(encodedDescription)
   };
   const sourceGroup = planModelGroups().find(group => modelGroupMatchesEditGroup(
-    group, source.department, source.brand, source.model
+    group, source.department, source.brand, source.model, source.description
   ));
   const maxQuantity = Math.max(1, Number(sourceGroup?.requiredQuantity || shortage || 1));
   planReplacementState = {
@@ -2147,7 +2149,9 @@ function renderPlanReplacementOptions() {
   const query = String(planReplacementState.search || '').trim().toLowerCase();
   const source = planReplacementState.source;
   const options = planAvailableModelGroups().filter(group => {
-    if (modelGroupMatchesEditGroup(group, source.department, source.brand, source.model)) return false;
+    if (modelGroupMatchesEditGroup(
+      group, source.department, source.brand, source.model, source.description
+    )) return false;
     if (query && !planAvailableModelSearchText(group).includes(query)) return false;
     const availability = planAvailabilityFor(group);
     const usable = planReplacementState.warningType === 'degraded'

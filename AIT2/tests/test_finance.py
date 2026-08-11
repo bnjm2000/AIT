@@ -1715,6 +1715,41 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(audio_child['unitPrice'], 444)
         self.assertEqual(audio_child['containerQuantity'], 1)
 
+    def test_container_catalog_keeps_same_model_with_distinct_descriptions(self):
+        self.data_manager.inventory['AX#02'] = InventoryItem(
+            asset_id='AX#02',
+            brand='L-Acoustics',
+            model_number='SB18 III',
+            serial_number='SN-2',
+            description='Subwoofer with wheel board',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='AX',
+        )
+        self.data_manager.containers['DRUM-1'] = Container(
+            'DRUM-1', ['AX#01', 'AX#02'], serial_number='DRUM-SN-1'
+        )
+
+        rows = self.client.get(
+            '/api/finance/catalog?query=DRUM-1'
+        ).get_json()['data']
+        container = next(row for row in rows if row.get('isContainer'))
+
+        self.assertEqual(len(container['containerItems']), 2)
+        self.assertEqual(
+            {row['description'] for row in container['containerItems']},
+            {'L-Acoustics SB18 III Subwoofer',
+             'L-Acoustics SB18 III Subwoofer with wheel board'},
+        )
+        self.assertEqual(
+            len({row['containerItemKey'] for row in container['containerItems']}),
+            2,
+        )
+        self.assertEqual(
+            len({row['catalogKey'] for row in container['containerItems']}),
+            1,
+        )
+
     def test_catalog_and_rate_card_search_inventory_tags_without_displaying_them(self):
         self.data_manager.inventory['AX#01'].tags = ['low-end', 'wireless']
         self.data_manager.save_inventory()
@@ -2278,9 +2313,11 @@ class FinanceFeatureTests(unittest.TestCase):
         )[0]
         self.assertIn("financeState.addDepartment = ''", select_catalog)
         self.assertIn("financeState.addDepartment = ''", add_custom)
-        self.assertIn('financeContainerMajorityDepartment(selected)', select_catalog)
+        self.assertIn('financeAddContainerAsGroup(selected)', select_catalog)
         self.assertIn('financeAddLineFromCatalog(', select_catalog)
-        self.assertNotIn('groupId', select_catalog)
+        self.assertIn('function financeAddContainerAsGroup(selected)', source)
+        self.assertIn('groupTitle: containerId', source)
+        self.assertIn("financeLineGroupState.title = selected.containerId", source)
         self.assertIn('function financeContainerMajorityDepartment(', source)
 
     def test_rate_card_migrates_legacy_asset_key_before_catalog_lookup(self):
@@ -2731,6 +2768,16 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('line.department =', drop_source)
         self.assertNotIn('line.departmentCode =', drop_source)
         self.assertIn('function financeCatalogCategory(', source)
+        self.assertIn('function financePreferredCatalogCategory(', source)
+        self.assertIn('financeSameOperationalDepartment(line, selected)', source)
+        self.assertIn('newest(inCurrentSubproject).find(financeIsRenamedCategory)', source)
+        suggestion_source = source.split(
+            'function financeDepartmentSuggestions(query)', 1,
+        )[1].split('function financeShowDepartmentSuggestions', 1)[0]
+        self.assertLess(
+            suggestion_source.index('...renamedCategories'),
+            suggestion_source.index('...(financeState.departments || []).map(financeDefaultSystemName)'),
+        )
         add_line_source = source.split(
             'function financeAddLineFromCatalog(', 1,
         )[1].split('function financeSelectCatalog(', 1)[0]
@@ -4821,6 +4868,37 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(line['model'], 'SB18 IV')
         self.assertIn('Updated subwoofer', line['description'])
 
+    def test_compare_keeps_same_model_with_different_descriptions_separate(self):
+        event = Event(
+            event_id=207,
+            name='Description Comparison',
+            location='Studio A',
+            start_date='20260721',
+            end_date='20260721',
+            asset_models=[],
+            prepared_items=[
+                '[MODEL]AX|Shure|SM58|2|Black microphone',
+                '[MODEL]AX|Shure|SM58|1|Silver microphone',
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['manager-no-sales'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('manager-no-sales')
+
+        response = self.client.get('/api/finance/compare?eventId=207')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = response.get_json()['data']['rows']
+        event_items = [row['eventItem'] for row in rows if row.get('eventItem')]
+        self.assertEqual(
+            {item['description']: item['quantity'] for item in event_items},
+            {'Black microphone': 2, 'Silver microphone': 1},
+        )
+        self.assertEqual(len({row['key'] for row in rows}), 2)
+
     def test_compare_manager_can_sync_event_but_not_quotation_without_sales(self):
         event = Event(
             event_id=200,
@@ -5646,6 +5724,20 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertIn('draggedWholeGroup(lines, indexes)', shared_source)
 
+    def test_group_child_quantities_are_editable_in_both_workspaces(self):
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        costing_source = Path('static/js/costing.js').read_text(encoding='utf-8')
+        finance_css = Path('static/css/finance.css').read_text(encoding='utf-8')
+
+        self.assertIn('financeLineGroupSelectionQuantityChange(', finance_source)
+        self.assertIn('financeGroupBucketQuantityChange(', finance_source)
+        self.assertIn('key: financeLineGroupResultKey(line)', finance_source)
+        self.assertIn('if (existing) {', finance_source)
+        self.assertIn('aria-label="Child asset quantity"', finance_source)
+        self.assertIn('line.groupItemQuantity = Math.max(0, costingNumber(value));', costing_source)
+        self.assertIn('.finance-line-group-quantity input', finance_css)
+        self.assertIn('.finance-lines-table input[type="number"]', finance_css)
+
     def test_optional_categories_are_visible_but_excluded_from_totals(self):
         quotation = self.create_quote('Optional Systems')
         quotation.update({
@@ -6019,6 +6111,19 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('<th>date</th>', source)
         self.assertIn('you can press add now', source)
         self.assertIn('abortcontroller', source)
+        save_current_source = source.split(
+            'async function financesavecurrent(', 1
+        )[1].split('async function financeflushpendingsave(', 1)[0]
+        self.assertIn('if (financestate.activesaves.size)', save_current_source)
+        self.assertIn("state.textcontent = 'waiting to save...'", save_current_source)
+        self.assertIn(
+            'financemergedocumentconflict(\n        localsnapshot,\n        newestlocal,\n        response.data',
+            save_current_source,
+        )
+        self.assertIn(
+            'rebased.documentversion = response.data.documentversion',
+            save_current_source,
+        )
         self.assertIn('iscontainer', source)
         self.assertIn('containeritems', source)
         self.assertIn('financegroupequivalentcontainers', source)

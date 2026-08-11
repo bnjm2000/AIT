@@ -74,6 +74,33 @@ class EventConcurrencyTests(unittest.TestCase):
         with self.assertRaises(EventMergeConflict):
             merge_event_payloads(base, current, desired)
 
+    def test_same_model_with_different_descriptions_merges_independently(self):
+        base = {
+            'preparedItems': [
+                '[MODEL]AX|Shure|SM58|1|Black microphone',
+                '[MODEL]AX|Shure|SM58|1|Silver microphone',
+            ],
+        }
+        current = {
+            'preparedItems': [
+                '[MODEL]AX|Shure|SM58|2|Black microphone',
+                '[MODEL]AX|Shure|SM58|1|Silver microphone',
+            ],
+        }
+        desired = {
+            'preparedItems': [
+                '[MODEL]AX|Shure|SM58|1|Black microphone',
+                '[MODEL]AX|Shure|SM58|3|Silver microphone',
+            ],
+        }
+
+        merged = merge_event_payloads(base, current, desired)
+
+        self.assertEqual(merged['preparedItems'], [
+            '[MODEL]AX|Shure|SM58|2|Black microphone',
+            '[MODEL]AX|Shure|SM58|3|Silver microphone',
+        ])
+
     def test_concurrent_distinct_assignments_are_retained(self):
         base = {'actuallyPrepared': []}
         current = {'actuallyPrepared': ['SM58#01']}

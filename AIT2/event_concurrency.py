@@ -31,9 +31,11 @@ def _event_ref_key(value: Any) -> str:
     if not isinstance(value, str):
         return repr(value)
     if value.startswith('[MODEL]'):
-        return '[MODEL]' + '|'.join(value[7:].split('|')[:3])
+        parts = value[7:].split('|')
+        return '[MODEL]' + '|'.join(parts[:3] + ['|'.join(parts[4:])])
     if value.startswith('[PREPARED]'):
-        return '[PREPARED]' + '|'.join(value[10:].split('|')[:3])
+        parts = value[10:].split('|')
+        return '[PREPARED]' + '|'.join(parts[:3] + ['|'.join(parts[4:])])
     if value.startswith('[BULK]'):
         parts = value[6:].split('|')
         return '[BULK]' + '|'.join((parts + ['', '', ''])[:1] + [(parts + ['', '', ''])[2]])

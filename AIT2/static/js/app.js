@@ -1867,11 +1867,11 @@ async function flushDoEdits(eventId) {
 }
 /* stable key for model-group rows */
 function makeModelKey(mg) {
-  return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}`;
+  return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}|${mg.description||''}`;
 }
 
 function makeQtyInputId(department, brand, model, description = '') {
-  const raw = `${department || ''}|${brand || ''}|${model || ''}`;
+  const raw = `${department || ''}|${brand || ''}|${model || ''}|${description || ''}`;
 
   return `qty-${encodeURIComponent(raw)
     .replace(/%/g, '_')
@@ -11509,7 +11509,9 @@ async function openPrepareEventModal(eventId) {
                     const modelAvailableAssets = availableAssets.filter(a =>
                         a.brand === modelGroup.brand &&
                         a.model === modelGroup.model &&
-                        a.department === modelGroup.department
+                        a.department === modelGroup.department &&
+                        String(a.description || '').trim().toLowerCase() ===
+                            String(modelGroup.description || '').trim().toLowerCase()
                     );
 
                     if (isBulkModelGroupForPrepare(modelGroup, modelAvailableAssets, modelGroup.assignedAssets || [])) {
@@ -12823,11 +12825,13 @@ async function processUniversalAsset(eventId) {
                             const reqDept = parts[0];
                             const reqBrand = parts[1];
                             const reqModel = parts[2];
+                            const reqDescription = parts.slice(4).join('|');
 
-                            // Description is display text only; type matching uses department, brand, and model.
                             if (assetDetails.department === reqDept &&
                                 assetDetails.brand === reqBrand &&
-                                assetDetails.model === reqModel) {
+                                assetDetails.model === reqModel &&
+                                String(assetDetails.description || '').trim().toLowerCase() ===
+                                    String(reqDescription || '').trim().toLowerCase()) {
                                 fulfillsModelRequirement = true;
                                 break;
                             }
@@ -19166,26 +19170,22 @@ function addAssetToEditModelGroup(modelGroups, asset, quantity = 1) {
   const department = normalizeDepartmentCode(asset.department || asset.departmentCode || 'UN');
   const brand = String(asset.brand || '').trim();
   const model = String(asset.model || '').trim();
+  const description = String(asset.description || '').trim();
 
   if (!brand || !model) return null;
 
-  const modelKey = `${department}|${brand}|${model}`;
+  const modelKey = [department, brand, model, description]
+    .map(value => String(value || '').trim().toLowerCase())
+    .join('|');
   if (!modelGroups[modelKey]) {
     modelGroups[modelKey] = {
       department,
       brand,
       model,
-      description: '',
-      descriptionParts: [],
+      description,
       count: 0,
       assets: []
     };
-  }
-
-  const description = String(asset.description || '').trim();
-  if (description && !modelGroups[modelKey].descriptionParts.includes(description)) {
-    modelGroups[modelKey].descriptionParts.push(description);
-    modelGroups[modelKey].description = modelGroups[modelKey].descriptionParts.sort().join(' / ');
   }
 
   modelGroups[modelKey].count += Math.max(1, parseInt(quantity, 10) || 1);
@@ -19412,17 +19412,20 @@ function renderEditContainerSearchSection(filteredContainers, filteredModels, ev
   `;
 }
 
-function modelGroupMatchesEditGroup(group, department, brand, model) {
+function modelGroupMatchesEditGroup(group, department, brand, model, description = '') {
   return (
     normalizeDepartmentCode(group?.department || 'UN') === normalizeDepartmentCode(department || 'UN') &&
-    String(group?.brand || '') === String(brand || '') &&
-    String(group?.model || '') === String(model || '')
+    String(group?.brand || '').trim().toLowerCase() === String(brand || '').trim().toLowerCase() &&
+    String(group?.model || '').trim().toLowerCase() === String(model || '').trim().toLowerCase() &&
+    String(group?.description || '').trim().toLowerCase() === String(description || '').trim().toLowerCase()
   );
 }
 
 function getCurrentEditModelQuantity(eventData, group) {
   return Object.values(eventData?.modelGroups || {}).reduce((total, modelGroup) => {
-    if (!modelGroupMatchesEditGroup(modelGroup, group.department, group.brand, group.model)) {
+    if (!modelGroupMatchesEditGroup(
+      modelGroup, group.department, group.brand, group.model, group.description
+    )) {
       return total;
     }
     return total + Number(modelGroup.requiredQuantity || 0);
@@ -19431,7 +19434,9 @@ function getCurrentEditModelQuantity(eventData, group) {
 
 function getEditModelPhysicalCount(group) {
   const availabilityEntry = (window.currentEditAvailabilityList || []).find(entry =>
-    modelGroupMatchesEditGroup(entry, group.department, group.brand, group.model)
+    modelGroupMatchesEditGroup(
+      entry, group.department, group.brand, group.model, group.description
+    )
   );
 
   if (availabilityEntry) {
@@ -19439,7 +19444,9 @@ function getEditModelPhysicalCount(group) {
   }
 
   return (window.currentEditAvailableAssets || []).reduce((total, asset) => {
-    if (!modelGroupMatchesEditGroup(asset, group.department, group.brand, group.model)) {
+    if (!modelGroupMatchesEditGroup(
+      asset, group.department, group.brand, group.model, group.description
+    )) {
       return total;
     }
     return total + (asset.isBulk ? Number(asset.quantity || 1) : 1);
@@ -19617,7 +19624,9 @@ function filterAvailableModels(searchTerm) {
     const entry = list.find(e =>
       e.department === m.department &&
       e.brand === m.brand &&
-      e.model === m.model
+      e.model === m.model &&
+      String(e.description || '').trim().toLowerCase() ===
+        String(m.description || '').trim().toLowerCase()
     );
     if (entry) {
       return {
@@ -23722,7 +23731,7 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     const availableQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
     const preparableQuantity = availableBulkSource ? Number(availableBulkSource.preparableQuantity ?? availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
     const healthyQuantity = availableBulkSource ? Number(availableBulkSource.healthyQuantity ?? availableQuantity) : 0;
-    const modelKey = `${modelGroup.department || ''}|${modelGroup.brand || ''}|${modelGroup.model || ''}`;
+    const modelKey = `${modelGroup.department || ''}|${modelGroup.brand || ''}|${modelGroup.model || ''}|${description}`;
 
     let actionButtons = '';
     if (assignedAssets && assignedAssets.length > 0) {
@@ -23795,7 +23804,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
         .replace(/\s+/g, '')
         .replace(/[^a-zA-Z0-9_-]/g, '');
     const modelId = `model-${makeDomSafe(department)}-${makeDomSafe(brand)}-${makeDomSafe(model)}-${makeDomSafe(description)}-${eventId}`;
-    const modelKey = `${department || ''}|${brand || ''}|${model || ''}`;
+    const modelKey = `${department || ''}|${brand || ''}|${model || ''}|${description || ''}`;
 
     let section = `
         <div class="model-prep-section" data-prepare-model-key="${escapeHtmlAttr(modelKey)}" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
