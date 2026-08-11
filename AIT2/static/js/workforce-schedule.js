@@ -5,6 +5,8 @@ const workforceScheduleState = {
   bulkDay: 'all',
   bulkDepartment: 'all',
   bulkTime: '08:00',
+  exportScope: 'event',
+  exportValue: '',
   saving: false
 };
 
@@ -528,10 +530,43 @@ document.addEventListener('keydown', event => {
 });
 
 function downloadWorkforceSchedule(scope = 'event', value = '') {
+  ensureWorkforceScheduleExportModal();
+  workforceScheduleState.exportScope = scope;
+  workforceScheduleState.exportValue = value;
+  document.getElementById('wfScheduleExportPhones').checked = false;
+  document.getElementById('wfScheduleExportRates').checked = false;
+  openWorkforceModal('wfScheduleExportModal');
+}
+
+function ensureWorkforceScheduleExportModal() {
+  if (document.getElementById('wfScheduleExportModal')) return;
+  ensureWorkforceModals();
+  document.body.insertAdjacentHTML('beforeend', wfModal(
+    'wfScheduleExportModal',
+    'Export manpower schedule',
+    `<form onsubmit="confirmWorkforceScheduleExport(event)">
+      <div class="wf-modal-body"><div class="wf-schedule-export-options">
+        <label class="wf-schedule-export-option"><span>Phone numbers</span>
+          <input id="wfScheduleExportPhones" type="checkbox"><i aria-hidden="true"></i></label>
+        <label class="wf-schedule-export-option"><span>Rates</span>
+          <input id="wfScheduleExportRates" type="checkbox"><i aria-hidden="true"></i></label>
+      </div></div>
+      <footer class="wf-modal-actions"><button type="button" class="wf-button" onclick="closeWorkforceModal('wfScheduleExportModal')">Cancel</button>
+        <button type="submit" class="wf-button primary">Open PDF</button></footer>
+    </form>`
+  ));
+}
+
+function confirmWorkforceScheduleExport(event) {
+  event.preventDefault();
+  const scope = workforceScheduleState.exportScope || 'event';
+  const value = workforceScheduleState.exportValue || '';
   const params = new URLSearchParams({ scope });
   if (scope === 'worker') params.set('subjectId', value);
   if (scope === 'date') params.set('date', value);
-  if (workforceScheduleState.showRates) params.set('showRates', '1');
+  if (document.getElementById('wfScheduleExportPhones')?.checked) params.set('showPhones', '1');
+  if (document.getElementById('wfScheduleExportRates')?.checked) params.set('showRates', '1');
+  closeWorkforceModal('wfScheduleExportModal');
   const preview = window.open(
     `/api/events/${workforcePageState.eventId}/workforce/schedule.pdf?${params}`,
     '_blank'

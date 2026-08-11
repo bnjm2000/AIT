@@ -9432,6 +9432,9 @@ def download_workforce_schedule_pdf(event_id):
     show_rates = str(request.args.get('showRates') or '').strip().lower() in {
         '1', 'true', 'yes', 'on',
     }
+    show_phones = str(request.args.get('showPhones') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
     report_data = _admin_workforce_payload(event_id)
     if subject_id and not any(
         _workforce_assignment_subject_id(row) == subject_id
@@ -9453,6 +9456,7 @@ def download_workforce_schedule_pdf(event_id):
         subject_id=subject_id,
         date_filter=date_filter,
         show_rates=show_rates,
+        show_phones=show_phones,
         generated_by=_user_display_name(session.get('user')),
     )
     event_name = sanitize_filename(

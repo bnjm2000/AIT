@@ -3129,6 +3129,18 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertNotIn("No manpower assigned", pdf_text)
         self.assertNotIn("Person-days", pdf_text)
         self.assertNotIn("Pax", pdf_text)
+        self.assertNotIn("+65 9123 9876", pdf_text)
+
+        response = self.client.get(
+            "/api/events/143/workforce/schedule.pdf"
+            "?scope=worker&subjectId=user%3Anormal&showPhones=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        phone_pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(response.data)).pages
+        )
+        self.assertIn("+65 9123 9876", phone_pdf_text)
 
     def test_schedule_pdf_only_shows_room_for_multi_room_events(self):
         base_payload = {
@@ -3232,6 +3244,12 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("By day", source)
         self.assertNotIn("By Worker", source)
         self.assertIn("window.open(", source)
+        self.assertIn("ensureWorkforceScheduleExportModal", source)
+        self.assertIn("wfScheduleExportPhones", source)
+        self.assertIn("wfScheduleExportRates", source)
+        self.assertIn("showPhones", source)
+        self.assertIn("document.getElementById('wfScheduleExportPhones').checked = false", source)
+        self.assertIn("document.getElementById('wfScheduleExportRates').checked = false", source)
         self.assertNotIn("window.location.assign", source)
         self.assertIn("wfCalendarExtraDateChipHtml", admin_source)
         self.assertIn("adjacentDates", admin_source)

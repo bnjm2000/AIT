@@ -414,6 +414,71 @@
   transform: translateX(16px);
 }
 
+.wf-schedule-export-options {
+  display: grid;
+  gap: 9px;
+}
+
+.wf-schedule-export-option {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #24324b;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.wf-schedule-export-option:last-child {
+  border-bottom: 0;
+}
+
+.wf-schedule-export-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wf-schedule-export-option i {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid #bac5d1;
+  border-radius: 999px;
+  background: #dce3ea;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.wf-schedule-export-option i::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 24%);
+  content: '';
+  transition: transform 140ms ease;
+}
+
+.wf-schedule-export-option input:focus-visible + i {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-brand, #0f766e) 17%, transparent);
+}
+
+.wf-schedule-export-option input:checked + i {
+  border-color: var(--wf-brand, #0f766e);
+  background: var(--wf-brand, #0f766e);
+}
+
+.wf-schedule-export-option input:checked + i::after {
+  transform: translateX(16px);
+}
+
 .wf-schedule-filter-row {
   min-height: 38px;
   gap: 7px;
