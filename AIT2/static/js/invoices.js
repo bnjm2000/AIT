@@ -15,6 +15,41 @@ const invoiceState = {
   clients: []
 };
 
+async function invoiceHandleRealtimeChanges(changes) {
+  const rows = Array.isArray(changes) ? changes : [];
+  const quotationIds = [...new Set(rows
+    .map(row => String(row?.quotationId || '').trim())
+    .filter(Boolean))];
+  const currentQuotationId = String(invoiceState.current?.quotation?.id || '');
+  if (currentQuotationId && quotationIds.includes(currentQuotationId)) {
+    if (!invoiceState.dirty) {
+      const response = await apiCall(
+        `/api/invoice-plans/${encodeURIComponent(currentQuotationId)}`
+      );
+      invoiceState.current = response.data;
+      invoiceRenderEditor();
+    }
+    return true;
+  }
+  if (quotationIds.length) {
+    await Promise.all(quotationIds.map(async quotationId => {
+      try {
+        const response = await apiCall(
+          `/api/invoice-plans/${encodeURIComponent(quotationId)}`
+        );
+        const index = invoiceState.rows.findIndex(
+          row => String(row?.quotation?.id) === quotationId
+        );
+        if (index >= 0) invoiceState.rows[index] = response.data;
+        else invoiceState.rows.unshift(response.data);
+      } catch {}
+    }));
+    invoiceRenderList();
+    return true;
+  }
+  return false;
+}
+
 function invoiceRoot() {
   return document.getElementById('invoices-page-root');
 }

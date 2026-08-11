@@ -99,6 +99,88 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         return response.get_json()['data']
 
+    def test_stale_costing_save_is_rejected_with_latest_document(self):
+        self.login('owner')
+        costing = self.create_costing()
+        stale_copy = json.loads(json.dumps(costing))
+
+        first = self.client.put(
+            f"/api/costings/{costing['id']}",
+            json={**costing, 'eventLocation': 'First editor location'},
+        )
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        first_document = first.get_json()['data']
+
+        conflict = self.client.put(
+            f"/api/costings/{costing['id']}",
+            json={**stale_copy, 'eventLocation': 'Stale editor location'},
+        )
+        self.assertEqual(conflict.status_code, 409, conflict.get_data(as_text=True))
+        payload = conflict.get_json()
+        self.assertEqual(payload['code'], 'document_version_conflict')
+        self.assertEqual(payload['actualVersion'], first_document['documentVersion'])
+        self.assertEqual(payload['data']['eventLocation'], 'First editor location')
+
+    def test_costing_conversion_keeps_adjustment_subproject(self):
+        self.login('owner')
+        costing = self.create_costing(
+            subprojects=[
+                {'id': 'main', 'name': 'Main Room'},
+                {'id': 'breakout', 'name': 'Breakout Room'},
+            ],
+            lineItems=[{
+                'id': 'breakout-audio',
+                'description': 'Breakout speaker',
+                'category': 'Audio',
+                'subprojectId': 'breakout',
+                'quantity': 1,
+                'multiplier': 1,
+                'salePrice': 100,
+            }],
+            categoryAdjustments=[{
+                'subprojectId': 'breakout',
+                'category': 'Audio',
+                'amount': -10,
+            }],
+        )
+        response = self.client.post(
+            f"/api/costings/{costing['id']}/convert-to-quotation", json={}
+        )
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        adjustment = response.get_json()['data']['adjustments'][0]
+        self.assertEqual(adjustment['subprojectId'], 'breakout')
+
+    def test_large_costing_group_splits_cleanly_across_pdf_pages(self):
+        from costing_pdf import build_costing_pdf
+
+        costing = {
+            'projectName': 'Large Costing Package',
+            'subprojects': [{'id': 'main', 'name': 'Main Room'}],
+            'lineItems': [{
+                'id': f'cost-line-{index}',
+                'description': f'Costing child {index} with a detailed internal description',
+                'category': 'Audio',
+                'subprojectId': 'main',
+                'quantity': 1,
+                'multiplier': 1,
+                'vendorName': 'Self',
+                'itemCost': 5,
+                'costTotal': 5,
+                'calculatedSalePrice': 10,
+                'salePrice': 10,
+                'groupId': 'large-cost-package',
+                'groupTitle': 'Large Costing Package',
+                'groupLeader': index == 1,
+                'groupItemQuantity': 1,
+                'groupDisplayFields': ['description'],
+            } for index in range(1, 121)],
+        }
+        exported = build_costing_pdf(costing, {})
+        reader = PdfReader(BytesIO(exported))
+        self.assertGreater(len(reader.pages), 2)
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        self.assertIn('Large Costing Package (continued)', text)
+
     def test_page_and_api_are_available_to_sales_active_users(self):
         self.login('owner')
         page = self.client.get('/costing')
@@ -1092,6 +1174,9 @@ class CostingFeatureTests(unittest.TestCase):
             saved_costing.status_code, 200, saved_costing.get_data(as_text=True)
         )
 
+        quotation = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
         quotation['lineItems'] = [
             {**quotation['lineItems'][0], 'quantity': 3, 'total': 330},
             {

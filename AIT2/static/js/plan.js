@@ -2656,6 +2656,40 @@ async function planFlushNotesSave() {
   }
 }
 
+function renderPlanMetrics() {
+  const event = planPageState.event || {};
+  const totals = planTotals();
+  return `
+    <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
+    <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
+    <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
+    ${event.quotationId ? `
+      <button type="button" class="plan-metric plan-compare-launch"
+              onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0}, '${escapeJs(String(event.quotationId))}')">
+        <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
+        <div><strong>Compare</strong><span>To Quotation</span></div>
+      </button>
+    ` : ''}
+  `;
+}
+
+function renderPlanSubprojectTabs() {
+  return renderEventSubprojectTabs(
+    'planPageState',
+    planPageState.event,
+    'renderPlanPage',
+    'Planning sub-projects',
+    {
+      allowAdd: true,
+      allowDelete: true,
+      allowRename: true,
+      allowReorder: true,
+      showImplicitMain: true,
+      roomWarning: planSubprojectWarning
+    }
+  );
+}
+
 function renderPlanPage() {
   const root = document.getElementById('plan-page-root');
   if (!root) return;
@@ -2672,7 +2706,6 @@ function renderPlanPage() {
   const event = planPageState.event;
   const consolidated = eventIsConsolidated(planPageState, event);
   root.classList.toggle('event-consolidated-mode', consolidated);
-  const totals = planTotals();
   root.innerHTML = `
     <div class="plan-page-heading">
       <div><h2>Plan Event Assets</h2><p>Add required asset models and quantities for this event.</p></div>
@@ -2700,34 +2733,10 @@ function renderPlanPage() {
             <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
           </button>
 
-          <div class="plan-metrics">
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
-            ${event.quotationId ? `
-              <button type="button" class="plan-metric plan-compare-launch"
-                      onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0}, '${escapeJs(String(event.quotationId))}')">
-                <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
-                <div><strong>Compare</strong><span>To Quotation</span></div>
-              </button>
-            ` : ''}
-          </div>
+          <div class="plan-metrics" id="planMetrics">${renderPlanMetrics()}</div>
         </div>
 
-        ${renderEventSubprojectTabs(
-          'planPageState',
-          event,
-          'renderPlanPage',
-          'Planning sub-projects',
-          {
-            allowAdd: true,
-            allowDelete: true,
-            allowRename: true,
-            allowReorder: true,
-            showImplicitMain: true,
-            roomWarning: planSubprojectWarning
-          }
-        )}
+        <div id="planSubprojectTabs">${renderPlanSubprojectTabs()}</div>
         ${consolidated ? eventConsolidatedNotice() : ''}
         <div class="plan-workspace">
           <div class="plan-available-stack">
@@ -2752,6 +2761,27 @@ function renderPlanPage() {
     </div>
   `;
   renderPlanAvailableResults();
+}
+
+function renderPlanRealtimeAssets() {
+  const available = document.getElementById('planAvailableCard');
+  const requirements = document.getElementById('planRequirementsCard');
+  const metrics = document.getElementById('planMetrics');
+  const tabs = document.getElementById('planSubprojectTabs');
+  if (!available || !requirements) {
+    renderPlanPage();
+    return;
+  }
+  const requirementsScrollTop = requirements.querySelector(
+    '.plan-requirements-scroll'
+  )?.scrollTop || 0;
+  available.innerHTML = renderPlanAvailableCard();
+  requirements.innerHTML = renderPlanRequirementsCard();
+  if (metrics) metrics.innerHTML = renderPlanMetrics();
+  if (tabs) tabs.innerHTML = renderPlanSubprojectTabs();
+  renderPlanAvailableResults();
+  const nextScroll = requirements.querySelector('.plan-requirements-scroll');
+  if (nextScroll) nextScroll.scrollTop = requirementsScrollTop;
 }
 
 async function loadPlanPage() {

@@ -2,6 +2,7 @@
 let currentUser = null;
 let events = [];
 let assets = [];
+let assetPageLoadGeneration = 0;
 let containers = [];
 let logs = [];
 let stats = {};
@@ -815,12 +816,15 @@ function getDefaultDoDepartments() {
 }
 
 function ensureDoEditBuckets(data, deptNames = []) {
+  data = data && typeof data === 'object' ? data : {};
   data.overrides ||= {};
   data.custom ||= {};
   data.ordering ||= {};
   data.deleted ||= {};
   data.document ||= {};
   data.subprojectOrder ||= [];
+  data.documentVersion = Math.max(0, Number(data.documentVersion) || 0);
+  data.updatedAt = String(data.updatedAt || '');
 
   const dynamicDeptNames = [];
   try {
@@ -1571,9 +1575,116 @@ function getAssignedAssetDisplay(asset) {
 
 // Delivery Order edit state
 const deliveryOrderWorkspaceCache = new Map();
+const deliveryOrderBaseCache = new Map();
 const deliveryOrderSaveTimers = new Map();
 const deliveryOrderActiveSaves = new Map();
 const deliveryOrderSaveVersions = new Map();
+
+function cloneDoWorkspace(value) {
+  if (value === undefined) return {};
+  if (value === null) return null;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function doWorkspaceValuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergeDoValue(baseValue, localValue, latestValue) {
+  if (
+    baseValue && localValue && latestValue
+    && typeof baseValue === 'object'
+    && typeof localValue === 'object'
+    && typeof latestValue === 'object'
+    && !Array.isArray(baseValue)
+    && !Array.isArray(localValue)
+    && !Array.isArray(latestValue)
+  ) {
+    return mergeDoKeyedObject(baseValue, localValue, latestValue);
+  }
+  return cloneDoWorkspace(localValue);
+}
+
+function mergeDoKeyedObject(baseValue, localValue, latestValue) {
+  const base = baseValue && typeof baseValue === 'object' ? baseValue : {};
+  const local = localValue && typeof localValue === 'object' ? localValue : {};
+  const merged = cloneDoWorkspace(
+    latestValue && typeof latestValue === 'object' ? latestValue : {}
+  );
+  new Set([...Object.keys(base), ...Object.keys(local)]).forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(local, key)) {
+      if (Object.prototype.hasOwnProperty.call(base, key)) delete merged[key];
+      return;
+    }
+    if (!doWorkspaceValuesEqual(local[key], base[key])) {
+      merged[key] = mergeDoValue(base[key], local[key], merged[key]);
+    }
+  });
+  return merged;
+}
+
+function mergeDoRows(baseRows, localRows, latestRows) {
+  const base = Array.isArray(baseRows) ? baseRows : [];
+  const local = Array.isArray(localRows) ? localRows : [];
+  const latest = Array.isArray(latestRows) ? latestRows : [];
+  const baseById = new Map(base.map(row => [String(row?.id || ''), row]));
+  const localById = new Map(local.map(row => [String(row?.id || ''), row]));
+  const latestById = new Map(latest.map(row => [String(row?.id || ''), row]));
+  const merged = local.map(row => {
+    const id = String(row?.id || '');
+    const baseRow = baseById.get(id);
+    const latestRow = latestById.get(id);
+    if (baseRow && doWorkspaceValuesEqual(row, baseRow)) {
+      return latestRow ? cloneDoWorkspace(latestRow) : null;
+    }
+    return baseRow && latestRow
+      ? mergeDoKeyedObject(baseRow, row, latestRow)
+      : cloneDoWorkspace(row);
+  }).filter(Boolean);
+  const included = new Set(merged.map(row => String(row?.id || '')));
+  latest.forEach(row => {
+    const id = String(row?.id || '');
+    if (!included.has(id) && !baseById.has(id)) merged.push(cloneDoWorkspace(row));
+  });
+  return merged;
+}
+
+function mergeDoCustomBuckets(baseValue, localValue, latestValue) {
+  const base = baseValue || {};
+  const local = localValue || {};
+  const latest = latestValue || {};
+  const merged = {};
+  new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(latest)])
+    .forEach(department => {
+      merged[department] = mergeDoRows(
+        base[department], local[department], latest[department]
+      );
+    });
+  return merged;
+}
+
+function mergeDoWorkspaceConflict(baseValue, localValue, latestValue) {
+  const base = ensureDoEditBuckets(cloneDoWorkspace(baseValue));
+  const local = ensureDoEditBuckets(cloneDoWorkspace(localValue));
+  const latest = ensureDoEditBuckets(cloneDoWorkspace(latestValue));
+  const merged = cloneDoWorkspace(latest);
+  merged.overrides = mergeDoKeyedObject(base.overrides, local.overrides, latest.overrides);
+  merged.deleted = mergeDoKeyedObject(base.deleted, local.deleted, latest.deleted);
+  merged.ordering = mergeDoKeyedObject(base.ordering, local.ordering, latest.ordering);
+  merged.document = mergeDoKeyedObject(base.document, local.document, latest.document);
+  merged.custom = mergeDoCustomBuckets(base.custom, local.custom, latest.custom);
+  if (!doWorkspaceValuesEqual(local.subprojectOrder, base.subprojectOrder)) {
+    merged.subprojectOrder = cloneDoWorkspace(local.subprojectOrder);
+  }
+  merged.documentVersion = latest.documentVersion;
+  merged.updatedAt = local.updatedAt || latest.updatedAt;
+  return ensureDoEditBuckets(merged);
+}
+
+function doWorkspaceTimestamp(workspace) {
+  const parsed = Date.parse(workspace?.updatedAt || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function getDoEdits(eventId, deptNames = []) {
   const blank = ensureDoEditBuckets({ overrides: {}, custom: {}, ordering: {} }, deptNames);
@@ -1590,6 +1701,7 @@ function getDoEdits(eventId, deptNames = []) {
 function saveDoEdits(eventId, data) {
   const key = String(eventId);
   const workspace = ensureDoEditBuckets(data);
+  workspace.updatedAt = new Date().toISOString();
   deliveryOrderWorkspaceCache.set(key, workspace);
   deliveryOrderSaveVersions.set(key, (deliveryOrderSaveVersions.get(key) || 0) + 1);
   localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(workspace));
@@ -1602,13 +1714,37 @@ function clearDoEdits(eventId) {
   const key = String(eventId);
   clearTimeout(deliveryOrderSaveTimers.get(key));
   deliveryOrderSaveTimers.delete(key);
-  deliveryOrderWorkspaceCache.set(key, ensureDoEditBuckets({}));
+  const base = deliveryOrderBaseCache.get(key) || getDoEdits(eventId);
+  const blank = ensureDoEditBuckets({ documentVersion: base.documentVersion });
+  deliveryOrderWorkspaceCache.set(key, blank);
   deliveryOrderSaveVersions.set(key, (deliveryOrderSaveVersions.get(key) || 0) + 1);
-  localStorage.removeItem(`doEdits/${eventId}`);
+  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(blank));
   const previousSave = deliveryOrderActiveSaves.get(key);
   const request = Promise.resolve(previousSave)
     .catch(() => {})
-    .then(() => apiCall(`/api/events/${encodeURIComponent(eventId)}/delivery-order`, 'DELETE'))
+    .then(async () => {
+      let expectedVersion = Math.max(0, Number(base.documentVersion) || 0);
+      try {
+        return await apiCall(
+          `/api/events/${encodeURIComponent(eventId)}/delivery-order?expectedVersion=${expectedVersion}`,
+          'DELETE'
+        );
+      } catch (error) {
+        if (error.payload?.code !== 'document_version_conflict') throw error;
+        expectedVersion = Math.max(0, Number(error.payload.actualVersion) || 0);
+        return apiCall(
+          `/api/events/${encodeURIComponent(eventId)}/delivery-order?expectedVersion=${expectedVersion}`,
+          'DELETE'
+        );
+      }
+    })
+    .then(response => {
+      const saved = ensureDoEditBuckets(response.data || blank);
+      deliveryOrderBaseCache.set(key, cloneDoWorkspace(saved));
+      deliveryOrderWorkspaceCache.set(key, saved);
+      localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(saved));
+      return response;
+    })
     .catch(error => showNotification('error', error.message || 'Failed to reset Delivery Order'));
   deliveryOrderActiveSaves.set(key, request);
   request.finally(() => {
@@ -1628,9 +1764,21 @@ async function loadDoEdits(eventId) {
     const response = await apiCall(`/api/events/${encodeURIComponent(eventId)}/delivery-order`);
     const serverWorkspace = ensureDoEditBuckets(response.data || {});
     const hasServerData = Object.keys(response.data || {}).length > 0;
-    const workspace = hasServerData ? serverWorkspace : (localWorkspace || serverWorkspace);
+    const localIsNewer = !!localWorkspace && (
+      !hasServerData || doWorkspaceTimestamp(localWorkspace) > doWorkspaceTimestamp(serverWorkspace)
+    );
+    const workspace = localIsNewer
+      ? mergeDoWorkspaceConflict(serverWorkspace, localWorkspace, serverWorkspace)
+      : serverWorkspace;
+    deliveryOrderBaseCache.set(key, cloneDoWorkspace(serverWorkspace));
     deliveryOrderWorkspaceCache.set(key, workspace);
-    if (!hasServerData && localWorkspace) saveDoEdits(eventId, workspace);
+    localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(workspace));
+    if (localIsNewer) {
+      deliveryOrderSaveVersions.set(key, (deliveryOrderSaveVersions.get(key) || 0) + 1);
+      deliveryOrderSaveTimers.set(key, setTimeout(() => {
+        persistDoEdits(eventId).catch(() => {});
+      }, 0));
+    }
     return workspace;
   } catch (error) {
     const fallback = localWorkspace || ensureDoEditBuckets({});
@@ -1646,20 +1794,64 @@ async function persistDoEdits(eventId) {
   const previousSave = deliveryOrderActiveSaves.get(key);
   if (previousSave) await previousSave.catch(() => {});
   const saveVersion = deliveryOrderSaveVersions.get(key) || 0;
-  const workspace = getDoEdits(eventId);
-  const request = apiCall(
-    `/api/events/${encodeURIComponent(eventId)}/delivery-order`,
-    'PUT',
-    workspace
-  );
-  deliveryOrderActiveSaves.set(key, request);
+  const base = ensureDoEditBuckets(cloneDoWorkspace(
+    deliveryOrderBaseCache.get(key) || { documentVersion: getDoEdits(eventId).documentVersion }
+  ));
+  let workspace = ensureDoEditBuckets(cloneDoWorkspace(getDoEdits(eventId)));
+  let request = null;
   try {
-    const response = await request;
-    if ((deliveryOrderSaveVersions.get(key) || 0) === saveVersion) {
-      deliveryOrderWorkspaceCache.set(key, ensureDoEditBuckets(response.data || workspace));
+    let response;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      request = apiCall(
+        `/api/events/${encodeURIComponent(eventId)}/delivery-order`,
+        'PUT',
+        { ...workspace, expectedVersion: base.documentVersion }
+      );
+      deliveryOrderActiveSaves.set(key, request);
+      try {
+        response = await request;
+        break;
+      } catch (error) {
+        if (
+          attempt > 0
+          || error.payload?.code !== 'document_version_conflict'
+          || !error.payload?.data
+        ) throw error;
+        const latest = ensureDoEditBuckets(error.payload.data);
+        workspace = mergeDoWorkspaceConflict(base, workspace, latest);
+        base.documentVersion = latest.documentVersion;
+        Object.assign(base, cloneDoWorkspace(latest));
+        deliveryOrderBaseCache.set(key, cloneDoWorkspace(latest));
+        deliveryOrderWorkspaceCache.set(key, workspace);
+        localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(workspace));
+        showNotification(
+          'warning',
+          'Another user updated this Delivery Order. Their changes were merged with yours.'
+        );
+      }
     }
+    const saved = ensureDoEditBuckets(response?.data || workspace);
+    deliveryOrderBaseCache.set(key, cloneDoWorkspace(saved));
+    if ((deliveryOrderSaveVersions.get(key) || 0) === saveVersion) {
+      deliveryOrderWorkspaceCache.set(key, saved);
+      localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(saved));
+    } else {
+      const newerLocal = getDoEdits(eventId);
+      const rebased = mergeDoWorkspaceConflict(workspace, newerLocal, saved);
+      deliveryOrderWorkspaceCache.set(key, rebased);
+      localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(rebased));
+      clearTimeout(deliveryOrderSaveTimers.get(key));
+      deliveryOrderSaveTimers.set(key, setTimeout(() => {
+        persistDoEdits(eventId).catch(() => {});
+      }, 100));
+    }
+    return saved;
   } catch (error) {
     showNotification('error', error.message || 'Failed to save Delivery Order');
+    clearTimeout(deliveryOrderSaveTimers.get(key));
+    deliveryOrderSaveTimers.set(key, setTimeout(() => {
+      persistDoEdits(eventId).catch(() => {});
+    }, 2000));
     throw error;
   } finally {
     if (deliveryOrderActiveSaves.get(key) === request) deliveryOrderActiveSaves.delete(key);
@@ -4418,6 +4610,7 @@ async function apiCall(endpoint, method = "GET", data = null) {
       !error.payload?.requiresModelGroupMergeConfirmation
       && !error.payload?.requiresHistoryInheritanceConfirmation
       && error.payload?.code !== 'quotation_revision_decision_required'
+      && error.payload?.code !== 'document_version_conflict'
     ) {
       showNotification("error", error.message);
     }
@@ -5315,6 +5508,7 @@ function getModelStatusIcon(status) {
 }
 
 async function loadInventory() {
+  const loadGeneration = ++assetPageLoadGeneration;
   try {
     if (!currentUser) {
       try {
@@ -5327,8 +5521,20 @@ async function loadInventory() {
 
     await loadDepartments(true);
 
-    const response = await apiCall("/api/assets");
-    assets = response.data;
+    const assetLoad = await loadAssetPagesProgressively({
+      pageSize: 200,
+      view: 'summary',
+      onPage: loaded => {
+        if (loadGeneration !== assetPageLoadGeneration) return;
+        assets = loaded;
+        if (document.getElementById('inventory-section')?.classList.contains('active')) {
+          displayFilteredInventory();
+        }
+      },
+      isCancelled: () => loadGeneration !== assetPageLoadGeneration
+    });
+    if (loadGeneration !== assetPageLoadGeneration) return;
+    assets = assetLoad.first;
 
     ensureDepartmentManagerPanel();
     renderDepartmentManager();
@@ -5340,6 +5546,9 @@ async function loadInventory() {
 
     // Display all assets initially
     displayFilteredInventory();
+    assetLoad.completion.catch(error => {
+      console.warn('Unable to load the remaining inventory pages:', error);
+    });
   } catch (error) {
     document.getElementById("inventory-table-container").innerHTML =
       '<p style="color: red; text-align: center;">Error loading inventory</p>';
@@ -6196,7 +6405,7 @@ async function loadAssetUsageDays(assetId) {
   }
 }
 
-function openAssetDetailsModal(encodedAssetId) {
+async function openAssetDetailsModal(encodedAssetId) {
   let assetId = String(encodedAssetId || '');
   try {
     assetId = decodeURIComponent(assetId);
@@ -6204,10 +6413,32 @@ function openAssetDetailsModal(encodedAssetId) {
     // Keep the original value if it was not URI encoded.
   }
 
-  const asset = getAssetByApiIdentifier(assetId);
+  let asset = getAssetByApiIdentifier(assetId);
   if (!asset) {
     showNotification('error', `Asset ${assetId} not found`);
     return;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(asset, 'changeHistory')) {
+    try {
+      const apiId = getAssetIdentifierForApi(asset);
+      const response = await apiCall(
+        `/api/assets?query=${encodeURIComponent(apiId)}&limit=100`
+      );
+      const fullAsset = (response.data || []).find(row =>
+        inventoryAssetMatchesIdentifier(row, apiId)
+      );
+      if (fullAsset) {
+        const index = assets.findIndex(row =>
+          inventoryAssetMatchesIdentifier(row, apiId)
+        );
+        if (index >= 0) assets[index] = fullAsset;
+        asset = fullAsset;
+      }
+    } catch (error) {
+      showNotification('error', error.message || 'Unable to load asset details');
+      return;
+    }
   }
 
   const modal = document.getElementById('assetDetailsModal');
@@ -16880,19 +17111,31 @@ function setMaintenanceConditionFilter(condition) {
 }
 
 async function loadMaintenanceAssets() {
+  const loadGeneration = ++assetPageLoadGeneration;
   try {
-    const response = await apiCall("/api/assets");
-    assets = response.data || [];
-    maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
-    renderMaintenanceDashboardSummary(assets);
-    renderMaintenanceFilterButtons();
-    const activeTab = document.querySelector(".maintenance-tab.active");
-    if (activeTab && activeTab.getAttribute('data-tab') === 'ooc') {
+    const renderLoaded = loaded => {
+      if (loadGeneration !== assetPageLoadGeneration) return;
+      assets = loaded;
       maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
-      filterOOCAssets();
-    } else {
-      applyMaintenanceRecentFilters();
-    }
+      renderMaintenanceDashboardSummary(assets);
+      renderMaintenanceFilterButtons();
+      const activeTab = document.querySelector(".maintenance-tab.active");
+      if (activeTab && activeTab.getAttribute('data-tab') === 'ooc') {
+        filterOOCAssets();
+      } else {
+        applyMaintenanceRecentFilters();
+      }
+    };
+    const assetLoad = await loadAssetPagesProgressively({
+      pageSize: 100,
+      onPage: renderLoaded,
+      isCancelled: () => loadGeneration !== assetPageLoadGeneration
+    });
+    if (loadGeneration !== assetPageLoadGeneration) return;
+    renderLoaded(assetLoad.first);
+    assetLoad.completion.catch(error => {
+      console.warn('Unable to load the remaining maintenance pages:', error);
+    });
   } catch (error) {
     document.getElementById("maintenance-assets").innerHTML =
       '<p style="color: red; text-align: center;">Error loading assets</p>';
@@ -23804,6 +24047,86 @@ function realtimeTopicsFromPayload(payload) {
   return topic ? [topic] : [];
 }
 
+async function loadAssetPagesProgressively(options = {}) {
+  const pageSize = Math.max(25, Number(options.pageSize) || 200);
+  const query = String(options.query || '').trim();
+  const view = String(options.view || '').trim();
+  const buildUrl = offset => {
+    const params = new URLSearchParams({
+      offset: String(offset),
+      limit: String(pageSize)
+    });
+    if (query) params.set('query', query);
+    if (view) params.set('view', view);
+    return `/api/assets?${params.toString()}`;
+  };
+  const firstResponse = await apiCall(buildUrl(0));
+  const first = firstResponse.data || [];
+  const total = Number(firstResponse.meta?.total || first.length);
+  options.onPage?.([...first], firstResponse.meta || {});
+  const completion = (async () => {
+    const loaded = [...first];
+    for (let offset = first.length; offset < total; offset += pageSize) {
+      if (options.isCancelled?.()) break;
+      const response = await apiCall(buildUrl(offset));
+      if (options.isCancelled?.()) break;
+      const page = response.data || [];
+      if (!page.length) break;
+      loaded.push(...page);
+      options.onPage?.([...loaded], response.meta || {});
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return loaded;
+  })();
+  return { first, total, completion };
+}
+
+function realtimeChangesForTopic(payload, topic) {
+  const target = String(topic || '').trim();
+  const changes = Array.isArray(payload?.details?.changes)
+    ? payload.details.changes
+        .filter(change => String(change?.topic || '') === target)
+        .map(change => change.details || {})
+    : [];
+  if (String(payload?.topic || '') === target && payload?.details) {
+    changes.push(payload.details);
+  }
+  return changes;
+}
+
+async function handleFinanceRealtimePayload(payload) {
+  const changes = realtimeChangesForTopic(payload, 'finance');
+  if (!changes.length) return false;
+  const activeSection = getActiveSectionId();
+  if (activeSection === 'quotations' && typeof financeHandleRealtimeChanges === 'function') {
+    await financeHandleRealtimeChanges(changes);
+  } else if (activeSection === 'costing' && typeof costingHandleRealtimeChanges === 'function') {
+    await costingHandleRealtimeChanges(changes);
+  } else if (activeSection === 'invoices' && typeof invoiceHandleRealtimeChanges === 'function') {
+    await invoiceHandleRealtimeChanges(changes);
+  } else if (activeSection === 'compare' && typeof refreshCompareForRealtime === 'function') {
+    const eventIds = eventIdsFromRealtimePayload(payload);
+    if (
+      typeof compareState !== 'undefined'
+      && eventIds.some(id => Number(id) === Number(compareState.eventId))
+    ) {
+      await refreshCompareForRealtime(compareState.eventId);
+    }
+  } else if (activeSection === 'profit-loss' && typeof refreshProfitLossForRealtime === 'function') {
+    const eventIds = eventIdsFromRealtimePayload(payload);
+    if (
+      typeof profitLossState !== 'undefined'
+      && eventIds.some(id => Number(id) === Number(profitLossState.eventId))
+    ) {
+      await refreshProfitLossForRealtime(profitLossState.eventId);
+    }
+  } else if (activeSection === 'accounting' && typeof loadAccounting === 'function') {
+    await loadAccounting({ quiet: true });
+  }
+  // Finance changes never trigger an unrelated whole-page refresh.
+  return true;
+}
+
 function currentRealtimeCompanyCode() {
   return String(
     currentUser?.company?.code ||
@@ -24086,7 +24409,11 @@ async function refreshEventAssetsOnly(eventIds) {
       } catch (error) {
         console.warn('Plan availability live update failed:', error);
       }
-      renderPlanPage();
+      if (typeof renderPlanRealtimeAssets === 'function') {
+        renderPlanRealtimeAssets();
+      } else {
+        renderPlanPage();
+      }
     }
 
     if (
@@ -24383,7 +24710,7 @@ function connectRealtimeUpdates() {
     stopRealtimeFallbackPolling();
   });
 
-  __realtimeSource.addEventListener("inventory-update", (event) => {
+  __realtimeSource.addEventListener("inventory-update", async (event) => {
     try {
       if (event.lastEventId) __realtimeLastEventId = event.lastEventId;
       const payload = JSON.parse(event.data || "{}");
@@ -24395,6 +24722,9 @@ function connectRealtimeUpdates() {
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
       const topics = realtimeTopicsFromPayload(payload);
+      if (topics.includes('finance') && await handleFinanceRealtimePayload(payload)) {
+        return;
+      }
       if (
         getActiveSectionId() === 'vehicles' &&
         topics.includes('vehicles')

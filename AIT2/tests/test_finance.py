@@ -138,6 +138,130 @@ class FinanceFeatureTests(unittest.TestCase):
             quotation = response.get_json()['data']
         return quotation
 
+    def test_stale_quotation_save_is_rejected_with_latest_document(self):
+        quotation = self.create_quote('Concurrent Quotation')
+        stale_copy = copy.deepcopy(quotation)
+
+        first = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'notes': 'Saved by the first editor'},
+        )
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        first_document = first.get_json()['data']
+
+        conflict = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**stale_copy, 'reference': 'STALE-CHANGE'},
+        )
+        self.assertEqual(conflict.status_code, 409, conflict.get_data(as_text=True))
+        payload = conflict.get_json()
+        self.assertEqual(payload['code'], 'document_version_conflict')
+        self.assertEqual(payload['actualVersion'], first_document['documentVersion'])
+        self.assertEqual(payload['data']['notes'], 'Saved by the first editor')
+
+    def test_stale_quotation_non_overlapping_edits_merge_with_base_document(self):
+        quotation = self.create_quote('Concurrent Line Editing')
+        quotation['lineItems'] = [
+            {
+                'id': 'line-a', 'description': 'Console',
+                'department': 'Audio Department', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 1, 'uom': 'units',
+                'unitPrice': 100, 'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+            {
+                'id': 'line-b', 'description': 'Microphone',
+                'department': 'Audio Department', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 1, 'uom': 'units',
+                'unitPrice': 20, 'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+        ]
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        first_editor = copy.deepcopy(quotation)
+        second_editor = copy.deepcopy(quotation)
+
+        first_editor['lineItems'][0]['quantity'] = 2
+        first = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**first_editor, '_baseDocument': quotation},
+        )
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+
+        second_editor['lineItems'][1]['quantity'] = 3
+        second = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**second_editor, '_baseDocument': quotation},
+        )
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        lines = {
+            line['id']: line for line in second.get_json()['data']['lineItems']
+        }
+        self.assertEqual(lines['line-a']['quantity'], 2)
+        self.assertEqual(lines['line-b']['quantity'], 3)
+
+    def test_stale_quotation_same_line_edit_still_conflicts(self):
+        quotation = self.create_quote('Concurrent Same Line')
+        quotation['lineItems'] = [{
+            'id': 'same-line', 'description': 'Console',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'units',
+            'unitPrice': 100, 'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        stale = copy.deepcopy(quotation)
+
+        first = copy.deepcopy(quotation)
+        first['lineItems'][0]['quantity'] = 2
+        self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**first, '_baseDocument': quotation},
+        )
+        stale['lineItems'][0]['quantity'] = 3
+        conflict = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**stale, '_baseDocument': quotation},
+        )
+
+        self.assertEqual(conflict.status_code, 409, conflict.get_data(as_text=True))
+        self.assertEqual(conflict.get_json()['code'], 'document_version_conflict')
+
+    def test_large_quotation_group_splits_cleanly_across_pdf_pages(self):
+        quotation = self.create_quote('Large Package')
+        quotation['lineItems'] = [{
+            'id': f'package-line-{index}',
+            'description': f'Package child {index} with a detailed client-facing description',
+            'department': 'Audio Department',
+            'systemName': 'Audio',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 10,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+            'groupId': 'large-package',
+            'groupTitle': 'Large Audio Package',
+            'groupLeader': index == 1,
+            'groupItemQuantity': 1,
+            'groupDisplayFields': ['description'],
+        } for index in range(1, 121)]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+
+        exported = self.client.get(f"/api/quotations/{quotation['id']}/pdf")
+        self.assertEqual(exported.status_code, 200)
+        reader = PdfReader(io.BytesIO(exported.data))
+        self.assertGreater(len(reader.pages), 2)
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        self.assertIn('Large Audio Package (continued)', text)
+
     def test_quotation_can_be_duplicated_as_next_numbered_draft(self):
         source = self.create_quote('Annual Conference')
         source.update({
@@ -925,7 +1049,11 @@ class FinanceFeatureTests(unittest.TestCase):
 
         old_revision_edit = self.client.put(
             f"/api/quotations/{quotation['id']}/revisions/1",
-            json={**edited, 'notes': 'Revision one corrected again'},
+            json={
+                **edited,
+                'notes': 'Revision one corrected again',
+                'documentVersion': sent_two['documentVersion'],
+            },
         ).get_json()['data']
         self.assertEqual(old_revision_edit['revision'], 1)
         latest = self.client.get(f"/api/quotations/{quotation['id']}").get_json()['data']
@@ -1481,10 +1609,12 @@ class FinanceFeatureTests(unittest.TestCase):
             ['[MODEL]AX|Existing|Model|1|Existing item'],
         )
 
-        paired_saved['eventId'] = None
         unpaired = self.client.put(
             f"/api/quotations/{paired_quote['id']}",
-            json=paired_saved,
+            json={
+                'eventId': None,
+                'documentVersion': paired_accepted['documentVersion'],
+            },
         ).get_json()['data']
         self.assertIsNone(unpaired['eventId'])
 
@@ -2730,10 +2860,10 @@ class FinanceFeatureTests(unittest.TestCase):
                 self.assertNotIn('DEPARTMENT', page_text)
 
         saved['showDepartmentSubtotals'] = False
-        self.client.put(
+        saved = self.client.put(
             f"/api/quotations/{quotation['id']}",
             json=saved,
-        )
+        ).get_json()['data']
         total_only_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         total_only_reader = PdfReader(io.BytesIO(total_only_pdf))
         total_only_text = '\n'.join(page.extract_text() or '' for page in total_only_reader.pages)
@@ -3007,6 +3137,43 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("line.groupCustomText ? 'showbase-group-custom-text' : ''", costing_source)
         self.assertIn('.showbase-group-custom-text {', shared_css)
         self.assertIn('white-space: pre-line;', shared_css)
+
+    def test_custom_group_quantities_aggregate_across_subprojects(self):
+        document = {
+            'lineItems': [
+                {
+                    'id': 'custom-main',
+                    'groupId': 'stage-package',
+                    'groupTitle': 'Stage package',
+                    'groupCustomText': True,
+                    'description': 'Main room stage package',
+                    'departmentCode': 'STAGING',
+                    'quantity': 1,
+                    'groupItemQuantity': 1,
+                    'subprojectId': 'main',
+                    'isCustom': True,
+                },
+                {
+                    'id': 'custom-breakout',
+                    'groupId': 'stage-package',
+                    'groupTitle': 'Stage package',
+                    'groupCustomText': True,
+                    'description': 'Breakout stage package',
+                    'departmentCode': 'STAGING',
+                    'quantity': 2,
+                    'groupItemQuantity': 1,
+                    'subprojectId': 'breakout',
+                    'isCustom': True,
+                },
+            ],
+        }
+
+        refs = app_module._finance_event_prepared_items(document)
+
+        self.assertEqual(len(refs), 1)
+        parsed = app_module._parse_custom_marker(refs[0])
+        self.assertEqual(parsed['name'], 'Stage package')
+        self.assertEqual(parsed['quantity'], 3)
 
     def test_group_description_only_consolidates_matching_asset_labels(self):
         from quotation_pdf import (
@@ -4089,6 +4256,7 @@ class FinanceFeatureTests(unittest.TestCase):
     def test_category_discount_defaults_to_discount_and_pdf_shows_percentage(self):
         quotation = self.create_quote('Default Discount Label')
         quotation.update({
+            'showUnitPrices': True,
             'showDepartmentDiscounts': True,
             'showDepartmentSubtotals': True,
             'lineItems': [{
@@ -4101,7 +4269,7 @@ class FinanceFeatureTests(unittest.TestCase):
                 'quantity': 1,
                 'uom': 'lot',
                 'unitPrice': 1000,
-                'discountPercent': 0,
+                'discountPercent': 12.3456,
                 'isCustom': True,
             }],
             'adjustments': [{
@@ -4125,7 +4293,8 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(pdf.data)).pages
         )
-        self.assertIn('Discount (12.5%)', text)
+        self.assertIn('12.35%', text)
+        self.assertIn('Discount (12.50%)', text)
         self.assertNotIn('System discount', text)
 
         source = Path('static/js/finance.js').read_text(encoding='utf-8')
@@ -4924,8 +5093,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(created_room_view['scope'], 'paired')
         self.assertEqual(created_room_view['eventSubprojectId'], 'quote-room-three')
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
-        self.assertIn("let actionViewId = bulkViewId;", finance_source)
-        self.assertIn("view.quoteSubprojectId === bulkView.quoteSubprojectId", finance_source)
+        self.assertIn("keys: targets.map(row => row.key)", finance_source)
+        self.assertIn("viewId: bulkViewId", finance_source)
 
     def test_compare_adds_custom_requirement_difference_to_main_room(self):
         main_ref = app_module._make_custom_marker(
@@ -5344,6 +5513,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Audio', department_text)
         self.assertIn('Lighting', department_text)
 
+        saved = department_summary.get_json()['data']
         accepted = self.client.put(
             f"/api/quotations/{quotation['id']}",
             json={**saved, 'status': 'accepted'},

@@ -5,6 +5,7 @@ import unittest
 import app as app_module
 from data_manager import DataManager
 from models import Container, Event, InventoryItem, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class ContainerBulkAssetTests(unittest.TestCase):
@@ -169,14 +170,7 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertIn('4x Showbase - Bulk Cable - Cable stock', event.event_logs[-1]['action'])
 
     def test_container_editor_and_scan_send_bulk_quantities(self):
-        source = os.path.join(
-            os.path.dirname(app_module.__file__),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(source, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn("asset?.id || asset?.bulkId || asset?.internalId", script)
         self.assertIn("title: 'Add bulk quantity'", script)

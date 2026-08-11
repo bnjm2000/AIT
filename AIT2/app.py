@@ -52,6 +52,11 @@ from data_manager import (
     MAX_LOG_LINES,
     humanize_custom_asset_references,
 )
+from finance_concurrency import (
+    FinanceMergeConflict,
+    changed_document_ids,
+    three_way_merge,
+)
 from maintenance_logs import (
     ASSET_CHECK_LOG_TYPE,
     DEFAULT_MAINTENANCE_LOG_TYPE,
@@ -86,6 +91,10 @@ from storage_paths import storage_root as configured_storage_root
 from routes.delivery_orders import register_delivery_order_routes
 from routes.pages import register_app_page_routes
 from services.company_storage import CompanyStorageUsageService, storage_category
+from services.company_storage_context import (
+    attach_company_storage_contexts,
+    build_company_storage_contexts,
+)
 from utils import sanitize_filename
 from workforce import (
     VALID_STATUSES,
@@ -503,6 +512,40 @@ def _company_storage_usage(company_code, force=False):
         ),
         database_url=_database_url_for_runtime(),
         force=force,
+    )
+
+
+def _company_storage_usage_with_context(company_code, force=False):
+    """Add record ownership to storage rows without exposing physical paths."""
+    code = _normalise_company_code(company_code)
+    manager = _current_data_manager_object()
+    manager_code = _normalise_company_code(getattr(manager, 'company_code', ''))
+    is_current_test_manager = (
+        manager is not None
+        and manager is app.config.get('TEST_DATA_MANAGER')
+        and code == _normalise_company_code(_current_company_code())
+    )
+    if manager is None or (manager_code != code and not is_current_test_manager):
+        manager = _company_data_managers.get(code)
+    if manager is None:
+        if _database_url_for_runtime():
+            manager = _get_company_data_manager(code)
+        else:
+            registry = _load_company_registry()
+            record = registry.get('companies', {}).get(code) or {}
+            manager = DataManager(
+                _company_record_backend_folder(record),
+                users_file=GLOBAL_USERS_FILE,
+                documents_folder=_company_record_documents_folder(record),
+                media_folder=_company_record_media_folder(record),
+            )
+            manager.company_code = code
+            manager.load_inventory()
+            manager.load_containers()
+    contexts = build_company_storage_contexts(manager)
+    return attach_company_storage_contexts(
+        _company_storage_usage(code, force=force),
+        contexts,
     )
 
 
@@ -1911,6 +1954,12 @@ def _realtime_state_path():
 
 def _write_realtime_state(payload):
     manager = _current_data_manager_object()
+    if manager is not None and hasattr(manager, 'append_realtime_event'):
+        try:
+            manager.append_realtime_event(payload)
+        except Exception as e:
+            logger.warning("Failed to append realtime event: %s", e)
+        return
     if manager is not None and hasattr(manager, 'save_company_document'):
         try:
             manager.save_company_document('realtime_state', payload)
@@ -1935,6 +1984,12 @@ def _write_realtime_state(payload):
 
 def _read_realtime_state():
     manager = _current_data_manager_object()
+    if manager is not None and hasattr(manager, 'latest_realtime_event'):
+        try:
+            return manager.latest_realtime_event()
+        except Exception as e:
+            logger.debug("Failed to read latest realtime event: %s", e)
+            return None
     if manager is not None and hasattr(manager, 'load_company_document'):
         try:
             return manager.load_company_document('realtime_state', None)
@@ -2037,6 +2092,21 @@ def mark_realtime_change(topic='data-changed', details=None):
         return
 
     _publish_realtime_update_now(topic, _with_realtime_scope(details), '')
+
+
+def _read_realtime_events_after(event_id, limit=200):
+    """Read all durable cross-worker notices after one SSE event ID."""
+    manager = _current_data_manager_object()
+    if manager is not None and hasattr(manager, 'realtime_events_after'):
+        try:
+            return manager.realtime_events_after(event_id, limit)
+        except Exception as exc:
+            logger.debug("Failed to read realtime outbox: %s", exc)
+            return []
+    latest = _read_realtime_state()
+    if latest and str(latest.get('id') or '') != str(event_id or ''):
+        return [latest]
+    return []
 
 
 def _event_asset_realtime_change_for_request():
@@ -2227,12 +2297,16 @@ def _current_manager_cache():
             'available_assets': None,
             'cache_timestamp': None,
             'event_state_refreshes': {},
+            'event_availability': {},
+            'inventory_deployments': {},
         }
     return _manager_caches.setdefault(id(manager), {
         'assigned_assets': None,
         'available_assets': None,
         'cache_timestamp': None,
         'event_state_refreshes': {},
+        'event_availability': {},
+        'inventory_deployments': {},
     })
 
 
@@ -4706,7 +4780,7 @@ def _event_subproject(event, subproject_id):
 def _event_initial_subproject_items(event):
     """Build a Main Room payload without changing existing event requirements."""
     items = []
-    seen_model_keys = set()
+    model_items = {}
 
     for ref in getattr(event, 'prepared_items', []) or []:
         marker = _parse_model_marker(ref)
@@ -4718,18 +4792,24 @@ def _event_initial_subproject_items(event):
                 'description': marker.get('description') or '',
             }
             group_key = _event_model_group_key(group)
-            if group_key in seen_model_keys:
-                continue
-            seen_model_keys.add(group_key)
-            items.append({
-                'department': group['department'],
-                'departmentCode': group['department'],
-                'brand': group['brand'],
-                'model': group['model'],
-                'description': group['description'],
-                'quantity': max(0, _safe_int(marker.get('quantity'), 0)),
-                'isCustom': False,
-            })
+            quantity = max(0, _safe_int(marker.get('quantity'), 0))
+            existing = model_items.get(group_key)
+            if existing:
+                existing['quantity'] += quantity
+                if not existing.get('description') and group['description']:
+                    existing['description'] = group['description']
+            else:
+                existing = {
+                    'department': group['department'],
+                    'departmentCode': group['department'],
+                    'brand': group['brand'],
+                    'model': group['model'],
+                    'description': group['description'],
+                    'quantity': quantity,
+                    'isCustom': False,
+                }
+                model_items[group_key] = existing
+                items.append(existing)
             continue
 
         custom = _parse_custom_marker(ref)
@@ -4765,10 +4845,9 @@ def _event_initial_subproject_items(event):
         if not group:
             continue
         group_key = _event_model_group_key(group)
-        if group_key in seen_model_keys:
+        if group_key in model_items:
             continue
-        seen_model_keys.add(group_key)
-        items.append({
+        item = {
             'department': group['department'],
             'departmentCode': group['department'],
             'brand': group['brand'],
@@ -4776,7 +4855,9 @@ def _event_initial_subproject_items(event):
             'description': group['description'],
             'quantity': max(0, _safe_int(row.get('quantity'), 0)),
             'isCustom': False,
-        })
+        }
+        model_items[group_key] = item
+        items.append(item)
 
     return [item for item in items if item.get('quantity', 0) > 0]
 
@@ -5856,6 +5937,12 @@ def _inventory_deployments_by_asset():
     if not data_manager:
         return deployments
 
+    cache = _current_manager_cache().setdefault('inventory_deployments', {})
+    cache_key = str(session.get('user') or '') if has_request_context() else 'system'
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cached
+
     for event in data_manager.events.values():
         if has_request_context() and not _current_user_can_access_event(event):
             continue
@@ -5909,6 +5996,7 @@ def _inventory_deployments_by_asset():
         for row in rows:
             row.pop('_sortStartDate', None)
             row.pop('_sortEndDate', None)
+    cache[cache_key] = deployments
     return deployments
 
 
@@ -8574,6 +8662,14 @@ def _find_worker_owned_submission(
                         'record': record,
                         'container': rows,
                     }
+    return None
+
+
+def _active_event_for_asset(asset_id):
+    """Return the event currently owning a deployed physical asset."""
+    for event in data_manager.events.values():
+        if event and asset_id in _active_physical_asset_refs_for_event(event):
+            return event
     return None
 
 
@@ -14008,11 +14104,18 @@ def realtime_stream():
                     yield sse_message('inventory-update', payload)
                     continue
 
-                shared_payload = _read_realtime_state()
-                shared_payload_id = str((shared_payload or {}).get('id') or '')
-                if shared_payload and shared_payload_id and shared_payload_id != last_seen_realtime_id:
-                    last_seen_realtime_id = shared_payload_id
-                    yield sse_message('inventory-update', shared_payload)
+                shared_payloads = _read_realtime_events_after(
+                    last_seen_realtime_id
+                )
+                if shared_payloads:
+                    for shared_payload in shared_payloads:
+                        shared_payload_id = str(
+                            (shared_payload or {}).get('id') or ''
+                        )
+                        if not shared_payload_id:
+                            continue
+                        last_seen_realtime_id = shared_payload_id
+                        yield sse_message('inventory-update', shared_payload)
                     continue
 
                 if time.time() - last_heartbeat_at >= 25:
@@ -14180,7 +14283,10 @@ def get_company_storage(company_code):
             return jsonify({'error': 'Company not found'}), 404
 
         force = str(request.args.get('refresh') or '').strip().lower() in {'1', 'true', 'yes'}
-        return jsonify({'success': True, 'data': _company_storage_usage(code, force=force)})
+        return jsonify({
+            'success': True,
+            'data': _company_storage_usage_with_context(code, force=force),
+        })
     except Exception as error:
         logger.error('Error calculating storage for company %s: %s', company_code, error, exc_info=True)
         return jsonify({'error': 'Failed to calculate company storage'}), 500
@@ -14196,7 +14302,10 @@ def get_current_company_storage():
         }
         return jsonify({
             'success': True,
-            'data': _company_storage_usage(_current_company_code(), force=force),
+            'data': _company_storage_usage_with_context(
+                _current_company_code(),
+                force=force,
+            ),
         })
     except Exception as error:
         logger.error(
@@ -16127,18 +16236,6 @@ def get_events():
             return jsonify({'error': 'Calendar range dates are invalid'}), 400
         if calendar_view and range_start and range_end and range_end < range_start:
             return jsonify({'error': 'rangeEnd cannot be before rangeStart'}), 400
-        events_to_refresh = visible_events
-        if calendar_view and range_start and range_end:
-            events_to_refresh = [
-                event for event in visible_events
-                if _ranges_overlap(
-                    getattr(event, 'start_date', ''),
-                    getattr(event, 'end_date', ''),
-                    range_start,
-                    range_end,
-                )
-            ]
-        refresh_event_states_for_read(events_to_refresh)
         query = request.args.get('query', '').strip().lower()
         state_filter = request.args.get('state', '').strip().lower()
         tag_filter = request.args.get('tag', '').strip().lower()
@@ -16204,6 +16301,7 @@ def get_events():
         page_events = filtered_events[
             offset:offset + limit if limit is not None else None
         ] if (offset or limit is not None) else filtered_events
+        refresh_event_states_for_read(page_events)
 
         if calendar_view:
             events_data = [
@@ -16436,6 +16534,7 @@ def get_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
+
         if not _current_user_can_access_event(event):
             return _event_access_denied_response()
 
@@ -17077,6 +17176,14 @@ def get_event_model_availability(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
+        availability_cache = _current_manager_cache().setdefault(
+            'event_availability', {}
+        )
+        cache_key = (event_id, str(session.get('user') or ''))
+        cached_result = availability_cache.get(cache_key)
+        if isinstance(cached_result, list):
+            return jsonify({'success': True, 'data': copy.deepcopy(cached_result)})
+
         physical_by_key = defaultdict(int)
         asset_ooc_by_key = defaultdict(int)
         asset_missing_by_key = defaultdict(int)
@@ -17242,6 +17349,8 @@ def get_event_model_availability(event_id):
             x['description'].lower()
         ))
 
+        availability_cache[cache_key] = copy.deepcopy(result)
+
         return jsonify({'success': True, 'data': result})
 
     except Exception as e:
@@ -17356,11 +17465,10 @@ def update_event(event_id):
 
         # Update asset locations if event name changed
         if old_name != event.name:
-            for asset_id in event.prepared_items:
-                if asset_id not in event.returned_items:
-                    asset = data_manager.inventory.get(asset_id)
-                    if asset and asset.current_location == old_name:
-                        asset.current_location = event.name
+            for asset_id in _active_physical_asset_refs_for_event(event):
+                asset = data_manager.inventory.get(asset_id)
+                if asset:
+                    asset.current_location = event.name
             data_manager.save_inventory()
 
         # Save event
@@ -17471,6 +17579,7 @@ def delete_maintenance_log(asset_id, log_index):
 def recalculate_asset_status_from_logs(asset):
     """Recalculate asset condition, serial, and location from maintenance logs."""
     try:
+        deployed_event = _active_event_for_asset(asset.asset_id)
         asset.is_ooc = False
         asset.is_missing = False
         asset.is_untagged = False
@@ -17494,6 +17603,11 @@ def recalculate_asset_status_from_logs(asset):
 
         for date_obj, log_index, log_entry in sorted_logs:
             apply_maintenance_log_changes(asset, log_entry)
+
+        # Maintenance owns the stored/off-show location. Deployment owns the
+        # live location while the asset remains active on an event.
+        if deployed_event:
+            asset.current_location = deployed_event.name
 
         logger.info(
             f"Final status for {asset.asset_id}: "
@@ -18126,6 +18240,8 @@ def manage_event_models(event_id):
 
         data = request.get_json() or {}
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
 
         # Sub-project planning keeps the aggregate model marker in sync for
         # availability, packing lists, and older integrations, while the room
@@ -18491,6 +18607,8 @@ def replace_event_model_requirement(event_id):
             return jsonify({'error': 'Choose a different replacement model'}), 400
 
         subproject = _event_subproject(event, payload.get('subprojectId'))
+        if str(payload.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         if subproject:
             source_group = {
                 'department': source_department,
@@ -18653,6 +18771,8 @@ def convert_event_model_requirement_to_loan(event_id):
 
         source_key = _model_key_from_parts(source_department, source_brand, source_model)
         subproject = _event_subproject(event, payload.get('subprojectId'))
+        if str(payload.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         if subproject:
             source_group = {
                 'department': source_department,
@@ -18898,6 +19018,8 @@ def apply_planning_template(event_id):
             return jsonify({'error': 'Planning template not found'}), 404
 
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         if subproject:
             if mode == 'replace':
                 removed_custom_refs = [
@@ -19066,6 +19188,8 @@ def add_container_models_to_event(event_id):
             }), 400
 
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         if subproject:
             for row in grouped.values():
                 room_quantity = _event_subproject_required_quantity(
@@ -19182,6 +19306,8 @@ def prepare_event_asset(event_id):
         data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         scan_options = _prepare_scan_options(data)
         add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
@@ -19391,6 +19517,8 @@ def add_custom_asset_to_event(event_id):
 
         data = request.get_json() or {}
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         name = str(data.get('name', '')).strip()
         quantity = max(1, _safe_int(data.get('quantity'), 1))
         asset_type = _normalise_custom_type(data.get('type', 'MISC'))
@@ -20225,6 +20353,8 @@ def assign_specific_asset_to_model(event_id):
         data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         scan_options = _prepare_scan_options(data)
         add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
@@ -20654,6 +20784,8 @@ def prepare_event_model_quantity(event_id):
         data = request.get_json(silent=True) or {}
         group = _group_from_request(data)
         subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'error': 'Sub-project not found'}), 404
         action = str(data.get('action') or 'prepare').strip().lower()
         requested_quantity = _safe_int(data.get('quantity'), 0)
         prepare_all = bool(data.get('all') or data.get('prepareAll'))
@@ -22202,12 +22334,52 @@ def get_assets():
     """Get all assets"""
     try:
         summary_view = request.args.get('view', '').strip().lower() == 'summary'
+        query = request.args.get('query', '').strip().lower()
+        query_terms = [term.strip() for term in query.split('+') if term.strip()]
+        department_filter = request.args.get('department', '').strip().lower()
+        status_filter = request.args.get('status', '').strip().lower()
+        offset = max(0, request.args.get('offset', type=int) or 0)
+        requested_limit = request.args.get('limit', type=int)
+        limit = min(max(1, requested_limit), 1000) if requested_limit else None
         assets_data = []
         assigned_assets = get_assigned_assets()
         deployments_by_asset = _inventory_deployments_by_asset()
         departments = _load_departments()
 
-        for asset in data_manager.inventory.values():
+        inventory_rows = list(data_manager.inventory.values())
+        if query_terms:
+            inventory_rows = [
+                asset for asset in inventory_rows
+                if any(
+                    term in ' '.join(str(value or '').lower() for value in (
+                        '' if _is_bulk_asset(asset) else asset.asset_id,
+                        asset.asset_id,
+                        asset.brand,
+                        asset.model_number,
+                        getattr(asset, 'version', ''),
+                        asset.serial_number,
+                        getattr(asset, 'secondary_serial_number', ''),
+                        asset.description,
+                        ' '.join(normalize_asset_tags(getattr(asset, 'tags', []))),
+                    ))
+                    for term in query_terms
+                )
+            ]
+        if department_filter:
+            inventory_rows = [
+                asset for asset in inventory_rows
+                if str(asset.department_code or '').lower() == department_filter
+            ]
+        unfiltered_total = len(inventory_rows)
+        # The normal inventory and maintenance screens do not request a status
+        # filter. Slice domain objects before serializing histories and media so
+        # the first progressive page is genuinely cheap to produce.
+        if not status_filter and (offset or limit is not None):
+            inventory_rows = inventory_rows[
+                offset:offset + limit if limit is not None else None
+            ]
+
+        for asset in inventory_rows:
             maintenance_records = [] if summary_view else [
                 _maintenance_log_for_response(log)
                 for log in (getattr(asset, 'maintenance_logs', []) or [])
@@ -22323,33 +22495,14 @@ def get_assets():
                 })
             assets_data.append(asset_payload)
 
-        query = request.args.get('query', '').strip().lower()
-        department_filter = request.args.get('department', '').strip().lower()
-        status_filter = request.args.get('status', '').strip().lower()
-        if query:
-            assets_data = [
-                asset for asset in assets_data
-                if any(
-                    query in str(asset.get(field) or '').lower()
-                    for field in ('id', 'internalId', 'brand', 'model', 'version', 'serial', 'serial2', 'description', 'tags')
-                )
-            ]
-        if department_filter:
-            assets_data = [
-                asset for asset in assets_data
-                if str(asset.get('department') or '').lower() == department_filter
-            ]
         if status_filter:
             assets_data = [
                 asset for asset in assets_data
                 if str(asset.get('status') or '').lower() == status_filter
             ]
 
-        total = len(assets_data)
-        offset = max(0, request.args.get('offset', type=int) or 0)
-        requested_limit = request.args.get('limit', type=int)
-        limit = min(max(1, requested_limit), 1000) if requested_limit else None
-        if offset or limit is not None:
+        total = len(assets_data) if status_filter else unfiltered_total
+        if status_filter and (offset or limit is not None):
             assets_data = assets_data[offset:offset + limit if limit else None]
 
         return jsonify({
@@ -22359,6 +22512,12 @@ def get_assets():
                 'total': total,
                 'offset': offset,
                 'limit': limit,
+                'hasMore': offset + len(assets_data) < total,
+                'nextOffset': (
+                    offset + len(assets_data)
+                    if offset + len(assets_data) < total
+                    else None
+                ),
                 'view': 'summary' if summary_view else 'full',
             },
         })
@@ -26332,7 +26491,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 15
+FINANCE_VERSION = 16
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
@@ -26702,10 +26861,12 @@ def _finance_price_book_line_key(line):
 
 def _finance_price_book_payload(line, owner, updated_at=''):
     line = line if isinstance(line, dict) else {}
-    if line.get('groupId'):
-        return None
     description = str(line.get('description') or '').strip()
-    unit_price = round(max(0, _safe_float(line.get('unitPrice'), 0)), 2)
+    grouped = bool(line.get('groupId'))
+    unit_price = round(max(0, _safe_float(
+        line.get('groupItemUnitPrice') if grouped else line.get('unitPrice'),
+        0,
+    )), 2)
     if not description or unit_price <= 0:
         return None
     return {
@@ -26715,7 +26876,9 @@ def _finance_price_book_payload(line, owner, updated_at=''):
         'unitPrice': unit_price,
         'department': line.get('department') or 'UN',
         'departmentCode': line.get('departmentCode') or '',
-        'uom': line.get('uom') or 'units',
+        'uom': (
+            line.get('groupItemUom') if grouped else line.get('uom')
+        ) or 'units',
         'owner': str(owner or '').strip().lower(),
         'updatedAt': str(updated_at or ''),
     }
@@ -27026,22 +27189,31 @@ def _load_finance_data():
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'load_company_document'):
         try:
-            loaded = manager.load_company_document('finance', None)
+            if hasattr(manager, 'load_company_document_with_version'):
+                loaded, storage_version = manager.load_company_document_with_version(
+                    'finance', None
+                )
+            else:
+                loaded = manager.load_company_document('finance', None)
+                storage_version = None
         except Exception as exc:
             logger.warning("Failed to read finance data from PostgreSQL: %s", exc)
             loaded = None
+            storage_version = None
         if not isinstance(loaded, dict):
-            return _finance_defaults()
+            loaded = _finance_defaults()
     else:
+        storage_version = None
         filepath = _finance_path()
         if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-            return _finance_defaults()
-        try:
-            with open(filepath, 'r', encoding='utf-8') as finance_file:
-                loaded = json.load(finance_file)
-        except Exception as exc:
-            logger.warning("Failed to read %s: %s", FINANCE_FILENAME, exc)
-            return _finance_defaults()
+            loaded = _finance_defaults()
+        else:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as finance_file:
+                    loaded = json.load(finance_file)
+            except Exception as exc:
+                logger.warning("Failed to read %s: %s", FINANCE_FILENAME, exc)
+                loaded = _finance_defaults()
 
     data = _finance_defaults()
     if isinstance(loaded, dict):
@@ -27060,6 +27232,8 @@ def _load_finance_data():
         if isinstance(loaded.get('accounting'), dict):
             data['accounting'] = loaded['accounting']
         data['version'] = loaded.get('version', 1)
+    data['_storageVersion'] = storage_version
+    data['_storageBasePayload'] = copy.deepcopy(loaded)
     loaded_version = _safe_int(data.get('version'), 1)
     if loaded_version < FINANCE_VERSION:
         if _migrate_finance_data(data):
@@ -27070,7 +27244,83 @@ def _load_finance_data():
         _validate_linked_line_store(data, require_projections=True)
         if _ensure_quotation_costings(data):
             _save_finance_data(data)
+    data['_storageBasePayload'] = copy.deepcopy(_finance_storage_payload(data))
     return data
+
+
+def _finance_storage_payload(data):
+    """Build the persisted finance document from the hydrated runtime model."""
+    return {
+        'version': FINANCE_VERSION,
+        'documents': _finance_persisted_documents(data),
+        'linkedLineItems': copy.deepcopy(data.get('linkedLineItems') or {}),
+        'priceBook': copy.deepcopy(data.get('priceBook') or {}),
+        'costBook': copy.deepcopy(data.get('costBook') or {}),
+        'invoicePlans': copy.deepcopy(data.get('invoicePlans') or {}),
+        'profitLoss': copy.deepcopy(
+            data.get('profitLoss')
+            if isinstance(data.get('profitLoss'), dict)
+            else {'expenses': {}, 'commissions': {}, 'manualRevenue': {}}
+        ),
+        'accounting': copy.deepcopy(
+            data.get('accounting')
+            if isinstance(data.get('accounting'), dict)
+            else _accounting_defaults()
+        ),
+    }
+
+
+def _finance_runtime_from_storage(payload):
+    """Hydrate a persisted finance payload after a concurrent storage merge."""
+    payload = payload if isinstance(payload, dict) else {}
+    data = _finance_defaults()
+    for key in (
+        'documents', 'linkedLineItems', 'priceBook', 'costBook',
+        'invoicePlans', 'profitLoss', 'accounting',
+    ):
+        if key in payload:
+            data[key] = copy.deepcopy(payload[key])
+    data['version'] = _safe_int(payload.get('version'), FINANCE_VERSION)
+    for quotation_id, record in (data.get('linkedLineItems') or {}).items():
+        if not isinstance(record, dict):
+            continue
+        record['quotationId'] = str(record.get('quotationId') or quotation_id)
+        record['quotationLineCount'] = len(record.get('lines') or [])
+        record['costingLineCount'] = sum(
+            len((group or {}).get('allocations') or [])
+            for group in record.get('lines') or []
+            if isinstance(group, dict)
+        )
+        record['updatedAt'] = now_iso()
+        record['checksum'] = _linked_line_record_checksum(record)
+    _validate_linked_line_store(data)
+    _hydrate_linked_line_documents(data, require_all_pairs=True)
+    return data
+
+
+def _finance_merge_storage_payloads(base_payload, local_payload, latest_payload):
+    """Merge separate finance edits made by different server workers."""
+    merged = three_way_merge(base_payload, local_payload, latest_payload)
+    local_changed = changed_document_ids(base_payload, local_payload)
+    remote_changed = changed_document_ids(base_payload, latest_payload)
+    simultaneous_documents = local_changed & remote_changed
+    runtime = _finance_runtime_from_storage(merged)
+    for document in runtime.get('documents') or []:
+        if str(document.get('id') or '') not in simultaneous_documents:
+            continue
+        versions = []
+        for source in (local_payload, latest_payload):
+            source_document = next((
+                row for row in source.get('documents') or []
+                if isinstance(row, dict)
+                and str(row.get('id') or '') == str(document.get('id') or '')
+            ), None)
+            if source_document:
+                versions.append(_safe_int(source_document.get('documentVersion'), 1))
+        document['documentVersion'] = max(versions or [1]) + 1
+        document['updatedAt'] = now_iso()
+        document['updatedBy'] = _finance_current_username()
+    return runtime
 
 
 def _save_finance_data(data):
@@ -27081,23 +27331,61 @@ def _save_finance_data(data):
     # and order, even when the caller supplied existing line projections.
     _hydrate_linked_line_documents(data, require_all_pairs=True)
     _validate_linked_line_store(data, require_projections=True)
-    payload = {
-        'version': FINANCE_VERSION,
-        'documents': _finance_persisted_documents(data),
-        'linkedLineItems': copy.deepcopy(data.get('linkedLineItems') or {}),
-        'priceBook': data.get('priceBook') or {},
-        'costBook': data.get('costBook') or {},
-        'invoicePlans': copy.deepcopy(data.get('invoicePlans') or {}),
-        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {
-            'expenses': {},
-            'commissions': {},
-            'manualRevenue': {},
-        },
-        'accounting': data.get('accounting') if isinstance(data.get('accounting'), dict) else _accounting_defaults(),
-    }
+    payload = _finance_storage_payload(data)
     manager = _current_data_manager_object()
+    if (
+        manager is not None
+        and hasattr(manager, 'save_company_document_if_version')
+        and hasattr(manager, 'load_company_document_with_version')
+    ):
+        expected_version = max(0, _safe_int(data.get('_storageVersion'), 0))
+        base_payload = copy.deepcopy(
+            data.get('_storageBasePayload')
+            if isinstance(data.get('_storageBasePayload'), dict)
+            else payload
+        )
+        for _attempt in range(4):
+            next_version = manager.save_company_document_if_version(
+                'finance', payload, expected_version
+            )
+            if next_version is not None:
+                data['_storageVersion'] = next_version
+                data['_storageBasePayload'] = copy.deepcopy(payload)
+                return payload
+            latest_payload, latest_version = manager.load_company_document_with_version(
+                'finance', _finance_defaults()
+            )
+            try:
+                merged_data = _finance_merge_storage_payloads(
+                    base_payload,
+                    payload,
+                    latest_payload,
+                )
+            except FinanceMergeConflict as exc:
+                raise ConcurrentDataChangeError(str(exc)) from exc
+            _ensure_quotation_costings(merged_data)
+            _capture_linked_line_items(merged_data)
+            _hydrate_linked_line_documents(
+                merged_data, require_all_pairs=True
+            )
+            _validate_linked_line_store(
+                merged_data, require_projections=True
+            )
+            payload = _finance_storage_payload(merged_data)
+            expected_version = latest_version
+            base_payload = copy.deepcopy(latest_payload)
+            storage_version = data.get('_storageVersion')
+            storage_base = data.get('_storageBasePayload')
+            data.clear()
+            data.update(merged_data)
+            data['_storageVersion'] = storage_version
+            data['_storageBasePayload'] = storage_base
+        raise ConcurrentDataChangeError(
+            'Finance data kept changing while this edit was being saved'
+        )
     if manager is not None and hasattr(manager, 'save_company_document'):
         manager.save_company_document('finance', payload)
+        data['_storageBasePayload'] = copy.deepcopy(payload)
         return payload
     filepath = _finance_path()
     folder = os.path.dirname(filepath)
@@ -27107,6 +27395,7 @@ def _save_finance_data(data):
     with open(temp_path, 'w', encoding='utf-8') as finance_file:
         json.dump(payload, finance_file, ensure_ascii=False, indent=2)
     os.replace(temp_path, filepath)
+    data['_storageBasePayload'] = copy.deepcopy(payload)
     return payload
 
 
@@ -28478,6 +28767,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         ),
         'createdAt': existing.get('createdAt') or now.isoformat(timespec='seconds'),
         'createdBy': existing.get('createdBy') or current_username,
+        'documentVersion': max(1, _safe_int(
+            existing.get('documentVersion', value.get('documentVersion')), 1
+        )),
         'updatedAt': existing.get('updatedAt') if is_read_normalisation else now.isoformat(timespec='seconds'),
         'updatedBy': existing.get('updatedBy', '') if is_read_normalisation else current_username,
     }
@@ -29015,6 +29307,9 @@ def _normalise_costing_document(value, existing=None):
         ),
         'createdAt': existing.get('createdAt') or value.get('createdAt') or now_iso(),
         'createdBy': existing.get('createdBy') or value.get('createdBy') or _finance_current_username(),
+        'documentVersion': max(1, _safe_int(
+            existing.get('documentVersion', value.get('documentVersion')), 1
+        )),
         'updatedAt': existing.get('updatedAt') if is_read_normalisation else now_iso(),
         'updatedBy': existing.get('updatedBy', '') if is_read_normalisation else _finance_current_username(),
     }
@@ -29245,6 +29540,11 @@ def _costing_line_quote_identity(line):
             ))
     if pricing_binding_id:
         item_key = f'{item_key}::pricing:{pricing_binding_id}'
+    group_id = str(line.get('groupId') or '').strip().casefold()
+    if group_id:
+        # Identically named children in separate packages remain separate
+        # quotation rows. Vendor allocations inside one package still collapse.
+        item_key = f'{item_key}::group:{group_id}'
     category_key = str(
         line.get('category') or line.get('department') or 'General'
     ).strip().casefold()
@@ -29454,6 +29754,15 @@ def _linked_quotation_for_costing(finance_data, costing):
     ), None)
 
 
+def _finance_sync_fingerprint(document):
+    payload = copy.deepcopy(document if isinstance(document, dict) else {})
+    for key in ('documentVersion', 'updatedAt', 'updatedBy', 'vendorDiscrepancies'):
+        payload.pop(key, None)
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')
+    )
+
+
 def _sync_costing_from_quotation(finance_data, quotation):
     """Make a linked costing mirror quotation-visible fields and line membership."""
     if quotation.get('costingDisabled'):
@@ -29530,6 +29839,16 @@ def _sync_costing_from_quotation(finance_data, quotation):
     })
     synced = _normalise_costing_document(payload, costing)
     _sync_costing_vendors(synced)
+    if _finance_sync_fingerprint(synced) != _finance_sync_fingerprint(costing):
+        synced['documentVersion'] = max(
+            1, _safe_int(costing.get('documentVersion'), 1)
+        ) + 1
+    else:
+        synced['documentVersion'] = max(
+            1, _safe_int(costing.get('documentVersion'), 1)
+        )
+        synced['updatedAt'] = costing.get('updatedAt') or synced.get('updatedAt')
+        synced['updatedBy'] = costing.get('updatedBy') or synced.get('updatedBy')
     for index, row in enumerate(finance_data.get('documents') or []):
         if str(row.get('id') or '') == str(costing.get('id') or ''):
             finance_data['documents'][index] = synced
@@ -29575,7 +29894,6 @@ def _sync_quotation_from_costing(finance_data, costing):
             'amount': amount,
             'calculationMode': 'amount',
             'kind': 'discount' if amount < 0 else 'adjustment',
-            'subprojectId': adjustment.get('subprojectId') or 'main',
         })
         preserved_adjustments.append(adjustment)
 
@@ -29596,6 +29914,16 @@ def _sync_quotation_from_costing(finance_data, costing):
     synced = _normalise_finance_document(
         payload, 'quotation', normalisation_existing
     )
+    if _finance_sync_fingerprint(synced) != _finance_sync_fingerprint(quotation):
+        synced['documentVersion'] = max(
+            1, _safe_int(quotation.get('documentVersion'), 1)
+        ) + 1
+    else:
+        synced['documentVersion'] = max(
+            1, _safe_int(quotation.get('documentVersion'), 1)
+        )
+        synced['updatedAt'] = quotation.get('updatedAt') or synced.get('updatedAt')
+        synced['updatedBy'] = quotation.get('updatedBy') or synced.get('updatedBy')
     for index, row in enumerate(finance_data.get('documents') or []):
         if str(row.get('id') or '') == str(quotation.get('id') or ''):
             finance_data['documents'][index] = synced
@@ -31119,16 +31447,19 @@ def _finance_group_requirement_quantity(line, costing=False):
 
 def _finance_event_prepared_items(document):
     prepared_items = []
-    custom_groups = set()
+    custom_groups = {}
     for line in document.get('lineItems') or []:
         custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
-        if custom_group and custom_group in custom_groups:
-            continue
-        if custom_group:
-            custom_groups.add(custom_group)
         quantity = max(1, _safe_int(round(
             _finance_group_requirement_quantity(line)
         ), 1))
+        if custom_group:
+            group_row = custom_groups.setdefault(custom_group, {
+                'line': line,
+                'quantity': 0,
+            })
+            group_row['quantity'] += quantity
+            continue
         group = _finance_inventory_group_from_line(line)
         if group:
             _add_or_increment_model_marker(
@@ -31138,6 +31469,12 @@ def _finance_event_prepared_items(document):
             )
             continue
         custom_marker = _finance_custom_marker_from_line(line, quantity)
+        if custom_marker:
+            prepared_items.append(custom_marker)
+    for row in custom_groups.values():
+        custom_marker = _finance_custom_marker_from_line(
+            row['line'], row['quantity']
+        )
         if custom_marker:
             prepared_items.append(custom_marker)
     return prepared_items
@@ -31249,17 +31586,20 @@ def _costing_finance_line(line):
 def _costing_event_prepared_items(costing):
     """Build Plan demand from costing sources without duplicating hired units."""
     prepared_items = []
-    custom_groups = set()
+    custom_groups = {}
     for line in (costing or {}).get('lineItems') or []:
         custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
-        if custom_group and custom_group in custom_groups:
-            continue
-        if custom_group:
-            custom_groups.add(custom_group)
-        finance_line = _costing_finance_line(line)
         quantity = max(1, _safe_int(round(
             _finance_group_requirement_quantity(line, costing=True)
         ), 1))
+        if custom_group:
+            group_row = custom_groups.setdefault(custom_group, {
+                'line': line,
+                'quantity': 0,
+            })
+            group_row['quantity'] += quantity
+            continue
+        finance_line = _costing_finance_line(line)
         if _costing_line_is_external(line):
             if _costing_vendor_management_mode(costing, line) == 'dry-hire':
                 prepared_items.append(_costing_event_loan_marker(costing, line))
@@ -31269,6 +31609,22 @@ def _costing_event_prepared_items(costing):
             _add_or_increment_model_marker(prepared_items, group, quantity)
             continue
         custom_marker = _finance_custom_marker_from_line(finance_line, quantity)
+        if custom_marker:
+            prepared_items.append(custom_marker)
+    for row in custom_groups.values():
+        line = row['line']
+        if _costing_line_is_external(line):
+            if _costing_vendor_management_mode(costing, line) == 'dry-hire':
+                marker = _costing_event_loan_marker(costing, {
+                    **line,
+                    'groupHeaderQuantity': row['quantity'],
+                    'groupItemQuantity': 1,
+                })
+                prepared_items.append(marker)
+            continue
+        custom_marker = _finance_custom_marker_from_line(
+            _costing_finance_line(line), row['quantity']
+        )
         if custom_marker:
             prepared_items.append(custom_marker)
     return prepared_items
@@ -31716,6 +32072,7 @@ def _finance_create_event(document, finance_data=None, mark_accepted=True):
 
 
 def _finance_line_price_signature(line):
+    grouped = bool((line or {}).get('groupId'))
     return (
         str((line or {}).get('catalogKey') or '').strip().casefold(),
         str((line or {}).get('description') or '').strip().casefold(),
@@ -31723,8 +32080,15 @@ def _finance_line_price_signature(line):
         str((line or {}).get('model') or '').strip().casefold(),
         str((line or {}).get('department') or '').strip().casefold(),
         str((line or {}).get('departmentCode') or '').strip().casefold(),
-        str((line or {}).get('uom') or 'units').strip().casefold(),
-        round(_safe_float((line or {}).get('unitPrice'), 0), 2),
+        str((
+            (line or {}).get('groupItemUom')
+            if grouped else (line or {}).get('uom')
+        ) or 'units').strip().casefold(),
+        round(_safe_float(
+            (line or {}).get('groupItemUnitPrice')
+            if grouped else (line or {}).get('unitPrice'),
+            0,
+        ), 2),
         tuple(sorted(
             str(asset_id or '').strip().casefold()
             for asset_id in ((line or {}).get('sourceAssetIds') or [])
@@ -33968,7 +34332,14 @@ def _finance_compare_add_item(items, identity, quantity, details=None, line_id=N
 def _finance_compare_item_from_line(line):
     if not isinstance(line, dict) or _finance_line_is_non_prepare_department(line):
         return None
-    quantity = max(0, _safe_int(round(_safe_float(line.get('quantity'), 0)), 0))
+    is_custom_group = bool(line.get('groupId') and line.get('groupCustomText'))
+    quantity = max(0, _safe_int(round(
+        _safe_float(line.get('quantity'), 0)
+        if is_custom_group
+        else _finance_group_requirement_quantity(line)
+        if line.get('groupId')
+        else _safe_float(line.get('quantity'), 0)
+    ), 0))
     if quantity <= 0:
         return None
     group = _finance_inventory_group_from_line(line)
@@ -33992,7 +34363,10 @@ def _finance_compare_item_from_line(line):
             'description': str(group.get('description') or line.get('description') or '').strip(),
         }
         return identity, quantity, details
-    description = str(line.get('description') or '').strip()
+    description = str(
+        (line.get('groupTitle') if is_custom_group else line.get('description'))
+        or ''
+    ).strip()
     if not description:
         return None
     department = _normalise_department_code(line.get('departmentCode')) or 'UN'
@@ -34035,12 +34409,21 @@ def _finance_compare_quote_items(
     items = {}
     if subproject_id is None:
         return items
+    custom_groups = set()
     for line in (document or {}).get('lineItems') or []:
         if (
             subproject_id is not _FINANCE_COMPARE_ALL_SUBPROJECTS
             and str(line.get('subprojectId') or 'main') != str(subproject_id)
         ):
             continue
+        custom_group_key = (
+            str(line.get('subprojectId') or 'main'),
+            str(line.get('groupId') or ''),
+        ) if line.get('groupCustomText') and line.get('groupId') else None
+        if custom_group_key and custom_group_key in custom_groups:
+            continue
+        if custom_group_key:
+            custom_groups.add(custom_group_key)
         parsed = _finance_compare_item_from_line(line)
         if not parsed:
             continue
@@ -34513,19 +34896,6 @@ def _finance_compare_payload(event, finance_data, quotation_id=''):
     }
 
 
-def _finance_compare_row_for_action(event, document, row_key, view_id='all'):
-    scope = _finance_compare_subproject_scope(event, document or {}, view_id)
-    if str(view_id or 'all') != 'all' and not scope:
-        return None
-    rows, _counts, _quote_items, _event_items = _finance_compare_rows(
-        event,
-        document or {},
-        scope.get('quoteSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
-        scope.get('eventSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
-    )
-    return next((row for row in rows if row.get('key') == row_key), None)
-
-
 def _finance_compare_ref_matches_identity(ref, identity):
     parsed = _finance_compare_item_from_event_ref(ref)
     if not parsed:
@@ -34951,7 +35321,38 @@ def _finance_compare_apply_to_quotation(
         target_line_id = str(line_ids[0])
         for line in quotation.get('lineItems') or []:
             if str(line.get('id')) == target_line_id:
-                line['quantity'] = round(_safe_float(line.get('quantity'), 0) + delta, 4)
+                if line.get('groupId'):
+                    package_quantity = max(
+                        0, _safe_float(line.get('quantity'), 0)
+                    )
+                    child_delta = (
+                        delta / package_quantity if package_quantity else 0
+                    )
+                    if package_quantity and abs(child_delta - round(child_delta)) < 0.0001:
+                        line['groupItemQuantity'] = round(
+                            max(0, _safe_float(
+                                line.get('groupItemQuantity'), 0
+                            )) + child_delta,
+                            4,
+                        )
+                    else:
+                        new_line = _finance_compare_line_from_event_item(
+                            event_item, delta, event, finance_data
+                        )
+                        new_line['subprojectId'] = str(
+                            line.get('subprojectId')
+                            or target_subproject_id
+                            or 'main'
+                        )
+                        new_line['systemName'] = _finance_system_name(
+                            line.get('department'), line.get('systemName')
+                        )
+                        quotation.setdefault('lineItems', []).append(new_line)
+                        return
+                else:
+                    line['quantity'] = round(
+                        _safe_float(line.get('quantity'), 0) + delta, 4
+                    )
                 identity = event_item.get('identity') or {}
                 if identity.get('kind') == 'model':
                     brand = str(identity.get('brand') or '').strip()
@@ -35127,6 +35528,7 @@ def _finance_document_list_summary(document):
         'createdByName': _user_display_name(created_by) if created_by else '',
         'createdAt': str(document.get('createdAt') or ''),
         'updatedAt': str(document.get('updatedAt') or ''),
+        'documentVersion': max(1, _safe_int(document.get('documentVersion'), 1)),
         'sentAt': str(document.get('sentAt') or ''),
         'acceptedAt': str(document.get('acceptedAt') or ''),
         'invoicedAt': str(document.get('invoicedAt') or ''),
@@ -35372,6 +35774,44 @@ def _finance_get_update_delete(document_id, document_type):
             return jsonify({'success': True})
 
         request_data = request.get_json() or {}
+        base_document = request_data.pop('_baseDocument', None)
+        current_document_version = max(
+            1, _safe_int(existing.get('documentVersion'), 1)
+        )
+        if 'documentVersion' in request_data:
+            expected_document_version = max(
+                1, _safe_int(request_data.get('documentVersion'), 1)
+            )
+            if expected_document_version != current_document_version:
+                can_merge = (
+                    isinstance(base_document, dict)
+                    and str(base_document.get('id') or '') == str(document_id)
+                    and max(
+                        1, _safe_int(base_document.get('documentVersion'), 1)
+                    ) == expected_document_version
+                )
+                if can_merge:
+                    try:
+                        request_data = three_way_merge(
+                            base_document,
+                            request_data,
+                            _normalise_finance_document(
+                                existing, document_type, existing
+                            ),
+                        )
+                        request_data['documentVersion'] = current_document_version
+                    except FinanceMergeConflict:
+                        can_merge = False
+                if not can_merge:
+                    return jsonify({
+                        'error': f'This {document_type} was updated by another user',
+                        'code': 'document_version_conflict',
+                        'expectedVersion': expected_document_version,
+                        'actualVersion': current_document_version,
+                        'data': _normalise_finance_document(
+                            existing, document_type, existing
+                        ),
+                    }), 409
         raw_requested_status = str(request_data.get('status') or '').strip().lower()
         if document_type == 'quotation' and raw_requested_status == 'declined':
             return jsonify({'error': 'Declined is no longer a quotation status'}), 400
@@ -35599,6 +36039,7 @@ def _finance_get_update_delete(document_id, document_type):
 
         if document_type == 'invoice':
             _ensure_invoice_sent_snapshot(updated)
+        updated['documentVersion'] = current_document_version + 1
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
                 finance_data['documents'][index] = updated
@@ -35629,6 +36070,9 @@ def _finance_get_update_delete(document_id, document_type):
         if document_type == 'quotation':
             _remember_finance_prices(finance_data, updated, previous_document)
         _save_finance_data(finance_data)
+        updated = _finance_find_document(
+            finance_data, document_id, document_type
+        ) or updated
         if document_type == 'quotation':
             previous_status = str(existing_normalised.get('status') or 'draft')
             current_status = str(updated.get('status') or 'draft')
@@ -36469,7 +36913,13 @@ def finance_compare_add_to_event(event_id):
         return _event_access_denied_response()
     payload = request.get_json(silent=True) or {}
     quotation_id = str(payload.get('quotationId') or '').strip()
-    row_key = str(payload.get('key') or '').strip()
+    row_keys = [
+        str(key or '').strip()
+        for key in (payload.get('keys') or [payload.get('key')])
+        if str(key or '').strip()
+    ]
+    if not row_keys:
+        return jsonify({'error': 'At least one comparison row is required'}), 400
     view_id = str(payload.get('viewId') or 'all').strip() or 'all'
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36478,27 +36928,40 @@ def finance_compare_add_to_event(event_id):
             return jsonify({'error': 'Quotation not found'}), 404
         normalised = _normalise_finance_document(quotation, 'quotation', quotation)
         scope = _finance_compare_subproject_scope(event, normalised, view_id)
-        row = _finance_compare_row_for_action(
-            event, normalised, row_key, view_id
+        rows, _counts, _quote_items, _event_items = _finance_compare_rows(
+            event,
+            normalised,
+            scope.get('quoteSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+            scope.get('eventSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
         )
-        if not row:
-            return jsonify({'error': 'Comparison row not found'}), 404
+        rows_by_key = {row.get('key'): row for row in rows}
+        selected_rows = []
+        for row_key in dict.fromkeys(row_keys):
+            row = rows_by_key.get(row_key)
+            if not row:
+                return jsonify({'error': 'Comparison row not found'}), 404
+            selected_rows.append(row)
         try:
             target_subproject_id = _finance_compare_ensure_event_subproject(
                 event, scope
             )
-            _finance_compare_add_to_event(
-                event,
-                row,
-                target_subproject_id,
-            )
+            for row in selected_rows:
+                _finance_compare_add_to_event(
+                    event,
+                    row,
+                    target_subproject_id,
+                )
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
         refreshed = _finance_compare_payload(event, finance_data, quotation_id)
-    log_action(f"Added quotation item to event {event_id} from compare")
+    item_count = len(selected_rows)
+    log_action(
+        f"Added {item_count} quotation item{'s' if item_count != 1 else ''} "
+        f"to event {event_id} from compare"
+    )
     mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'compare-add-to-event'})
     return jsonify({'success': True, 'data': refreshed})
 
@@ -36514,7 +36977,13 @@ def finance_compare_remove_extra(event_id):
         return _event_access_denied_response()
     payload = request.get_json(silent=True) or {}
     quotation_id = str(payload.get('quotationId') or '').strip()
-    row_key = str(payload.get('key') or '').strip()
+    row_keys = [
+        str(key or '').strip()
+        for key in (payload.get('keys') or [payload.get('key')])
+        if str(key or '').strip()
+    ]
+    if not row_keys:
+        return jsonify({'error': 'At least one comparison row is required'}), 400
     view_id = str(payload.get('viewId') or 'all').strip() or 'all'
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -36523,30 +36992,46 @@ def finance_compare_remove_extra(event_id):
             return jsonify({'error': 'Quotation not found'}), 404
         normalised = _normalise_finance_document(quotation, 'quotation', quotation) if quotation else {}
         scope = _finance_compare_subproject_scope(event, normalised, view_id)
-        row = _finance_compare_row_for_action(
-            event, normalised, row_key, view_id
-        )
-        if not row:
-            return jsonify({'error': 'Comparison row not found'}), 404
-        event_item = row.get('eventItem') or {}
-        quote_item = row.get('quotationItem') or {}
-        event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
-        quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
-        if event_qty <= quote_qty:
-            return jsonify({'error': 'There is no extra event quantity to remove'}), 400
-        identity = event_item.get('identity') or quote_item.get('identity') or {}
-        _finance_compare_set_event_quantity(
+        rows, _counts, _quote_items, _event_items = _finance_compare_rows(
             event,
-            identity,
-            quote_qty,
-            quote_item if quote_qty else event_item,
-            scope.get('eventSubprojectId') if scope else None,
+            normalised,
+            scope.get('quoteSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
+            scope.get('eventSubprojectId') if scope else _FINANCE_COMPARE_ALL_SUBPROJECTS,
         )
+        rows_by_key = {row.get('key'): row for row in rows}
+        selected_rows = []
+        for row_key in dict.fromkeys(row_keys):
+            row = rows_by_key.get(row_key)
+            if not row:
+                return jsonify({'error': 'Comparison row not found'}), 404
+            event_item = row.get('eventItem') or {}
+            quote_item = row.get('quotationItem') or {}
+            event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
+            quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
+            if event_qty <= quote_qty:
+                return jsonify({'error': 'There is no extra event quantity to remove'}), 400
+            selected_rows.append(row)
+        for row in selected_rows:
+            event_item = row.get('eventItem') or {}
+            quote_item = row.get('quotationItem') or {}
+            quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
+            identity = event_item.get('identity') or quote_item.get('identity') or {}
+            _finance_compare_set_event_quantity(
+                event,
+                identity,
+                quote_qty,
+                quote_item if quote_qty else event_item,
+                scope.get('eventSubprojectId') if scope else None,
+            )
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
         refreshed = _finance_compare_payload(event, finance_data, quotation_id)
-    log_action(f"Removed extra event item from event {event_id} via compare")
+    item_count = len(selected_rows)
+    log_action(
+        f"Removed {item_count} extra event item{'s' if item_count != 1 else ''} "
+        f"from event {event_id} via compare"
+    )
     mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'compare-remove-extra'})
     return jsonify({'success': True, 'data': refreshed})
 
@@ -36841,6 +37326,42 @@ def costing_item(costing_id):
         if str(existing.get('status') or 'draft') == 'converted':
             return jsonify({'error': 'Converted costings are read-only'}), 409
         payload = request.get_json(silent=True) or {}
+        base_document = payload.pop('_baseDocument', None)
+        current_document_version = max(
+            1, _safe_int(existing.get('documentVersion'), 1)
+        )
+        if 'documentVersion' in payload:
+            expected_document_version = max(
+                1, _safe_int(payload.get('documentVersion'), 1)
+            )
+            if expected_document_version != current_document_version:
+                current = _normalise_costing_document(existing, existing)
+                current['vendorDiscrepancies'] = _costing_vendor_discrepancies(
+                    current
+                )
+                can_merge = (
+                    isinstance(base_document, dict)
+                    and str(base_document.get('id') or '') == str(costing_id)
+                    and max(1, _safe_int(
+                        base_document.get('documentVersion'), 1
+                    )) == expected_document_version
+                )
+                if can_merge:
+                    try:
+                        payload = three_way_merge(
+                            base_document, payload, current
+                        )
+                        payload['documentVersion'] = current_document_version
+                    except FinanceMergeConflict:
+                        can_merge = False
+                if not can_merge:
+                    return jsonify({
+                        'error': 'This costing was updated by another user',
+                        'code': 'document_version_conflict',
+                        'expectedVersion': expected_document_version,
+                        'actualVersion': current_document_version,
+                        'data': current,
+                    }), 409
         if not str(payload.get('projectName') or '').strip():
             return jsonify({'error': 'Project Name is required'}), 400
         if (
@@ -36887,6 +37408,7 @@ def costing_item(costing_id):
             except ValueError as exc:
                 return jsonify({'error': str(exc)}), 409
         _sync_costing_vendors(costing)
+        costing['documentVersion'] = current_document_version + 1
         _costing_remember_costs(finance_data, costing)
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(costing_id):
@@ -36923,6 +37445,9 @@ def costing_item(costing_id):
                 costing, linked_quotation.get('eventId')
             )
         _save_finance_data(finance_data)
+        costing = _finance_find_document(
+            finance_data, costing_id, 'costing'
+        ) or costing
     mark_realtime_change('finance', {
         'action': 'costing-updated', 'costingId': costing['id'],
     })
@@ -37120,7 +37645,6 @@ def costing_convert_to_quotation(costing_id):
             'amount': round(_safe_float(row.get('amount'), 0), 2),
             'calculationMode': 'amount',
             'kind': 'discount' if _safe_float(row.get('amount'), 0) < 0 else 'adjustment',
-            'subprojectId': 'main',
         } for row in costing.get('categoryAdjustments') or []
             if abs(_safe_float(row.get('amount'), 0)) >= 0.005]
         quotation = _normalise_finance_document({
@@ -38405,6 +38929,22 @@ def discard_quotation_revision(document_id):
             return jsonify({'error': 'Quotation not found'}), 404
 
         current = _normalise_finance_document(stored, 'quotation', stored)
+        current_document_version = max(
+            1, _safe_int(current.get('documentVersion'), 1)
+        )
+        request_data = request.get_json(silent=True) or {}
+        if 'documentVersion' in request_data:
+            expected_document_version = max(
+                1, _safe_int(request_data.get('documentVersion'), 1)
+            )
+            if expected_document_version != current_document_version:
+                return jsonify({
+                    'error': 'This quotation was updated by another user',
+                    'code': 'document_version_conflict',
+                    'expectedVersion': expected_document_version,
+                    'actualVersion': current_document_version,
+                    'data': current,
+                }), 409
         current_revision = _safe_int(current.get('revision'), 1)
         if current.get('status') != 'draft' or current_revision <= 1:
             return jsonify({'error': 'This quotation has no draft revision to discard'}), 409
@@ -38461,6 +39001,7 @@ def discard_quotation_revision(document_id):
             ),
             'updatedAt': datetime.now().isoformat(timespec='seconds'),
             'updatedBy': _finance_current_username(),
+            'documentVersion': current_document_version + 1,
         })
         finance_data['documents'] = [
             restored if str(row.get('id')) == str(document_id) else row
@@ -38485,6 +39026,27 @@ def update_or_delete_quotation_revision(document_id, revision):
             return jsonify({'error': 'Quotation not found'}), 404
 
         current = _normalise_finance_document(stored, 'quotation', stored)
+        current_document_version = max(
+            1, _safe_int(current.get('documentVersion'), 1)
+        )
+        request_data = request.get_json(silent=True) or {}
+        expected_version_value = (
+            request_data.get('documentVersion')
+            if 'documentVersion' in request_data
+            else request.args.get('documentVersion')
+        )
+        if expected_version_value not in (None, ''):
+            expected_document_version = max(
+                1, _safe_int(expected_version_value, 1)
+            )
+            if expected_document_version != current_document_version:
+                return jsonify({
+                    'error': 'This quotation was updated by another user',
+                    'code': 'document_version_conflict',
+                    'expectedVersion': expected_document_version,
+                    'actualVersion': current_document_version,
+                    'data': current,
+                }), 409
         revisions = current.get('revisions') or []
         revision_row = next(
             (
@@ -38559,6 +39121,7 @@ def update_or_delete_quotation_revision(document_id, revision):
 
             replacement['updatedAt'] = datetime.now().isoformat(timespec='seconds')
             replacement['updatedBy'] = _finance_current_username()
+            replacement['documentVersion'] = current_document_version + 1
             finance_data['documents'] = [
                 replacement if str(row.get('id')) == str(document_id) else row
                 for row in finance_data.get('documents') or []
@@ -38587,7 +39150,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'validityUnit': revision_row.get('validityUnit') or revision_row['snapshot'].get('validityUnit'),
             'validityDays': revision_row.get('validityDays') or revision_row['snapshot'].get('validityDays'),
         }
-        edited = _normalise_finance_document(request.get_json() or {}, 'quotation', snapshot_existing)
+        edited = _normalise_finance_document(request_data, 'quotation', snapshot_existing)
         edited.update({
             'id': current.get('id'),
             'number': snapshot_existing['number'],
@@ -38624,6 +39187,8 @@ def update_or_delete_quotation_revision(document_id, revision):
             replacement = dict(current)
             replacement['revisions'] = revisions
 
+        replacement['documentVersion'] = current_document_version + 1
+
         finance_data['documents'] = [
             replacement if str(row.get('id')) == str(document_id) else row
             for row in finance_data.get('documents') or []
@@ -38650,6 +39215,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'validityUnit': revision_row.get('validityUnit'),
             'validityDays': revision_row.get('validityDays'),
             'revisions': revisions,
+            'documentVersion': current_document_version + 1,
         }
         editor_payload['totals'] = _finance_totals(editor_payload)
         return jsonify({'success': True, 'data': editor_payload})

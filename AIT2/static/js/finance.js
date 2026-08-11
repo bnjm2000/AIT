@@ -31,6 +31,7 @@ const FINANCE_VALIDITY_UNITS = [
 const financeState = {
   documents: [],
   current: null,
+  baseDocument: null,
   clients: [],
   events: [],
   salespeople: [],
@@ -81,6 +82,157 @@ const financeState = {
   expandedScheduleBatches: {}
 };
 
+function financeCloneDocument(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function financeValuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function financeHandleRealtimeChanges(changes) {
+  const rows = Array.isArray(changes) ? changes : [];
+  const quotationIds = [...new Set(rows
+    .map(row => String(row?.quotationId || '').trim())
+    .filter(Boolean))];
+  if (!quotationIds.length) return false;
+
+  const currentId = String(financeState.current?.id || '');
+  if (currentId && quotationIds.includes(currentId)) {
+    const response = await apiCall(`/api/quotations/${encodeURIComponent(currentId)}`);
+    const latest = response.data;
+    const base = financeState.baseDocument || financeState.current;
+    const hasLocalChanges = !financeValuesEqual(financeState.current, base);
+    if (hasLocalChanges) {
+      financeState.current = financeMergeDocumentConflict(
+        base,
+        financeState.current,
+        latest
+      );
+      // Retain the original edit version. The server then performs the
+      // authoritative three-way merge and rejects a true same-line conflict.
+      financeState.current.documentVersion = base.documentVersion;
+    } else {
+      financeState.current = latest;
+      financeState.baseDocument = financeCloneDocument(latest);
+    }
+    financeRenderEditor();
+  }
+
+  if (!currentId) {
+    await Promise.all(quotationIds.map(async quotationId => {
+      try {
+        const response = await apiCall(`/api/quotations/${encodeURIComponent(quotationId)}`);
+        financeUpdateListRow(response.data);
+      } catch (error) {
+        if (error?.status === 404) {
+          financeState.documents = financeState.documents.filter(
+            row => String(row.id) !== quotationId
+          );
+          financeRenderList(financeState.listQuery);
+        }
+      }
+    }));
+  }
+  return true;
+}
+
+function financeIsPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function financeMergeObjectFields(baseValue, localValue, latestValue) {
+  const base = financeIsPlainObject(baseValue) ? baseValue : {};
+  const local = financeIsPlainObject(localValue) ? localValue : {};
+  const latest = financeIsPlainObject(latestValue) ? latestValue : {};
+  const merged = financeCloneDocument(latest);
+  new Set([...Object.keys(base), ...Object.keys(local)]).forEach(key => {
+    if (!Object.prototype.hasOwnProperty.call(local, key)) {
+      if (Object.prototype.hasOwnProperty.call(base, key)) delete merged[key];
+      return;
+    }
+    if (financeValuesEqual(local[key], base[key])) return;
+    if (Array.isArray(local[key]) && Array.isArray(base[key]) && Array.isArray(latest[key])) {
+      merged[key] = financeMergeVersionedRows(base[key], local[key], latest[key]);
+    } else if (
+      financeIsPlainObject(local[key])
+      && financeIsPlainObject(base[key])
+      && financeIsPlainObject(latest[key])
+    ) {
+      merged[key] = financeMergeObjectFields(base[key], local[key], latest[key]);
+    } else {
+      merged[key] = financeCloneDocument(local[key]);
+    }
+  });
+  return merged;
+}
+
+function financeMergeVersionedRows(baseRows, localRows, latestRows) {
+  const base = Array.isArray(baseRows) ? baseRows : [];
+  const local = Array.isArray(localRows) ? localRows : [];
+  const latest = Array.isArray(latestRows) ? latestRows : [];
+  const allHaveIds = [...base, ...local, ...latest].every(row => (
+    row && typeof row === 'object' && String(row.id || '').trim()
+  ));
+  if (!allHaveIds) return financeCloneDocument(local);
+
+  const baseById = new Map(base.map(row => [String(row.id), row]));
+  const localById = new Map(local.map(row => [String(row.id), row]));
+  const latestById = new Map(latest.map(row => [String(row.id), row]));
+  const deletedLocally = new Set(
+    [...baseById.keys()].filter(id => !localById.has(id))
+  );
+  const merged = local.map(row => {
+    const id = String(row.id);
+    const baseRow = baseById.get(id);
+    const latestRow = latestById.get(id);
+    if (baseRow && financeValuesEqual(row, baseRow)) {
+      return latestRow ? financeCloneDocument(latestRow) : null;
+    }
+    return baseRow && latestRow
+      ? financeMergeObjectFields(baseRow, row, latestRow)
+      : financeCloneDocument(row);
+  }).filter(Boolean);
+  const included = new Set(merged.map(row => String(row.id)));
+  latest.forEach(row => {
+    const id = String(row.id);
+    if (!included.has(id) && !deletedLocally.has(id)) {
+      merged.push(financeCloneDocument(row));
+    }
+  });
+  return merged;
+}
+
+function financeMergeDocumentConflict(baseDocument, localDocument, latestDocument) {
+  const base = baseDocument || {};
+  const local = localDocument || {};
+  const latest = latestDocument || {};
+  const merged = financeCloneDocument(latest);
+  const protectedFields = new Set([
+    'documentVersion', 'updatedAt', 'updatedBy', 'updatedByName', 'totals'
+  ]);
+  Object.keys(local).forEach(key => {
+    if (protectedFields.has(key) || key.startsWith('_')) return;
+    if (financeValuesEqual(local[key], base[key])) return;
+    if (Array.isArray(local[key]) && Array.isArray(base[key]) && Array.isArray(latest[key])) {
+      merged[key] = financeMergeVersionedRows(base[key], local[key], latest[key]);
+    } else if (
+      financeIsPlainObject(local[key])
+      && financeIsPlainObject(base[key])
+      && financeIsPlainObject(latest[key])
+    ) {
+      merged[key] = financeMergeObjectFields(base[key], local[key], latest[key]);
+    } else {
+      merged[key] = financeCloneDocument(local[key]);
+    }
+  });
+  merged.documentVersion = latest.documentVersion;
+  Object.keys(local).filter(key => key.startsWith('_')).forEach(key => {
+    merged[key] = local[key];
+  });
+  return merged;
+}
+
 const financeScheduleBulkState = {
   kind: 'show',
   method: 'recurring',
@@ -108,6 +260,7 @@ const financeCustomScheduleState = {
 const financeLineGroupState = {
   mode: 'finance',
   groupId: '',
+  subprojectId: 'main',
   title: '',
   category: '',
   displayFields: ['brand', 'model', 'description'],
@@ -1738,11 +1891,9 @@ function financeSyncDocumentDepartments(document = financeState.current) {
     const groupKey = `${line.subprojectId}::${groupId}`;
     const category = groupCategories.get(groupKey);
     if (category) {
-      line.department = category.department;
       line.systemName = category.systemName;
     } else {
       groupCategories.set(groupKey, {
-        department: line.department,
         systemName: line.systemName
       });
     }
@@ -1868,18 +2019,26 @@ function financeGroupItemQuantityChange(index, value) {
   financeRenderEditor();
 }
 
-function financeDeleteLineGroup(groupId) {
+function financeDeleteLineGroup(groupId, subprojectId = financeCurrentSubprojectId()) {
   const key = String(groupId || '');
+  const roomId = String(subprojectId || 'main');
   financeState.current.lineItems = (financeState.current.lineItems || [])
-    .filter(line => String(line.groupId || '') !== key);
+    .filter(line => !(
+      String(line.groupId || '') === key
+      && String(line.subprojectId || 'main') === roomId
+    ));
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
 }
 
-async function financeRenameLineGroup(groupId) {
+async function financeRenameLineGroup(groupId, subprojectId = financeCurrentSubprojectId()) {
   const key = String(groupId || '');
-  const members = (financeState.current?.lineItems || []).filter(line => String(line.groupId || '') === key);
+  const roomId = String(subprojectId || 'main');
+  const members = (financeState.current?.lineItems || []).filter(line => (
+    String(line.groupId || '') === key
+    && String(line.subprojectId || 'main') === roomId
+  ));
   if (!members.length) return;
   const title = await showAppPrompt({
     title: 'Rename group header',
@@ -2871,6 +3030,7 @@ async function financeCreateDocument() {
   try {
     const response = await apiCall('/api/quotations', 'POST', {});
     financeState.current = response.data;
+    financeState.baseDocument = financeCloneDocument(response.data);
     financeState.automaticDraftDateRefresh = false;
     financeState.eventPairTargetId = financeState.current.id;
     financeState.current._createdBlank = true;
@@ -2906,6 +3066,7 @@ async function financeOpenDocument(documentId, options = {}) {
     const editorDataPromise = financeLoadEditorData();
     const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`);
     financeState.current = response.data;
+    financeState.baseDocument = financeCloneDocument(response.data);
     financeState.automaticDraftDateRefresh = false;
     financeState.eventPairTargetId = financeState.current.id;
     financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
@@ -2987,6 +3148,7 @@ async function financeEditRevision(documentId, revision) {
     validityAmount: snapshotRow.validityAmount || snapshotRow.snapshot.validityAmount || '',
     validityUnit: snapshotRow.validityUnit || snapshotRow.snapshot.validityUnit || 'days',
     validityDays: snapshotRow.validityDays || snapshotRow.snapshot.validityDays || 30,
+    documentVersion: documentRow.documentVersion,
     revisions: documentRow.revisions || [],
     totals: snapshotRow.snapshot.totals || financeTotals(snapshotRow.snapshot)
   };
@@ -2995,6 +3157,7 @@ async function financeEditRevision(documentId, revision) {
   financeState.snapshotMode = false;
   financeState.addDepartment = '';
   financeState.current._editingSentRevision = Number(snapshotRow.revision) || 1;
+  financeState.baseDocument = financeCloneDocument(financeState.current);
   if (typeof updateAppDetailHistory === 'function') {
     updateAppDetailHistory(`/quotations/${encodeURIComponent(documentId)}`);
   }
@@ -3019,11 +3182,12 @@ async function financeDeleteRevision(documentId, revision) {
   try {
     clearTimeout(financeState.saveTimer);
     const response = await apiCall(
-      `/api/quotations/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revision)}`,
+      `/api/quotations/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revision)}?documentVersion=${encodeURIComponent(documentRow.documentVersion || 1)}`,
       'DELETE'
     );
     if (financeState.current?.id === documentId) {
       financeState.current = response.data;
+      financeState.baseDocument = financeCloneDocument(response.data);
       financeState.snapshotMode = false;
       financeRenderEditor();
     } else {
@@ -3065,8 +3229,11 @@ async function financeDiscardChanges() {
     }
     clearTimeout(financeState.saveTimer);
     financeState.saveTimer = null;
-    const response = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}/discard-revision`, 'POST', {});
+    const response = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}/discard-revision`, 'POST', {
+      documentVersion: current.documentVersion
+    });
     financeState.current = response.data;
+    financeState.baseDocument = financeCloneDocument(response.data);
     financeUpdateListRow(response.data);
     financeState.snapshotMode = false;
     financeRenderEditor();
@@ -3276,7 +3443,10 @@ async function financePairEvent(eventId) {
     const response = await apiCall(
       `/api/quotations/${encodeURIComponent(targetId)}`,
       'PUT',
-      { eventId: id }
+      {
+        eventId: id,
+        documentVersion: financeState.documents.find(row => row.id === targetId)?.documentVersion
+      }
     );
     closeModal('financeEventPickerModal');
     financeUpdateListRow({
@@ -3521,13 +3691,22 @@ function financeGroupActiveSubproject(mode = financeLineGroupState.mode) {
 
 function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
   const lines = financeGroupWorkingLines(mode);
-  const existing = groupId ? lines.filter(line => String(line.groupId || '') === String(groupId)) : [];
+  const activeSubprojectId = financeGroupActiveSubproject(mode);
+  const existing = groupId ? lines.filter(line => (
+    String(line.groupId || '') === String(groupId)
+    && String(line.subprojectId || 'main') === String(activeSubprojectId || 'main')
+  )) : [];
   const first = existing[0] || {};
   const commercialLeader = existing.find(line => line.groupLeader) || first;
   financeLineGroupState.mode = mode;
   financeLineGroupState.groupId = String(groupId || `group_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+  financeLineGroupState.subprojectId = String(activeSubprojectId || 'main');
   financeLineGroupState.title = String(first.groupTitle || '');
-  financeLineGroupState.category = String(first.department || first.category || (mode === 'costing' ? costingState.addCategory : financeState.addDepartment) || 'General');
+  financeLineGroupState.category = String(
+    mode === 'costing'
+      ? first.category || costingState.addCategory || 'General'
+      : financeLineSystem(first) || financeState.addDepartment || 'General'
+  );
   financeLineGroupState.displayFields = Array.isArray(first.groupDisplayFields) && first.groupDisplayFields.length
     ? [...first.groupDisplayFields]
     : ['brand', 'model', 'description'];
@@ -3695,8 +3874,18 @@ function financeSaveLineGroup() {
   if (!financeLineGroupState.selected.length && !customText) return showNotification('warning', 'Add an asset or custom text to the group');
 
   const groupId = financeLineGroupState.groupId;
+  const groupSubprojectId = String(financeLineGroupState.subprojectId || 'main');
   const lines = financeGroupWorkingLines(mode);
-  const retained = lines.filter(line => String(line.groupId || '') !== groupId);
+  const inEditedGroup = line => (
+    String(line.groupId || '') === groupId
+    && String(line.subprojectId || 'main') === groupSubprojectId
+  );
+  const existingGroupLines = lines.filter(inEditedGroup);
+  const firstGroupIndex = lines.findIndex(inEditedGroup);
+  const insertionIndex = firstGroupIndex < 0
+    ? lines.length
+    : lines.slice(0, firstGroupIndex).filter(line => !inEditedGroup(line)).length;
+  const retained = lines.filter(line => !inEditedGroup(line));
   const grouped = financeLineGroupState.selected.map(entry => {
     let line;
     if (entry.line) {
@@ -3709,17 +3898,21 @@ function financeSaveLineGroup() {
     } else {
       line = financeNewGroupedQuotationLine(entry.catalog || {}, category);
     }
-    return { ...line, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: false };
+    return { ...line, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: false };
   });
   if (customText) {
     const custom = mode === 'costing'
       ? costingNewLine({ description: customText, department: category })
       : financeNewGroupedQuotationLine({ description: customText, isCustom: true }, category);
     if (mode === 'costing') custom.category = category;
-    grouped.push({ ...custom, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: true, isCustom: true });
+    grouped.push({ ...custom, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: true, isCustom: true });
   }
   if (mode === 'finance' && financeLineGroupState.commercialHeader && grouped.length) {
-    const headerFactor = financeGroupCommercialFactor(financeLineGroupState.commercialHeader);
+    const originalHeader = financeLineGroupState.commercialHeader;
+    const headerFactor = financeGroupCommercialFactor(originalHeader);
+    const oldContribution = existingGroupLines.reduce(
+      (sum, line) => sum + financeGroupItemPriceContribution(line), 0
+    );
     grouped.forEach((line, index) => {
       financeCaptureGroupItemCommercial(line);
       if (line.groupItemPriceContribution === undefined || line.groupItemPriceContribution === null) {
@@ -3727,20 +3920,36 @@ function financeSaveLineGroup() {
           ? Math.max(0, financeNumber(line.groupItemTotal)) / headerFactor
           : Math.max(0, financeNumber(line.groupItemUnitPrice)) * Math.max(0, financeNumber(line.groupItemQuantity, 1));
       }
-      Object.assign(line, financeLineGroupState.commercialHeader, {
+    });
+    const newContribution = grouped.reduce(
+      (sum, line) => sum + financeGroupItemPriceContribution(line), 0
+    );
+    const contributionDelta = newContribution - oldContribution;
+    const adjustedHeader = {
+      ...originalHeader,
+      unitPrice: Math.max(0, financeNumber(originalHeader.unitPrice) + contributionDelta),
+      total: Math.max(
+        0,
+        financeNumber(originalHeader.total) + contributionDelta * headerFactor
+      )
+    };
+    grouped.forEach((line, index) => {
+      Object.assign(line, adjustedHeader, {
         groupLeader: index === 0,
-        total: index === 0 ? financeLineGroupState.commercialHeader.total : 0,
+        total: index === 0 ? adjustedHeader.total : 0,
         totalMode: 'amount'
       });
     });
   }
+  const nextLines = [...retained];
+  nextLines.splice(Math.min(insertionIndex, nextLines.length), 0, ...grouped);
   if (mode === 'costing') {
-    costingState.current.lineItems = [...retained, ...grouped];
+    costingState.current.lineItems = nextLines;
     costingState.changeVersion += 1;
     costingQueueSave();
     costingRenderEditor();
   } else {
-    financeState.current.lineItems = [...retained, ...grouped];
+    financeState.current.lineItems = nextLines;
     financeSyncDocumentDepartments();
     financeState.changeVersion += 1;
     financeQueueSave();
@@ -3845,7 +4054,7 @@ function financeRenderLineGroups() {
             ondrop="financeDropLine(event,${firstGroupIndex})"
             ondragend="financeDragLineEnd()">
             <td class="finance-line-number"><span class="finance-drag-handle finance-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="financeDragLineGroupStart(event,'${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')" ondragend="financeDragLineEnd()">&#9776;</span>${showLineNumbers ? displayNumber : ''}</td>
-            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" title="Edit group contents" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">&#9998;</button></div></td>
+            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" title="Edit group contents" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">&#9998;</button></div></td>
             <td><div class="finance-inline-combobox"><input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(leader))}" aria-label="Category" autocomplete="off" data-finance-department-index="${leaderIndex}" onfocus="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" oninput="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" onchange="financeCommitDepartmentInput(${leaderIndex},this)"><div class="finance-inline-suggestions" id="${leaderResultsId}"></div></div></td>
             <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(leader.days)}" aria-label="Days" onchange="financeLineChange(${leaderIndex},'days',this.value)"></td>
             <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
@@ -3853,7 +4062,7 @@ function financeRenderLineGroups() {
             <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(leader.unitPrice)}" aria-label="Group unit price" onchange="financeLineChange(${leaderIndex},'unitPrice',this.value)"></div></td>
             <td><span class="finance-percent-input"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(leader.discountPercent || 0)}" aria-label="Group discount percentage" onchange="financeLineChange(${leaderIndex},'discountPercent',this.value)"><span>%</span></span></td>
             <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(financeLineTotal(leader).toFixed(2))}" aria-label="Group total" onchange="financeSetLineTotal(${leaderIndex},this.value)"></div></td>
-            <td><button type="button" class="finance-delete-line" title="Delete group" onclick="financeDeleteLineGroup('${financeEscapeAttr(groupId)}')">&times;</button></td>
+            <td><button type="button" class="finance-delete-line" title="Delete group" onclick="financeDeleteLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">&times;</button></td>
           </tr>`;
         const childRows = financeGroupDisplayBuckets(rows, groupId).map(bucket => {
           const representativeIndex = bucket.rows[0].index;
@@ -5254,7 +5463,7 @@ function financeQuotationIsBlank(document) {
     && !dateChanged;
 }
 
-async function financeSaveCurrent(notify = false) {
+async function financeSaveCurrent(notify = false, conflictRetry = 0) {
   const current = financeState.current;
   if (!current) return null;
   if (financeState.discardingRevision) return current;
@@ -5264,6 +5473,8 @@ async function financeSaveCurrent(notify = false) {
   financeState.saveTimer = null;
   const version = financeState.changeVersion;
   const automaticDraftDateRefresh = financeState.automaticDraftDateRefresh;
+  const localSnapshot = financeCloneDocument(current);
+  const baseSnapshot = financeCloneDocument(financeState.baseDocument || current);
   const previousClientRecordName = current.clientRecordName || current.client?.name || '';
   const state = document.getElementById('financeSaveState');
   if (state) state.textContent = 'Saving...';
@@ -5272,9 +5483,11 @@ async function financeSaveCurrent(notify = false) {
     const endpoint = editingSentRevision
       ? `/api/quotations/${encodeURIComponent(current.id)}/revisions/${encodeURIComponent(editingSentRevision)}`
       : `/api/quotations/${encodeURIComponent(current.id)}`;
-    const payload = automaticDraftDateRefresh
-      ? { ...current, _automaticDraftDateRefresh: true }
-      : current;
+    const payload = {
+      ...current,
+      _baseDocument: baseSnapshot,
+      ...(automaticDraftDateRefresh ? { _automaticDraftDateRefresh: true } : {})
+    };
     const requestPromise = apiCall(endpoint, 'PUT', payload);
     financeState.activeSaves.add(requestPromise);
     let response;
@@ -5284,6 +5497,9 @@ async function financeSaveCurrent(notify = false) {
       financeState.activeSaves.delete(requestPromise);
     }
     financeSyncClientCache(response.data, previousClientRecordName);
+    if (financeState.current?.id === current.id) {
+      financeState.baseDocument = financeCloneDocument(response.data);
+    }
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
       const previousStatus = financeState.current.status;
@@ -5302,6 +5518,46 @@ async function financeSaveCurrent(notify = false) {
     if (notify) showNotification('success', 'Quotation saved');
     return response.data;
   } catch (error) {
+    if (
+      error.payload?.code === 'document_version_conflict'
+      && error.payload?.data
+      && conflictRetry < 1
+      && financeState.current?.id === current.id
+    ) {
+      const latest = error.payload.data;
+      const newestLocal = financeState.changeVersion === version
+        ? localSnapshot
+        : financeCloneDocument(financeState.current);
+      const mergedLocal = financeMergeDocumentConflict(
+        baseSnapshot, newestLocal, latest
+      );
+      const decision = await showAppConfirm({
+        title: 'Quotation changed elsewhere',
+        message: 'Another user changed the same quotation detail. Keep your value, or use the latest saved value?',
+        confirmText: 'Keep My Changes',
+        confirmValue: 'keep-local',
+        alternateText: 'Use Latest',
+        alternateValue: 'use-latest',
+        cancelText: 'Review First'
+      });
+      if (decision === 'keep-local') {
+        mergedLocal.documentVersion = latest.documentVersion;
+        financeState.baseDocument = financeCloneDocument(latest);
+        financeState.current = mergedLocal;
+        financeState.changeVersion += 1;
+        financeRenderEditor();
+        return financeSaveCurrent(notify, conflictRetry + 1);
+      }
+      if (decision === 'use-latest') {
+        financeState.baseDocument = financeCloneDocument(latest);
+        financeState.current = latest;
+        financeState.changeVersion += 1;
+        financeRenderEditor();
+        return latest;
+      }
+      if (state) state.textContent = 'Conflict needs review';
+      return newestLocal;
+    }
     if (state) state.textContent = 'Save failed';
     if (notify) showNotification('error', error.message || 'Failed to save quotation');
     throw error;
@@ -5721,18 +5977,26 @@ async function financeConfirmInvoiced() {
   });
 }
 
-async function financeCommitStatus(documentId, status, extras) {
+async function financeCommitStatus(documentId, status, extras, conflictRetry = 0) {
   const listRow = Array.from(financeRoot()?.querySelectorAll('.finance-list-row') || [])
     .find(row => row.dataset.documentId === String(documentId));
   listRow?.classList.add('is-updating');
   listRow?.setAttribute('aria-busy', 'true');
   try {
-    const beforeChange = financeState.current?.id === documentId ? financeState.current : financeState.documents.find(row => row.id === documentId);
+    let beforeChange = financeState.current?.id === documentId ? financeState.current : financeState.documents.find(row => row.id === documentId);
     const existingEventId = Number(beforeChange?.eventId || 0);
-    if (financeState.current?.id === documentId) await financeSaveCurrent(false);
-    const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`, 'PUT', { status, ...extras });
+    if (financeState.current?.id === documentId) {
+      await financeSaveCurrent(false);
+      beforeChange = financeState.current;
+    }
+    const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`, 'PUT', {
+      status,
+      ...extras,
+      documentVersion: beforeChange?.documentVersion
+    });
     if (financeState.current?.id === documentId) {
       financeState.current = response.data;
+      financeState.baseDocument = financeCloneDocument(response.data);
       financeRenderEditor();
     } else {
       financeUpdateListRow(response.data);
@@ -5742,6 +6006,20 @@ async function financeCommitStatus(documentId, status, extras) {
       : '';
     showNotification('success', `Quotation marked ${financeStatusLabel(response.data.status)}.${eventNote}`);
   } catch (error) {
+    if (
+      error.payload?.code === 'document_version_conflict'
+      && error.payload?.data
+      && conflictRetry < 1
+    ) {
+      if (financeState.current?.id === documentId) {
+        financeState.current = error.payload.data;
+        financeState.baseDocument = financeCloneDocument(error.payload.data);
+        financeRenderEditor();
+      } else {
+        financeUpdateListRow(error.payload.data);
+      }
+      return financeCommitStatus(documentId, status, extras, conflictRetry + 1);
+    }
     listRow?.classList.remove('is-updating');
     listRow?.removeAttribute('aria-busy');
     showNotification('error', error.message || 'Failed to change quotation status');
@@ -7280,50 +7558,60 @@ async function compareBulkAction(action) {
     if (action === 'resolve-mismatch') return row.status === 'qty_mismatch';
     return false;
   });
-  if (action === 'add-quote' && targets.length) {
+  const bulkEndpoints = {
+    'add-event': 'add-to-event',
+    'remove-extra': 'remove-extra',
+    'add-quote': 'add-to-quotation'
+  };
+  if (bulkEndpoints[action] && targets.length) {
     try {
-      const response = await apiCall(`/api/finance/compare/${compareState.eventId}/add-to-quotation`, 'POST', {
+      const response = await apiCall(`/api/finance/compare/${compareState.eventId}/${bulkEndpoints[action]}`, 'POST', {
         quotationId: compareState.quotationId,
         keys: targets.map(row => row.key),
         viewId: bulkViewId
       });
       compareState.data = response.data;
       compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
-      if (bulkView?.scope === 'event_only') compareState.viewId = 'all';
+      if (
+        (action === 'add-quote' && bulkView?.scope === 'event_only')
+        || (action === 'add-event' && bulkView?.scope === 'quotation_only')
+      ) {
+        compareState.viewId = 'all';
+      }
       renderComparePage();
-      showNotification('success', `${targets.length} item${targets.length === 1 ? '' : 's'} added to quotation`);
+      const actionLabel = action === 'add-quote'
+        ? 'added to quotation'
+        : action === 'add-event'
+          ? 'added to event'
+          : 'removed from event';
+      showNotification('success', `${targets.length} item${targets.length === 1 ? '' : 's'} ${actionLabel}`);
     } catch (error) {
       showNotification('error', error.message || 'Compare action failed');
     }
     return;
   }
-  let actionViewId = bulkViewId;
-  for (const row of targets) {
-    const quoteQty = financeNumber(row.quotationItem?.quantity);
-    const eventQty = financeNumber(row.eventItem?.quantity);
-    const chosen = action === 'resolve-mismatch'
-      ? (quoteQty > eventQty ? 'add-event' : 'remove-extra')
-      : action;
-    await compareRunRowAction(chosen, row.key, {
-      silent: true,
-      viewId: actionViewId,
-      preserveView: true
-    });
-    if (bulkView?.quoteSubprojectId) {
-      const refreshedView = compareSubprojectViews().find(view =>
-        view.quoteSubprojectId === bulkView.quoteSubprojectId
-      );
-      actionViewId = refreshedView?.id || actionViewId;
+  if (action === 'resolve-mismatch' && targets.length) {
+    const additions = targets.filter(row => financeNumber(row.quotationItem?.quantity) > financeNumber(row.eventItem?.quantity));
+    const removals = targets.filter(row => financeNumber(row.eventItem?.quantity) > financeNumber(row.quotationItem?.quantity));
+    try {
+      let response = null;
+      for (const [endpoint, actionRows] of [['add-to-event', additions], ['remove-extra', removals]]) {
+        if (!actionRows.length) continue;
+        response = await apiCall(`/api/finance/compare/${compareState.eventId}/${endpoint}`, 'POST', {
+          quotationId: compareState.quotationId,
+          keys: actionRows.map(row => row.key),
+          viewId: bulkViewId
+        });
+        compareState.data = response.data;
+        compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
+      }
+      renderComparePage();
+      showNotification('success', `${targets.length} quantit${targets.length === 1 ? 'y' : 'ies'} resolved`);
+    } catch (error) {
+      showNotification('error', error.message || 'Compare action failed');
     }
+    return;
   }
-  if (
-    bulkView?.scope === 'quotation_only'
-    && ['add-event', 'resolve-mismatch'].includes(action)
-  ) {
-    compareState.viewId = 'all';
-    renderComparePage();
-  }
-  if (targets.length) showNotification('success', 'Comparison updated');
 }
 
 function compareEnsureQuotationPickerModal() {

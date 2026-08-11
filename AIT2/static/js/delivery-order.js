@@ -1506,6 +1506,24 @@ async function ensureAssetsLoaded() {
 }
 
 // Delivery order item ordering
+function normaliseDoOrdering(items, storedOrdering = []) {
+  const itemKeys = items.map(item => item.key).filter(Boolean);
+  const validKeys = new Set(itemKeys);
+  const seen = new Set();
+  const ordering = [];
+  (Array.isArray(storedOrdering) ? storedOrdering : []).forEach(key => {
+    if (!validKeys.has(key) || seen.has(key)) return;
+    seen.add(key);
+    ordering.push(key);
+  });
+  itemKeys.forEach(key => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    ordering.push(key);
+  });
+  return ordering;
+}
+
 function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', subprojectId = '') {
   const state = getDoEdits(eventId);
 
@@ -1522,7 +1540,7 @@ function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', 
   }
 
   const orderingKey = deliveryOrderOrderingKey(subprojectId, dept);
-  const ordering = [...(state.ordering[orderingKey] || items.map(item => item.key))];
+  const ordering = normaliseDoOrdering(items, state.ordering[orderingKey]);
   const [movedKey] = ordering.splice(fromIndex, 1);
   let insertionIndex = toIndex + (position === 'after' ? 1 : 0);
   if (fromIndex < insertionIndex) insertionIndex -= 1;
@@ -1536,7 +1554,10 @@ function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', 
 
 function applyDoOrdering(items, dept, eventId, subprojectId = '') {
   const state = getDoEdits(eventId);
-  const ordering = state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)];
+  const ordering = normaliseDoOrdering(
+    items,
+    state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)]
+  );
   if (!ordering) return items;
   const orderedItems = [];
   const itemsMap = new Map(items.map(item => [item.key, item]));
@@ -1615,11 +1636,25 @@ function getDeliveryOrderAssetCatalog() {
     const label = [brand, model].filter(Boolean).join(' ') || description || String(asset.id || 'Asset');
     const detail = description && description.toLowerCase() !== label.toLowerCase() ? description : '';
     const key = [department, brand, model, description].map(value => value.toLowerCase()).join('|');
-    if (!grouped.has(key)) grouped.set(key, { department, brand, model, description, label, detail, tags: [] });
-    grouped.get(key).tags = normalizeAssetTags([
-      ...grouped.get(key).tags,
+    if (!grouped.has(key)) grouped.set(key, {
+      department,
+      brand,
+      model,
+      description,
+      label,
+      detail,
+      tags: [],
+      catalogKey: `inventory|${key}`,
+      sourceAssetIds: []
+    });
+    const catalogItem = grouped.get(key);
+    catalogItem.tags = normalizeAssetTags([
+      ...catalogItem.tags,
       ...normalizeAssetTags(asset.tags),
     ]);
+    if (asset.id && !catalogItem.sourceAssetIds.includes(String(asset.id))) {
+      catalogItem.sourceAssetIds.push(String(asset.id));
+    }
   });
   return Array.from(grouped.values()).sort((a, b) =>
     a.department.localeCompare(b.department) || a.label.localeCompare(b.label, undefined, { numeric: true })
@@ -1757,6 +1792,8 @@ function deliveryOrderAddCatalogItem() {
     quantity: Math.max(1, Number(quantityInput?.value) || 1),
     brand: selected?.brand || '',
     model: selected?.model || '',
+    catalogKey: selected?.catalogKey || '',
+    sourceAssetIds: [...(selected?.sourceAssetIds || [])],
     subprojectId: deliveryOrderActiveSubprojectId(event)
   });
   saveDoEdits(eventId, state);
@@ -2086,6 +2123,10 @@ function groupItemsByDepartment(event, subprojectId = null) {
           customId: ci.id,
           description: ci.description,
           quantity: String(ci.quantity || 1),
+          brand: ci.brand || '',
+          model: ci.model || '',
+          catalogKey: ci.catalogKey || '',
+          sourceAssetIds: [...(ci.sourceAssetIds || [])],
           source: 'do-custom',
           subprojectId: itemSubprojectId
         });

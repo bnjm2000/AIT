@@ -5,6 +5,7 @@ adapter persists those objects as versioned PostgreSQL rows and rejects a stale
 write instead of silently overwriting another worker's changes.
 """
 
+import copy
 import hashlib
 import json
 import logging
@@ -25,6 +26,7 @@ from data_manager import (
     normalize_asset_change_history,
 )
 from maintenance_logs import normalize_maintenance_log
+from event_concurrency import EventMergeConflict, merge_event_payloads
 from models import (
     Client,
     Container,
@@ -90,7 +92,7 @@ def company_storage_breakdown(dsn, company_code):
         'company_data': ('aim_companies', 'aim_company_revisions', 'aim_users'),
         'inventory': ('aim_inventory', 'aim_containers', 'aim_clients', 'aim_departments'),
         'events': ('aim_events',),
-        'logs': ('aim_system_logs',),
+        'logs': ('aim_system_logs', 'aim_realtime_events'),
     }
     breakdown = {}
 
@@ -176,6 +178,7 @@ class PostgresDataManager(DataManager):
         self._container_snapshots = {}
         self._container_versions = {}
         self._event_snapshots = {}
+        self._event_baselines = {}
         self._event_versions = {}
         self._client_snapshots = {}
         self._client_versions = {}
@@ -586,6 +589,7 @@ class PostgresDataManager(DataManager):
         events = {}
         file_map = {}
         snapshots = {}
+        baselines = {}
         versions = {}
         with self._connection() as connection:
             with connection.cursor() as cursor:
@@ -632,10 +636,12 @@ class PostgresDataManager(DataManager):
                     # the normalised object here would make the migration save
                     # look like a no-op and repeat on every process start.
                     snapshots[int(event_id)] = _fingerprint(data)
+                    baselines[int(event_id)] = copy.deepcopy(data)
                     versions[int(event_id)] = int(version)
         self.events = events
         self.event_file_map = file_map
         self._event_snapshots = snapshots
+        self._event_baselines = baselines
         self._event_versions = versions
 
     def load_logs(self):
@@ -1086,9 +1092,69 @@ class PostgresDataManager(DataManager):
                         )
                         row = cursor.fetchone()
                         if not row:
-                            raise ConcurrentDataChangeError(
-                                f'Event {event_id} changed concurrently'
+                            cursor.execute(
+                                """
+                                SELECT data, version
+                                FROM aim_events
+                                WHERE company_code = %s AND event_id = %s
+                                FOR UPDATE
+                                """,
+                                (self.company_code, event_id),
                             )
+                            latest = cursor.fetchone()
+                            if not latest:
+                                raise ConcurrentDataChangeError(
+                                    f'Event {event_id} was deleted concurrently'
+                                )
+                            latest_payload, latest_version = latest
+                            baseline = self._event_baselines.get(event_id)
+                            if not isinstance(baseline, dict):
+                                raise ConcurrentDataChangeError(
+                                    f'Event {event_id} changed concurrently'
+                                )
+                            try:
+                                payload = merge_event_payloads(
+                                    baseline,
+                                    dict(latest_payload or {}),
+                                    payload,
+                                )
+                            except EventMergeConflict as exc:
+                                raise ConcurrentDataChangeError(str(exc)) from exc
+                            fingerprint = _fingerprint(payload)
+                            cursor.execute(
+                                """
+                                UPDATE aim_events
+                                SET event_name = %s,
+                                    start_date = %s,
+                                    end_date = %s,
+                                    state = %s,
+                                    source_filename = %s,
+                                    data = %s,
+                                    version = version + 1,
+                                    updated_at = CURRENT_TIMESTAMP
+                                WHERE company_code = %s
+                                  AND event_id = %s
+                                  AND version = %s
+                                RETURNING version
+                                """,
+                                (
+                                    payload.get('name', event.name),
+                                    payload.get('startDate', event.start_date),
+                                    payload.get('endDate', event.end_date),
+                                    normalize_event_state(payload.get('state', event.state)),
+                                    filename,
+                                    Jsonb(payload),
+                                    self.company_code,
+                                    event_id,
+                                    int(latest_version),
+                                ),
+                            )
+                            row = cursor.fetchone()
+                            if not row:
+                                raise ConcurrentDataChangeError(
+                                    f'Event {event_id} changed again while merging'
+                                )
+                            self._apply_event_data(event, payload)
                         next_version = int(row[0])
                     next_revision = self._bump_company_revision(cursor, revision)
         except ConcurrentDataChangeError:
@@ -1097,9 +1163,31 @@ class PostgresDataManager(DataManager):
 
         self._loaded_revision = next_revision
         self._event_snapshots[event_id] = fingerprint
+        self._event_baselines[event_id] = copy.deepcopy(payload)
         self._event_versions[event_id] = next_version
         self.event_file_map[event_id] = filename
         event._legacy_location_extracted = False
+
+    def _apply_event_data(self, event, payload):
+        """Keep the caller's domain object aligned after a concurrent merge."""
+        event.name = payload.get('name', '')
+        event.location = payload.get('location', '')
+        event.start_date = payload.get('startDate', '')
+        event.end_date = payload.get('endDate', '')
+        event.asset_models = list(payload.get('assetModels') or [])
+        event.prepared_items = list(payload.get('preparedItems') or [])
+        event.returned_items = list(payload.get('returnedItems') or [])
+        event.state = normalize_event_state(payload.get('state', 'New'))
+        event.actually_prepared = list(payload.get('actuallyPrepared') or [])
+        event.extra_assets = list(payload.get('extraAssets') or [])
+        event.custom_collected = list(payload.get('customCollected') or [])
+        event.tag = payload.get('tag', 'events')
+        event.force_state_override = bool(payload.get('forceStateOverride', False))
+        event.notes = payload.get('notes', '')
+        event.event_logs = self.normalize_event_logs(payload.get('eventLogs') or [])
+        event.assigned_users = list(payload.get('assignedUsers') or [])
+        event.subprojects = list(payload.get('subprojects') or [])
+        self.events[int(event.event_id)] = event
 
     def delete_event_file(self, event_id):
         event_id = int(event_id)
@@ -1130,6 +1218,7 @@ class PostgresDataManager(DataManager):
 
         self._loaded_revision = next_revision
         self._event_snapshots.pop(event_id, None)
+        self._event_baselines.pop(event_id, None)
         self._event_versions.pop(event_id, None)
         self.event_file_map.pop(event_id, None)
         if folder and os.path.isdir(folder):
@@ -1209,19 +1298,70 @@ class PostgresDataManager(DataManager):
 
     def load_company_document(self, document_key, default=None):
         """Load one company-scoped JSON document from PostgreSQL."""
+        data, _version = self.load_company_document_with_version(
+            document_key, default
+        )
+        return data
+
+    def load_company_document_with_version(self, document_key, default=None):
+        """Load a company document together with its storage version."""
         self.ensure_company()
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT data
+                SELECT data, version
                 FROM aim_company_documents
                 WHERE company_code = %s AND document_key = %s
                 """,
                 (self.company_code, str(document_key)),
             ).fetchone()
         if not row:
-            return default
-        return row[0]
+            return default, 0
+        return row[0], int(row[1])
+
+    def save_company_document_if_version(
+        self,
+        document_key,
+        data,
+        expected_version,
+    ):
+        """Atomically save a document only when its storage version matches."""
+        if not isinstance(data, dict):
+            raise ValueError('Company document data must be a JSON object')
+        self.ensure_company()
+        expected_version = max(0, int(expected_version or 0))
+        with self._connection() as connection:
+            if expected_version == 0:
+                row = connection.execute(
+                    """
+                    INSERT INTO aim_company_documents
+                        (company_code, document_key, data, version)
+                    VALUES (%s, %s, %s, 1)
+                    ON CONFLICT (company_code, document_key) DO NOTHING
+                    RETURNING version
+                    """,
+                    (self.company_code, str(document_key), Jsonb(data)),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    UPDATE aim_company_documents
+                    SET data = %s,
+                        version = version + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE company_code = %s
+                      AND document_key = %s
+                      AND version = %s
+                    RETURNING version
+                    """,
+                    (
+                        Jsonb(data),
+                        self.company_code,
+                        str(document_key),
+                        expected_version,
+                    ),
+                ).fetchone()
+        return int(row[0]) if row else None
 
     def save_company_document(self, document_key, data):
         """Upsert one company-scoped JSON document and advance its version."""
@@ -1242,6 +1382,89 @@ class PostgresDataManager(DataManager):
                 (self.company_code, str(document_key), Jsonb(data)),
             )
         return data
+
+    def append_realtime_event(self, payload, retain=3000):
+        """Append a realtime notice to the durable company outbox."""
+        if not isinstance(payload, dict) or not payload.get('id'):
+            raise ValueError('Realtime payload requires an ID')
+        self.ensure_company()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO aim_realtime_events (company_code, event_id, data)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (company_code, event_id) DO NOTHING
+                """,
+                (self.company_code, str(payload['id']), Jsonb(payload)),
+            )
+            connection.execute(
+                """
+                DELETE FROM aim_realtime_events
+                WHERE company_code = %s
+                  AND sequence < COALESCE((
+                      SELECT sequence
+                      FROM aim_realtime_events
+                      WHERE company_code = %s
+                      ORDER BY sequence DESC
+                      OFFSET %s LIMIT 1
+                  ), 0)
+                """,
+                (self.company_code, self.company_code, max(100, int(retain))),
+            )
+        return payload
+
+    def realtime_events_after(self, event_id='', limit=200):
+        """Return every queued notice after the supplied event ID in order."""
+        self.ensure_company()
+        clean_event_id = str(event_id or '').strip()
+        limit = max(1, min(1000, int(limit or 200)))
+        with self._connection() as connection:
+            if clean_event_id:
+                cursor = connection.execute(
+                    """
+                    SELECT sequence FROM aim_realtime_events
+                    WHERE company_code = %s AND event_id = %s
+                    """,
+                    (self.company_code, clean_event_id),
+                ).fetchone()
+                after_sequence = int(cursor[0]) if cursor else 0
+            else:
+                latest = connection.execute(
+                    """
+                    SELECT COALESCE(MAX(sequence), 0)
+                    FROM aim_realtime_events
+                    WHERE company_code = %s
+                    """,
+                    (self.company_code,),
+                ).fetchone()
+                after_sequence = int((latest or [0])[0] or 0)
+            rows = connection.execute(
+                """
+                SELECT data
+                FROM aim_realtime_events
+                WHERE company_code = %s AND sequence > %s
+                ORDER BY sequence ASC
+                LIMIT %s
+                """,
+                (self.company_code, after_sequence, limit),
+            ).fetchall()
+        return [row[0] for row in rows]
+
+    def latest_realtime_event(self):
+        """Return the newest durable notice for an SSE connection cursor."""
+        self.ensure_company()
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT data
+                FROM aim_realtime_events
+                WHERE company_code = %s
+                ORDER BY sequence DESC
+                LIMIT 1
+                """,
+                (self.company_code,),
+            ).fetchone()
+        return row[0] if row else None
 
     def company_document_count(self):
         with self._connection() as connection:

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import os
 import re
 import threading
+import textwrap
 
 
 _CJK_TEXT_RE = re.compile(
@@ -127,6 +128,43 @@ def _group_display_entries(lines):
             0.0, float(line.get('groupItemQuantity', 1) or 0)
         )
     return entries
+
+
+def _group_display_entry_chunks(entries, max_lines=12, wrap_width=72):
+    """Split a group into table-row-sized chunks that ReportLab can paginate."""
+    expanded = []
+    for source in entries or []:
+        description = _text(source.get('description')).strip() or 'Item'
+        wrapped_lines = []
+        for raw_line in description.splitlines() or [description]:
+            wrapped_lines.extend(textwrap.wrap(
+                raw_line,
+                width=wrap_width,
+                break_long_words=True,
+                break_on_hyphens=False,
+            ) or [''])
+        for index in range(0, len(wrapped_lines), max_lines):
+            expanded.append({
+                **source,
+                'description': '\n'.join(wrapped_lines[index:index + max_lines]),
+                'showQuantity': index == 0 and not source.get('customText'),
+                '_lineCount': min(max_lines, len(wrapped_lines) - index),
+            })
+
+    chunks = []
+    current = []
+    current_lines = 0
+    for entry in expanded:
+        entry_lines = max(1, int(entry.get('_lineCount') or 1))
+        if current and current_lines + entry_lines > max_lines:
+            chunks.append(current)
+            current = []
+            current_lines = 0
+        current.append(entry)
+        current_lines += entry_lines
+    if current:
+        chunks.append(current)
+    return chunks or [[]]
 
 
 def _is_optional_category(value):
@@ -274,6 +312,14 @@ def _money(value, currency='SGD'):
     return f"{sign}${abs(amount):,.2f}"
 
 
+def _discount_percent(value):
+    try:
+        percent = float(value or 0)
+    except (TypeError, ValueError):
+        percent = 0
+    return f'{percent:.2f}%'
+
+
 def _adjustment_label(adjustment, fallback='Discount'):
     adjustment = adjustment if isinstance(adjustment, dict) else {}
     label = _text(adjustment.get('label') or fallback).strip() or fallback
@@ -284,8 +330,7 @@ def _adjustment_label(adjustment, fallback='Discount'):
     except (TypeError, ValueError):
         percent = 0
     if percent and not re.search(r'\d+(?:\.\d+)?\s*%', label):
-        percent_text = f'{percent:.2f}'.rstrip('0').rstrip('.')
-        label = f'{label} ({percent_text}%)'
+        label = f'{label} ({_discount_percent(percent)})'
     return label
 
 
@@ -1270,22 +1315,8 @@ def build_finance_pdf(document, company, logo_path=''):
             )
             is_group = bool(line.get('groupId'))
             if is_group:
-                title_markup = _cjk_markup(
-                    escape(_text(line.get('groupTitle') or 'Group')),
-                    bold=True,
-                )
-                content_markup = '<br/>'.join(
-                    _cjk_markup(_escaped_line_breaks(
-                        entry['description']
-                        if entry.get('customText')
-                        else f"{entry['quantity']:g}x {entry['description']}"
-                    ))
-                    for entry in _group_display_entries(line_unit)
-                )
-                description_flowable = Paragraph(
-                    f'<b>{title_markup}</b>'
-                    + (f'<br/>{content_markup}' if content_markup else ''),
-                    body,
+                entry_chunks = _group_display_entry_chunks(
+                    _group_display_entries(line_unit)
                 )
                 display_days = float(line.get('days') or 0)
                 quantity = f"{float(line.get('quantity') or 0):g}"
@@ -1296,9 +1327,7 @@ def build_finance_pdf(document, company, logo_path=''):
                 unit_price = float(line.get('unitPrice') or 0)
                 group_total = float(line.get('total') or 0)
             else:
-                description_flowable = _paragraph(
-                    _group_line_description(line), body
-                )
+                entry_chunks = [None]
                 display_days = float(line.get('days') or 0)
                 quantity = f"{float(line.get('quantity') or 0):g}"
                 uom = _text(
@@ -1317,20 +1346,60 @@ def build_finance_pdf(document, company, logo_path=''):
                 )
             else:
                 line_number = str(pdf_line_number)
-            table_rows.append([
-                _paragraph(line_number if show_line_numbers else '', center),
-                description_flowable,
-                _paragraph(f"{display_days:g}" if display_days else '', right),
-                _paragraph(quantity_label, right),
-                _paragraph(_money(unit_price, currency) if show_unit_prices else '', right),
-                _paragraph(
-                    f"{float(line.get('discountPercent') or 0):g}%"
-                    if show_unit_prices and float(line.get('discountPercent') or 0)
-                    else '',
-                    right,
-                ),
-                _paragraph(_money(group_total, currency) if show_unit_prices else '', right),
-            ])
+            for chunk_index, chunk in enumerate(entry_chunks):
+                first_chunk = chunk_index == 0
+                if is_group:
+                    title = _text(line.get('groupTitle') or 'Group')
+                    title_markup = _cjk_markup(
+                        escape(title if first_chunk else f'{title} (continued)'),
+                        bold=True,
+                    )
+                    content_markup = '<br/>'.join(
+                        _cjk_markup(_escaped_line_breaks(
+                            f"{entry['quantity']:g}x {entry['description']}"
+                            if entry.get('showQuantity')
+                            else entry['description']
+                        ))
+                        for entry in chunk
+                    )
+                    description_flowable = Paragraph(
+                        f'<b>{title_markup}</b>'
+                        + (f'<br/>{content_markup}' if content_markup else ''),
+                        body,
+                    )
+                else:
+                    description_flowable = _paragraph(
+                        _group_line_description(line), body
+                    )
+                table_rows.append([
+                    _paragraph(
+                        line_number if first_chunk and show_line_numbers else '',
+                        center,
+                    ),
+                    description_flowable,
+                    _paragraph(
+                        f"{display_days:g}" if first_chunk and display_days else '',
+                        right,
+                    ),
+                    _paragraph(quantity_label if first_chunk else '', right),
+                    _paragraph(
+                        _money(unit_price, currency)
+                        if first_chunk and show_unit_prices else '',
+                        right,
+                    ),
+                    _paragraph(
+                        _discount_percent(line.get('discountPercent'))
+                        if first_chunk and show_unit_prices
+                        and float(line.get('discountPercent') or 0)
+                        else '',
+                        right,
+                    ),
+                    _paragraph(
+                        _money(group_total, currency)
+                        if first_chunk and show_unit_prices else '',
+                        right,
+                    ),
+                ])
             pdf_line_number += 1
 
         show_department_adjustment_block = bool(

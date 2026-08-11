@@ -12,6 +12,7 @@ from quotation_pdf import (
     _cjk_markup,
     _escaped_line_breaks,
     _group_display_entries,
+    _group_display_entry_chunks,
     _group_line_description,
     _paragraph,
     _safe_hex,
@@ -602,23 +603,34 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                         for member in line_unit
                         if str(member.get('remarks') or '').strip()
                     )) or '-'
-                    title_markup = _cjk_markup(
-                        escape(_text(line.get('groupTitle') or 'Group')),
-                        bold=True,
-                    )
-                    child_markup = '<br/>'.join(
-                        _cjk_markup(_escaped_line_breaks(
-                            entry['description']
-                            if entry.get('customText')
-                            else f"{entry['quantity']:g}x {entry['description']}"
+                    group_title = _text(line.get('groupTitle') or 'Group')
+                    item_flowables = []
+                    for chunk_index, chunk in enumerate(
+                        _group_display_entry_chunks(
+                            _group_display_entries(line_unit)
+                        )
+                    ):
+                        title_markup = _cjk_markup(
+                            escape(
+                                group_title
+                                if chunk_index == 0
+                                else f'{group_title} (continued)'
+                            ),
+                            bold=True,
+                        )
+                        child_markup = '<br/>'.join(
+                            _cjk_markup(_escaped_line_breaks(
+                                f"{entry['quantity']:g}x {entry['description']}"
+                                if entry.get('showQuantity')
+                                else entry['description']
+                            ))
+                            for entry in chunk
+                        )
+                        item_flowables.append(Paragraph(
+                            f'<b>{title_markup}</b>'
+                            + (f'<br/>{child_markup}' if child_markup else ''),
+                            table_left,
                         ))
-                        for entry in _group_display_entries(line_unit)
-                    )
-                    item_flowable = Paragraph(
-                        f'<b>{title_markup}</b>'
-                        + (f'<br/>{child_markup}' if child_markup else ''),
-                        table_left,
-                    )
                 else:
                     quantity = max(0, _number(line.get('quantity')))
                     unit_cost = max(0, _number(line.get('itemCost')))
@@ -632,45 +644,54 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                         str(line.get('vendorName') or '').strip() or 'Unassigned'
                     )
                     remarks = line.get('remarks') or '-'
-                    item_flowable = _paragraph(_line_item_text(line), table_left)
+                    item_flowables = [
+                        _paragraph(_line_item_text(line), table_left)
+                    ]
 
-                row = [
-                    item_flowable,
-                    _paragraph(_quantity(quantity), table_center),
-                    _paragraph(_quantity(multiplier), table_center),
-                    _paragraph(vendor_name, table_center),
-                    _paragraph(remarks, table_left),
-                    _paragraph(_money(unit_cost), table_right),
-                    _paragraph(_money(cost_total), table_right),
-                    _paragraph(
-                        f'{margin_percent_line:,.2f}%\n{_money(calculated - cost_total)}',
-                        table_right,
-                    ),
-                    _paragraph(_money(calculated), table_right),
-                    _paragraph(
-                        f'{_money(unit_price)}\n{_comparison_text(unit_price, unit_cost)}',
-                        table_right_bold,
-                    ),
-                    _paragraph(
-                        f'{_money(sale_price)}\n{_comparison_text(sale_price, cost_total)}',
-                        table_right_bold,
-                    ),
-                ]
-                data.append(row)
-                row_index = len(data) - 1
-                vendor_background, vendor_text = _vendor_palette(vendor_name)
-                unit_state = _price_state(unit_price, unit_cost, calculated_unit)
-                sale_state = _price_state(sale_price, cost_total, calculated)
-                unit_background, unit_text = _price_palette(unit_state)
-                sale_background, sale_text = _price_palette(sale_state)
-                style_commands.extend([
-                    ('BACKGROUND', (3, row_index), (3, row_index), vendor_background),
-                    ('TEXTCOLOR', (3, row_index), (3, row_index), vendor_text),
-                    ('BACKGROUND', (9, row_index), (9, row_index), unit_background),
-                    ('TEXTCOLOR', (9, row_index), (9, row_index), unit_text),
-                    ('BACKGROUND', (10, row_index), (10, row_index), sale_background),
-                    ('TEXTCOLOR', (10, row_index), (10, row_index), sale_text),
-                ])
+                for flowable_index, item_flowable in enumerate(item_flowables):
+                    first_row = flowable_index == 0
+                    row = [
+                        item_flowable,
+                        _paragraph(_quantity(quantity) if first_row else '', table_center),
+                        _paragraph(_quantity(multiplier) if first_row else '', table_center),
+                        _paragraph(vendor_name if first_row else '', table_center),
+                        _paragraph(remarks if first_row else '', table_left),
+                        _paragraph(_money(unit_cost) if first_row else '', table_right),
+                        _paragraph(_money(cost_total) if first_row else '', table_right),
+                        _paragraph(
+                            f'{margin_percent_line:,.2f}%\n{_money(calculated - cost_total)}'
+                            if first_row else '',
+                            table_right,
+                        ),
+                        _paragraph(_money(calculated) if first_row else '', table_right),
+                        _paragraph(
+                            f'{_money(unit_price)}\n{_comparison_text(unit_price, unit_cost)}'
+                            if first_row else '',
+                            table_right_bold,
+                        ),
+                        _paragraph(
+                            f'{_money(sale_price)}\n{_comparison_text(sale_price, cost_total)}'
+                            if first_row else '',
+                            table_right_bold,
+                        ),
+                    ]
+                    data.append(row)
+                    if not first_row:
+                        continue
+                    row_index = len(data) - 1
+                    vendor_background, vendor_text = _vendor_palette(vendor_name)
+                    unit_state = _price_state(unit_price, unit_cost, calculated_unit)
+                    sale_state = _price_state(sale_price, cost_total, calculated)
+                    unit_background, unit_text = _price_palette(unit_state)
+                    sale_background, sale_text = _price_palette(sale_state)
+                    style_commands.extend([
+                        ('BACKGROUND', (3, row_index), (3, row_index), vendor_background),
+                        ('TEXTCOLOR', (3, row_index), (3, row_index), vendor_text),
+                        ('BACKGROUND', (9, row_index), (9, row_index), unit_background),
+                        ('TEXTCOLOR', (9, row_index), (9, row_index), unit_text),
+                        ('BACKGROUND', (10, row_index), (10, row_index), sale_background),
+                        ('TEXTCOLOR', (10, row_index), (10, row_index), sale_text),
+                    ])
 
             adjustment = _number(total.get('adjustment'))
             data.append([
@@ -699,11 +720,10 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                 hAlign='CENTER',
                 style=TableStyle(style_commands),
             )
-            category_block = [category_table, Spacer(1, 2 * mm)]
             if pending_room_heading:
-                category_block.insert(0, pending_room_heading)
+                story.append(pending_room_heading)
                 pending_room_heading = None
-            story.append(KeepTogether(category_block))
+            story.extend([category_table, Spacer(1, 2 * mm)])
 
     story.extend([PageBreak(), _paragraph('Summary', section_style)])
     category_rows = [[

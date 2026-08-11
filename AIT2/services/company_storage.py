@@ -31,6 +31,8 @@ def storage_category(root_kind: str, relative_path: str) -> str:
         return "branding"
     if relative_path.startswith("workforce_uploads/"):
         return "uploads"
+    if relative_path.startswith("containermedia/"):
+        return "inventory"
     if (
         root_kind == "media"
         or relative_path.startswith("maintenance_media/")

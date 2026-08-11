@@ -94,6 +94,35 @@ class RuntimeHardeningTests(unittest.TestCase):
         )
         self.assertEqual(unchanged.status_code, 304)
 
+    def test_asset_search_supports_or_terms_and_pagination_metadata(self):
+        self.manager.inventory['LX#01'] = InventoryItem(
+            'LX#01',
+            'Lighting Brand',
+            'Fixture',
+            'LX-SERIAL',
+            'Wash light',
+            False,
+            [],
+            'LX',
+            'Store',
+            'Store',
+        )
+
+        first = self.client.get('/api/assets?view=summary&query=Brand%2BFixture&limit=1')
+        self.assertEqual(first.status_code, 200)
+        first_payload = first.get_json()
+        self.assertEqual(first_payload['meta']['total'], 2)
+        self.assertTrue(first_payload['meta']['hasMore'])
+        self.assertEqual(first_payload['meta']['nextOffset'], 1)
+
+        second = self.client.get(
+            '/api/assets?view=summary&query=Brand%2BFixture&limit=1&offset=1'
+        )
+        second_payload = second.get_json()
+        self.assertEqual(second_payload['meta']['total'], 2)
+        self.assertFalse(second_payload['meta']['hasMore'])
+        self.assertIsNone(second_payload['meta']['nextOffset'])
+
     def test_event_upload_rejects_a_file_above_its_limit(self):
         app_module.EVENT_FILE_MAX_BYTES = 10
         response = self.client.post(

@@ -168,6 +168,26 @@ function ensurePdfSettingsNavItem() {
   }
 }
 
+let companyDetailsActiveTab = 'details';
+let companyStorageUsageLoaded = false;
+
+function showCompanyDetailsTab(tabName) {
+  const nextTab = tabName === 'storage' ? 'storage' : 'details';
+  companyDetailsActiveTab = nextTab;
+  document.querySelectorAll('#pdf-settings-section [data-company-details-tab]').forEach(button => {
+    const isActive = button.dataset.companyDetailsTab === nextTab;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+  });
+  document.querySelectorAll('#pdf-settings-section [data-company-details-panel]').forEach(panel => {
+    const isActive = panel.dataset.companyDetailsPanel === nextTab;
+    panel.hidden = !isActive;
+    panel.classList.toggle('active', isActive);
+  });
+  if (nextTab === 'storage') loadCompanyStorageUsage(false);
+}
+
 function ensurePdfSettingsSection() {
   if (document.getElementById('pdf-settings-section')) return;
 
@@ -179,44 +199,56 @@ function ensurePdfSettingsSection() {
   section.className = 'content-section';
 
   section.innerHTML = `
-    <style>
-      #pdf-settings-section .company-letterhead-heading { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px; }
-      #pdf-settings-section .company-letterhead-heading .form-label { margin:0; }
-      #pdf-settings-section .company-letterhead-default { min-height:27px;padding:4px 9px;font-size:10px; }
-    </style>
-    <div class="content-header">
+    <div class="content-header company-details-page-header">
       <div>
         <h2 class="content-title">Company Details</h2>
-        <p style="color:#64748b;margin-top:6px;">Branding and billing details used on quotations, invoices and other PDFs.</p>
+        <p>Manage the company identity, document defaults and storage usage.</p>
       </div>
     </div>
 
-    <div class="form-container company-details-form">
-      <div style="display:grid;grid-template-columns:minmax(240px,320px) minmax(360px,1fr);gap:24px;align-items:start;">
-        <section class="company-details-card">
-          <h3>Company logo</h3>
+    <div class="company-details-tabs" role="tablist" aria-label="Company settings">
+      <button type="button" class="company-details-tab active" data-company-details-tab="details" role="tab" aria-selected="true" onclick="showCompanyDetailsTab('details')">
+        ${settingsIcon('building')}<span>Company details</span>
+      </button>
+      <button type="button" class="company-details-tab" data-company-details-tab="storage" role="tab" aria-selected="false" tabindex="-1" onclick="showCompanyDetailsTab('storage')">
+        ${settingsIcon('storage')}<span>Storage usage</span>
+      </button>
+    </div>
+
+    <div class="company-details-form">
+      <div class="company-details-tab-panel active" data-company-details-panel="details" role="tabpanel">
+        <div class="company-details-workspace">
+          <aside class="company-details-brand-panel" aria-labelledby="companyLogoHeading">
+            <div class="company-details-section-heading">
+              <div>
+                <h3 id="companyLogoHeading">Company logo</h3>
+                <p>Used across the app and exported documents.</p>
+              </div>
+            </div>
           <div class="company-logo-dropzone">
             <img id="pdfSettingsLogoPreview" alt="Company logo">
             <span id="pdfSettingsLogoPlaceholder">No logo uploaded</span>
           </div>
-          <input id="pdfSettingsLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-            <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">Upload Logo</button>
-            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Remove Logo</button>
+          <input id="pdfSettingsLogoInput" class="company-logo-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div class="company-logo-actions">
+            <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">${settingsIcon('upload')}<span>Upload</span></button>
+            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Remove</button>
           </div>
-          <div id="pdfSettingsLogoName" style="font-size:12px;color:#64748b;margin-top:8px;"></div>
-        </section>
+          <div id="pdfSettingsLogoName" class="company-logo-name"></div>
+          </aside>
 
-        <div style="display:grid;gap:18px;">
-          <section class="company-details-card">
-            <h3>Business identity</h3>
+          <main class="company-details-fields">
+          <section class="company-details-section">
+            <div class="company-details-section-heading">
+              <div><h3>Business identity</h3><p>Core contact details shown to clients.</p></div>
+            </div>
             <div class="company-details-grid">
-              <label class="form-group"><span class="form-label">Company name</span><input id="companyDetailsName" class="form-input"></label>
+              <label class="form-group company-details-span-2"><span class="form-label">Company name</span><input id="companyDetailsName" class="form-input"></label>
               <label class="form-group"><span class="form-label">UEN / registration no.</span><input id="companyDetailsRegistration" class="form-input"></label>
               <label class="form-group company-details-wide"><span class="form-label">Billing address</span><textarea id="companyDetailsAddress" class="form-input" rows="3"></textarea></label>
               <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
               <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
               <div class="form-group company-details-wide">
                 <div class="company-letterhead-heading">
                   <label class="form-label" for="companyDetailsLetterhead">Letterhead</label>
@@ -227,8 +259,10 @@ function ensurePdfSettingsSection() {
             </div>
           </section>
 
-          <section class="company-details-card">
-            <h3>Billing &amp; document defaults</h3>
+          <section class="company-details-section">
+            <div class="company-details-section-heading">
+              <div><h3>Billing &amp; document defaults</h3><p>Applied when new quotations and invoices are created.</p></div>
+            </div>
             <div class="company-details-grid">
               <label class="form-group company-details-wide"><span class="form-label">PDF colour theme</span>
                 <div class="company-theme-control">
@@ -244,7 +278,7 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
               <label class="form-group"><span class="form-label">PayNow UEN</span><input id="companyDetailsPaynow" class="form-input"></label>
-              <div class="form-group company-details-wide">
+              <div class="form-group company-details-span-2">
                 <div class="company-letterhead-heading">
                   <label class="form-label" for="companyDetailsPaymentDetails">Payment details</label>
                   <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyPaymentDetails()">Default</button>
@@ -261,32 +295,36 @@ function ensurePdfSettingsSection() {
               <label class="form-group company-details-wide"><span class="form-label">Default terms &amp; conditions</span><textarea id="companyDetailsTerms" class="form-input" rows="6"></textarea></label>
               <label class="form-group company-details-wide"><span class="form-label">PDF footer</span><textarea id="pdfSettingsFooterText" class="form-input" rows="4" maxlength="2000"></textarea></label>
             </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
+            <div class="company-details-actions">
               <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Clear Footer</button>
-              <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">Save Company Details</button>
+              <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">${settingsIcon('check')}<span>Save changes</span></button>
             </div>
           </section>
+          </main>
         </div>
       </div>
 
-      <section class="company-details-card company-details-storage" aria-labelledby="companyStorageHeading">
-        <div class="company-details-storage-heading">
-          <div>
-            <h3 id="companyStorageHeading">Storage usage</h3>
-            <p>Documents, media and company data stored in this workspace.</p>
+      <div class="company-details-tab-panel" data-company-details-panel="storage" role="tabpanel" hidden>
+        <section class="company-details-storage" aria-labelledby="companyStorageHeading">
+          <div class="company-details-storage-heading">
+            <div>
+              <h3 id="companyStorageHeading">Storage overview</h3>
+              <p>Documents, media and company data stored in this workspace.</p>
+            </div>
+            <button type="button" class="company-storage-refresh" onclick="loadCompanyStorageUsage(true)" title="Refresh storage usage" aria-label="Refresh storage usage">
+              ${settingsIcon('refresh')}
+            </button>
           </div>
-          <button type="button" class="company-storage-refresh" onclick="loadCompanyStorageUsage(true)" title="Refresh storage usage" aria-label="Refresh storage usage">
-            ${settingsIcon('refresh')}
-          </button>
-        </div>
-        <div id="companyStorageUsage" class="company-details-storage-content" aria-live="polite">
-          <div class="company-storage-loading">Calculating storage usage...</div>
-        </div>
-      </section>
+          <div id="companyStorageUsage" class="company-details-storage-content" aria-live="polite">
+            <div class="company-storage-loading">Calculating storage usage...</div>
+          </div>
+        </section>
+      </div>
     </div>
   `;
 
   sectionParent.appendChild(section);
+  showCompanyDetailsTab(companyDetailsActiveTab);
 }
 
 function renderPdfSettingsForm() {
@@ -425,10 +463,8 @@ async function loadPdfSettingsSection() {
   }
 
   ensurePdfSettingsSection();
-  await Promise.all([
-    loadPdfSettings(true),
-    loadCompanyStorageUsage(false),
-  ]);
+  await loadPdfSettings(true);
+  showCompanyDetailsTab(companyDetailsActiveTab);
 }
 
 function companyStorageFileDate(value) {
@@ -484,8 +520,11 @@ function renderCompanyStorageUsage(storage) {
             ${largestFiles.map(file => `
               <div class="company-details-file-row">
                 <div class="company-details-file-name">
-                  <strong title="${escapeHtmlAttr(file.relativePath || file.name || '')}">${escapeHtml(file.name || '-')}</strong>
-                  <span title="${escapeHtmlAttr(file.relativePath || '')}">${escapeHtml(file.relativePath || '-')}</span>
+                  <strong title="${escapeHtmlAttr(file.displayName || file.name || '')}">${escapeHtml(file.displayName || file.name || '-')}</strong>
+                  ${file.contextLabel && file.contextLabel !== file.categoryLabel
+                    ? `<span>${escapeHtml(file.contextLabel)}</span>`
+                    : ''}
+                  ${file.contextDetail ? `<small>${escapeHtml(file.contextDetail)}</small>` : ''}
                 </div>
                 <span class="company-details-file-category">${escapeHtml(file.categoryLabel || 'Other')}</span>
                 <time datetime="${escapeHtmlAttr(file.modifiedAt || '')}">${companyStorageFileDate(file.modifiedAt)}</time>
@@ -497,11 +536,13 @@ function renderCompanyStorageUsage(storage) {
       </div>
     </div>
   `;
+  companyStorageUsageLoaded = true;
 }
 
 async function loadCompanyStorageUsage(force = false) {
   const container = document.getElementById('companyStorageUsage');
   if (!container) return;
+  if (!force && companyStorageUsageLoaded) return;
   if (force) {
     container.innerHTML = '<div class="company-storage-loading">Recalculating storage usage...</div>';
   }
@@ -671,6 +712,8 @@ function settingsIcon(name) {
     edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
     refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9m2 6a7 7 0 0 0 12 2.5L20 15"/>',
+    storage: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+    upload: '<path d="M12 16V4m0 0-4 4m4-4 4 4M5 15v5h14v-5"/>',
     switch: '<path d="M7 7h11l-3-3m3 3-3 3M17 17H6l3 3m-3-3 3-3"/>',
     lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/>',
     shield: '<path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6z"/><path d="m9 12 2 2 4-4"/>',

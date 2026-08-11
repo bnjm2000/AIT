@@ -102,6 +102,23 @@ class EventAssetRealtimeTests(unittest.TestCase):
             )
         )
 
+    def test_realtime_state_uses_durable_outbox_cursor_when_available(self):
+        class Manager:
+            def latest_realtime_event(self):
+                return {'id': 'durable-42', 'topic': 'events'}
+
+            def load_company_document(self, *_args):
+                raise AssertionError('legacy realtime document should not be read')
+
+        with patch.object(
+            app_module,
+            '_current_data_manager_object',
+            return_value=Manager(),
+        ):
+            payload = app_module._read_realtime_state()
+
+        self.assertEqual(payload['id'], 'durable-42')
+
 
 if __name__ == '__main__':
     unittest.main()

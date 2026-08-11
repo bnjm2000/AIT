@@ -6,7 +6,8 @@ from flask import jsonify, request
 
 from services.delivery_orders import (
     DeliveryOrderWorkspaceTooLarge,
-    normalize_delivery_order_workspace,
+    delivery_order_workspace_version,
+    version_delivery_order_workspace,
 )
 
 
@@ -37,12 +38,34 @@ def register_delivery_order_routes(
                     }
                 )
 
+            current_workspace = dict(getattr(event, "delivery_order", {}) or {})
+            current_version = delivery_order_workspace_version(current_workspace)
+            payload = request.get_json(silent=True) or {}
+            expected_version = payload.get("expectedVersion")
+            if expected_version is None:
+                expected_version = request.args.get("expectedVersion")
+            if expected_version not in (None, ""):
+                try:
+                    expected_version = max(0, int(expected_version))
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid Delivery Order document version"}), 400
+                if expected_version != current_version:
+                    return jsonify({
+                        "error": "This Delivery Order was updated by another user",
+                        "code": "document_version_conflict",
+                        "expectedVersion": expected_version,
+                        "actualVersion": current_version,
+                        "data": current_workspace,
+                    }), 409
+
             if request.method == "DELETE":
-                event.delivery_order = {}
+                event.delivery_order = version_delivery_order_workspace(
+                    {}, current_version
+                )
             else:
                 try:
-                    event.delivery_order = normalize_delivery_order_workspace(
-                        request.get_json(silent=True) or {}
+                    event.delivery_order = version_delivery_order_workspace(
+                        payload, current_version
                     )
                 except TypeError as error:
                     return jsonify({"error": str(error)}), 400

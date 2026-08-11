@@ -1,6 +1,7 @@
 const costingState = {
   documents: [],
   current: null,
+  baseDocument: null,
   vendors: [],
   lookupsPromise: null,
   catalog: [],
@@ -31,6 +32,55 @@ const costingState = {
   inventoryLinkTimer: null,
   inventoryLinkSelection: null
 };
+
+async function costingHandleRealtimeChanges(changes) {
+  const costingIds = [...new Set((Array.isArray(changes) ? changes : [])
+    .map(row => String(row?.costingId || '').trim())
+    .filter(Boolean))];
+  if (!costingIds.length) return false;
+  const currentId = String(costingState.current?.id || '');
+  if (currentId && costingIds.includes(currentId)) {
+    const response = await apiCall(`/api/costings/${encodeURIComponent(currentId)}`);
+    const latest = response.data;
+    const base = costingState.baseDocument || costingState.current;
+    const hasLocalChanges = !financeValuesEqual(costingState.current, base);
+    if (hasLocalChanges) {
+      costingState.current = financeMergeDocumentConflict(
+        base,
+        costingState.current,
+        latest
+      );
+      costingState.current.documentVersion = base.documentVersion;
+    } else {
+      costingState.current = latest;
+      costingState.baseDocument = financeCloneDocument(latest);
+    }
+    costingRenderEditor();
+  }
+  if (!currentId) {
+    await Promise.all(costingIds.map(async costingId => {
+      try {
+        const response = await apiCall(`/api/costings/${encodeURIComponent(costingId)}`);
+        const detail = response.data;
+        const summary = {
+          ...detail,
+          lineCount: (detail.lineItems || []).length
+        };
+        const index = costingState.documents.findIndex(row => String(row.id) === costingId);
+        if (index >= 0) costingState.documents[index] = summary;
+        else costingState.documents.unshift(summary);
+      } catch (error) {
+        if (error?.status === 404) {
+          costingState.documents = costingState.documents.filter(
+            row => String(row.id) !== costingId
+          );
+        }
+      }
+    }));
+    costingRenderList();
+  }
+  return true;
+}
 
 function costingRoot() {
   return document.getElementById('costing-page-root');
@@ -740,6 +790,7 @@ async function costingCreate() {
       eventLocation: String(details?.eventLocation || '').trim()
     });
     costingState.current = response.data;
+    costingState.baseDocument = financeCloneDocument(response.data);
     costingState.activeSubprojectId = '';
     costingState.quotationSyncMode = '';
     if (typeof updateAppDetailHistory === 'function') {
@@ -760,6 +811,7 @@ async function costingOpen(id, options = {}) {
   try {
     const response = await apiCall(`/api/costings/${encodeURIComponent(id)}`);
     costingState.current = response.data;
+    costingState.baseDocument = financeCloneDocument(response.data);
     costingState.activeSubprojectId = '';
     costingState.quotationSyncMode = '';
     costingLines().forEach(line => costingLineRecalculate(line));
@@ -2333,22 +2385,28 @@ function costingQueueSave() {
   costingState.saveTimer = setTimeout(() => costingSave(false), 600);
 }
 
-async function costingSave(notify = false) {
+async function costingSave(notify = false, conflictRetry = 0) {
   const current = costingState.current;
   if (!current || current.status === 'converted') return current;
   clearTimeout(costingState.saveTimer);
   costingState.saveTimer = null;
   const version = costingState.changeVersion;
+  const localSnapshot = financeCloneDocument(current);
+  const baseSnapshot = financeCloneDocument(costingState.baseDocument || current);
   const state = document.getElementById('costingSaveState');
   if (state) state.textContent = 'Saving...';
   const payload = {
     ...current,
+    _baseDocument: baseSnapshot,
     quotationSyncMode: costingState.quotationSyncMode || undefined
   };
   const promise = apiCall(`/api/costings/${encodeURIComponent(current.id)}`, 'PUT', payload);
   costingState.activeSave = promise;
   try {
     const response = await promise;
+    if (costingState.current?.id === current.id) {
+      costingState.baseDocument = financeCloneDocument(response.data);
+    }
     if (costingState.current?.id === current.id && version === costingState.changeVersion) {
       costingState.current = response.data;
     } else if (costingState.current?.id === current.id) {
@@ -2360,6 +2418,46 @@ async function costingSave(notify = false) {
     if (response.quotation?.status === 'draft') costingState.quotationSyncMode = '';
     return response.data;
   } catch (error) {
+    if (
+      error.payload?.code === 'document_version_conflict'
+      && error.payload?.data
+      && conflictRetry < 1
+      && costingState.current?.id === current.id
+    ) {
+      const latest = error.payload.data;
+      const newestLocal = costingState.changeVersion === version
+        ? localSnapshot
+        : financeCloneDocument(costingState.current);
+      const mergedLocal = financeMergeDocumentConflict(
+        baseSnapshot, newestLocal, latest
+      );
+      const decision = await showAppConfirm({
+        title: 'Costing changed elsewhere',
+        message: 'Another user changed the same costing detail. Keep your value, or use the latest saved value?',
+        confirmText: 'Keep My Changes',
+        confirmValue: 'keep-local',
+        alternateText: 'Use Latest',
+        alternateValue: 'use-latest',
+        cancelText: 'Review First'
+      });
+      if (decision === 'keep-local') {
+        mergedLocal.documentVersion = latest.documentVersion;
+        costingState.baseDocument = financeCloneDocument(latest);
+        costingState.current = mergedLocal;
+        costingState.changeVersion += 1;
+        costingRenderEditor();
+        return costingSave(notify, conflictRetry + 1);
+      }
+      if (decision === 'use-latest') {
+        costingState.baseDocument = financeCloneDocument(latest);
+        costingState.current = latest;
+        costingState.changeVersion += 1;
+        costingRenderEditor();
+        return latest;
+      }
+      if (state) state.textContent = 'Conflict needs review';
+      return newestLocal;
+    }
     if (error.payload?.code === 'quotation_revision_decision_required') {
       const quote = error.payload.quotation || {};
       const decision = await showAppConfirm({
@@ -2378,6 +2476,7 @@ async function costingSave(notify = false) {
           const refreshed = await apiCall(`/api/costings/${encodeURIComponent(current.id)}`);
           if (costingState.current?.id === current.id) {
             costingState.current = refreshed.data;
+            costingState.baseDocument = financeCloneDocument(refreshed.data);
             costingState.changeVersion += 1;
             costingState.quotationSyncMode = '';
             costingRenderEditor();
@@ -2478,6 +2577,7 @@ async function costingMakeQuotation() {
     await costingFlushSave();
     const response = await apiCall(`/api/costings/${encodeURIComponent(current.id)}/convert-to-quotation`, 'POST', {});
     costingState.current = response.costing || costingState.current;
+    costingState.baseDocument = financeCloneDocument(costingState.current);
     showNotification('success', `Quotation ${response.data.number} created`);
     showSection('quotations');
     if (typeof financeOpenDocument === 'function') financeOpenDocument(response.data.id);

@@ -179,6 +179,19 @@ CREATE TABLE IF NOT EXISTS aim_company_documents (
     CONSTRAINT aim_company_documents_data_object CHECK (jsonb_typeof(data) = 'object')
 );
 
+CREATE TABLE IF NOT EXISTS aim_realtime_events (
+    sequence BIGSERIAL PRIMARY KEY,
+    company_code TEXT NOT NULL REFERENCES aim_companies(company_code) ON DELETE CASCADE,
+    event_id TEXT NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (company_code, event_id),
+    CONSTRAINT aim_realtime_events_data_object CHECK (jsonb_typeof(data) = 'object')
+);
+
+CREATE INDEX IF NOT EXISTS aim_realtime_events_company_sequence_idx
+    ON aim_realtime_events (company_code, sequence);
+
 CREATE TABLE IF NOT EXISTS aim_migration_runs (
     migration_id BIGSERIAL PRIMARY KEY,
     company_code TEXT NOT NULL,

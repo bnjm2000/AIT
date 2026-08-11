@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 import app as app_module
@@ -539,6 +540,51 @@ class CompanyManagementTests(unittest.TestCase):
             not os.path.isabs(item['relativePath'])
             for item in payload['largestFiles']
         ))
+
+    def test_current_company_storage_identifies_maintenance_log_owner(self):
+        registry = app_module._load_company_registry()
+        avpl_backend = app_module._company_record_backend_folder(
+            registry['companies']['AVPL']
+        )
+        media_path = os.path.join(
+            avpl_backend,
+            'maintenance_media',
+            'log-storage-context',
+            'stored-photo.jpg',
+        )
+        os.makedirs(os.path.dirname(media_path), exist_ok=True)
+        with open(media_path, 'wb') as output:
+            output.write(b'maintenance-photo')
+        self.data_manager.inventory['MIC#01'] = SimpleNamespace(
+            asset_id='MIC#01',
+            maintenance_logs=[{
+                'id': 'log-storage-context',
+                'date': '2026-08-11',
+                'type': 'fault',
+                'description': 'Capsule noise found during inspection',
+                'media': [{
+                    'id': 'stored-photo',
+                    'name': 'capsule inspection.jpg',
+                    'path': 'maintenance_media/log-storage-context/stored-photo.jpg',
+                    'kind': 'image',
+                }],
+            }],
+        )
+
+        self.login_super_admin()
+        response = self.client.get('/api/company-storage?refresh=1')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        file_row = next(
+            item for item in response.get_json()['data']['largestFiles']
+            if item['name'] == 'stored-photo.jpg'
+        )
+        self.assertEqual(file_row['displayName'], 'capsule inspection.jpg')
+        self.assertEqual(
+            file_row['contextLabel'],
+            'Maintenance log for asset MIC#01',
+        )
+        self.assertIn('2026-08-11', file_row['contextDetail'])
 
     def test_company_storage_breakdown_is_owner_only(self):
         with self.client.session_transaction() as session:

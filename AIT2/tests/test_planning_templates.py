@@ -139,14 +139,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('id="plan-page-root"', page)
 
     def test_event_plan_actions_open_new_workspace(self):
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn(
             "planPageState.eventId = Number(eventId) || null;\n"
@@ -156,14 +149,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('Manage Assets', script)
 
     def test_plan_action_identifiers_escape_apostrophes(self):
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn(".replace(/'/g, '%27')", script)
         self.assertIn(
@@ -172,14 +158,7 @@ class PlanningTemplateTests(unittest.TestCase):
         )
 
     def test_plan_asset_search_includes_each_asset_description(self):
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn('function planAvailableModelSearchText(group)', script)
         self.assertIn("String(asset?.description || '').trim()", script)
@@ -197,14 +176,7 @@ class PlanningTemplateTests(unittest.TestCase):
         )
 
     def test_event_workspaces_offer_consolidated_room_drag_and_delete_controls(self):
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn("EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__'", script)
         self.assertIn('All requirements', script)
@@ -783,14 +755,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("showSection('prepare')", page)
         self.assertIn('Prepare (Legacy)', page)
 
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn('async function loadPrepareNewPage()', script)
         self.assertIn('async function prepareNewApplyRealtimeEvent(event)', script)
@@ -850,14 +815,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('generateExcelBtn', page)
         self.assertNotIn("generateDeliveryOrder('excel')", page)
 
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'static',
-            'js',
-            'app.js',
-        )
-        with open(script_path, encoding='utf-8') as script_file:
-            script = script_file.read()
+        script = APP_BUNDLE_SOURCE
 
         self.assertIn('function getDeliveryOrderAssetCatalog()', script)
         self.assertIn("id: 'doCatalogSearch'", script)
@@ -869,6 +827,10 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('data-custom-id=', script)
         self.assertIn('function removeDeliveryOrderItem(eventId, { key, kind, customId })', script)
         self.assertIn('function removeDeliveryOrderRow(button)', script)
+        self.assertIn('function normaliseDoOrdering(items, storedOrdering = [])', script)
+        self.assertIn("catalogKey: `inventory|${key}`", script)
+        self.assertIn('sourceAssetIds: [...(selected?.sourceAssetIds || [])]', script)
+        self.assertIn('function mergeDoWorkspaceConflict(', script)
         self.assertIn('onclick="return removeDeliveryOrderRow(this)"', script)
         self.assertIn('state.deleted[key] = true;', script)
         self.assertIn('item.id || `legacy-${dept}-${index}`', script)
@@ -942,7 +904,17 @@ class PlanningTemplateTests(unittest.TestCase):
             json=workspace,
         )
         self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
-        self.assertEqual(saved.get_json()['data']['document']['doNumber'], 'DO-TEST-01')
+        saved_workspace = saved.get_json()['data']
+        self.assertEqual(saved_workspace['document']['doNumber'], 'DO-TEST-01')
+        self.assertEqual(saved_workspace['documentVersion'], 1)
+
+        stale = self.client.put(
+            f'/api/events/{self.event.event_id}/delivery-order',
+            json={**workspace, 'expectedVersion': 0},
+        )
+        self.assertEqual(stale.status_code, 409, stale.get_data(as_text=True))
+        self.assertEqual(stale.get_json()['code'], 'document_version_conflict')
+        self.assertEqual(stale.get_json()['data']['document']['doNumber'], 'DO-TEST-01')
         self.assertEqual(self.event.asset_models, original_models)
         self.assertEqual(self.event.subprojects, original_rooms)
 
@@ -955,9 +927,14 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(reloaded.events[self.event.event_id].asset_models, original_models)
         self.assertEqual(reloaded.events[self.event.event_id].subprojects, original_rooms)
 
-        cleared = self.client.delete(f'/api/events/{self.event.event_id}/delivery-order')
+        cleared = self.client.delete(
+            f'/api/events/{self.event.event_id}/delivery-order?expectedVersion=1'
+        )
         self.assertEqual(cleared.status_code, 200, cleared.get_data(as_text=True))
-        self.assertEqual(cleared.get_json()['data'], {})
+        cleared_workspace = cleared.get_json()['data']
+        self.assertEqual(cleared_workspace['documentVersion'], 2)
+        self.assertNotIn('document', cleared_workspace)
+        self.assertNotIn('custom', cleared_workspace)
 
     def test_template_crud_is_company_local(self):
         self.login('admin')
