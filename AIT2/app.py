@@ -110,6 +110,7 @@ from workforce import (
     money,
     mutate_workforce,
     new_id,
+    normalize_call_times,
     normalize_phone,
     now_iso,
     save_upload,
@@ -117,6 +118,7 @@ from workforce import (
     upload_absolute_path,
     worker_submissions,
 )
+from workforce_schedule import build_workforce_schedule_pdf
 
 
 def _load_local_env_file():
@@ -7194,7 +7196,13 @@ def _worker_upload_limits(workforce, event_id, freelancer_id):
         if isinstance(row, dict) and row.get('status') != 'Denied'
     ]
     active_claim_rows = active_claims(rows)
-    invoice_limit = 1 + extra_invoices
+    is_app_user = any(
+        _workforce_assignment_subject_id(row) == str(freelancer_id)
+        and str(row.get('subjectType') or '').lower() == 'app-user'
+        for row in event_assignments(workforce, event_id)
+        if isinstance(row, dict)
+    )
+    invoice_limit = (0 if is_app_user else 1) + extra_invoices
     claim_limit = 5 + extra_claims
     return {
         'invoiceLimit': invoice_limit,
@@ -7434,9 +7442,21 @@ def _find_worker_context(token, event_id=None):
 
 
 def _department_codes_for_manager(manager):
-    departments = getattr(manager, 'departments', {}) or {}
-    if not departments and hasattr(manager, 'load_departments'):
-        departments = manager.load_departments()
+    departments = {}
+    if manager is _current_data_manager_object():
+        departments = _load_departments()
+    elif hasattr(manager, 'load_departments'):
+        try:
+            departments = manager.load_departments() or {}
+        except Exception as exc:
+            logger.warning('Failed to load configured departments: %s', exc)
+    manager_departments = getattr(manager, 'departments', {}) or {}
+    if departments:
+        departments = dict(departments)
+        for code, row in manager_departments.items():
+            departments.setdefault(code, row)
+    else:
+        departments = manager_departments
     if not departments:
         filepath = os.path.join(
             getattr(manager, 'data_folder', '') or '', 'Departments.csv'
@@ -7603,11 +7623,7 @@ def _workforce_submission_expectation(workforce, event_id, subject_id):
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
-        assigned_subject_id = str(
-            assignment.get('freelancerId')
-            or assignment.get('vendorId')
-            or ''
-        )
+        assigned_subject_id = _workforce_assignment_subject_id(assignment)
         if assigned_subject_id != str(subject_id):
             continue
         assignment_work_dates.update(
@@ -7739,6 +7755,10 @@ def _admin_submission_rows(manager=None, workforce=None):
             if not isinstance(subject, dict) or not subject.get('id'):
                 continue
             subjects[str(subject['id'])] = (subject, subject_type)
+    for app_user in _workforce_app_users(manager):
+        username = str(app_user.get('username') or '')
+        if username:
+            subjects[f'user:{username}'] = (app_user, 'app-user')
 
     context_cache = {}
 
@@ -7755,11 +7775,7 @@ def _admin_submission_rows(manager=None, workforce=None):
             for assignment in event_assignments(workforce, event_id)
             if (
                 isinstance(assignment, dict)
-                and str(
-                    assignment.get('freelancerId')
-                    or assignment.get('vendorId')
-                    or ''
-                ) == str(subject_id)
+                and _workforce_assignment_subject_id(assignment) == str(subject_id)
                 and str(assignment.get('department') or '').strip()
             )
         })
@@ -7852,11 +7868,7 @@ def _admin_submission_rows(manager=None, workforce=None):
         if not event or not isinstance(assignments, list):
             continue
         assigned_subject_ids = {
-            str(
-                assignment.get('freelancerId')
-                or assignment.get('vendorId')
-                or ''
-            )
+            _workforce_assignment_subject_id(assignment)
             for assignment in assignments
             if isinstance(assignment, dict)
         }
@@ -7864,6 +7876,10 @@ def _admin_submission_rows(manager=None, workforce=None):
             if not subject_id or subject_id not in subjects:
                 continue
             submissions = worker_submissions(workforce, event_id, subject_id)
+            if _worker_upload_limits(
+                workforce, event_id, subject_id
+            )['invoiceLimit'] <= 0:
+                continue
             active_invoices = [
                 record
                 for record in submissions.get('invoices', [])
@@ -8059,6 +8075,18 @@ def _admin_vendor_payload(vendor, workforce):
 
 
 def _workforce_subject(workforce, subject_id):
+    subject_key = str(subject_id or '').strip()
+    if subject_key.startswith('user:'):
+        username = subject_key[5:]
+        user = data_manager.users.get(username) if data_manager else None
+        if user and getattr(user, 'is_active', True):
+            return {
+                'id': subject_key,
+                'username': username,
+                'name': str(getattr(user, 'name', '') or username),
+                'phone': str(getattr(user, 'phone', '') or ''),
+                'active': True,
+            }, 'app-user'
     worker = find_by_id(workforce.get('freelancers'), subject_id)
     if worker:
         return worker, 'worker'
@@ -8118,6 +8146,87 @@ def _workforce_subproject_options(event):
     return options
 
 
+def _normalise_workforce_work_dates(values):
+    """Return unique ISO work dates without limiting them to the event window."""
+    if not isinstance(values, list):
+        return []
+    dates = []
+    for value in values:
+        date_value = str(value or '').strip()
+        if not date_value:
+            continue
+        try:
+            parsed = datetime.strptime(date_value, '%Y-%m-%d')
+        except ValueError as exc:
+            raise ValueError(f'{date_value} is not a valid working date') from exc
+        if parsed.strftime('%Y-%m-%d') != date_value:
+            raise ValueError(f'{date_value} is not a valid working date')
+        dates.append(date_value)
+    return sorted(set(dates))
+
+
+def _workforce_assignment_work_dates(assignment, event):
+    """Resolve explicit dates, with an event-date fallback for legacy rows."""
+    try:
+        explicit = _normalise_workforce_work_dates(assignment.get('workDates'))
+    except ValueError:
+        explicit = []
+    if explicit:
+        return explicit
+
+    start_value = _event_date_for_input(event.start_date)
+    end_value = _event_date_for_input(event.end_date)
+    try:
+        start_date = datetime.strptime(start_value, '%Y-%m-%d')
+        end_date = datetime.strptime(end_value, '%Y-%m-%d')
+    except (TypeError, ValueError):
+        return []
+    if end_date < start_date:
+        end_date = start_date
+    event_dates = [
+        (start_date + timedelta(days=offset)).strftime('%Y-%m-%d')
+        for offset in range((end_date - start_date).days + 1)
+    ]
+    try:
+        requested_days = max(0, int(assignment.get('days') or 0))
+    except (TypeError, ValueError):
+        requested_days = 0
+    return event_dates[:requested_days]
+
+
+def _workforce_assignment_subject_id(assignment):
+    subject_type = str(assignment.get('subjectType') or '').strip().lower()
+    if subject_type == 'app-user':
+        username = str(assignment.get('userUsername') or '').strip()
+        return f'user:{username}' if username else ''
+    subject_id = str(
+        assignment.get('freelancerId') or assignment.get('vendorId') or ''
+    ).strip()
+    return subject_id
+
+
+def _workforce_app_users(manager=None):
+    manager = manager or _current_data_manager_object()
+    current_username = str(session.get('user') or '').strip()
+    can_reveal_owner = _current_user_is_owner()
+    rows = []
+    for username, user in getattr(manager, 'users', {}).items():
+        role = _effective_user_role(user)
+        if role == 'owner' and not (
+            can_reveal_owner and str(username) == current_username
+        ):
+            continue
+        if not getattr(user, 'is_active', True):
+            continue
+        rows.append({
+            'username': str(username),
+            'name': str(getattr(user, 'name', '') or username),
+            'phone': str(getattr(user, 'phone', '') or ''),
+            'role': 'admin' if role == 'owner' else role,
+        })
+    return sorted(rows, key=lambda row: row['name'].lower())
+
+
 def _workforce_subproject_details(event, requested_id=None):
     """Validate a room ID and return its canonical ID and display name."""
     options = _workforce_subproject_options(event)
@@ -8161,8 +8270,6 @@ def _workforce_worker_date_conflicts(workforce, event_id, manager=None):
     current_event = manager.events.get(int(event_id)) if manager else None
     if not current_event:
         return {}
-    start_date = _event_date_for_input(current_event.start_date)
-    end_date = _event_date_for_input(current_event.end_date)
     conflicts = {}
     assignments_by_event = workforce.get('assignments') or {}
     for other_event_key, rows in assignments_by_event.items():
@@ -8175,12 +8282,12 @@ def _workforce_worker_date_conflicts(workforce, event_id, manager=None):
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict) or row.get('subjectType') == 'vendor':
                 continue
-            worker_id = str(row.get('freelancerId') or '').strip()
+            worker_id = _workforce_assignment_subject_id(row)
             if not worker_id:
                 continue
             for date_value in sorted(set(row.get('workDates') or [])):
                 date_value = str(date_value or '').strip()
-                if not date_value or date_value < start_date or date_value > end_date:
+                if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date_value):
                     continue
                 date_rows = conflicts.setdefault(worker_id, {}).setdefault(
                     date_value, []
@@ -8239,8 +8346,17 @@ def _admin_workforce_payload(event_id, manager=None):
         if not isinstance(stored_row, dict):
             continue
         row = _workforce_row_with_subproject(stored_row, event, subprojects)
+        row['workDates'] = _workforce_assignment_work_dates(row, event)
+        row['days'] = len(row['workDates'])
+        row['callTimes'] = {
+            date_value: call_time
+            for date_value, call_time in normalize_call_times(
+                row.get('callTimes')
+            ).items()
+            if date_value in row['workDates']
+        }
         worker_conflicts = worker_date_conflicts.get(
-            str(row.get('freelancerId') or ''), {}
+            _workforce_assignment_subject_id(row), {}
         )
         row['dateConflicts'] = [
             conflict
@@ -8273,6 +8389,12 @@ def _admin_workforce_payload(event_id, manager=None):
             and (row.get('freelancerId') or row.get('vendorId'))
         )
     }
+    freelancer_ids.update(
+        _workforce_assignment_subject_id(row)
+        for row in assignments
+        if isinstance(row, dict) and row.get('subjectType') == 'app-user'
+    )
+    freelancer_ids.discard('')
     freelancer_ids.update(str(key) for key in event_submission_rows)
     for freelancer_id in freelancer_ids:
         upload_allowances[freelancer_id] = _worker_upload_limits(
@@ -8298,6 +8420,7 @@ def _admin_workforce_payload(event_id, manager=None):
             for row in workforce.get('freelancers', [])
             if isinstance(row, dict)
         ],
+        'appUsers': _workforce_app_users(manager),
         'vendors': [
             _admin_vendor_payload(row, workforce)
             for row in workforce.get('vendors', [])
@@ -8338,12 +8461,9 @@ def _workforce_financial_closure_complete(
         else load_workforce(_workforce_folder(manager))
     )
     subject_ids = {
-        str(row.get('freelancerId') or row.get('vendorId') or '')
+        _workforce_assignment_subject_id(row)
         for row in event_assignments(workforce, event_id)
-        if (
-            isinstance(row, dict)
-            and (row.get('freelancerId') or row.get('vendorId'))
-        )
+        if isinstance(row, dict) and _workforce_assignment_subject_id(row)
     }
     if not subject_ids:
         return True
@@ -8355,7 +8475,8 @@ def _workforce_financial_closure_complete(
             for row in rows.get('invoices', [])
             if isinstance(row, dict) and row.get('status') != 'Denied'
         ]
-        if not invoices:
+        limits = _worker_upload_limits(workforce, event_id, subject_id)
+        if limits['invoiceLimit'] > 0 and not invoices:
             return False
 
         payable_rows = invoices + [
@@ -8368,7 +8489,7 @@ def _workforce_financial_closure_complete(
     return True
 
 
-def _workforce_changed(event_id, action):
+def _workforce_changed(event_id, action, details=None):
     manager = _current_data_manager_object()
     event = getattr(manager, 'events', {}).get(int(event_id)) if manager else None
     if event:
@@ -8383,10 +8504,13 @@ def _workforce_changed(event_id, action):
                 'oldState': old_state,
                 'newState': event.state,
             })
-    mark_realtime_change(
-        'workforce',
-        {'eventId': int(event_id), 'action': str(action or 'updated')},
-    )
+    change_details = {
+        'eventId': int(event_id),
+        'action': str(action or 'updated'),
+    }
+    if isinstance(details, dict):
+        change_details.update(details)
+    mark_realtime_change('workforce', change_details)
 
 
 @app.route('/worker')
@@ -9206,6 +9330,146 @@ def get_event_workforce(event_id):
         return jsonify({'error': 'Failed to load manpower and transport'}), 500
 
 
+@app.route(
+    '/api/events/<int:event_id>/workforce/schedule/call-times',
+    methods=['PATCH'],
+)
+@require_admin
+def update_workforce_schedule_call_times(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    requested_updates = payload.get('updates')
+    if not isinstance(requested_updates, list) or not requested_updates:
+        return jsonify({'error': 'Choose at least one schedule entry'}), 400
+    if len(requested_updates) > 50000:
+        return jsonify({'error': 'Too many schedule entries in one update'}), 400
+
+    normalized_updates = []
+    errors = []
+    with mutate_workforce(_workforce_folder()) as workforce:
+        assignments = {
+            str(row.get('id')): row
+            for row in event_assignments(workforce, event_id)
+            if isinstance(row, dict) and row.get('id')
+        }
+        for index, requested in enumerate(requested_updates):
+            if not isinstance(requested, dict):
+                errors.append(f'Entry {index + 1} is invalid')
+                continue
+            assignment_id = str(requested.get('assignmentId') or '').strip()
+            date_value = str(requested.get('date') or '').strip()
+            call_time = str(requested.get('callTime') or '').strip()
+            assignment = assignments.get(assignment_id)
+            if not assignment:
+                errors.append(f'Assignment {assignment_id or index + 1} was not found')
+                continue
+            if (
+                assignment.get('subjectType') == 'vendor'
+                and assignment.get('providerType') == 'service'
+            ):
+                errors.append('Service-only vendors do not have manpower call times')
+                continue
+            valid_dates = _workforce_assignment_work_dates(assignment, event)
+            if date_value not in valid_dates:
+                errors.append(f'{date_value or "Date"} is not a working date for this assignment')
+                continue
+            if call_time and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', call_time):
+                errors.append(f'{call_time} is not a valid 24-hour call time')
+                continue
+            call_times = normalize_call_times(assignment.get('callTimes'))
+            if call_time:
+                call_times[date_value] = call_time
+            else:
+                call_times.pop(date_value, None)
+            assignment['callTimes'] = call_times
+            assignment['updatedAt'] = now_iso()
+            normalized_updates.append({
+                'assignmentId': assignment_id,
+                'date': date_value,
+                'callTime': call_time,
+            })
+        if errors:
+            return jsonify({'error': errors[0], 'details': errors}), 400
+
+    saved = load_workforce(_workforce_folder())
+    if len(normalized_updates) == 1:
+        update = normalized_updates[0]
+        log_action(
+            f"Set manpower call time to {update['callTime'] or 'not set'} "
+            f"on {update['date']} for event {event_id}"
+        )
+    else:
+        call_times = {row['callTime'] for row in normalized_updates}
+        time_label = next(iter(call_times)) if len(call_times) == 1 else 'multiple times'
+        log_action(
+            f"Updated {len(normalized_updates)} manpower schedule entries "
+            f"to {time_label or 'not set'} for event {event_id}"
+        )
+    _workforce_changed(
+        event_id,
+        'schedule-call-times-updated',
+        {'updates': normalized_updates},
+    )
+    return jsonify({
+        'success': True,
+        'data': {
+            'updates': normalized_updates,
+            'updatedAt': saved.get('updatedAt', ''),
+        },
+    })
+
+
+@app.route('/api/events/<int:event_id>/workforce/schedule.pdf', methods=['GET'])
+@require_admin
+def download_workforce_schedule_pdf(event_id):
+    if event_id not in data_manager.events:
+        return jsonify({'error': 'Event not found'}), 404
+    scope = str(request.args.get('scope') or 'event').strip().lower()
+    subject_id = str(request.args.get('subjectId') or '').strip() if scope == 'worker' else ''
+    date_filter = str(request.args.get('date') or '').strip() if scope == 'date' else ''
+    show_rates = str(request.args.get('showRates') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
+    report_data = _admin_workforce_payload(event_id)
+    if subject_id and not any(
+        _workforce_assignment_subject_id(row) == subject_id
+        for row in report_data.get('assignments', [])
+        if isinstance(row, dict)
+    ):
+        return jsonify({'error': 'Worker or vendor is not assigned to this event'}), 404
+    if date_filter and date_filter not in {
+        date_value
+        for row in report_data.get('assignments', [])
+        for date_value in row.get('workDates', [])
+    }:
+        return jsonify({'error': 'No manpower is assigned on this date'}), 404
+    pdf_settings = _normalise_pdf_settings(_load_pdf_settings())
+    pdf_bytes = build_workforce_schedule_pdf(
+        report_data,
+        company=pdf_settings,
+        logo_path=_pdf_logo_path(pdf_settings),
+        subject_id=subject_id,
+        date_filter=date_filter,
+        show_rates=show_rates,
+        generated_by=_user_display_name(session.get('user')),
+    )
+    event_name = sanitize_filename(
+        str(report_data.get('event', {}).get('name') or f'Event-{event_id}')
+    )
+    suffix = 'worker-schedule' if subject_id else (
+        f'{date_filter}-schedule' if date_filter else 'event-schedule'
+    )
+    from io import BytesIO
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f'{event_name}-{suffix}.pdf',
+    )
+
+
 @app.route('/api/events/<int:event_id>/overview', methods=['GET'])
 @require_auth
 @require_event_access
@@ -9225,27 +9489,35 @@ def get_event_operational_overview(event_id):
         for row in workforce.get('vendors', [])
         if isinstance(row, dict)
     }
+    app_users = {
+        str(row.get('username') or ''): row
+        for row in _workforce_app_users()
+        if isinstance(row, dict)
+    }
     crew = []
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
-        subject_id = str(
-            assignment.get('vendorId') or assignment.get('freelancerId') or ''
-        )
+        subject_id = _workforce_assignment_subject_id(assignment)
         is_vendor = bool(
             assignment.get('vendorId')
             or assignment.get('subjectType') == 'vendor'
         )
-        subject = (vendors if is_vendor else freelancers).get(subject_id, {})
+        is_app_user = assignment.get('subjectType') == 'app-user'
+        subject = (
+            app_users.get(str(assignment.get('userUsername') or ''), {})
+            if is_app_user
+            else (vendors if is_vendor else freelancers).get(subject_id, {})
+        )
         crew.append({
             'id': str(assignment.get('id') or ''),
             'name': str(subject.get('name') or 'Unassigned'),
-            'subjectType': 'vendor' if is_vendor else 'worker',
-            'department': str(assignment.get('department') or 'General'),
+            'subjectType': 'app-user' if is_app_user else ('vendor' if is_vendor else 'worker'),
+            'department': str(assignment.get('department') or ('FT' if is_app_user else 'General')),
             'role': str(
                 assignment.get('serviceName')
                 or assignment.get('roleName')
-                or ('Vendor' if is_vendor else 'Worker')
+                or ('Vendor' if is_vendor else ('Full-time' if is_app_user else 'Worker'))
             ),
             'pax': max(0, _safe_int(assignment.get('pax'), 0)),
             'days': max(0, _safe_int(assignment.get('days'), 0)),
@@ -10057,6 +10329,84 @@ def delete_event_workforce_department(event_id, department_code):
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
+@app.route(
+    '/api/events/<int:event_id>/workforce/staff-assignments',
+    methods=['POST'],
+)
+@require_admin
+def create_workforce_staff_assignment(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    username = str(payload.get('username') or '').strip()
+    department = _normalise_department_code(payload.get('department')) or 'FT'
+    role_name = str(payload.get('roleName') or '').strip()
+    daily_rate = money(payload.get('dailyRate'))
+    call_time = str(payload.get('callTime') or '').strip()
+    try:
+        work_dates = _normalise_workforce_work_dates(payload.get('workDates'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not username or not work_dates:
+        return jsonify({
+            'error': 'App user, department and working dates are required'
+        }), 400
+    if call_time and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', call_time):
+        return jsonify({'error': 'Enter a valid 24-hour call time'}), 400
+    allowed_usernames = {
+        row['username'] for row in _workforce_app_users()
+    }
+    if username not in allowed_usernames:
+        return jsonify({'error': 'Active app user not found'}), 404
+    try:
+        subproject_id, subproject_name = _workforce_subproject_details(
+            event, payload.get('subprojectId')
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    with mutate_workforce(_workforce_folder()) as workforce:
+        departments, _all_departments = _event_workforce_departments(
+            event_id,
+            event,
+            _current_data_manager_object(),
+            workforce,
+        )
+        if department != 'FT' and department not in {
+            row['code'] for row in departments
+        }:
+            return jsonify({
+                'error': 'Choose an event asset department or add one manually'
+            }), 400
+        assignment = {
+            'id': new_id('assignment'),
+            'subjectType': 'app-user',
+            'userUsername': username,
+            'department': department,
+            'subprojectId': subproject_id,
+            'roleName': role_name,
+            'days': len(work_dates),
+            'workDates': work_dates,
+            'dailyRate': daily_rate,
+            'callTimes': {
+                date_value: call_time for date_value in work_dates
+            } if call_time else {},
+            'createdAt': now_iso(),
+        }
+        workforce.setdefault('assignments', {}).setdefault(
+            str(event_id), []
+        ).append(assignment)
+    display_name = _user_display_name(username) or username
+    log_action(
+        f"Assigned full-time staff {display_name} to event {event_id}"
+        f"{f' as {role_name}' if role_name else ''}"
+        f"{f' in {subproject_name}' if subproject_name else ''}"
+    )
+    _workforce_changed(event_id, 'staff-assignment-created')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
 @app.route('/api/events/<int:event_id>/workforce/assignments', methods=['POST'])
 @require_admin
 def create_workforce_assignment(event_id):
@@ -10070,11 +10420,10 @@ def create_workforce_assignment(event_id):
     department = _normalise_department_code(payload.get('department'))
     role_id = str(payload.get('roleId') or '').strip()
     custom_role = str(payload.get('customRole') or '').strip()
-    work_dates = [
-        str(value or '').strip()
-        for value in payload.get('workDates', [])
-        if str(value or '').strip()
-    ] if isinstance(payload.get('workDates'), list) else []
+    try:
+        work_dates = _normalise_workforce_work_dates(payload.get('workDates'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     try:
         days = len(work_dates) or int(payload.get('days') or 0)
     except (TypeError, ValueError):
@@ -10091,13 +10440,6 @@ def create_workforce_assignment(event_id):
         )
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    start_date = _event_date_for_input(event.start_date)
-    end_date = _event_date_for_input(event.end_date)
-    if work_dates and any(
-        value < start_date or value > end_date for value in work_dates
-    ):
-        return jsonify({'error': 'Choose working dates within the event'}), 400
-
     with mutate_workforce(_workforce_folder()) as workforce:
         allowed_departments, _all_departments = _event_workforce_departments(
             event_id,
@@ -10211,6 +10553,7 @@ def create_workforce_assignment(event_id):
                 'workDates': sorted(set(work_dates)),
                 'dailyRate': daily_rate,
                 'notes': str(payload.get('notes') or '').strip(),
+                'callTimes': {},
                 'createdAt': now_iso(),
             }
             workforce.setdefault('assignments', {}).setdefault(
@@ -10237,11 +10580,10 @@ def update_workforce_assignment(event_id, assignment_id):
     department = _normalise_department_code(payload.get('department'))
     role_name = str(payload.get('customRole') or '').strip()
     daily_rate = money(payload.get('dailyRate'))
-    work_dates = [
-        str(value or '').strip()
-        for value in payload.get('workDates', [])
-        if str(value or '').strip()
-    ] if isinstance(payload.get('workDates'), list) else []
+    try:
+        work_dates = _normalise_workforce_work_dates(payload.get('workDates'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     try:
         days = len(work_dates) or int(payload.get('days') or 0)
     except (TypeError, ValueError):
@@ -10259,12 +10601,6 @@ def update_workforce_assignment(event_id, assignment_id):
         )
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    start_date = _event_date_for_input(event.start_date)
-    end_date = _event_date_for_input(event.end_date)
-    if work_dates and any(
-        value < start_date or value > end_date for value in work_dates
-    ):
-        return jsonify({'error': 'Choose working dates within the event'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
         assignment = find_by_id(
             event_assignments(workforce, event_id), assignment_id
@@ -10287,6 +10623,13 @@ def update_workforce_assignment(event_id, assignment_id):
                 'providerType': provider_type,
                 'days': days,
                 'workDates': sorted(set(work_dates)),
+                'callTimes': {
+                    date_value: call_time
+                    for date_value, call_time in normalize_call_times(
+                        assignment.get('callTimes')
+                    ).items()
+                    if date_value in work_dates
+                },
                 'updatedAt': now_iso(),
             }
             if provider_type == 'manpower':
@@ -10326,6 +10669,13 @@ def update_workforce_assignment(event_id, assignment_id):
                 })
             assignment.update(updates)
         else:
+            retained_call_times = {
+                date_value: call_time
+                for date_value, call_time in normalize_call_times(
+                    assignment.get('callTimes')
+                ).items()
+                if date_value in work_dates
+            }
             assignment.update({
                 'department': department,
                 'subprojectId': subproject_id,
@@ -10333,6 +10683,7 @@ def update_workforce_assignment(event_id, assignment_id):
                 'days': days,
                 'workDates': sorted(set(work_dates)),
                 'dailyRate': daily_rate,
+                'callTimes': retained_call_times,
                 'updatedAt': now_iso(),
             })
     log_action(
@@ -10358,15 +10709,13 @@ def delete_workforce_assignment(event_id, assignment_id):
         assignment = find_by_id(rows, assignment_id)
         if not assignment:
             return jsonify({'error': 'Assignment not found'}), 404
-        subject_id = str(
-            assignment.get('freelancerId') or assignment.get('vendorId') or ''
-        )
+        subject_id = _workforce_assignment_subject_id(assignment)
         kept_rows = [
             row for row in rows
             if not isinstance(row, dict) or str(row.get('id')) != str(assignment_id)
         ]
         still_assigned = any(
-            str(row.get('freelancerId') or row.get('vendorId') or '') == subject_id
+            _workforce_assignment_subject_id(row) == subject_id
             for row in kept_rows
             if isinstance(row, dict)
         )
@@ -10451,7 +10800,7 @@ def add_workforce_upload_allowance(event_id, freelancer_id):
         if not freelancer:
             return jsonify({'error': 'Worker or vendor not found'}), 404
         assigned = any(
-            str(row.get('freelancerId') or '') == str(freelancer_id)
+            _workforce_assignment_subject_id(row) == str(freelancer_id)
             for row in event_assignments(workforce, event_id)
             if isinstance(row, dict)
         )
@@ -10469,7 +10818,11 @@ def add_workforce_upload_allowance(event_id, freelancer_id):
             limits['activeInvoices'] if kind == 'invoice'
             else limits['activeClaims']
         )
-        base_limit = 1 if kind == 'invoice' else 5
+        base_limit = (
+            0 if kind == 'invoice' and subject_type == 'app-user'
+            else 1 if kind == 'invoice'
+            else 5
+        )
         minimum_extra = max(0, active_count - base_limit)
         current_extra = max(0, int(allowance.get(key) or 0))
         allowance[key] = max(minimum_extra, current_extra + delta)
@@ -10518,7 +10871,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
                 row for row in event_assignments(workforce, event_id)
                 if (
                     isinstance(row, dict)
-                    and str(row.get('freelancerId') or '') == str(freelancer_id)
+                    and _workforce_assignment_subject_id(row) == str(freelancer_id)
                 )
             ]
             if not assignments:
@@ -13971,6 +14324,8 @@ def _render_app_page(section):
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
+        workforce_schedule_js_version=_static_asset_version('js/workforce-schedule.js'),
+        workforce_schedule_css_version=_static_asset_version('css/workforce-schedule.css'),
         vehicles_js_version=_static_asset_version('js/vehicles.js'),
         vehicles_css_version=_static_asset_version('css/vehicles.css'),
         accounting_js_version=_static_asset_version('js/accounting.js'),
@@ -14941,6 +15296,10 @@ def create_department():
 
         departments[code] = _department_record(code, name or code, colour)
         _save_departments(departments)
+        mark_realtime_change('departments', {
+            'action': 'created',
+            'department': departments[code],
+        })
 
         log_action(f"Created department {code} ({name or code})")
 
@@ -15050,6 +15409,11 @@ def update_department(department_code):
                 data_manager.save_inventory()
 
         invalidate_cache()
+        mark_realtime_change('departments', {
+            'action': 'updated',
+            'oldCode': old_code,
+            'department': departments[new_code],
+        })
 
         log_action(
             f"Updated department {old_code} -> {new_code}; "
@@ -15101,6 +15465,10 @@ def delete_department(department_code):
         removed = departments.pop(code)
         _save_departments(departments)
         invalidate_cache()
+        mark_realtime_change('departments', {
+            'action': 'deleted',
+            'departmentCode': code,
+        })
         log_action(f"Deleted department {code} ({removed.get('name') or code})")
 
         return jsonify({'success': True, 'message': 'Department deleted successfully'})

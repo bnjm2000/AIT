@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import re
@@ -65,6 +66,21 @@ def normalize_phone(value: str) -> str:
     if len(digits) == 8:
         digits = f"65{digits}"
     return f"+{digits}"
+
+
+def normalize_call_times(value) -> dict:
+    """Return valid ISO-date to 24-hour call-time mappings."""
+    source = value if isinstance(value, dict) else {}
+    normalized = {}
+    for raw_date, raw_time in source.items():
+        date_value = str(raw_date or "").strip()
+        time_value = str(raw_time or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+            continue
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time_value):
+            continue
+        normalized[date_value] = time_value
+    return normalized
 
 
 def empty_workforce() -> dict:
@@ -148,6 +164,12 @@ def normalize_workforce(data) -> dict:
                 if str(value or "").strip()
             ]
             vendor.setdefault("active", True)
+    for assignments in normalized["assignments"].values():
+        for assignment in _list(assignments):
+            if isinstance(assignment, dict):
+                assignment["callTimes"] = normalize_call_times(
+                    assignment.get("callTimes")
+                )
     for vehicle in normalized["vehicles"]:
         if isinstance(vehicle, dict):
             vehicle.pop("capacity", None)
@@ -261,6 +283,16 @@ def _safe_original_name(filename: str) -> str:
     return (name or "upload")[:180]
 
 
+def _safe_storage_segment(value) -> str:
+    """Return a stable filesystem-safe segment without changing logical IDs."""
+    raw = str(value or "transport").strip() or "transport"
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", raw).strip("._") or "item"
+    if safe == raw:
+        return safe
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
+    return f"{safe}-{digest}"
+
+
 def _validate_magic(content: bytes, extension: str) -> bool:
     if extension == ".pdf":
         return content.startswith(b"%PDF")
@@ -315,7 +347,7 @@ def save_upload(
     relative_folder = os.path.join(
         UPLOAD_FOLDERNAME,
         str(event_id),
-        str(freelancer_id or "transport"),
+        _safe_storage_segment(freelancer_id),
     )
     document_root = os.path.abspath(documents_root_for_data_folder(data_folder))
     absolute_folder = os.path.abspath(os.path.join(document_root, relative_folder))
@@ -954,12 +986,19 @@ def submission_totals(data: dict, event_id) -> dict:
     for assignment in assignments:
         if not isinstance(assignment, dict):
             continue
-        freelancer_id = str(
-            assignment.get("freelancerId")
-            or assignment.get("vendorId")
-            or ""
+        if assignment.get("subjectType") == "app-user":
+            username = str(assignment.get("userUsername") or "")
+            freelancer_id = f"user:{username}" if username else ""
+        else:
+            freelancer_id = str(
+                assignment.get("freelancerId")
+                or assignment.get("vendorId")
+                or ""
+            )
+        department = str(
+            assignment.get("department")
+            or ("FT" if assignment.get("subjectType") == "app-user" else "Unassigned")
         )
-        department = str(assignment.get("department") or "Unassigned")
         assignment_departments.setdefault(freelancer_id, [])
         if department not in assignment_departments[freelancer_id]:
             assignment_departments[freelancer_id].append(department)

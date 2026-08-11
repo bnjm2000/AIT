@@ -3,6 +3,7 @@ const workforcePageState = {
   eventOptions: [],
   data: null,
   loading: false,
+  loadRequestId: 0,
   reviewSubmissionId: null,
   denialSubmissionId: null,
   reviewDenialPending: false,
@@ -13,6 +14,7 @@ const workforcePageState = {
   editingVendorId: null,
   selectedVendorId: null,
   editingVendorAssignmentId: null,
+  assignmentPrefillDates: [],
   vendorMemberSelection: new Set(),
   directoryMode: 'manage',
   directorySubject: 'worker',
@@ -34,6 +36,7 @@ const workforcePageState = {
     external: new Set()
   },
   transportDriverDetails: new Map(),
+  viewMode: 'assignments',
   activeSubprojectId: 'all',
   focusTarget: ''
 };
@@ -249,6 +252,18 @@ function wfFindVendor(id) {
   return wfDirectoryVendors().find(row => String(row.id) === String(id));
 }
 
+function wfFindAppUser(username) {
+  return (workforcePageState.data?.appUsers || [])
+    .find(row => String(row.username) === String(username));
+}
+
+function wfAssignmentSubjectId(row) {
+  if (String(row?.subjectType || '').toLowerCase() === 'app-user') {
+    return row?.userUsername ? `user:${row.userUsername}` : '';
+  }
+  return String(row?.freelancerId || row?.vendorId || '');
+}
+
 function wfFindSubmission(id) {
   for (const [freelancerId, rows] of Object.entries(workforcePageState.data?.submissions || {})) {
     for (const plural of ['invoices', 'claims']) {
@@ -307,6 +322,42 @@ function wfTintDepartmentSelect(select) {
   select.onchange = () => select.setAttribute('style', wfDepartmentStyle(select.value));
 }
 
+function workforceRoutePath(
+  eventId = workforcePageState.eventId,
+  viewMode = workforcePageState.viewMode
+) {
+  const id = Number(eventId);
+  if (!id) return '/manpower';
+  const view = viewMode === 'schedule' ? 'by-day' : 'by-department';
+  return `/manpower/${id}/${view}`;
+}
+
+function syncWorkforceRoute(options = {}) {
+  if (typeof updateAppDetailHistory !== 'function') return;
+  updateAppDetailHistory(
+    workforceRoutePath(),
+    options.replace === true
+  );
+}
+
+function restoreWorkforceRouteState(route) {
+  if (route?.kind !== 'workforce' || !Number(route.eventId)) return false;
+  const eventId = Number(route.eventId);
+  const eventChanged = eventId !== Number(workforcePageState.eventId);
+  workforcePageState.eventId = eventId;
+  workforcePageState.viewMode = route.viewMode === 'schedule'
+    ? 'schedule'
+    : 'assignments';
+  if (eventChanged) {
+    workforcePageState.data = null;
+    workforcePageState.activeSubprojectId = 'all';
+    if (typeof resetWorkforceScheduleFilters === 'function') {
+      resetWorkforceScheduleFilters();
+    }
+  }
+  return true;
+}
+
 function openEventWorkforce(eventId, focus = '') {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges are required');
@@ -315,13 +366,17 @@ function openEventWorkforce(eventId, focus = '') {
   workforcePageState.eventId = Number(eventId);
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
+  if (typeof resetWorkforceScheduleFilters === 'function') {
+    resetWorkforceScheduleFilters();
+  }
   workforcePageState.focusTarget = String(focus || '');
   showSection('workforce');
 }
 
 async function loadWorkforcePage() {
   const root = document.getElementById('workforce-page-root');
-  if (!root || workforcePageState.loading) return;
+  if (!root) return;
+  const requestId = ++workforcePageState.loadRequestId;
   workforcePageState.loading = true;
   if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading manpower and transport...</div>';
   try {
@@ -352,13 +407,22 @@ async function loadWorkforcePage() {
       root.innerHTML = '<div class="wf-panel wf-empty">Create an event before assigning manpower or transport.</div>';
       return;
     }
-    const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce`);
+    syncWorkforceRoute({ replace: true });
+    const eventId = Number(workforcePageState.eventId);
+    const response = await apiCall(`/api/events/${eventId}/workforce`);
+    if (
+      requestId !== workforcePageState.loadRequestId ||
+      eventId !== Number(workforcePageState.eventId)
+    ) return;
     workforcePageState.data = response.data;
     renderWorkforcePage();
   } catch (error) {
+    if (requestId !== workforcePageState.loadRequestId) return;
     root.innerHTML = `<div class="wf-panel wf-empty">Unable to load this page: ${wfEscape(error.message)}</div>`;
   } finally {
-    workforcePageState.loading = false;
+    if (requestId === workforcePageState.loadRequestId) {
+      workforcePageState.loading = false;
+    }
   }
 }
 
@@ -375,6 +439,10 @@ async function changeWorkforceEvent(eventId) {
   workforcePageState.eventId = id;
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
+  if (typeof resetWorkforceScheduleFilters === 'function') {
+    resetWorkforceScheduleFilters();
+  }
+  syncWorkforceRoute();
   await loadWorkforcePage();
 }
 
@@ -1032,6 +1100,52 @@ function wfWorkerHtml(freelancerId, assignments) {
   </article>`;
 }
 
+function wfAppUserHtml(subjectId, assignments) {
+  const username = String(assignments[0]?.userUsername || subjectId).replace(/^user:/, '');
+  const user = wfFindAppUser(username) || {
+    username,
+    name: username || 'Unknown app user',
+    phone: ''
+  };
+  const submissions = workforcePageState.data.submissions?.[subjectId] || {
+    invoices: [], claims: []
+  };
+  const limits = workforcePageState.data.uploadAllowances?.[subjectId] || {
+    invoiceLimit: 0, claimLimit: 5, activeInvoices: 0, activeClaims: 0,
+    invoiceSlotsRemaining: 0, claimSlotsRemaining: 5,
+    extraInvoices: 0, extraClaims: 0
+  };
+  const roles = assignments.map(row => `<span class="wf-assignment-chip">
+    <button class="wf-assignment-edit" type="button" title="Edit assignment"
+      onclick="openFullTimeStaffAssignment('${wfAttr(row.id)}')">
+      ${wfRoomBadge(row)}${wfEscape(row.roleName || 'Role not set')} &middot; ${row.days} day${Number(row.days) === 1 ? '' : 's'} &middot; ${row.dailyRate == null ? 'Rate not set' : `${wfMoney(row.dailyRate)}/day`}
+    </button>
+    <button type="button" title="Remove assignment" onclick="event.stopPropagation();deleteWorkforceAssignment('${wfAttr(row.id)}')">&times;</button>
+  </span>`).join('');
+  return `<article class="wf-worker wf-app-user">
+    <div class="wf-worker-identity"><div class="wf-worker-profile">
+      <span class="wf-avatar staff">${wfEscape(wfInitials(user.name))}</span>
+      <div><strong>${wfEscape(user.name)}</strong>
+        <small>${wfEscape(wfFormatPhone(user.phone) || 'No phone number')}</small>
+        <small>Full-time staff &middot; App user</small></div>
+    </div></div>
+    <div class="wf-worker-roles">
+      <div class="wf-column-heading"><strong>Role(s)</strong>
+        <button class="wf-link-button" type="button"
+          onclick="openFullTimeStaffAssignment('', '${wfAttr(username)}', '${wfAttr(assignments[0]?.department || '')}')">+ Add role</button></div>
+      <div class="wf-assignment-list">${roles}</div>
+    </div>
+    <section class="wf-submission-box"><header><span>Invoice &middot; ${limits.activeInvoices}/${limits.invoiceLimit}</span>
+      ${wfSlotControls(subjectId, 'invoice', limits)}</header>
+      ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice slot by default.</div>'}</section>
+    <section class="wf-submission-box"><header><span class="wf-claims-heading"><span>Claims &middot; ${limits.activeClaims}/${limits.claimLimit}</span>
+      ${wfClaimTotalMarkup(submissions.claims || [])}
+      ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, subjectId, assignments[0]?.department)}</span>
+      ${wfSlotControls(subjectId, 'claim', limits)}</header>
+      ${submissions.claims?.length ? submissions.claims.map(row => wfSubmissionRow(row, 'claim')).join('') : '<div class="wf-empty">No claims submitted.</div>'}</section>
+  </article>`;
+}
+
 function wfVendorHtml(vendorId, assignments) {
   const vendor = wfFindVendor(vendorId) || { id: vendorId, name: 'Unknown vendor' };
   const lastLogin = vendor.workerLastLoginAt
@@ -1087,7 +1201,10 @@ function wfVendorHtml(vendorId, assignments) {
 function wfDepartmentHtml(department, assignments) {
   const totals = workforcePageState.data.totals?.departments?.[department] || { invoice: 0, claims: 0, combined: 0 };
   const bySubject = {};
-  assignments.forEach(row => (bySubject[row.freelancerId || row.vendorId] ||= []).push(row));
+  assignments.forEach(row => {
+    const subjectId = wfAssignmentSubjectId(row);
+    if (subjectId) (bySubject[subjectId] ||= []).push(row);
+  });
   const subjectIds = Object.keys(bySubject);
   const count = subjectIds.reduce((total, subjectId) => {
     const rows = bySubject[subjectId] || [];
@@ -1116,10 +1233,11 @@ function wfDepartmentHtml(department, assignments) {
     <summary><span class="wf-department-title"><span class="wf-department-label">${wfEscape(department)} <small>${count} crew</small></span>
         <span class="wf-dept-status-summary">${statusBadges}</span></span>
       <span class="wf-department-header-actions">
-        <button class="wf-button primary" type="button"
+        ${department === 'FT' ? `<button class="wf-button primary" type="button"
+          onclick="event.preventDefault();event.stopPropagation();openFreelancerDirectory('assign','FT')">+ Add worker</button>` : `<button class="wf-button primary" type="button"
           onclick="event.preventDefault();event.stopPropagation();openFreelancerDirectory('assign','${wfAttr(department)}')">+ Add worker</button>
         <button class="wf-button" type="button"
-          onclick="event.preventDefault();event.stopPropagation();openVendorDirectory('${wfAttr(department)}')">+ Add Vendor</button>
+          onclick="event.preventDefault();event.stopPropagation();openVendorDirectory('${wfAttr(department)}')">+ Add Vendor</button>`}
         ${canRemoveDepartment
           ? `<button class="wf-button danger" type="button"
               onclick="event.preventDefault();event.stopPropagation();deleteWorkforceDepartment('${wfAttr(department)}')">Remove department</button>`
@@ -1131,7 +1249,9 @@ function wfDepartmentHtml(department, assignments) {
     <div>${assignments.length ? Object.entries(bySubject).map(([id, rows]) =>
       rows.some(row => row.vendorId || row.subjectType === 'vendor')
         ? wfVendorHtml(id, rows)
-        : wfWorkerHtml(id, rows)
+        : rows.some(row => row.subjectType === 'app-user')
+          ? wfAppUserHtml(id, rows)
+          : wfWorkerHtml(id, rows)
     ).join('') : '<div class="wf-empty">No workers or vendors assigned to this department.</div>'}</div>
   </details>`;
 }
@@ -1331,6 +1451,13 @@ function renderWorkforcePage() {
   if (!validSubprojectIds.has(String(workforcePageState.activeSubprojectId))) {
     workforcePageState.activeSubprojectId = 'all';
   }
+  if (
+    workforcePageState.viewMode === 'schedule' &&
+    typeof renderWorkforceSchedulePage === 'function'
+  ) {
+    renderWorkforceSchedulePage(root, data);
+    return;
+  }
   const activeSubprojectId = String(workforcePageState.activeSubprojectId);
   const visibleAssignments = activeSubprojectId === 'all'
     ? data.assignments
@@ -1346,7 +1473,8 @@ function renderWorkforcePage() {
     (data.departments || []).map(row => [row.code, []])
   );
   visibleAssignments.forEach(row => {
-    (grouped[row.department || 'Unassigned'] ||= []).push(row);
+    const department = row.department || (row.subjectType === 'app-user' ? 'FT' : 'Unassigned');
+    (grouped[department] ||= []).push(row);
   });
   const departments = Object.entries(grouped)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -1361,11 +1489,14 @@ function renderWorkforcePage() {
 
   root.innerHTML = `
     <div class="plan-page-heading wf-manpower-page-heading">
-      <div><div class="wf-manpower-title-row"><h2>Manpower &amp; Transport</h2>
+      <div><h2>Manpower &amp; Transport</h2>
+      <p>Assign crew, review submissions and arrange transport.</p></div>
+      <div class="wf-manpower-heading-actions">
         <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
           View all invoice &amp; claims
-        </button></div>
-      <p>Assign crew, review submissions and arrange transport.</p></div>
+        </button>
+        ${typeof wfWorkforceViewSwitchHtml === 'function' ? wfWorkforceViewSwitchHtml() : ''}
+      </div>
     </div>
 
     <div class="wf-plan-layout">
@@ -1981,7 +2112,7 @@ function openFreelancerDirectory(mode = 'manage', department = '') {
   workforcePageState.directoryMode = mode;
   workforcePageState.directoryDepartment = department;
   document.getElementById('wfFreelancerDirectoryModalTitle').textContent =
-    mode === 'assign' ? `Add Worker to ${department}` : 'Manage Worker/Vendor';
+    mode === 'assign' ? `Add Worker or Full-time Staff to ${department}` : 'Manage Worker/Vendor';
   document.getElementById('wfFreelancerSearch').value = '';
   renderFreelancerDirectory('');
   openWorkforceModal('wfFreelancerDirectoryModal');
@@ -1992,6 +2123,11 @@ function renderFreelancerDirectory(search) {
   const workers = wfDirectoryFreelancers().filter(row =>
     !row.personnelOnly &&
     `${row.name} ${row.phone || ''} ${row.email || ''} ${row.company || ''}`.toLowerCase().includes(query));
+  const appUsers = workforcePageState.directoryMode === 'assign'
+    ? (workforcePageState.data?.appUsers || []).filter(row =>
+      `${row.name || ''} ${row.username || ''} ${row.phone || ''}`.toLowerCase().includes(query)
+    )
+    : [];
   const vendors = workforcePageState.directoryMode === 'manage'
     ? wfDirectoryVendors().filter(row =>
       `${row.name} ${(row.members || []).map(member => `${member.name} ${member.phone || ''}`).join(' ')}`
@@ -2004,6 +2140,7 @@ function renderFreelancerDirectory(search) {
       .reduce((total, key) => total + Number(summary[key] || 0), 0);
   };
   const entries = [
+    ...appUsers.map(row => ({ type: 'app-user', row })),
     ...workers.map(row => ({ type: 'worker', row })),
     ...vendors.map(row => ({ type: 'vendor', row }))
   ];
@@ -2015,6 +2152,16 @@ function renderFreelancerDirectory(search) {
   }
   const cards = entries.map(({ type, row }) => {
     const summary = row.submissionSummary || {};
+    if (type === 'app-user') {
+      const name = row.name || row.username || 'App user';
+      return `<article class="wf-directory-row wf-directory-card"
+        onclick="openFullTimeStaffAssignment('','${wfAttr(row.username)}','${wfAttr(workforcePageState.directoryDepartment)}')">
+        <span class="wf-avatar staff">${wfEscape(wfInitials(name))}</span>
+        <span><strong>${wfEscape(name)}</strong>
+          <small class="wf-directory-phone">Full-time staff${row.phone ? ` &middot; ${wfEscape(wfFormatPhone(row.phone))}` : ''}</small></span>
+        <span class="wf-directory-action">Select &rsaquo;</span>
+      </article>`;
+    }
     if (type === 'vendor') {
       const lastLogin = row.workerLastLoginAt
         ? `Last login: ${wfEscape(wfDateTime(row.workerLastLoginAt))} by ${wfEscape(row.workerLastLoginBy || 'Unknown member')}`
@@ -2675,17 +2822,30 @@ function wfEventDateOptions() {
 
 function wfDateCalendarHtml(selectedDates = [], conflictsByDate = {}) {
   const allowedDates = wfEventDateOptions();
-  if (!allowedDates.length) return '<div class="wf-empty">No valid event dates.</div>';
   const allowed = new Set(allowedDates);
-  const selected = new Set(selectedDates);
-  const first = new Date(`${allowedDates[0]}T12:00:00`);
-  const last = new Date(`${allowedDates[allowedDates.length - 1]}T12:00:00`);
+  const adjacentDates = new Set();
+  if (allowedDates.length) {
+    const before = new Date(`${allowedDates[0]}T12:00:00`);
+    const after = new Date(`${allowedDates[allowedDates.length - 1]}T12:00:00`);
+    before.setDate(before.getDate() - 1);
+    after.setDate(after.getDate() + 1);
+    adjacentDates.add(before.toISOString().slice(0, 10));
+    adjacentDates.add(after.toISOString().slice(0, 10));
+  }
+  const selectableDates = new Set([...allowed, ...adjacentDates]);
+  const selected = new Set((selectedDates || []).filter(date =>
+    /^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))
+  ));
   const months = [];
-  for (
-    const cursor = new Date(first.getFullYear(), first.getMonth(), 1, 12);
-    cursor <= last;
-    cursor.setMonth(cursor.getMonth() + 1)
-  ) {
+  const orderedSelectableDates = [...selectableDates].sort();
+  const first = orderedSelectableDates.length
+    ? new Date(`${orderedSelectableDates[0]}T12:00:00`)
+    : null;
+  const last = orderedSelectableDates.length
+    ? new Date(`${orderedSelectableDates[orderedSelectableDates.length - 1]}T12:00:00`)
+    : null;
+  for (const cursor = first ? new Date(first.getFullYear(), first.getMonth(), 1, 12) : null;
+    cursor && cursor <= last; cursor.setMonth(cursor.getMonth() + 1)) {
     const year = cursor.getFullYear();
     const month = cursor.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -2695,14 +2855,17 @@ function wfDateCalendarHtml(selectedDates = [], conflictsByDate = {}) {
     );
     for (let day = 1; day <= daysInMonth; day += 1) {
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      if (!allowed.has(date)) {
+      if (!selectableDates.has(date)) {
         cells.push(`<span class="wf-calendar-day outside">${day}</span>`);
       } else {
         const conflicts = conflictsByDate?.[date] || [];
         const conflictTitle = conflicts.map(row => `Event #${row.eventId} ${row.eventName || ''}`).join(', ');
-        cells.push(`<button class="wf-calendar-day event-date ${selected.has(date) ? 'selected' : ''} ${conflicts.length ? 'has-conflict' : ''}"
+        const dateClass = allowed.has(date) ? 'event-date' : 'adjacent-date';
+        cells.push(`<button class="wf-calendar-day ${dateClass} ${selected.has(date) ? 'selected' : ''} ${conflicts.length ? 'has-conflict' : ''}"
           type="button" data-date="${date}" aria-pressed="${selected.has(date)}"
-          ${conflicts.length ? `title="Already assigned to ${wfAttr(conflictTitle)}"` : ''}
+          ${conflicts.length
+            ? `title="Already assigned to ${wfAttr(conflictTitle)}"`
+            : (!allowed.has(date) ? 'title="Adjacent work date"' : '')}
           onclick="toggleWorkforceCalendarDate(this)">${day}</button>`);
       }
     }
@@ -2712,10 +2875,57 @@ function wfDateCalendarHtml(selectedDates = [], conflictsByDate = {}) {
       <div class="wf-calendar-days">${cells.join('')}</div>
     </section>`);
   }
-  return `<div class="wf-calendar-toolbar"><span>Only highlighted event dates can be selected.</span>
+  const otherDates = [...selected].filter(date => !selectableDates.has(date)).sort();
+  return `<div class="wf-calendar-toolbar" data-conflicts="${wfAttr(JSON.stringify(conflictsByDate || {}))}"><span>Event dates are highlighted. Other work dates can be added below.</span>
       <div><button class="wf-link-button" type="button" onclick="setWorkforceCalendarSelection(this,true)">Select all</button>
         <button class="wf-link-button" type="button" onclick="setWorkforceCalendarSelection(this,false)">Clear</button></div>
-    </div><div class="wf-calendar-months">${months.join('')}</div>`;
+    </div>
+    <div class="wf-calendar-extra-row"><label><span>Additional work date</span><input type="date" class="wf-calendar-extra-input"></label>
+      <button class="wf-button" type="button" onclick="addWorkforceCalendarDate(this)">Add date</button>
+      <div class="wf-calendar-extra-dates">${otherDates.map(date => wfCalendarExtraDateChipHtml(date, conflictsByDate?.[date] || [])).join('')}</div>
+    </div>
+    ${months.length ? `<div class="wf-calendar-months">${months.join('')}</div>` : '<div class="wf-empty">Event dates are unavailable. Add the required working dates above.</div>'}`;
+}
+
+function wfCalendarExtraDateChipHtml(date, conflicts = []) {
+  const parsed = new Date(`${date}T12:00:00`);
+  const label = Number.isNaN(parsed.getTime())
+    ? date
+    : parsed.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+  const conflictTitle = conflicts.map(row => `Event #${row.eventId} ${row.eventName || ''}`).join(', ');
+  return `<button type="button" class="wf-calendar-extra-date selected ${conflicts.length ? 'has-conflict' : ''}"
+    data-date="${wfAttr(date)}" ${conflicts.length ? `title="Already assigned to ${wfAttr(conflictTitle)}"` : ''}
+    onclick="removeWorkforceCalendarDate(this)"><span>${wfEscape(label)}</span><b aria-hidden="true">&times;</b></button>`;
+}
+
+function addWorkforceCalendarDate(button) {
+  const calendar = button.closest('.wf-date-calendar');
+  const input = calendar?.querySelector('.wf-calendar-extra-input');
+  const date = String(input?.value || '');
+  if (!calendar || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    input?.focus();
+    return;
+  }
+  const eventDate = calendar.querySelector(`.wf-calendar-day[data-date="${date}"]`);
+  if (eventDate) {
+    eventDate.classList.add('selected');
+    eventDate.setAttribute('aria-pressed', 'true');
+  } else if (!calendar.querySelector(`.wf-calendar-extra-date[data-date="${date}"]`)) {
+    let conflicts = {};
+    try {
+      conflicts = JSON.parse(calendar.querySelector('.wf-calendar-toolbar')?.dataset.conflicts || '{}');
+    } catch (_error) {
+      conflicts = {};
+    }
+    calendar.querySelector('.wf-calendar-extra-dates')?.insertAdjacentHTML(
+      'beforeend', wfCalendarExtraDateChipHtml(date, conflicts?.[date] || [])
+    );
+  }
+  input.value = '';
+}
+
+function removeWorkforceCalendarDate(button) {
+  button.remove();
 }
 
 function toggleWorkforceCalendarDate(button) {
@@ -2729,12 +2939,17 @@ function setWorkforceCalendarSelection(button, selected) {
     day.classList.toggle('selected', selected);
     day.setAttribute('aria-pressed', String(selected));
   });
+  if (!selected) {
+    calendar?.querySelectorAll('.wf-calendar-extra-date').forEach(day => day.remove());
+  }
 }
 
 function wfSelectedCalendarDates(id) {
-  return [...document.querySelectorAll(`#${id} .wf-calendar-day.selected`)]
-    .map(button => button.dataset.date)
-    .filter(Boolean);
+  return [...new Set(
+    [...document.querySelectorAll(`#${id} [data-date].selected`)]
+      .map(button => button.dataset.date)
+      .filter(Boolean)
+  )].sort();
 }
 
 function openFreelancerAssignment(freelancerId, department = '', assignmentId = '') {
@@ -2759,8 +2974,11 @@ function openFreelancerAssignment(freelancerId, department = '', assignmentId = 
   const selectedDates = new Set(
     assignment?.workDates?.length
       ? assignment.workDates
-      : allDates.slice(0, Number(assignment?.days || 1))
+      : (workforcePageState.assignmentPrefillDates.length
+        ? workforcePageState.assignmentPrefillDates
+        : allDates.slice(0, Number(assignment?.days || 1)))
   );
+  workforcePageState.assignmentPrefillDates = [];
   document.getElementById('wfAssignmentDates').innerHTML =
     wfDateCalendarHtml(
       [...selectedDates],
@@ -2833,7 +3051,10 @@ function openVendorAssignment(vendorId, department = '', assignmentId = '') {
   const allDates = wfEventDateOptions();
   const selectedDates = assignment?.workDates?.length
     ? assignment.workDates
-    : allDates.slice(0, Number(assignment?.days || 1));
+    : (workforcePageState.assignmentPrefillDates.length
+      ? workforcePageState.assignmentPrefillDates
+      : allDates.slice(0, Number(assignment?.days || 1)));
+  workforcePageState.assignmentPrefillDates = [];
   document.getElementById('wfVendorAssignmentDates').innerHTML =
     wfDateCalendarHtml(selectedDates);
   syncVendorAssignmentFields();
@@ -2974,7 +3195,9 @@ async function changeWorkforceUploadSlots(freelancerId, kind, delta) {
 
 function openAdminWorkforceUpload(freelancerId, kind) {
   ensureWorkforceModals();
-  const freelancer = wfFindFreelancer(freelancerId) || wfFindVendor(freelancerId);
+  const appUsername = String(freelancerId || '').replace(/^user:/, '');
+  const freelancer = wfFindFreelancer(freelancerId) ||
+    wfFindVendor(freelancerId) || wfFindAppUser(appUsername);
   if (!freelancer) return;
   const claim = kind === 'claim';
   const form = document.getElementById('wfAdminUploadForm');

@@ -11,6 +11,10 @@
     />
     <link
       rel="stylesheet"
+      href="{{ url_for('static', filename='css/workforce-schedule.css', v=workforce_schedule_css_version) }}"
+    />
+    <link
+      rel="stylesheet"
       href="{{ url_for('static', filename='css/vehicles.css', v=vehicles_css_version) }}"
     />
     <link
@@ -12109,6 +12113,7 @@
     <script src="{{ url_for('static', filename='js/costing.js', v=costing_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/accounting.js', v=accounting_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/workforce-schedule.js', v=workforce_schedule_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/vehicles.js', v=vehicles_js_version) }}"></script>
   </body>
 </html>

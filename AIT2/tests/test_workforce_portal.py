@@ -7,6 +7,8 @@ import unittest
 import zipfile
 from unittest.mock import patch
 
+from pypdf import PdfReader
+
 import app as app_module
 from data_manager import DataManager
 from models import Event, User, hash_password
@@ -18,6 +20,7 @@ from workforce import (
     mutate_workforce,
     now_iso,
 )
+from workforce_schedule import build_workforce_schedule_pdf
 
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
@@ -2237,7 +2240,9 @@ class WorkforcePortalTests(unittest.TestCase):
                 "dailyRate": 350,
             },
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        updated = response.get_json()["data"]["assignments"][0]
+        self.assertEqual(updated["workDates"], ["2026-07-13"])
 
     def test_workforce_assignments_support_the_same_person_in_multiple_rooms(self):
         event = self.manager.events[143]
@@ -2813,7 +2818,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(response.get_json()["data"]["id"], person["id"])
         self.assertFalse(response.get_json()["data"]["personnelOnly"])
 
-    def test_vendor_assignment_rejects_dates_outside_event(self):
+    def test_vendor_assignment_accepts_dates_outside_event(self):
         self.login("admin", True)
         response = self.client.post(
             "/api/workforce/vendors",
@@ -2831,8 +2836,9 @@ class WorkforcePortalTests(unittest.TestCase):
                 "ratePerPax": 180,
             },
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("within the event", response.get_json()["error"])
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assignment = response.get_json()["data"]["assignments"][0]
+        self.assertEqual(assignment["workDates"], ["2026-08-01"])
 
     def test_admin_and_worker_upload_surfaces_support_drag_and_drop(self):
         static_folder = os.path.join(os.path.dirname(app_module.__file__), "static", "js")
@@ -2996,15 +3002,15 @@ class WorkforcePortalTests(unittest.TestCase):
         ) as source_file:
             admin_source = source_file.read()
         with open(
-            os.path.join(static_root, "js", "worker.js"),
-            encoding="utf-8",
-        ) as source_file:
-            worker_source = source_file.read()
-        with open(
             os.path.join(static_root, "css", "workforce-admin.css"),
             encoding="utf-8",
         ) as source_file:
             admin_styles = source_file.read()
+        with open(
+            os.path.join(static_root, "js", "worker.js"),
+            encoding="utf-8",
+        ) as source_file:
+            worker_source = source_file.read()
 
         self.assertIn("function wfDepartmentMeta", admin_source)
         self.assertIn("wfDepartmentStyle(row.department)", admin_source)
@@ -3012,6 +3018,230 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("function departmentBadge", worker_source)
         self.assertIn("assignment.departmentColor", worker_source)
         self.assertIn("color-mix(in srgb, var(--wf-dept-color", admin_styles)
+
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/departments",
+            json={"code": "AU", "name": "Audio", "color": "#cdebff"},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        response = self.client.put(
+            "/api/departments/AU",
+            json={"code": "AU", "name": "Audio", "color": "#126b58"},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = self.client.get("/api/events/143/workforce").get_json()["data"]
+        department = next(row for row in payload["departments"] if row["code"] == "AU")
+        self.assertEqual(department["color"].lower(), "#126b58")
+
+    def test_full_time_app_user_schedule_and_upload_limits(self):
+        self.manager.users["normal"].name = "Taylor Fulltime"
+        self.manager.users["normal"].phone = "+65 9123 9876"
+        self.manager.save_users()
+        self.login("admin", True)
+
+        response = self.client.post(
+            "/api/events/143/workforce/staff-assignments",
+            json={
+                "username": "normal",
+                "department": "",
+                "roleName": "Operations",
+                "workDates": ["2026-07-10", "2026-07-11"],
+                "dailyRate": 180,
+                "callTime": "08:30",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()["data"]
+        assignment = payload["assignments"][0]
+        self.assertEqual(assignment["subjectType"], "app-user")
+        self.assertEqual(assignment["userUsername"], "normal")
+        self.assertEqual(assignment["department"], "FT")
+        self.assertEqual(assignment["callTimes"]["2026-07-10"], "08:30")
+        app_user = next(
+            row for row in payload["appUsers"] if row["username"] == "normal"
+        )
+        self.assertEqual(app_user["name"], "Taylor Fulltime")
+
+        limits = payload["uploadAllowances"]["user:normal"]
+        self.assertEqual(limits["invoiceLimit"], 0)
+        self.assertEqual(limits["claimLimit"], 5)
+
+        response = self.client.patch(
+            "/api/events/143/workforce/schedule/call-times",
+            json={"updates": [{
+                "assignmentId": assignment["id"],
+                "date": "2026-07-11",
+                "callTime": "09:15",
+            }]},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        refreshed = self.client.get("/api/events/143/workforce").get_json()["data"]
+        self.assertEqual(refreshed["assignments"][0]["callTimes"]["2026-07-11"], "09:15")
+
+        response = self.client.post(
+            "/api/events/143/workforce/allowances/user%3Anormal",
+            json={"kind": "invoice", "delta": 1},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            response.get_json()["data"]["uploadAllowances"]["user:normal"]["invoiceLimit"],
+            1,
+        )
+
+        with patch.object(app_module, "_queue_worker_submission_processing"):
+            response = self.client.post(
+                "/api/events/143/workforce/submissions/user%3Anormal",
+                data={
+                    "kind": "claim",
+                    "claimDate": "2026-07-10",
+                    "category": "Meal",
+                    "file": (io.BytesIO(PNG_BYTES), "staff-claim.png"),
+                },
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        claim = response.get_json()["data"]["submissions"]["user:normal"]["claims"][0]
+        self.assertNotIn(":", claim["storedPath"])
+
+        response = self.client.get(
+            "/api/events/143/workforce/schedule.pdf"
+            "?scope=worker&subjectId=user%3Anormal&showRates=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/pdf")
+        self.assertTrue(
+            response.headers.get("Content-Disposition", "").startswith("inline;")
+        )
+        self.assertTrue(response.data.startswith(b"%PDF"))
+        pdf_text = "\n".join(
+            page.extract_text() or "" for page in PdfReader(io.BytesIO(response.data)).pages
+        )
+        self.assertNotIn("PERSONAL MANPOWER SCHEDULE", pdf_text)
+        self.assertIn("Taylor Fulltime", pdf_text)
+        self.assertIn("Event ID", pdf_text)
+        self.assertNotIn("Schedule type", pdf_text)
+        self.assertIn("Generated by", pdf_text)
+        self.assertIn("Generated on", pdf_text)
+        self.assertIn("10 July 2026", pdf_text)
+        self.assertIn("11 July 2026", pdf_text)
+        self.assertNotIn("12 July 2026", pdf_text)
+        self.assertNotIn("No manpower assigned", pdf_text)
+        self.assertNotIn("Person-days", pdf_text)
+        self.assertNotIn("Pax", pdf_text)
+
+    def test_schedule_pdf_only_shows_room_for_multi_room_events(self):
+        base_payload = {
+            "event": {
+                "id": 143,
+                "name": "Room-aware schedule",
+                "location": "Showbase",
+                "startDateValue": "2026-07-10",
+                "endDateValue": "2026-07-10",
+            },
+            "freelancers": [{"id": "worker-1", "name": "Taylor Crew"}],
+            "vendors": [],
+            "appUsers": [],
+            "allDepartments": [{"code": "AX", "name": "Audio", "color": "#dbeafe"}],
+            "departments": [],
+            "assignments": [{
+                "id": "assignment-1",
+                "freelancerId": "worker-1",
+                "department": "AX",
+                "roleName": "Audio Engineer",
+                "subprojectId": "main",
+                "subprojectName": "Main Room",
+                "workDates": ["2026-07-10"],
+                "callTimes": {"2026-07-10": "08:00"},
+            }],
+        }
+
+        single_room_payload = {
+            **base_payload,
+            "subprojects": [{"id": "main", "name": "Main Room"}],
+        }
+        single_pdf = build_workforce_schedule_pdf(single_room_payload)
+        single_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(single_pdf)).pages
+        )
+        self.assertNotIn("Room\n", single_text)
+
+        multi_room_payload = {
+            **base_payload,
+            "subprojects": [
+                {"id": "main", "name": "Main Room"},
+                {"id": "breakout", "name": "Breakout Room"},
+            ],
+        }
+        multi_pdf = build_workforce_schedule_pdf(multi_room_payload)
+        multi_reader = PdfReader(io.BytesIO(multi_pdf))
+        multi_text = "\n".join(page.extract_text() or "" for page in multi_reader.pages)
+        first_page = multi_reader.pages[0]
+        self.assertGreater(
+            float(first_page.mediabox.height),
+            float(first_page.mediabox.width),
+        )
+        self.assertIn("Room", multi_text)
+        self.assertIn("Main Room", multi_text)
+        self.assertNotIn("person-days", multi_text)
+        self.assertNotIn("workers |", multi_text)
+        self.assertLess(multi_text.index("Room"), multi_text.index("Department"))
+        self.assertLess(multi_text.index("Department"), multi_text.index("Role / Assignment"))
+        self.assertLess(multi_text.index("Role / Assignment"), multi_text.index("Call time"))
+
+    def test_workforce_schedule_frontend_is_responsive_and_granular(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
+        with open(
+            os.path.join(static_root, "js", "workforce-schedule.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-schedule.css"),
+            encoding="utf-8",
+        ) as source_file:
+            styles = source_file.read()
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            admin_source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            admin_styles = source_file.read()
+
+        self.assertIn("schedule/call-times", source)
+        self.assertIn("Apply to All Staff", source)
+        self.assertIn("Apply to Department", source)
+        self.assertIn("wfScheduleCustomSelectHtml", source)
+        self.assertIn("chooseWorkforceScheduleSelect", source)
+        self.assertNotIn('<select id="wfScheduleBulkDay"', source)
+        self.assertNotIn('<select id="wfScheduleBulkDepartment"', source)
+        self.assertIn(".wf-schedule-select-menu", styles)
+        self.assertNotIn('onclick="openFullTimeStaffAssignment()"', source)
+        self.assertNotIn("printWorkforceSchedule", source)
+        self.assertIn("...appUsers.map(row => ({ type: 'app-user', row }))", admin_source)
+        self.assertIn("Add Worker or Full-time Staff", admin_source)
+        self.assertIn("coverageMode", source)
+        self.assertIn("wfScheduleCoverageTotal", source)
+        self.assertIn("<th>Event Total</th>", source)
+        self.assertIn("By department", source)
+        self.assertIn("By day", source)
+        self.assertNotIn("By Worker", source)
+        self.assertIn("window.open(", source)
+        self.assertNotIn("window.location.assign", source)
+        self.assertIn("wfCalendarExtraDateChipHtml", admin_source)
+        self.assertIn("adjacentDates", admin_source)
+        self.assertIn("adjacent-date", admin_source)
+        self.assertIn("button.wf-calendar-day.adjacent-date", admin_styles)
+        self.assertIn("grid-auto-columns: minmax(238px, 1fr)", styles)
+        self.assertIn("container-type: inline-size", styles)
+        self.assertIn("@container (min-width: 340px)", styles)
+        self.assertNotIn("wfScheduleDates().length <=", source)
+        self.assertIn("@media (max-width: 720px)", styles)
 
 
 if __name__ == "__main__":

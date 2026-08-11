@@ -132,6 +132,8 @@ class PageRoutingTests(unittest.TestCase):
         event_overview = self.client.get('/events/41')
         delivery_order = self.client.get('/delivery-order/41')
         packing_list = self.client.get('/packing-list/41')
+        manpower_day = self.client.get('/manpower/41/by-day')
+        manpower_department = self.client.get('/manpower/41/by-department')
 
         self.assertEqual(quotation.status_code, 200)
         self.assertIn('window.__INITIAL_APP_SECTION__ = "quotations"', quotation.get_data(as_text=True))
@@ -140,11 +142,19 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(delivery_order.status_code, 200)
         self.assertIn('window.__INITIAL_APP_SECTION__ = "delivery-order"', delivery_order.get_data(as_text=True))
         self.assertEqual(packing_list.status_code, 200)
+        self.assertEqual(manpower_day.status_code, 200)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "workforce"', manpower_day.get_data(as_text=True))
+        self.assertEqual(manpower_department.status_code, 200)
 
         self.login('user')
         self.assertEqual(self.client.get('/quotations/quote-123').status_code, 302)
         self.assertEqual(self.client.get('/delivery-order/999').status_code, 302)
         self.assertEqual(self.client.get('/packing-list/999').status_code, 302)
+        self.assertEqual(self.client.get('/manpower/41/by-day').status_code, 302)
+
+        self.login('owner')
+        self.assertEqual(self.client.get('/manpower/999/by-day').status_code, 302)
+        self.assertEqual(self.client.get('/manpower/41/by-worker').status_code, 404)
 
     def test_client_router_supports_history_navigation(self):
         source = APP_BUNDLE_SOURCE
@@ -157,6 +167,8 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn("kind: 'event-overview'", source)
         self.assertIn("kind: 'delivery-order'", source)
         self.assertIn("kind: 'packing-list'", source)
+        self.assertIn("kind: 'workforce'", source)
+        self.assertIn("/^\\/manpower\\/(\\d+)(?:\\/(by-department|by-day))?$/", source)
         self.assertIn('openPackingListPage(eventId)', source)
         self.assertIn("apiCall(`/api/events/${eventId}/overview`)", source)
         self.assertIn('function eventOverviewAssets(event)', source)
@@ -164,6 +176,21 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn("eventOverviewSection('rooms', 'Sub-projects'", source)
         self.assertIn('function closeEventOverview(options = {})', source)
         self.assertNotIn('setTimeout(async () => {\n      const detailRoute = appDetailRouteFromPath();', source)
+
+        workforce_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'workforce-admin.js'
+        )
+        schedule_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'workforce-schedule.js'
+        )
+        with open(workforce_path, encoding='utf-8') as workforce_file:
+            workforce_source = workforce_file.read()
+        with open(schedule_path, encoding='utf-8') as schedule_file:
+            schedule_source = schedule_file.read()
+        self.assertIn('function restoreWorkforceRouteState(route)', workforce_source)
+        self.assertIn("return `/manpower/${id}/${view}`", workforce_source)
+        self.assertIn('syncWorkforceRoute({ replace: true })', workforce_source)
+        self.assertIn("syncWorkforceRoute();", schedule_source)
 
         template_path = os.path.join(os.path.dirname(app_module.__file__), 'templates', 'index.html')
         with open(template_path, encoding='utf-8') as template_file:

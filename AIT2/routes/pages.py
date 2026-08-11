@@ -147,6 +147,16 @@ def register_app_page_routes(
     def event_overview_page(event_id):
         return event_page(event_id, "events")
 
+    @app.route("/manpower/<int:event_id>")
+    @app.route("/manpower/<int:event_id>/<view_mode>")
+    @require_auth
+    def manpower_detail_page(event_id, view_mode="by-department"):
+        if not is_admin():
+            return redirect("/events")
+        if view_mode not in {"by-department", "by-day"}:
+            abort(404)
+        return event_page(event_id, "workforce")
+
     @app.route("/delivery-order/<int:event_id>")
     @require_auth
     def delivery_order_detail_page(event_id):
@@ -156,4 +166,3 @@ def register_app_page_routes(
     @require_auth
     def packing_list_detail_page(event_id):
         return event_page(event_id, "events")
-

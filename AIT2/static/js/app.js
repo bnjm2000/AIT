@@ -3795,6 +3795,7 @@ function appSectionFromPath(pathname = window.location.pathname) {
   const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
   if (cleanPath === '/') return 'events';
   if (/^\/events\/\d+$/.test(cleanPath)) return 'events';
+  if (/^\/manpower\/\d+(?:\/by-(?:department|day))?$/.test(cleanPath)) return 'workforce';
   if (/^\/quotations\/[^/]+$/.test(cleanPath)) return 'quotations';
   if (/^\/invoices\/[^/]+$/.test(cleanPath)) return 'invoices';
   if (/^\/costing\/[^/]+$/.test(cleanPath)) return 'costing';
@@ -3813,6 +3814,12 @@ function appDetailRouteFromPath(pathname = window.location.pathname) {
   if (match) return { kind: 'costing', id: decodeURIComponent(match[1]) };
   match = cleanPath.match(/^\/events\/(\d+)$/);
   if (match) return { kind: 'event-overview', eventId: Number(match[1]) };
+  match = cleanPath.match(/^\/manpower\/(\d+)(?:\/(by-department|by-day))?$/);
+  if (match) return {
+    kind: 'workforce',
+    eventId: Number(match[1]),
+    viewMode: match[2] === 'by-day' ? 'schedule' : 'assignments'
+  };
   match = cleanPath.match(/^\/delivery-order\/(\d+)$/);
   if (match) return { kind: 'delivery-order', eventId: Number(match[1]) };
   match = cleanPath.match(/^\/packing-list\/(\d+)$/);
@@ -3923,7 +3930,19 @@ function showSection(sectionName, options = {}) {
       loadPrepareNewPage();
       break;
     case "workforce":
-      if (typeof loadWorkforcePage === "function") loadWorkforcePage();
+      const workforceRoute = appDetailRouteFromPath();
+      const restoredWorkforceRoute = (
+        workforceRoute?.kind === 'workforce' &&
+        typeof restoreWorkforceRouteState === 'function'
+      ) ? restoreWorkforceRouteState(workforceRoute) : false;
+      if (
+        restoredWorkforceRoute &&
+        Number(workforcePageState?.data?.event?.id) === Number(workforceRoute.eventId)
+      ) {
+        renderWorkforcePage();
+      } else if (typeof loadWorkforcePage === "function") {
+        loadWorkforcePage();
+      }
       break;
     case "invoice-claims":
       if (typeof loadWorkforceDocumentsPage === "function") loadWorkforceDocumentsPage();
@@ -24799,6 +24818,13 @@ function connectRealtimeUpdates() {
           activeSection === 'workforce' &&
           eventIds.some(eventId => Number(eventId) === Number(activeWorkforceEventId))
         ) {
+          if (
+            realtimePayloadHasAction(payload, 'schedule-call-times-updated') &&
+            typeof applyWorkforceRealtimeCallTimes === 'function' &&
+            applyWorkforceRealtimeCallTimes(payload)
+          ) {
+            return;
+          }
           queueRealtimeRefresh();
           return;
         }
