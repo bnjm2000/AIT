@@ -1002,6 +1002,60 @@
   vertical-align: middle;
 }
 
+.wf-instant-tooltip {
+  cursor: help;
+}
+
+.wf-instant-tooltip-popup {
+  --wf-tooltip-arrow-left: 50%;
+  position: fixed;
+  z-index: 10020;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  border-radius: 7px;
+  background: #172033;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 22%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(2px);
+  transition: opacity 40ms ease, transform 40ms ease, visibility 0s linear 40ms;
+  visibility: hidden;
+  white-space: pre-line;
+}
+
+.wf-instant-tooltip-popup::after {
+  position: absolute;
+  left: var(--wf-tooltip-arrow-left);
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  content: '';
+  transform: translateX(-50%);
+}
+
+.wf-instant-tooltip-popup[data-placement="top"]::after {
+  top: 100%;
+  border-top-color: #172033;
+}
+
+.wf-instant-tooltip-popup[data-placement="bottom"]::after {
+  bottom: 100%;
+  border-bottom-color: #172033;
+}
+
+.wf-instant-tooltip-popup.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0s;
+  visibility: visible;
+}
+
 .wf-worker-profile small {
   display: block;
   margin-top: 2px;
@@ -1548,14 +1602,22 @@
 .wf-calendar-day,
 .wf-calendar-blank {
   display: grid;
+  width: 100%;
+  height: 31px;
   min-height: 31px;
   place-items: center;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: #a3a9b7;
+  padding: 0;
   font: inherit;
   font-size: 10px;
+  line-height: 1;
+}
+
+button.wf-calendar-day {
+  appearance: none;
 }
 
 button.wf-calendar-day.event-date {

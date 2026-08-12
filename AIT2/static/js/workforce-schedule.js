@@ -287,16 +287,14 @@ function wfScheduleStaffCard(row, date) {
   const callTime = String(row.callTimes?.[date] || '');
   const role = wfScheduleRole(row, date);
   const dateConflicts = (row.dateConflicts || []).filter(conflict => String(conflict.date || '') === String(date));
-  const conflictTitle = dateConflicts.map(conflict =>
-    `Also scheduled for event #${conflict.eventId} ${conflict.eventName || ''}`.trim()
-  ).join('; ');
+  const conflictTitle = wfConflictTooltipText(dateConflicts);
   return `<article class="wf-schedule-person ${dateConflicts.length ? 'has-conflict' : ''}" style="${wfDepartmentStyle(departmentCode)}"
     role="button" tabindex="0" title="Open event assignment"
     onclick="if(!event.target.closest('input,button,label'))openWorkforceScheduledAssignment('${wfAttr(row.id)}')"
     onkeydown="if((event.key==='Enter'||event.key===' ')&&!event.target.closest('input,button')){event.preventDefault();openWorkforceScheduledAssignment('${wfAttr(row.id)}')}">
     <div class="wf-schedule-person-main">
       <span class="wf-avatar ${subject.type}">${wfEscape(wfInitials(subject.name))}</span>
-      <div><strong>${wfEscape(subject.name)}${dateConflicts.length ? `<span class="wf-schedule-conflict" title="${wfAttr(conflictTitle)}" aria-label="Scheduled for multiple events on this day">!</span>` : ''}</strong>
+      <div><strong>${wfEscape(subject.name)}${dateConflicts.length ? `<span class="wf-schedule-conflict wf-instant-tooltip" data-wf-tooltip="${wfAttr(conflictTitle)}" role="img" aria-label="${wfAttr(`Schedule conflict. ${conflictTitle}`)}">!</span>` : ''}</strong>
         <button type="button" class="wf-schedule-role" title="Change role for ${wfAttr(wfScheduleDateLabel(date))}"
           onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','role')">${wfEscape(role)}</button>
         ${wfScheduleRate(row) ? `<small class="wf-schedule-rate">${wfEscape(wfScheduleRate(row))}</small>` : ''}</div>
@@ -577,9 +575,12 @@ function wfScheduleCoverageHtml() {
 
 function wfScheduleDepartmentFiltersHtml() {
   const departments = wfScheduleDepartments();
-  return `<div class="wf-schedule-filter-row"><span>Department</span>
-    <button type="button" class="${workforceScheduleState.department === 'all' ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('all')">All</button>
-    ${departments.map(code => `<button type="button" style="${wfDepartmentStyle(code)}" class="dept ${workforceScheduleState.department === code ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('${wfAttr(code)}')">${wfEscape(code)}</button>`).join('')}
+  return `<div class="wf-schedule-filter-row">
+    <div class="wf-schedule-filter-options"><span>Department</span>
+      <button type="button" class="${workforceScheduleState.department === 'all' ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('all')">All</button>
+      ${departments.map(code => `<button type="button" style="${wfDepartmentStyle(code)}" class="dept ${workforceScheduleState.department === code ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('${wfAttr(code)}')">${wfEscape(code)}</button>`).join('')}
+    </div>
+    <button type="button" class="wf-button primary wf-schedule-manage-directory" onclick="openFreelancerDirectory('manage')">Manage Workers/Vendors</button>
   </div>`;
 }
 

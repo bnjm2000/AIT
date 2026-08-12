@@ -3278,6 +3278,9 @@ class FinanceFeatureTests(unittest.TestCase):
 
         self.assertNotIn('view=summary&limit=500', finance_source)
         self.assertIn('startProgressiveEventOptions(', finance_source)
+        self.assertIn('financeRefreshEventCreationControls(', finance_source)
+        self.assertIn("financePreviewEventField('projectName'", finance_source)
+        self.assertIn('financeEventCreationNote', finance_source)
         self.assertIn("planOpenEventChooser('return')", app_source)
         self.assertIn("planOpenEventChooser('workforce')", workforce_source)
         self.assertNotIn('returnEventChooserModal', app_source)

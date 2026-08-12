@@ -466,6 +466,7 @@ function financeAdditionalScheduleChange(kind, index, field, value) {
   if (!row || !['date', 'time'].includes(field)) return;
   row[field] = value;
   financeQueueSave();
+  financeRefreshEventCreationControls();
 }
 
 function financeRemoveScheduleRow(kind, index) {
@@ -3589,6 +3590,27 @@ function financeEventCreationIssue(document = financeState.current) {
   return '';
 }
 
+function financeRefreshEventCreationControls(overrides = {}) {
+  const button = document.getElementById('financeCreateEventButton');
+  const note = document.getElementById('financeEventCreationNote');
+  if (!button || !note) return;
+  const issue = financeEventCreationIssue({
+    ...(financeState.current || {}),
+    ...overrides
+  });
+  button.disabled = Boolean(issue);
+  button.title = issue || 'Create and pair a planning event';
+  note.textContent = issue;
+  note.hidden = !issue;
+}
+
+function financePreviewEventField(field, value) {
+  if (!financeState.current) return;
+  financeState.current[field] = value;
+  if (field === 'projectName') financeState.current.title = value;
+  financeRefreshEventCreationControls();
+}
+
 async function financeCreateEventFromQuotation() {
   const current = financeState.current;
   if (!current || current.eventId) return;
@@ -5112,7 +5134,7 @@ function financeRenderEditor() {
             <label class="finance-field"><span>Email</span><input class="finance-input" type="email" value="${financeEscapeAttr(client.email || '')}" onchange="financeClientFieldChange('email',this.value)"></label>
             <label class="finance-field finance-span-3"><span>Billing address</span><input class="finance-input" value="${financeEscapeAttr([client.address1, client.address2, client.address3, client.postalCode].filter(Boolean).join(', '))}" onchange="financeSetClientAddress(this.value)"></label>
             <label class="finance-field"><span>Salesperson</span><span class="finance-salesperson-combobox"><input id="financeSalespersonInput" class="finance-input" value="${financeEscapeAttr(document.salesperson || '')}" autocomplete="off" onfocus="financeShowSalespersonSuggestions(this.value)" oninput="financeSalespersonInput(this.value)" onblur="setTimeout(() => document.getElementById('financeSalespersonResults')?.classList.remove('open'),120)"><span class="finance-salesperson-results" id="financeSalespersonResults"></span></span></label>
-            <label class="finance-field finance-span-2"><span>Project Name *</span><input id="financeProjectNameInput" class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" oninput="financeClearProjectNameExportError(this)" onchange="financeFieldChange('projectName',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>Project Name *</span><input id="financeProjectNameInput" class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" oninput="financeClearProjectNameExportError(this);financePreviewEventField('projectName',this.value)" onchange="financeFieldChange('projectName',this.value)"></label>
             <label class="finance-field finance-span-2"><span>Location</span><span class="finance-location-combobox"><input id="financeLocationInput" class="finance-input" value="${financeEscapeAttr(document.eventLocation || '')}" autocomplete="off" onfocus="financeShowLocationSuggestions(this.value)" oninput="financeFieldChange('eventLocation',this.value);financeShowLocationSuggestions(this.value)" onchange="financeFieldChange('eventLocation',this.value)" onblur="setTimeout(() => document.getElementById('financeLocationResults')?.classList.remove('open'),120)"><span class="finance-location-results" id="financeLocationResults"></span></span></label>
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
             <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)">${financeValidityUnitControl(validityUnit, 'finance-editor-validity-unit-menu', 'financeSetValidityUnit')}</span></label>
@@ -5241,10 +5263,10 @@ function financeRenderEditor() {
               <button type="button" class="btn btn-secondary finance-compare-event" onclick="financeOpenComparePage()">Compare</button>
             ` : ''}
             ${!document.eventId ? `
-              <button type="button" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()" ${eventCreationIssue ? 'disabled' : ''} title="${financeEscapeAttr(eventCreationIssue || 'Create and pair a planning event')}">Create event</button>
+              <button type="button" id="financeCreateEventButton" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()" ${eventCreationIssue ? 'disabled' : ''} title="${financeEscapeAttr(eventCreationIssue || 'Create and pair a planning event')}">Create event</button>
             ` : ''}
           </div>
-          ${!document.eventId && eventCreationIssue ? `<p class="finance-side-note">${financeEscape(eventCreationIssue)}</p>` : ''}
+          ${!document.eventId ? `<p id="financeEventCreationNote" class="finance-side-note" ${eventCreationIssue ? '' : 'hidden'}>${financeEscape(eventCreationIssue)}</p>` : ''}
           ${document.eventId ? `<button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>` : ''}
         </section>
         <section class="finance-card finance-section">
@@ -5363,6 +5385,9 @@ function financeFieldChange(field, value) {
   if (field === 'validityDays') financeState.current.validityDays = Math.max(1, Math.min(365, financeNumber(value, 30)));
   if (field === 'projectName') financeState.current.title = value;
   financeQueueSave();
+  if (field === 'projectName' || field === 'eventLocation' || field.endsWith('Date')) {
+    financeRefreshEventCreationControls();
+  }
 }
 
 function financeSetTaxRate(value) {

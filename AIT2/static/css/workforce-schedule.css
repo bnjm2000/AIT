@@ -391,20 +391,32 @@
 
 .wf-schedule-filter-row {
   min-height: 38px;
-  gap: 7px;
+  gap: 12px;
   margin-bottom: 6px;
   padding: 2px 1px;
-  overflow-x: auto;
+  overflow: hidden;
 }
 
-.wf-schedule-filter-row > span {
+.wf-schedule-filter-options {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.wf-schedule-filter-options > span {
+  flex: 0 0 auto;
   margin-right: 4px;
   color: var(--schedule-muted);
   font-size: 12px;
   font-weight: 750;
 }
 
-.wf-schedule-filter-row > button {
+.wf-schedule-filter-options > button {
+  flex: 0 0 auto;
   min-width: 42px;
   min-height: 29px;
   border: 1px solid #d4dde6;
@@ -419,23 +431,30 @@
   cursor: pointer;
 }
 
-.wf-schedule-filter-row > button.active {
+.wf-schedule-filter-options > button.active {
   border-color: var(--schedule-green);
   background: var(--schedule-green);
   color: #fff;
 }
 
-.wf-schedule-filter-row > button.dept:not(.active) {
+.wf-schedule-filter-options > button.dept:not(.active) {
   border-color: color-mix(in srgb, var(--wf-dept-color) 78%, var(--wf-dept-text));
   background: var(--wf-dept-color);
   color: var(--wf-dept-text);
 }
 
-.wf-schedule-filter-row > button.dept.active {
+.wf-schedule-filter-options > button.dept.active {
   border-color: var(--wf-dept-text);
   background: var(--wf-dept-color);
   color: var(--wf-dept-text);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-dept-color) 58%, transparent);
+}
+
+.wf-schedule-filter-row > .wf-schedule-manage-directory {
+  min-height: 31px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .wf-schedule-days {

@@ -85,6 +85,72 @@ function wfAttr(value) {
   return wfEscape(value).replace(/"/g, '&quot;');
 }
 
+function wfConflictTooltipText(conflicts, { includeDate = false } = {}) {
+  const reasons = new Map();
+  (conflicts || []).forEach(conflict => {
+    const eventId = String(conflict?.eventId || '').trim();
+    const date = String(conflict?.date || '').trim();
+    const eventName = String(conflict?.eventName || '').trim();
+    const eventLabel = eventId ? `event #${eventId}` : 'another event';
+    const reason = `Also scheduled for ${eventLabel}${eventName ? ` ${eventName}` : ''}`;
+    reasons.set(`${eventId}:${date}:${eventName}`, includeDate && date ? `${date}: ${reason}` : reason);
+  });
+  return [...reasons.values()].join('\n');
+}
+
+let workforceTooltipTarget = null;
+
+function ensureWorkforceInstantTooltip() {
+  let tooltip = document.getElementById('workforceInstantTooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'workforceInstantTooltip';
+  tooltip.className = 'wf-instant-tooltip-popup';
+  tooltip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function positionWorkforceInstantTooltip(target, tooltip) {
+  const targetRect = target.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const gap = 9;
+  const edge = 8;
+  const targetCenter = targetRect.left + (targetRect.width / 2);
+  const left = Math.min(
+    window.innerWidth - tooltipRect.width - edge,
+    Math.max(edge, targetCenter - (tooltipRect.width / 2))
+  );
+  const showAbove = targetRect.top >= tooltipRect.height + gap + edge;
+  const top = showAbove
+    ? targetRect.top - tooltipRect.height - gap
+    : targetRect.bottom + gap;
+
+  tooltip.dataset.placement = showAbove ? 'top' : 'bottom';
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+  tooltip.style.setProperty(
+    '--wf-tooltip-arrow-left',
+    `${Math.round(Math.min(tooltipRect.width - 10, Math.max(10, targetCenter - left)))}px`
+  );
+}
+
+function showWorkforceInstantTooltip(target) {
+  const reason = String(target?.dataset?.wfTooltip || '').trim();
+  if (!reason) return;
+  const tooltip = ensureWorkforceInstantTooltip();
+  workforceTooltipTarget = target;
+  tooltip.textContent = reason;
+  tooltip.classList.add('is-visible');
+  positionWorkforceInstantTooltip(target, tooltip);
+}
+
+function hideWorkforceInstantTooltip(target = null) {
+  if (target && target !== workforceTooltipTarget) return;
+  workforceTooltipTarget = null;
+  document.getElementById('workforceInstantTooltip')?.classList.remove('is-visible');
+}
+
 function wfSubprojects() {
   return workforcePageState.data?.subprojects ||
     workforcePageState.data?.event?.subprojects || [];
@@ -1057,10 +1123,7 @@ function wfWorkerHtml(freelancerId, assignments) {
     invoiceSlotsRemaining: 1, claimSlotsRemaining: 5, extraInvoices: 0, extraClaims: 0
   };
   const dateConflicts = assignments.flatMap(row => row.dateConflicts || []);
-  const conflictTitle = [...new Map(dateConflicts.map(row => [
-    `${row.eventId}:${row.date}`,
-    `${row.date}: Event #${row.eventId} ${row.eventName || ''}`
-  ])).values()].join('\n');
+  const conflictTitle = wfConflictTooltipText(dateConflicts, { includeDate: true });
   const roles = assignments.map(row => `<span class="wf-assignment-chip">
     <button class="wf-assignment-edit" type="button" title="Edit assignment"
       onclick="openFreelancerAssignment('${wfAttr(freelancer.id)}','${wfAttr(row.department)}','${wfAttr(row.id)}')">
@@ -1072,7 +1135,7 @@ function wfWorkerHtml(freelancerId, assignments) {
     <button class="wf-worker-identity wf-worker-open" type="button"
       onclick="openFreelancerHistory('${wfAttr(freelancer.id)}')"><div class="wf-worker-profile">
       <span class="wf-avatar">${wfEscape(wfInitials(freelancer.name))}</span>
-      <div><strong>${wfEscape(freelancer.name)}${dateConflicts.length ? ` <span class="wf-worker-conflict" title="${wfAttr(conflictTitle)}" aria-label="Worker has clashing event dates">!</span>` : ''}</strong>
+      <div><strong>${wfEscape(freelancer.name)}${dateConflicts.length ? ` <span class="wf-worker-conflict wf-instant-tooltip" data-wf-tooltip="${wfAttr(conflictTitle)}" role="img" aria-label="${wfAttr(`Schedule conflict. ${conflictTitle}`)}">!</span>` : ''}</strong>
         <small>${wfEscape(wfFormatPhone(freelancer.phone) || 'No portal phone number')}</small></div>
     </div><small>View all events &rsaquo;</small></button>
     <div class="wf-worker-roles">
@@ -4341,8 +4404,37 @@ document.addEventListener('click', () => {
 
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
+  hideWorkforceInstantTooltip();
   const modal = document.querySelector('.wf-modal.open');
   if (modal) closeWorkforceModal(modal.id);
 });
+
+document.addEventListener('pointerover', event => {
+  const target = event.target instanceof Element
+    ? event.target.closest('[data-wf-tooltip]')
+    : null;
+  if (target && target !== workforceTooltipTarget) showWorkforceInstantTooltip(target);
+});
+
+document.addEventListener('pointerout', event => {
+  const target = event.target instanceof Element
+    ? event.target.closest('[data-wf-tooltip]')
+    : null;
+  if (!target || target !== workforceTooltipTarget) return;
+  if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return;
+  hideWorkforceInstantTooltip(target);
+});
+
+window.addEventListener('resize', () => {
+  if (workforceTooltipTarget) {
+    positionWorkforceInstantTooltip(workforceTooltipTarget, ensureWorkforceInstantTooltip());
+  }
+});
+
+window.addEventListener('scroll', () => {
+  if (workforceTooltipTarget) {
+    positionWorkforceInstantTooltip(workforceTooltipTarget, ensureWorkforceInstantTooltip());
+  }
+}, true);
 
 document.addEventListener('DOMContentLoaded', ensureWorkforceModals);
