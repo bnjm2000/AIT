@@ -126,15 +126,31 @@ def _department(payload_maps, code):
     return str(row.get("name") or code or "Unassigned")
 
 
+def _date_value(row, field, date_value, fallback=""):
+    values = row.get(field) if isinstance(row.get(field), dict) else {}
+    date_key = str(date_value or "")
+    return str(values[date_key]) if date_key in values else str(fallback or "")
+
+
+def _department_code(row, date_value=""):
+    fallback = row.get("department") or (
+        "FT" if row.get("subjectType") == "app-user" else ""
+    )
+    return _date_value(row, "dateDepartments", date_value, fallback)
+
+
 def _room(row):
     return str(row.get("subprojectName") or "").strip() or "-"
 
 
-def _role(row):
+def _role(row, date_value=""):
+    fallback = row.get("roleName")
     if row.get("subjectType") == "vendor" or row.get("vendorId"):
         pax = max(1, int(_number(row.get("pax"), 1)))
-        return str(row.get("roleName") or f"{pax} pax manpower")
-    return str(row.get("roleName") or "Role not set")
+        fallback = fallback or f"{pax} pax manpower"
+    else:
+        fallback = fallback or "Role not set"
+    return _date_value(row, "dateRoles", date_value, fallback) or "Role not set"
 
 
 def _pax(row):
@@ -505,9 +521,11 @@ def build_workforce_schedule_pdf(
         if subject_record and not rows:
             continue
         rows.sort(key=lambda row: (
-            0 if str(row.get("department") or "FT") == "FT" else 1,
+            0 if _department_code(row, date_value) == "FT" else 1,
             str(row.get("callTimes", {}).get(date_value) or "99:99"),
-            _department(department_maps, row.get("department")).lower(),
+            _department(
+                department_maps, _department_code(row, date_value)
+            ).lower(),
             _subject(subject_maps, row)["name"].lower(),
         ))
         if subject_record:
@@ -519,7 +537,7 @@ def build_workforce_schedule_pdf(
             if show_rates:
                 table_rows[0].append(Paragraph("Rate", table_header))
             for row in rows:
-                role = _role(row)
+                role = _role(row, date_value)
                 if row.get("subjectType") == "vendor" or row.get("vendorId"):
                     role = re.sub(
                         r"^\d+\s+pax\s+", "", role, flags=re.IGNORECASE
@@ -528,7 +546,9 @@ def build_workforce_schedule_pdf(
                 if show_room:
                     values.append(Paragraph(escape(_room(row)), cell_style))
                 values.extend([
-                    Paragraph(escape(_department(department_maps, row.get("department"))), cell_style),
+                    Paragraph(escape(_department(
+                        department_maps, _department_code(row, date_value)
+                    )), cell_style),
                     Paragraph(escape(role), cell_style),
                     Paragraph(escape(str((row.get("callTimes") or {}).get(date_value) or "Not set")), cell_center),
                 ])
@@ -559,8 +579,10 @@ def build_workforce_schedule_pdf(
                 if show_room:
                     values.append(Paragraph(escape(_room(row)), cell_style))
                 values.extend([
-                    Paragraph(escape(_department(department_maps, row.get("department"))), cell_style),
-                    Paragraph(escape(_role(row)), cell_style),
+                    Paragraph(escape(_department(
+                        department_maps, _department_code(row, date_value)
+                    )), cell_style),
+                    Paragraph(escape(_role(row, date_value)), cell_style),
                     Paragraph(escape(call_time), cell_center),
                     Paragraph(str(_pax(row)), cell_center),
                 ])
@@ -592,7 +614,9 @@ def build_workforce_schedule_pdf(
             ("SPAN", (0, 1), (-1, 1)) if not rows else ("LEFTPADDING", (0, 1), (-1, -1), 5),
         ]
         for row_index, row in enumerate(rows, start=1):
-            dept = department_maps.get(str(row.get("department") or "").upper()) or {}
+            dept = department_maps.get(
+                _department_code(row, date_value).upper()
+            ) or {}
             department_hex = _safe_colour(dept.get("color"), "#f8fafc")
             colour = colors.HexColor(department_hex)
             commands.append(("BACKGROUND", (department_column, row_index), (department_column, row_index), colour))

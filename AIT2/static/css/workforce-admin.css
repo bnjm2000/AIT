@@ -255,6 +255,11 @@
   flex: 0 0 auto;
 }
 
+.wf-event-picker-content {
+  min-width: 0;
+  flex: 1;
+}
+
 .wf-documents-sort-note {
   color: var(--wf-muted);
   font-size: 10px;

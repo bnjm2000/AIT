@@ -24819,9 +24819,12 @@ function connectRealtimeUpdates() {
           eventIds.some(eventId => Number(eventId) === Number(activeWorkforceEventId))
         ) {
           if (
-            realtimePayloadHasAction(payload, 'schedule-call-times-updated') &&
-            typeof applyWorkforceRealtimeCallTimes === 'function' &&
-            applyWorkforceRealtimeCallTimes(payload)
+            (
+              realtimePayloadHasAction(payload, 'schedule-call-times-updated') ||
+              realtimePayloadHasAction(payload, 'schedule-day-assignment-updated')
+            ) &&
+            typeof applyWorkforceRealtimeScheduleUpdates === 'function' &&
+            applyWorkforceRealtimeScheduleUpdates(payload)
           ) {
             return;
           }

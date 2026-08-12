@@ -1389,6 +1389,34 @@ function restoreWorkforceViewState(root, state) {
   });
 }
 
+function wfManpowerEventPickerHtml(data, ariaLabel = 'Choose an event') {
+  const event = data?.event || {};
+  const eventDates = event.startDate === event.endDate
+    ? wfEscape(event.startDate || '')
+    : [event.startDate, event.endDate]
+      .filter(Boolean)
+      .map(wfEscape)
+      .join(' &ndash; ');
+  return `<button type="button" class="plan-event-select-wrap"
+      aria-haspopup="dialog" aria-label="${wfAttr(ariaLabel)}"
+      onclick="openWorkforceEventChooser()">
+    <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
+    <div class="wf-event-picker-content">
+      <div class="plan-event-title-row">
+        <span class="plan-event-id">#${wfEscape(String(event.id || ''))}</span>
+        <span class="plan-event-name">${wfEscape(planEventOptionLabel(event))}</span>
+      </div>
+      <div class="plan-event-meta">
+        <span>${eventDates || '&mdash;'}</span>
+        ${event.location ? `<span aria-hidden="true">&bull;</span><span>${wfEscape(event.location)}</span>` : ''}
+        ${planEventTypeBadgeHtml(event)}
+        ${planEventStateBadgeHtml(event)}
+      </div>
+    </div>
+    <span class="plan-event-picker-chevron" aria-hidden="true">&#8964;</span>
+  </button>`;
+}
+
 function renderWorkforcePageLegacy() {
   const root = document.getElementById('workforce-page-root');
   const data = workforcePageState.data;
@@ -1483,10 +1511,6 @@ function renderWorkforcePage() {
     ).join('');
   const totals = data.totals || {};
   const grand = Number(totals.combined || 0) + Number(totals.transport || 0);
-  const eventDates = data.event.startDate === data.event.endDate
-    ? data.event.startDate
-    : [data.event.startDate, data.event.endDate].filter(Boolean).join(' – ');
-
   root.innerHTML = `
     <div class="plan-page-heading wf-manpower-page-heading">
       <div><h2>Manpower &amp; Transport</h2>
@@ -1502,25 +1526,7 @@ function renderWorkforcePage() {
     <div class="wf-plan-layout">
       <div class="wf-plan-primary">
         <div class="plan-event-bar">
-          <button type="button" class="plan-event-select-wrap"
-                  aria-haspopup="dialog"
-                  aria-label="Choose an event for manpower and transport"
-                  onclick="openWorkforceEventChooser()">
-            <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
-            <div style="min-width:0;flex:1;">
-              <div class="plan-event-title-row">
-                <span class="plan-event-id">#${wfEscape(String(data.event.id || ''))}</span>
-                <span class="plan-event-name">${wfEscape(planEventOptionLabel(data.event))}</span>
-              </div>
-              <div class="plan-event-meta">
-                <span>${wfEscape(eventDates || '—')}</span>
-                ${data.event.location ? `<span aria-hidden="true">&bull;</span><span>${wfEscape(data.event.location)}</span>` : ''}
-                ${planEventTypeBadgeHtml(data.event)}
-                ${planEventStateBadgeHtml(data.event)}
-              </div>
-            </div>
-            <span class="plan-event-picker-chevron" aria-hidden="true">&#8964;</span>
-          </button>
+          ${wfManpowerEventPickerHtml(data, 'Choose an event for manpower and transport')}
 
           <div class="plan-metrics">
             <div class="plan-metric">
@@ -3122,8 +3128,11 @@ async function deleteWorkforceAssignment(id) {
   }
 }
 
-async function deleteWorkforceAssignmentRequest(eventId, assignmentId, confirmedUploads = false) {
-  const suffix = confirmedUploads ? '?deleteUploads=1' : '';
+async function deleteWorkforceAssignmentRequest(eventId, assignmentId, confirmedUploads = false, date = '') {
+  const params = new URLSearchParams();
+  if (confirmedUploads) params.set('deleteUploads', '1');
+  if (date) params.set('date', date);
+  const suffix = params.size ? `?${params}` : '';
   try {
     return await apiCall(
       `/api/events/${Number(eventId)}/workforce/assignments/${encodeURIComponent(assignmentId)}${suffix}`,
@@ -3139,7 +3148,7 @@ async function deleteWorkforceAssignmentRequest(eventId, assignmentId, confirmed
         variant: 'danger'
       });
       if (confirmed) {
-        return deleteWorkforceAssignmentRequest(eventId, assignmentId, true);
+        return deleteWorkforceAssignmentRequest(eventId, assignmentId, true, date);
       }
     }
     throw error;

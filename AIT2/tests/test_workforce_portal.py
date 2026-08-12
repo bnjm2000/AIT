@@ -2244,6 +2244,175 @@ class WorkforcePortalTests(unittest.TestCase):
         updated = response.get_json()["data"]["assignments"][0]
         self.assertEqual(updated["workDates"], ["2026-07-13"])
 
+    def test_schedule_can_remove_one_assignment_date_and_reports_conflicts(self):
+        self.login("admin", True)
+        worker = self.client.post(
+            "/api/workforce/freelancers",
+            json={"name": "Clashing Crew", "phone": "9555 1122"},
+        ).get_json()["data"]
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "freelancerId": worker["id"],
+                "department": "AU",
+                "customRole": "Audio Engineer",
+                "workDates": ["2026-07-10", "2026-07-11"],
+                "dailyRate": 280,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assignment = response.get_json()["data"]["assignments"][0]
+
+        other_event = Event(
+            144,
+            "Clashing Production",
+            "20260711",
+            "20260711",
+            [],
+            prepared_items=[
+                "[MODEL]AU|Test Brand|Test Console|1|Audio requirement"
+            ],
+            location="Other Venue",
+        )
+        self.manager.events[other_event.event_id] = other_event
+        self.manager.save_event(other_event)
+        response = self.client.post(
+            "/api/events/144/workforce/assignments",
+            json={
+                "freelancerId": worker["id"],
+                "department": "AU",
+                "customRole": "Audio Engineer",
+                "workDates": ["2026-07-11"],
+                "dailyRate": 280,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        payload = self.client.get("/api/events/143/workforce").get_json()["data"]
+        current = next(row for row in payload["assignments"] if row["id"] == assignment["id"])
+        self.assertEqual(current["dateConflicts"][0]["eventId"], 144)
+        self.assertEqual(current["dateConflicts"][0]["date"], "2026-07-11")
+
+        response = self.client.delete(
+            f"/api/events/143/workforce/assignments/{assignment['id']}"
+            "?date=2026-07-10"
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        current = next(
+            row for row in response.get_json()["data"]["assignments"]
+            if row["id"] == assignment["id"]
+        )
+        self.assertEqual(current["workDates"], ["2026-07-11"])
+        self.assertEqual(current["days"], 1)
+
+    def test_schedule_can_change_department_and_role_for_one_day(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            "/api/events/143/workforce/departments",
+            json={"code": "LI", "name": "Lighting"},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assignment = next(
+            row for row in response.get_json()["data"]["assignments"]
+            if row["freelancerId"] == freelancer_id
+        )
+
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{assignment['id']}/schedule-day",
+            json={
+                "date": "2026-07-11",
+                "department": "LI",
+                "roleName": "Lighting Operator",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        update = response.get_json()["data"]
+        self.assertEqual(update["dateDepartments"], {"2026-07-11": "LI"})
+        self.assertEqual(update["dateRoles"], {"2026-07-11": "Lighting Operator"})
+
+        payload = self.client.get("/api/events/143/workforce").get_json()["data"]
+        current = next(
+            row for row in payload["assignments"] if row["id"] == assignment["id"]
+        )
+        self.assertEqual(current["department"], "AU")
+        self.assertEqual(current["roleName"], "Audio Engineer")
+        self.assertEqual(current["dateDepartments"]["2026-07-11"], "LI")
+        self.assertEqual(current["dateRoles"]["2026-07-11"], "Lighting Operator")
+
+        pdf_response = self.client.get(
+            "/api/events/143/workforce/schedule.pdf?scope=worker"
+            f"&subjectId={freelancer_id}"
+        )
+        self.assertEqual(pdf_response.status_code, 200)
+        pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(pdf_response.data)).pages
+        )
+        self.assertIn("Audio Engineer", pdf_text)
+        self.assertIn("Lighting Operator", pdf_text)
+        self.assertIn("Audio", pdf_text)
+        self.assertIn("Lighting", pdf_text)
+
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{assignment['id']}/schedule-day",
+            json={
+                "date": "2026-07-11",
+                "department": "AU",
+                "roleName": "Audio Engineer",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        update = response.get_json()["data"]
+        self.assertEqual(update["dateDepartments"], {})
+        self.assertEqual(update["dateRoles"], {})
+
+    def test_schedule_shows_linked_quotation_date_labels(self):
+        self.login("admin", True)
+        with open(
+            os.path.join(self.manager.data_folder, app_module.FINANCE_FILENAME),
+            "w",
+            encoding="utf-8",
+        ) as finance_file:
+            json.dump({
+                "version": app_module.FINANCE_VERSION,
+                "documents": [{
+                    "id": "quote_schedule_labels",
+                    "type": "quotation",
+                    "number": "QT-2026-143-01",
+                    "revision": 1,
+                    "eventId": 143,
+                    "scheduleMode": "event",
+                    "setupDate": "2026-07-10",
+                    "rehearsalDate": "2026-07-11",
+                    "showDate": "2026-07-12",
+                    "additionalShows": [{"date": "2026-07-11", "time": ""}],
+                    "teardownDate": "2026-07-13",
+                    "customScheduleGroups": [{
+                        "id": "handover",
+                        "label": "Client handover",
+                        "dates": [{"date": "2026-07-11", "time": ""}],
+                    }],
+                    "scheduleOrder": [
+                        "setup", "rehearsal", "custom:handover", "show",
+                        "teardown",
+                    ],
+                    "lineItems": [],
+                    "subprojects": [{"id": "main", "name": "Main Room"}],
+                }],
+            }, finance_file)
+
+        response = self.client.get("/api/events/143/workforce")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        labels = response.get_json()["data"]["event"]["quotationScheduleLabels"]
+        self.assertEqual(labels["2026-07-10"], ["Setup"])
+        self.assertEqual(
+            labels["2026-07-11"],
+            ["Rehearsal", "Client handover", "Show"],
+        )
+        self.assertEqual(labels["2026-07-12"], ["Show"])
+        self.assertEqual(labels["2026-07-13"], ["Teardown"])
+        self.assertNotIn("2026-07-14", labels)
+
     def test_workforce_assignments_support_the_same_person_in_multiple_rooms(self):
         event = self.manager.events[143]
         event.subprojects = [
@@ -3242,12 +3411,32 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("<th>Event Total</th>", source)
         self.assertIn("By department", source)
         self.assertIn("By day", source)
+        self.assertIn(
+            'class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"',
+            source,
+        )
+        self.assertIn("wfManpowerEventPickerHtml(data", source)
+        self.assertIn("function wfManpowerEventPickerHtml", admin_source)
+        self.assertIn("wf-event-picker-content", admin_source)
         self.assertNotIn("By Worker", source)
         self.assertIn("window.open(", source)
         self.assertIn("ensureWorkforceScheduleExportModal", source)
         self.assertIn("wfScheduleExportPhones", source)
         self.assertIn("wfScheduleExportRates", source)
         self.assertIn("showPhones", source)
+        self.assertIn("removeWorkforceScheduleDate", source)
+        self.assertIn("wf-schedule-person-remove", source)
+        self.assertIn("openWorkforceScheduleDayEditor", source)
+        self.assertIn("saveWorkforceScheduleDayAssignment", source)
+        self.assertIn("wf-schedule-dept-edit", source)
+        self.assertIn("wf-schedule-role", source)
+        self.assertIn(".wf-schedule-day-departments", styles)
+        self.assertIn("wfScheduleQuotationLabelHtml", source)
+        self.assertIn("quotationScheduleLabels", source)
+        self.assertIn(".wf-schedule-day-purpose", styles)
+        self.assertIn("dateConflicts", source)
+        self.assertIn("dateConflicts.length ? 'has-conflict'", source)
+        self.assertIn(".wf-schedule-person.has-conflict", styles)
         self.assertIn("document.getElementById('wfScheduleExportPhones').checked = false", source)
         self.assertIn("document.getElementById('wfScheduleExportRates').checked = false", source)
         self.assertNotIn("window.location.assign", source)

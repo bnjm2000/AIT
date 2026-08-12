@@ -83,6 +83,19 @@ def normalize_call_times(value) -> dict:
     return normalized
 
 
+def normalize_schedule_date_values(value, *, uppercase=False, max_length=100) -> dict:
+    """Return safe ISO-date mappings used by per-day schedule overrides."""
+    source = value if isinstance(value, dict) else {}
+    normalized = {}
+    for raw_date, raw_value in source.items():
+        date_value = str(raw_date or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+            continue
+        text_value = str(raw_value or "").strip()[:max_length]
+        normalized[date_value] = text_value.upper() if uppercase else text_value
+    return normalized
+
+
 def empty_workforce() -> dict:
     return {
         "version": 1,
@@ -169,6 +182,12 @@ def normalize_workforce(data) -> dict:
             if isinstance(assignment, dict):
                 assignment["callTimes"] = normalize_call_times(
                     assignment.get("callTimes")
+                )
+                assignment["dateDepartments"] = normalize_schedule_date_values(
+                    assignment.get("dateDepartments"), uppercase=True, max_length=12
+                )
+                assignment["dateRoles"] = normalize_schedule_date_values(
+                    assignment.get("dateRoles")
                 )
     for vehicle in normalized["vehicles"]:
         if isinstance(vehicle, dict):
