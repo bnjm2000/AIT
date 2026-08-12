@@ -8236,6 +8236,56 @@ def _workforce_role_on_date(assignment, date_value):
     ).strip()
 
 
+def _workforce_assignment_base_role(assignment):
+    return str(
+        assignment.get('serviceName')
+        or assignment.get('roleName')
+        or ''
+    ).strip()
+
+
+def _workforce_assignment_matches_schedule_group(
+    candidate, source, subject_id, department, role_name
+):
+    """Return whether two rows represent the same department-view role entry."""
+    return (
+        isinstance(candidate, dict)
+        and candidate is not source
+        and _workforce_assignment_subject_id(candidate) == subject_id
+        and _normalise_department_code(candidate.get('department')) == department
+        and _workforce_assignment_base_role(candidate).casefold() == role_name.casefold()
+        and str(candidate.get('subprojectId') or '') == str(
+            source.get('subprojectId') or ''
+        )
+        and str(candidate.get('providerType') or '') == str(
+            source.get('providerType') or ''
+        )
+    )
+
+
+def _set_workforce_assignment_dates(assignment, dates):
+    """Set a row's dates and prune every date-keyed field in one place."""
+    normalized_dates = sorted(set(dates))
+    assignment.update({
+        'workDates': normalized_dates,
+        'days': len(normalized_dates),
+        'callTimes': {
+            date_value: call_time
+            for date_value, call_time in normalize_call_times(
+                assignment.get('callTimes')
+            ).items()
+            if date_value in normalized_dates
+        },
+        'dateDepartments': _workforce_schedule_date_values(
+            assignment, 'dateDepartments', normalized_dates
+        ),
+        'dateRoles': _workforce_schedule_date_values(
+            assignment, 'dateRoles', normalized_dates
+        ),
+        'updatedAt': now_iso(),
+    })
+
+
 def _workforce_quotation_schedule_labels(event_id, manager=None):
     """Return quotation schedule labels by date without hydrating finance lines."""
     manager = manager or _current_data_manager_object()
@@ -9588,10 +9638,11 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
     previous_department = ''
     previous_role = ''
     subject_name = 'Worker or vendor'
+    result_assignment_id = str(assignment_id)
+    structure_changed = False
     with mutate_workforce(_workforce_folder()) as workforce:
-        assignment = find_by_id(
-            event_assignments(workforce, event_id), assignment_id
-        )
+        assignments = event_assignments(workforce, event_id)
+        assignment = find_by_id(assignments, assignment_id)
         if not assignment:
             return jsonify({'error': 'Assignment not found'}), 404
         work_dates = _workforce_assignment_work_dates(assignment, event)
@@ -9615,48 +9666,123 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             assignment, date_value
         )
         previous_role = _workforce_role_on_date(assignment, date_value)
-        base_department = _normalise_department_code(
-            assignment.get('department')
-        )
-        base_role = str(
-            assignment.get('serviceName')
-            or assignment.get('roleName')
-            or ''
-        ).strip()
-        date_departments = _workforce_schedule_date_values(
-            assignment, 'dateDepartments', work_dates
-        )
-        date_roles = _workforce_schedule_date_values(
-            assignment, 'dateRoles', work_dates
-        )
-        if department == base_department:
-            date_departments.pop(date_value, None)
-        else:
-            date_departments[date_value] = department
-        if role_name == base_role:
-            date_roles.pop(date_value, None)
-        else:
-            date_roles[date_value] = role_name
-        assignment.update({
-            'dateDepartments': date_departments,
-            'dateRoles': date_roles,
-            'updatedAt': now_iso(),
-        })
-
-        if role_name and not any(
-            isinstance(row, dict)
+        matching_role = next((
+            row for row in workforce.get('roles', [])
+            if isinstance(row, dict)
             and str(row.get('name') or '').strip().casefold() == role_name.casefold()
             and _normalise_department_code(row.get('department')) == department
-            for row in workforce.get('roles', [])
-        ):
-            workforce.setdefault('roles', []).append({
+        ), None) if role_name else None
+        if role_name and not matching_role:
+            matching_role = {
                 'id': new_id('role'),
                 'name': role_name,
                 'department': department,
                 'createdAt': now_iso(),
-            })
+            }
+            workforce.setdefault('roles', []).append(matching_role)
 
         subject_id = _workforce_assignment_subject_id(assignment)
+        target = next((
+            row for row in assignments
+            if _workforce_assignment_matches_schedule_group(
+                row, assignment, subject_id, department, role_name
+            )
+        ), None)
+        source_call_time = normalize_call_times(
+            assignment.get('callTimes')
+        ).get(date_value, '')
+        remaining_dates = [
+            row_date for row_date in work_dates if row_date != date_value
+        ]
+        source_matches_target = (
+            _normalise_department_code(assignment.get('department')) == department
+            and _workforce_assignment_base_role(assignment).casefold()
+            == role_name.casefold()
+        )
+
+        if target:
+            if remaining_dates:
+                _set_workforce_assignment_dates(assignment, remaining_dates)
+            else:
+                assignments.remove(assignment)
+            target_calls = normalize_call_times(target.get('callTimes'))
+            if source_call_time:
+                target_calls[date_value] = source_call_time
+            else:
+                target_calls.pop(date_value, None)
+            target['callTimes'] = target_calls
+            target_date_departments = _workforce_schedule_date_values(
+                target, 'dateDepartments'
+            )
+            target_date_roles = _workforce_schedule_date_values(
+                target, 'dateRoles'
+            )
+            target_date_departments.pop(date_value, None)
+            target_date_roles.pop(date_value, None)
+            target['dateDepartments'] = target_date_departments
+            target['dateRoles'] = target_date_roles
+            _set_workforce_assignment_dates(
+                target,
+                [*_workforce_assignment_work_dates(target, event), date_value],
+            )
+            result_assignment = target
+            structure_changed = True
+        elif source_matches_target:
+            date_departments = _workforce_schedule_date_values(
+                assignment, 'dateDepartments', work_dates
+            )
+            date_roles = _workforce_schedule_date_values(
+                assignment, 'dateRoles', work_dates
+            )
+            date_departments.pop(date_value, None)
+            date_roles.pop(date_value, None)
+            assignment['dateDepartments'] = date_departments
+            assignment['dateRoles'] = date_roles
+            _set_workforce_assignment_dates(assignment, work_dates)
+            result_assignment = assignment
+        elif remaining_dates:
+            result_assignment = copy.deepcopy(assignment)
+            result_assignment.update({
+                'id': new_id('assignment'),
+                'department': department,
+                'roleName': role_name,
+                'roleId': str((matching_role or {}).get('id') or ''),
+                'workDates': [date_value],
+                'days': 1,
+                'callTimes': {date_value: source_call_time} if source_call_time else {},
+                'dateDepartments': {},
+                'dateRoles': {},
+                'createdAt': now_iso(),
+                'updatedAt': now_iso(),
+            })
+            _set_workforce_assignment_dates(assignment, remaining_dates)
+            assignments.append(result_assignment)
+            structure_changed = True
+        else:
+            assignment.update({
+                'department': department,
+                'roleName': role_name,
+                'roleId': str((matching_role or {}).get('id') or ''),
+                'dateDepartments': {},
+                'dateRoles': {},
+            })
+            _set_workforce_assignment_dates(assignment, [date_value])
+            result_assignment = assignment
+            structure_changed = not source_matches_target
+
+        if (
+            matching_role
+            and str(result_assignment.get('subjectType') or '') != 'vendor'
+        ):
+            result_assignment['roleId'] = str(matching_role.get('id') or '')
+        result_assignment_id = str(result_assignment.get('id') or assignment_id)
+        date_departments = _workforce_schedule_date_values(
+            result_assignment, 'dateDepartments'
+        )
+        date_roles = _workforce_schedule_date_values(
+            result_assignment, 'dateRoles'
+        )
+
         subject, _subject_type = _workforce_subject(workforce, subject_id)
         subject_name = str(
             (subject or {}).get('name') or subject_id or subject_name
@@ -9679,21 +9805,27 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             f"{event_id}: {'; '.join(changes)}"
         )
     update = {
-        'assignmentId': str(assignment_id),
+        'assignmentId': result_assignment_id,
+        'originalAssignmentId': str(assignment_id),
         'date': date_value,
         'department': department,
         'roleName': role_name,
+        'structureChanged': structure_changed,
     }
     _workforce_changed(
-        event_id, 'schedule-day-assignment-updated', {'updates': [update]}
+        event_id,
+        'schedule-day-assignment-updated',
+        {'updates': [update], 'structureChanged': structure_changed},
     )
     saved = load_workforce(_workforce_folder())
+    current_workforce = _admin_workforce_payload(event_id)
     return jsonify({
         'success': True,
         'data': {
             **update,
             'dateDepartments': date_departments,
             'dateRoles': date_roles,
+            'workforce': current_workforce,
             'updatedAt': saved.get('updatedAt', ''),
         },
     })

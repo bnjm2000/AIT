@@ -8,11 +8,20 @@ from html import escape
 from io import BytesIO
 import os
 
+from models import format_user_phone
+from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
+
 
 SHOWBASE_GREEN = "#0f766e"
 SHOWBASE_INK = "#1f352f"
 SHOWBASE_MUTED = "#60736c"
 SHOWBASE_BORDER = "#d9e4e0"
+
+
+def _pdf_phone(value):
+    """Format phone fields for display without discarding legacy values."""
+    raw = str(value or "").strip()
+    return format_user_phone(raw) or raw
 
 
 def _number(value, default=0):
@@ -92,7 +101,7 @@ def _subject(payload_maps, row):
         return {
             "id": subject_id,
             "name": str(record.get("name") or username or "Unknown user"),
-            "phone": str(record.get("phone") or ""),
+            "phone": _pdf_phone(record.get("phone")),
             "vendor": False,
             "appUser": True,
         }
@@ -103,7 +112,7 @@ def _subject(payload_maps, row):
     return {
         "id": subject_id,
         "name": str(record.get("name") or fallback),
-        "phone": str(record.get("phone") or ""),
+        "phone": _pdf_phone(record.get("phone")),
         "vendor": is_vendor,
         "appUser": False,
     }
@@ -304,7 +313,7 @@ def build_workforce_schedule_pdf(
         company_name,
         str(company.get("billingAddress") or "").strip(),
         " | ".join(filter(None, (
-            str(company.get("phone") or "").strip(),
+            _pdf_phone(company.get("phone")),
             str(company.get("email") or "").strip(),
             str(company.get("website") or "").strip(),
         ))),
@@ -339,11 +348,11 @@ def build_workforce_schedule_pdf(
                 logo_drawn = False
         if letterhead_enabled and not logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont("Helvetica-Bold", 14)
+            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 14)
             canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
         if letterhead_enabled and logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont("Helvetica-Bold", 8.5)
+            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 8.5)
             canvas.drawRightString(
                 page_width - margin, page_height - 8 * mm, company_name[:80]
             )
@@ -351,7 +360,7 @@ def build_workforce_schedule_pdf(
             canvas.setFillColor(muted)
             y = page_height - 11 * mm
             for line in company_details[:3]:
-                canvas.setFont("Helvetica", 5.8)
+                canvas.setFont(_canvas_font(line, "Helvetica"), 5.8)
                 canvas.drawRightString(page_width - margin, y, line[:140])
                 y -= 2.7 * mm
         canvas.setStrokeColor(border)
@@ -359,7 +368,7 @@ def build_workforce_schedule_pdf(
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or (company_lines[0] if company_lines else "")
         canvas.setFillColor(muted)
-        canvas.setFont("Helvetica", 5.8)
+        canvas.setFont(_canvas_font(footer_line, "Helvetica"), 5.8)
         canvas.drawString(margin, 7.5 * mm, footer_line[:165])
         canvas.restoreState()
 
@@ -472,7 +481,7 @@ def build_workforce_schedule_pdf(
             ("Generated on", generated_at),
         ]
     metadata_cells = [
-        [Paragraph(escape(str(label)), label_style), Paragraph(escape(str(value)), value_style)]
+        [_paragraph(label, label_style), _paragraph(value, value_style)]
         for label, value in metadata
     ]
     metadata_rows = []
@@ -481,12 +490,12 @@ def build_workforce_schedule_pdf(
         row.extend(
             metadata_cells[index + 1]
             if index + 1 < len(metadata_cells)
-            else [Paragraph("", label_style), Paragraph("", value_style)]
+            else [_paragraph("", label_style), _paragraph("", value_style)]
         )
         metadata_rows.append(row)
     story = [
         Table(
-            [[Paragraph(heading, title_style), Paragraph(escape(str(event.get("name") or "Event")), section_style)]],
+            [[_paragraph(heading, title_style), _paragraph(event.get("name") or "Event", section_style)]],
             colWidths=[doc.width * .48, doc.width * .52],
             style=TableStyle([
                 ("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -533,9 +542,9 @@ def build_workforce_schedule_pdf(
             if show_room:
                 headers.append("Room")
             headers.extend(["Department", "Role / Assignment", "Call time"])
-            table_rows = [[Paragraph(header, table_header) for header in headers]]
+            table_rows = [[_paragraph(header, table_header) for header in headers]]
             if show_rates:
-                table_rows[0].append(Paragraph("Rate", table_header))
+                table_rows[0].append(_paragraph("Rate", table_header))
             for row in rows:
                 role = _role(row, date_value)
                 if row.get("subjectType") == "vendor" or row.get("vendorId"):
@@ -544,16 +553,16 @@ def build_workforce_schedule_pdf(
                     ) or "Manpower"
                 values = []
                 if show_room:
-                    values.append(Paragraph(escape(_room(row)), cell_style))
+                    values.append(_paragraph(_room(row), cell_style))
                 values.extend([
-                    Paragraph(escape(_department(
+                    _paragraph(_department(
                         department_maps, _department_code(row, date_value)
-                    )), cell_style),
-                    Paragraph(escape(role), cell_style),
-                    Paragraph(escape(str((row.get("callTimes") or {}).get(date_value) or "Not set")), cell_center),
+                    ), cell_style),
+                    _paragraph(role, cell_style),
+                    _paragraph((row.get("callTimes") or {}).get(date_value) or "Not set", cell_center),
                 ])
                 if show_rates:
-                    values.append(Paragraph(escape(_rate(row)), cell_right))
+                    values.append(_paragraph(_rate(row), cell_right))
                 table_rows.append(values)
             widths = ([42] if show_room else []) + [38, 68, 30]
             if show_rates:
@@ -564,34 +573,37 @@ def build_workforce_schedule_pdf(
             if show_room:
                 headers.append("Room")
             headers.extend(["Department", "Role / Assignment", "Call time", "Pax"])
-            table_rows = [[Paragraph(header, table_header) for header in headers]]
+            table_rows = [[_paragraph(header, table_header) for header in headers]]
             if show_rates:
-                table_rows[0].append(Paragraph("Rate", table_header))
+                table_rows[0].append(_paragraph("Rate", table_header))
             for row in rows:
                 subject = _subject(subject_maps, row)
                 call_time = str((row.get("callTimes") or {}).get(date_value) or "Not set")
                 values = [
-                    Paragraph(f"<b>{escape(subject['name'])}</b>" + (
-                        f" &nbsp; <font color='{SHOWBASE_MUTED}'>{escape(subject['phone'])}</font>"
-                        if show_phones and subject.get("phone") else ""
+                    Paragraph(_cjk_markup(
+                        f"<b>{escape(subject['name'])}</b>" + (
+                            f" &nbsp; <font color='{SHOWBASE_MUTED}'>{escape(subject['phone'])}</font>"
+                            if show_phones and subject.get("phone") else ""
+                        ),
+                        bold=True,
                     ), cell_style),
                 ]
                 if show_room:
-                    values.append(Paragraph(escape(_room(row)), cell_style))
+                    values.append(_paragraph(_room(row), cell_style))
                 values.extend([
-                    Paragraph(escape(_department(
+                    _paragraph(_department(
                         department_maps, _department_code(row, date_value)
-                    )), cell_style),
-                    Paragraph(escape(_role(row, date_value)), cell_style),
-                    Paragraph(escape(call_time), cell_center),
-                    Paragraph(str(_pax(row)), cell_center),
+                    ), cell_style),
+                    _paragraph(_role(row, date_value), cell_style),
+                    _paragraph(call_time, cell_center),
+                    _paragraph(_pax(row), cell_center),
                 ])
                 if show_rates:
-                    values.append(Paragraph(escape(_rate(row)), cell_right))
+                    values.append(_paragraph(_rate(row), cell_right))
                 table_rows.append(values)
             if not rows:
                 colspan = len(table_rows[0])
-                table_rows.append([Paragraph("No manpower assigned.", cell_style)] + [""] * (colspan - 1))
+                table_rows.append([_paragraph("No manpower assigned.", cell_style)] + [""] * (colspan - 1))
             widths = [48] + ([34] if show_room else []) + [30, 58, 26, 16]
             if show_rates:
                 widths.append(32)
@@ -631,8 +643,8 @@ def build_workforce_schedule_pdf(
         table.setStyle(TableStyle(commands))
         heading_row = Table(
             [[
-                Paragraph(_date_label(date_value), section_style),
-                Paragraph("" if subject_record else f"{_headcount(rows)} crew", cell_right),
+                _paragraph(_date_label(date_value), section_style),
+                _paragraph("" if subject_record else f"{_headcount(rows)} crew", cell_right),
             ]],
             colWidths=[doc.width * .75, doc.width * .25],
         )
@@ -646,7 +658,7 @@ def build_workforce_schedule_pdf(
             story.append(Spacer(1, 4 * mm))
 
     if not dates:
-        story.append(Paragraph("No event dates are available for this schedule.", cell_style))
+        story.append(_paragraph("No event dates are available for this schedule.", cell_style))
 
     doc.build(
         story,

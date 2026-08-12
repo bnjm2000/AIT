@@ -35,6 +35,7 @@ let __eventAssetRefreshTimer = null;
 const __eventAssetRefreshIds = new Set();
 const EVENT_OVERVIEW_PAGE_SIZE = 30;
 const EVENT_OPTIONS_PAGE_SIZE = 100;
+const PDF_EXPORT_FONT_FAMILY = "'Century Gothic', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans SC', Arial, sans-serif";
 let __allEventsLoadVersion = 0;
 let __allEventsProgressiveLoading = false;
 let assetLookupSource = null;
@@ -11097,7 +11098,7 @@ function buildMaintenanceReportPdfPages(rows, context) {
     top:0;
     visibility:hidden;
     width:196mm;
-    font-family:'Century Gothic', Arial, sans-serif;
+    font-family:${PDF_EXPORT_FONT_FAMILY};
     font-size:7.6pt;
     line-height:1.25;
     background:white;
@@ -11224,10 +11225,10 @@ async function generateMaintenanceReportPdf() {
       return;
     }
 
-    const html = `<!DOCTYPE html><html><head><title>Maintenance Report</title><style>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Maintenance Report</title><style>
       @page { size: A4; margin: 0; }
       * { box-sizing: border-box; }
-      body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+      body { margin: 0; font-family: ${PDF_EXPORT_FONT_FAMILY}; color: #000; background: #f0f0f0; }
       .page { width: 210mm; height: 297mm; min-height: 297mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
       .page:last-child { page-break-after: auto; break-after: auto; }
       .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }

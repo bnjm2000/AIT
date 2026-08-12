@@ -16,13 +16,14 @@
   padding: 5px 11px;
   font: inherit;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .wf-view-switch button.active {
   background: var(--wf-brand, #0f766e);
   color: #fff;
+  font-weight: 650;
   box-shadow: 0 1px 2px rgb(15 23 42 / 16%);
 }
 
@@ -102,6 +103,7 @@
   flex: 0 0 auto;
   margin-right: 6px;
   font-size: 13px;
+  font-weight: 600;
 }
 
 .wf-schedule-controls > label:not(.wf-rate-toggle) {
@@ -114,7 +116,7 @@
 .wf-schedule-select-field > span {
   color: var(--schedule-muted);
   font-size: 10.5px;
-  font-weight: 750;
+  font-weight: 500;
   text-transform: uppercase;
 }
 
@@ -192,7 +194,7 @@
 .wf-schedule-select-value b,
 .wf-schedule-option-label b {
   overflow: hidden;
-  font-weight: 650;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -338,7 +340,7 @@
   border-bottom: 1px solid #e2e8f0;
   color: #24324b;
   font-size: 14px;
-  font-weight: 750;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -412,7 +414,7 @@
   margin-right: 4px;
   color: var(--schedule-muted);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .wf-schedule-filter-options > button {
@@ -426,7 +428,7 @@
   padding: 4px 10px;
   font: inherit;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -435,6 +437,7 @@
   border-color: var(--schedule-green);
   background: var(--schedule-green);
   color: #fff;
+  font-weight: 650;
 }
 
 .wf-schedule-filter-options > button.dept:not(.active) {
@@ -541,7 +544,7 @@
   overflow: hidden;
   color: var(--schedule-green-dark);
   font-size: 9.5px;
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -556,7 +559,7 @@
   padding: 4px 6px;
   text-align: center;
   font-size: 11.5px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -675,7 +678,7 @@
   padding: 1px 2px;
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.2;
   text-align: left;
   text-overflow: ellipsis;
@@ -700,12 +703,12 @@
   margin-top: 2px;
   color: #536478;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .wf-schedule-person-main .wf-schedule-rate {
   color: #0f766e;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .wf-schedule-dept {
@@ -720,7 +723,7 @@
   color: var(--wf-dept-text);
   padding: 2px 5px;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .wf-schedule-dept-edit {
@@ -740,7 +743,7 @@
   margin-top: 7px;
   color: #526174;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .wf-schedule-person-meta label {
@@ -764,7 +767,7 @@
   padding: 1px 3px;
   font: inherit;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 400;
   transition: border-color 130ms ease, background-color 130ms ease;
 }
 
@@ -840,7 +843,7 @@
   color: #314a45;
   padding: 8px 10px;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .wf-schedule-day-departments {
@@ -874,12 +877,13 @@
   padding: 3px 5px;
   text-align: center;
   font-size: 10px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .wf-schedule-day-departments > button > b {
   overflow: hidden;
   font-size: 11px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -914,7 +918,7 @@
 .wf-schedule-role-suggestions > span {
   color: #718096;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .wf-schedule-role-suggestions > button {
@@ -925,7 +929,7 @@
   padding: 4px 7px;
   font: inherit;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1006,13 +1010,14 @@
   color: #607086;
   font: inherit;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .wf-coverage-toggle button.active {
   background: var(--schedule-green);
   color: #fff;
+  font-weight: 650;
 }
 
 .wf-call-summary {
@@ -1055,7 +1060,7 @@
 .wf-coverage-scroll thead th {
   background: #f8fafc;
   color: #526174;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .wf-coverage-scroll thead th > span {
@@ -1069,7 +1074,7 @@
   overflow: hidden;
   color: var(--schedule-green-dark);
   font-size: 8.5px;
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1081,14 +1086,14 @@
 
 .wf-coverage-scroll tr.total {
   background: #f3f8f7;
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .wf-coverage-scroll .event-total {
   border-left: 2px solid color-mix(in srgb, var(--schedule-green) 45%, #d7e1e8);
   background: #f2faf7;
   color: var(--schedule-green-dark);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .wf-app-user {

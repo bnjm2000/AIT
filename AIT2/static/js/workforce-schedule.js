@@ -56,6 +56,7 @@ function applyWorkforceRealtimeScheduleUpdates(payload) {
         .map(change => change.details || {})
       : [])
   ];
+  if (candidates.some(row => row.structureChanged)) return false;
   const updates = candidates.flatMap(row =>
     Array.isArray(row.updates) ? row.updates : []
   );
@@ -474,19 +475,7 @@ async function saveWorkforceScheduleDayAssignment(event) {
       'PATCH',
       { date, department, roleName }
     );
-    const assignment = wfScheduleRows().find(row => String(row.id) === assignmentId);
-    if (assignment) {
-      assignment.dateDepartments = response.data.dateDepartments || {};
-      assignment.dateRoles = response.data.dateRoles || {};
-    }
-    if (roleName && !(workforcePageState.data?.roles || []).some(row =>
-      String(row.name || '').toLowerCase() === roleName.toLowerCase() &&
-      String(row.department || '') === department
-    )) {
-      workforcePageState.data.roles ||= [];
-      workforcePageState.data.roles.push({ name: roleName, department });
-    }
-    workforcePageState.data.updatedAt = response.data.updatedAt || workforcePageState.data.updatedAt;
+    workforcePageState.data = response.data.workforce;
     closeWorkforceModal('wfScheduleDayEditorModal');
     renderWorkforcePage();
     showNotification('success', `Assignment updated for ${wfScheduleDateLabel(date)}`);
@@ -689,8 +678,7 @@ function renderWorkforceSchedulePage(root, data) {
       ${wfScheduleCustomSelectHtml('wfScheduleBulkDay', 'Day', workforceScheduleState.bulkDay, dayOptions)}
       ${wfScheduleCustomSelectHtml('wfScheduleBulkDepartment', 'Department', workforceScheduleState.bulkDepartment, departmentOptions)}
       <label><span>Call Time</span><input id="wfScheduleBulkTime" type="time" value="${wfAttr(workforceScheduleState.bulkTime)}" onchange="workforceScheduleState.bulkTime=this.value"></label>
-      <button type="button" class="wf-button primary" onclick="applyWorkforceBulkCallTime(false)">Apply to All Staff</button>
-      <button type="button" class="wf-button" onclick="applyWorkforceBulkCallTime(true)">Apply to Department</button>
+      <button type="button" class="wf-button primary" onclick="applyWorkforceBulkCallTime()">Apply</button>
       <label class="wf-rate-toggle"><span>Show Rates</span><input type="checkbox" ${workforceScheduleState.showRates ? 'checked' : ''} onchange="toggleWorkforceScheduleRates(this.checked)"><i></i></label>
     </section>
     ${wfScheduleDepartmentFiltersHtml()}
@@ -743,7 +731,7 @@ async function updateWorkforceCallTime(assignmentId, date, callTime, input) {
   }
 }
 
-async function applyWorkforceBulkCallTime(departmentOnly) {
+async function applyWorkforceBulkCallTime() {
   if (workforceScheduleState.saving) return;
   const day = workforceScheduleState.bulkDay || 'all';
   const department = workforceScheduleState.bulkDepartment || 'all';
@@ -752,15 +740,11 @@ async function applyWorkforceBulkCallTime(departmentOnly) {
     showNotification('warning', 'Choose a call time first');
     return;
   }
-  if (departmentOnly && department === 'all') {
-    showNotification('warning', 'Choose a department first');
-    return;
-  }
   const updates = [];
   wfScheduleRows().forEach(row => {
     (row.workDates || []).forEach(date => {
       if (day !== 'all' && day !== date) return;
-      if (departmentOnly && wfScheduleDepartment(row, date) !== department) return;
+      if (department !== 'all' && wfScheduleDepartment(row, date) !== department) return;
       updates.push({ assignmentId: row.id, date, callTime });
     });
   });

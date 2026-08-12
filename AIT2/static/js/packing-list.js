@@ -491,7 +491,7 @@ function buildPackingListPdfPages(event, snapshot, context) {
   measureBox.id = '__packingListMeasureBox';
   measureBox.style.cssText = `
     position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
-    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.25;
+    font-family:${PDF_EXPORT_FONT_FAMILY};font-size:8pt;line-height:1.25;
     background:white;z-index:-1;
   `;
   measureBox.innerHTML = `
@@ -682,7 +682,7 @@ async function generatePackingList(eventId, options = {}) {
   }
 
   if (!options.targetWindow) {
-    packingWindow.document.write(`<!DOCTYPE html><html><head><title>Preparing Packing List</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing the latest packing list...</body></html>`);
+    packingWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Preparing Packing List</title></head><body style="font-family:${PDF_EXPORT_FONT_FAMILY};padding:24px;">Preparing the latest packing list...</body></html>`);
     packingWindow.document.close();
   }
 
@@ -709,7 +709,7 @@ async function generatePackingList(eventId, options = {}) {
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
       @page { size:A4; margin:0; }
       * { box-sizing:border-box; }
-      body { margin:0;font-family:'Century Gothic',Arial,sans-serif;color:#111;background:#f0f0f0;font-size:8pt;line-height:1.25; }
+      body { margin:0;font-family:${PDF_EXPORT_FONT_FAMILY};color:#111;background:#f0f0f0;font-size:8pt;line-height:1.25; }
       .page { width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;position:relative;overflow:hidden;page-break-after:always;break-after:page; }
       .page:last-child { page-break-after:auto;break-after:auto; }
       .print-btn { position:fixed;top:20px;right:20px;background:#16a34a;color:#fff;border:0;padding:10px 18px;border-radius:6px;cursor:pointer;z-index:999;font-size:12px; }

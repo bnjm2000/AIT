@@ -568,7 +568,7 @@ function buildInventoryPdfPages(filteredAssets, filters, context) {
     top:0;
     visibility:hidden;
     width:${pageConfig.measureWidthMm}mm;
-    font-family:'Century Gothic', Arial, sans-serif;
+    font-family:${PDF_EXPORT_FONT_FAMILY};
     font-size:${pageConfig.bodyFontSize};
     line-height:1.25;
     background:white;
@@ -689,7 +689,7 @@ async function generateInventoryPdf() {
       return;
     }
 
-    win.document.write(`<!DOCTYPE html><html><head><title>Preparing Inventory PDF</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing inventory PDF...</body></html>`);
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Preparing Inventory PDF</title></head><body style="font-family:${PDF_EXPORT_FONT_FAMILY};padding:24px;">Preparing inventory PDF...</body></html>`);
     win.document.close();
 
     await loadPdfSettings(true);
@@ -706,10 +706,10 @@ async function generateInventoryPdf() {
       reportTitle,
     });
 
-    const html = `<!DOCTYPE html><html><head><title>${reportTitle}</title><style>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${reportTitle}</title><style>
       @page { size: A4 ${pageConfig.orientation}; margin: 0; }
       * { box-sizing: border-box; }
-      body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; font-size: ${pageConfig.bodyFontSize}; line-height: 1.25; }
+      body { margin: 0; font-family: ${PDF_EXPORT_FONT_FAMILY}; color: #000; background: #f0f0f0; font-size: ${pageConfig.bodyFontSize}; line-height: 1.25; }
       .page { width: ${pageConfig.widthMm}mm; height: ${pageConfig.heightMm}mm; min-height: ${pageConfig.heightMm}mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
       .page:last-child { page-break-after: auto; break-after: auto; }
       .print-btn { position: fixed; top: 20px; right: 20px; background: #667eea; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; z-index: 999; font-size: 12px; }

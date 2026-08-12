@@ -293,7 +293,7 @@ function generatePdfDO(data) {
         }
 
         body {
-            font-family: 'Century Gothic', sans-serif;
+            font-family: ${PDF_EXPORT_FONT_FAMILY};
             font-size: 9pt;
             line-height: 1.2;
             color: black;
@@ -865,6 +865,11 @@ function generatePdfDO(data) {
             z-index: 101;
         }
 
+        body,
+        body * {
+            font-family: ${PDF_EXPORT_FONT_FAMILY};
+        }
+
         @media print {
             @page {
                 size: A4;
@@ -1254,6 +1259,7 @@ function generatePagesContent(data, formattedDate) {
             #__doMeasureBox .quantity-column { width:22mm; }
             #__doMeasureBox .asset-id-line { display:block;margin-top:.5mm;color:#64748b;font-size:6.5pt;font-style:normal; }
             #__doMeasureBox .footer-measure { width:100%;color:#64748b;font-size:6.2pt;line-height:1.25;text-align:left;overflow-wrap:anywhere; }
+            #__doMeasureBox, #__doMeasureBox * { font-family:${PDF_EXPORT_FONT_FAMILY}; }
         </style>
 
         <div id="__doBaseMeasure">

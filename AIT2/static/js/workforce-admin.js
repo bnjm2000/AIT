@@ -1341,7 +1341,7 @@ function wfTransportTripCard(booking, direction) {
         [booking.departDate, booking.departTime].filter(Boolean).join(' '),
         [booking.useEndDate, booking.useEndTime].filter(Boolean).join(' ')
       ].filter(Boolean).join(' to '))}</strong></div>` : ''}
-      <div><span>Cost per trip</span><strong>${wfMoney(booking.cost)}</strong></div>
+      <div class="wf-trip-cost"><span>Cost per trip</span><strong>${wfMoney(booking.cost)}</strong></div>
       ${!isLegacyReturn && !isFleet ? `<div><span>Invoice</span><strong>${invoice
         ? `<button class="wf-link-button" type="button" onclick="window.open('${wfAttr(invoice.previewUrl)}','_blank')">${wfEscape(invoice.originalName)}</button>`
         : 'Not uploaded'}</strong></div>` : ''}

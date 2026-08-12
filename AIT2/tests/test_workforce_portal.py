@@ -947,10 +947,9 @@ class WorkforcePortalTests(unittest.TestCase):
         ) as source_file:
             source = source_file.read()
 
-        chooser = source[
-            source.index("function openWorkforceEventChooser()"): 
-            source.index("function wfDirectorySummaryBadges")
-        ]
+        chooser_start = source.index("function openWorkforceEventChooser()")
+        chooser_end = source.index("function wfDirectorySummaryBadges")
+        chooser = source[chooser_start:chooser_end]
         self.assertIn("planOpenEventChooser('workforce')", chooser)
         self.assertIn("refreshWorkforceEventChooserOptions()", chooser)
         self.assertIn("startProgressiveEventOptions(", chooser)
@@ -2319,6 +2318,16 @@ class WorkforcePortalTests(unittest.TestCase):
         )
 
         response = self.client.patch(
+            "/api/events/143/workforce/schedule/call-times",
+            json={"updates": [{
+                "assignmentId": assignment["id"],
+                "date": "2026-07-11",
+                "callTime": "09:15",
+            }]},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        response = self.client.patch(
             f"/api/events/143/workforce/assignments/{assignment['id']}/schedule-day",
             json={
                 "date": "2026-07-11",
@@ -2328,17 +2337,37 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         update = response.get_json()["data"]
-        self.assertEqual(update["dateDepartments"], {"2026-07-11": "LI"})
-        self.assertEqual(update["dateRoles"], {"2026-07-11": "Lighting Operator"})
+        self.assertTrue(update["structureChanged"])
+        self.assertEqual(update["dateDepartments"], {})
+        self.assertEqual(update["dateRoles"], {})
+        split_assignments = [
+            row for row in update["workforce"]["assignments"]
+            if row["freelancerId"] == freelancer_id
+        ]
+        self.assertEqual(len(split_assignments), 2)
+        audio_assignment = next(
+            row for row in split_assignments
+            if row["roleName"] == "Audio Engineer"
+        )
+        lighting_assignment = next(
+            row for row in split_assignments
+            if row["roleName"] == "Lighting Operator"
+        )
+        self.assertEqual(audio_assignment["department"], "AU")
+        self.assertEqual(audio_assignment["workDates"], ["2026-07-10"])
+        self.assertEqual(lighting_assignment["department"], "LI")
+        self.assertEqual(lighting_assignment["workDates"], ["2026-07-11"])
+        self.assertEqual(lighting_assignment["callTimes"], {"2026-07-11": "09:15"})
 
         payload = self.client.get("/api/events/143/workforce").get_json()["data"]
-        current = next(
-            row for row in payload["assignments"] if row["id"] == assignment["id"]
+        current_rows = [
+            row for row in payload["assignments"]
+            if row["freelancerId"] == freelancer_id
+        ]
+        self.assertEqual(
+            {(row["department"], row["roleName"]) for row in current_rows},
+            {("AU", "Audio Engineer"), ("LI", "Lighting Operator")},
         )
-        self.assertEqual(current["department"], "AU")
-        self.assertEqual(current["roleName"], "Audio Engineer")
-        self.assertEqual(current["dateDepartments"]["2026-07-11"], "LI")
-        self.assertEqual(current["dateRoles"]["2026-07-11"], "Lighting Operator")
 
         pdf_response = self.client.get(
             "/api/events/143/workforce/schedule.pdf?scope=worker"
@@ -2355,7 +2384,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("Lighting", pdf_text)
 
         response = self.client.patch(
-            f"/api/events/143/workforce/assignments/{assignment['id']}/schedule-day",
+            f"/api/events/143/workforce/assignments/{lighting_assignment['id']}/schedule-day",
             json={
                 "date": "2026-07-11",
                 "department": "AU",
@@ -2364,8 +2393,24 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         update = response.get_json()["data"]
+        self.assertTrue(update["structureChanged"])
         self.assertEqual(update["dateDepartments"], {})
         self.assertEqual(update["dateRoles"], {})
+        merged_assignments = [
+            row for row in update["workforce"]["assignments"]
+            if row["freelancerId"] == freelancer_id
+        ]
+        self.assertEqual(len(merged_assignments), 1)
+        self.assertEqual(merged_assignments[0]["department"], "AU")
+        self.assertEqual(merged_assignments[0]["roleName"], "Audio Engineer")
+        self.assertEqual(
+            merged_assignments[0]["workDates"],
+            ["2026-07-10", "2026-07-11"],
+        )
+        self.assertEqual(
+            merged_assignments[0]["callTimes"],
+            {"2026-07-11": "09:15"},
+        )
 
     def test_schedule_shows_linked_quotation_date_labels(self):
         self.login("admin", True)
@@ -3206,7 +3251,7 @@ class WorkforcePortalTests(unittest.TestCase):
 
     def test_full_time_app_user_schedule_and_upload_limits(self):
         self.manager.users["normal"].name = "Taylor Fulltime"
-        self.manager.users["normal"].phone = "+65 9123 9876"
+        self.manager.users["normal"].phone = "91239876"
         self.manager.save_users()
         self.login("admin", True)
 
@@ -3321,7 +3366,11 @@ class WorkforcePortalTests(unittest.TestCase):
                 "startDateValue": "2026-07-10",
                 "endDateValue": "2026-07-10",
             },
-            "freelancers": [{"id": "worker-1", "name": "Taylor Crew"}],
+            "freelancers": [{
+                "id": "worker-1",
+                "name": "Taylor Crew",
+                "phone": "91239876",
+            }],
             "vendors": [],
             "appUsers": [],
             "allDepartments": [{"code": "AX", "name": "Audio", "color": "#dbeafe"}],
@@ -3342,12 +3391,18 @@ class WorkforcePortalTests(unittest.TestCase):
             **base_payload,
             "subprojects": [{"id": "main", "name": "Main Room"}],
         }
-        single_pdf = build_workforce_schedule_pdf(single_room_payload)
+        single_pdf = build_workforce_schedule_pdf(
+            single_room_payload,
+            company={"companyName": "Showbase", "phone": "61234567"},
+            show_phones=True,
+        )
         single_text = "\n".join(
             page.extract_text() or ""
             for page in PdfReader(io.BytesIO(single_pdf)).pages
         )
         self.assertNotIn("Room\n", single_text)
+        self.assertIn("+65 9123 9876", single_text)
+        self.assertIn("+65 6123 4567", single_text)
 
         multi_room_payload = {
             **base_payload,
@@ -3371,6 +3426,97 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertLess(multi_text.index("Room"), multi_text.index("Department"))
         self.assertLess(multi_text.index("Department"), multi_text.index("Role / Assignment"))
         self.assertLess(multi_text.index("Role / Assignment"), multi_text.index("Call time"))
+
+    def test_workforce_schedule_pdf_preserves_chinese_text(self):
+        payload = {
+            "event": {
+                "id": 168,
+                "name": "新春晚宴",
+                "location": "滨海湾宴会厅",
+                "startDateValue": "2026-08-18",
+                "endDateValue": "2026-08-18",
+            },
+            "freelancers": [{
+                "id": "worker-cn",
+                "name": "陈小明",
+                "phone": "91239876",
+            }],
+            "vendors": [],
+            "appUsers": [],
+            "allDepartments": [{
+                "code": "LX",
+                "name": "灯光部",
+                "color": "#dbeafe",
+            }],
+            "departments": [],
+            "subprojects": [
+                {"id": "main", "name": "主宴会厅"},
+                {"id": "foyer", "name": "迎宾厅"},
+            ],
+            "assignments": [{
+                "id": "assignment-cn",
+                "freelancerId": "worker-cn",
+                "department": "LX",
+                "roleName": "灯光操作员",
+                "subprojectId": "main",
+                "subprojectName": "主宴会厅",
+                "workDates": ["2026-08-18"],
+                "callTimes": {"2026-08-18": "08:00"},
+            }],
+        }
+        pdf_bytes = build_workforce_schedule_pdf(
+            payload,
+            company={
+                "companyName": "演出制作有限公司",
+                "footerText": "感谢您的支持",
+            },
+            show_phones=True,
+        )
+        pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(pdf_bytes)).pages
+        )
+
+        for expected in (
+            "演出制作有限公司",
+            "新春晚宴",
+            "滨海湾宴会厅",
+            "陈小明",
+            "主宴会厅",
+            "灯光部",
+            "灯光操作员",
+            "感谢您的支持",
+        ):
+            self.assertIn(expected, pdf_text)
+
+    def test_every_pdf_export_uses_chinese_capable_fonts(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static", "js")
+        with open(os.path.join(static_root, "app.js"), encoding="utf-8") as source_file:
+            app_source = source_file.read()
+        self.assertIn("const PDF_EXPORT_FONT_FAMILY", app_source)
+        self.assertIn("'Microsoft YaHei'", app_source)
+        self.assertIn("'PingFang SC'", app_source)
+        self.assertIn("'Noto Sans CJK SC'", app_source)
+
+        for filename in (
+            "delivery-order.js",
+            "inventory-export.js",
+            "packing-list.js",
+            "transfer.js",
+        ):
+            with self.subTest(filename=filename):
+                with open(os.path.join(static_root, filename), encoding="utf-8") as source_file:
+                    source = source_file.read()
+                self.assertIn("PDF_EXPORT_FONT_FAMILY", source)
+                self.assertIn('<meta charset="UTF-8">', source)
+
+        project_root = os.path.dirname(app_module.__file__)
+        for filename in ("costing_pdf.py", "profit_loss_pdf.py", "workforce_schedule.py"):
+            with self.subTest(filename=filename):
+                with open(os.path.join(project_root, filename), encoding="utf-8") as source_file:
+                    source = source_file.read()
+                self.assertIn("_paragraph", source)
+                self.assertIn("_canvas_font", source)
 
     def test_workforce_schedule_frontend_is_responsive_and_granular(self):
         static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
@@ -3396,8 +3542,14 @@ class WorkforcePortalTests(unittest.TestCase):
             admin_styles = source_file.read()
 
         self.assertIn("schedule/call-times", source)
-        self.assertIn("Apply to All Staff", source)
-        self.assertIn("Apply to Department", source)
+        self.assertIn('onclick="applyWorkforceBulkCallTime()">Apply</button>', source)
+        self.assertNotIn("Apply to All Staff", source)
+        self.assertNotIn("Apply to Department", source)
+        self.assertNotIn("departmentOnly", source)
+        self.assertIn(
+            "department !== 'all' && wfScheduleDepartment(row, date) !== department",
+            source,
+        )
         self.assertIn("wfScheduleCustomSelectHtml", source)
         self.assertIn("chooseWorkforceScheduleSelect", source)
         self.assertNotIn('<select id="wfScheduleBulkDay"', source)
@@ -3413,6 +3565,23 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("Manage Workers/Vendors", source)
         self.assertIn("openFreelancerDirectory('manage')", source)
         self.assertIn(".wf-schedule-manage-directory", styles)
+        self.assertIn(
+            "font-weight: 400;",
+            styles.split(".wf-schedule-role {", 1)[1].split("}", 1)[0],
+        )
+        self.assertIn(
+            "font-weight: 500;",
+            styles.split(".wf-schedule-filter-options > button {", 1)[1].split("}", 1)[0],
+        )
+        self.assertIn(
+            "font-weight: 500;",
+            admin_styles.split(".wf-assignment-chip {", 1)[1].split("}", 1)[0],
+        )
+        self.assertIn(
+            "font-weight: 400;",
+            admin_styles.split(".wf-transport-meta strong {", 1)[1].split("}", 1)[0],
+        )
+        self.assertIn('class="wf-trip-cost"', admin_source)
         self.assertIn("wfConflictTooltipText(dateConflicts)", source)
         self.assertIn('data-wf-tooltip="${wfAttr(conflictTitle)}"', source)
         self.assertNotIn('class="wf-schedule-conflict" title=', source)
@@ -3463,6 +3632,8 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("width: 100%;", calendar_cells)
         self.assertIn("height: 31px;", calendar_cells)
         self.assertIn("padding: 0;", calendar_cells)
+        self.assertIn("button.wf-calendar-day.selected:hover", admin_styles)
+        self.assertIn("button.wf-calendar-day.selected.has-conflict:hover", admin_styles)
         self.assertIn("grid-auto-columns: minmax(238px, 1fr)", styles)
         self.assertIn("container-type: inline-size", styles)
         self.assertIn("@container (min-width: 340px)", styles)

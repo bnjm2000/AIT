@@ -1625,7 +1625,7 @@ function buildLegacyTransferPdfPages(groups, context) {
     top:0;
     visibility:hidden;
     width:196mm;
-    font-family:'Century Gothic', Arial, sans-serif;
+    font-family:${PDF_EXPORT_FONT_FAMILY};
     font-size:8.5pt;
     line-height:1.25;
     background:white;
@@ -1850,7 +1850,7 @@ function buildTransferPdfPagesV2(sections, context) {
   const measureBox = document.createElement('div');
   measureBox.id = '__transferReportMeasureBox';
   measureBox.style.cssText = `position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
-    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.3;background:#fff;z-index:-1;`;
+    font-family:${PDF_EXPORT_FONT_FAMILY};font-size:8pt;line-height:1.3;background:#fff;z-index:-1;`;
   measureBox.innerHTML = `
     <style>
       #__transferReportMeasureBox *{box-sizing:border-box}
@@ -2002,10 +2002,10 @@ async function generateTransferPdf(selectedModes = ['common']) {
       themeColor
     });
     const safe = value => escapeHtml(String(value ?? ''));
-    const html = `<!DOCTYPE html><html><head><title>Asset Transfer Report - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Asset Transfer Report - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
       @page{size:A4;margin:0}
       *{box-sizing:border-box}
-      body{margin:0;background:#eef2f1;color:#172033;font-family:'Century Gothic',Arial,sans-serif}
+      body{margin:0;background:#eef2f1;color:#172033;font-family:${PDF_EXPORT_FONT_FAMILY}}
       .page{position:relative;width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;overflow:hidden;page-break-after:always;break-after:page}
       .page:last-child{page-break-after:auto;break-after:auto}
       .transfer-report-letterhead{display:flex;align-items:center;justify-content:space-between;min-height:34px;margin-bottom:6px;border-bottom:1px solid #dbe5e3;padding-bottom:6px}
