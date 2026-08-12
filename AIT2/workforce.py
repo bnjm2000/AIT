@@ -276,17 +276,6 @@ def worker_submissions(data: dict, event_id, freelancer_id, create=False) -> dic
     return _dict(event_rows.get(str(freelancer_id)))
 
 
-def active_invoice(rows: dict):
-    return next(
-        (
-            row
-            for row in reversed(_list(rows.get("invoices")))
-            if isinstance(row, dict) and row.get("status") != "Denied"
-        ),
-        None,
-    )
-
-
 def active_claims(rows: dict) -> list:
     return [
         row

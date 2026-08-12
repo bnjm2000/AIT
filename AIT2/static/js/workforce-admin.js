@@ -42,10 +42,6 @@ const workforcePageState = {
 };
 
 const workforceEventChooserState = {
-  search: '',
-  filter: 'ALL',
-  page: 1,
-  pageSize: 8,
   requestId: 0
 };
 
@@ -385,9 +381,7 @@ async function loadWorkforcePage() {
         workforcePageState.eventId,
         loaded => {
           workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
-          if (document.getElementById('workforceEventChooserModal')?.classList.contains('active')) {
-            renderWorkforceEventChooser();
-          }
+          if (planEventChooserState.context === 'workforce') renderPlanEventChooser();
         }
       );
       workforcePageState.eventOptions = eventOptionsLoad.first
@@ -395,9 +389,7 @@ async function loadWorkforcePage() {
         .sort(planCompareEventsByStartDate);
       eventOptionsLoad.completion.then(loaded => {
         workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
-        if (document.getElementById('workforceEventChooserModal')?.classList.contains('active')) {
-          renderWorkforceEventChooser();
-        }
+        if (planEventChooserState.context === 'workforce') renderPlanEventChooser();
       }).catch(error => console.warn('Unable to load more event options:', error));
     }
     if (!workforcePageState.eventId) {
@@ -435,7 +427,7 @@ async function refreshWorkforcePage() {
 async function changeWorkforceEvent(eventId) {
   const id = Number(eventId);
   if (!id) return;
-  closeModal('workforceEventChooserModal');
+  closeModal('planEventChooserModal');
   workforcePageState.eventId = id;
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
@@ -1256,28 +1248,6 @@ function wfDepartmentHtml(department, assignments) {
   </details>`;
 }
 
-function wfTransportCardLegacy(booking) {
-  const invoice = booking.invoice;
-  return `<article class="wf-transport-card">
-    <div class="wf-transport-heading"><div><h4>${wfEscape(booking.vehicleType || 'Transport')}</h4>
-      <small>${wfEscape(booking.company || '')} &middot; ${wfEscape(booking.driver || booking.companyDriver || '')}</small></div>
-      <span class="wf-status-pill ${wfStatusClass(booking.status)}">${wfEscape(booking.status)}</span></div>
-    <div class="wf-transport-meta">
-      <div><span>Vehicle</span><strong>${wfEscape(booking.vehicleNumber || '—')}</strong></div>
-      <div><span>Contact</span><strong>${wfEscape(booking.contactNumber || '—')}</strong></div>
-      <div class="wf-route"><span>Route</span><strong>${wfEscape(booking.locationFrom)} &rarr; ${wfEscape(booking.locationTo)}</strong></div>
-      <div><span>Depart</span><strong>${wfEscape(`${booking.departDate} ${booking.departTime}`)}</strong></div>
-      <div><span>Return</span><strong>${booking.twoWay ? wfEscape(`${booking.returnDate} ${booking.returnTime}`) : 'One way'}</strong></div>
-      <div><span>Cost</span><strong>${wfMoney(booking.cost)}</strong></div>
-      <div><span>Invoice</span><strong>${invoice ? `<button class="wf-link-button" type="button" onclick="window.open('${wfAttr(invoice.previewUrl)}','_blank')">${wfEscape(invoice.originalName)}</button>` : 'Not uploaded'}</strong></div>
-    </div>
-    <div class="wf-transport-footer"><label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}
-      <input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>
-      <div><button class="wf-button" type="button" onclick="openTransportBooking('${wfAttr(booking.vendorId)}','${wfAttr(booking.id)}')">Edit</button>
-        <button class="wf-button danger" type="button" onclick="deleteTransportBooking('${wfAttr(booking.id)}')">Remove</button></div></div>
-  </article>`;
-}
-
 function wfTransportTripCard(booking, direction) {
   const isReturn = direction === 'return';
   const isLegacyReturn = isReturn && Boolean(booking.twoWay);
@@ -1415,56 +1385,6 @@ function wfManpowerEventPickerHtml(data, ariaLabel = 'Choose an event') {
     </div>
     <span class="plan-event-picker-chevron" aria-hidden="true">&#8964;</span>
   </button>`;
-}
-
-function renderWorkforcePageLegacy() {
-  const root = document.getElementById('workforce-page-root');
-  const data = workforcePageState.data;
-  if (!root || !data) return;
-  const grouped = Object.fromEntries((data.departments || []).map(row => [row.code, []]));
-  data.assignments.forEach(row => (grouped[row.department || 'Unassigned'] ||= []).push(row));
-  const departments = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b))
-    .map(([department, rows], index) => wfDepartmentHtml(department, rows, index)).join('');
-  const totals = data.totals || {};
-  const grand = Number(totals.combined || 0) + Number(totals.transport || 0);
-  root.innerHTML = `<header class="wf-page-header"><div>
-      <button class="wf-back" type="button" onclick="showSection('events')">&larr; Back to All Events</button>
-      <h2>Manpower &amp; Transport</h2><p>Assign crew, review submissions and arrange transport.</p>
-    </div><button class="wf-button" type="button" onclick="editEvent(${data.event.id})">Edit Event</button></header>
-    <section class="wf-event-dashboard">
-      <button type="button" class="plan-event-select-wrap wf-event-picker" onclick="openWorkforceEventChooser()">
-        <div class="plan-event-icon">${planMetricIconSvg('calendar')}</div>
-        <div class="wf-event-picker-copy"><div class="plan-event-title-row"><span class="plan-event-id">#${data.event.id}</span>
-          <span class="plan-event-name">${wfEscape(data.event.name)}</span></div>
-          <div class="plan-event-meta"><span>${wfEscape([data.event.startDate, data.event.endDate].filter(Boolean).join(' – '))}</span>
-            ${data.event.location ? `<span>&bull;</span><span>${wfEscape(data.event.location)}</span>` : ''}
-            ${planEventTypeBadgeHtml(data.event)} ${planEventStateBadgeHtml(data.event)}</div></div>
-        <span class="plan-event-picker-chevron">&#8964;</span>
-      </button>
-      <div class="wf-header-totals">
-        <div><span>Invoices</span><strong>${wfMoney(totals.invoice)}</strong></div>
-        <div><span>Claims</span><strong>${wfMoney(totals.claims)}</strong></div>
-        <div><span>Transport</span><strong>${wfMoney(totals.transport)}</strong></div>
-        <div><span>Combined</span><strong>${wfMoney(grand)}</strong></div>
-      </div>
-    </section>
-    <section class="wf-event-summary"><div class="wf-summary-cell"><span>Start date</span><strong>${wfEscape(data.event.startDate)}</strong></div>
-      <div class="wf-summary-cell"><span>End date</span><strong>${wfEscape(data.event.endDate)}</strong></div>
-      <div class="wf-summary-cell location"><span>Location</span><strong>${wfEscape(data.event.location || '—')}</strong></div>
-      <div class="wf-summary-cell"><span>Status</span><strong>${wfEscape(data.event.state)}</strong></div></section>
-    <section class="wf-panel wf-transport-panel"><header class="wf-panel-header"><div><h3>Transport Details</h3>
-      <p>Vehicles booked for this event.</p></div>
-      <div class="wf-toolbar"><button class="wf-button" type="button" onclick="openTransportDirectory()">Manage transport</button>
-        <button class="wf-button primary" type="button" onclick="openTransportBooking()">Book transport</button></div></header>
-      <div class="wf-transport-list">${data.transportBookings.length ? data.transportBookings.map(wfTransportCard).join('') : '<div class="wf-empty">No transport booked for this event.</div>'}</div></section>
-    <section class="wf-panel"><header class="wf-panel-header"><div><h3>Manpower / Workers &amp; Vendors</h3>
-      <p>Departments are created automatically from this event’s outgoing assets.</p></div>
-      <div class="wf-toolbar"><a class="wf-button" href="/api/events/${data.event.id}/workforce/download/invoices">Download invoices (.zip)</a>
-        <a class="wf-button" href="/api/events/${data.event.id}/workforce/download/claims">Download claims (.zip)</a>
-        <button class="wf-button" type="button" onclick="openManualDepartment()">+ Department</button>
-        <button class="wf-button primary" type="button" onclick="openFreelancerDirectory('manage')">Manage Worker/Vendor</button></div></header>
-      <div>${departments || '<div class="wf-empty">No asset departments detected. Add one manually to begin.</div>'}</div>
-    </section>`;
 }
 
 function renderWorkforcePage() {
@@ -1886,217 +1806,40 @@ function wfError(id, message = '') {
 }
 
 function openWorkforceEventChooser() {
-  ensureWorkforceEventChooserModal();
-  workforceEventChooserState.search = '';
-  workforceEventChooserState.filter = 'ALL';
-  workforceEventChooserState.page = 1;
-  const search = document.getElementById('workforceEventChooserSearch');
-  if (search) search.value = '';
-  renderWorkforceEventChooser();
-  openModal('workforceEventChooserModal');
+  planOpenEventChooser('workforce');
   refreshWorkforceEventChooserOptions();
 }
 
 async function refreshWorkforceEventChooserOptions() {
   const requestId = ++workforceEventChooserState.requestId;
+  const renderIfOpen = () => {
+    if (
+      requestId === workforceEventChooserState.requestId &&
+      planEventChooserState.context === 'workforce' &&
+      document.getElementById('planEventChooserModal')?.classList.contains('active')
+    ) renderPlanEventChooser();
+  };
   try {
     const eventOptionsLoad = await startProgressiveEventOptions(
       workforcePageState.eventId,
       loaded => {
         if (requestId !== workforceEventChooserState.requestId) return;
         workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
-        renderWorkforceEventChooser();
+        renderIfOpen();
       }
     );
     if (requestId !== workforceEventChooserState.requestId) return;
     workforcePageState.eventOptions = eventOptionsLoad.first
       .slice()
       .sort(planCompareEventsByStartDate);
-    renderWorkforceEventChooser();
+    renderIfOpen();
     const loaded = await eventOptionsLoad.completion;
     if (requestId !== workforceEventChooserState.requestId) return;
     workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
-    renderWorkforceEventChooser();
+    renderIfOpen();
   } catch (error) {
     console.warn('Unable to refresh event options:', error);
   }
-}
-
-function workforceEventChooserFilteredEvents() {
-  const search = String(workforceEventChooserState.search || '').trim().toLowerCase();
-  const filter = workforceEventChooserState.filter || 'ALL';
-  return (workforcePageState.eventOptions || [])
-    .filter(event => (
-      (
-        filter === 'ALL' ||
-        (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
-        planEventChooserFilterKey(event) === filter
-      ) &&
-      (!search || planEventChooserSearchText(event).includes(search))
-    ))
-    .sort(planCompareEventsByStartDate);
-}
-
-function ensureWorkforceEventChooserModal() {
-  let modal = document.getElementById('workforceEventChooserModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'workforceEventChooserModal';
-  modal.className = 'modal';
-  modal.setAttribute('aria-hidden', 'true');
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">Other Events <span title="Select an event to manage its manpower and transport">&#9432;</span></h3>
-        <button type="button" class="close-btn" aria-label="Close event picker"
-                onclick="closeModal('workforceEventChooserModal')">&times;</button>
-      </div>
-      <div class="plan-event-chooser-search">
-        <span aria-hidden="true">&#128269;</span>
-        <input type="search" id="workforceEventChooserSearch"
-               placeholder="Search events by name, ID, client, or location..."
-               oninput="workforceEventChooserSearchChanged(this.value)">
-      </div>
-      <div class="plan-event-chooser-filters" id="workforceEventChooserFilters"></div>
-      <div class="plan-event-chooser-table">
-        <div class="plan-event-chooser-head">
-          <span>Event</span>
-          <span>Dates</span>
-          <span>Location</span>
-          <span>Status</span>
-          <span></span>
-        </div>
-        <div class="plan-event-chooser-results" id="workforceEventChooserResults"></div>
-      </div>
-      <div class="plan-event-chooser-footer" id="workforceEventChooserFooter"></div>
-    </div>
-  `;
-  modal.addEventListener('click', event => {
-    if (event.target === modal) closeModal('workforceEventChooserModal');
-  });
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function renderWorkforceEventChooser() {
-  const filters = document.getElementById('workforceEventChooserFilters');
-  const results = document.getElementById('workforceEventChooserResults');
-  const footer = document.getElementById('workforceEventChooserFooter');
-  if (!filters || !results || !footer) return;
-
-  const counts = (workforcePageState.eventOptions || []).reduce((summary, event) => {
-    const key = planEventChooserFilterKey(event);
-    summary.ALL += 1;
-    if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
-      summary.ACTIVE += 1;
-    }
-    summary[key] = (summary[key] || 0) + 1;
-    return summary;
-  }, { ALL: 0, ACTIVE: 0 });
-
-  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
-    <button type="button"
-            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${workforceEventChooserState.filter === filter.key ? 'active' : ''}"
-            onclick="workforceSetEventChooserFilter('${filter.key}')">
-      ${wfEscape(filter.label)}
-      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
-    </button>
-  `).join('');
-
-  const events = workforceEventChooserFilteredEvents();
-  const pageCount = Math.max(1, Math.ceil(events.length / workforceEventChooserState.pageSize));
-  workforceEventChooserState.page = Math.min(
-    Math.max(1, workforceEventChooserState.page),
-    pageCount
-  );
-  const start = (workforceEventChooserState.page - 1) * workforceEventChooserState.pageSize;
-  const visibleEvents = events.slice(start, start + workforceEventChooserState.pageSize);
-
-  results.innerHTML = visibleEvents.length ? visibleEvents.map(event => `
-    <button type="button"
-            class="plan-event-option ${Number(event.id) === Number(workforcePageState.eventId) ? 'current' : ''}"
-            onclick="workforceChooseEvent(${Number(event.id)})">
-      <span class="plan-event-option-name">
-        <span class="plan-event-option-title-line">
-          <strong>#${wfEscape(String(event.id || ''))} &nbsp; ${wfEscape(planEventOptionLabel(event))}</strong>
-          ${planEventTypeBadgeHtml(event)}
-        </span>
-        <span>${wfEscape(planEventChooserSecondaryLabel(event))}</span>
-      </span>
-      <span class="plan-event-option-dates">
-        ${wfEscape(planEventChooserDateRange(event))}
-        <span>${wfEscape(planEventChooserRelativeDate(event))}</span>
-      </span>
-      <span class="plan-event-option-location">${wfEscape(event.location || event.venue || '—')}</span>
-      ${planEventStateBadgeHtml(event)}
-      <span class="plan-event-option-arrow" aria-hidden="true">&rsaquo;</span>
-    </button>
-  `).join('') : '<div class="plan-empty">No events match this search.</div>';
-
-  const firstShown = events.length ? start + 1 : 0;
-  const lastShown = Math.min(start + visibleEvents.length, events.length);
-  const visiblePages = [];
-  for (let page = 1; page <= pageCount; page += 1) {
-    if (
-      pageCount <= 7 ||
-      page === 1 ||
-      page === pageCount ||
-      Math.abs(page - workforceEventChooserState.page) <= 1
-    ) {
-      visiblePages.push(page);
-    }
-  }
-  const pageControls = [];
-  let previousPage = 0;
-  visiblePages.forEach(page => {
-    if (previousPage && page - previousPage > 1) {
-      pageControls.push('<span aria-hidden="true">&hellip;</span>');
-    }
-    pageControls.push(`
-      <button type="button"
-              class="plan-event-chooser-page ${page === workforceEventChooserState.page ? 'active' : ''}"
-              onclick="workforceSetEventChooserPage(${page})">${page}</button>
-    `);
-    previousPage = page;
-  });
-
-  footer.innerHTML = `
-    <span>Showing ${firstShown} to ${lastShown} of ${events.length} events</span>
-    <div class="plan-event-chooser-pages">
-      <button type="button" class="plan-event-chooser-page"
-              ${workforceEventChooserState.page <= 1 ? 'disabled' : ''}
-              onclick="workforceSetEventChooserPage(${workforceEventChooserState.page - 1})"
-              aria-label="Previous page">&lsaquo;</button>
-      ${pageControls.join('')}
-      <button type="button" class="plan-event-chooser-page"
-              ${workforceEventChooserState.page >= pageCount ? 'disabled' : ''}
-              onclick="workforceSetEventChooserPage(${workforceEventChooserState.page + 1})"
-              aria-label="Next page">&rsaquo;</button>
-    </div>
-  `;
-}
-
-function workforceEventChooserSearchChanged(value) {
-  workforceEventChooserState.search = value;
-  workforceEventChooserState.page = 1;
-  renderWorkforceEventChooser();
-}
-
-function workforceSetEventChooserFilter(filter) {
-  workforceEventChooserState.filter = filter || 'ALL';
-  workforceEventChooserState.page = 1;
-  renderWorkforceEventChooser();
-}
-
-function workforceSetEventChooserPage(page) {
-  workforceEventChooserState.page = Math.max(1, Number(page || 1));
-  renderWorkforceEventChooser();
-}
-
-async function workforceChooseEvent(eventId) {
-  closeModal('workforceEventChooserModal');
-  if (Number(eventId) === Number(workforcePageState.eventId)) return;
-  await changeWorkforceEvent(eventId);
 }
 
 function wfDirectorySummaryBadges(summary = {}) {

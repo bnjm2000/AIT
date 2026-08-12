@@ -63,6 +63,7 @@ const financeState = {
   automaticDraftDateRefresh: false,
   statusTargetId: '',
   eventPairTargetId: '',
+  eventOptionsRequestSeq: 0,
   contextDocumentId: '',
   addDepartment: '',
   collapsedDepartments: {},
@@ -3080,15 +3081,18 @@ function financeQueueListSearch(query) {
 
 async function financeLoadEditorData(force = false) {
   if (!force && financeState.editorDataLoadedAt && Date.now() - financeState.editorDataLoadedAt < 30000) return;
-  const [clientsResponse, departmentsResponse, eventsResponse, salespeopleResponse] = await Promise.all([
+  const linkedEventId = Number(financeState.current?.eventId || 0);
+  const [clientsResponse, departmentsResponse, linkedEventResponse, salespeopleResponse] = await Promise.all([
     apiCall('/api/clients').catch(() => ({ data: [] })),
     apiCall('/api/finance/departments').catch(() => ({ data: ['Manpower', 'Transportation'] })),
-    apiCall('/api/events?view=summary&limit=500').catch(() => ({ data: [] })),
+    linkedEventId
+      ? apiCall(`/api/events?view=options&eventId=${encodeURIComponent(linkedEventId)}&limit=1`).catch(() => ({ data: [] }))
+      : Promise.resolve({ data: [] }),
     apiCall('/api/finance/salespeople').catch(() => ({ data: [] }))
   ]);
   financeState.clients = clientsResponse.data || [];
   financeState.departments = departmentsResponse.data || ['Manpower', 'Transportation'];
-  financeState.events = eventsResponse.data || [];
+  financeState.events = mergeEventsById(financeState.events, linkedEventResponse.data || []);
   financeState.salespeople = salespeopleResponse.data || [];
   financeState.editorDataLoadedAt = Date.now();
 }
@@ -3464,20 +3468,47 @@ function financeRenderEventPickerResults(query = '') {
   `).join('') || '<div class="finance-suggestion-empty">No matching events</div>';
 }
 
+async function financeLoadEventOptions(preferredEventId = null) {
+  const requestId = ++financeState.eventOptionsRequestSeq;
+  const eventOptionsLoad = await startProgressiveEventOptions(
+    preferredEventId,
+    loaded => {
+      if (requestId !== financeState.eventOptionsRequestSeq) return;
+      financeState.events = loaded;
+      const search = document.getElementById('financeEventPickerSearch');
+      if (document.getElementById('financeEventPickerModal')?.classList.contains('active')) {
+        financeRenderEventPickerResults(search?.value || '');
+      }
+    }
+  );
+  if (requestId !== financeState.eventOptionsRequestSeq) return;
+  financeState.events = eventOptionsLoad.first;
+  financeRenderEventPickerResults(
+    document.getElementById('financeEventPickerSearch')?.value || ''
+  );
+  const loaded = await eventOptionsLoad.completion;
+  if (requestId !== financeState.eventOptionsRequestSeq) return;
+  financeState.events = loaded;
+  financeRenderEventPickerResults(
+    document.getElementById('financeEventPickerSearch')?.value || ''
+  );
+}
+
 async function financeOpenEventPicker(documentId = financeState.current?.id) {
   financeState.eventPairTargetId = String(documentId || '');
-  try {
-    await financeLoadEditorData();
-  } catch (error) {
-    showNotification('error', error.message || 'Unable to load events');
-    return;
-  }
   financeEnsureEventPickerModal();
   const search = document.getElementById('financeEventPickerSearch');
   if (search) search.value = '';
-  financeRenderEventPickerResults('');
+  const results = document.getElementById('financeEventPickerResults');
+  if (results) results.innerHTML = '<div class="finance-suggestion-empty">Loading events...</div>';
   openModal('financeEventPickerModal');
   setTimeout(() => search?.focus(), 50);
+  try {
+    await financeLoadEventOptions(financeState.current?.eventId || null);
+  } catch (error) {
+    if (results) results.innerHTML = '<div class="finance-suggestion-empty">Unable to load events</div>';
+    showNotification('error', error.message || 'Unable to load events');
+  }
 }
 
 function financeShowEventSuggestions(query = '') {
@@ -3536,9 +3567,36 @@ function financeUnpairEvent() {
   financeRenderEditor();
 }
 
+function financeEventCreationIssue(document = financeState.current) {
+  if (!String(document?.projectName || '').trim()) return 'Add a project name first.';
+  if (
+    String(document?.scheduleMode || 'event').toLowerCase() !== 'dry-hire' &&
+    !String(document?.eventLocation || '').trim()
+  ) return 'Add the event location first.';
+  const scheduleDates = [
+    document?.setupDate,
+    document?.rehearsalDate,
+    document?.showDate,
+    document?.teardownDate,
+    ...Object.values(FINANCE_SCHEDULE_KEYS).flatMap(key =>
+      (document?.[key] || []).map(row => row?.date)
+    ),
+    ...(document?.customScheduleGroups || []).flatMap(group =>
+      (group?.dates || []).map(row => row?.date)
+    )
+  ].filter(Boolean);
+  if (!scheduleDates.length) return 'Add at least one event schedule date first.';
+  return '';
+}
+
 async function financeCreateEventFromQuotation() {
   const current = financeState.current;
   if (!current || current.eventId) return;
+  const creationIssue = financeEventCreationIssue(current);
+  if (creationIssue) {
+    showNotification('warning', creationIssue);
+    return;
+  }
   const confirmed = await showAppConfirm({
     title: 'Create event from quotation?',
     message: 'This creates and pairs an event now so planning can begin. The quotation status will remain unchanged.',
@@ -5000,6 +5058,7 @@ function financeRenderEditor() {
   const canOpenCosting = typeof currentUserHasSalesAccess === 'function'
     ? currentUserHasSalesAccess()
     : false;
+  const eventCreationIssue = financeEventCreationIssue(document);
   root.innerHTML = `
     <div class="finance-editor-header">
       <div class="finance-editor-identity">
@@ -5078,11 +5137,6 @@ function financeRenderEditor() {
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('setup')">+ Add ${financeEscape(setupLabel.toLowerCase())}</button>
             </div>
             <div class="finance-schedule-stack">
-              ${financeSchedulePair(teardownLabel, 'teardown')}
-              ${financeScheduleRowsMarkup('teardown', document)}
-              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('teardown')">+ Add ${financeEscape(teardownLabel.toLowerCase())}</button>
-            </div>
-            <div class="finance-schedule-stack">
               ${financeSchedulePair('Rehearsal', 'rehearsal')}
               ${financeScheduleRowsMarkup('rehearsal', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
@@ -5091,6 +5145,11 @@ function financeRenderEditor() {
               ${financeSchedulePair('Show', 'show')}
               ${financeScheduleRowsMarkup('show', document)}
               <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('show')">+ Add show</button>
+            </div>
+            <div class="finance-schedule-stack">
+              ${financeSchedulePair(teardownLabel, 'teardown')}
+              ${financeScheduleRowsMarkup('teardown', document)}
+              <button type="button" class="btn btn-secondary finance-schedule-add" onclick="financeAddScheduleRow('teardown')">+ Add ${financeEscape(teardownLabel.toLowerCase())}</button>
             </div>
             ${financeCustomScheduleMarkup(document)}
           </div>
@@ -5182,9 +5241,10 @@ function financeRenderEditor() {
               <button type="button" class="btn btn-secondary finance-compare-event" onclick="financeOpenComparePage()">Compare</button>
             ` : ''}
             ${!document.eventId ? `
-              <button type="button" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()">Create event</button>
+              <button type="button" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()" ${eventCreationIssue ? 'disabled' : ''} title="${financeEscapeAttr(eventCreationIssue || 'Create and pair a planning event')}">Create event</button>
             ` : ''}
           </div>
+          ${!document.eventId && eventCreationIssue ? `<p class="finance-side-note">${financeEscape(eventCreationIssue)}</p>` : ''}
           ${document.eventId ? `<button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>` : ''}
         </section>
         <section class="finance-card finance-section">
@@ -6418,6 +6478,24 @@ function profitLossEventTitle(event) {
   return `#${event.id} ${event.name || 'Untitled event'}`;
 }
 
+async function financeLoadProgressiveEvents(targetState, preferredEventId, chooserContext) {
+  const update = loaded => {
+    targetState.events = (loaded || [])
+      .slice()
+      .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    if (
+      typeof planEventChooserState !== 'undefined' &&
+      planEventChooserState.context === chooserContext &&
+      document.getElementById('planEventChooserModal')?.classList.contains('active')
+    ) renderPlanEventChooser();
+  };
+  const eventOptionsLoad = await startProgressiveEventOptions(preferredEventId, update);
+  update(eventOptionsLoad.first);
+  eventOptionsLoad.completion.then(update).catch(error => {
+    console.warn('Unable to finish loading event options:', error);
+  });
+}
+
 async function loadProfitLoss(options = {}) {
   ensureFinanceSections();
   const root = profitLossRoot();
@@ -6425,8 +6503,11 @@ async function loadProfitLoss(options = {}) {
   profitLossState.loading = true;
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading Profit & Loss...</div>';
   try {
-    const eventsResponse = await apiCall('/api/events?view=summary&limit=500');
-    profitLossState.events = (eventsResponse.data || []).slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    await financeLoadProgressiveEvents(
+      profitLossState,
+      profitLossState.eventId,
+      'profit-loss'
+    );
     if (!profitLossState.eventId) {
       profitLossState.eventId = Number(profitLossState.events[0]?.id || 0);
     }
@@ -7429,8 +7510,11 @@ async function loadComparePage(options = {}) {
   compareState.loading = true;
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading comparison...</div>';
   try {
-    const eventsResponse = await apiCall('/api/events?view=summary&limit=500');
-    compareState.events = (eventsResponse.data || []).slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    await financeLoadProgressiveEvents(
+      compareState,
+      compareState.eventId,
+      'compare'
+    );
     if (!compareState.eventId) compareState.eventId = Number(compareState.events[0]?.id || 0);
     if (!compareState.eventId) {
       root.innerHTML = '<div class="finance-empty">Create an event before comparing quotation items.</div>';

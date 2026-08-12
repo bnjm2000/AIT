@@ -1141,6 +1141,12 @@ function planEventChooserSourceEvents() {
   if (planEventChooserState.context === 'compare' && typeof compareEventChooserEvents === 'function') {
     return compareEventChooserEvents();
   }
+  if (planEventChooserState.context === 'return' && typeof returnPageSelectableEvents === 'function') {
+    return returnPageSelectableEvents();
+  }
+  if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
+    return workforcePageState.eventOptions || [];
+  }
   return planPageState.events || [];
 }
 
@@ -1156,6 +1162,12 @@ function planEventChooserCurrentEventId() {
   }
   if (planEventChooserState.context === 'compare' && typeof compareCurrentEventId === 'function') {
     return compareCurrentEventId();
+  }
+  if (planEventChooserState.context === 'return' && typeof returnPageState !== 'undefined') {
+    return returnPageState.eventId;
+  }
+  if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
+    return workforcePageState.eventId;
   }
   return planEventChooserState.context === 'prepare-new'
     ? prepareNewPageState.eventId
@@ -1319,24 +1331,16 @@ function planOpenEventChooser(context = 'plan') {
   planEventChooserState.page = 1;
   const title = modal.querySelector('.modal-title');
   if (title) {
-    const titleText = context === 'transfer-source'
-      ? 'Choose From Event'
-      : context === 'transfer-target'
-        ? 'Choose To Event'
-        : context === 'profit-loss'
-          ? 'Choose Profit & Loss Event'
-          : context === 'compare'
-            ? 'Choose Event to Compare'
-            : 'Other Events';
-    const titleHelp = context === 'transfer-source'
-      ? 'Select the event assets are moving out from'
-      : context === 'transfer-target'
-        ? 'Select the event assets are moving into'
-        : context === 'profit-loss'
-          ? 'Select an event to review revenue, costs, and net profit'
-          : context === 'compare'
-            ? 'Select an event to compare against its quotation'
-            : 'Select any event to update its plan';
+    const headings = {
+      'transfer-source': ['Choose From Event', 'Select the event assets are moving out from'],
+      'transfer-target': ['Choose To Event', 'Select the event assets are moving into'],
+      'profit-loss': ['Choose Profit & Loss Event', 'Select an event to review revenue, costs, and net profit'],
+      compare: ['Choose Event to Compare', 'Select an event to compare against its quotation'],
+      return: ['Choose Event to Return', 'Select an event to receive its returned assets'],
+      workforce: ['Choose Event for Manpower', 'Select an event to manage its manpower and transport'],
+      plan: ['Other Events', 'Select any event to update its plan']
+    };
+    const [titleText, titleHelp] = headings[context] || headings.plan;
     title.innerHTML = `${titleText} <span title="${escapeHtmlAttr(titleHelp)}">&#9432;</span>`;
   }
   const search = document.getElementById('planEventChooserSearch');
@@ -1383,6 +1387,14 @@ async function planChooseEvent(eventId) {
   }
   if (planEventChooserState.context === 'compare' && typeof selectCompareEvent === 'function') {
     await selectCompareEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'return' && typeof returnPageSelectEvent === 'function') {
+    await returnPageSelectEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'workforce' && typeof changeWorkforceEvent === 'function') {
+    await changeWorkforceEvent(eventId);
     return;
   }
   await selectPlanEvent(eventId);

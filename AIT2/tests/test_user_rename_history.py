@@ -15,7 +15,24 @@ class UserRenameHistoryTests(unittest.TestCase):
         self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
+        self.original_company_registry_file = app_module.COMPANY_REGISTRY_FILE
+        self.original_company_registry_cache = app_module._company_registry_cache
         self.tempdir = tempfile.TemporaryDirectory()
+
+        app_module.COMPANY_REGISTRY_FILE = os.path.join(
+            self.tempdir.name, 'Companies.json'
+        )
+        app_module._company_registry_cache = None
+        company = app_module._new_company_record('SHOWBASE', 'Showbase Test')
+        app_module._save_company_registry({
+            'defaultCompany': 'SHOWBASE',
+            'companies': {'SHOWBASE': company},
+            'userCompanies': {
+                'admin': 'SHOWBASE',
+                'tech-old': 'SHOWBASE',
+            },
+            'superAdmins': ['bnjm2000'],
+        })
 
         self.data_manager = DataManager(self.tempdir.name)
         self.data_manager.setup_data_folder()
@@ -129,6 +146,8 @@ class UserRenameHistoryTests(unittest.TestCase):
         app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
+        app_module.COMPANY_REGISTRY_FILE = self.original_company_registry_file
+        app_module._company_registry_cache = self.original_company_registry_cache
         self.tempdir.cleanup()
 
     def login_as_admin(self):

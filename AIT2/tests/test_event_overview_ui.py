@@ -96,7 +96,7 @@ def test_all_events_title_uses_the_company_theme():
 
 def test_event_overview_includes_a_single_or_legacy_main_room():
     room_rows = function_source('eventOverviewSubprojectRows', 'eventOverviewSubprojects')
-    overview = function_source('viewEvent', 'viewEventLegacy')
+    overview = function_source('viewEvent', 'toggleViewSection')
 
     assert "name: 'Main Room'" in room_rows
     assert 'Object.values(event?.modelGroups || {})' in room_rows

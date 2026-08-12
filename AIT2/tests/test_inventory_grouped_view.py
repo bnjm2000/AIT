@@ -627,7 +627,8 @@ def test_maintenance_entries_support_inline_event_references():
         'editMaintenanceDescription',
     ):
         assert f"setupMaintenanceEventReferenceInput('{field_id}')" in script
-    assert script.count('maintenanceDescriptionHtml(') >= 10
+    assert script.count('maintenanceDescriptionHtml(') >= 9
+    assert 'showMaintenanceLogModalLegacy' not in script
     assert '.maintenance-event-suggestions {' in template
     assert '.maintenance-event-reference {' in template
     assert '#eventDetailsModal.maintenance-reference-overlay {' in template

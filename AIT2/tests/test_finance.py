@@ -3222,6 +3222,76 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(parsed['name'], 'Stage package')
         self.assertEqual(parsed['quantity'], 3)
 
+    def test_zero_quantity_lines_do_not_create_event_requirements(self):
+        quotation = {
+            'lineItems': [{
+                'id': 'zero-quotation-line',
+                'catalogKey': 'inventory|l-acoustics|sb18-iii',
+                'sourceAssetIds': ['AX#01'],
+                'brand': 'L-Acoustics',
+                'model': 'SB18 III',
+                'description': 'Subwoofer',
+                'department': 'Audio',
+                'departmentCode': 'AX',
+                'quantity': 0,
+                'subprojectId': 'main',
+            }],
+        }
+        costing = {
+            'id': 'cost-zero',
+            'lineItems': [{
+                **quotation['lineItems'][0],
+                'id': 'zero-costing-line',
+                'groupHeaderQuantity': 0,
+            }],
+        }
+
+        self.assertEqual(app_module._finance_event_prepared_items(quotation), [])
+        self.assertEqual(
+            app_module._finance_event_subprojects(quotation)[0]['items'],
+            [],
+        )
+        self.assertEqual(app_module._costing_event_prepared_items(costing), [])
+        self.assertEqual(
+            app_module._costing_event_subprojects(costing)[0]['items'],
+            [],
+        )
+
+    def test_event_date_range_uses_the_earliest_schedule_date(self):
+        start, end = app_module._finance_event_date_range({
+            'setupDate': '2026-08-20',
+            'rehearsalDate': '2026-08-18',
+            'showDate': '2026-08-19',
+            'teardownDate': '2026-08-21',
+        })
+
+        self.assertEqual(start, '2026-08-18')
+        self.assertEqual(end, '2026-08-21')
+
+    def test_event_workflow_frontend_uses_progressive_shared_selection(self):
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        plan_source = Path('static/js/plan.js').read_text(encoding='utf-8')
+        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        workforce_source = Path('static/js/workforce-admin.js').read_text(
+            encoding='utf-8'
+        )
+
+        self.assertNotIn('view=summary&limit=500', finance_source)
+        self.assertIn('startProgressiveEventOptions(', finance_source)
+        self.assertIn("planOpenEventChooser('return')", app_source)
+        self.assertIn("planOpenEventChooser('workforce')", workforce_source)
+        self.assertNotIn('returnEventChooserModal', app_source)
+        self.assertNotIn('workforceEventChooserModal', workforce_source)
+        self.assertIn("context === 'return'", plan_source)
+        self.assertIn("context === 'workforce'", plan_source)
+
+        schedule = finance_source.split(
+            '<div class="finance-schedule-grid">', 1
+        )[1].split('${financeCustomScheduleMarkup(document)}', 1)[0]
+        self.assertLess(schedule.index("'setup'"), schedule.index("'rehearsal'"))
+        self.assertLess(schedule.index("'rehearsal'"), schedule.index("'show'"))
+        self.assertLess(schedule.index("'show'"), schedule.index("'teardown'"))
+
     def test_group_description_only_consolidates_matching_asset_labels(self):
         from quotation_pdf import (
             _group_description_part,
@@ -3990,7 +4060,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'Canonical Company',
         )
 
-    def test_editor_pairs_setup_teardown_then_rehearsal_show(self):
+    def test_editor_orders_schedule_chronologically(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
             os.path.join(project_root, 'static', 'js', 'finance.js'),
@@ -4009,12 +4079,12 @@ class FinanceFeatureTests(unittest.TestCase):
         show = schedule_source.index("financeSchedulePair('Show', 'show')")
         additional_shows = schedule_source.index("financeScheduleRowsMarkup('show', document)")
         self.assertLess(setup, additional_setups)
-        self.assertLess(additional_setups, teardown)
-        self.assertLess(teardown, additional_teardowns)
-        self.assertLess(teardown, rehearsal)
+        self.assertLess(additional_setups, rehearsal)
         self.assertLess(rehearsal, additional_rehearsals)
         self.assertLess(additional_rehearsals, show)
         self.assertLess(show, additional_shows)
+        self.assertLess(additional_shows, teardown)
+        self.assertLess(teardown, additional_teardowns)
         self.assertIn('finance-schedule-stack', schedule_source)
         self.assertIn("financeAddScheduleRow('setup')", schedule_source)
         self.assertIn("financeAddScheduleRow('teardown')", schedule_source)
@@ -6035,7 +6105,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('financelistresultshtml', source)
         self.assertIn('financestate.listrequestseq += 1', source)
         self.assertIn('settimeout(() => financeloadlist(query), 400)', source)
-        self.assertIn('/api/events?view=summary&limit=500', source)
+        self.assertNotIn('/api/events?view=summary&limit=500', source)
+        self.assertIn('startprogressiveeventoptions(', source)
         self.assertIn('/api/finance/salespeople', source)
         self.assertIn('financeshowsalespersonsuggestions', source)
         self.assertIn('financesalespersoninput', source)
@@ -6150,6 +6221,8 @@ class FinanceFeatureTests(unittest.TestCase):
 
     def test_draft_quotation_can_create_a_planning_event_without_acceptance(self):
         quotation = self.create_quote('Early Planning')
+        quotation['eventLocation'] = 'Marina Bay Sands'
+        quotation['showDate'] = '2026-09-12'
         quotation['lineItems'] = [{
             'id': 'early-line',
             'catalogKey': 'inventory|l-acoustics|sb18-iii',
@@ -6180,6 +6253,69 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(event.name, 'Early Planning')
         self.assertEqual(event.state, 'New')
         self.assertEqual(len(event.prepared_items), 1)
+
+    def test_draft_quotation_event_creation_requires_event_details(self):
+        quotation = self.create_quote('Incomplete Planning Event')
+
+        missing_details = self.client.post(
+            f"/api/quotations/{quotation['id']}/create-event", json={},
+        )
+
+        self.assertEqual(missing_details.status_code, 400)
+        self.assertIn('Location is required', missing_details.get_json()['error'])
+        self.assertFalse(self.data_manager.events)
+
+        quotation['eventLocation'] = 'Suntec Convention Centre'
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        missing_schedule = self.client.post(
+            f"/api/quotations/{quotation['id']}/create-event", json={},
+        )
+
+        self.assertEqual(missing_schedule.status_code, 400)
+        self.assertIn(
+            'schedule date',
+            missing_schedule.get_json()['error'].lower(),
+        )
+        self.assertFalse(self.data_manager.events)
+
+    def test_managed_event_tracks_quotation_metadata_and_owners(self):
+        quotation = self.create_quote('Original Event Name')
+        quotation.update({
+            'eventLocation': 'Original Venue',
+            'showDate': '2026-09-12',
+            'salespersonUsername': 'bob',
+        })
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.login('bob')
+        created = self.client.post(
+            f"/api/quotations/{quotation['id']}/create-event", json={},
+        ).get_json()['data']
+        event = self.data_manager.events[created['eventId']]
+
+        self.assertEqual(set(event.assigned_users), {'alice', 'bob'})
+
+        updated = {
+            **created,
+            'projectName': 'Updated Event Name',
+            'title': 'Updated Event Name',
+            'eventLocation': 'Updated Venue',
+            'rehearsalDate': '2026-09-10',
+            'showDate': '2026-09-13',
+        }
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=updated,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event = self.data_manager.events[created['eventId']]
+        self.assertEqual(event.name, 'Updated Event Name')
+        self.assertEqual(event.location, 'Updated Venue')
+        self.assertEqual(event.start_date, '20260910')
+        self.assertEqual(event.end_date, '20260913')
 
     def test_invoice_plans_only_start_from_accepted_quotations_and_track_installments(self):
         draft = self.create_quote('Not Ready For Invoicing')

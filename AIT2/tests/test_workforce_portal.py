@@ -948,9 +948,10 @@ class WorkforcePortalTests(unittest.TestCase):
             source = source_file.read()
 
         chooser = source[
-            source.index("function openWorkforceEventChooser()"):
-            source.index("function workforceEventChooserFilteredEvents()")
+            source.index("function openWorkforceEventChooser()"): 
+            source.index("function wfDirectorySummaryBadges")
         ]
+        self.assertIn("planOpenEventChooser('workforce')", chooser)
         self.assertIn("refreshWorkforceEventChooserOptions()", chooser)
         self.assertIn("startProgressiveEventOptions(", chooser)
 
@@ -3044,7 +3045,7 @@ class WorkforcePortalTests(unittest.TestCase):
 
         department_renderer = source.split(
             "function wfDepartmentHtml", 1
-        )[1].split("function wfTransportCardLegacy", 1)[0]
+        )[1].split("function wfTransportTripCard", 1)[0]
         summary = department_renderer.split("<summary>", 1)[1].split(
             "</summary>", 1
         )[0]

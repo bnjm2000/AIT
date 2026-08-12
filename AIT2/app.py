@@ -90,7 +90,7 @@ from models import (
 from storage_paths import storage_root as configured_storage_root
 from routes.delivery_orders import register_delivery_order_routes
 from routes.pages import register_app_page_routes
-from services.company_storage import CompanyStorageUsageService, storage_category
+from services.company_storage import CompanyStorageUsageService
 from services.company_storage_context import (
     attach_company_storage_contexts,
     build_company_storage_contexts,
@@ -492,10 +492,6 @@ def _invalidate_company_storage_cache(*company_codes):
     _company_storage_service.invalidate(*(
         _normalise_company_code(company_code) for company_code in company_codes
     ))
-
-
-def _company_storage_category(root_kind, relative_path):
-    return storage_category(root_kind, relative_path)
 
 
 def _company_storage_usage(company_code, force=False):
@@ -2654,10 +2650,6 @@ def _company_frontend_folder(company_code=None):
     return folder or os.path.join(
         _storage_root_for_app(), 'companies', DEFAULT_COMPANY_CODE, 'branding'
     )
-
-
-def _default_pdf_logo_path(company_code=None):
-    return ''
 
 
 def _pdf_assets_folder(company_code=None):
@@ -5610,11 +5602,6 @@ def _event_active_prepared_quantity_for_group(event, group, include_extra=True):
     specific_qty = _event_specific_asset_quantity(event, group, include_returned=False, include_extra=include_extra)
     bulk_qty = _event_bulk_quantity_for_group(event, group, include_returned=False)
     return slot_qty + specific_qty + bulk_qty
-
-
-def _event_prepared_open_slots(event, group):
-    prepared_slots = _event_prepared_slot_quantity(event, group)
-    return max(0, prepared_slots)
 
 
 def _decrement_prepared_model_marker_list(event, list_name, group, quantity=1):
@@ -32083,35 +32070,61 @@ def _finance_export_error(document):
     return ''
 
 
-def _finance_event_date_range(document):
-    setup_dates = [
-        document.get('setupDate'),
-        *[row.get('date') for row in document.get('additionalSetups') or [] if isinstance(row, dict)],
-    ]
-    setup_dates = [value for value in setup_dates if value]
-    custom_dates = [
-        row.get('date')
+def _finance_event_schedule_dates(document):
+    """Return every date that contributes to the planning event window."""
+    date_fields = (
+        ('setupDate', 'additionalSetups'),
+        ('rehearsalDate', 'additionalRehearsals'),
+        ('showDate', 'additionalShows'),
+        ('teardownDate', 'additionalTeardowns'),
+    )
+    values = []
+    for primary_key, additional_key in date_fields:
+        primary = str(document.get(primary_key) or '').strip()
+        if primary:
+            values.append(primary)
+        values.extend(
+            str(row.get('date') or '').strip()
+            for row in document.get(additional_key) or []
+            if isinstance(row, dict) and str(row.get('date') or '').strip()
+        )
+    values.extend(
+        str(row.get('date') or '').strip()
         for group in document.get('customScheduleGroups') or []
         if isinstance(group, dict)
         for row in group.get('dates') or []
-        if isinstance(row, dict) and row.get('date')
-    ]
-    candidates = [
-        *setup_dates,
-        document.get('rehearsalDate'),
-        *[row.get('date') for row in document.get('additionalRehearsals') or [] if isinstance(row, dict)],
-        document.get('showDate'),
-        document.get('teardownDate'),
-        *[row.get('date') for row in document.get('additionalShows') or [] if isinstance(row, dict)],
-        *[row.get('date') for row in document.get('additionalTeardowns') or [] if isinstance(row, dict)],
-        *custom_dates,
-    ]
-    candidates = [value for value in candidates if value]
+        if isinstance(row, dict) and str(row.get('date') or '').strip()
+    )
+    return values
+
+
+def _finance_event_creation_error(document):
+    """Validate the minimum details needed for an explicit Plan event."""
+    export_error = _finance_export_error(document)
+    if export_error:
+        return export_error
+    if (
+        str(document.get('scheduleMode') or 'event').strip().lower() != 'dry-hire'
+        and not str(document.get('eventLocation') or '').strip()
+    ):
+        return 'Location is required for events'
+    schedule_dates = _finance_event_schedule_dates(document)
+    if not schedule_dates:
+        return 'Add at least one event schedule date before creating an event'
+    for value in schedule_dates:
+        try:
+            datetime.strptime(value, '%Y-%m-%d')
+        except ValueError:
+            return 'Enter valid event schedule dates before creating an event'
+    return ''
+
+
+def _finance_event_date_range(document):
+    candidates = _finance_event_schedule_dates(document)
     if not candidates:
         fallback = document.get('quotationDate') or datetime.now().strftime('%Y-%m-%d')
         return fallback, fallback
-    start_candidates = [*setup_dates, *custom_dates]
-    start = min(start_candidates) if start_candidates else min(candidates)
+    start = min(candidates)
     end = max(candidates)
     if end < start:
         end = start
@@ -32282,14 +32295,22 @@ def _finance_group_requirement_quantity(line, costing=False):
     return item_quantity * header_quantity
 
 
+def _finance_event_marker_quantity(line, costing=False):
+    """Convert positive demand to a marker count without reviving zero lines."""
+    quantity = _finance_group_requirement_quantity(line, costing=costing)
+    if quantity <= 0:
+        return 0
+    return max(1, _safe_int(round(quantity), 1))
+
+
 def _finance_event_prepared_items(document):
     prepared_items = []
     custom_groups = {}
     for line in document.get('lineItems') or []:
         custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
-        quantity = max(1, _safe_int(round(
-            _finance_group_requirement_quantity(line)
-        ), 1))
+        quantity = _finance_event_marker_quantity(line)
+        if not quantity:
+            continue
         if custom_group:
             group_row = custom_groups.setdefault(custom_group, {
                 'line': line,
@@ -32332,9 +32353,11 @@ def _finance_event_subprojects(document):
             if custom_group:
                 custom_groups.add(custom_group)
             quantity = _finance_group_requirement_quantity(line)
+            if quantity <= 0:
+                continue
             custom_ref = _finance_custom_marker_from_line(
                 line,
-                max(1, _safe_int(round(quantity), 1)),
+                _finance_event_marker_quantity(line),
             )
             inventory_group = _finance_inventory_group_from_line(line)
             item = {
@@ -32392,9 +32415,7 @@ def _costing_event_loan_marker(costing, line):
     line_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(
         (line or {}).get('id') or secrets.token_hex(6)
     ))[:60]
-    quantity = max(1, _safe_int(round(
-        _finance_group_requirement_quantity(line, costing=True)
-    ), 1))
+    quantity = _finance_event_marker_quantity(line, costing=True)
     return _make_custom_marker(
         'LOAN',
         str((line or {}).get('description') or 'Self pickup equipment'),
@@ -32426,9 +32447,9 @@ def _costing_event_prepared_items(costing):
     custom_groups = {}
     for line in (costing or {}).get('lineItems') or []:
         custom_group = str(line.get('groupId') or '') if line.get('groupCustomText') else ''
-        quantity = max(1, _safe_int(round(
-            _finance_group_requirement_quantity(line, costing=True)
-        ), 1))
+        quantity = _finance_event_marker_quantity(line, costing=True)
+        if not quantity:
+            continue
         if custom_group:
             group_row = custom_groups.setdefault(custom_group, {
                 'line': line,
@@ -32485,6 +32506,8 @@ def _costing_event_subprojects(costing, subprojects=None):
             if custom_group:
                 custom_groups.add(custom_group)
             quantity = _finance_group_requirement_quantity(line, costing=True)
+            if quantity <= 0:
+                continue
             finance_line = _costing_finance_line(line)
             if _costing_line_is_external(line):
                 if _costing_vendor_management_mode(costing, line) != 'dry-hire':
@@ -32501,7 +32524,7 @@ def _costing_event_subprojects(costing, subprojects=None):
                     'description': line.get('description') or 'Self pickup equipment',
                     'customDescription': 'Managed from Event Costing',
                     'company': line.get('vendorName') or 'Vendor',
-                    'quantity': max(1, _safe_int(round(quantity), 1)),
+                    'quantity': _finance_event_marker_quantity(line, costing=True),
                     'isCustom': True,
                     'assetRefs': [custom_ref],
                 })
@@ -32509,7 +32532,7 @@ def _costing_event_subprojects(costing, subprojects=None):
 
             inventory_group = _finance_inventory_group_from_line(finance_line)
             custom_ref = _finance_custom_marker_from_line(
-                finance_line, max(1, _safe_int(round(quantity), 1))
+                finance_line, _finance_event_marker_quantity(line, costing=True)
             )
             item = {
                 'lineId': line.get('id'),
@@ -32784,6 +32807,40 @@ def _finance_can_adopt_legacy_created_event(document, event):
     ))
 
 
+def _finance_event_assignees(document, existing=None):
+    """Keep current assignees and include both quotation ownership roles."""
+    result = []
+    for username in [
+        *(existing or []),
+        document.get('createdBy'),
+        document.get('salespersonUsername'),
+    ]:
+        username = str(username or '').strip()
+        if username in data_manager.users and username not in result:
+            result.append(username)
+    return result
+
+
+def _finance_apply_managed_event_metadata(event, document):
+    """Synchronise the event fields that remain owned by the quotation."""
+    start_date, end_date = _finance_event_date_range(document)
+    event.name = str(
+        document.get('projectName') or document.get('number') or event.name
+    ).strip()
+    event.location = str(document.get('eventLocation') or '').strip()
+    event.start_date = datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y%m%d')
+    event.end_date = datetime.strptime(end_date, '%Y-%m-%d').strftime('%Y%m%d')
+    event.tag = (
+        'dry hire'
+        if document.get('scheduleMode') == 'dry-hire'
+        else 'events'
+    )
+    event.assigned_users = _finance_event_assignees(
+        document,
+        getattr(event, 'assigned_users', []) or [],
+    )
+
+
 def _finance_sync_managed_event(document, finance_data=None, force=False):
     event_id = _safe_int(document.get('eventId'), 0)
     if not event_id:
@@ -32827,6 +32884,7 @@ def _finance_sync_managed_event(document, finance_data=None, force=False):
         if linked_costing
         else _finance_event_subprojects(document)
     )
+    _finance_apply_managed_event_metadata(event, document)
     data_manager.save_event(event)
     invalidate_cache()
     document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
@@ -32866,9 +32924,7 @@ def _finance_create_event(document, finance_data=None, mark_accepted=True):
         else _finance_event_subprojects(document)
     )
 
-    assigned_users = [
-        document.get('createdBy')
-    ] if document.get('createdBy') in data_manager.users else []
+    assigned_users = _finance_event_assignees(document)
 
     def build_event(event_id):
         return Event(
@@ -33699,16 +33755,6 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
             })
     result.sort(key=lambda row: (row.get('expenseDate') or '', row.get('createdAt') or ''), reverse=True)
     return result
-
-
-def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
-    return [
-        row for row in _finance_profit_loss_worker_submission_expenses(
-            workforce,
-            event_id,
-        )
-        if row.get('source') == 'worker-claim'
-    ]
 
 
 def _finance_profit_loss_payload(event, finance_data):
@@ -36249,30 +36295,6 @@ def _finance_compare_apply_to_quotation(
         quotation.setdefault('lineItems', []).append(new_line)
 
 
-def _finance_compare_add_to_quotation(
-    finance_data,
-    quotation,
-    event,
-    row,
-    target_subproject_id=None,
-):
-    previous = copy.deepcopy(quotation)
-    _finance_compare_apply_to_quotation(
-        finance_data,
-        quotation,
-        event,
-        row,
-        target_subproject_id,
-    )
-    updated = _normalise_finance_document(quotation, 'quotation', quotation)
-    _remember_finance_prices(finance_data, updated, previous)
-    for index, document in enumerate(finance_data.get('documents') or []):
-        if str(document.get('id')) == str(updated.get('id')):
-            finance_data['documents'][index] = updated
-            return updated
-    raise LookupError('Quotation not found')
-
-
 def _finance_revision_list_summary(revision):
     revision = revision if isinstance(revision, dict) else {}
     snapshot = revision.get('snapshot')
@@ -38569,6 +38591,10 @@ def create_event_from_quotation(document_id):
             return jsonify({'error': 'Quotation not found'}), 404
         document = _normalise_finance_document(stored, 'quotation', stored)
         existing_event_id = _safe_int(document.get('eventId'), 0)
+        if not existing_event_id:
+            creation_error = _finance_event_creation_error(document)
+            if creation_error:
+                return jsonify({'error': creation_error}), 400
         event_id = _finance_create_event(
             document,
             finance_data,
