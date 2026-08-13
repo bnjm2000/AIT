@@ -242,6 +242,133 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             ],
         )
 
+    def test_all_similar_description_rename_keeps_prepared_room_asset_linked(self):
+        event = self.make_event(
+            105,
+            prepared=['[MODEL]AX|TestBrand|OldModel|2|Old desc'],
+            actual=['A#01', 'A#02'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'quote-line-1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 2,
+                'isCustom': False,
+                'assetRefs': ['A#01', 'A#02'],
+            }],
+            'extraRefs': [],
+        }]
+
+        response = self.put_asset(
+            'A#01',
+            description='New desc',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(item['quantity'], 2)
+        self.assertCountEqual(item['assetRefs'], ['A#01', 'A#02'])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|2|New desc'],
+        )
+
+    def test_all_similar_rename_updates_every_preexisting_description_variant(self):
+        self.data_manager.inventory['A#02'].description = 'Legacy capitalisation'
+        event = self.make_event(
+            106,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Legacy capitalisation'],
+            actual=['A#02'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'quote-line-legacy',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Legacy capitalisation',
+                'quantity': 1,
+                'isCustom': False,
+                'assetRefs': ['A#02'],
+            }],
+            'extraRefs': [],
+        }]
+
+        response = self.put_asset(
+            'A#01',
+            description='Canonical description',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['description'], 'Canonical description')
+        self.assertEqual(item['assetRefs'], ['A#02'])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|Canonical description'],
+        )
+
+    def test_integrity_repair_uses_prepared_id_when_room_asset_refs_are_legacy_missing(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.description = 'New desc'
+        asset.change_history = [{
+            'date': '2026-08-13T10:00:00',
+            'user': 'admin',
+            'action': 'updated',
+            'changes': [{
+                'field': 'description',
+                'label': 'Description',
+                'old': 'Old desc',
+                'new': 'New desc',
+            }],
+        }]
+        event = self.make_event(
+            107,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc'],
+            actual=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'quote-line-legacy',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'isCustom': False,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        changes = app_module._repair_prepared_event_asset_group_links(
+            event,
+            self.data_manager.inventory,
+        )
+
+        self.assertGreater(changes, 0)
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+
     def test_bulk_asset_detail_change_updates_assigned_quantity_and_unassigned_model_events(self):
         marker = app_module._bulk_marker('BULK-0001', 4)
         assigned = self.make_event(

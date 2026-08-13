@@ -13936,6 +13936,272 @@ def _event_asset_reference_quantity(event, asset_id):
     return 1 if any(asset_id in values for values in lists_to_check if isinstance(values, list)) else 0
 
 
+_ASSET_MODEL_GROUP_AUDIT_FIELDS = {
+    'department', 'brand', 'model', 'description',
+}
+
+
+def _asset_historical_model_groups(asset, additional_groups=None):
+    """Return the current and former inventory groups for one physical asset."""
+    current = _asset_group_from_item(asset)
+    groups = [current]
+    state = dict(current)
+
+    for audit_record in reversed(getattr(asset, 'change_history', []) or []):
+        touched_group = False
+        for change in reversed(audit_record.get('changes') or []):
+            field = str(change.get('field') or '').strip()
+            if field not in _ASSET_MODEL_GROUP_AUDIT_FIELDS:
+                continue
+            state[field] = str(change.get('old') or '').strip()
+            touched_group = True
+        if touched_group and all(
+            state.get(field) for field in ('department', 'brand', 'model')
+        ):
+            groups.append(dict(state))
+
+    for group in additional_groups or []:
+        if isinstance(group, dict) and all(
+            str(group.get(field) or '').strip()
+            for field in ('department', 'brand', 'model')
+        ):
+            groups.append({
+                'department': str(group.get('department') or '').strip().upper(),
+                'brand': str(group.get('brand') or '').strip(),
+                'model': str(group.get('model') or '').strip(),
+                'description': str(group.get('description') or '').strip(),
+            })
+
+    unique = []
+    seen = set()
+    for group in groups:
+        key = _event_model_group_key(group)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(group)
+    return unique
+
+
+def _event_inventory_asset_references(event, inventory):
+    """Collect immutable inventory IDs referenced anywhere in an event."""
+    references = {}
+
+    def remember(value):
+        if not isinstance(value, str):
+            return
+        marker = _parse_bulk_marker(value)
+        asset_id = (
+            str(marker.get('bulkId') or '').strip()
+            if marker else value.strip()
+        )
+        if asset_id in inventory:
+            references.setdefault(asset_id, []).append(value)
+
+    for values in _event_reference_lists(event):
+        for value in values if isinstance(values, list) else []:
+            remember(value)
+
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        for value in subproject.get('extraRefs') or []:
+            remember(value)
+        for item in subproject.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            for value in item.get('assetRefs') or []:
+                remember(value)
+
+    return references
+
+
+def _repair_prepared_event_asset_group_links(
+    event,
+    inventory,
+    candidate_asset_ids=None,
+    previous_groups_by_asset=None,
+):
+    """Keep prepared physical IDs paired with their live inventory group.
+
+    Model labels are editable, while a physical asset ID is the durable link.
+    This reconciler uses that ID to repair stale room rows after a rename. It
+    only rewrites an entire historical group when every inventory asset from
+    that former group now resolves to the same destination; split groups move
+    only the quantities belonging to the specifically referenced assets.
+    """
+    subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    if not subprojects:
+        return 0
+
+    event_references = _event_inventory_asset_references(event, inventory)
+    if candidate_asset_ids is None:
+        candidates = set(event_references)
+    else:
+        candidates = {
+            str(asset_id or '').strip()
+            for asset_id in candidate_asset_ids
+            if str(asset_id or '').strip() in event_references
+        }
+    if not candidates:
+        return 0
+
+    previous_groups_by_asset = previous_groups_by_asset or {}
+    current_groups = {}
+    historical_groups = {}
+    alias_destinations = {}
+    repair_whole_groups = candidate_asset_ids is None
+
+    # A historical audit needs every inventory row so a partial rename cannot
+    # be mistaken for a whole-group rename. The live rename path passes its
+    # exact candidate IDs and stays proportional to the edited group size.
+    inventory_rows = (
+        inventory.items()
+        if repair_whole_groups
+        else (
+            (asset_id, inventory[asset_id])
+            for asset_id in candidates
+            if asset_id in inventory
+        )
+    )
+    for asset_id, asset in inventory_rows:
+        asset_id = str(asset_id or '').strip()
+        current_group = _asset_group_from_item(asset)
+        current_key = _event_model_group_key(current_group)
+        extras = previous_groups_by_asset.get(asset_id) or []
+        if isinstance(extras, dict):
+            extras = [extras]
+        groups = _asset_historical_model_groups(asset, extras)
+        group_keys = {_event_model_group_key(group) for group in groups}
+        current_groups[asset_id] = current_group
+        historical_groups[asset_id] = group_keys
+        for group_key in group_keys:
+            alias_destinations.setdefault(group_key, set()).add(current_key)
+
+    changed = 0
+
+    # Whole-group renames preserve the complete planned quantity, including
+    # units which have not been prepared yet.
+    if repair_whole_groups:
+        room_groups = {}
+        for subproject in subprojects:
+            for item in subproject.get('items') or []:
+                group = _event_subproject_item_group(item)
+                if group:
+                    room_groups[_event_model_group_key(group)] = group
+
+        for source_key, source_group in list(room_groups.items()):
+            destinations = alias_destinations.get(source_key) or set()
+            if len(destinations) != 1:
+                continue
+            destination_key = next(iter(destinations))
+            if destination_key == source_key:
+                continue
+            evidence_id = next((
+                asset_id for asset_id in candidates
+                if source_key in historical_groups.get(asset_id, set())
+                and _event_model_group_key(current_groups[asset_id])
+                == destination_key
+            ), None)
+            if not evidence_id:
+                continue
+            changed += _update_event_subproject_model_group_references(
+                event,
+                source_group,
+                current_groups[evidence_id],
+            )
+
+    # A single-asset rename creates a split group. Move its room ownership and
+    # quantity without disturbing the remaining assets in the source group.
+    for asset_id in sorted(candidates):
+        current_group = current_groups.get(asset_id)
+        if not current_group:
+            continue
+        current_key = _event_model_group_key(current_group)
+        owners = []
+        for subproject in subprojects:
+            for item in subproject.get('items') or []:
+                item_group = _event_subproject_item_group(item)
+                if not item_group:
+                    continue
+                for ref in item.get('assetRefs') or []:
+                    marker = _parse_bulk_marker(ref)
+                    ref_id = (
+                        str(marker.get('bulkId') or '').strip()
+                        if marker else ref
+                    )
+                    if ref_id == asset_id:
+                        owners.append((item_group, ref))
+
+        mismatched_owners = [
+            (group, ref) for group, ref in owners
+            if _event_model_group_key(group) != current_key
+            and _event_model_group_key(group)
+            in historical_groups.get(asset_id, set())
+        ]
+        for source_group, ref in mismatched_owners:
+            marker = _parse_bulk_marker(ref)
+            quantity = (
+                max(1, _safe_int(marker.get('quantity'), 1))
+                if marker else 1
+            )
+            changed += _move_event_subproject_model_group_quantity(
+                event,
+                source_group,
+                current_group,
+                quantity,
+                asset_id,
+            )
+
+        if owners:
+            continue
+
+        # Older event files can contain the prepared ID only at event level.
+        # When a whole-group rewrite was ambiguous, move just this asset's
+        # quantity from the one matching historical room row.
+        matching_source_groups = []
+        for subproject in subprojects:
+            for item in subproject.get('items') or []:
+                source_group = _event_subproject_item_group(item)
+                if not source_group:
+                    continue
+                source_key = _event_model_group_key(source_group)
+                if (
+                    source_key != current_key
+                    and source_key in historical_groups.get(asset_id, set())
+                ):
+                    matching_source_groups.append(source_group)
+        unique_sources = {
+            _event_model_group_key(group): group
+            for group in matching_source_groups
+        }
+        if len(unique_sources) != 1:
+            continue
+        source_group = next(iter(unique_sources.values()))
+        quantity = 1
+        for ref in event_references.get(asset_id) or []:
+            marker = _parse_bulk_marker(ref)
+            if marker:
+                quantity = max(
+                    quantity,
+                    max(1, _safe_int(marker.get('quantity'), 1)),
+                )
+        changed += _move_event_subproject_model_group_quantity(
+            event,
+            source_group,
+            current_group,
+            quantity,
+            asset_id,
+        )
+
+    if changed:
+        _sync_event_model_markers_from_subprojects(event)
+    return changed
+
+
 def _event_has_model_group_reference(event, group):
     if not event or not group:
         return False
@@ -24978,6 +25244,11 @@ def update_asset(asset_id):
             for item in target_assets
             if str(getattr(item, 'asset_id', '') or '').strip()
         ]
+        target_asset_groups_before = {
+            str(getattr(item, 'asset_id', '') or '').strip(): _asset_group_from_item(item)
+            for item in target_assets
+            if str(getattr(item, 'asset_id', '') or '').strip()
+        }
 
         audit_timestamp = _asset_audit_timestamp()
         audit_user = _asset_audit_user()
@@ -25113,6 +25384,22 @@ def update_asset(asset_id):
         # Cascade through every event file.
         events_updated = 0
         model_references_changed = 0
+        target_asset_ids_after = [
+            str(getattr(item, 'asset_id', '') or '').strip()
+            for item in target_assets
+            if str(getattr(item, 'asset_id', '') or '').strip()
+        ]
+        previous_groups_by_asset = {}
+        for target in target_assets:
+            current_id = str(getattr(target, 'asset_id', '') or '').strip()
+            former_id = old_asset_id if target is asset else current_id
+            former_group = target_asset_groups_before.get(former_id)
+            if current_id and former_group:
+                previous_groups_by_asset[current_id] = [former_group]
+        all_similar_source_groups = {
+            _event_model_group_key(group): group
+            for group in target_asset_groups_before.values()
+        }
 
         for event in data_manager.events.values():
             event_changed = 0
@@ -25197,10 +25484,13 @@ def update_asset(asset_id):
             #   that whole planning row so unstarted events stay current too.
             if group_changed:
                 if apply_to == 'allSimilar':
-                    model_changes = _update_event_model_group_references(
-                        event,
-                        old_group,
-                        new_group
+                    model_changes = sum(
+                        _update_event_model_group_references(
+                            event,
+                            source_group,
+                            new_group,
+                        )
+                        for source_group in all_similar_source_groups.values()
                     )
                 elif event.event_id in single_asset_event_quantities_to_rewrite:
                     model_changes = _update_single_asset_event_model_references(
@@ -25221,6 +25511,18 @@ def update_asset(asset_id):
 
                 event_changed += model_changes
                 model_references_changed += model_changes
+
+                # Final integrity check: room rows are display/grouping data;
+                # physical asset IDs are the durable association. Reconcile by
+                # ID so a stale label can never detach a prepared assignment.
+                integrity_changes = _repair_prepared_event_asset_group_links(
+                    event,
+                    data_manager.inventory,
+                    target_asset_ids_after,
+                    previous_groups_by_asset,
+                )
+                event_changed += integrity_changes
+                model_references_changed += integrity_changes
 
             if event_changed:
                 id_references_changed += event_changed
