@@ -48,7 +48,11 @@ def test_flagged_inventory_statuses_show_immediate_history_tooltips():
     assert "pnl-chart-tooltip inventory-status-tooltip" in script
     assert "maintenanceLogUserLabel(record)" in script
     assert "inventoryMaintenanceDateText(record)" in script
-    assert "record.description || 'No description recorded.'" in script
+    assert "maintenanceDescriptionHtml(" in script
+    assert "tooltip.querySelector('em').innerHTML = maintenanceDescriptionHtml(" in script
+    assert "{ interactive: false }" in script
+    assert "function maintenanceDescriptionPlainText(description)" in script
+    assert "accessibleDescription" in script
     assert 'onpointerenter="inventoryShowStatusHistoryTooltip' in script
     assert "inventoryAvailabilityBadgesHtml(asset, true)" in script
 
@@ -60,10 +64,23 @@ def test_deployed_inventory_badges_show_event_tooltips():
     assert "function inventoryDeploymentRecords(asset)" in script
     assert "function inventoryShowDeploymentTooltip" in script
     assert "function inventoryDeploymentBadgeHtml(asset, label)" in script
+    assert "function inventoryActivateDeployment(" in script
+    assert "function inventoryOpenDeploymentEvent(" in script
+    assert 'onclick="inventoryActivateDeployment(event,this' in script
+    assert 'onclick="inventoryOpenDeploymentEvent(event,' in script
     assert 'onpointerenter="inventoryShowDeploymentTooltip' in script
     assert "deployment.eventName" in script
     assert "bulkDeploymentDateText(deployment)" in script
     assert ".inventory-deployment-tooltip-row" in stylesheet
+
+
+def test_ooc_and_degraded_inventory_badges_open_maintenance_history():
+    script = APP_BUNDLE_SOURCE
+
+    assert "function inventoryOpenStatusMaintenance(" in script
+    assert "status === 'ooc' || status === 'degraded'" in script
+    assert "inventoryOpenStatusMaintenance(event," in script
+    assert "viewMaintenanceLog(encodedAssetId)" in script
 
 
 def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():

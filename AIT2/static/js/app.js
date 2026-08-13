@@ -6908,6 +6908,8 @@ function ensureInventoryStatusHistoryTooltip() {
   return tooltip;
 }
 
+let inventoryStatusTooltipPinned = false;
+
 function inventoryPositionStatusHistoryTooltip(event, target) {
   const tooltip = document.getElementById('inventoryStatusHistoryTooltip');
   if (!tooltip || !target) return;
@@ -6935,13 +6937,19 @@ function inventoryShowStatusHistoryTooltip(event, target, encodedAssetId, status
   const statusMeta = INVENTORY_CONDITION_META[status] || { label: inventoryStatusText(status), color: '#334155' };
   tooltip.querySelector('strong').textContent = `Marked ${statusMeta.label}`;
   tooltip.querySelector('span').textContent = `${maintenanceLogUserLabel(record) || 'Unknown person'} · ${inventoryMaintenanceDateText(record)}`;
-  tooltip.querySelector('em').textContent = record.description || 'No description recorded.';
+  const description = record.description || 'No description recorded.';
+  tooltip.querySelector('em').innerHTML = maintenanceDescriptionHtml(
+    description,
+    { interactive: false }
+  );
   tooltip.style.setProperty('--tooltip-colour', statusMeta.color || '#334155');
   tooltip.classList.add('is-visible');
   inventoryPositionStatusHistoryTooltip(event, target);
 }
 
-function inventoryHideStatusHistoryTooltip() {
+function inventoryHideStatusHistoryTooltip(force = false) {
+  if (inventoryStatusTooltipPinned && !force) return;
+  inventoryStatusTooltipPinned = false;
   document.getElementById('inventoryStatusHistoryTooltip')?.classList.remove('is-visible', 'is-below');
 }
 
@@ -6974,13 +6982,37 @@ function inventoryShowDeploymentTooltip(event, target, encodedAssetId) {
           const dateText = bulkDeploymentDateText(deployment) || 'Date not set';
           const quantity = Math.max(1, Number(deployment.quantity || 1) || 1);
           const quantityText = asset?.isBulk ? `${quantity} deployed` : '1 asset';
-          return `<div class="inventory-deployment-tooltip-row"><span><b>${escapeHtml(eventId)}</b>${escapeHtml(eventName)}</span><em>${escapeHtml(dateText)} &middot; ${escapeHtml(quantityText)}</em></div>`;
+          return `<button type="button" class="inventory-deployment-tooltip-row" onclick="inventoryOpenDeploymentEvent(event,${Number(deployment.eventId) || 0})"><span><b>${escapeHtml(eventId)}</b>${escapeHtml(eventName)}</span><em>${escapeHtml(dateText)} &middot; ${escapeHtml(quantityText)}</em></button>`;
         }).join('')}
       </div>
     </div>`;
   tooltip.style.setProperty('--tooltip-colour', ASSET_DEPLOYED_COLOR);
   tooltip.classList.add('is-visible');
   inventoryPositionStatusHistoryTooltip(event, target);
+}
+
+function inventoryOpenDeploymentEvent(clickEvent, eventId) {
+  clickEvent?.preventDefault();
+  clickEvent?.stopPropagation();
+  const numericEventId = Number(eventId);
+  if (!numericEventId) return;
+  inventoryHideStatusHistoryTooltip(true);
+  viewEvent(numericEventId);
+}
+
+function inventoryActivateDeployment(clickEvent, target, encodedAssetId) {
+  clickEvent?.preventDefault();
+  clickEvent?.stopPropagation();
+  let assetId = String(encodedAssetId || '');
+  try { assetId = decodeURIComponent(assetId); } catch (error) {}
+  const deployments = inventoryDeploymentRecords(getAssetByApiIdentifier(assetId));
+  if (deployments.length === 1) {
+    inventoryOpenDeploymentEvent(clickEvent, deployments[0].eventId);
+    return;
+  }
+  if (!deployments.length) return;
+  inventoryStatusTooltipPinned = true;
+  inventoryShowDeploymentTooltip(clickEvent, target, encodedAssetId);
 }
 
 function inventoryDeploymentBadgeHtml(asset, label) {
@@ -6992,13 +7024,20 @@ function inventoryDeploymentBadgeHtml(asset, label) {
     const eventName = deployment.eventName || (deployment.eventId ? `Event ${deployment.eventId}` : 'Event');
     return `${deployment.eventId ? `Event ${deployment.eventId}: ` : ''}${eventName}`;
   }).join('; ');
-  return `<span class="inventory-status-history inventory-deployment-status" tabindex="0" aria-label="${escapeHtmlAttr(`${label}. ${accessibleEvents}`)}"
+  return `<button type="button" class="inventory-status-history inventory-deployment-status" aria-label="${escapeHtmlAttr(`${label}. ${accessibleEvents}`)}" onclick="inventoryActivateDeployment(event,this,'${escapeHtmlAttr(encodedId)}')"
     onpointerenter="inventoryShowDeploymentTooltip(event,this,'${escapeHtmlAttr(encodedId)}')"
     onpointermove="inventoryPositionStatusHistoryTooltip(event,this)"
     onpointerleave="inventoryHideStatusHistoryTooltip()"
     onfocus="inventoryShowDeploymentTooltip(event,this,'${escapeHtmlAttr(encodedId)}')"
     onblur="inventoryHideStatusHistoryTooltip()"
-    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip();this.blur();}">${badge}</span>`;
+    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip(true);this.blur();}">${badge}</button>`;
+}
+
+function inventoryOpenStatusMaintenance(clickEvent, encodedAssetId) {
+  clickEvent?.preventDefault();
+  clickEvent?.stopPropagation();
+  inventoryHideStatusHistoryTooltip(true);
+  viewMaintenanceLog(encodedAssetId);
 }
 
 function inventoryStatusHistoryBadgeHtml(asset, status, label) {
@@ -7006,14 +7045,22 @@ function inventoryStatusHistoryBadgeHtml(asset, status, label) {
   const record = inventoryStatusHistoryRecord(asset, status);
   if (!record) return badge;
   const encodedId = encodeURIComponent(inventoryAssetIdentifier(asset));
-  const accessible = `${label}. Marked by ${maintenanceLogUserLabel(record) || 'Unknown person'} on ${inventoryMaintenanceDateText(record)}. ${record.description || 'No description recorded.'}`;
-  return `<span class="inventory-status-history" tabindex="0" aria-label="${escapeHtmlAttr(accessible)}"
+  const accessibleDescription = maintenanceDescriptionPlainText(
+    record.description || 'No description recorded.'
+  );
+  const accessible = `${label}. Marked by ${maintenanceLogUserLabel(record) || 'Unknown person'} on ${inventoryMaintenanceDateText(record)}. ${accessibleDescription}`;
+  const isMaintenanceAction = status === 'ooc' || status === 'degraded';
+  const tagName = isMaintenanceAction ? 'button' : 'span';
+  const buttonAttributes = isMaintenanceAction
+    ? `type="button" onclick="inventoryOpenStatusMaintenance(event,'${escapeHtmlAttr(encodedId)}')"`
+    : 'tabindex="0"';
+  return `<${tagName} class="inventory-status-history" ${buttonAttributes} aria-label="${escapeHtmlAttr(accessible)}"
     onpointerenter="inventoryShowStatusHistoryTooltip(event,this,'${escapeHtmlAttr(encodedId)}','${escapeHtmlAttr(status)}')"
     onpointermove="inventoryPositionStatusHistoryTooltip(event,this)"
     onpointerleave="inventoryHideStatusHistoryTooltip()"
     onfocus="inventoryShowStatusHistoryTooltip(event,this,'${escapeHtmlAttr(encodedId)}','${escapeHtmlAttr(status)}')"
     onblur="inventoryHideStatusHistoryTooltip()"
-    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip();this.blur();}">${badge}</span>`;
+    onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip(true);this.blur();}">${badge}</${tagName}>`;
 }
 
 function inventoryAvailabilityBadgesHtml(asset, includeStatusHistory = false) {
@@ -16159,6 +16206,13 @@ function maintenanceEventReferenceToken(event) {
     .replace(/\*\*/g, '')
     .trim();
   return '`' + eventId + ': **' + eventName + '**`';
+}
+
+function maintenanceDescriptionPlainText(description) {
+  return String(description || '').replace(
+    /`(\d+)\s*:\s*\*\*([^`\n]+?)\*\*`/g,
+    (_match, eventId, eventName) => `${eventId}: ${String(eventName || '').trim()}`
+  );
 }
 
 function maintenanceDescriptionHtml(description, options = {}) {

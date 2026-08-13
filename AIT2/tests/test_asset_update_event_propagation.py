@@ -155,6 +155,93 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(other_asset_assigned.prepared_items, ['[MODEL]AX|TestBrand|OldModel|1|Old desc'])
         self.assertEqual(response.get_json()['data']['eventsUpdated'], 2)
 
+    def test_unassigned_room_requirement_follows_single_asset_rename(self):
+        event = self.make_event(
+            103,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'quote-line-1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'isCustom': False,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['lineId'], 'quote-line-1')
+        self.assertEqual(item['model'], 'NewModel')
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|NewModel|1|New desc'],
+        )
+
+    def test_assigned_room_requirement_splits_when_one_asset_is_renamed(self):
+        event = self.make_event(
+            104,
+            prepared=['[MODEL]AX|TestBrand|OldModel|2|Old desc'],
+            actual=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'quote-line-1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 2,
+                'isCustom': False,
+                'assetRefs': ['A#01'],
+            }],
+            'extraRefs': [],
+        }]
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        old_items = app_module._event_subproject_group_items(
+            event.subprojects[0],
+            {'department': 'AX', 'brand': 'TestBrand', 'model': 'OldModel', 'description': 'Old desc'},
+        )
+        new_items = app_module._event_subproject_group_items(
+            event.subprojects[0],
+            {'department': 'AX', 'brand': 'TestBrand', 'model': 'NewModel', 'description': 'New desc'},
+        )
+        self.assertEqual(old_items[0]['quantity'], 1)
+        self.assertEqual(new_items[0]['quantity'], 1)
+        self.assertEqual(new_items[0]['assetRefs'], ['A#01'])
+        self.assertCountEqual(
+            event.prepared_items,
+            [
+                '[MODEL]AX|TestBrand|OldModel|1|Old desc',
+                '[MODEL]AX|TestBrand|NewModel|1|New desc',
+            ],
+        )
+
     def test_bulk_asset_detail_change_updates_assigned_quantity_and_unassigned_model_events(self):
         marker = app_module._bulk_marker('BULK-0001', 4)
         assigned = self.make_event(
@@ -349,6 +436,52 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             stored['draft-invoice']['lineItems'][0]['model'],
             'OldModel',
         )
+
+    def test_asset_rename_preserves_manually_edited_draft_quotation_name(self):
+        old_key = app_module._finance_catalog_key(
+            'AX', 'TestBrand', 'OldModel', 'Old desc',
+        )
+        app_module._save_finance_data({
+            'version': app_module.FINANCE_VERSION,
+            'documents': [{
+                'id': 'draft-custom-name',
+                'type': 'quotation',
+                'number': 'QT-2026-099-01',
+                'status': 'draft',
+                'lineItems': [{
+                    'id': 'custom-name-line',
+                    'catalogKey': old_key,
+                    'sourceAssetIds': ['A#01'],
+                    'brand': 'TestBrand',
+                    'model': 'OldModel',
+                    'description': 'Client-facing custom package name',
+                    'department': 'Audio Department',
+                    'departmentCode': 'AX',
+                    'days': 1,
+                    'quantity': 1,
+                    'uom': 'units',
+                    'unitPrice': 100,
+                    'discountPercent': 0,
+                    'total': 100,
+                    'isCustom': False,
+                }],
+                'adjustments': [],
+            }],
+            'priceBook': {},
+        })
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        line = app_module._load_finance_data()['documents'][0]['lineItems'][0]
+        self.assertEqual(line['model'], 'NewModel')
+        self.assertEqual(line['description'], 'Client-facing custom package name')
+        self.assertEqual(line['inventoryNameMode'], 'custom')
 
     def test_single_asset_model_group_rename_updates_only_draft_content(self):
         del self.data_manager.inventory['A#02']

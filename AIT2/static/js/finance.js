@@ -4087,6 +4087,7 @@ function financeNewGroupedQuotationLine(selected, category) {
     id: `line_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     catalogKey: selected.catalogKey || '', sourceAssetIds: selected.sourceAssetIds || [],
     brand: selected.brand || '', model: selected.model || '', description: selected.description || 'Item',
+    inventoryNameMode: selected.catalogKey ? 'inventory' : '',
     department: selected.department || category, departmentCode: selected.departmentCode || '',
     systemName: category, days, quantity,
     uom: financeDefaultUom(category, selected.uom), unitPrice, discountPercent: 0,
@@ -5437,6 +5438,9 @@ function financeLineChange(index, field, value) {
   const line = financeState.current?.lineItems?.[index];
   if (!line) return;
   line[field] = ['days', 'quantity', 'unitPrice', 'discountPercent'].includes(field) ? financeNumber(value) : value;
+  if (field === 'description' && (line.catalogKey || line.sourceAssetIds?.length)) {
+    line.inventoryNameMode = 'custom';
+  }
   if (field === 'discountPercent') line.discountPercent = financePercent(value);
   if (field === 'department') {
     line.departmentCode = '';
@@ -6019,6 +6023,7 @@ function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOver
     brand: selected.brand || '',
     model: selected.model || '',
     description: selected.description,
+    inventoryNameMode: selected.catalogKey ? 'inventory' : '',
     department,
     departmentCode: selected.departmentCode || '',
     systemName: category,

@@ -13717,6 +13717,113 @@ def _model_marker_matches_group(marker, group):
     )
 
 
+def _set_event_subproject_item_group(item, group):
+    """Update a planned room row's inventory identity without losing metadata."""
+    item['department'] = group['department']
+    item['departmentCode'] = group['department']
+    item['brand'] = group['brand']
+    item['model'] = group['model']
+    item['description'] = group.get('description') or ''
+
+
+def _update_event_subproject_model_group_references(event, old_group, new_group):
+    """Rename a model group in every room and merge destination duplicates."""
+    changed = 0
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        matches = list(_event_subproject_group_items(subproject, old_group))
+        if not matches:
+            continue
+        destination_quantity = _event_subproject_required_quantity(
+            subproject, new_group
+        )
+        total_quantity = sum(
+            max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+            for item in matches
+        )
+        for item in matches:
+            _set_event_subproject_item_group(item, new_group)
+            changed += 1
+        # This folds a pre-existing destination row while preserving room line
+        # IDs, prepared counters, and physical asset references.
+        _event_subproject_set_group_quantity(
+            subproject, new_group, total_quantity + destination_quantity
+        )
+    return changed
+
+
+def _move_event_subproject_model_group_quantity(
+    event,
+    old_group,
+    new_group,
+    quantity_to_move=1,
+    asset_id='',
+):
+    """Move part of a room requirement when one physical asset is renamed."""
+    remaining = max(1, _safe_int(quantity_to_move, 1))
+    changed = 0
+    asset_id = str(asset_id or '').strip()
+    subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+
+    def room_priority(subproject):
+        for item in _event_subproject_group_items(subproject, old_group):
+            for ref in item.get('assetRefs') or []:
+                marker = _parse_bulk_marker(ref)
+                if ref == asset_id or (marker and marker.get('bulkId') == asset_id):
+                    return 0
+        return 1
+
+    for subproject in sorted(subprojects, key=room_priority):
+        if remaining <= 0:
+            break
+        source_items = list(_event_subproject_group_items(subproject, old_group))
+        if not source_items:
+            continue
+        source_quantity = sum(
+            max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+            for item in source_items
+        )
+        move_quantity = min(source_quantity, remaining)
+        if move_quantity <= 0:
+            continue
+
+        moved_refs = []
+        for item in source_items:
+            retained_refs = []
+            for ref in item.get('assetRefs') or []:
+                marker = _parse_bulk_marker(ref)
+                if ref == asset_id or (marker and marker.get('bulkId') == asset_id):
+                    moved_refs.append(ref)
+                else:
+                    retained_refs.append(ref)
+            if moved_refs or 'assetRefs' in item:
+                item['assetRefs'] = retained_refs
+
+        destination_quantity = _event_subproject_required_quantity(
+            subproject, new_group
+        )
+        _event_subproject_set_group_quantity(
+            subproject, old_group, source_quantity - move_quantity
+        )
+        _event_subproject_set_group_quantity(
+            subproject, new_group, destination_quantity + move_quantity
+        )
+        destination_items = _event_subproject_group_items(subproject, new_group)
+        if destination_items and moved_refs:
+            destination_refs = destination_items[0].setdefault('assetRefs', [])
+            for ref in moved_refs:
+                if ref not in destination_refs:
+                    destination_refs.append(ref)
+        remaining -= move_quantity
+        changed += 1
+
+    return changed
+
+
 def _update_event_model_group_references(event, old_group, new_group):
     """
     Updates event-level model requirement rows when admin chooses
@@ -13724,8 +13831,21 @@ def _update_event_model_group_references(event, old_group, new_group):
     """
     changed = 0
 
-    # Newer web workflow: [MODEL]DEPT|BRAND|MODEL|QTY|DESCRIPTION
-    if hasattr(event, 'prepared_items') and isinstance(event.prepared_items, list):
+    # Room rows are the source of truth in the current planning workflow.
+    has_subprojects = bool(getattr(event, 'subprojects', []) or [])
+    if has_subprojects:
+        changed += _update_event_subproject_model_group_references(
+            event, old_group, new_group
+        )
+        if changed:
+            _sync_event_model_markers_from_subprojects(event)
+
+    # Events without room rows store requirements directly in prepared_items.
+    if (
+        not has_subprojects
+        and hasattr(event, 'prepared_items')
+        and isinstance(event.prepared_items, list)
+    ):
         for index, item in enumerate(event.prepared_items):
             marker = _parse_model_marker(item)
 
@@ -13770,7 +13890,15 @@ def _event_asset_reference_quantity(event, asset_id):
         seen_markers = set()
         has_direct_reference = False
 
-        for values in _event_reference_lists(event):
+        reference_lists = list(_event_reference_lists(event))
+        reference_lists.extend(
+            item.get('assetRefs') or []
+            for subproject in (getattr(event, 'subprojects', []) or [])
+            if isinstance(subproject, dict)
+            for item in (subproject.get('items') or [])
+            if isinstance(item, dict)
+        )
+        for values in reference_lists:
             if not isinstance(values, list):
                 continue
 
@@ -13791,11 +13919,18 @@ def _event_asset_reference_quantity(event, asset_id):
 
         return quantity or (1 if has_direct_reference else 0)
 
-    lists_to_check = (
+    lists_to_check = list((
         getattr(event, 'prepared_items', []) or [],
         getattr(event, 'actually_prepared', []) or [],
         getattr(event, 'returned_items', []) or [],
         getattr(event, 'extra_assets', []) or []
+    ))
+    lists_to_check.extend(
+        item.get('assetRefs') or []
+        for subproject in (getattr(event, 'subprojects', []) or [])
+        if isinstance(subproject, dict)
+        for item in (subproject.get('items') or [])
+        if isinstance(item, dict)
     )
 
     return 1 if any(asset_id in values for values in lists_to_check if isinstance(values, list)) else 0
@@ -14162,7 +14297,13 @@ def _move_asset_model_row_quantity(asset_models, old_group, new_group, quantity_
     return changed
 
 
-def _update_single_asset_event_model_references(event, old_group, new_group, quantity_to_move=1):
+def _update_single_asset_event_model_references(
+    event,
+    old_group,
+    new_group,
+    quantity_to_move=1,
+    asset_id='',
+):
     """
     For a single asset edit, update only the referenced quantity of the old
     model requirement inside events where that exact asset was
@@ -14184,9 +14325,22 @@ def _update_single_asset_event_model_references(event, old_group, new_group, qua
     """
     changed = 0
 
-    # Newer web workflow: prepared_items contains [MODEL] rows.
-    prepared_items = getattr(event, 'prepared_items', []) or []
-    changed += _move_model_marker_quantity(prepared_items, old_group, new_group, quantity_to_move)
+    has_subprojects = bool(getattr(event, 'subprojects', []) or [])
+    if has_subprojects:
+        changed += _move_event_subproject_model_group_quantity(
+            event,
+            old_group,
+            new_group,
+            quantity_to_move,
+            asset_id,
+        )
+        if changed:
+            _sync_event_model_markers_from_subprojects(event)
+    else:
+        prepared_items = getattr(event, 'prepared_items', []) or []
+        changed += _move_model_marker_quantity(
+            prepared_items, old_group, new_group, quantity_to_move
+        )
 
     # Older saved events may still contain display rows in asset_models.
     asset_models = getattr(event, 'asset_models', []) or []
@@ -25053,7 +25207,8 @@ def update_asset(asset_id):
                         event,
                         old_group,
                         new_group,
-                        single_asset_event_quantities_to_rewrite[event.event_id]
+                        single_asset_event_quantities_to_rewrite[event.event_id],
+                        old_asset_id,
                     )
                 elif event.event_id in unassigned_model_event_ids_to_rewrite:
                     model_changes = _update_event_model_group_references(
@@ -28473,6 +28628,11 @@ def _finance_sync_inventory_edit(
                         changed = True
 
         if apply_group_change and old_group != new_group:
+            old_description = _finance_display_description(
+                old_group.get('brand'),
+                old_group.get('model'),
+                old_group.get('description'),
+            )
             new_description = _finance_display_description(
                 new_group.get('brand'),
                 new_group.get('model'),
@@ -28495,7 +28655,19 @@ def _finance_sync_inventory_edit(
                     line['departmentCode'] = new_department_code
                     line['brand'] = str(new_group.get('brand') or '').strip()
                     line['model'] = str(new_group.get('model') or '').strip()
-                    line['description'] = new_description
+                    name_mode = str(line.get('inventoryNameMode') or '').strip().lower()
+                    legacy_name_is_inventory = (
+                        not name_mode
+                        and str(line.get('description') or '').strip().casefold()
+                        == old_description.casefold()
+                    )
+                    if name_mode == 'inventory' or legacy_name_is_inventory:
+                        line['description'] = new_description
+                        line['inventoryNameMode'] = 'inventory'
+                    elif not name_mode:
+                        # Preserve manually edited wording in legacy drafts and
+                        # make that choice explicit for future inventory edits.
+                        line['inventoryNameMode'] = 'custom'
                     document_changed = True
                 if document_changed:
                     document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
@@ -28721,6 +28893,13 @@ def _normalise_finance_line(value):
         'brand': brand[:240],
         'model': model[:240],
         'description': str(value.get('description') or '').strip()[:1000],
+        'inventoryNameMode': (
+            'custom'
+            if str(value.get('inventoryNameMode') or '').strip().lower() == 'custom'
+            else 'inventory'
+            if str(value.get('inventoryNameMode') or '').strip().lower() == 'inventory'
+            else ''
+        ),
         'department': department[:200],
         'departmentCode': department_code,
         'systemName': _finance_system_name(department, value.get('systemName')),
