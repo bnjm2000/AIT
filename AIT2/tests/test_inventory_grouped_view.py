@@ -14,13 +14,19 @@ def test_inventory_template_uses_grouped_responsive_catalogue():
     assert ".inventory-model-summary" in template
     assert ".inventory-model-detail" in template
     assert "@media(max-width:520px)" in template.replace(" ", "")
-    assert "Assets grouped by brand and model." in template
+    assert "Assets grouped by brand, model, and description." in template
 
 
 def test_inventory_script_groups_models_and_weights_availability_quantities():
     script = APP_BUNDLE_SOURCE
 
-    assert "function groupInventoryByModel(assetList)" in script
+    assert "function groupInventoryAssets(assetList)" in script
+    assert "function inventoryAssetGroupKey(asset)" in script
+    assert "const groups = groupInventoryAssets(filteredAssets).length;" in script
+    assert "groupInventoryByModel" not in script
+    assert "[asset?.department, asset?.brand, asset?.model, asset?.description]" in script
+    assert "description: String(asset.description || '').trim()" in script
+    assert "return inventoryAssetGroupKey(asset) === inventoryAssetGroupKey(group);" in script
     assert "function inventoryConditionCounts(assetList)" in script
     assert "function inventoryAvailabilityCounts(assetList)" in script
     assert "function inventoryAvailabilityBadgesHtml(asset, includeStatusHistory = false)" in script
@@ -103,13 +109,61 @@ def test_add_asset_warns_before_submitting_mismatched_serial_counts():
     assert "function addAssetPrimarySerialPreviewState(assetData)" in script
     assert "serialCount === 0" in script
     assert "serialCount === quantity" in script
-    assert "renderAddAssetPreview(serialState.className" in script
+    assert "renderAddAssetPreview(previewClass" in script
+    assert "function addAssetFuturePurchaseDateMessage(assetData)" in script
     assert "Serial number count does not match" in script
     assert "Add Anyway" in script
     assert "Review Serial Numbers" in script
     assert "assetData.confirmSerialMismatch = true" in script
     assert ".add-asset-preview.warning" in template
     assert ".add-asset-preview-status" in template
+
+
+def test_add_asset_form_defaults_and_submits_inventory_location():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
+
+    assert 'id="assetDefaultLocation" list="assetDefaultLocationOptions" value="Store"' in template
+    assert 'id="assetDefaultLocationOptions"' in template
+    assert "'assetDefaultLocationOptions'" in script
+    assert "allAssets.map(asset => String(asset.defaultLocation || '').trim())" in script
+    assert "defaultLocation: addAssetValue('assetDefaultLocation') || 'Store'" in script
+    assert "addAssetField('assetDefaultLocation').value = 'Store'" in script
+
+
+def test_add_asset_known_model_autofills_tags_and_default_location():
+    script = APP_BUNDLE_SOURCE
+
+    assert "function mostCommonAddAssetTags(matches)" in script
+    assert "const defaultLocation = mostCommonAddAssetValue(matches.map(asset => asset.defaultLocation)) || 'Store';" in script
+    assert "const tags = mostCommonAddAssetTags(matches);" in script
+    assert "setAddAssetAutofillValue('assetDefaultLocation', defaultLocation);" in script
+    assert "setAddAssetAutofillTags(tags);" in script
+    assert "['assetDescription', 'assetDepartment', 'assetDefaultLocation']" in script
+    assert "if (editorId === 'assetTagsEditor') editor.dataset.addAssetAutofilled = '';" in script
+
+
+def test_unknown_add_asset_model_preserves_previous_autofill_values():
+    script = APP_BUNDLE_SOURCE
+    defaults_source = script.split("function applyKnownAssetDefaults()", 1)[1].split(
+        "function syncAddAssetSuggestionsAndDefaults()", 1
+    )[0]
+
+    assert "if (!matches.length) return;" in defaults_source
+    assert "addAssetField('assetDescription').value = '';" not in defaults_source
+    assert "addAssetField('assetDepartment').value = 'AX';" not in defaults_source
+    assert "addAssetField('assetDefaultLocation').value = 'Store';" not in defaults_source
+    assert "setAddAssetAutofillTags([]);" not in defaults_source
+    assert "canReplaceAddAssetField('assetDescription')" in defaults_source
+    assert "canReplaceAddAssetTags()" in defaults_source
+
+
+def test_realtime_inventory_refresh_is_strictly_company_scoped():
+    script = APP_BUNDLE_SOURCE
+
+    assert "function realtimePayloadMatchesCurrentCompany(payload)" in script
+    assert "currentCode && payloadCodes.length && payloadCodes.includes(currentCode)" in script
+    assert "if (!realtimePayloadMatchesCurrentCompany(payload))" in script
 
 
 def test_asset_history_uses_timeline_and_event_cards():

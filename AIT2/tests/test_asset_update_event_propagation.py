@@ -281,7 +281,7 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             ['[MODEL]AX|TestBrand|OldModel|2|New desc'],
         )
 
-    def test_all_similar_rename_updates_every_preexisting_description_variant(self):
+    def test_all_similar_rename_preserves_other_description_variant_event_links(self):
         self.data_manager.inventory['A#02'].description = 'Legacy capitalisation'
         event = self.make_event(
             106,
@@ -313,11 +313,11 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         item = event.subprojects[0]['items'][0]
-        self.assertEqual(item['description'], 'Canonical description')
+        self.assertEqual(item['description'], 'Legacy capitalisation')
         self.assertEqual(item['assetRefs'], ['A#02'])
         self.assertEqual(
             event.prepared_items,
-            ['[MODEL]AX|TestBrand|OldModel|1|Canonical description'],
+            ['[MODEL]AX|TestBrand|OldModel|1|Legacy capitalisation'],
         )
 
     def test_integrity_repair_uses_prepared_id_when_room_asset_refs_are_legacy_missing(self):
@@ -755,8 +755,67 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(self.data_manager.inventory['A#01'].description, 'Updated description')
 
+    def test_all_similar_update_excludes_same_model_with_different_description(self):
+        self.data_manager.inventory['A#02'].description = 'Different desc'
+        self.data_manager.save_inventory()
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='Updated description',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['A#01'].model_number, 'NewModel')
+        self.assertEqual(self.data_manager.inventory['A#01'].description, 'Updated description')
+        self.assertEqual(self.data_manager.inventory['A#02'].model_number, 'OldModel')
+        self.assertEqual(self.data_manager.inventory['A#02'].description, 'Different desc')
+
     def test_regular_asset_id_change_uses_edited_id_and_updates_event_references(self):
-        event = self.make_event(300, prepared=['A#01'], actual=['A#01'], extra=['A#01'])
+        asset = self.data_manager.inventory['A#01']
+        asset.change_history = [{
+            'date': '2026-05-01T09:00:00',
+            'user': 'admin',
+            'action': 'created',
+            'changes': [{
+                'field': 'asset_id',
+                'label': 'Asset ID',
+                'old': '',
+                'new': 'A#01',
+            }],
+        }]
+        asset.maintenance_logs = [app_module.make_maintenance_log(
+            '2026/05/02',
+            'admin',
+            'Inspected before deployment',
+            log_id='maintenance-before-rename',
+        )]
+        self.data_manager.save_inventory()
+        self.data_manager.containers = {
+            'CASE-1': Container('CASE-1', ['A#01']),
+        }
+        self.data_manager.save_containers()
+        event = self.make_event(
+            300,
+            prepared=['A#01'],
+            actual=['A#01'],
+            returned=['A#01'],
+            extra=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'assetRefs': ['A#01'],
+            }],
+            'extraRefs': ['A#01'],
+        }]
 
         response = self.put_asset('A#01', id='A#99', internalId='A#01')
 
@@ -765,10 +824,64 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertIn('A#99', self.data_manager.inventory)
         self.assertEqual(event.prepared_items, ['A#99'])
         self.assertEqual(event.actually_prepared, ['A#99'])
+        self.assertEqual(event.returned_items, ['A#99'])
         self.assertEqual(event.extra_assets, ['A#99'])
+        self.assertEqual(event.subprojects[0]['items'][0]['assetRefs'], ['A#99'])
+        self.assertEqual(event.subprojects[0]['extraRefs'], ['A#99'])
+        self.assertEqual(self.data_manager.containers['CASE-1'].asset_ids, ['A#99'])
+
+        renamed = self.data_manager.inventory['A#99']
+        self.assertEqual(
+            renamed.maintenance_logs[0]['id'],
+            'maintenance-before-rename',
+        )
+        self.assertEqual(len(renamed.change_history), 2)
+        rename_changes = {
+            change['field']: change
+            for change in renamed.change_history[-1]['changes']
+        }
+        self.assertEqual(rename_changes['asset_id']['old'], 'A#01')
+        self.assertEqual(rename_changes['asset_id']['new'], 'A#99')
+
+        history_response = self.client.get('/api/assets/A%2399/event-history')
+        self.assertEqual(
+            history_response.status_code,
+            200,
+            history_response.get_data(as_text=True),
+        )
+        self.assertEqual(history_response.get_json()['data'][0]['id'], 300)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        reloaded.load_events()
+        reloaded.load_containers()
+        self.assertNotIn('A#01', reloaded.inventory)
+        self.assertEqual(
+            reloaded.inventory['A#99'].maintenance_logs[0]['id'],
+            'maintenance-before-rename',
+        )
+        self.assertEqual(len(reloaded.inventory['A#99'].change_history), 2)
+        self.assertEqual(reloaded.events[300].actually_prepared, ['A#99'])
+        self.assertEqual(reloaded.containers['CASE-1'].asset_ids, ['A#99'])
 
     def test_bulk_asset_id_change_updates_bulk_event_markers(self):
         marker = app_module._bulk_marker('BULK-0001', 2)
+        bulk_asset = self.data_manager.inventory['BULK-0001']
+        bulk_asset.maintenance_logs = [app_module.make_maintenance_log(
+            '2026/05/03',
+            'admin',
+            'Bulk cable inspection',
+            log_id='bulk-maintenance-before-rename',
+        )]
+        self.data_manager.save_inventory()
+        self.data_manager.containers = {
+            'CABLE-CASE': Container(
+                'CABLE-CASE',
+                [],
+                bulk_items={'BULK-0001': 2},
+            ),
+        }
+        self.data_manager.save_containers()
         event = self.make_event(
             400,
             prepared=[marker],
@@ -776,6 +889,19 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             returned=[marker],
             extra=[marker],
         )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'BulkModel',
+                'description': 'Bulk item',
+                'quantity': 2,
+                'assetRefs': [marker],
+            }],
+            'extraRefs': [marker],
+        }]
 
         response = self.put_asset(
             'BULK-0001',
@@ -794,8 +920,28 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(event.actually_prepared, [new_marker])
         self.assertEqual(event.returned_items, [new_marker])
         self.assertEqual(event.extra_assets, [new_marker])
+        self.assertEqual(event.subprojects[0]['items'][0]['assetRefs'], [new_marker])
+        self.assertEqual(event.subprojects[0]['extraRefs'], [new_marker])
+        self.assertEqual(
+            self.data_manager.containers['CABLE-CASE'].bulk_items,
+            {'BULK-0099': 2},
+        )
+        self.assertEqual(
+            self.data_manager.inventory['BULK-0099'].maintenance_logs[0]['id'],
+            'bulk-maintenance-before-rename',
+        )
 
     def test_bulk_renumber_handles_overlapping_ids_and_updates_references(self):
+        for asset_id in ('A#01', 'A#02'):
+            self.data_manager.inventory[asset_id].maintenance_logs = [
+                app_module.make_maintenance_log(
+                    '2026/05/04',
+                    'admin',
+                    f'Inspection for {asset_id}',
+                    log_id=f'log-{asset_id}',
+                )
+            ]
+        self.data_manager.save_inventory()
         self.data_manager.containers = {
             'CASE-1': Container('CASE-1', ['A#01', 'A#02']),
         }
@@ -808,6 +954,51 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             returned=['A#01'],
             extra=['A#02'],
         )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 2,
+                'assetRefs': ['A#01', 'A#02'],
+            }],
+            'extraRefs': [],
+        }]
+        catalog_key = app_module._finance_catalog_key(
+            'AX', 'TestBrand', 'OldModel', 'Old desc',
+        )
+        app_module._save_finance_data({
+            'version': app_module.FINANCE_VERSION,
+            'documents': [{
+                'id': 'renumber-draft',
+                'type': 'quotation',
+                'number': 'QT-2026-450-01',
+                'status': 'draft',
+                'lineItems': [{
+                    'id': 'line-1',
+                    'catalogKey': catalog_key,
+                    'sourceAssetIds': ['A#01', 'A#02'],
+                    'brand': 'TestBrand',
+                    'model': 'OldModel',
+                    'description': 'TestBrand OldModel Old desc',
+                    'department': 'Audio Department',
+                    'departmentCode': 'AX',
+                    'quantity': 2,
+                    'days': 1,
+                    'unitPrice': 100,
+                    'total': 200,
+                    'isCustom': False,
+                }],
+                'adjustments': [],
+            }],
+            'priceBook': {
+                f'admin::{catalog_key}::asset:a#01': {'unitPrice': 100},
+                f'admin::{catalog_key}::asset:a#02': {'unitPrice': 200},
+            },
+        })
         self.login_admin()
 
         response = self.client.post('/api/assets/bulk-renumber', json={
@@ -826,8 +1017,38 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(event.returned_items, ['A#02'])
         self.assertEqual(event.extra_assets, ['A#03'])
         self.assertEqual(
+            event.subprojects[0]['items'][0]['assetRefs'],
+            ['A#02', 'A#03'],
+        )
+        self.assertEqual(
             self.data_manager.containers['CASE-1'].asset_ids,
             ['A#02', 'A#03'],
+        )
+        self.assertTrue(body['financeDocumentsUpdated'])
+        finance_data = app_module._load_finance_data()
+        self.assertEqual(
+            finance_data['documents'][0]['lineItems'][0]['sourceAssetIds'],
+            ['A#02', 'A#03'],
+        )
+        self.assertNotIn(
+            f'admin::{catalog_key}::asset:a#01',
+            finance_data['priceBook'],
+        )
+        self.assertIn(
+            f'admin::{catalog_key}::asset:a#02',
+            finance_data['priceBook'],
+        )
+        self.assertIn(
+            f'admin::{catalog_key}::asset:a#03',
+            finance_data['priceBook'],
+        )
+        self.assertEqual(
+            self.data_manager.inventory['A#02'].maintenance_logs[0]['id'],
+            'log-A#01',
+        )
+        self.assertEqual(
+            self.data_manager.inventory['A#03'].maintenance_logs[0]['id'],
+            'log-A#02',
         )
 
         reloaded = DataManager(self.tempdir.name)
@@ -835,6 +1056,16 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertNotIn('A#01', reloaded.inventory)
         self.assertIn('A#02', reloaded.inventory)
         self.assertIn('A#03', reloaded.inventory)
+        self.assertEqual(reloaded.inventory['A#02'].maintenance_logs[0]['id'], 'log-A#01')
+        self.assertEqual(reloaded.inventory['A#03'].maintenance_logs[0]['id'], 'log-A#02')
+        self.assertEqual(
+            reloaded.inventory['A#02'].change_history[-1]['changes'][0]['old'],
+            'A#01',
+        )
+        self.assertEqual(
+            reloaded.inventory['A#03'].change_history[-1]['changes'][0]['old'],
+            'A#02',
+        )
 
     def test_bulk_renumber_rejects_ids_owned_by_unselected_assets(self):
         self.login_admin()

@@ -3,6 +3,7 @@
 import copy
 import csv
 import hashlib
+import io
 import json
 import logging
 import mimetypes
@@ -40,6 +41,16 @@ from flask import (
 )
 from flask_cors import CORS
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+try:
+    from openpyxl import load_workbook
+except ImportError:
+    load_workbook = None
+
+try:
+    import xlrd
+except ImportError:
+    xlrd = None
 
 try:
     from flask_compress import Compress
@@ -2042,8 +2053,34 @@ def _with_realtime_scope(details=None):
     return scoped
 
 
+def _realtime_company_codes_from_payload(payload):
+    """Return every company explicitly addressed by a realtime notice."""
+    codes = set()
+
+    def add_code(value):
+        code = _normalise_company_code(value)
+        if code:
+            codes.add(code)
+
+    details = (payload or {}).get('details') or {}
+    add_code(details.get('companyCode'))
+    add_code(details.get('previousCompanyCode'))
+    for change in details.get('changes') or []:
+        change_details = (change or {}).get('details') or {}
+        add_code(change_details.get('companyCode'))
+        add_code(change_details.get('previousCompanyCode'))
+    return codes
+
+
+def _realtime_payload_matches_company(payload, company_code):
+    """Keep realtime notices inside their addressed company boundary."""
+    target_code = _normalise_company_code(company_code)
+    payload_codes = _realtime_company_codes_from_payload(payload)
+    return bool(target_code and payload_codes and target_code in payload_codes)
+
+
 def _publish_realtime_update_now(topic='data-changed', details=None, origin_client_id=None):
-    """Push a compact change notice to every connected browser."""
+    """Push a compact change notice to browsers in the addressed company."""
     global _realtime_sequence
 
     with _realtime_subscribers_lock:
@@ -2068,7 +2105,14 @@ def _publish_realtime_update_now(topic='data-changed', details=None, origin_clie
             return
 
         dead_subscribers = []
-        for subscriber_id, subscriber_queue in _realtime_subscribers.items():
+        for subscriber_id, subscriber in _realtime_subscribers.items():
+            subscriber_queue = subscriber['queue']
+            subscriber_company_code = subscriber['companyCode']
+            if not _realtime_payload_matches_company(
+                payload,
+                subscriber_company_code,
+            ):
+                continue
             try:
                 subscriber_queue.put_nowait(payload)
             except queue.Full:
@@ -3053,6 +3097,7 @@ def _asset_id_plan_for_request(data):
     model_number = str(data.get('model', '') or '').strip()
     description = str(data.get('description', '') or '').strip()
     department = _normalise_department_code(data.get('department'))
+    default_location = str(data.get('defaultLocation', '') or '').strip() or 'Store'
     is_bulk = _request_bool(data.get('isBulk'), default=False)
     quantity = _safe_int(data.get('quantity'), 0)
 
@@ -3077,6 +3122,7 @@ def _asset_id_plan_for_request(data):
             'model': model_number,
             'description': description,
             'department': department,
+            'defaultLocation': default_location,
             'quantity': quantity,
             'prefix': '',
             'startNumber': None,
@@ -3162,6 +3208,7 @@ def _asset_id_plan_for_request(data):
         'model': model_number,
         'description': description,
         'department': department,
+        'defaultLocation': default_location,
         'quantity': quantity,
         'prefix': prefix,
         'startNumber': next_number,
@@ -3218,6 +3265,9 @@ def _safe_float(value, default=0.0):
 
 
 def _normalise_asset_purchase_date(value):
+    if hasattr(value, 'strftime') and not isinstance(value, str):
+        return value.strftime('%Y-%m-%d')
+
     raw = str(value or '').strip()
     if not raw:
         return ''
@@ -3229,6 +3279,590 @@ def _normalise_asset_purchase_date(value):
             continue
 
     raise ValueError('Date of purchase must be YYYY-MM-DD')
+
+
+ASSET_IMPORT_MAX_ROWS = 500
+ASSET_IMPORT_MAX_BYTES = 5 * 1024 * 1024
+ASSET_IMPORT_TEMPLATE_PATH = os.path.join(
+    _INITIAL_BASE_DIR,
+    'outputs',
+    'asset-import',
+    'asset-import-template.csv',
+)
+ASSET_IMPORT_FILE_EXTENSIONS = {'.csv', '.xlsx', '.xlsm', '.xls'}
+ASSET_IMPORT_HEADERS = {
+    'brand': ('brand',),
+    'model': ('model', 'model number'),
+    'description': ('description',),
+    'version': ('version',),
+    'department': (
+        'department',
+        'department code',
+        'department name',
+        'department code or name',
+        'dept',
+        'dept code',
+        'dept name',
+    ),
+    'quantity': ('quantity', 'qty'),
+    'isBulk': ('bulk asset', 'bulk', 'is bulk'),
+    'serials': ('primary serial numbers', 'primary serials', 'serial numbers', 'serials'),
+    'secondarySerials': ('secondary serial numbers', 'secondary serials', 'second serial numbers'),
+    'dateOfPurchase': ('date of purchase', 'purchase date'),
+    'notes': ('notes',),
+    'tags': ('tags',),
+    'defaultLocation': ('default location', 'location'),
+    'assetIdPrefix': ('custom asset id prefix', 'asset id prefix', 'custom prefix'),
+}
+
+
+def _normalise_asset_import_header(value):
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9]+', ' ', str(value or '').casefold())).strip()
+
+
+def _asset_import_header_map(values):
+    aliases = {
+        _normalise_asset_import_header(alias): field
+        for field, field_aliases in ASSET_IMPORT_HEADERS.items()
+        for alias in field_aliases
+    }
+    return {
+        aliases[normalized]: index
+        for index, value in enumerate(values or [])
+        if (normalized := _normalise_asset_import_header(value)) in aliases
+    }
+
+
+def _asset_import_serials(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        serials = []
+        for item in value:
+            serials.extend(_asset_import_serials(item))
+        return serials
+    if isinstance(value, bool):
+        return [str(value)]
+    if isinstance(value, int):
+        return [str(value)]
+    if isinstance(value, float):
+        return [str(int(value)) if value.is_integer() else format(value, 'g')]
+    return [
+        item.strip()
+        for item in re.split(r'[,;\r\n]+', str(value))
+        if item.strip()
+    ]
+
+
+def _asset_import_bool(value):
+    normalized = str(value or '').strip().casefold()
+    if normalized in ('', 'no', 'n', 'false', '0'):
+        return False
+    if normalized in ('yes', 'y', 'true', '1'):
+        return True
+    raise ValueError('Bulk Asset must be Yes or No')
+
+
+def _asset_import_quantity(value):
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError('Quantity must be a whole number')
+    quantity = _safe_int(value, 0)
+    if quantity < 1 or quantity > 500:
+        raise ValueError('Quantity must be between 1 and 500')
+    return quantity
+
+
+def _asset_import_unchecked_row_payload(values, header_map):
+    def read(field):
+        index = header_map.get(field)
+        return values[index] if index is not None and index < len(values) else None
+
+    return {
+        'brand': str(read('brand') or '').strip(),
+        'model': str(read('model') or '').strip(),
+        'description': str(read('description') or '').strip(),
+        'version': str(read('version') or '').strip(),
+        'department': str(read('department') or '').strip(),
+        'quantity': read('quantity'),
+        'isBulk': read('isBulk'),
+        'serials': _asset_import_serials(read('serials')),
+        'secondarySerials': _asset_import_serials(read('secondarySerials')),
+        'dateOfPurchase': read('dateOfPurchase').strftime('%Y-%m-%d') if hasattr(read('dateOfPurchase'), 'strftime') else str(read('dateOfPurchase') or '').strip(),
+        'notes': str(read('notes') or '').strip(),
+        'tags': normalize_asset_tags(read('tags')),
+        'defaultLocation': str(read('defaultLocation') or '').strip() or 'Store',
+        'assetIdPrefix': str(read('assetIdPrefix') or '').strip(),
+        'createDepartment': False,
+        'newDepartmentCode': '',
+        'newDepartmentName': '',
+    }
+
+
+def _asset_import_row_payload(values, header_map):
+    return _normalise_asset_import_payload(
+        _asset_import_unchecked_row_payload(values, header_map),
+        allow_unmatched_department=True,
+    )
+
+
+def _parse_asset_import_rows(rows):
+    rows = iter(rows)
+    buffered_rows = []
+    for row_number, values in enumerate(rows, start=1):
+        buffered_rows.append((row_number, list(values or [])))
+        if row_number >= 12:
+            break
+
+    header_row_number = None
+    header_map = {}
+    for row_number, values in buffered_rows:
+        candidate = _asset_import_header_map(values)
+        if 'brand' in candidate and 'model' in candidate:
+            header_row_number = row_number
+            header_map = candidate
+            break
+    if header_row_number is None:
+        raise ValueError('Could not find the asset column headers in the uploaded file')
+
+    missing_headers = [
+        label for field, label in (
+            ('brand', 'Brand'),
+            ('model', 'Model'),
+            ('department', 'Department Code or Name'),
+            ('quantity', 'Quantity'),
+        ) if field not in header_map
+    ]
+    if missing_headers:
+        raise ValueError(f"Missing required column(s): {', '.join(missing_headers)}")
+
+    data_rows = (
+        [(number, values) for number, values in buffered_rows if number > header_row_number]
+        + [(number, list(values or [])) for number, values in enumerate(rows, start=len(buffered_rows) + 1)]
+    )
+    parsed_rows = []
+    rejected = []
+    for row_number, values in data_rows:
+        if not any(value not in (None, '') for value in values):
+            continue
+        if len(parsed_rows) >= ASSET_IMPORT_MAX_ROWS:
+            raise ValueError(f'An import can contain at most {ASSET_IMPORT_MAX_ROWS} rows')
+        try:
+            payload = _asset_import_row_payload(values, header_map)
+            payload['sourceRow'] = row_number
+            parsed_rows.append(payload)
+        except ValueError as error:
+            payload = _asset_import_unchecked_row_payload(values, header_map)
+            payload['sourceRow'] = row_number
+            payload['validationError'] = str(error)
+            parsed_rows.append(payload)
+            rejected.append({'sourceRow': row_number, 'error': str(error)})
+
+    if not parsed_rows:
+        raise ValueError('The uploaded file does not contain any asset rows')
+    return {'rows': parsed_rows, 'rejected': rejected}
+
+
+def _parse_asset_import_workbook(file_bytes, extension='.xlsx'):
+    if load_workbook is None:
+        raise RuntimeError('Excel import support is not installed')
+    try:
+        workbook = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception as error:
+        raise ValueError('The uploaded file is not a valid .xlsx workbook') from error
+
+    worksheet = workbook['Assets'] if 'Assets' in workbook.sheetnames else workbook.active
+    return _parse_asset_import_rows(worksheet.iter_rows(values_only=True))
+
+
+def _decode_asset_import_csv(file_bytes):
+    for encoding in ('utf-8-sig', 'utf-16', 'cp1252'):
+        try:
+            return file_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError('The CSV file must use UTF-8, UTF-16, or Windows text encoding')
+
+
+def _parse_asset_import_csv(file_bytes):
+    text = _decode_asset_import_csv(file_bytes)
+    return _parse_asset_import_rows(csv.reader(io.StringIO(text, newline='')))
+
+
+def _parse_asset_import_legacy_excel(file_bytes):
+    if xlrd is None:
+        raise RuntimeError('Legacy .xls import support is not installed')
+    try:
+        workbook = xlrd.open_workbook(file_contents=file_bytes)
+        worksheet = workbook.sheet_by_name('Assets') if 'Assets' in workbook.sheet_names() else workbook.sheet_by_index(0)
+    except Exception as error:
+        raise ValueError('The uploaded file is not a valid .xls workbook') from error
+
+    def rows():
+        for row_index in range(worksheet.nrows):
+            values = []
+            for cell in worksheet.row(row_index):
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    values.append(xlrd.xldate_as_datetime(cell.value, workbook.datemode))
+                else:
+                    values.append(cell.value)
+            yield values
+
+    return _parse_asset_import_rows(rows())
+
+
+def _parse_asset_import_file(file_bytes, filename):
+    extension = os.path.splitext(str(filename or ''))[1].lower()
+    if extension == '.csv':
+        return _parse_asset_import_csv(file_bytes)
+    if extension in ('.xlsx', '.xlsm'):
+        return _parse_asset_import_workbook(file_bytes, extension)
+    if extension == '.xls':
+        return _parse_asset_import_legacy_excel(file_bytes)
+    raise ValueError('Upload a CSV or Excel file (.csv, .xlsx, .xlsm, or .xls)')
+
+
+def _asset_import_department_resolution(value, departments=None):
+    departments = departments or _load_departments()
+    raw_value = str(value or '').strip()
+    if not raw_value:
+        return {
+            'input': '',
+            'matched': False,
+            'ambiguous': False,
+            'code': '',
+            'name': '',
+            'suggestedCode': '',
+            'issue': 'Department is required',
+        }
+
+    normalized_code = _normalise_department_code(raw_value)
+    if normalized_code in departments:
+        department = departments[normalized_code]
+        return {
+            'input': raw_value,
+            'matched': True,
+            'ambiguous': False,
+            'code': normalized_code,
+            'name': str(department.get('name') or normalized_code).strip() or normalized_code,
+            'suggestedCode': normalized_code,
+            'issue': '',
+        }
+
+    name_matches = [
+        (code, department)
+        for code, department in departments.items()
+        if str(department.get('name') or code).strip().casefold() == raw_value.casefold()
+    ]
+    if len(name_matches) == 1:
+        code, department = name_matches[0]
+        return {
+            'input': raw_value,
+            'matched': True,
+            'ambiguous': False,
+            'code': code,
+            'name': str(department.get('name') or code).strip() or code,
+            'suggestedCode': code,
+            'issue': '',
+        }
+
+    if len(name_matches) > 1:
+        matching_codes = ', '.join(sorted(code for code, _ in name_matches))
+        return {
+            'input': raw_value,
+            'matched': False,
+            'ambiguous': True,
+            'code': '',
+            'name': '',
+            'suggestedCode': '',
+            'issue': f'Department name "{raw_value}" matches more than one code ({matching_codes}); enter a department code instead',
+        }
+
+    return {
+        'input': raw_value,
+        'matched': False,
+        'ambiguous': False,
+        'code': '',
+        'name': '',
+        'suggestedCode': normalized_code,
+        'issue': f'Department "{raw_value}" does not match an existing department',
+    }
+
+
+def _normalise_asset_import_payload(data, allow_unmatched_department=False, departments=None):
+    data = data or {}
+    departments = departments or _load_departments()
+    department_resolution = _asset_import_department_resolution(data.get('department'), departments)
+    create_department = _asset_import_bool(data.get('createDepartment'))
+    new_department_code = _normalise_department_code(
+        data.get('newDepartmentCode') or department_resolution.get('suggestedCode')
+    )
+    new_department_name = str(
+        data.get('newDepartmentName') or department_resolution.get('input')
+    ).strip()
+
+    if department_resolution['matched']:
+        department_code = department_resolution['code']
+        create_department = False
+        new_department_code = ''
+        new_department_name = ''
+    elif create_department:
+        if department_resolution['ambiguous']:
+            raise ValueError(department_resolution['issue'])
+        if not new_department_code:
+            raise ValueError('New department code is required')
+        if not new_department_name:
+            raise ValueError('New department name is required')
+        if new_department_code in departments:
+            existing_name = departments[new_department_code].get('name') or new_department_code
+            raise ValueError(
+                f'Department code {new_department_code} already exists as {existing_name}; use the existing code or name instead'
+            )
+        existing_name_match = next((
+            code for code, department in departments.items()
+            if str(department.get('name') or code).strip().casefold() == new_department_name.casefold()
+        ), '')
+        if existing_name_match:
+            raise ValueError(
+                f'Department name {new_department_name} already exists as {existing_name_match}; use the existing code or name instead'
+            )
+        department_code = new_department_code
+    elif allow_unmatched_department:
+        department_code = department_resolution['input']
+    else:
+        raise ValueError(department_resolution['issue'])
+
+    payload = {
+        'brand': str(data.get('brand') or '').strip(),
+        'model': str(data.get('model') or '').strip(),
+        'description': str(data.get('description') or '').strip(),
+        'version': str(data.get('version') or '').strip(),
+        'department': department_code,
+        'departmentInput': str(data.get('departmentInput') or department_resolution['input']).strip(),
+        'departmentMatched': department_resolution['matched'],
+        'departmentMatchedName': department_resolution['name'],
+        'departmentIssue': '' if department_resolution['matched'] or create_department else department_resolution['issue'],
+        'createDepartment': create_department,
+        'newDepartmentCode': new_department_code,
+        'newDepartmentName': new_department_name,
+        'quantity': _asset_import_quantity(data.get('quantity')),
+        'isBulk': _asset_import_bool(data.get('isBulk')),
+        'serials': _asset_import_serials(data.get('serials')),
+        'secondarySerials': _asset_import_serials(data.get('secondarySerials')),
+        'dateOfPurchase': _normalise_asset_purchase_date(data.get('dateOfPurchase')),
+        'notes': str(data.get('notes') or '').strip(),
+        'tags': normalize_asset_tags(data.get('tags')),
+        'defaultLocation': str(data.get('defaultLocation') or '').strip() or 'Store',
+        'assetIdPrefix': _normalise_asset_id_prefix(data.get('assetIdPrefix')),
+        'sourceRow': _safe_int(data.get('sourceRow'), 0),
+    }
+    if not payload['brand']:
+        raise ValueError('Brand is required')
+    if not payload['model']:
+        raise ValueError('Model number is required')
+    if not payload['department']:
+        raise ValueError('Department is required')
+    if payload['isBulk']:
+        payload['serials'] = []
+        payload['secondarySerials'] = []
+        payload['assetIdPrefix'] = ''
+    return payload
+
+
+def _asset_import_validation_warnings(payload):
+    warnings = []
+    for mismatch in _asset_serial_count_mismatches(
+        payload,
+        payload.get('quantity', 0),
+        payload.get('isBulk', False),
+    ):
+        count = mismatch['count']
+        quantity = mismatch['quantity']
+        label = mismatch['type'].capitalize()
+        if count < quantity:
+            missing = quantity - count
+            warnings.append(
+                f'{label} serial numbers: {count}/{quantity}; '
+                f'{missing} asset{"" if missing == 1 else "s"} will be saved without one'
+            )
+        else:
+            extra = count - quantity
+            warnings.append(
+                f'{label} serial numbers: {count}/{quantity}; '
+                f'{extra} extra serial number{"" if extra == 1 else "s"} will not be saved'
+            )
+
+    purchase_date = str(payload.get('dateOfPurchase') or '').strip()
+    if purchase_date and datetime.strptime(purchase_date, '%Y-%m-%d').date() > datetime.now().date():
+        warnings.append('Date of purchase is in the future')
+    return warnings
+
+
+def _asset_import_auto_ids(payload, reserved_ids=None):
+    reserved_ids = set(reserved_ids or [])
+    plan = _asset_id_plan_for_request(payload)
+    if plan['isBulk']:
+        used_ids = set(data_manager.inventory.keys()) | reserved_ids
+        used_numbers = [
+            _safe_int(str(asset_id).replace('BULK-', ''), 0)
+            for asset_id in used_ids
+            if str(asset_id).startswith('BULK-')
+        ]
+        return [f"BULK-{(max(used_numbers, default=0) + 1):04d}"]
+
+    prefix = plan['prefix']
+    pattern = re.compile(rf'^{re.escape(prefix)}#(\d+)$', re.IGNORECASE)
+    used_numbers = []
+    widths = [2]
+    for asset_id in set(data_manager.inventory.keys()) | reserved_ids:
+        match = pattern.match(str(asset_id))
+        if not match:
+            continue
+        used_numbers.append(_safe_int(match.group(1), 0))
+        widths.append(len(match.group(1)))
+    start = max(used_numbers, default=0) + 1
+    width = max(*widths, len(str(start + payload['quantity'] - 1)))
+    return [
+        f"{prefix}#{number:0{width}d}"
+        for number in range(start, start + payload['quantity'])
+    ]
+
+
+def _asset_import_different_descriptions(payload):
+    brand = str(payload.get('brand') or '').strip().casefold()
+    model = str(payload.get('model') or '').strip().casefold()
+    description = str(payload.get('description') or '').strip().casefold()
+    matches = {
+        str(getattr(asset, 'description', '') or '').strip() or '(blank description)'
+        for asset in data_manager.inventory.values()
+        if str(getattr(asset, 'brand', '') or '').strip().casefold() == brand
+        and str(getattr(asset, 'model_number', '') or '').strip().casefold() == model
+        and str(getattr(asset, 'description', '') or '').strip().casefold() != description
+    }
+    return sorted(matches, key=str.casefold)
+
+
+def _asset_import_preview_rows(rows):
+    preview_rows = []
+    reserved_ids = set()
+    for row in rows:
+        try:
+            payload = _normalise_asset_import_payload(
+                row,
+                allow_unmatched_department=True,
+            )
+            preview_ids = _asset_import_auto_ids(payload, reserved_ids)
+        except ValueError as error:
+            preview_rows.append({
+                **row,
+                'validationError': str(error),
+                'suggestedAssetIds': [],
+                'assetIdsPreview': [],
+                'idIssue': '',
+                'differentDescriptions': [],
+                'validationWarnings': [],
+            })
+            continue
+        reserved_ids.update(preview_ids)
+        preview_rows.append({
+            **payload,
+            'suggestedAssetIds': preview_ids,
+            'assetIdsPreview': preview_ids,
+            'idIssue': '',
+            'differentDescriptions': _asset_import_different_descriptions(payload),
+            'validationWarnings': _asset_import_validation_warnings(payload),
+            'validationError': '',
+        })
+    return preview_rows
+
+
+def _asset_import_new_departments(rows):
+    new_departments = {}
+    new_names = {}
+    for payload in rows:
+        if not payload.get('createDepartment'):
+            continue
+        code = _normalise_department_code(payload.get('newDepartmentCode'))
+        name = str(payload.get('newDepartmentName') or '').strip()
+        name_key = name.casefold()
+        existing = new_departments.get(code)
+        if existing and existing['name'].casefold() != name_key:
+            raise ValueError(
+                f'New department code {code} has conflicting names in this import'
+            )
+        existing_code = new_names.get(name_key)
+        if existing_code and existing_code != code:
+            raise ValueError(
+                f'New department name {name} has conflicting codes in this import'
+            )
+        new_departments[code] = _department_record(code, name)
+        new_names[name_key] = code
+    return new_departments
+
+
+def _create_asset_import_row(payload, audit_timestamp, audit_user):
+    created_asset_ids = _asset_import_auto_ids(payload)
+
+    purchase_date = payload['dateOfPurchase']
+    version = payload['version']
+    tags = payload['tags']
+    notes = payload['notes']
+    if payload['isBulk']:
+        asset = InventoryItem(
+            asset_id=created_asset_ids[0],
+            brand=payload['brand'],
+            model_number=payload['model'],
+            version=version,
+            serial_number='',
+            secondary_serial_number='',
+            description=payload['description'],
+            is_missing=False,
+            is_ooc=False,
+            is_untagged=False,
+            is_degraded=False,
+            is_disposed=False,
+            maintenance_logs=[],
+            department_code=payload['department'],
+            default_location=payload['defaultLocation'],
+            current_location='',
+            is_bulk=True,
+            quantity=payload['quantity'],
+            date_of_purchase=purchase_date,
+            notes=notes,
+            tags=tags,
+        )
+        _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
+        data_manager.inventory[created_asset_ids[0]] = asset
+        return created_asset_ids
+
+    serials = (payload['serials'] + [''] * payload['quantity'])[:payload['quantity']]
+    secondary_serials = (payload['secondarySerials'] + [''] * payload['quantity'])[:payload['quantity']]
+    for index, asset_id in enumerate(created_asset_ids):
+        asset = InventoryItem(
+            asset_id=asset_id,
+            brand=payload['brand'],
+            model_number=payload['model'],
+            version=version,
+            serial_number=serials[index],
+            secondary_serial_number=secondary_serials[index],
+            description=payload['description'],
+            is_missing=False,
+            is_ooc=False,
+            is_untagged=False,
+            is_degraded=False,
+            is_disposed=False,
+            maintenance_logs=[],
+            department_code=payload['department'],
+            default_location=payload['defaultLocation'],
+            current_location='',
+            is_bulk=False,
+            quantity=1,
+            date_of_purchase=purchase_date,
+            notes=notes,
+            tags=tags,
+        )
+        _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
+        data_manager.inventory[asset_id] = asset
+    return created_asset_ids
 
 
 ASSET_AUDIT_FIELD_LABELS = {
@@ -4134,6 +4768,31 @@ def _parse_custom_marker(value):
 
 def _is_custom_ref(value):
     return _parse_custom_marker(value) is not None
+
+
+def _subproject_item_matches_custom_marker(item, marker_id, custom=None):
+    """Match a room custom line by its reference or stable quotation UID."""
+    if not isinstance(item, dict):
+        return False
+    if marker_id in (item.get('assetRefs') or []):
+        return True
+    if not item.get('isCustom'):
+        return False
+
+    custom = custom or _parse_custom_marker(marker_id)
+    marker_uid = str((custom or {}).get('uid') or '').strip()
+    line_id = str(item.get('lineId') or '').strip()
+    if not marker_uid or not line_id:
+        return False
+
+    # Finance-created custom markers retain the quotation line ID with a
+    # ``finance_`` prefix, while the room requirement stores ``line_...``.
+    marker_line_id = (
+        marker_uid[len('finance_'):]
+        if marker_uid.startswith('finance_')
+        else marker_uid
+    )
+    return line_id in {marker_uid, marker_line_id}
 
 
 def _custom_display_name(custom):
@@ -13581,16 +14240,14 @@ def _asset_matches_group(asset, group):
     return (
         (asset.department_code or '').strip().upper() == group['department'] and
         (asset.brand or '').strip() == group['brand'] and
-        (asset.model_number or '').strip() == group['model']
+        (asset.model_number or '').strip() == group['model'] and
+        (asset.description or '').strip().casefold() ==
+        str(group.get('description') or '').strip().casefold()
     )
 
 
 def _event_asset_matches_group(asset, group):
-    return (
-        _asset_matches_group(asset, group) and
-        (asset.description or '').strip().casefold() ==
-        str(group.get('description') or '').strip().casefold()
-    )
+    return _asset_matches_group(asset, group)
 
 
 def _is_real_asset_ref(value):
@@ -13608,40 +14265,6 @@ def _is_real_asset_ref(value):
     )
 
     return not value.startswith(blocked_prefixes)
-
-
-def _replace_asset_id_in_list(values, old_asset_id, new_asset_id):
-    if not isinstance(values, list):
-        return 0
-
-    changed = 0
-
-    for index, value in enumerate(values):
-        if value == old_asset_id:
-            values[index] = new_asset_id
-            changed += 1
-
-    return changed
-
-
-def _replace_bulk_asset_id_in_list(values, old_asset_id, new_asset_id):
-    if not isinstance(values, list):
-        return 0
-
-    changed = 0
-
-    for index, value in enumerate(values):
-        marker = _parse_bulk_marker(value)
-
-        if marker and marker.get('bulkId') == old_asset_id:
-            values[index] = _bulk_marker(
-                new_asset_id,
-                marker.get('quantity', 1),
-                marker.get('subprojectId', ''),
-            )
-            changed += 1
-
-    return changed
 
 
 def _replace_asset_ids_in_list(values, asset_id_mapping):
@@ -13671,6 +14294,57 @@ def _replace_asset_ids_in_list(values, asset_id_mapping):
             )
             changed += 1
 
+    return changed
+
+
+def _replace_asset_ids_in_container(container, asset_id_mapping):
+    """Cascade an ID mapping through every live container reference."""
+    if not container or not asset_id_mapping:
+        return 0
+    changed = _replace_asset_ids_in_list(
+        getattr(container, 'asset_ids', []),
+        asset_id_mapping,
+    )
+    changed += _replace_container_bulk_item_ids(container, asset_id_mapping)
+    return changed
+
+
+def _replace_asset_ids_in_event(event, asset_id_mapping):
+    """Cascade an ID mapping through every operational event reference.
+
+    Event activity text remains a historical snapshot of what users saw at
+    the time. The live preparation/return references are updated so event and
+    inventory history lookup continue to follow the renamed physical asset.
+    """
+    if not event or not asset_id_mapping:
+        return 0
+
+    changed = 0
+    for attr in (
+        'prepared_items',
+        'returned_items',
+        'actually_prepared',
+        'extra_assets',
+    ):
+        changed += _replace_asset_ids_in_list(
+            getattr(event, attr, []),
+            asset_id_mapping,
+        )
+
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        changed += _replace_asset_ids_in_list(
+            subproject.get('extraRefs', []),
+            asset_id_mapping,
+        )
+        for item in subproject.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            changed += _replace_asset_ids_in_list(
+                item.get('assetRefs', []),
+                asset_id_mapping,
+            )
     return changed
 
 
@@ -15359,9 +16033,16 @@ def realtime_stream():
     subscriber_id = secrets.token_urlsafe(16)
     subscriber_queue = queue.Queue(maxsize=100)
     client_id = _client_id_from_request()
+    subscriber_company_code = _normalise_company_code(
+        _current_company_code(),
+        DEFAULT_COMPANY_CODE,
+    )
 
     with _realtime_subscribers_lock:
-        _realtime_subscribers[subscriber_id] = subscriber_queue
+        _realtime_subscribers[subscriber_id] = {
+            'queue': subscriber_queue,
+            'companyCode': subscriber_company_code,
+        }
 
     def sse_message(event_name, payload):
         payload = payload or {}
@@ -15397,7 +16078,10 @@ def realtime_stream():
                 except queue.Empty:
                     payload = None
 
-                if payload:
+                if payload and _realtime_payload_matches_company(
+                    payload,
+                    subscriber_company_code,
+                ):
                     last_seen_realtime_id = str(payload.get('id') or last_seen_realtime_id)
                     yield sse_message('inventory-update', payload)
                     continue
@@ -15407,6 +16091,11 @@ def realtime_stream():
                 )
                 if shared_payloads:
                     for shared_payload in shared_payloads:
+                        if not _realtime_payload_matches_company(
+                            shared_payload,
+                            subscriber_company_code,
+                        ):
+                            continue
                         shared_payload_id = str(
                             (shared_payload or {}).get('id') or ''
                         )
@@ -24508,6 +25197,172 @@ def get_event_assets(event_id):
     return jsonify({'success': True, 'data': event_assets})
 
 
+@app.route('/api/assets/import-template', methods=['GET'])
+@require_admin
+def download_asset_import_template():
+    if not os.path.isfile(ASSET_IMPORT_TEMPLATE_PATH):
+        return jsonify({'error': 'Asset import template is unavailable'}), 404
+    return send_file(
+        ASSET_IMPORT_TEMPLATE_PATH,
+        as_attachment=True,
+        download_name='Asset Import Template.csv',
+        mimetype='text/csv; charset=utf-8',
+    )
+
+
+@app.route('/api/assets/import-preview', methods=['POST'])
+@require_admin
+def preview_asset_import():
+    uploaded = request.files.get('file')
+    if not uploaded or not uploaded.filename:
+        return jsonify({'error': 'Choose a CSV or Excel file to upload'}), 400
+    extension = os.path.splitext(uploaded.filename)[1].lower()
+    if extension not in ASSET_IMPORT_FILE_EXTENSIONS:
+        return jsonify({'error': 'Upload a CSV or Excel file (.csv, .xlsx, .xlsm, or .xls)'}), 400
+    file_bytes = uploaded.read(ASSET_IMPORT_MAX_BYTES + 1)
+    if len(file_bytes) > ASSET_IMPORT_MAX_BYTES:
+        return jsonify({'error': 'The import file must be 5 MB or smaller'}), 413
+    try:
+        parsed = _parse_asset_import_file(file_bytes, uploaded.filename)
+        parsed['rows'] = _asset_import_preview_rows(parsed['rows'])
+        existing_rejected_rows = {
+            _safe_int(item.get('sourceRow'), 0)
+            for item in parsed['rejected']
+        }
+        parsed['rejected'].extend(
+            {
+                'sourceRow': row.get('sourceRow', 0),
+                'error': row['departmentIssue'],
+            }
+            for row in parsed['rows']
+            if row.get('departmentIssue')
+            and _safe_int(row.get('sourceRow'), 0) not in existing_rejected_rows
+        )
+        departments = _load_departments()
+        parsed['departments'] = [
+            _department_payload(code, departments)
+            for code in sorted(departments.keys())
+        ]
+        return jsonify({'success': True, 'data': parsed})
+    except (RuntimeError, ValueError) as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        logger.error('Error previewing asset import: %s', error, exc_info=True)
+        return jsonify({'error': 'Could not read the asset import file'}), 500
+
+
+@app.route('/api/assets/import-plan', methods=['POST'])
+@require_admin
+def plan_asset_import():
+    data = request.get_json() or {}
+    rows = data.get('rows')
+    if not isinstance(rows, list) or not rows:
+        return jsonify({'error': 'The import does not contain any assets'}), 400
+    if len(rows) > ASSET_IMPORT_MAX_ROWS:
+        return jsonify({'error': f'An import can contain at most {ASSET_IMPORT_MAX_ROWS} rows'}), 400
+    return jsonify({
+        'success': True,
+        'data': {
+            'rows': _asset_import_preview_rows(rows),
+        },
+    })
+
+
+@app.route('/api/assets/import', methods=['POST'])
+@require_admin
+def import_assets_from_workbook():
+    data = request.get_json() or {}
+    raw_rows = data.get('rows')
+    if not isinstance(raw_rows, list) or not raw_rows:
+        return jsonify({'error': 'The import does not contain any assets'}), 400
+    if len(raw_rows) > ASSET_IMPORT_MAX_ROWS:
+        return jsonify({'error': f'An import can contain at most {ASSET_IMPORT_MAX_ROWS} rows'}), 400
+
+    with _inventory_action_lock:
+        normalized_rows = []
+        row_errors = []
+        departments = _load_departments()
+        for index, raw_row in enumerate(raw_rows):
+            try:
+                normalized_rows.append(_normalise_asset_import_payload(
+                    raw_row,
+                    departments=departments,
+                ))
+            except ValueError as error:
+                row_errors.append({
+                    'index': index,
+                    'sourceRow': _safe_int((raw_row or {}).get('sourceRow'), 0) if isinstance(raw_row, dict) else 0,
+                    'error': str(error),
+                })
+        if row_errors:
+            return jsonify({'error': 'Some imported assets need attention', 'rowErrors': row_errors}), 400
+
+        try:
+            new_departments = _asset_import_new_departments(normalized_rows)
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+
+        inventory_before = copy.deepcopy(data_manager.inventory)
+        departments_before = copy.deepcopy(departments)
+        audit_timestamp = _asset_audit_timestamp()
+        audit_user = _asset_audit_user()
+        results = []
+        try:
+            for index, payload in enumerate(normalized_rows):
+                created_ids = _create_asset_import_row(payload, audit_timestamp, audit_user)
+                results.append({
+                    'index': index,
+                    'sourceRow': payload.get('sourceRow', 0),
+                    'assetIds': created_ids,
+                    'quantity': payload['quantity'],
+                    'isBulk': payload['isBulk'],
+                })
+            if new_departments:
+                departments.update(new_departments)
+                _save_departments(departments)
+            data_manager.save_inventory()
+        except Exception as error:
+            data_manager.inventory = inventory_before
+            if new_departments:
+                try:
+                    _save_departments(departments_before)
+                except Exception:
+                    logger.error(
+                        'Failed to roll back departments after an asset import error',
+                        exc_info=True,
+                    )
+            if isinstance(error, ValueError):
+                return jsonify({'error': str(error)}), 400
+            logger.error('Error importing assets: %s', error, exc_info=True)
+            return jsonify({'error': 'Failed to save the imported assets'}), 500
+
+    if new_departments:
+        mark_realtime_change('departments', {
+            'action': 'created-from-asset-import',
+            'departments': list(new_departments.values()),
+        })
+
+    invalidate_cache()
+    created_record_count = sum(len(result['assetIds']) for result in results)
+    bulk_unit_count = sum(
+        result['quantity'] for result in results if result['isBulk']
+    )
+    log_action(
+        f'Imported {len(results)} asset row(s) from a template file: '
+        f'{created_record_count} inventory record(s), {bulk_unit_count} bulk unit(s)',
+        system_log_only=True,
+    )
+    return jsonify({
+        'success': True,
+        'message': f'Imported {len(results)} asset row(s)',
+        'data': {
+            'rows': results,
+            'inventoryRecordsCreated': created_record_count,
+            'bulkUnitsCreated': bulk_unit_count,
+        },
+    })
+
+
 @app.route('/api/assets', methods=['POST'])
 @require_admin
 def create_asset():
@@ -24531,6 +25386,7 @@ def create_asset():
                     'department': plan['department'],
                     'brand': plan['brand'],
                     'model': plan['model'],
+                    'description': plan['description'],
                 }
                 similar_tag_targets = [
                     item for item in data_manager.inventory.values()
@@ -24582,7 +25438,7 @@ def create_asset():
                     is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                     maintenance_logs=[],
                     department_code=plan['department'],
-                    default_location='Store',
+                    default_location=plan['defaultLocation'],
                     current_location='',
                     is_bulk=True,
                     quantity=plan['quantity'],
@@ -24610,7 +25466,7 @@ def create_asset():
                         is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                         maintenance_logs=[],
                         department_code=plan['department'],
-                        default_location='Store',
+                        default_location=plan['defaultLocation'],
                         current_location='',
                         is_bulk=False,
                         quantity=1,
@@ -24977,6 +25833,7 @@ def bulk_renumber_assets():
                         'eventsUpdated': 0,
                         'containersUpdated': 0,
                         'idReferencesChanged': 0,
+                        'financeDocumentsUpdated': False,
                     },
                 })
 
@@ -25000,11 +25857,7 @@ def bulk_renumber_assets():
             containers_updated = 0
             id_references_changed = 0
             for container in data_manager.containers.values():
-                changed = _replace_asset_ids_in_list(
-                    container.asset_ids,
-                    changed_mapping
-                )
-                changed += _replace_container_bulk_item_ids(
+                changed = _replace_asset_ids_in_container(
                     container,
                     changed_mapping,
                 )
@@ -25017,30 +25870,10 @@ def bulk_renumber_assets():
 
             events_updated = 0
             for event in data_manager.events.values():
-                event_changed = 0
-                for attr in (
-                    'prepared_items',
-                    'returned_items',
-                    'actually_prepared',
-                    'extra_assets',
-                ):
-                    event_changed += _replace_asset_ids_in_list(
-                        getattr(event, attr, []),
-                        changed_mapping
-                    )
-                for subproject in getattr(event, 'subprojects', []) or []:
-                    if not isinstance(subproject, dict):
-                        continue
-                    event_changed += _replace_asset_ids_in_list(
-                        subproject.get('extraRefs', []),
-                        changed_mapping,
-                    )
-                    for subproject_item in subproject.get('items') or []:
-                        if isinstance(subproject_item, dict):
-                            event_changed += _replace_asset_ids_in_list(
-                                subproject_item.get('assetRefs', []),
-                                changed_mapping,
-                            )
+                event_changed = _replace_asset_ids_in_event(
+                    event,
+                    changed_mapping,
+                )
 
                 if event_changed:
                     id_references_changed += event_changed
@@ -25063,6 +25896,9 @@ def bulk_renumber_assets():
 
             stale_ids = set(asset_ids) - set(new_asset_ids)
             data_manager.save_inventory(drop_asset_ids=stale_ids)
+            finance_documents_updated = _finance_sync_inventory_id_mapping(
+                changed_mapping,
+            )
 
         invalidate_cache()
         log_action(
@@ -25081,6 +25917,7 @@ def bulk_renumber_assets():
                 'eventsUpdated': events_updated,
                 'containersUpdated': containers_updated,
                 'idReferencesChanged': id_references_changed,
+                'financeDocumentsUpdated': bool(finance_documents_updated),
             },
         })
 
@@ -25137,6 +25974,7 @@ def delete_asset(asset_id):
 
 @app.route('/api/assets/<path:asset_id>', methods=['PUT'])
 @require_admin
+@with_inventory_action_lock
 def update_asset(asset_id):
     """
     Admin-only asset edit.
@@ -25144,7 +25982,7 @@ def update_asset(asset_id):
     Supports:
     - renaming Asset ID and cascading it through all event files and containers
     - editing one asset only
-    - editing all assets that originally shared the same department/brand/model type
+    - editing all assets that originally shared the same department/brand/model/description type
     """
     try:
         old_asset_id = unquote_plus(asset_id)
@@ -25235,6 +26073,7 @@ def update_asset(asset_id):
                         'department': new_group['department'],
                         'brand': new_group['brand'],
                         'model': new_group['model'],
+                        'description': new_group['description'],
                     },
                 },
             }), 409
@@ -25351,7 +26190,6 @@ def update_asset(asset_id):
             asset.quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
             asset.serial_number = ''
             asset.secondary_serial_number = ''
-            asset.maintenance_logs = []
 
         # Rename selected asset ID if needed.
         id_references_changed = 0
@@ -25364,12 +26202,7 @@ def update_asset(asset_id):
 
             # Cascade asset ID through containers.
             for container in data_manager.containers.values():
-                container_changed = _replace_asset_id_in_list(
-                    container.asset_ids,
-                    old_asset_id,
-                    new_asset_id
-                )
-                container_changed += _replace_container_bulk_item_ids(
+                container_changed = _replace_asset_ids_in_container(
                     container,
                     {old_asset_id: new_asset_id},
                 )
@@ -25405,72 +26238,10 @@ def update_asset(asset_id):
             event_changed = 0
 
             if new_asset_id != old_asset_id:
-                event_changed += _replace_asset_id_in_list(
-                    getattr(event, 'prepared_items', []),
-                    old_asset_id,
-                    new_asset_id
+                event_changed += _replace_asset_ids_in_event(
+                    event,
+                    {old_asset_id: new_asset_id},
                 )
-                event_changed += _replace_bulk_asset_id_in_list(
-                    getattr(event, 'prepared_items', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_asset_id_in_list(
-                    getattr(event, 'returned_items', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_bulk_asset_id_in_list(
-                    getattr(event, 'returned_items', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_asset_id_in_list(
-                    getattr(event, 'actually_prepared', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_bulk_asset_id_in_list(
-                    getattr(event, 'actually_prepared', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_asset_id_in_list(
-                    getattr(event, 'extra_assets', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                event_changed += _replace_bulk_asset_id_in_list(
-                    getattr(event, 'extra_assets', []),
-                    old_asset_id,
-                    new_asset_id
-                )
-                for subproject in getattr(event, 'subprojects', []) or []:
-                    if not isinstance(subproject, dict):
-                        continue
-                    event_changed += _replace_asset_id_in_list(
-                        subproject.get('extraRefs', []),
-                        old_asset_id,
-                        new_asset_id,
-                    )
-                    event_changed += _replace_bulk_asset_id_in_list(
-                        subproject.get('extraRefs', []),
-                        old_asset_id,
-                        new_asset_id,
-                    )
-                    for subproject_item in subproject.get('items') or []:
-                        if not isinstance(subproject_item, dict):
-                            continue
-                        event_changed += _replace_asset_id_in_list(
-                            subproject_item.get('assetRefs', []),
-                            old_asset_id,
-                            new_asset_id,
-                        )
-                        event_changed += _replace_bulk_asset_id_in_list(
-                            subproject_item.get('assetRefs', []),
-                            old_asset_id,
-                            new_asset_id,
-                        )
 
             # Rewrite model requirement rows when model-type fields change.
             #
@@ -27630,12 +28401,15 @@ def remove_custom_asset_from_event(event_id):
         if hasattr(event, 'custom_collected') and asset_id in event.custom_collected:
             event.custom_collected.remove(asset_id)
             logger.info(f"Removed {asset_id} from custom_collected")
+        custom = _parse_custom_marker(asset_id)
         for subproject in getattr(event, 'subprojects', []) or []:
             if not isinstance(subproject, dict):
                 continue
             subproject['items'] = [
                 item for item in subproject.get('items') or []
-                if asset_id not in (item.get('assetRefs') or [])
+                if not _subproject_item_matches_custom_marker(
+                    item, asset_id, custom
+                )
             ]
             subproject['extraRefs'] = [
                 ref for ref in subproject.get('extraRefs') or [] if ref != asset_id
@@ -27650,7 +28424,6 @@ def remove_custom_asset_from_event(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        custom = _parse_custom_marker(asset_id)
         log_action(
             f"Removed {_custom_asset_log_label(custom)} from event {event_id}"
         )
@@ -28853,6 +29626,81 @@ def _finance_inventory_editable_quotation(document):
     )
 
 
+def _finance_apply_inventory_id_mapping(finance_data, asset_id_mapping):
+    """Apply an ID mapping to draft finance links in one collision-safe pass."""
+    mapping = {
+        str(old_id or '').strip(): str(new_id or '').strip()
+        for old_id, new_id in (asset_id_mapping or {}).items()
+        if (
+            str(old_id or '').strip()
+            and str(new_id or '').strip()
+            and str(old_id or '').strip() != str(new_id or '').strip()
+        )
+    }
+    if not mapping:
+        return False
+
+    changed = False
+    for document in finance_data.get('documents') or []:
+        if not _finance_inventory_editable_quotation(document):
+            continue
+        document_changed = False
+        for line in document.get('lineItems') or []:
+            source_ids = list(line.get('sourceAssetIds') or [])
+            replaced = [
+                mapping.get(
+                    str(asset_id or '').strip(),
+                    str(asset_id or '').strip(),
+                )
+                for asset_id in source_ids
+                if str(asset_id or '').strip()
+            ]
+            if replaced != source_ids:
+                line['sourceAssetIds'] = replaced
+                document_changed = True
+        if document_changed:
+            document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+            document['updatedBy'] = _finance_current_username()
+            changed = True
+
+    price_book = finance_data.setdefault('priceBook', {})
+    rewritten_price_book = {}
+    price_book_changed = False
+    for price_key, payload in price_book.items():
+        replacement_key = price_key
+        lower_key = str(price_key).lower()
+        for old_id, new_id in mapping.items():
+            suffix = f"::asset:{old_id.lower()}"
+            if not lower_key.endswith(suffix):
+                continue
+            replacement_key = (
+                f"{price_key[:-len(suffix)]}::asset:{new_id.lower()}"
+            )
+            break
+        if replacement_key != price_key:
+            price_book_changed = True
+        rewritten_price_book[replacement_key] = payload
+
+    if price_book_changed:
+        price_book.clear()
+        price_book.update(rewritten_price_book)
+        changed = True
+    return changed
+
+
+def _finance_sync_inventory_id_mapping(asset_id_mapping):
+    """Persist a collision-safe ID cascade for draft costings and quotations."""
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        changed = _finance_apply_inventory_id_mapping(
+            finance_data,
+            asset_id_mapping,
+        )
+        if changed:
+            _save_finance_data(finance_data)
+        return changed
+
+
 def _finance_sync_inventory_edit(
     old_asset_id,
     new_asset_id,
@@ -28903,31 +29751,10 @@ def _finance_sync_inventory_edit(
         price_book = finance_data.setdefault('priceBook', {})
 
         if id_mapping:
-            for document in finance_data.get('documents') or []:
-                if not _finance_inventory_editable_quotation(document):
-                    continue
-                document_changed = False
-                for line in document.get('lineItems') or []:
-                    source_ids = list(line.get('sourceAssetIds') or [])
-                    replaced = [
-                        id_mapping.get(str(asset_id or '').strip(), str(asset_id or '').strip())
-                        for asset_id in source_ids
-                        if str(asset_id or '').strip()
-                    ]
-                    if replaced != source_ids:
-                        line['sourceAssetIds'] = replaced
-                        document_changed = True
-                if document_changed:
-                    document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
-                    document['updatedBy'] = _finance_current_username()
-                    changed = True
-
-            for price_key, payload in list(price_book.items()):
-                for old_id, replacement_id in id_mapping.items():
-                    if price_key.endswith(f"::asset:{old_id.lower()}"):
-                        prefix = price_key[: -len(f"asset:{old_id.lower()}")]
-                        price_book[f"{prefix}asset:{replacement_id.lower()}"] = payload
-                        changed = True
+            changed = _finance_apply_inventory_id_mapping(
+                finance_data,
+                id_mapping,
+            ) or changed
 
         if apply_group_change and old_group != new_group:
             old_description = _finance_display_description(

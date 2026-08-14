@@ -1184,6 +1184,58 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(event.returned_items, [])
         self.assertEqual(event.extra_assets, [])
 
+    def test_remove_custom_asset_cleans_finance_room_line_without_asset_refs(self):
+        marker = app_module._make_custom_marker(
+            'MISC',
+            'Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens',
+            1,
+            'VX',
+            uid='finance_line_1784015304143_337c4de8ec12e8',
+        )
+        event = self.make_event(
+            event_id=160,
+            prepared=[marker],
+            actual=[marker],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [
+                {
+                    'lineId': 'line_1784015304143_337c4de8ec12e8',
+                    'isCustom': True,
+                    'description': 'Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens',
+                    'quantity': 1,
+                    'assetRefs': [],
+                },
+                {
+                    'lineId': 'plan_8661a6898b4cf293',
+                    'isCustom': False,
+                    'brand': 'Panasonic',
+                    'model': 'PT-DZ13K',
+                    'description': '3-chip FHD DLP projector 12000 ANSI lumens',
+                    'quantity': 1,
+                    'assetRefs': ['A#01'],
+                },
+            ],
+            'extraRefs': [marker],
+        }]
+
+        self.login_as('admin', True)
+        response = self.client.post(
+            '/api/events/160/custom-assets/remove',
+            json={'assetId': marker},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn(marker, event.prepared_items)
+        self.assertNotIn(marker, event.actually_prepared)
+        self.assertEqual(event.subprojects[0]['extraRefs'], [])
+        self.assertEqual(
+            [line['lineId'] for line in event.subprojects[0]['items']],
+            ['plan_8661a6898b4cf293'],
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

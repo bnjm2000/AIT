@@ -7,7 +7,7 @@ const deliveryOrderEditorState = {
   catalog: [],
   catalogMatches: [],
   selectedCatalogItem: null,
-  editMode: false,
+  pendingRevealKey: '',
   collapsedCategories: {}
 };
 let deliveryOrderSubprojectWorkspace = null;
@@ -46,7 +46,7 @@ function ensureDeliveryOrderSubprojectWorkspace() {
       const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
       const workspace = getDoEdits(eventId);
       workspace.subprojectOrder = reordered.map(row => row.id);
-      saveDoEdits(eventId, workspace);
+      saveDoEdits(eventId, workspace, { immediate: true });
       populateDeliveryItemsPreview(currentDeliveryOrderEvent);
       return true;
     }
@@ -159,6 +159,11 @@ function deliveryOrderBindDocumentAutosave(eventId) {
     input.addEventListener(field === 'showAssetIds' ? 'change' : 'input', () => {
       deliveryOrderCaptureDocument(eventId);
     });
+    if (field !== 'showAssetIds') {
+      input.addEventListener('change', () => {
+        flushDoEdits(eventId).catch(() => {});
+      });
+    }
   });
 }
 
@@ -246,14 +251,26 @@ async function generateDeliveryOrder() {
         return;
     }
 
-    deliveryOrderCaptureDocument(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
-    await flushDoEdits(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
-    await loadPdfSettings(true);
+    const doWindow = window.open('', '_blank');
+    if (!doWindow) {
+        showNotification('error', 'Allow pop-ups to preview and print the Delivery Order');
+        return;
+    }
 
-    generatePdfDO(deliveryOrderData);
+    // Field input handlers already autosave real edits. Exporting an unchanged
+    // Delivery Order must stay read-only and must not create a new server version.
+    try {
+        await flushDoEdits(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
+        await loadPdfSettings(true);
+
+        generatePdfDO(deliveryOrderData, doWindow);
+    } catch (error) {
+        doWindow.close();
+        showNotification('error', error.message || 'Failed to generate Delivery Order preview');
+    }
 }
 
-function generatePdfDO(data) {
+function generatePdfDO(data, doWindow) {
     // Format the date for display
     const formattedDate = new Date(data.doDate).toLocaleDateString('en-GB', {
         day: '2-digit',
@@ -263,8 +280,6 @@ function generatePdfDO(data) {
     const themeColor = deliveryOrderPdfThemeColor();
 
     // Create a new window for the delivery order
-    const doWindow = window.open('', '_blank', 'width=800,height=1000');
-
     // Generate pages content
     const pagesContent = generatePagesContent(data, formattedDate);
 
@@ -298,247 +313,6 @@ function generatePdfDO(data) {
             line-height: 1.2;
             color: black;
             background: white;
-        }
-
-        .page {
-            min-height: 240mm;
-            page-break-after: avoid;
-            position: relative;
-            padding-bottom: 1mm;
-        }
-
-        .page-break {
-            page-break-before: always;
-            height: 0;
-            margin: 0;
-            padding: 0;
-        }
-
-        .page-break + .page {
-            padding-top: 12mm;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 25px;
-        }
-
-        .header-left {
-            flex: 1;
-        }
-
-        .header-right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 5px;
-            margin-right: 0;
-            margin-top: -5px;
-            margin-bottom: 2px;
-        }
-
-        .do-logo-row {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 7px;
-            height: 39px;
-        }
-
-        .do-logo-row img {
-            height: 39px;
-            width: auto;
-            object-fit: contain;
-        }
-
-        .delivery-order-title {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 14pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 5;
-            text-align: right;
-            margin-top: 5;
-        }
-
-        .do-number {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            text-align: left;
-            margin-right: 46px;
-            font-weight: bold;
-            margin-bottom: 1;
-        }
-
-        .deliver-to {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 2px;
-        }
-
-        .client-info {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            font-weight: bold;
-            margin-bottom: 1px;
-        }
-
-        .client-phone {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-            margin-bottom: 1px;
-        }
-
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-            border: 2px solid black;
-        }
-
-        .items-table th {
-            background-color: #333;
-            color: white;
-            padding: 8px;
-            text-align: left;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            border: 1px solid #333;
-        }
-
-        .items-table td {
-            padding: 6px 8px;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            vertical-align: top;
-            word-break: break-word;
-            overflow-wrap: anywhere;
-        }
-
-        .items-table td:first-child {
-            border-right: 1px solid black;
-            border-left: 1px solid black;
-        }
-
-        .items-table td:last-child {
-            border-right: 1px solid black;
-        }
-
-        .job-title {
-            font-weight: bold;
-            background-color: #f5f5f5;
-        }
-
-        .department-header {
-            font-weight: bold;
-            color: black;
-            background-color: #f0f0f0;
-        }
-
-        .quantity-col {
-            text-align: center;
-            width: 80px;
-        }
-
-        .comments-section {
-            position: absolute;
-            bottom: 5mm;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 30px;
-            margin-bottom: 30px;
-        }
-
-        .other-comments {
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            font-weight: bold;
-            color: black;
-        }
-
-        .received-text {
-            bottom: 5mm;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-        }
-
-        .signature-line {
-            bottom: 2mm;
-            width: 210px;
-            height: 60px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-items: center;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 9pt;
-            color: black;
-            margin-top: 20px;
-        }
-
-        .signature-line::before {
-            content: "";
-            border-bottom: 2px solid black;
-            width: 100%;
-            margin-bottom: 5px;
-        }
-
-        .footer {
-            position: absolute;
-            bottom: 10mm;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-family: 'Calibri', sans-serif;
-            font-size: 7pt;
-            color: black;
-            line-height: 1.2;
-            z-index: 100;
-            overflow-wrap: anywhere;
-        }
-
-        .page-number {
-            position: fixed;
-            bottom: 5mm;
-            right: 0;
-            margin-right: 20px;
-            font-family: 'Century Gothic', sans-serif;
-            font-size: 7pt;
-            color: black;
-        }
-
-        @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            .page {
-                page-break-after: avoid;
-                page-break-inside: avoid;
-            }
-
-            .page-break {
-                page-break-before: always;
-                display: block;
-                height: 0;
-            }
-
-            @page { margin: 0; }
-            html, body { margin: 0 !important; padding: 7mm !important; }
         }
 
         /* Delivery Order measured pagination and client-facing theme */
@@ -642,6 +416,7 @@ function generatePdfDO(data) {
             margin: 0;
             color: ${themeColor};
             font-size: 12pt;
+            font-weight: 700;
             line-height: 1.1;
             text-align: right;
         }
@@ -724,9 +499,11 @@ function generatePdfDO(data) {
         }
 
         .items-table {
+            width: 100%;
             table-layout: fixed;
             margin: 0;
             border: 0.5pt solid #cbd5e1;
+            border-collapse: collapse;
         }
 
         .items-table th {
@@ -744,12 +521,12 @@ function generatePdfDO(data) {
         }
 
         .items-table td {
-            padding: 1.35mm 2.7mm;
+            padding: 0.9mm 2.7mm;
             border: 0;
             border-bottom: 0.35pt solid #e2e8f0;
             color: #172033;
             font-size: 8pt;
-            line-height: 1.2;
+            line-height: 1.15;
         }
 
         .items-table td:first-child,
@@ -762,14 +539,57 @@ function generatePdfDO(data) {
             border-bottom: 0;
         }
 
-        .department-header {
-            padding: 1.5mm 2.7mm !important;
-            border-top: 0.5pt solid #cbd5e1 !important;
-            border-bottom: 0.5pt solid #cbd5e1 !important;
+        .items-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .items-table .do-pdf-group-row td {
+            padding-top: 1.7mm;
+            padding-bottom: 1.7mm;
+            border-top: 0.55pt solid #9dc9b0;
+            border-bottom: 0.35pt solid #cfe3d7;
+            background: #eef7f2;
+            color: #173f2b;
+            font-size: 7.6pt;
+            font-weight: 700;
+        }
+
+        .do-pdf-category {
+            padding-top: 3mm;
+        }
+
+        .do-pdf-category.is-first {
+            padding-top: 0;
+        }
+
+        .do-pdf-category-heading {
+            min-height: 7mm;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5mm 2.7mm;
+            border: 0.5pt solid #cbd5e1;
+            border-bottom: 0;
             background: #f1f5f9;
             color: #172033;
-            font-size: 7.2pt !important;
+            font-size: 7.2pt;
+            font-weight: 700;
             text-transform: uppercase;
+        }
+
+        .do-pdf-category-heading small {
+            color: #64748b;
+            font-size: 6pt;
+            font-weight: 600;
+        }
+
+        .do-pdf-empty {
+            padding: 8mm;
+            border: 0.5pt solid #cbd5e1;
+            color: #64748b;
+            font-size: 8pt;
+            text-align: center;
         }
 
         .quantity-col {
@@ -824,18 +644,20 @@ function generatePdfDO(data) {
             position: absolute;
             right: 13mm;
             bottom: 21mm;
+            width: 62mm;
         }
 
-        .signature-line {
-            width: 62mm;
-            height: 16mm;
-            margin: 0;
+        .signature-space {
+            height: 12mm;
+            border-bottom: 0.7pt solid #172033;
+        }
+
+        .signature-label {
+            margin-top: 1.5mm;
             color: #475569;
             font-size: 7.5pt;
-        }
-
-        .signature-line::before {
-            border-bottom: 0.7pt solid #172033;
+            line-height: 1.2;
+            text-align: center;
         }
 
         .footer {
@@ -898,6 +720,11 @@ function generatePdfDO(data) {
             .page:last-child {
                 page-break-after: auto;
                 break-after: auto;
+            }
+
+            .do-pdf-category {
+                page-break-inside: auto;
+                break-inside: auto;
             }
         }
     </style>
@@ -987,8 +814,9 @@ function renderDeliveryOrderLetterheadHtml() {
     `;
 }
 
-function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate) {
+function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate, options = {}) {
     const safe = value => escapeHtml(String(value ?? ''));
+    const continuation = options.continuation === true;
     const addressLines = [
         data.clientCompany,
         data.deliveryAddress1,
@@ -1002,7 +830,7 @@ function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate) {
             <div class="delivery-order-title">DELIVERY ORDER</div>
             <div class="do-number">${safe(data.doNumber)}</div>
         </div>
-        <div class="do-recipient-panel">
+        ${continuation ? '' : `<div class="do-recipient-panel">
             <div class="do-recipient">
                 <span class="do-label">Deliver to</span>
                 <strong>${safe(data.clientName)}</strong>
@@ -1016,7 +844,7 @@ function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate) {
         <div class="do-job-band">
             <div><strong>Job:</strong> ${safe(data.jobTitle || '-')}</div>
             <div><strong>Location:</strong> ${safe(data.jobLocation || '-')}</div>
-        </div>
+        </div>`}
     `;
 }
 
@@ -1033,17 +861,31 @@ function deliveryOrderDepartmentHeaderLabel(department) {
 
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
-    const documentHeaderHtml = renderDeliveryOrderDocumentHeaderHtml(data, formattedDate);
+    const firstPageHeaderHtml = renderDeliveryOrderDocumentHeaderHtml(data, formattedDate);
+    const continuationHeaderHtml = renderDeliveryOrderDocumentHeaderHtml(
+        data,
+        formattedDate,
+        { continuation: true }
+    );
     const footerHtml = renderPdfFooterHtml();
     const themeColor = deliveryOrderPdfThemeColor();
     const tableColumnsHtml = '<colgroup><col><col class="quantity-column"></colgroup>';
+    const tableHeaderHtml = `
+        <thead>
+            <tr>
+                <th class="description-header">DESCRIPTION</th>
+                <th class="quantity-header">QUANTITY</th>
+            </tr>
+        </thead>
+    `;
 
     // A4 is 210mm x 297mm.
     // Page padding is 10mm top, 13mm left/right and 18mm bottom.
     // Normal pages reserve the measured footer height.
-    // Last page reserves comments + signature + footer space.
+    // Last page reserves its measured comments + signature + footer space.
     const PAGE_BODY_HEIGHT_MM = 269;
-    const LAST_RESERVED_MM = 55;
+    const COMMENTS_BOTTOM_MM = 43;
+    const COMMENTS_FLOW_GAP_MM = 3;
 
     const FOOTER_HTML = `
         <div class="footer">
@@ -1065,6 +907,9 @@ function generatePagesContent(data, formattedDate) {
     };
 
     const renderItemRow = (record) => {
+        if (record.item.isGroupHeader) {
+            return `<tr class="do-pdf-group-row"><td colspan="2">${safe(record.item.description)}</td></tr>`;
+        }
         return `
             <tr>
                 <td>
@@ -1076,14 +921,25 @@ function generatePagesContent(data, formattedDate) {
         `;
     };
 
-    const renderDeptRow = (dept) => {
+    const renderCategoryHeading = (dept, continued = false) => {
         return `
-            <tr>
-                <td class="department-header">${safe(deliveryOrderDepartmentHeaderLabel(dept))}</td>
-                <td class="department-header quantity-col" aria-hidden="true"></td>
-            </tr>
+            <div class="do-pdf-category-heading">
+                <span>${safe(deliveryOrderDepartmentHeaderLabel(dept))}</span>
+                ${continued ? '<small>Continued</small>' : ''}
+            </div>
         `;
     };
+
+    const renderCategorySection = (dept, records, options = {}) => `
+        <section class="do-pdf-category${options.first ? ' is-first' : ''}">
+            ${renderCategoryHeading(dept, options.continued)}
+            <table class="items-table">
+                ${tableColumnsHtml}
+                ${tableHeaderHtml}
+                <tbody>${records.map(renderItemRow).join('')}</tbody>
+            </table>
+        </section>
+    `;
 
     // Hidden measuring box: lets the browser calculate real row heights
     // instead of guessing based on row count.
@@ -1108,127 +964,6 @@ function generatePagesContent(data, formattedDate) {
                 box-sizing: border-box;
             }
 
-            #__doMeasureBox .do-logo-row {
-                display: flex;
-                justify-content: flex-end;
-                margin-bottom: 7px;
-                height: 39px;
-            }
-
-            #__doMeasureBox .do-logo-row img {
-                height: 39px;
-                width: auto;
-                object-fit: contain;
-            }
-
-            #__doMeasureBox .header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 25px;
-            }
-
-            #__doMeasureBox .header-left {
-                flex: 1;
-            }
-
-            #__doMeasureBox .header-right {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 5px;
-                margin-right: 0;
-                margin-top: -5px;
-                margin-bottom: 2px;
-            }
-
-            #__doMeasureBox .delivery-order-title {
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 14pt;
-                font-weight: bold;
-                color: black;
-                margin-bottom: 5px;
-                text-align: right;
-                margin-top: 5px;
-            }
-
-            #__doMeasureBox .do-number,
-            #__doMeasureBox .deliver-to,
-            #__doMeasureBox .client-info,
-            #__doMeasureBox .client-phone {
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                color: black;
-                font-weight: bold;
-            }
-
-            #__doMeasureBox .items-table,
-            #__doMeasureBox .do-measure-table {
-                width: 100%;
-                border-collapse: collapse;
-                border: 2px solid black;
-                margin-bottom: 0;
-            }
-
-            #__doMeasureBox .items-table th,
-            #__doMeasureBox .do-measure-table th {
-                background-color: #333;
-                color: white;
-                padding: 8px;
-                text-align: left;
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                font-weight: bold;
-                border: 1px solid #333;
-            }
-
-            #__doMeasureBox .items-table td,
-            #__doMeasureBox .do-measure-table td {
-                padding: 6px 8px;
-                font-family: 'Century Gothic', sans-serif;
-                font-size: 9pt;
-                color: black;
-                vertical-align: top;
-                word-break: break-word;
-                overflow-wrap: anywhere;
-            }
-
-            #__doMeasureBox .items-table td:first-child,
-            #__doMeasureBox .do-measure-table td:first-child {
-                border-right: 1px solid black;
-                border-left: 1px solid black;
-            }
-
-            #__doMeasureBox .items-table td:last-child,
-            #__doMeasureBox .do-measure-table td:last-child {
-                border-right: 1px solid black;
-            }
-
-            #__doMeasureBox .job-title {
-                font-weight: bold;
-                background-color: #f5f5f5;
-            }
-
-            #__doMeasureBox .department-header {
-                font-weight: bold;
-                color: black;
-                background-color: #f0f0f0;
-            }
-
-            #__doMeasureBox .quantity-col {
-                text-align: center;
-                width: 80px;
-            }
-
-            #__doMeasureBox .footer-measure {
-                width: 100%;
-                text-align: center;
-                font-family: 'Calibri', sans-serif;
-                font-size: 7pt;
-                line-height: 1.2;
-                overflow-wrap: anywhere;
-            }
-
             #__doMeasureBox .do-letterhead { min-height:15mm;display:flex;justify-content:space-between;align-items:flex-start;gap:12mm;margin-bottom:8mm; }
             #__doMeasureBox .do-letterhead-brand { flex:0 0 auto;min-width:40mm; }
             #__doMeasureBox .do-letterhead-brand img { display:block;width:auto;max-width:42mm;height:auto;max-height:14mm;object-fit:contain; }
@@ -1237,7 +972,7 @@ function generatePagesContent(data, formattedDate) {
             #__doMeasureBox .do-letterhead-details strong { display:block;margin-bottom:1mm;color:#172033;font-size:8.5pt;line-height:1.2; }
             #__doMeasureBox .do-title-row { display:flex;align-items:flex-end;justify-content:space-between;gap:10mm;padding-bottom:3mm;border-bottom:.6pt solid #cbd5e1; }
             #__doMeasureBox .delivery-order-title { margin:0;color:#172033;font-size:20pt;line-height:1;text-align:left; }
-            #__doMeasureBox .do-number { margin:0;color:${themeColor};font-size:12pt;line-height:1.1;text-align:right; }
+            #__doMeasureBox .do-number { margin:0;color:${themeColor};font-size:12pt;font-weight:700;line-height:1.1;text-align:right; }
             #__doMeasureBox .do-recipient-panel { display:grid;grid-template-columns:minmax(0,1.4fr) minmax(52mm,.75fr);margin-top:5mm;border:.5pt solid #cbd5e1; }
             #__doMeasureBox .do-recipient,#__doMeasureBox .do-document-meta { min-height:0;padding:3.5mm 5mm; }
             #__doMeasureBox .do-document-meta { border-left:.5pt solid #cbd5e1; }
@@ -1253,33 +988,40 @@ function generatePagesContent(data, formattedDate) {
             #__doMeasureBox .items-table,#__doMeasureBox .do-measure-table { width:100%;table-layout:fixed;border-collapse:collapse;border:.5pt solid #cbd5e1;margin:0; }
             #__doMeasureBox .items-table th { padding:2mm 2.7mm;border:0;background:${themeColor};color:#fff;font-size:7pt; }
             #__doMeasureBox .items-table th:last-child { border-left:.5pt solid rgba(255,255,255,.45);text-align:right; }
-            #__doMeasureBox .items-table td,#__doMeasureBox .do-measure-table td { padding:1.35mm 2.7mm;border:0;border-bottom:.35pt solid #e2e8f0;color:#172033;font-size:8pt;line-height:1.2;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
-            #__doMeasureBox .department-header { padding:1.5mm 2.7mm!important;border-top:.5pt solid #cbd5e1!important;border-bottom:.5pt solid #cbd5e1!important;background:#f1f5f9;color:#172033;font-size:7.2pt!important;text-transform:uppercase; }
+            #__doMeasureBox .items-table td,#__doMeasureBox .do-measure-table td { padding:.9mm 2.7mm;border:0;border-bottom:.35pt solid #e2e8f0;color:#172033;font-size:8pt;line-height:1.15;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
+            #__doMeasureBox .items-table .do-pdf-group-row td,#__doMeasureBox .do-measure-table .do-pdf-group-row td { padding-top:1.7mm;padding-bottom:1.7mm;border-top:.55pt solid #9dc9b0;border-bottom:.35pt solid #cfe3d7;background:#eef7f2;color:#173f2b;font-size:7.6pt;font-weight:700; }
             #__doMeasureBox .quantity-col { width:22mm;border-left:.5pt solid #cbd5e1!important;text-align:right; }
             #__doMeasureBox .quantity-column { width:22mm; }
             #__doMeasureBox .asset-id-line { display:block;margin-top:.5mm;color:#64748b;font-size:6.5pt;font-style:normal; }
+            #__doMeasureBox .do-pdf-category { padding-top:3mm; }
+            #__doMeasureBox .do-pdf-category.is-first { padding-top:0; }
+            #__doMeasureBox .do-pdf-category-heading { display:flex;align-items:center;justify-content:space-between;min-height:7mm;padding:1.5mm 2.7mm;border:.5pt solid #cbd5e1;border-bottom:0;background:#f1f5f9;color:#172033;font-size:7.2pt;font-weight:700;text-transform:uppercase; }
+            #__doMeasureBox .do-pdf-category-heading small { color:#64748b;font-size:6pt;font-weight:600; }
+            #__doMeasureBox .do-final-measure { width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10mm;padding-top:3mm;border-top:.5pt solid #cbd5e1;color:#475569;font-size:7.5pt;line-height:1.35; }
+            #__doMeasureBox .do-final-measure .received-text { font-weight:700; }
             #__doMeasureBox .footer-measure { width:100%;color:#64748b;font-size:6.2pt;line-height:1.25;text-align:left;overflow-wrap:anywhere; }
             #__doMeasureBox, #__doMeasureBox * { font-family:${PDF_EXPORT_FONT_FAMILY}; }
         </style>
 
-        <div id="__doBaseMeasure">
-            ${documentHeaderHtml}
-            <table class="items-table">
-                ${tableColumnsHtml}
-                <thead>
-                    <tr>
-                        <th class="description-header">DESCRIPTION</th>
-                        <th class="quantity-header">QUANTITY</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+        <div id="__doFirstBaseMeasure">
+            ${firstPageHeaderHtml}
         </div>
+
+        <div id="__doContinuationBaseMeasure">
+            ${continuationHeaderHtml}
+        </div>
+
+        <div id="__doCategoryMeasure"></div>
 
         <table class="do-measure-table">
             ${tableColumnsHtml}
             <tbody id="__doMeasureBody"></tbody>
         </table>
+
+        <div id="__doFinalMeasure" class="do-final-measure">
+            <div><strong>Other comments:</strong> ${safe(data.additionalComments || '-')}</div>
+            <div class="received-text">Received in good order &amp; condition</div>
+        </div>
 
         <div id="__doFooterMeasure" class="footer-measure">${footerHtml}</div>
     `;
@@ -1287,11 +1029,18 @@ function generatePagesContent(data, formattedDate) {
     const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 184);
 
     const measureBody = measureBox.querySelector('#__doMeasureBody');
-    const baseHeight = normaliseMeasuredHeight(
-        measureBox.querySelector('#__doBaseMeasure').getBoundingClientRect().height
+    const measureCategory = measureBox.querySelector('#__doCategoryMeasure');
+    const firstBaseHeight = normaliseMeasuredHeight(
+        measureBox.querySelector('#__doFirstBaseMeasure').getBoundingClientRect().height
+    );
+    const continuationBaseHeight = normaliseMeasuredHeight(
+        measureBox.querySelector('#__doContinuationBaseMeasure').getBoundingClientRect().height
     );
     const footerHeight = normaliseMeasuredHeight(
         measureBox.querySelector('#__doFooterMeasure')?.getBoundingClientRect().height || 0
+    );
+    const finalSectionHeight = normaliseMeasuredHeight(
+        measureBox.querySelector('#__doFinalMeasure')?.getBoundingClientRect().height || 0
     );
     const normalReservedMm = pdfFooterReserveMm({
         pageFlowHeightMm: PAGE_BODY_HEIGHT_MM,
@@ -1299,14 +1048,26 @@ function generatePagesContent(data, formattedDate) {
         footerBottomMm: 8
     }, footerHeight);
 
-    const normalPageRowBudget = Math.max(
+    const firstPageRowBudget = Math.max(
         50,
-        pdfMmToPx(PAGE_BODY_HEIGHT_MM - normalReservedMm) - baseHeight
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - normalReservedMm) - firstBaseHeight
+    );
+    const continuationPageRowBudget = Math.max(
+        50,
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - normalReservedMm) - continuationBaseHeight
     );
 
-    const lastPageRowBudget = Math.max(
+    const lastReservedMm = Math.max(
+        normalReservedMm,
+        COMMENTS_BOTTOM_MM + (finalSectionHeight * 25.4 / 96) + COMMENTS_FLOW_GAP_MM
+    );
+    const firstPageFinalRowBudget = Math.max(
         50,
-        pdfMmToPx(PAGE_BODY_HEIGHT_MM - Math.max(LAST_RESERVED_MM, normalReservedMm)) - baseHeight
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - lastReservedMm) - firstBaseHeight
+    );
+    const continuationFinalRowBudget = Math.max(
+        50,
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - lastReservedMm) - continuationBaseHeight
     );
 
     function measureRow(rowHtml) {
@@ -1315,16 +1076,43 @@ function generatePagesContent(data, formattedDate) {
         return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
     }
 
-    const deptHeights = {};
+    function measureCategoryBase(dept, first) {
+        measureCategory.innerHTML = renderCategorySection(dept, [], { first });
+        const section = measureCategory.querySelector('.do-pdf-category');
+        return section ? normaliseMeasuredHeight(section.getBoundingClientRect().height) : 0;
+    }
+
+    const categoryHeights = {};
     const records = [];
 
     Object.keys(departments).forEach(dept => {
         const deptItems = departments[dept] || [];
         if (deptItems.length === 0) return;
 
-        deptHeights[dept] = measureRow(renderDeptRow(dept));
+        categoryHeights[dept] = {
+            first: measureCategoryBase(dept, true),
+            following: measureCategoryBase(dept, false)
+        };
 
+        const renderedGroups = new Set();
         deptItems.forEach(item => {
+            const groupId = String(item.groupId || '');
+            if (groupId && !renderedGroups.has(groupId)) {
+                renderedGroups.add(groupId);
+                const groupRecord = {
+                    dept,
+                    item: {
+                        description: item.groupTitle || 'Group',
+                        quantity: '',
+                        isGroupHeader: true
+                    },
+                    groupId,
+                    keepWithNext: true,
+                    height: 0
+                };
+                groupRecord.height = measureRow(renderItemRow(groupRecord));
+                records.push(groupRecord);
+            }
             const assetIds = data.showAssetIds
                 ? getAssetIdsByItem(data.event, item, dept)
                 : [];
@@ -1333,8 +1121,12 @@ function generatePagesContent(data, formattedDate) {
                 dept,
                 item: {
                     ...item,
+                    description: groupId && !item.groupCustomText
+                        ? financeGroupedLineDisplay(item)
+                        : item.description,
                     assetIds
                 },
+                groupId,
                 height: 0
             };
 
@@ -1347,17 +1139,20 @@ function generatePagesContent(data, formattedDate) {
 
     function costToAdd(page, record) {
         const needsDeptHeader = page.lastDept !== record.dept;
-        return (needsDeptHeader ? deptHeights[record.dept] : 0) + record.height;
+        const categoryHeight = page.records.length
+            ? categoryHeights[record.dept]?.following
+            : categoryHeights[record.dept]?.first;
+        return (needsDeptHeader ? categoryHeight || 0 : 0) + record.height;
     }
 
-    function canFitRemaining(startIndex, budget) {
+    function canFitRemaining(startIndex, budget, endIndex = records.length) {
         const testPage = {
             records: [],
             height: 0,
             lastDept: null
         };
 
-        for (let i = startIndex; i < records.length; i++) {
+        for (let i = startIndex; i < endIndex; i++) {
             const record = records[i];
             const cost = costToAdd(testPage, record);
 
@@ -1373,7 +1168,7 @@ function generatePagesContent(data, formattedDate) {
         return true;
     }
 
-    function fillPage(startIndex, budget) {
+    function fillPage(startIndex, budget, endIndex = records.length) {
         const page = {
             records: [],
             height: 0,
@@ -1382,11 +1177,15 @@ function generatePagesContent(data, formattedDate) {
 
         let i = startIndex;
 
-        while (i < records.length) {
+        while (i < endIndex) {
             const record = records[i];
             const cost = costToAdd(page, record);
+            const nextRecord = i + 1 < endIndex ? records[i + 1] : null;
+            const keepWithNextCost = record.keepWithNext && nextRecord?.dept === record.dept
+                ? nextRecord.height
+                : 0;
 
-            if (page.records.length > 0 && page.height + cost > budget) {
+            if (page.records.length > 0 && page.height + cost + keepWithNextCost > budget) {
                 break;
             }
 
@@ -1422,14 +1221,43 @@ function generatePagesContent(data, formattedDate) {
         });
     } else {
         let index = 0;
-
+        let pageIndex = 0;
         while (index < records.length) {
-            const remainingCanBeLastPage = canFitRemaining(index, lastPageRowBudget);
-            const budget = remainingCanBeLastPage ? lastPageRowBudget : normalPageRowBudget;
+            const finalBudget = pageIndex === 0
+                ? firstPageFinalRowBudget
+                : continuationFinalRowBudget;
+            if (canFitRemaining(index, finalBudget)) {
+                pages.push(fillPage(index, finalBudget).page);
+                break;
+            }
 
-            const result = fillPage(index, budget);
+            const normalBudget = pageIndex === 0
+                ? firstPageRowBudget
+                : continuationPageRowBudget;
+            let result = fillPage(index, normalBudget);
+
+            // The normal page has more usable height than the sign-off page.
+            // If it consumed every remaining row, move the smallest intact tail
+            // to a final page instead of leaving the sign-off with no page.
+            if (result.nextIndex >= records.length) {
+                let finalStart = records.length - 1;
+                while (
+                    finalStart > index
+                    && records[finalStart - 1].keepWithNext
+                    && records[finalStart - 1].dept === records[finalStart].dept
+                ) {
+                    finalStart--;
+                }
+                if (finalStart <= index) {
+                    pages.push(fillPage(index, finalBudget).page);
+                    break;
+                }
+                result = fillPage(index, normalBudget, finalStart);
+            }
+
             pages.push(result.page);
             index = result.nextIndex;
+            pageIndex++;
         }
     }
 
@@ -1442,33 +1270,30 @@ function generatePagesContent(data, formattedDate) {
 
         pagesHtml += `
             <div class="page">
-                ${documentHeaderHtml}
-                <table class="items-table">
-                    ${tableColumnsHtml}
-                    <thead>
-                        <tr>
-                            <th class="description-header">DESCRIPTION</th>
-                            <th class="quantity-header">QUANTITY</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                ${pageIndex === 0 ? firstPageHeaderHtml : continuationHeaderHtml}
         `;
 
-        let currentDept = null;
-
-        page.records.forEach(record => {
-            if (record.dept !== currentDept) {
-                pagesHtml += renderDeptRow(record.dept);
-                currentDept = record.dept;
-            }
-
-            pagesHtml += renderItemRow(record);
-        });
-
-        pagesHtml += `
-                    </tbody>
-                </table>
-        `;
+        if (!page.records.length) {
+            pagesHtml += '<div class="do-pdf-empty">No items have been added to this delivery order.</div>';
+        } else {
+            const categoryGroups = [];
+            page.records.forEach(record => {
+                const current = categoryGroups.at(-1);
+                if (!current || current.dept !== record.dept) {
+                    categoryGroups.push({ dept: record.dept, records: [record] });
+                } else {
+                    current.records.push(record);
+                }
+            });
+            const priorDepartments = new Set(
+                pages.slice(0, pageIndex).flatMap(priorPage => priorPage.records.map(record => record.dept))
+            );
+            pagesHtml += categoryGroups.map((group, groupIndex) => renderCategorySection(
+                group.dept,
+                group.records,
+                { first: groupIndex === 0, continued: priorDepartments.has(group.dept) }
+            )).join('');
+        }
 
         if (isLastPage) {
             pagesHtml += `
@@ -1478,9 +1303,8 @@ function generatePagesContent(data, formattedDate) {
                 </div>
 
                 <div class="signature-holder">
-                    <div class="signature-line">
-                        Company's Stamp & Signature
-                    </div>
+                    <div class="signature-space" aria-hidden="true"></div>
+                    <div class="signature-label">Company's Stamp &amp; Signature</div>
                 </div>
             `;
         }
@@ -1530,6 +1354,21 @@ function normaliseDoOrdering(items, storedOrdering = []) {
   return ordering;
 }
 
+function deliveryOrderAlphabeticalItems(items) {
+  return [...(items || [])].sort((left, right) => {
+    const leftGroup = String(left?.groupTitle || '').trim();
+    const rightGroup = String(right?.groupTitle || '').trim();
+    const leftLabel = [leftGroup, left?.description, left?.brand, left?.model]
+      .filter(Boolean).join(' ');
+    const rightLabel = [rightGroup, right?.description, right?.brand, right?.model]
+      .filter(Boolean).join(' ');
+    return leftLabel.localeCompare(rightLabel, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    }) || String(left?.key || '').localeCompare(String(right?.key || ''), undefined, { numeric: true });
+  });
+}
+
 function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', subprojectId = '') {
   const state = getDoEdits(eventId);
 
@@ -1554,19 +1393,23 @@ function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', 
   if (ordering.every((key, index) => key === items[index]?.key)) return false;
 
   state.ordering[orderingKey] = ordering;
-  saveDoEdits(eventId, state);
+  saveDoEdits(eventId, state, { immediate: true });
   return true;
 }
 
 function applyDoOrdering(items, dept, eventId, subprojectId = '') {
   const state = getDoEdits(eventId);
+  const storedOrdering = state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)];
+  const sourceItems = Array.isArray(storedOrdering) && storedOrdering.length
+    ? items
+    : deliveryOrderAlphabeticalItems(items);
   const ordering = normaliseDoOrdering(
-    items,
-    state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)]
+    sourceItems,
+    storedOrdering
   );
-  if (!ordering) return items;
+  if (!ordering) return sourceItems;
   const orderedItems = [];
-  const itemsMap = new Map(items.map(item => [item.key, item]));
+  const itemsMap = new Map(sourceItems.map(item => [item.key, item]));
   ordering.forEach(key => {
     const item = itemsMap.get(key);
     if (item) {
@@ -1583,8 +1426,11 @@ function setupDoItemDragHandlers(previewContainer, eventId) {
   let draggedDept = null;
   let draggedSubprojectId = '';
 
-  previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
-    row.addEventListener('dragstart', (e) => {
+  previewContainer.querySelectorAll('.do-item-row').forEach(row => {
+    const handle = row.querySelector('.do-drag-handle[draggable="true"]');
+    if (!handle) return;
+
+    handle.addEventListener('dragstart', (e) => {
       draggedIndex = Number(row.dataset.index);
       draggedDept = row.dataset.dept;
       draggedSubprojectId = row.dataset.subprojectId || '';
@@ -1593,7 +1439,7 @@ function setupDoItemDragHandlers(previewContainer, eventId) {
       e.dataTransfer.setData('application/x-showbase-delivery-order-line', String(draggedIndex));
     });
 
-    row.addEventListener('dragend', () => {
+    handle.addEventListener('dragend', () => {
       row.classList.remove('dragging');
       draggedIndex = null;
       draggedDept = null;
@@ -1667,11 +1513,167 @@ function getDeliveryOrderAssetCatalog() {
   );
 }
 
-function deliveryOrderDepartmentOptions(selected, names = []) {
-  const options = new Set([...getDefaultDoDepartments(), ...names, selected].filter(Boolean));
-  return Array.from(options).sort((a, b) => a.localeCompare(b)).map(name =>
-    `<option value="${escapeHtmlAttr(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`
-  ).join('');
+function deliveryOrderCatalogDisplayName(item) {
+  if (!item) return '';
+  const product = [item.brand, item.model].filter(Boolean).join(' ').trim();
+  const detail = String(item.description || item.detail || '').trim();
+  return [product || item.label, detail && detail.toLocaleLowerCase() !== product.toLocaleLowerCase() ? detail : '']
+    .filter(Boolean)
+    .join(' - ');
+}
+
+function deliveryOrderDepartmentControlMarkup({ value, groupId = '', label = 'Category' } = {}) {
+  const encodedGroupId = groupId ? encodeURIComponent(groupId) : '';
+  return `
+    <div class="finance-inline-combobox do-line-category-combobox">
+      <input type="text" class="finance-line-input do-dept" value="${escapeHtmlAttr(value || '')}"
+        aria-label="${escapeHtmlAttr(label)}" autocomplete="off" data-do-group-id="${escapeHtmlAttr(encodedGroupId)}"
+        onfocus="deliveryOrderRenderLineDepartmentSuggestions(this)"
+        oninput="deliveryOrderRenderLineDepartmentSuggestions(this)"
+        onchange="deliveryOrderCommitLineDepartment(this)"
+        onblur="setTimeout(()=>deliveryOrderHideLineDepartmentSuggestions(this),120)">
+      <div class="finance-inline-suggestions do-line-category-suggestions"></div>
+    </div>
+  `;
+}
+
+function deliveryOrderGroupWorkingLines() {
+  const event = currentDeliveryOrderEvent;
+  if (!event) return [];
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const subprojectId = deliveryOrderActiveSubprojectId(event);
+  const state = getDoEdits(eventId);
+  return Object.entries(state.custom || {}).flatMap(([category, lines]) => (
+    (lines || [])
+      .filter(line => (
+        line.groupId
+        && String(line.subprojectId || 'main') === String(subprojectId || 'main')
+      ))
+      .map(line => ({
+        ...line,
+        id: line.id || makeDoCustomItemId(),
+        customId: line.id || '',
+        key: `DOCUSTOM|${line.id || ''}`,
+        category,
+        department: category,
+        quantity: Math.max(0, Number(line.quantity) || 0),
+        source: 'do-custom'
+      }))
+  ));
+}
+
+function deliveryOrderNewGroupedLine(selected, category, subprojectId) {
+  const id = makeDoCustomItemId();
+  const description = String(
+    selected?.isCustom
+      ? selected.description
+      : deliveryOrderCatalogDisplayName(selected)
+  ).trim() || String(selected?.description || selected?.label || 'Item').trim();
+  return {
+    id,
+    customId: id,
+    key: `DOCUSTOM|${id}`,
+    description,
+    quantity: Math.max(0, Number(selected?.quantityOverride ?? selected?.quantity ?? 1) || 0),
+    category,
+    department: category,
+    brand: String(selected?.brand || '').trim(),
+    model: String(selected?.model || '').trim(),
+    catalogKey: selected?.catalogKey || '',
+    sourceAssetIds: [...new Set((selected?.sourceAssetIds || []).map(String))],
+    source: 'do-custom',
+    subprojectId: String(subprojectId || 'main'),
+    isCustom: !!selected?.isCustom
+  };
+}
+
+function deliveryOrderCommitLineGroup(groupId, subprojectId, groupedLines) {
+  const event = currentDeliveryOrderEvent;
+  if (!event) return false;
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const state = getDoEdits(eventId);
+  const targetSubprojectId = String(subprojectId || 'main');
+  Object.keys(state.custom || {}).forEach(category => {
+    state.custom[category] = (state.custom[category] || []).filter(line => !(
+      String(line.groupId || '') === String(groupId || '')
+      && String(line.subprojectId || 'main') === targetSubprojectId
+    ));
+  });
+
+  let firstKey = '';
+  (groupedLines || []).forEach(line => {
+    const category = String(line.category || line.department || 'MISC').trim() || 'MISC';
+    const id = String(line.customId || line.id || makeDoCustomItemId());
+    state.custom[category] ||= [];
+    state.custom[category].push({
+      id,
+      description: String(line.description || 'Item'),
+      quantity: Math.max(0, Number(line.quantity) || 0),
+      brand: String(line.brand || ''),
+      model: String(line.model || ''),
+      catalogKey: line.catalogKey || '',
+      sourceAssetIds: [...new Set((line.sourceAssetIds || []).map(String))],
+      subprojectId: targetSubprojectId,
+      groupId: String(groupId || ''),
+      groupTitle: String(line.groupTitle || 'Group'),
+      groupDisplayFields: Array.isArray(line.groupDisplayFields)
+        ? [...line.groupDisplayFields]
+        : ['brand', 'model', 'description'],
+      groupCustomText: !!line.groupCustomText,
+      isCustom: !!line.isCustom
+    });
+    deliveryOrderEditorState.collapsedCategories[`${eventId}::${targetSubprojectId}::${category}`] = false;
+    if (!firstKey) firstKey = `DOCUSTOM|${id}`;
+  });
+
+  deliveryOrderEditorState.pendingRevealKey = firstKey;
+  saveDoEdits(eventId, state, { immediate: true });
+  Promise.resolve(populateDeliveryItemsPreview(event)).then(() => {
+    deliveryOrderEditorState.pendingRevealKey = '';
+  });
+  return true;
+}
+
+function deliveryOrderMoveLineGroup(encodedGroupId, control) {
+  const groupId = decodeURIComponent(encodedGroupId || '');
+  const category = String(control?.value || '').trim();
+  if (!category) {
+    showNotification('warning', 'Choose a category for the group');
+    populateDeliveryItemsPreview(currentDeliveryOrderEvent);
+    return false;
+  }
+  const subprojectId = deliveryOrderActiveSubprojectId();
+  const lines = deliveryOrderGroupWorkingLines()
+    .filter(line => String(line.groupId || '') === groupId)
+    .map(line => ({ ...line, category, department: category }));
+  if (!lines.length) return false;
+  return deliveryOrderCommitLineGroup(groupId, subprojectId, lines);
+}
+
+async function deliveryOrderDeleteLineGroup(encodedGroupId) {
+  const groupId = decodeURIComponent(encodedGroupId || '');
+  const event = currentDeliveryOrderEvent;
+  if (!event || !groupId) return false;
+  if (!await showAppConfirm({
+    title: 'Remove Group',
+    message: 'Remove this group and all of its items from the Delivery Order?',
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    variant: 'warning'
+  })) return false;
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const subprojectId = deliveryOrderActiveSubprojectId(event);
+  const state = getDoEdits(eventId);
+  Object.keys(state.custom || {}).forEach(category => {
+    state.custom[category] = (state.custom[category] || []).filter(line => !(
+      String(line.groupId || '') === groupId
+      && String(line.subprojectId || 'main') === String(subprojectId || 'main')
+    ));
+  });
+  await saveDoEdits(eventId, state, { immediate: true });
+  showNotification('success', 'Group removed from the Delivery Order');
+  await populateDeliveryItemsPreview(event);
+  return false;
 }
 
 function removeDeliveryOrderItem(eventId, { key, kind, customId }) {
@@ -1690,7 +1692,7 @@ function removeDeliveryOrderItem(eventId, { key, kind, customId }) {
   } else {
     return false;
   }
-  saveDoEdits(eventId, state);
+  saveDoEdits(eventId, state, { immediate: true });
   return true;
 }
 
@@ -1725,6 +1727,7 @@ function deliveryOrderRenderCatalogResults() {
   deliveryOrderEditorState.selectedCatalogItem = null;
   if (!query) {
     results.innerHTML = '';
+    results.classList.remove('open');
     return;
   }
   deliveryOrderEditorState.catalogMatches = deliveryOrderEditorState.catalog.filter(item =>
@@ -1732,11 +1735,12 @@ function deliveryOrderRenderCatalogResults() {
       .join(' ').toLowerCase().includes(query)
   ).slice(0, 12);
   results.innerHTML = deliveryOrderEditorState.catalogMatches.map((item, index) => `
-    <button type="button" class="do-catalog-result" onclick="deliveryOrderSelectCatalogItem(${index})">
-      <strong>${escapeHtml(item.label)}</strong>
-      <span>${escapeHtml([item.detail, item.department].filter(Boolean).join(' / '))}</span>
+    <button type="button" class="finance-catalog-option do-catalog-result" onclick="deliveryOrderSelectCatalogItem(${index})">
+      <span><strong>${escapeHtml(item.label)}</strong><br><small>${escapeHtml([item.detail, item.department].filter(Boolean).join(' / '))}</small></span>
+      <small>${item.sourceAssetIds.length} in inventory</small>
     </button>
-  `).join('') || '<div class="do-empty-dept">No inventory match. This can be added as a custom DO item.</div>';
+  `).join('') || '<div class="finance-suggestion-empty">No inventory match. Press Add to create this as a custom item.</div>';
+  results.classList.add('open');
 }
 
 function deliveryOrderSelectCatalogItem(index) {
@@ -1746,9 +1750,12 @@ function deliveryOrderSelectCatalogItem(index) {
   const search = document.getElementById('doCatalogSearch');
   const category = document.getElementById('doCatalogDepartment');
   const results = document.getElementById('doCatalogResults');
-  if (search) search.value = [item.label, item.detail].filter(Boolean).join(' - ');
+  if (search) search.value = deliveryOrderCatalogDisplayName(item);
   if (category) category.value = item.department;
-  if (results) results.innerHTML = '';
+  if (results) {
+    results.innerHTML = '';
+    results.classList.remove('open');
+  }
 }
 
 function deliveryOrderRenderDepartmentSuggestions() {
@@ -1765,46 +1772,184 @@ function deliveryOrderRenderDepartmentSuggestions() {
     .filter(name => !query || name.toLowerCase().includes(query));
   results.innerHTML = names.map(name => `
     <button type="button" onclick="deliveryOrderSelectDepartment('${escapeHtmlAttr(name)}')">${escapeHtml(name)}</button>
-  `).join('');
+  `).join('') || '<div class="finance-suggestion-empty">Enter a new category name</div>';
+  results.classList.add('open');
 }
 
 function deliveryOrderSelectDepartment(name) {
   const input = document.getElementById('doCatalogDepartment');
   const results = document.getElementById('doCatalogDepartmentResults');
   if (input) input.value = name;
-  if (results) results.innerHTML = '';
+  if (results) {
+    results.innerHTML = '';
+    results.classList.remove('open');
+  }
 }
 
-function deliveryOrderAddCatalogItem() {
+async function deliveryOrderAddCatalogItem() {
   const event = currentDeliveryOrderEvent;
   if (!event) return;
-  const eventId = event.id || event.event_id || '0';
-  const search = document.getElementById('doCatalogSearch');
-  const category = document.getElementById('doCatalogDepartment');
-  const quantityInput = document.getElementById('doCatalogQuantity');
-  const description = search?.value.trim();
-  if (!description) {
-    showNotification('warning', 'Enter or select an asset first');
-    search?.focus();
-    return;
+  const addButton = document.querySelector('.do-catalog-composer .btn-primary');
+  if (addButton?.disabled) return;
+  if (addButton) addButton.disabled = true;
+  try {
+    const eventId = event.id || event.event_id || '0';
+    const search = document.getElementById('doCatalogSearch');
+    const category = document.getElementById('doCatalogDepartment');
+    const quantityInput = document.getElementById('doCatalogQuantity');
+    const selected = deliveryOrderEditorState.selectedCatalogItem;
+    const description = String(selected
+      ? deliveryOrderCatalogDisplayName(selected)
+      : search?.value || '').trim();
+    if (!description) {
+      showNotification('warning', 'Enter or select an asset first');
+      search?.focus();
+      return;
+    }
+
+    const department = String(category?.value || selected?.department || '').trim();
+    if (!department) {
+      showNotification('warning', 'Choose a category before adding the item');
+      category?.focus();
+      return;
+    }
+    const subprojectId = deliveryOrderActiveSubprojectId(event);
+    const customId = makeDoCustomItemId();
+    const rowKey = `DOCUSTOM|${customId}`;
+    const state = getDoEdits(eventId);
+    state.custom[department] ||= [];
+    state.custom[department].push({
+      id: customId,
+      description,
+      quantity: Math.max(1, Number(quantityInput?.value) || 1),
+      brand: selected?.brand || '',
+      model: selected?.model || '',
+      catalogKey: selected?.catalogKey || '',
+      sourceAssetIds: [...(selected?.sourceAssetIds || [])],
+      subprojectId
+    });
+
+    deliveryOrderEditorState.selectedCatalogItem = null;
+    deliveryOrderEditorState.pendingRevealKey = rowKey;
+    deliveryOrderEditorState.collapsedCategories[`${eventId}::${subprojectId}::${department}`] = false;
+    await saveDoEdits(eventId, state, { immediate: true });
+    await populateDeliveryItemsPreview(event);
+
+    const visibleRow = document.querySelector(`.do-item-row[data-key="${CSS.escape(rowKey)}"]`);
+    if (!visibleRow) {
+      throw new Error(`The new line was saved but could not be displayed in ${department}.`);
+    }
+    visibleRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    visibleRow.classList.add('is-new');
+    setTimeout(() => visibleRow.classList.remove('is-new'), 1800);
+    deliveryOrderEditorState.pendingRevealKey = '';
+    showNotification('success', `${description} added to ${department}`);
+  } catch (error) {
+    deliveryOrderEditorState.pendingRevealKey = '';
+    console.error('Could not add Delivery Order line:', error);
+    showNotification('error', error.message || 'Could not add the item to the Delivery Order');
+  } finally {
+    if (addButton?.isConnected) addButton.disabled = false;
   }
-  const selected = deliveryOrderEditorState.selectedCatalogItem;
-  const department = category?.value.trim() || selected?.department || 'MISC';
+}
+
+function deliveryOrderRenderLineDepartmentSuggestions(control) {
+  const results = control?.closest('.do-line-category-combobox')
+    ?.querySelector('.do-line-category-suggestions');
+  if (!control || !results || !currentDeliveryOrderEvent) return;
+  const eventId = currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0';
+  const grouped = groupItemsByDepartment(
+    currentDeliveryOrderEvent,
+    deliveryOrderActiveSubprojectId(currentDeliveryOrderEvent)
+  );
+  const query = control.value.trim().toLowerCase();
+  const names = getDoDepartmentList(grouped, getDoEdits(eventId))
+    .filter(name => !query || name.toLowerCase().includes(query));
+  results.innerHTML = names.map(name => `
+    <button type="button" data-do-department="${escapeHtmlAttr(name)}"
+      onmousedown="event.preventDefault()" onclick="deliveryOrderSelectLineDepartment(this)">${escapeHtml(name)}</button>
+  `).join('') || '<div class="finance-suggestion-empty">Enter a new category name</div>';
+  results.classList.add('open');
+}
+
+function deliveryOrderHideLineDepartmentSuggestions(control) {
+  const results = control?.closest('.do-line-category-combobox')
+    ?.querySelector('.do-line-category-suggestions');
+  if (!results) return;
+  results.innerHTML = '';
+  results.classList.remove('open');
+}
+
+function deliveryOrderSelectLineDepartment(button) {
+  const wrapper = button?.closest('.do-line-category-combobox');
+  const control = wrapper?.querySelector('.do-dept');
+  if (!control) return false;
+  control.value = String(button.dataset.doDepartment || '').trim();
+  deliveryOrderHideLineDepartmentSuggestions(control);
+  return deliveryOrderCommitLineDepartment(control);
+}
+
+function deliveryOrderCommitLineDepartment(control) {
+  const encodedGroupId = control?.dataset.doGroupId || '';
+  if (encodedGroupId) return deliveryOrderMoveLineGroup(encodedGroupId, control);
+  return deliveryOrderAutosaveLine(control);
+}
+
+function deliveryOrderSaveLine(row) {
+  const event = currentDeliveryOrderEvent;
+  if (!row || !event) return false;
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const key = row.dataset.key || '';
+  const kind = row.dataset.kind || '';
+  const customId = row.dataset.customId || '';
+  const sourceDepartment = row.dataset.dept || 'MISC';
+  const targetDepartment = row.querySelector('.do-dept')?.value.trim() || sourceDepartment;
+  const descriptionControl = row.querySelector('.do-desc');
+  const description = descriptionControl
+    ? descriptionControl.value.trim()
+    : String(row.dataset.description || '').trim();
+  const quantity = Math.max(1, Number(row.querySelector('.do-qty')?.value) || 1);
+  if (!description) {
+    showNotification('warning', 'Item is required');
+    populateDeliveryItemsPreview(event);
+    return false;
+  }
+
   const state = getDoEdits(eventId);
-  state.custom[department] ||= [];
-  state.custom[department].push({
-    id: makeDoCustomItemId(),
-    description,
-    quantity: Math.max(1, Number(quantityInput?.value) || 1),
-    brand: selected?.brand || '',
-    model: selected?.model || '',
-    catalogKey: selected?.catalogKey || '',
-    sourceAssetIds: [...(selected?.sourceAssetIds || [])],
-    subprojectId: deliveryOrderActiveSubprojectId(event)
-  });
-  saveDoEdits(eventId, state);
-  showNotification('success', 'Item added to the delivery order');
+  if (kind === 'do-custom') {
+    let sourceItem = null;
+    let sourceIndex = -1;
+    let sourceBucket = '';
+    Object.keys(state.custom || {}).some(department => {
+      const index = state.custom[department].findIndex(item => String(item.id) === String(customId));
+      if (index < 0) return false;
+      sourceItem = state.custom[department][index];
+      sourceIndex = index;
+      sourceBucket = department;
+      return true;
+    });
+    if (!sourceItem) return false;
+    const updated = { ...sourceItem, description, quantity };
+    if (sourceBucket === targetDepartment) {
+      state.custom[sourceBucket][sourceIndex] = updated;
+    } else {
+      state.custom[sourceBucket].splice(sourceIndex, 1);
+      state.custom[targetDepartment] ||= [];
+      state.custom[targetDepartment].push(updated);
+    }
+  } else if (key) {
+    state.overrides[key] = { description, quantity, department: targetDepartment };
+  } else {
+    return false;
+  }
+
+  saveDoEdits(eventId, state, { immediate: true });
   populateDeliveryItemsPreview(event);
+  return true;
+}
+
+function deliveryOrderAutosaveLine(control) {
+  return deliveryOrderSaveLine(control?.closest('.do-item-row'));
 }
 
 function deliveryOrderToggleCategory(encodedCategory) {
@@ -1831,7 +1976,6 @@ async function populateDeliveryItemsPreview(event) {
   const subprojectId = deliveryOrderActiveSubprojectId(event);
   const edits = getDoEdits(eventId);
   const depts = groupItemsByDepartment(event, subprojectId);
-  const editMode = !!deliveryOrderEditorState.editMode;
   const populatedDepartments = Object.values(depts).filter(items => items.length);
   const lineCount = populatedDepartments.reduce((total, items) => total + items.length, 0);
   const unitCount = populatedDepartments.reduce((total, items) => (
@@ -1839,7 +1983,7 @@ async function populateDeliveryItemsPreview(event) {
   ), 0);
   const escA = value => (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(value) : escapeHtml(value));
 
-  const addRow = editMode ? showbaseLineWorkspace.addRowMarkup({
+  const addRow = showbaseLineWorkspace.addRowMarkup({
     mode: 'delivery-order',
     className: 'do-catalog-composer',
     search: {
@@ -1852,53 +1996,67 @@ async function populateDeliveryItemsPreview(event) {
     category: {
       id: 'doCatalogDepartment',
       resultsId: 'doCatalogDepartmentResults',
-      value: 'MISC',
+      value: '',
       placeholder: 'Category',
       oninput: 'deliveryOrderRenderDepartmentSuggestions()',
       onfocus: 'deliveryOrderRenderDepartmentSuggestions()',
-      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||'MISC'),120)"
+      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||''),120)"
     },
     extraMarkup: '<input id="doCatalogQuantity" class="finance-input do-catalog-quantity" type="number" min="1" max="999" value="1" aria-label="Quantity">',
     addAction: 'deliveryOrderAddCatalogItem()',
-    showGroup: false
-  }) : '';
+    groupAction: "financeOpenLineGroupEditor('delivery-order')"
+  });
 
   const sectionMarkup = (department, items) => {
     const encodedDepartment = encodeURIComponent(department);
     const collapseKey = `${eventId}::${subprojectId}::${department}`;
     const collapsed = !!deliveryOrderEditorState.collapsedCategories[collapseKey];
-    const rows = items.map((item, index) => editMode ? `
-      <tr class="do-item-row do-edit-row" draggable="true"
+    const lineMarkup = (item, index, groupChild = false) => `
+      <tr class="finance-line-row do-item-row${groupChild ? ' finance-group-child-row' : ''}${deliveryOrderEditorState.pendingRevealKey === item.key ? ' is-new' : ''}"
           data-key="${escA(item.key)}"
           data-custom-id="${escA(item.customId || '')}"
           data-kind="${escA(item.source || '')}"
           data-dept="${escA(department)}"
+          data-description="${escA(item.description)}"
           data-subproject-id="${escA(subprojectId)}"
           data-index="${index}">
         <td class="do-item-cell">
           <div class="do-edit-item">
-            <span class="do-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-            <div class="do-edit-fields">
-              <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item">
-              <select class="do-dept form-input" aria-label="Category">${deliveryOrderDepartmentOptions(department, getDoDepartmentList(depts, edits))}</select>
-            </div>
+            <span class="do-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            ${groupChild
+              ? `<div class="finance-group-item-display"><span class="${item.groupCustomText ? 'showbase-group-custom-text' : ''}">${escapeHtml(item.groupCustomText ? item.description : financeGroupedLineDisplay(item))}</span>${item.groupCustomText ? '<small>Custom text</small>' : ''}</div>`
+              : `<input type="text" class="finance-line-input do-desc" value="${escA(item.description)}" placeholder="Item" aria-label="Description" onchange="deliveryOrderAutosaveLine(this)">`}
           </div>
         </td>
-        <td class="do-quantity-cell"><input type="number" class="do-qty form-input" value="${escA(item.quantity)}" min="1" max="999"></td>
+        <td class="do-category-cell">${groupChild ? '' : deliveryOrderDepartmentControlMarkup({ value: department })}</td>
+        <td class="do-quantity-cell"><input type="number" class="finance-line-input do-qty" value="${escA(item.quantity)}" min="1" max="999" aria-label="Quantity" onchange="deliveryOrderAutosaveLine(this)"></td>
         <td class="do-action-cell">
-          <button type="button" class="btn do-save">Save</button>
-          <button type="button" class="btn do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>
+          <button type="button" class="finance-delete-line do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>
         </td>
       </tr>
-    ` : `
-      <tr class="do-item-row">
-        <td class="do-item-cell">${escapeHtml(item.description)}</td>
-        <td class="do-quantity-cell"><span class="do-quantity-badge">${escapeHtml(item.quantity)}</span></td>
-      </tr>
-    `).join('');
+    `;
+    const renderedGroups = new Set();
+    const rows = items.map((item, index) => {
+      const groupId = String(item.groupId || '');
+      if (!groupId) return lineMarkup(item, index);
+      if (renderedGroups.has(groupId)) return '';
+      renderedGroups.add(groupId);
+      const members = items
+        .map((candidate, candidateIndex) => ({ item: candidate, index: candidateIndex }))
+        .filter(row => String(row.item.groupId || '') === groupId);
+      const encodedGroupId = encodeURIComponent(groupId);
+      const header = `
+        <tr class="finance-line-row finance-line-group-header finance-group-commercial-row do-line-group-header">
+          <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Edit group" onclick="financeOpenLineGroupEditor('delivery-order','${escA(groupId)}')">${escapeHtml(item.groupTitle || 'Group')}</button><button type="button" title="Edit group contents" aria-label="Edit group contents" onclick="financeOpenLineGroupEditor('delivery-order','${escA(groupId)}')">&#9998;</button></div></td>
+          <td class="do-category-cell">${deliveryOrderDepartmentControlMarkup({ value: department, groupId, label: 'Group category' })}</td>
+          <td class="do-quantity-cell"><span class="do-group-count">${members.length} item${members.length === 1 ? '' : 's'}</span></td>
+          <td class="do-action-cell"><button type="button" class="finance-delete-line do-del" title="Delete group" aria-label="Delete group" onclick="return deliveryOrderDeleteLineGroup('${escA(encodedGroupId)}')">&times;</button></td>
+        </tr>`;
+      return header + members.map(row => lineMarkup(row.item, row.index, true)).join('');
+    }).join('');
 
     const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
-      colspan: editMode ? 3 : 2,
+      colspan: 4,
       className: 'do-category-row',
       content: `<div class="do-category-heading-main">${showbaseLineWorkspace.categoryToggleMarkup({
         label: `${department} category`,
@@ -1908,13 +2066,15 @@ async function populateDeliveryItemsPreview(event) {
     });
     return `
       <section class="${showbaseLineWorkspace.categorySectionClass({ className: 'do-department-section', collapsed })}" data-do-category="${escA(encodedDepartment)}">
-        <table class="do-line-table showbase-category-table">
+        <table class="finance-lines-table do-line-table showbase-category-table">
+          <colgroup><col><col class="do-category-column"><col class="do-quantity-column"><col class="do-action-column"></colgroup>
           <thead>
             ${categoryHeader}
             <tr class="do-column-row showbase-category-column-header">
               <th>Item</th>
+              <th>Category</th>
               <th>Quantity</th>
-              ${editMode ? '<th aria-label="Actions"></th>' : ''}
+              <th aria-label="Actions"></th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -1937,24 +2097,15 @@ async function populateDeliveryItemsPreview(event) {
           <span>${lineCount} line${lineCount === 1 ? '' : 's'} / ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
         </div>
         <div class="do-items-actions">
-          <label class="do-edit-toggle">
-            <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}>
-            <span class="do-toggle-control" aria-hidden="true"></span>
-            <span>Edit</span>
-          </label>
           <button type="button" class="btn do-reset-button" id="doResetEdits">Reset</button>
         </div>
       </div>
       ${deliveryOrderSubprojectTabsMarkup(event)}
-      ${addRow ? `<div class="do-composer-toolbar">${addRow}</div>` : ''}
       <div class="do-category-list showbase-category-stack">${body}</div>
+      <div class="do-composer-toolbar">${addRow}</div>
     </div>
   `;
 
-  document.getElementById('doEditToggle')?.addEventListener('change', eventChange => {
-    deliveryOrderEditorState.editMode = !!eventChange.currentTarget.checked;
-    populateDeliveryItemsPreview(event);
-  });
   document.getElementById('doResetEdits')?.addEventListener('click', async () => {
     if (!await showAppConfirm({
       title: 'Reset Delivery Order',
@@ -1971,45 +2122,7 @@ async function populateDeliveryItemsPreview(event) {
   });
 
   deliveryOrderEditorState.catalog = getDeliveryOrderAssetCatalog();
-  previewContainer.querySelectorAll('.do-save').forEach(button => {
-    button.addEventListener('click', () => {
-      const row = button.closest('.do-item-row');
-      const key = row?.dataset.key || '';
-      const kind = row?.dataset.kind || '';
-      const customId = row?.dataset.customId || '';
-      const sourceDepartment = row?.dataset.dept || 'MISC';
-      const targetDepartment = row?.querySelector('.do-dept')?.value || sourceDepartment;
-      const description = row?.querySelector('.do-desc')?.value.trim() || '';
-      const quantity = Math.max(1, Number(row?.querySelector('.do-qty')?.value) || 1);
-      if (!description) {
-        showNotification('warning', 'Item is required');
-        return;
-      }
-
-      const state = getDoEdits(eventId);
-      if (kind.startsWith('do-custom')) {
-        let savedItem = null;
-        Object.keys(state.custom || {}).some(department => {
-          const index = state.custom[department].findIndex(item => item.id === customId);
-          if (index < 0) return false;
-          savedItem = { ...state.custom[department][index], description, quantity };
-          state.custom[department].splice(index, 1);
-          return true;
-        });
-        if (savedItem) {
-          state.custom[targetDepartment] ||= [];
-          state.custom[targetDepartment].push(savedItem);
-        }
-      } else {
-        state.overrides[key] = { description, quantity, department: targetDepartment };
-      }
-      saveDoEdits(eventId, state);
-      showNotification('success', 'Delivery Order item updated');
-      populateDeliveryItemsPreview(event);
-    });
-  });
-
-  if (editMode) setupDoItemDragHandlers(previewContainer, eventId);
+  setupDoItemDragHandlers(previewContainer, eventId);
 }
 
 function groupItemsByDepartment(event, subprojectId = null) {
@@ -2029,6 +2142,32 @@ function groupItemsByDepartment(event, subprojectId = null) {
         : rooms.filter(room => String(room.id || 'main') === String(subprojectId || 'main')))
     : [];
 
+  const modelIdentity = value => [
+    normalizeDepartmentCode(value?.departmentCode || value?.department || 'UN'),
+    String(value?.brand || '').trim().toLocaleLowerCase(),
+    String(value?.model || '').trim().toLocaleLowerCase(),
+    String(value?.description || '').trim().toLocaleLowerCase()
+  ].join('|');
+
+  const roomSpareQuantity = (room, line) => {
+    if (line?.isCustom) return 0;
+    const extraRefs = new Set((room?.extraRefs || []).map(String));
+    if (!extraRefs.size) return 0;
+    const targetIdentity = modelIdentity(line);
+    const countedRefs = new Set();
+    let quantity = 0;
+    Object.values(event?.modelGroups || {}).forEach(group => {
+      if (modelIdentity(group) !== targetIdentity) return;
+      (group.assignedAssets || []).forEach(asset => {
+        const assetId = String(asset?.id || '');
+        if (!extraRefs.has(assetId) || countedRefs.has(assetId)) return;
+        countedRefs.add(assetId);
+        quantity += Math.max(1, Number(asset?.quantity || 1));
+      });
+    });
+    return quantity;
+  };
+
   if (selectedRooms.length) {
     selectedRooms.forEach(room => {
       const roomId = String(room.id || 'main');
@@ -2040,7 +2179,12 @@ function groupItemsByDepartment(event, subprojectId = null) {
         departments[dname].push({
           key: `ROOM|${roomId}|${line.lineId || `${dname}|${line.brand || ''}|${line.model || ''}|${index}`}`,
           description,
-          quantity: String(line.quantity || 0),
+          quantity: String(
+            Math.max(0, Number(line.quantity || 0)) + roomSpareQuantity(room, line)
+          ),
+          brand: String(line.brand || '').trim(),
+          model: String(line.model || '').trim(),
+          assetRefs: [...new Set((line.assetRefs || []).map(String))],
           source: line.isCustom ? 'event-custom' : 'model',
           subprojectId: roomId
         });
@@ -2053,7 +2197,13 @@ function groupItemsByDepartment(event, subprojectId = null) {
       departments[dname].push({
         key: makeModelKey(mg),
         description: baseDesc,
-        quantity: String(mg.requiredQuantity || 0),
+        quantity: String(
+          Math.max(0, Number(mg.requiredQuantity || 0))
+          + Math.max(0, Number(mg.extraPreparedQuantity || 0))
+        ),
+        brand: String(mg.brand || '').trim(),
+        model: String(mg.model || '').trim(),
+        assetRefs: [...new Set((mg.assignedAssets || []).map(asset => String(asset?.id || '')).filter(Boolean))],
         source: 'model'
       });
     });
@@ -2134,7 +2284,12 @@ function groupItemsByDepartment(event, subprojectId = null) {
           catalogKey: ci.catalogKey || '',
           sourceAssetIds: [...(ci.sourceAssetIds || [])],
           source: 'do-custom',
-          subprojectId: itemSubprojectId
+          subprojectId: itemSubprojectId,
+          groupId: ci.groupId || '',
+          groupTitle: ci.groupTitle || '',
+          groupDisplayFields: Array.isArray(ci.groupDisplayFields) ? [...ci.groupDisplayFields] : [],
+          groupCustomText: !!ci.groupCustomText,
+          isCustom: !!ci.isCustom
         });
       });
     });
@@ -2142,34 +2297,74 @@ function groupItemsByDepartment(event, subprojectId = null) {
 
   getDoDepartmentList(departments, edits).forEach(d => {
     departments[d] ||= [];
-    departments[d] = applyDoOrdering(departments[d], d, eventId, subprojectId || 'all');
+    if (subprojectId == null && selectedRooms.length) {
+      const ordered = [];
+      const included = new Set();
+      deliveryOrderSubprojects(event).forEach(room => {
+        const roomId = String(room.id || 'main');
+        const roomItems = departments[d].filter(item => (
+          String(item.subprojectId || 'main') === roomId
+        ));
+        applyDoOrdering(roomItems, d, eventId, roomId).forEach(item => {
+          if (included.has(item.key)) return;
+          included.add(item.key);
+          ordered.push(item);
+        });
+      });
+      departments[d].forEach(item => {
+        if (included.has(item.key)) return;
+        included.add(item.key);
+        ordered.push(item);
+      });
+      departments[d] = ordered;
+    } else {
+      departments[d] = applyDoOrdering(departments[d], d, eventId, subprojectId || 'all');
+    }
   });
 
   return departments;
 }
 
 function getAssetIdsByItem(event, item, department) {
-    const assetIds = [];
-    if (!event.assetsByDepartment || !item || item.source !== 'model') return assetIds;
+    if (!item) return [];
 
+    const assetRecords = Object.values(event?.assetsByDepartment || {})
+        .flatMap(rows => Array.isArray(rows) ? rows : []);
+    const recordsById = new Map(assetRecords
+        .filter(asset => asset?.id)
+        .map(asset => [String(asset.id), asset]));
+    const isIndividualAssetId = value => {
+        const id = String(value || '').trim();
+        if (!id || id.startsWith('[BULK]') || id.startsWith('[MODEL]') || isCustomAssetId(id)) return false;
+        const record = recordsById.get(id);
+        return !record?.isBulk && record?.status !== 'returned';
+    };
+    const sortedUniqueIds = values => [...new Set((values || []).map(String).filter(isIndividualAssetId))]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    // Room requirements carry the exact stable references assigned during planning.
+    // Prefer those references so identical models in different rooms are not mixed.
+    const linkedIds = sortedUniqueIds(item.assetRefs);
+    if (linkedIds.length || (item.assetRefs || []).length) return linkedIds;
+
+    if (!event?.assetsByDepartment || item.source !== 'model') return [];
+
+    // Legacy events may not have room-level assetRefs. Match their prepared model
+    // records using the retained model identity as a backwards-compatible fallback.
     const keyParts = String(item.key || '').split('|');
-    if (keyParts.length < 4) return assetIds;
+    const deptCode = normalizeDepartmentCode(
+        keyParts[0] === 'MG'
+            ? keyParts[1]
+            : getDepartmentCodeForDoName(department)
+    );
+    const brand = String(item.brand || (keyParts[0] === 'MG' ? keyParts[2] : '')).trim();
+    const model = String(item.model || (keyParts[0] === 'MG' ? keyParts[3] : '')).trim();
+    if (!brand && !model) return [];
 
-    // makeModelKey format: MG|department|brand|model
-    const deptCodeFromKey = normalizeDepartmentCode(keyParts[1] || getDepartmentCodeForDoName(department));
-    const brand = keyParts[2] || '';
-    const model = keyParts[3] || '';
-
-    const departmentAssets = event.assetsByDepartment[deptCodeFromKey] || [];
-    departmentAssets.forEach(asset => {
-        if (!asset || !asset.id) return;
-        if (asset.isBulk || String(asset.id).startsWith('[BULK]') || isCustomAssetId(asset.id) || String(asset.id).startsWith('[MODEL]')) return;
-        if (asset.status === 'returned') return;
-
-        if (asset.brand === brand && asset.model === model) {
-            assetIds.push(asset.id);
-        }
-    });
-
-    return assetIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    return sortedUniqueIds((event.assetsByDepartment[deptCode] || [])
+        .filter(asset => (
+            String(asset?.brand || '').trim() === brand
+            && String(asset?.model || '').trim() === model
+        ))
+        .map(asset => asset.id));
 }

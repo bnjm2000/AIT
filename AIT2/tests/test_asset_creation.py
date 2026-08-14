@@ -223,6 +223,41 @@ class AssetCreationTests(unittest.TestCase):
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['dateOfPurchase'], '2026-06-02')
 
+    def test_create_asset_saves_selected_default_location(self):
+        response = self.post_asset({
+            'quantity': 2,
+            'serials': ['SN-LOCATION-1', 'SN-LOCATION-2'],
+            'defaultLocation': 'Warehouse B',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_ids = response.get_json()['assetIds']
+        self.assertEqual(
+            [self.data_manager.inventory[asset_id].default_location for asset_id in asset_ids],
+            ['Warehouse B', 'Warehouse B'],
+        )
+
+        assets_response = self.client.get('/api/assets')
+        created_assets = {
+            item['internalId']: item
+            for item in assets_response.get_json()['data']
+            if item['internalId'] in asset_ids
+        }
+        self.assertEqual(created_assets[asset_ids[0]]['defaultLocation'], 'Warehouse B')
+
+    def test_create_asset_defaults_blank_location_to_store_for_bulk_assets(self):
+        response = self.post_asset({
+            'isBulk': True,
+            'quantity': 6,
+            'defaultLocation': '   ',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        asset = self.data_manager.inventory[asset_id]
+        self.assertTrue(asset.is_bulk)
+        self.assertEqual(asset.default_location, 'Store')
+
     def test_create_asset_saves_notes(self):
         notes = 'Pack with short IEC cable\nCheck foam insert before hire'
         response = self.post_asset({
@@ -307,6 +342,20 @@ class AssetCreationTests(unittest.TestCase):
             change.get('field') == 'tags'
             for change in self.data_manager.inventory['P1#01'].change_history[-1]['changes']
         ))
+
+    def test_create_asset_does_not_tag_same_model_with_a_different_description(self):
+        self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wireless IEM beltpack')
+        self.data_manager.inventory['P1#01'].tags = ['legacy']
+        self.data_manager.save_inventory()
+
+        response = self.post_asset({
+            'tags': ['Wired'],
+            'tagsToApplyToSimilar': ['Wired'],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['matchingAssetsTagged'], 0)
+        self.assertEqual(self.data_manager.inventory['P1#01'].tags, ['legacy'])
 
     def test_create_asset_saves_second_serial_and_resolves_it(self):
         response = self.post_asset({

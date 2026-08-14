@@ -1056,6 +1056,402 @@
         color: #1f2937;
       }
 
+      .add-asset-modal-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .add-asset-template-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .add-asset-template-actions .btn {
+        min-height: 34px;
+        padding: 7px 11px;
+        font-size: 12px;
+      }
+
+      .asset-import-modal-content {
+        width: min(1320px, calc(100vw - 28px)) !important;
+        max-width: none !important;
+        height: min(900px, calc(100vh - 28px));
+        max-height: none !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .asset-import-modal-content .modal-header {
+        padding: 14px 18px;
+      }
+
+      .asset-import-heading p {
+        margin: 3px 0 0;
+        color: #667872;
+        font-size: 11px;
+      }
+
+      .asset-import-body {
+        height: calc(100% - 126px);
+        padding: 14px 18px;
+        overflow: auto;
+        background: #f5f8f7;
+      }
+
+      .asset-import-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .asset-import-summary span {
+        padding: 6px 9px;
+        border: 1px solid #d8e4e0;
+        border-radius: 999px;
+        background: #fff;
+        color: #40564f;
+        font-size: 11px;
+      }
+
+      .asset-import-rejected {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border: 1px solid #edc878;
+        border-radius: 7px;
+        background: #fff8e7;
+        color: #754e0f;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .asset-import-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .asset-import-row {
+        border: 1px solid #d9e4e0;
+        border-radius: 8px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .asset-import-row.has-error {
+        border-color: #dc8d93;
+      }
+
+      .asset-import-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 38px;
+        padding: 7px 10px;
+        border-bottom: 1px solid #e7eeeb;
+        background: #f9fbfa;
+      }
+
+      .asset-import-row-title {
+        min-width: 0;
+        color: #2d443d;
+        font-size: 11px;
+      }
+
+      .asset-import-row-title strong {
+        margin-right: 7px;
+      }
+
+      .asset-import-remove {
+        border: 0;
+        background: transparent;
+        color: #a43d46;
+        font: inherit;
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .asset-import-fields {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        gap: 9px;
+        padding: 10px;
+      }
+
+      .asset-import-field {
+        min-width: 0;
+      }
+
+      .asset-import-field.wide {
+        grid-column: span 2;
+      }
+
+      .asset-import-field.full {
+        grid-column: 1 / -1;
+      }
+
+      .asset-import-field label {
+        display: block;
+        margin-bottom: 4px;
+        color: #65766f;
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .asset-import-field input,
+      .asset-import-field select,
+      .asset-import-field textarea {
+        width: 100%;
+        min-height: 34px;
+        padding: 7px 8px;
+        border: 1px solid #d5e1dd;
+        border-radius: 6px;
+        background: #fff;
+        color: #2f443e;
+        font: inherit;
+        font-size: 11px;
+      }
+
+      .asset-import-field textarea {
+        min-height: 56px;
+        resize: vertical;
+      }
+
+      .asset-import-message {
+        margin-top: 5px;
+        color: #a33d46;
+        font-size: 10px;
+        line-height: 1.4;
+      }
+
+      .asset-import-message.warning {
+        color: #8b5c0b;
+      }
+
+      .asset-import-message.success {
+        color: #16704f;
+      }
+
+      .asset-import-department-action {
+        margin-top: 4px;
+      }
+
+      .asset-import-use-suggestion {
+        margin-top: 5px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #0f766e;
+        font: inherit;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .asset-import-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 68px;
+        padding: 12px 18px;
+        border-top: 1px solid #dce6e2;
+        background: #fff;
+      }
+
+      .asset-import-footer-status {
+        color: #667872;
+        font-size: 11px;
+      }
+
+      .asset-import-summary .asset-import-summary-error {
+        border-color: #efb7bb;
+        background: #fff3f4;
+        color: #9f303a;
+      }
+
+      .asset-import-summary .asset-import-summary-warning {
+        border-color: #ecd18f;
+        background: #fff9ea;
+        color: #815510;
+      }
+
+      .asset-import-category {
+        display: grid;
+        gap: 7px;
+      }
+
+      .asset-import-category + .asset-import-category {
+        margin-top: 15px;
+      }
+
+      .asset-import-category-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 2px;
+        color: #2f463f;
+        font-size: 11px;
+      }
+
+      .asset-import-category-head > div {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+
+      .asset-import-category-head strong {
+        font-size: 12px;
+      }
+
+      .asset-import-category-head span {
+        color: #71827c;
+      }
+
+      .asset-import-category-head > span {
+        min-width: 24px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #e5eeeb;
+        color: #40564f;
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .asset-import-category-rows {
+        display: grid;
+        gap: 7px;
+      }
+
+      details.asset-import-row {
+        overflow: hidden;
+      }
+
+      .asset-import-row.has-error {
+        border-color: #dc8d93;
+      }
+
+      .asset-import-row.has-warning {
+        border-color: #e2bd65;
+      }
+
+      .asset-import-row.has-ready {
+        border-color: #b9d8cc;
+      }
+
+      .asset-import-row-head {
+        display: grid;
+        grid-template-columns: 9px minmax(220px, 1fr) minmax(330px, auto) auto;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .asset-import-row-head::-webkit-details-marker {
+        display: none;
+      }
+
+      .asset-import-row[open] .asset-import-row-head {
+        border-bottom: 1px solid #e7eeeb;
+      }
+
+      .asset-import-state-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4b9d7f;
+      }
+
+      .asset-import-row.has-error .asset-import-state-dot {
+        background: #c64e59;
+      }
+
+      .asset-import-row.has-warning .asset-import-state-dot {
+        background: #d79a23;
+      }
+
+      .asset-import-row-title {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 7px;
+      }
+
+      .asset-import-row-title strong {
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .asset-import-row-label {
+        flex: 0 0 auto;
+        color: #7a8a85;
+        font-size: 10px;
+      }
+
+      .asset-import-row-description {
+        min-width: 0;
+        overflow: hidden;
+        color: #71827c;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .asset-import-row-facts {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 0;
+        gap: 6px;
+      }
+
+      .asset-import-row-facts span {
+        max-width: 220px;
+        padding: 3px 6px;
+        border: 1px solid #dfe9e5;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #fff;
+        color: #4c625b;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .asset-import-row-status {
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #eaf5f0;
+        color: #286b53;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .asset-import-row.has-error .asset-import-row-status {
+        background: #fff0f1;
+        color: #a3333d;
+      }
+
+      .asset-import-row.has-warning .asset-import-row-status {
+        background: #fff6de;
+        color: #84580d;
+      }
+
+      .asset-import-row-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: flex-end;
+      }
+
       .asset-tag-editor {
         min-height: 44px;
         display: flex;
@@ -1174,6 +1570,47 @@
       @media (max-width: 768px) {
         .add-asset-prefix-row {
           grid-template-columns: 1fr;
+        }
+
+        .add-asset-modal-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .add-asset-template-actions {
+          flex-wrap: wrap;
+        }
+
+        .asset-import-fields {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .asset-import-field.wide {
+          grid-column: span 2;
+        }
+
+        .asset-import-row-head {
+          grid-template-columns: 9px minmax(0, 1fr) auto;
+        }
+
+        .asset-import-row-facts {
+          grid-column: 2 / -1;
+          justify-content: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .asset-import-row-description {
+          display: none;
+        }
+      }
+
+      @media (min-width: 769px) and (max-width: 1100px) {
+        .asset-import-fields {
+          grid-template-columns: repeat(3, minmax(130px, 1fr));
+        }
+
+        .asset-import-row-head {
+          grid-template-columns: 9px minmax(200px, 1fr) minmax(240px, auto) auto;
         }
       }
 
@@ -10768,7 +11205,7 @@
             <div class="inventory-page-header">
               <div>
                 <h2>Inventory</h2>
-                <p>Assets grouped by brand and model.</p>
+                <p>Assets grouped by brand, model, and description.</p>
               </div>
               <div class="inventory-header-actions">
                 <button type="button" class="btn inventory-manage-departments admin-only" data-admin-only="true" data-admin-display="inline-flex" onclick="openModal('department-admin-panel')">Manage departments</button>
@@ -11078,45 +11515,52 @@
                 #delivery-order-section .do-items-title h3 { margin:0;color:var(--do-ink);font-size:13px; }
                 #delivery-order-section .do-items-title span { color:var(--do-muted);font-size:10px;font-weight:700; }
                 #delivery-order-section .do-items-actions { display:flex;align-items:center;gap:8px; }
-                #delivery-order-section .do-edit-toggle { display:flex;align-items:center;gap:7px;color:#40564f;font-size:10px;font-weight:800;cursor:pointer; }
-                #delivery-order-section .do-edit-toggle input { position:absolute;opacity:0;pointer-events:none; }
-                #delivery-order-section .do-toggle-control { width:30px;height:17px;padding:2px;border:1px solid #b9ccc6;border-radius:9px;background:#dfe9e6;transition:background .16s,border-color .16s; }
-                #delivery-order-section .do-toggle-control::after { display:block;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(23,43,38,.24);content:"";transition:transform .16s; }
-                #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control { border-color:var(--do-accent);background:var(--do-accent); }
-                #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control::after { transform:translateX(13px); }
                 #delivery-order-section .do-reset-button { min-height:30px;padding:5px 9px;border-color:#d3dfdb;background:#fff;color:#536861;font-size:9px;font-weight:800; }
                 #delivery-order-section .do-subproject-tabs { margin:0;padding:10px 14px;border-bottom:1px solid var(--do-line);background:#f8fbfa; }
-                #delivery-order-section .do-composer-toolbar { padding:12px 14px;border-bottom:1px solid var(--do-line);background:#f5f9f7; }
-                #delivery-order-section .do-catalog-composer { width:100%;grid-template-columns:minmax(260px,1fr) minmax(150px,.55fr) 82px auto; }
+                #delivery-order-section .do-composer-toolbar { padding:0;border-top:1px solid var(--do-line);background:#f5f9f7; }
+                #delivery-order-section .do-catalog-composer { width:100%;grid-template-columns:minmax(260px,1fr) minmax(160px,230px) 82px max-content max-content;border-radius:0 0 7px 7px;background:#f8fafc; }
                 #delivery-order-section .do-catalog-quantity { text-align:center; }
                 #delivery-order-section .finance-catalog-results,
                 #delivery-order-section .finance-inline-suggestions { z-index:80;max-height:280px;overflow:auto; }
+                #delivery-order-section .finance-catalog-results,
+                #delivery-order-section .finance-inline-suggestions { top:auto;right:0;bottom:calc(100% + 3px);left:0; }
                 #delivery-order-section .do-catalog-result { width:100%;padding:9px 11px;border:0;border-bottom:1px solid #edf1f0;background:#fff;text-align:left;cursor:pointer; }
                 #delivery-order-section .do-catalog-result:hover,#delivery-order-section .do-catalog-result:focus { background:#eef7f5;outline:none; }
                 #delivery-order-section .do-catalog-result strong { display:block;color:var(--do-ink);font-size:11px; }
                 #delivery-order-section .do-catalog-result span { display:block;margin-top:2px;color:var(--do-muted);font-size:9px; }
-                #delivery-order-section .do-line-table { width:100%;border-collapse:collapse;table-layout:fixed; }
-                #delivery-order-section .do-line-table th,#delivery-order-section .do-line-table td { border-bottom:2px solid #e5ece9; }
+                #delivery-order-section .do-line-table { --do-category-width:110px;--do-quantity-width:54px;--do-action-width:34px;width:100%;min-width:0;border-collapse:collapse;table-layout:fixed; }
+                #delivery-order-section .do-category-column { width:var(--do-category-width); }
+                #delivery-order-section .do-quantity-column { width:var(--do-quantity-width); }
+                #delivery-order-section .do-action-column { width:var(--do-action-width); }
+                #delivery-order-section .do-line-table th,#delivery-order-section .do-line-table td { border-bottom:1px solid var(--finance-border); }
                 #delivery-order-section .do-category-row th { padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#334155;font-size:10px;font-weight:800;text-align:left;text-transform:uppercase; }
                 #delivery-order-section .do-category-heading-main { display:flex;min-width:0;align-items:center;gap:8px; }
                 #delivery-order-section .do-column-row th { padding:6px 14px;background:#fafcfb;color:#71807b;font-size:9px;text-align:left;text-transform:uppercase; }
-                #delivery-order-section .do-column-row th:nth-child(2) { width:92px;text-align:right; }
-                #delivery-order-section .do-column-row th:nth-child(3) { width:86px; }
+                #delivery-order-section .do-column-row th:nth-child(2) { width:var(--do-category-width); }
+                #delivery-order-section .do-column-row th:nth-child(3) { width:var(--do-quantity-width);text-align:right; }
+                #delivery-order-section .do-column-row th:nth-child(4) { width:var(--do-action-width); }
                 #delivery-order-section .do-dept-count { min-width:23px;padding:2px 6px;border-radius:9px;background:#dcebe6;color:#315c50;text-align:center;font-size:9px; }
                 #delivery-order-section .do-item-row { background:#fff;transition:background .14s; }
                 #delivery-order-section .do-item-row:hover { background:#fafcfb; }
-                #delivery-order-section .do-item-row td { padding:7px 14px;color:#2d433d;font-size:11px;vertical-align:middle; }
+                #delivery-order-section .do-item-row.is-new { animation:do-line-added 1.8s ease-out; }
+                @keyframes do-line-added { 0%,35% { background:#dff6ec;box-shadow:inset 3px 0 0 var(--do-accent); } 100% { background:#fff;box-shadow:inset 0 0 0 transparent; } }
+                #delivery-order-section .do-item-row td { padding:1px 2px;color:#2d433d;vertical-align:middle; }
                 #delivery-order-section .do-item-cell { overflow-wrap:anywhere; }
-                #delivery-order-section .do-quantity-cell { width:92px;text-align:right; }
-                #delivery-order-section .do-action-cell { width:86px;white-space:nowrap;text-align:right; }
+                #delivery-order-section .do-category-cell { width:var(--do-category-width); }
+                #delivery-order-section .do-quantity-cell { width:var(--do-quantity-width);text-align:right; }
+                #delivery-order-section .do-action-cell { width:var(--do-action-width);white-space:nowrap;text-align:right; }
                 #delivery-order-section .do-edit-item { display:flex;align-items:center;gap:8px; }
-                #delivery-order-section .do-edit-fields { min-width:0;display:grid;grid-template-columns:minmax(160px,1fr) minmax(125px,.4fr);gap:7px;flex:1; }
-                #delivery-order-section .do-edit-fields .form-input,#delivery-order-section .do-quantity-cell .form-input { min-height:31px;padding:5px 7px;font-size:10px; }
-                #delivery-order-section .do-quantity-badge { display:inline-grid;min-width:30px;height:23px;place-items:center;padding:2px 8px;border-radius:5px;background:var(--do-accent-soft);color:#176652;font-size:10px;font-weight:800; }
-                #delivery-order-section .do-action-cell .btn { min-height:29px;padding:4px 7px;border-radius:5px;font-size:9px;font-weight:800; }
-                #delivery-order-section .do-action-cell .do-save { border-color:#a8d2c5;background:#e8f5f1;color:#176652; }
-                #delivery-order-section .do-action-cell .do-del { width:29px;padding:0;border-color:#efc4c4;background:#fff2f2;color:#a62d35;font-size:17px; }
-                #delivery-order-section .do-drag-handle { width:18px;height:25px;display:grid;grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);place-content:center;gap:3px;margin:0;padding:0;color:#82928d;cursor:grab; }
+                #delivery-order-section .do-edit-item .finance-line-input { min-width:0;flex:1; }
+                #delivery-order-section .do-line-category-combobox { width:100%; }
+                #delivery-order-section .do-line-category-suggestions { top:calc(100% + 3px);bottom:auto;max-height:210px; }
+                #delivery-order-section .do-line-group-header .finance-group-title-button { cursor:pointer; }
+                #delivery-order-section .do-group-count { color:#536861;font-size:10px;font-weight:700;white-space:nowrap; }
+                #delivery-order-section .finance-group-child-row .do-edit-item { padding-left:12px; }
+                #delivery-order-section .finance-group-child-row .finance-group-item-display { display:grid;min-width:0;color:#415349; }
+                #delivery-order-section .finance-group-child-row .finance-group-item-display small { color:#758078;font-size:9px; }
+                #delivery-order-section .do-action-cell .do-del { width:22px;height:22px;padding:0; }
+                #delivery-order-section .do-drag-handle { width:18px;height:22px;display:grid;flex:0 0 18px;grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);place-content:center;gap:3px;margin:0;padding:0;color:#82928d;cursor:grab;user-select:none; }
+                #delivery-order-section .do-drag-handle:active { cursor:grabbing; }
                 #delivery-order-section .do-drag-handle i { width:3px;height:3px;border-radius:50%;background:currentColor; }
                 #delivery-order-section .do-item-row.dragging { opacity:.45; }
                 #delivery-order-section .do-item-row.drag-over-before { box-shadow:inset 0 2px 0 var(--do-accent); }
@@ -11136,13 +11580,10 @@
                   #delivery-order-section .do-recipient-grid .do-client-name { grid-column:auto; }
                   #delivery-order-section .do-form-section { padding:12px; }
                   #delivery-order-section .do-pdf-options { border-top:1px solid var(--do-line);border-left:0; }
-                  #delivery-order-section .do-catalog-composer { grid-template-columns:1fr 80px auto; }
+                  #delivery-order-section .do-catalog-composer { grid-template-columns:1fr 80px auto auto; }
                   #delivery-order-section .do-catalog-composer .finance-add-item-wrap { grid-column:1/-1; }
-                  #delivery-order-section .do-edit-fields { grid-template-columns:1fr; }
-                  #delivery-order-section .do-column-row th:nth-child(2),#delivery-order-section .do-quantity-cell { width:70px; }
-                  #delivery-order-section .do-column-row th:nth-child(3),#delivery-order-section .do-action-cell { width:68px; }
-                  #delivery-order-section .do-item-row td { padding:7px 8px; }
-                  #delivery-order-section .do-action-cell .do-save { display:none; }
+                  #delivery-order-section .do-line-table { --do-category-width:88px;--do-quantity-width:52px;--do-action-width:32px; }
+                  #delivery-order-section .do-item-row td { padding:1px 2px; }
                 }
               </style>
               <div class="content-header do-page-header">
@@ -11493,7 +11934,14 @@
     <div id="addAssetModal" class="modal">
       <div class="modal-content" style="max-width: 860px;">
         <div class="modal-header">
-          <h3 class="modal-title">Add Assets</h3>
+          <div class="add-asset-modal-heading">
+            <h3 class="modal-title">Add Assets</h3>
+            <div class="add-asset-template-actions">
+              <button type="button" class="btn btn-secondary" onclick="downloadAssetImportTemplate()">Download Template</button>
+              <button type="button" class="btn btn-secondary" onclick="chooseAssetImportTemplate()">Upload Template</button>
+              <input id="assetImportFile" type="file" accept=".csv,text/csv,.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden onchange="previewAssetImportFile(this)" />
+            </div>
+          </div>
           <button class="close-btn" onclick="closeModal('addAssetModal')">
             &times;
           </button>
@@ -11530,6 +11978,11 @@
             <div class="form-group">
               <label class="form-label">Date of Purchase</label>
               <input type="date" class="form-input" id="assetDateOfPurchase" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="assetDefaultLocation">Default Location</label>
+              <input type="text" class="form-input" id="assetDefaultLocation" list="assetDefaultLocationOptions" value="Store" placeholder="Store" />
+              <datalist id="assetDefaultLocationOptions"></datalist>
             </div>
           </div>
 
@@ -11576,16 +12029,16 @@
 
             <div class="form-group">
               <label class="form-label">Primary Serial Numbers</label>
-              <textarea class="form-input" id="assetSerials" rows="5" placeholder="SN-001&#10;SN-002&#10;SN-003"></textarea>
+              <textarea class="form-input" id="assetSerials" rows="5" placeholder="SN-001, SN-002, SN-003"></textarea>
               <small style="color:#666;font-size:12px;margin-top:6px;display:block;line-height:1.4;">
-                Enter one serial number per line. The first line goes to the first Asset ID, the second line to the second Asset ID, and so on. Leave blank if the assets have no serial numbers.
+                Separate serial numbers with commas or line breaks. They are assigned to Asset IDs in the same order. Leave blank if the serial numbers are not known yet.
               </small>
               <input type="hidden" id="assetSerial" />
             </div>
 
             <div class="form-group">
               <label class="form-label">Second Serial Numbers <span style="color:#666;font-weight:400;">(optional)</span></label>
-              <textarea class="form-input" id="assetSecondarySerials" rows="5" placeholder="ALT-001&#10;ALT-002&#10;ALT-003"></textarea>
+              <textarea class="form-input" id="assetSecondarySerials" rows="5" placeholder="ALT-001, ALT-002, ALT-003"></textarea>
               <small style="color:#666;font-size:12px;margin-top:6px;display:block;line-height:1.4;">
                 Enter the optional second serial for each Asset ID in the same order.
               </small>
@@ -11603,6 +12056,30 @@
             <button type="submit" class="btn btn-primary" id="addAssetSubmitButton">Add Assets</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="assetImportModal" class="modal">
+      <div class="modal-content asset-import-modal-content">
+        <div class="modal-header">
+          <div class="asset-import-heading">
+            <h3 class="modal-title">Confirm Asset Import</h3>
+            <p>Review, edit, or remove rows before anything is added to inventory.</p>
+          </div>
+          <button class="close-btn" onclick="cancelAssetImport()">&times;</button>
+        </div>
+        <div class="asset-import-body">
+          <div id="assetImportSummary" class="asset-import-summary"></div>
+          <div id="assetImportRejected" class="asset-import-rejected" hidden></div>
+          <div id="assetImportRows" class="asset-import-list"></div>
+        </div>
+        <div class="asset-import-footer">
+          <span id="assetImportFooterStatus" class="asset-import-footer-status" aria-live="polite"></span>
+          <div class="modal-actions" style="display:flex;gap:8px;margin:0;">
+            <button type="button" class="btn btn-secondary" onclick="cancelAssetImport()">Back</button>
+            <button type="button" class="btn btn-primary" id="assetImportConfirmButton" onclick="confirmAssetImport()">Import Assets</button>
+          </div>
+        </div>
       </div>
     </div>
 

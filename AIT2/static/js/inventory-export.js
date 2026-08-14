@@ -90,7 +90,7 @@ function displayFilteredInventory() {
   renderInventorySummary();
   const countElement = document.getElementById('asset-count');
   if (countElement) {
-    const groups = groupInventoryByModel(filteredAssets).length;
+    const groups = groupInventoryAssets(filteredAssets).length;
     countElement.textContent = `${groups} model${groups === 1 ? '' : 's'} · ${filteredAssets.length} of ${totalAssets} records`;
   }
   displayInventoryTable(filteredAssets);

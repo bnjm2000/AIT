@@ -1,4 +1,5 @@
 import unittest
+import queue
 from unittest.mock import patch
 
 from flask import g
@@ -7,6 +8,10 @@ import app as app_module
 
 
 class EventAssetRealtimeTests(unittest.TestCase):
+    def tearDown(self):
+        with app_module._realtime_subscribers_lock:
+            app_module._realtime_subscribers.clear()
+
     def test_prepare_and_return_requests_include_event_scoped_details(self):
         cases = (
             ('/api/events/42/prepare', 'prepare'),
@@ -118,6 +123,49 @@ class EventAssetRealtimeTests(unittest.TestCase):
             payload = app_module._read_realtime_state()
 
         self.assertEqual(payload['id'], 'durable-42')
+
+    def test_realtime_publish_only_notifies_matching_company_subscribers(self):
+        company_a_queue = queue.Queue()
+        company_b_queue = queue.Queue()
+        with app_module._realtime_subscribers_lock:
+            app_module._realtime_subscribers.update({
+                'company-a-browser': {
+                    'queue': company_a_queue,
+                    'companyCode': 'COMPANY-A',
+                },
+                'company-b-browser': {
+                    'queue': company_b_queue,
+                    'companyCode': 'COMPANY-B',
+                },
+            })
+
+        with patch.object(app_module, '_write_realtime_state'):
+            app_module._publish_realtime_update_now(
+                'data-changed',
+                {
+                    'companyCode': 'COMPANY-A',
+                    'topics': ['inventory-data', 'activity-log'],
+                },
+                'editing-browser',
+            )
+
+        delivered = company_a_queue.get_nowait()
+        self.assertEqual(delivered['details']['companyCode'], 'COMPANY-A')
+        self.assertTrue(company_b_queue.empty())
+
+    def test_unscoped_realtime_payload_does_not_cross_company_boundary(self):
+        self.assertFalse(
+            app_module._realtime_payload_matches_company(
+                {'topic': 'inventory-data', 'details': {}},
+                'COMPANY-A',
+            )
+        )
+        self.assertTrue(
+            app_module._realtime_payload_matches_company(
+                {'details': {'companyCode': 'company-a'}},
+                'COMPANY-A',
+            )
+        )
 
 
 if __name__ == '__main__':

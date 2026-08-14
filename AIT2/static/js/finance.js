@@ -3838,12 +3838,22 @@ function financeGroupedLineDisplay(line) {
 }
 
 function financeGroupWorkingLines(mode = financeLineGroupState.mode) {
+  if (mode === 'delivery-order') {
+    return typeof deliveryOrderGroupWorkingLines === 'function'
+      ? deliveryOrderGroupWorkingLines()
+      : [];
+  }
   return mode === 'costing'
     ? (typeof costingLines === 'function' ? costingLines() : [])
     : (financeState.current?.lineItems || []);
 }
 
 function financeGroupActiveSubproject(mode = financeLineGroupState.mode) {
+  if (mode === 'delivery-order') {
+    return typeof deliveryOrderActiveSubprojectId === 'function'
+      ? deliveryOrderActiveSubprojectId()
+      : 'main';
+  }
   return mode === 'costing'
     ? (typeof costingActiveSubprojectId === 'function' ? costingActiveSubprojectId() : 'main')
     : financeCurrentSubprojectId();
@@ -3865,7 +3875,9 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
   financeLineGroupState.category = String(
     mode === 'costing'
       ? first.category || costingState.addCategory || 'General'
-      : financeLineSystem(first) || financeState.addDepartment || 'General'
+      : (mode === 'delivery-order'
+          ? first.category || first.department || 'MISC'
+          : financeLineSystem(first) || financeState.addDepartment || 'General')
   );
   financeLineGroupState.displayFields = Array.isArray(first.groupDisplayFields) && first.groupDisplayFields.length
     ? [...first.groupDisplayFields]
@@ -4028,6 +4040,9 @@ function financeRemoveLineGroupSelection(index) {
 
 function financeLineGroupSelectionQuantity(entry) {
   const row = entry?.line || entry?.catalog || {};
+  if (financeLineGroupState.mode === 'delivery-order') {
+    return Math.max(0, financeNumber(row.quantityOverride, row.quantity ?? 1));
+  }
   if (financeLineGroupState.mode === 'costing') {
     return Math.max(0, financeNumber(row.quantity, row.groupItemQuantity ?? 1));
   }
@@ -4042,7 +4057,9 @@ function financeLineGroupSelectionQuantityChange(index, value) {
   if (!entry) return;
   const quantity = Math.max(0, financeNumber(value, 1));
   if (entry.line) {
-    if (financeLineGroupState.mode === 'costing') {
+    if (financeLineGroupState.mode === 'delivery-order') {
+      entry.line.quantity = quantity;
+    } else if (financeLineGroupState.mode === 'costing') {
       const line = entry.line;
       const previousQuantity = Math.max(0, financeNumber(line.quantity, 1));
       const previousUnitSale = previousQuantity
@@ -4124,10 +4141,16 @@ function financeSaveLineGroup() {
     if (entry.line) {
       line = JSON.parse(JSON.stringify(entry.line));
       if (mode === 'costing') line.category = category;
+      else if (mode === 'delivery-order') {
+        line.category = category;
+        line.department = category;
+      }
       else line.systemName = category;
     } else if (mode === 'costing') {
       line = costingNewLine({ ...(entry.catalog || {}), department: category });
       line.category = category;
+    } else if (mode === 'delivery-order') {
+      line = deliveryOrderNewGroupedLine(entry.catalog || {}, category, groupSubprojectId);
     } else {
       line = financeNewGroupedQuotationLine(entry.catalog || {}, category);
     }
@@ -4139,8 +4162,11 @@ function financeSaveLineGroup() {
   if (customText) {
     const custom = mode === 'costing'
       ? costingNewLine({ description: customText, department: category })
-      : financeNewGroupedQuotationLine({ description: customText, isCustom: true }, category);
+      : (mode === 'delivery-order'
+          ? deliveryOrderNewGroupedLine({ description: customText, isCustom: true }, category, groupSubprojectId)
+          : financeNewGroupedQuotationLine({ description: customText, isCustom: true }, category));
     if (mode === 'costing') custom.category = category;
+    if (mode === 'delivery-order') custom.category = category;
     grouped.push({ ...custom, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: true, isCustom: true });
   }
   if (mode === 'finance' && financeLineGroupState.commercialHeader && grouped.length) {
@@ -4179,7 +4205,9 @@ function financeSaveLineGroup() {
   }
   const nextLines = [...retained];
   nextLines.splice(Math.min(insertionIndex, nextLines.length), 0, ...grouped);
-  if (mode === 'costing') {
+  if (mode === 'delivery-order') {
+    deliveryOrderCommitLineGroup(groupId, groupSubprojectId, grouped);
+  } else if (mode === 'costing') {
     costingState.current.lineItems = nextLines;
     costingState.changeVersion += 1;
     costingQueueSave();
