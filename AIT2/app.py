@@ -3281,8 +3281,13 @@ def _normalise_asset_purchase_date(value):
     raise ValueError('Date of purchase must be YYYY-MM-DD')
 
 
-ASSET_IMPORT_MAX_ROWS = 500
+ASSET_IMPORT_MAX_ROWS = 1000
 ASSET_IMPORT_MAX_BYTES = 5 * 1024 * 1024
+ASSET_IMPORT_MAX_RECORDS = max(
+    ASSET_IMPORT_MAX_ROWS,
+    int(os.environ.get('ASSET_IMPORT_MAX_RECORDS', '50000')),
+)
+ASSET_IMPORT_PLAN_MAX_AGE_SECONDS = 30 * 60
 ASSET_IMPORT_TEMPLATE_PATH = os.path.join(
     _INITIAL_BASE_DIR,
     'outputs',
@@ -3339,7 +3344,12 @@ def _asset_import_serials(value):
     if isinstance(value, (list, tuple, set)):
         serials = []
         for item in value:
-            serials.extend(_asset_import_serials(item))
+            if item is None or (isinstance(item, str) and not item.strip()):
+                serials.append('')
+            else:
+                serials.extend(_asset_import_serials(item))
+        while serials and not serials[-1]:
+            serials.pop()
         return serials
     if isinstance(value, bool):
         return [str(value)]
@@ -3347,11 +3357,11 @@ def _asset_import_serials(value):
         return [str(value)]
     if isinstance(value, float):
         return [str(int(value)) if value.is_integer() else format(value, 'g')]
-    return [
-        item.strip()
-        for item in re.split(r'[,;\r\n]+', str(value))
-        if item.strip()
-    ]
+    text = str(value).replace('\r\n', '\n').replace('\r', '\n')
+    serials = [item.strip() for item in re.split(r'[,;\n]', text)]
+    while serials and not serials[-1]:
+        serials.pop()
+    return serials
 
 
 def _asset_import_bool(value):
@@ -3475,12 +3485,18 @@ def _parse_asset_import_workbook(file_bytes, extension='.xlsx'):
 
 
 def _decode_asset_import_csv(file_bytes):
-    for encoding in ('utf-8-sig', 'utf-16', 'cp1252'):
+    if file_bytes.startswith((b'\xff\xfe', b'\xfe\xff')):
+        try:
+            return file_bytes.decode('utf-16')
+        except UnicodeDecodeError as error:
+            raise ValueError('The CSV file contains invalid UTF-16 text') from error
+
+    for encoding in ('utf-8-sig', 'cp1252'):
         try:
             return file_bytes.decode(encoding)
         except UnicodeDecodeError:
             continue
-    raise ValueError('The CSV file must use UTF-8, UTF-16, or Windows text encoding')
+    raise ValueError('The CSV file must use UTF-8, UTF-16, or Windows-1252 text encoding')
 
 
 def _parse_asset_import_csv(file_bytes):
@@ -3522,7 +3538,7 @@ def _parse_asset_import_file(file_bytes, filename):
 
 
 def _asset_import_department_resolution(value, departments=None):
-    departments = departments or _load_departments()
+    departments = _load_departments() if departments is None else departments
     raw_value = str(value or '').strip()
     if not raw_value:
         return {
@@ -3590,7 +3606,7 @@ def _asset_import_department_resolution(value, departments=None):
 
 def _normalise_asset_import_payload(data, allow_unmatched_department=False, departments=None):
     data = data or {}
-    departments = departments or _load_departments()
+    departments = _load_departments() if departments is None else departments
     department_resolution = _asset_import_department_resolution(data.get('department'), departments)
     create_department = _asset_import_bool(data.get('createDepartment'))
     new_department_code = _normalise_department_code(
@@ -3742,6 +3758,9 @@ def _asset_import_different_descriptions(payload):
 
 
 def _asset_import_preview_rows(rows):
+    departments = _load_departments()
+    proposed_departments = _asset_import_proposed_departments(rows, departments)
+    planning_departments = {**departments, **proposed_departments}
     preview_rows = []
     reserved_ids = set()
     for row in rows:
@@ -3749,7 +3768,15 @@ def _asset_import_preview_rows(rows):
             payload = _normalise_asset_import_payload(
                 row,
                 allow_unmatched_department=True,
+                departments=planning_departments,
             )
+            department_code = payload.get('department', '')
+            payload['departmentWillBeCreated'] = department_code in proposed_departments
+            if _asset_import_bool((row or {}).get('createDepartment')):
+                payload['createDepartment'] = department_code in proposed_departments
+                if payload['createDepartment']:
+                    payload['newDepartmentCode'] = department_code
+                    payload['newDepartmentName'] = proposed_departments[department_code]['name']
             preview_ids = _asset_import_auto_ids(payload, reserved_ids)
         except ValueError as error:
             preview_rows.append({
@@ -3775,14 +3802,43 @@ def _asset_import_preview_rows(rows):
     return preview_rows
 
 
-def _asset_import_new_departments(rows):
+def _asset_import_proposed_departments(rows, departments=None):
+    departments = _load_departments() if departments is None else departments
     new_departments = {}
     new_names = {}
-    for payload in rows:
-        if not payload.get('createDepartment'):
+    for row in rows:
+        row = row if isinstance(row, dict) else {}
+        if not _asset_import_bool(row.get('createDepartment')):
             continue
-        code = _normalise_department_code(payload.get('newDepartmentCode'))
-        name = str(payload.get('newDepartmentName') or '').strip()
+        resolution = _asset_import_department_resolution(row.get('department'), departments)
+        if resolution['matched']:
+            continue
+        if resolution['ambiguous']:
+            raise ValueError(resolution['issue'])
+        code = _normalise_department_code(
+            row.get('newDepartmentCode') or resolution.get('suggestedCode')
+        )
+        name = str(row.get('newDepartmentName') or resolution.get('input')).strip()
+        if not code:
+            raise ValueError('New department code is required')
+        if not name:
+            raise ValueError('New department name is required')
+        if code in departments:
+            existing_name = departments[code].get('name') or code
+            raise ValueError(
+                f'Department code {code} already exists as {existing_name}; '
+                'use the existing code or name instead'
+            )
+        existing_name_match = next((
+            existing_code
+            for existing_code, department in departments.items()
+            if str(department.get('name') or existing_code).strip().casefold() == name.casefold()
+        ), '')
+        if existing_name_match:
+            raise ValueError(
+                f'Department name {name} already exists as {existing_name_match}; '
+                'use the existing code or name instead'
+            )
         name_key = name.casefold()
         existing = new_departments.get(code)
         if existing and existing['name'].casefold() != name_key:
@@ -3799,8 +3855,117 @@ def _asset_import_new_departments(rows):
     return new_departments
 
 
-def _create_asset_import_row(payload, audit_timestamp, audit_user):
-    created_asset_ids = _asset_import_auto_ids(payload)
+def _asset_import_inventory_revision():
+    inventory_rows = [
+        (
+            str(asset_id),
+            str(getattr(asset, 'brand', '') or ''),
+            str(getattr(asset, 'model_number', '') or ''),
+            bool(_is_bulk_asset(asset)),
+        )
+        for asset_id, asset in data_manager.inventory.items()
+        if asset is not None
+    ]
+    encoded = json.dumps(
+        sorted(inventory_rows, key=lambda row: row[0].casefold()),
+        ensure_ascii=False,
+        separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _asset_import_plan_rows_digest(rows):
+    fields = (
+        'brand', 'model', 'description', 'version', 'department', 'quantity',
+        'isBulk', 'serials', 'secondarySerials', 'dateOfPurchase', 'notes',
+        'tags', 'defaultLocation', 'assetIdPrefix', 'sourceRow',
+        'createDepartment', 'newDepartmentCode', 'newDepartmentName',
+        'assetIdsPreview',
+    )
+    canonical = [
+        {field: row.get(field) for field in fields}
+        for row in rows
+    ]
+    encoded = json.dumps(
+        canonical,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _asset_import_plan_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt='asset-import-plan-v1')
+
+
+def _asset_import_requested_record_count(rows):
+    total = 0
+    for row in rows:
+        row = row if isinstance(row, dict) else {}
+        try:
+            quantity = _asset_import_quantity(row.get('quantity'))
+            is_bulk = _asset_import_bool(row.get('isBulk'))
+        except ValueError:
+            continue
+        total += 1 if is_bulk else quantity
+        if total > ASSET_IMPORT_MAX_RECORDS:
+            raise ValueError(
+                f'This import would create more than {ASSET_IMPORT_MAX_RECORDS:,} '
+                'inventory records. Split it into smaller imports.'
+            )
+    return total
+
+
+def _asset_import_plan_response(rows):
+    record_count = _asset_import_requested_record_count(rows)
+    planned_rows = _asset_import_preview_rows(rows)
+    revision = _asset_import_inventory_revision()
+    token = _asset_import_plan_serializer().dumps({
+        'company': _current_company_code(),
+        'user': str(session.get('user') or ''),
+        'revision': revision,
+        'rowsDigest': _asset_import_plan_rows_digest(planned_rows),
+    })
+    return {
+        'rows': planned_rows,
+        'planToken': token,
+        'inventoryRevision': revision,
+        'inventoryRecordsPlanned': record_count,
+    }
+
+
+def _verify_asset_import_plan(rows, token):
+    if not token:
+        raise ValueError('Refresh the Asset ID preview before importing')
+    try:
+        plan = _asset_import_plan_serializer().loads(
+            token,
+            max_age=ASSET_IMPORT_PLAN_MAX_AGE_SECONDS,
+        )
+    except SignatureExpired as error:
+        raise ValueError('The asset import preview has expired; refresh it before importing') from error
+    except BadSignature as error:
+        raise ValueError('The asset import preview is invalid; refresh it before importing') from error
+    if plan.get('company') != _current_company_code() or plan.get('user') != str(session.get('user') or ''):
+        raise ValueError('The asset import preview belongs to a different user or company')
+    if plan.get('rowsDigest') != _asset_import_plan_rows_digest(rows):
+        raise ValueError('The import was edited after its Asset IDs were previewed; refresh the preview')
+    return plan
+
+
+def _create_asset_import_row(
+    payload,
+    audit_timestamp,
+    audit_user,
+    created_asset_ids=None,
+    inventory_target=None,
+):
+    created_asset_ids = list(created_asset_ids or _asset_import_auto_ids(payload))
+    expected_id_count = 1 if payload['isBulk'] else payload['quantity']
+    if len(created_asset_ids) != expected_id_count:
+        raise ValueError('The planned Asset IDs no longer match this import row')
+    inventory_target = data_manager.inventory if inventory_target is None else inventory_target
 
     purchase_date = payload['dateOfPurchase']
     version = payload['version']
@@ -3831,7 +3996,7 @@ def _create_asset_import_row(payload, audit_timestamp, audit_user):
             tags=tags,
         )
         _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
-        data_manager.inventory[created_asset_ids[0]] = asset
+        inventory_target[created_asset_ids[0]] = asset
         return created_asset_ids
 
     serials = (payload['serials'] + [''] * payload['quantity'])[:payload['quantity']]
@@ -3861,7 +4026,7 @@ def _create_asset_import_row(payload, audit_timestamp, audit_user):
             tags=tags,
         )
         _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
-        data_manager.inventory[asset_id] = asset
+        inventory_target[asset_id] = asset
     return created_asset_ids
 
 
@@ -25224,7 +25389,7 @@ def preview_asset_import():
         return jsonify({'error': 'The import file must be 5 MB or smaller'}), 413
     try:
         parsed = _parse_asset_import_file(file_bytes, uploaded.filename)
-        parsed['rows'] = _asset_import_preview_rows(parsed['rows'])
+        parsed.update(_asset_import_plan_response(parsed['rows']))
         existing_rejected_rows = {
             _safe_int(item.get('sourceRow'), 0)
             for item in parsed['rejected']
@@ -25260,12 +25425,11 @@ def plan_asset_import():
         return jsonify({'error': 'The import does not contain any assets'}), 400
     if len(rows) > ASSET_IMPORT_MAX_ROWS:
         return jsonify({'error': f'An import can contain at most {ASSET_IMPORT_MAX_ROWS} rows'}), 400
-    return jsonify({
-        'success': True,
-        'data': {
-            'rows': _asset_import_preview_rows(rows),
-        },
-    })
+    try:
+        planned = _asset_import_plan_response(rows)
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    return jsonify({'success': True, 'data': planned})
 
 
 @app.route('/api/assets/import', methods=['POST'])
@@ -25273,20 +25437,39 @@ def plan_asset_import():
 def import_assets_from_workbook():
     data = request.get_json() or {}
     raw_rows = data.get('rows')
+    plan_token = str(data.get('planToken') or '')
     if not isinstance(raw_rows, list) or not raw_rows:
         return jsonify({'error': 'The import does not contain any assets'}), 400
     if len(raw_rows) > ASSET_IMPORT_MAX_ROWS:
         return jsonify({'error': f'An import can contain at most {ASSET_IMPORT_MAX_ROWS} rows'}), 400
 
     with _inventory_action_lock:
+        try:
+            plan = _verify_asset_import_plan(raw_rows, plan_token)
+        except ValueError as error:
+            return jsonify({'error': str(error), 'code': 'asset_import_plan_required'}), 409
+
+        if plan.get('revision') != _asset_import_inventory_revision():
+            refreshed = _asset_import_plan_response(raw_rows)
+            return jsonify({
+                'error': 'Inventory changed after this import was previewed. Review the refreshed Asset IDs and confirm again.',
+                'code': 'asset_import_plan_stale',
+                'data': refreshed,
+            }), 409
+
         normalized_rows = []
         row_errors = []
         departments = _load_departments()
+        try:
+            new_departments = _asset_import_proposed_departments(raw_rows, departments)
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+        planning_departments = {**departments, **new_departments}
         for index, raw_row in enumerate(raw_rows):
             try:
                 normalized_rows.append(_normalise_asset_import_payload(
                     raw_row,
-                    departments=departments,
+                    departments=planning_departments,
                 ))
             except ValueError as error:
                 row_errors.append({
@@ -25297,19 +25480,41 @@ def import_assets_from_workbook():
         if row_errors:
             return jsonify({'error': 'Some imported assets need attention', 'rowErrors': row_errors}), 400
 
-        try:
-            new_departments = _asset_import_new_departments(normalized_rows)
-        except ValueError as error:
-            return jsonify({'error': str(error)}), 400
+        expanded_record_count = sum(
+            1 if row['isBulk'] else row['quantity']
+            for row in normalized_rows
+        )
+        if expanded_record_count > ASSET_IMPORT_MAX_RECORDS:
+            return jsonify({
+                'error': (
+                    f'This import would create {expanded_record_count:,} inventory records. '
+                    f'The safe limit is {ASSET_IMPORT_MAX_RECORDS:,} records per import.'
+                ),
+                'code': 'asset_import_too_large',
+            }), 413
 
-        inventory_before = copy.deepcopy(data_manager.inventory)
         departments_before = copy.deepcopy(departments)
         audit_timestamp = _asset_audit_timestamp()
         audit_user = _asset_audit_user()
         results = []
+        staged_inventory = {}
         try:
             for index, payload in enumerate(normalized_rows):
-                created_ids = _create_asset_import_row(payload, audit_timestamp, audit_user)
+                planned_ids = list((raw_rows[index] or {}).get('assetIdsPreview') or [])
+                if any(
+                    asset_id in data_manager.inventory or asset_id in staged_inventory
+                    for asset_id in planned_ids
+                ):
+                    raise ValueError(
+                        'A planned Asset ID is no longer available; refresh the import preview'
+                    )
+                created_ids = _create_asset_import_row(
+                    payload,
+                    audit_timestamp,
+                    audit_user,
+                    created_asset_ids=planned_ids,
+                    inventory_target=staged_inventory,
+                )
                 results.append({
                     'index': index,
                     'sourceRow': payload.get('sourceRow', 0),
@@ -25320,9 +25525,11 @@ def import_assets_from_workbook():
             if new_departments:
                 departments.update(new_departments)
                 _save_departments(departments)
+            data_manager.inventory.update(staged_inventory)
             data_manager.save_inventory()
         except Exception as error:
-            data_manager.inventory = inventory_before
+            for asset_id in staged_inventory:
+                data_manager.inventory.pop(asset_id, None)
             if new_departments:
                 try:
                     _save_departments(departments_before)
@@ -25335,6 +25542,8 @@ def import_assets_from_workbook():
                 return jsonify({'error': str(error)}), 400
             logger.error('Error importing assets: %s', error, exc_info=True)
             return jsonify({'error': 'Failed to save the imported assets'}), 500
+
+        mark_data_snapshot_current()
 
     if new_departments:
         mark_realtime_change('departments', {

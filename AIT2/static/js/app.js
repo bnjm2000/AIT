@@ -4651,6 +4651,7 @@ async function apiCall(endpoint, method = "GET", data = null) {
       && !error.payload?.requiresHistoryInheritanceConfirmation
       && error.payload?.code !== 'quotation_revision_decision_required'
       && error.payload?.code !== 'document_version_conflict'
+      && error.payload?.code !== 'asset_import_plan_stale'
     ) {
       showNotification("error", error.message);
     }
@@ -19402,13 +19403,16 @@ function addAssetQuantityValue() {
   return Math.min(500, quantity);
 }
 
-function addAssetSerialList(fieldId = 'assetSerials') {
-  const serialText = addAssetField(fieldId)?.value || '';
-  const serials = serialText
-    .split(/[,;\r\n]+/)
-    .map(value => value.trim());
+function positionalAssetSerialList(value) {
+  const serials = Array.isArray(value)
+    ? value.map(item => String(item || '').trim())
+    : String(value || '').replace(/\r\n?/g, '\n').split(/[,;\n]/).map(item => item.trim());
   while (serials.length && !serials[serials.length - 1]) serials.pop();
   return serials;
+}
+
+function addAssetSerialList(fieldId = 'assetSerials') {
+  return positionalAssetSerialList(addAssetField(fieldId)?.value || '');
 }
 
 function collectAddAssetPayload() {
@@ -19532,8 +19536,13 @@ let assetImportState = {
   rejected: [],
   departments: [],
   fileName: '',
-  submitting: false
+  submitting: false,
+  planning: false,
+  planToken: '',
+  inventoryRevision: '',
+  page: 0
 };
+const ASSET_IMPORT_REVIEW_PAGE_SIZE = 100;
 let __assetImportPlanTimer = null;
 let __assetImportPlanSequence = 0;
 
@@ -19559,8 +19568,7 @@ function assetImportBoolean(value) {
 }
 
 function assetImportSerialList(value) {
-  if (Array.isArray(value)) return value.map(item => String(item || '').trim()).filter(Boolean);
-  return String(value || '').split(/[,;\r\n]+/).map(item => item.trim()).filter(Boolean);
+  return positionalAssetSerialList(value);
 }
 
 function assetImportExistingDescriptions(row) {
@@ -19584,12 +19592,24 @@ function assetImportNormaliseDepartmentCode(value) {
 function assetImportDepartmentList() {
   const supplied = Array.isArray(assetImportState.departments) ? assetImportState.departments : [];
   const list = supplied.length ? supplied : Object.values(departments || {});
-  return list
+  const normalized = list
     .map(department => ({
       code: assetImportNormaliseDepartmentCode(department?.code),
-      name: String(department?.name || department?.code || '').trim()
+      name: String(department?.name || department?.code || '').trim(),
+      pending: false
     }))
     .filter(department => department.code);
+  assetImportState.rows.forEach(row => {
+    if (!assetImportBoolean(row?.createDepartment)) return;
+    const code = assetImportNormaliseDepartmentCode(row?.newDepartmentCode || row?.department);
+    if (!code || normalized.some(department => department.code === code)) return;
+    normalized.push({
+      code,
+      name: String(row?.newDepartmentName || row?.department || code).trim(),
+      pending: true
+    });
+  });
+  return normalized;
 }
 
 function assetImportDepartmentResolution(value) {
@@ -19629,7 +19649,11 @@ function assetImportRowErrors(row, index) {
     } else {
       const newCode = assetImportNormaliseDepartmentCode(row?.newDepartmentCode);
       const newName = String(row?.newDepartmentName || '').trim();
-      const departmentList = assetImportDepartmentList();
+      const departmentList = (Array.isArray(assetImportState.departments) ? assetImportState.departments : [])
+        .map(department => ({
+          code: assetImportNormaliseDepartmentCode(department?.code),
+          name: String(department?.name || department?.code || '').trim()
+        }));
       if (!newCode) errors.push('New department code is required');
       if (!newName) errors.push('New department name is required');
       const codeMatch = departmentList.find(department => department.code === newCode);
@@ -19648,6 +19672,32 @@ function assetImportRowErrors(row, index) {
         }
       });
     }
+  }
+  if (assetImportBoolean(row?.createDepartment) && departmentResolution.matched) {
+    const newCode = assetImportNormaliseDepartmentCode(row?.newDepartmentCode || row?.department);
+    const newName = String(row?.newDepartmentName || '').trim();
+    const existingDepartments = (Array.isArray(assetImportState.departments) ? assetImportState.departments : [])
+      .map(department => ({
+        code: assetImportNormaliseDepartmentCode(department?.code),
+        name: String(department?.name || department?.code || '').trim()
+      }));
+    if (!newCode) errors.push('New department code is required');
+    if (!newName) errors.push('New department name is required');
+    const codeMatch = existingDepartments.find(department => department.code === newCode);
+    if (codeMatch) errors.push(`Department code ${newCode} already exists as ${codeMatch.name}`);
+    const nameMatch = existingDepartments.find(department => department.name.toLocaleLowerCase() === newName.toLocaleLowerCase());
+    if (nameMatch) errors.push(`Department name ${newName} already exists as ${nameMatch.code}`);
+    assetImportState.rows.forEach((candidate, candidateIndex) => {
+      if (candidateIndex === index || !assetImportBoolean(candidate?.createDepartment)) return;
+      const candidateCode = assetImportNormaliseDepartmentCode(candidate?.newDepartmentCode || candidate?.department);
+      const candidateName = String(candidate?.newDepartmentName || '').trim();
+      if (newCode && candidateCode === newCode && candidateName.toLocaleLowerCase() !== newName.toLocaleLowerCase()) {
+        errors.push(`New department code ${newCode} has conflicting names in this import`);
+      }
+      if (newName && candidateName.toLocaleLowerCase() === newName.toLocaleLowerCase() && candidateCode !== newCode) {
+        errors.push(`New department name ${newName} has conflicting codes in this import`);
+      }
+    });
   }
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) errors.push('Quantity must be a whole number from 1 to 500');
   if (row?.dateOfPurchase && !/^\d{4}-\d{2}-\d{2}$/.test(String(row.dateOfPurchase))) {
@@ -19675,7 +19725,7 @@ function assetImportRowWarnings(row) {
       ['Primary', assetImportSerialList(row?.serials), false],
       ['Secondary', assetImportSerialList(row?.secondarySerials), true],
     ].forEach(([label, serials, optional]) => {
-      const count = serials.length;
+      const count = serials.filter(serial => String(serial || '').trim()).length;
       if (count === quantity || (optional && count === 0)) return;
       if (count < quantity) {
         const missing = quantity - count;
@@ -19721,7 +19771,7 @@ function assetImportIssueHtml(row, index) {
   return `
     ${errors.length ? `<div class="asset-import-message">${errors.map(escapeHtml).join('<br>')}</div>` : ''}
     ${warnings.length ? `<div class="asset-import-message warning">${warnings.map(escapeHtml).join('<br>')}</div>` : ''}
-    ${departmentResolution.matched ? `<div class="asset-import-message success">Department: ${escapeHtml(departmentResolution.department.code)} - ${escapeHtml(departmentResolution.department.name)}</div>` : ''}
+    ${departmentResolution.matched ? `<div class="asset-import-message success">Department: ${escapeHtml(departmentResolution.department.code)} - ${escapeHtml(departmentResolution.department.name)}${departmentResolution.department.pending ? ' (will be created)' : ''}</div>` : ''}
     ${departmentResolution.input && !departmentResolution.matched && !departmentResolution.ambiguous ? `
       <div class="asset-import-department-action">
         <button type="button" class="asset-import-use-suggestion" onclick="setAssetImportDepartmentCreation(${index},${assetImportBoolean(row?.createDepartment) ? 'false' : 'true'})">${assetImportBoolean(row?.createDepartment) ? 'Use an existing department instead' : 'Create new department'}</button>
@@ -19774,8 +19824,14 @@ function renderAssetImportReview() {
     ? `<strong>${assetImportState.rejected.length} row${assetImportState.rejected.length === 1 ? '' : 's'} initially need attention.</strong> You can correct them below.<br>${assetImportState.rejected.map(item => `File row ${Number(item.sourceRow) || '-'}: ${escapeHtml(item.error)}`).join('<br>')}`
     : '';
 
+  const pageCount = Math.max(1, Math.ceil(assetImportState.rows.length / ASSET_IMPORT_REVIEW_PAGE_SIZE));
+  assetImportState.page = Math.max(0, Math.min(Number(assetImportState.page) || 0, pageCount - 1));
+  const pageStart = assetImportState.page * ASSET_IMPORT_REVIEW_PAGE_SIZE;
+  const pageRows = assetImportState.rows
+    .map((row, index) => ({ row, index }))
+    .slice(pageStart, pageStart + ASSET_IMPORT_REVIEW_PAGE_SIZE);
   const categorizedRows = { error: [], warning: [], ready: [] };
-  assetImportState.rows.forEach((row, index) => categorizedRows[assetImportRowStatus(row, index)].push({ row, index }));
+  pageRows.forEach(({ row, index }) => categorizedRows[assetImportRowStatus(row, index)].push({ row, index }));
   const categories = [
     { key: 'error', title: 'Needs attention', description: 'Fix these rows before importing.' },
     { key: 'warning', title: 'Warnings', description: 'These rows can still be imported.' },
@@ -19787,7 +19843,7 @@ function renderAssetImportReview() {
     const errors = assetImportRowErrors(row, index);
     const warnings = assetImportRowWarnings(row);
     const departmentResolution = assetImportDepartmentResolution(row.department);
-    const isCreatingDepartment = assetImportBoolean(row.createDepartment) && !departmentResolution.matched;
+    const isCreatingDepartment = assetImportBoolean(row.createDepartment);
     const rowLabel = Number(row.sourceRow) > 0 ? `File row ${Number(row.sourceRow)}` : `Import row ${index + 1}`;
     const title = [row.brand, row.model].filter(Boolean).join(' ') || 'Unnamed asset';
     const description = String(row.description || '').trim();
@@ -19836,7 +19892,14 @@ function renderAssetImportReview() {
     `;
   };
 
-  rowsContainer.innerHTML = categories.map(category => {
+  const paginationHtml = pageCount > 1 ? `
+    <div class="asset-import-pagination">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="setAssetImportPage(${assetImportState.page - 1})"${assetImportState.page <= 0 ? ' disabled' : ''}>Previous</button>
+      <span>Rows ${pageStart + 1}-${Math.min(pageStart + ASSET_IMPORT_REVIEW_PAGE_SIZE, assetImportState.rows.length)} of ${assetImportState.rows.length} · Page ${assetImportState.page + 1} of ${pageCount}</span>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="setAssetImportPage(${assetImportState.page + 1})"${assetImportState.page >= pageCount - 1 ? ' disabled' : ''}>Next</button>
+    </div>
+  ` : '';
+  const categoryHtml = categories.map(category => {
     const categoryRows = categorizedRows[category.key];
     if (!categoryRows.length) return '';
     return `
@@ -19848,8 +19911,15 @@ function renderAssetImportReview() {
         <div class="asset-import-category-rows">${categoryRows.map(({ row, index }) => rowHtml(row, index, category.key)).join('')}</div>
       </section>
     `;
-  }).join('') || '<div class="inventory-empty">No assets remain in this import.</div>';
+  }).join('') || '<div class="inventory-empty">No assets remain on this page.</div>';
+  rowsContainer.innerHTML = `${paginationHtml}${categoryHtml}${paginationHtml}`;
   refreshAssetImportStatus();
+}
+
+function setAssetImportPage(page) {
+  assetImportState.page = Number(page) || 0;
+  renderAssetImportReview();
+  document.querySelector('.asset-import-body')?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function refreshAssetImportStatus() {
@@ -19887,8 +19957,10 @@ function refreshAssetImportStatus() {
   }
   const button = document.getElementById('assetImportConfirmButton');
   if (button) {
-    button.disabled = assetImportState.submitting || issueCount > 0 || assetImportState.rows.length === 0;
-    button.textContent = assetImportState.submitting ? 'Importing…' : 'Import Assets';
+    button.disabled = assetImportState.submitting || assetImportState.planning || !assetImportState.planToken || issueCount > 0 || assetImportState.rows.length === 0;
+    button.textContent = assetImportState.submitting
+      ? 'Importing…'
+      : (assetImportState.planning ? 'Planning IDs…' : 'Import Assets');
   }
 }
 
@@ -19896,6 +19968,9 @@ function updateAssetImportRow(index, field, value) {
   const row = assetImportState.rows[index];
   if (!row) return;
   row.serverError = '';
+  row.validationError = '';
+  assetImportState.planToken = '';
+  assetImportState.inventoryRevision = '';
   if (field === 'quantity') row[field] = Number(value);
   else if (field === 'isBulk') row[field] = assetImportBoolean(value);
   else if (field === 'tags') row[field] = normalizeAssetTags(value);
@@ -19919,6 +19994,9 @@ function updateAssetImportRow(index, field, value) {
 }
 
 function commitAssetImportRowChanges() {
+  assetImportState.planToken = '';
+  assetImportState.inventoryRevision = '';
+  refreshAssetImportStatus();
   clearTimeout(__assetImportPlanTimer);
   __assetImportPlanTimer = setTimeout(refreshAssetImportPlan, 180);
 }
@@ -19926,18 +20004,30 @@ function commitAssetImportRowChanges() {
 async function refreshAssetImportPlan() {
   if (!assetImportState.rows.length || assetImportState.submitting) return;
   const sequence = ++__assetImportPlanSequence;
+  assetImportState.planning = true;
+  assetImportState.planToken = '';
+  refreshAssetImportStatus();
   try {
     const response = await apiCall('/api/assets/import-plan', 'POST', { rows: assetImportState.rows });
-    if (sequence !== __assetImportPlanSequence) return;
+    if (sequence !== __assetImportPlanSequence) return false;
     const plannedRows = response.data?.rows || [];
     assetImportState.rows = assetImportState.rows.map((row, index) => ({
       ...row,
       ...(plannedRows[index] || {}),
       serverError: row.serverError || '',
     }));
+    assetImportState.planToken = String(response.data?.planToken || '');
+    assetImportState.inventoryRevision = String(response.data?.inventoryRevision || '');
+    assetImportState.planning = false;
     renderAssetImportReview();
+    return Boolean(assetImportState.planToken);
   } catch (error) {
     // Local validation remains visible; the next successful plan refresh will update IDs.
+    if (sequence === __assetImportPlanSequence) {
+      assetImportState.planning = false;
+      refreshAssetImportStatus();
+    }
+    return false;
   }
 }
 
@@ -19973,7 +20063,11 @@ async function previewAssetImportFile(input) {
       rejected: response.data?.rejected || [],
       departments: response.data?.departments || [],
       fileName: file.name,
-      submitting: false
+      submitting: false,
+      planning: false,
+      planToken: String(response.data?.planToken || ''),
+      inventoryRevision: String(response.data?.inventoryRevision || ''),
+      page: 0
     };
     closeModal('addAssetModal');
     renderAssetImportReview();
@@ -19992,20 +20086,39 @@ function cancelAssetImport() {
 
 async function confirmAssetImport() {
   if (assetImportState.rows.some((row, index) => assetImportRowErrors(row, index).length)) {
+    const firstErrorIndex = assetImportState.rows.findIndex((row, index) => assetImportRowErrors(row, index).length);
+    assetImportState.page = Math.floor(firstErrorIndex / ASSET_IMPORT_REVIEW_PAGE_SIZE);
+    renderAssetImportReview();
     refreshAssetImportStatus();
     document.querySelector('.asset-import-row.has-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
+  clearTimeout(__assetImportPlanTimer);
+  if (!await refreshAssetImportPlan()) return;
   assetImportState.submitting = true;
   refreshAssetImportStatus();
   try {
-    const response = await apiCall('/api/assets/import', 'POST', { rows: assetImportState.rows });
+    const response = await apiCall('/api/assets/import', 'POST', {
+      rows: assetImportState.rows,
+      planToken: assetImportState.planToken
+    });
     closeModal('assetImportModal');
-    assetImportState = { rows: [], rejected: [], departments: [], fileName: '', submitting: false };
+    assetImportState = {
+      rows: [], rejected: [], departments: [], fileName: '', submitting: false,
+      planning: false, planToken: '', inventoryRevision: '', page: 0
+    };
     const created = Number(response.data?.inventoryRecordsCreated || 0);
     showNotification('success', `${response.message || 'Assets imported'} (${created} inventory record${created === 1 ? '' : 's'})`);
     await loadInventory();
   } catch (error) {
+    if (error.payload?.code === 'asset_import_plan_stale' && error.payload?.data) {
+      assetImportState.rows = error.payload.data.rows || assetImportState.rows;
+      assetImportState.planToken = String(error.payload.data.planToken || '');
+      assetImportState.inventoryRevision = String(error.payload.data.inventoryRevision || '');
+      showNotification('warning', 'Inventory changed. The Asset ID preview has been refreshed; review it and confirm again.');
+      renderAssetImportReview();
+      return;
+    }
     (error.payload?.rowErrors || []).forEach(item => {
       const row = assetImportState.rows[Number(item.index)];
       if (!row) return;

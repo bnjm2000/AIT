@@ -160,12 +160,16 @@ class AssetTemplateImportTests(unittest.TestCase):
             content_type='multipart/form-data',
         )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        row = response.get_json()['data']['rows'][0]
+        preview = response.get_json()['data']
+        row = preview['rows'][0]
         self.assertEqual(row['validationError'], '')
         self.assertTrue(any('1/3' in warning for warning in row['validationWarnings']))
         self.assertIn('Date of purchase is in the future', row['validationWarnings'])
 
-        created = self.client.post('/api/assets/import', json={'rows': [row]})
+        created = self.client.post('/api/assets/import', json={
+            'rows': [row],
+            'planToken': preview['planToken'],
+        })
         self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
         self.assertEqual(created.get_json()['data']['inventoryRecordsCreated'], 3)
         self.assertEqual(self.data_manager.inventory['WARN#01'].serial_number, 'ONLY-ONE')
@@ -193,15 +197,25 @@ class AssetTemplateImportTests(unittest.TestCase):
             content_type='multipart/form-data',
         )
         self.assertEqual(unknown_response.status_code, 200, unknown_response.get_data(as_text=True))
-        row = unknown_response.get_json()['data']['rows'][0]
+        unknown_preview = unknown_response.get_json()['data']
+        row = unknown_preview['rows'][0]
         self.assertFalse(row['departmentMatched'])
-        blocked = self.client.post('/api/assets/import', json={'rows': [row]})
+        blocked = self.client.post('/api/assets/import', json={
+            'rows': [row],
+            'planToken': unknown_preview['planToken'],
+        })
         self.assertEqual(blocked.status_code, 400)
 
         row['createDepartment'] = True
         row['newDepartmentCode'] = 'CAM'
         row['newDepartmentName'] = 'Camera'
-        created = self.client.post('/api/assets/import', json={'rows': [row]})
+        replanned_response = self.client.post('/api/assets/import-plan', json={'rows': [row]})
+        self.assertEqual(replanned_response.status_code, 200, replanned_response.get_data(as_text=True))
+        replanned = replanned_response.get_json()['data']
+        created = self.client.post('/api/assets/import', json={
+            'rows': replanned['rows'],
+            'planToken': replanned['planToken'],
+        })
         self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
         self.assertEqual(self.data_manager.inventory['CAM#01'].department_code, 'CAM')
 
@@ -212,16 +226,20 @@ class AssetTemplateImportTests(unittest.TestCase):
         ]
         plan = self.client.post('/api/assets/import-plan', json={'rows': rows})
         self.assertEqual(plan.status_code, 200, plan.get_data(as_text=True))
-        planned = plan.get_json()['data']['rows']
+        plan_data = plan.get_json()['data']
+        planned = plan_data['rows']
         self.assertEqual(planned[0]['assetIdsPreview'], ['IMP#01'])
         self.assertEqual(planned[1]['assetIdsPreview'], ['IMP#02', 'IMP#03'])
 
-        created = self.client.post('/api/assets/import', json={'rows': planned})
+        created = self.client.post('/api/assets/import', json={
+            'rows': planned,
+            'planToken': plan_data['planToken'],
+        })
         self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
         self.assertTrue({'IMP#01', 'IMP#02', 'IMP#03'}.issubset(self.data_manager.inventory))
 
     def test_bulk_rows_use_automatic_bulk_ids(self):
-        response = self.client.post('/api/assets/import', json={'rows': [{
+        rows = [{
             'brand': 'Generic',
             'model': 'DMX-1.5M',
             'description': 'DMX Cable - 1.5m',
@@ -230,10 +248,161 @@ class AssetTemplateImportTests(unittest.TestCase):
             'isBulk': True,
             'defaultLocation': 'Store',
             'assetIdPrefix': 'IGNORED',
-        }]})
+        }]
+        plan_response = self.client.post('/api/assets/import-plan', json={'rows': rows})
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+        plan = plan_response.get_json()['data']
+        response = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'],
+            'planToken': plan['planToken'],
+        })
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn('BULK-0001', self.data_manager.inventory)
         self.assertEqual(self.data_manager.inventory['BULK-0001'].quantity, 25)
+
+    def test_blank_serial_positions_are_preserved_through_import(self):
+        response = self.client.post(
+            '/api/assets/import-preview',
+            data={'file': (io.BytesIO(self.csv_bytes([[
+                'New', 'Positional', '', '', 'AX', 3, 'No',
+                '\nSN-002\nSN-003', '', '', '', '', 'Store', 'POS',
+            ]])), 'assets.csv')},
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        preview = response.get_json()['data']
+        self.assertEqual(preview['rows'][0]['serials'], ['', 'SN-002', 'SN-003'])
+
+        created = self.client.post('/api/assets/import', json={
+            'rows': preview['rows'],
+            'planToken': preview['planToken'],
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['POS#01'].serial_number, '')
+        self.assertEqual(self.data_manager.inventory['POS#02'].serial_number, 'SN-002')
+        self.assertEqual(self.data_manager.inventory['POS#03'].serial_number, 'SN-003')
+
+    def test_windows_1252_csv_is_not_misread_as_utf16(self):
+        output = io.StringIO(newline='')
+        writer = csv.writer(output)
+        writer.writerow(IMPORT_HEADERS)
+        writer.writerow([
+            'Acme', 'Windows CSV', 'Caf\u00e9 microphone', '', 'AX', 1, 'No',
+            '', '', '', '', '', 'Store', 'WIN',
+        ])
+        response = self.client.post(
+            '/api/assets/import-preview',
+            data={'file': (io.BytesIO(output.getvalue().encode('cp1252')), 'assets.csv')},
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            response.get_json()['data']['rows'][0]['description'],
+            'Caf\u00e9 microphone',
+        )
+
+    def test_stale_plan_refreshes_ids_before_any_assets_are_created(self):
+        plan_response = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'Acme', 'model': 'Race', 'department': 'AX', 'quantity': 1,
+            'isBulk': False, 'assetIdPrefix': 'RACE',
+        }]})
+        plan = plan_response.get_json()['data']
+        self.assertEqual(plan['rows'][0]['assetIdsPreview'], ['RACE#01'])
+
+        self.data_manager.inventory['RACE#01'] = InventoryItem(
+            asset_id='RACE#01', brand='Other', model_number='Existing',
+            serial_number='', description='', is_missing=False,
+            maintenance_logs=[], department_code='AX', default_location='Store',
+            current_location='',
+        )
+        self.data_manager.save_inventory()
+
+        stale = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'],
+            'planToken': plan['planToken'],
+        })
+        self.assertEqual(stale.status_code, 409, stale.get_data(as_text=True))
+        stale_payload = stale.get_json()
+        self.assertEqual(stale_payload['code'], 'asset_import_plan_stale')
+        refreshed = stale_payload['data']
+        self.assertEqual(refreshed['rows'][0]['assetIdsPreview'], ['RACE#02'])
+        self.assertNotIn('RACE#02', self.data_manager.inventory)
+
+        created = self.client.post('/api/assets/import', json={
+            'rows': refreshed['rows'],
+            'planToken': refreshed['planToken'],
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertIn('RACE#02', self.data_manager.inventory)
+
+    def test_one_new_department_declaration_resolves_sibling_rows(self):
+        rows = [
+            {
+                'brand': 'CameraCo', 'model': 'C1', 'department': 'Camera',
+                'quantity': 1, 'isBulk': False, 'assetIdPrefix': 'CAM',
+                'createDepartment': True, 'newDepartmentCode': 'CAM',
+                'newDepartmentName': 'Camera',
+            },
+            {
+                'brand': 'CameraCo', 'model': 'C2', 'department': 'CAM',
+                'quantity': 1, 'isBulk': False, 'assetIdPrefix': 'CAM2',
+            },
+        ]
+        plan_response = self.client.post('/api/assets/import-plan', json={'rows': rows})
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+        plan = plan_response.get_json()['data']
+        self.assertTrue(plan['rows'][1]['departmentMatched'])
+        self.assertTrue(plan['rows'][1]['departmentWillBeCreated'])
+
+        created = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'],
+            'planToken': plan['planToken'],
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['CAM#01'].department_code, 'CAM')
+        self.assertEqual(self.data_manager.inventory['CAM2#01'].department_code, 'CAM')
+
+    def test_import_accepts_one_thousand_rows(self):
+        rows = [
+            {
+                'brand': 'Load', 'model': f'Unit {index}', 'department': 'AX',
+                'quantity': 1, 'isBulk': False, 'assetIdPrefix': 'LOAD',
+            }
+            for index in range(1000)
+        ]
+        plan_response = self.client.post('/api/assets/import-plan', json={'rows': rows})
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+        plan = plan_response.get_json()['data']
+        self.assertEqual(len(plan['rows']), 1000)
+
+        created = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'],
+            'planToken': plan['planToken'],
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(created.get_json()['data']['inventoryRecordsCreated'], 1000)
+        self.assertIn('LOAD#1000', self.data_manager.inventory)
+
+    def test_import_rejects_more_than_one_thousand_source_rows(self):
+        rows = [
+            {'brand': 'Load', 'model': 'Unit', 'department': 'AX', 'quantity': 1}
+            for _ in range(1001)
+        ]
+        response = self.client.post('/api/assets/import-plan', json={'rows': rows})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('at most 1000 rows', response.get_json()['error'])
+
+    def test_plan_rejects_unsafe_expanded_record_count_before_allocating_ids(self):
+        rows = [
+            {
+                'brand': 'Load', 'model': f'Large {index}', 'department': 'AX',
+                'quantity': 500, 'isBulk': False, 'assetIdPrefix': f'L{index}',
+            }
+            for index in range(101)
+        ]
+        response = self.client.post('/api/assets/import-plan', json={'rows': rows})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('more than 50,000 inventory records', response.get_json()['error'])
 
 
 def test_asset_import_review_ui_is_compact_categorized_and_editable():
@@ -251,6 +420,7 @@ def test_asset_import_review_ui_is_compact_categorized_and_editable():
     assert "function updateAssetImportRow(" in script
     assert "function removeAssetImportRow(" in script
     assert "function assetImportRowWarnings(" in script
+    assert "serials.filter(serial => String(serial || '').trim()).length" in script
     assert "function assetImportDepartmentResolution(" in script
     assert "function setAssetImportDepartmentCreation(" in script
     assert "function refreshAssetImportPlan(" in script
