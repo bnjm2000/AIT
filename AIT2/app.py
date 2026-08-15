@@ -33758,6 +33758,80 @@ def _finance_revision_payload(document):
     }
 
 
+def _finance_relink_revision_line_ids(request_data, revision_row, current_document):
+    """Map historical snapshot line IDs back to the live canonical line IDs."""
+    request_data = copy.deepcopy(request_data if isinstance(request_data, dict) else {})
+    edited_lines = request_data.get('lineItems')
+    snapshot = (revision_row or {}).get('snapshot')
+    snapshot_lines = (snapshot or {}).get('lineItems') if isinstance(snapshot, dict) else None
+    canonical_lines = (current_document or {}).get('lineItems')
+    if not all(isinstance(rows, list) for rows in (
+        edited_lines, snapshot_lines, canonical_lines,
+    )):
+        return request_data
+
+    canonical_by_id = {
+        str(line.get('id') or ''): line
+        for line in canonical_lines
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    available_ids = set(canonical_by_id)
+    id_mapping = {}
+
+    def claim(snapshot_line, index):
+        source_id = str((snapshot_line or {}).get('id') or '')
+        if source_id in available_ids:
+            return source_id
+        binding_id = str(
+            (snapshot_line or {}).get('costingPricingBindingId')
+            or (snapshot_line or {}).get('pricingBindingId')
+            or ''
+        ).strip()
+        if binding_id:
+            match = next((
+                canonical_id for canonical_id in available_ids
+                if str(
+                    canonical_by_id[canonical_id].get('costingPricingBindingId')
+                    or canonical_by_id[canonical_id].get('pricingBindingId')
+                    or ''
+                ).strip()
+                == binding_id
+            ), '')
+            if match:
+                return match
+        identity = _costing_line_quote_identity(snapshot_line or {})
+        match = next((
+            canonical_id for canonical_id in available_ids
+            if _costing_line_quote_identity(canonical_by_id[canonical_id]) == identity
+        ), '')
+        if match:
+            return match
+        if len(snapshot_lines) == len(canonical_lines) and index < len(canonical_lines):
+            positional_id = str((canonical_lines[index] or {}).get('id') or '')
+            if positional_id in available_ids:
+                return positional_id
+        return ''
+
+    for index, snapshot_line in enumerate(snapshot_lines):
+        if not isinstance(snapshot_line, dict):
+            continue
+        source_id = str(snapshot_line.get('id') or '')
+        canonical_id = claim(snapshot_line, index)
+        if not canonical_id:
+            continue
+        available_ids.discard(canonical_id)
+        if source_id:
+            id_mapping[source_id] = canonical_id
+
+    for line in edited_lines:
+        if not isinstance(line, dict):
+            continue
+        source_id = str(line.get('id') or '')
+        if source_id in id_mapping:
+            line['id'] = id_mapping[source_id]
+    return request_data
+
+
 def _finance_revision_fingerprint(document):
     return json.dumps(
         _finance_revision_payload(document),
@@ -42078,6 +42152,16 @@ def update_or_delete_quotation_revision(document_id, revision):
             log_action(f"Deleted revision {revision:02d} from quotation {current.get('number')}")
             return jsonify({'success': True, 'data': replacement})
 
+        editing_current_revision = (
+            _safe_int(current.get('revision'), 1) == revision
+        )
+        if editing_current_revision:
+            request_data = _finance_relink_revision_line_ids(
+                request_data,
+                revision_row,
+                current,
+            )
+
         revision_status = _finance_revision_status(revision_row)
         snapshot_existing = {
             **revision_row['snapshot'],
@@ -42110,6 +42194,10 @@ def update_or_delete_quotation_revision(document_id, revision):
             'paymentDueDate': snapshot_existing['paymentDueDate'],
             'paidAt': snapshot_existing['paidAt'],
         })
+        if editing_current_revision:
+            edited['sourceCostingId'] = current.get('sourceCostingId') or ''
+            edited['costingDisabled'] = bool(current.get('costingDisabled'))
+            _sync_costing_from_quotation(finance_data, edited)
         _remember_finance_prices(finance_data, edited, snapshot_existing)
         _sync_finance_client_record(edited, snapshot_existing)
         revision_row.update({
@@ -42122,7 +42210,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             'snapshot': _finance_revision_payload(edited),
         })
 
-        if _safe_int(current.get('revision'), 1) == revision:
+        if editing_current_revision:
             edited.update({
                 'revisions': revisions,
                 'eventId': current.get('eventId'),

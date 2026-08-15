@@ -1073,6 +1073,82 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual((deleted_current['revision'], deleted_current['status']), (1, 'draft'))
         self.assertEqual(deleted_current['revisions'], [])
 
+    def test_editing_saved_revision_relinks_legacy_line_ids_without_losing_costs(self):
+        quotation = self.create_quote('Legacy Revision Line IDs')
+        quotation['lineItems'] = [{
+            'id': 'canonical-quote-line',
+            'description': 'Original quoted service',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 500,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+        }]
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        costing['lineItems'][0]['itemCost'] = 175
+        costing_response = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            costing_response.status_code, 200, costing_response.get_data(as_text=True)
+        )
+
+        quotation = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        sent = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'sent'},
+        ).get_json()['data']
+
+        finance_data = app_module._load_finance_data()
+        stored = app_module._finance_find_document(
+            finance_data, quotation['id'], 'quotation'
+        )
+        stored['revisions'][0]['snapshot']['lineItems'][0]['id'] = 'legacy-snapshot-line'
+        app_module._save_finance_data(finance_data)
+
+        detail = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        snapshot = copy.deepcopy(detail['revisions'][0]['snapshot'])
+        snapshot['lineItems'][0]['description'] = 'Corrected quoted service'
+        snapshot['documentVersion'] = detail['documentVersion']
+
+        edited_response = self.client.put(
+            f"/api/quotations/{quotation['id']}/revisions/1",
+            json=snapshot,
+        )
+
+        self.assertEqual(
+            edited_response.status_code, 200, edited_response.get_data(as_text=True)
+        )
+        edited = edited_response.get_json()['data']
+        self.assertEqual(edited['lineItems'][0]['id'], 'canonical-quote-line')
+        self.assertEqual(
+            edited['lineItems'][0]['description'], 'Corrected quoted service'
+        )
+        self.assertEqual((edited['revision'], edited['status']), (1, 'sent'))
+        self.assertGreater(edited['documentVersion'], sent['documentVersion'])
+
+        refreshed_costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        self.assertEqual(refreshed_costing['lineItems'][0]['itemCost'], 175)
+        self.assertEqual(
+            refreshed_costing['lineItems'][0]['quotationLineId'],
+            'canonical-quote-line',
+        )
+
     def test_summary_page_hydrates_saved_version_before_editing(self):
         quotation = self.create_quote('Summary Version Editing')
         quotation['lineItems'] = [{
