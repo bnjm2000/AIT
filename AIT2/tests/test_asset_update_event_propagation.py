@@ -126,6 +126,24 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertIn('Description: Old desc -> Updated description', action)
         self.assertIn('Notes: - -> Keep with receiver rack', action)
 
+    def test_asset_edit_warns_before_reusing_serial_in_same_asset_group(self):
+        response = self.put_asset('A#02', serial='sn-a#01')
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertTrue(body['requiresDuplicateSerialConfirmation'])
+        self.assertEqual(body['duplicateSerials'][0]['existingAssetIds'], ['A#01'])
+        self.assertEqual(self.data_manager.inventory['A#02'].serial_number, 'SN-A#02')
+
+        confirmed = self.put_asset(
+            'A#02',
+            serial='sn-a#01',
+            confirmDuplicateSerial=True,
+        )
+
+        self.assertEqual(confirmed.status_code, 200, confirmed.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['A#02'].serial_number, 'sn-a#01')
+
     def test_single_asset_detail_change_updates_assigned_and_unassigned_model_events(self):
         assigned = self.make_event(
             100,

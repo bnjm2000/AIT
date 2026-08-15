@@ -176,6 +176,35 @@ class AssetTemplateImportTests(unittest.TestCase):
         self.assertEqual(self.data_manager.inventory['WARN#02'].serial_number, '')
         self.assertEqual(self.data_manager.inventory['WARN#03'].date_of_purchase, '2099-12-31')
 
+    def test_duplicate_serial_is_shown_as_import_warning_and_can_be_confirmed(self):
+        plan_response = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'shure',
+            'model': 'sm58',
+            'description': 'black microphone',
+            'department': 'AX',
+            'quantity': 1,
+            'isBulk': False,
+            'serials': ['old-1'],
+            'assetIdPrefix': 'DUP',
+        }]})
+
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+        plan = plan_response.get_json()['data']
+        row = plan['rows'][0]
+        self.assertEqual(row['duplicateSerials'][0]['existingAssetIds'], ['A#01'])
+        self.assertTrue(any(
+            'already used by A#01' in warning
+            for warning in row['validationWarnings']
+        ))
+
+        created = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'],
+            'planToken': plan['planToken'],
+        })
+
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['DUP#01'].serial_number, 'old-1')
+
     def test_preview_resolves_department_name_and_unknown_department_requires_creation(self):
         known_response = self.client.post(
             '/api/assets/import-preview',

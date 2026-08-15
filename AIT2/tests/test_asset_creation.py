@@ -38,12 +38,15 @@ class AssetCreationTests(unittest.TestCase):
             session['user'] = username
             session['is_admin'] = is_admin
 
-    def add_existing_asset(self, asset_id, brand, model, description=''):
+    def add_existing_asset(
+        self, asset_id, brand, model, description='', serial='', secondary_serial=''
+    ):
         self.data_manager.inventory[asset_id] = InventoryItem(
             asset_id=asset_id,
             brand=brand,
             model_number=model,
-            serial_number='',
+            serial_number=serial,
+            secondary_serial_number=secondary_serial,
             description=description,
             is_missing=False,
             maintenance_logs=[],
@@ -95,6 +98,63 @@ class AssetCreationTests(unittest.TestCase):
         self.assertEqual(body['assetIds'], ['P1#03', 'P1#04'])
         self.assertEqual(self.data_manager.inventory['P1#03'].serial_number, 'SN-003')
         self.assertEqual(self.data_manager.inventory['P1#04'].serial_number, 'SN-004')
+
+    def test_create_asset_warns_and_allows_confirmation_for_existing_matching_serial(self):
+        self.add_existing_asset(
+            'P1#01', 'Behringher', 'P1', 'Wired IEM beltpack', 'SN-DUPLICATE'
+        )
+
+        response = self.post_asset({'serials': ['sn-duplicate']})
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertTrue(body['requiresDuplicateSerialConfirmation'])
+        self.assertEqual(body['duplicateSerials'][0]['existingAssetIds'], ['P1#01'])
+        self.assertNotIn('P1#02', self.data_manager.inventory)
+
+        confirmed = self.post_asset({
+            'serials': ['sn-duplicate'],
+            'confirmDuplicateSerial': True,
+        })
+
+        self.assertEqual(confirmed.status_code, 200, confirmed.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['P1#02'].serial_number, 'sn-duplicate')
+
+    def test_batch_create_warns_for_duplicate_serials_inside_same_request(self):
+        response = self.post_asset({
+            'quantity': 2,
+            'serials': ['SN-SAME', 'sn-same'],
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        duplicate = response.get_json()['duplicateSerials'][0]
+        self.assertEqual(duplicate['assetId'], 'P1#02')
+        self.assertEqual(duplicate['existingAssetIds'], ['P1#01'])
+        self.assertEqual(self.data_manager.inventory, {})
+
+    def test_same_serial_with_different_description_does_not_warn(self):
+        self.add_existing_asset(
+            'P1#01', 'Behringher', 'P1', 'Different description', 'SN-SHARED'
+        )
+
+        response = self.post_asset({'serials': ['SN-SHARED']})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+    def test_secondary_serial_warns_when_it_matches_an_existing_primary_serial(self):
+        self.add_existing_asset(
+            'P1#01', 'Behringher', 'P1', 'Wired IEM beltpack', 'SN-CROSS-FIELD'
+        )
+
+        response = self.post_asset({
+            'serials': ['SN-NEW'],
+            'secondarySerials': ['sn-cross-field'],
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        duplicate = response.get_json()['duplicateSerials'][0]
+        self.assertEqual(duplicate['serialType'], 'secondary')
+        self.assertEqual(duplicate['existingAssetIds'], ['P1#01'])
 
     def test_create_asset_warns_when_serial_count_is_lower_than_quantity(self):
         response = self.post_asset({

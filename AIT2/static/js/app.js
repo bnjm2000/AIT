@@ -7463,6 +7463,30 @@ function openEditAssetModal(encodedAssetId) {
   openModal('editAssetModal');
 }
 
+async function confirmDuplicateAssetSerial(details, actionLabel = 'save') {
+  const duplicates = Array.isArray(details) ? details : [];
+  const lines = duplicates.slice(0, 6).map(detail => {
+    const serial = String(detail?.serial || '').trim() || '(blank)';
+    const serialType = String(detail?.serialType || 'primary').toLocaleLowerCase();
+    const matches = Array.isArray(detail?.existingAssetIds)
+      ? detail.existingAssetIds.filter(Boolean)
+      : [];
+    return `${serialType === 'secondary' ? 'Secondary' : 'Primary'} serial ${serial} is already used by ${matches.join(', ') || 'another matching asset'}.`;
+  });
+  if (duplicates.length > lines.length) {
+    lines.push(`…and ${duplicates.length - lines.length} more duplicate serial number${duplicates.length - lines.length === 1 ? '' : 's'}.`);
+  }
+  return showAppConfirm({
+    title: 'Duplicate serial number',
+    message:
+      `The following primary serial number${duplicates.length === 1 ? ' already exists' : 's already exist'} for the same brand, model, and description:\n\n` +
+      `${lines.join('\n')}\n\nContinue and ${actionLabel} anyway?`,
+    confirmText: actionLabel === 'add these assets' ? 'Add Anyway' : 'Save Anyway',
+    cancelText: 'Review Serial Number',
+    variant: 'warning',
+  });
+}
+
 async function saveAssetEditModal() {
   if (!currentUser || !currentUser.isAdmin) {
     showNotification('error', 'Admin privileges required');
@@ -7624,6 +7648,14 @@ After saving, they will appear together as one inventory model group.`,
           !payload.confirmModelGroupMerge &&
           await confirmModelGroupMerge(mergeDetails)
         ) {
+          continue;
+        }
+        if (
+          error.payload?.requiresDuplicateSerialConfirmation &&
+          !payload.confirmDuplicateSerial &&
+          await confirmDuplicateAssetSerial(error.payload?.duplicateSerials, 'save this asset')
+        ) {
+          payload.confirmDuplicateSerial = true;
           continue;
         }
         throw error;
@@ -8105,7 +8137,22 @@ async function saveBulkAssetEditModal() {
       delete payload.__selectedFieldCount;
 
       try {
-        const res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', payload);
+        let res;
+        while (!res) {
+          try {
+            res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', payload);
+          } catch (error) {
+            if (
+              error.payload?.requiresDuplicateSerialConfirmation &&
+              !payload.confirmDuplicateSerial &&
+              await confirmDuplicateAssetSerial(error.payload?.duplicateSerials, `save ${assetId}`)
+            ) {
+              payload.confirmDuplicateSerial = true;
+              continue;
+            }
+            throw error;
+          }
+        }
         if (!useAssetIdSequence) updated += 1;
         eventsUpdated += Number(res.data?.eventsUpdated || 0);
         containersUpdated += Number(res.data?.containersUpdated || 0);
@@ -19681,7 +19728,9 @@ function assetImportTodayIso() {
 }
 
 function assetImportRowWarnings(row) {
-  const warnings = [];
+  const warnings = Array.isArray(row?.validationWarnings)
+    ? row.validationWarnings.map(String)
+    : [];
   const quantity = Number(row?.quantity);
   const isBulk = assetImportBoolean(row?.isBulk);
   if (!isBulk && Number.isInteger(quantity) && quantity > 0) {
@@ -19931,6 +19980,8 @@ function refreshAssetImportStatus() {
 function updateAssetImportRow(index, field, value) {
   const row = assetImportState.rows[index];
   if (!row) return;
+  row.validationWarnings = [];
+  row.duplicateSerials = [];
   row.serverError = '';
   row.validationError = '';
   assetImportState.planToken = '';
@@ -20781,7 +20832,22 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       try {
-        const response = await apiCall("/api/assets", "POST", assetData);
+        let response;
+        while (!response) {
+          try {
+            response = await apiCall("/api/assets", "POST", assetData);
+          } catch (error) {
+            if (
+              error.payload?.requiresDuplicateSerialConfirmation &&
+              !assetData.confirmDuplicateSerial &&
+              await confirmDuplicateAssetSerial(error.payload?.duplicateSerials, 'add these assets')
+            ) {
+              assetData.confirmDuplicateSerial = true;
+              continue;
+            }
+            throw error;
+          }
+        }
         closeModal("addAssetModal");
         const createdIds = response.assetIds || [];
         const createdMessage = createdIds.length > 1

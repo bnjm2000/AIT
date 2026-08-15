@@ -3286,6 +3286,107 @@ def _asset_serial_count_mismatches(data, quantity, is_bulk=False):
     return mismatches
 
 
+def _asset_duplicate_serial_key(brand, model, description, serial):
+    """Identity used when warning about a reused primary serial number."""
+    serial_key = str(serial or '').strip().casefold()
+    if not serial_key:
+        return None
+    return (
+        str(brand or '').strip().casefold(),
+        str(model or '').strip().casefold(),
+        str(description or '').strip().casefold(),
+        serial_key,
+    )
+
+
+def _asset_duplicate_serial_index(exclude_asset_ids=None):
+    excluded = {
+        str(asset_id or '').strip()
+        for asset_id in (exclude_asset_ids or [])
+        if str(asset_id or '').strip()
+    }
+    index = defaultdict(list)
+    for asset_id, asset in data_manager.inventory.items():
+        if not asset or _is_bulk_asset(asset) or str(asset_id) in excluded:
+            continue
+        for serial in (
+            getattr(asset, 'serial_number', ''),
+            getattr(asset, 'secondary_serial_number', ''),
+        ):
+            key = _asset_duplicate_serial_key(
+                getattr(asset, 'brand', ''),
+                getattr(asset, 'model_number', ''),
+                getattr(asset, 'description', ''),
+                serial,
+            )
+            if key and str(asset_id) not in index[key]:
+                index[key].append(str(asset_id))
+    return index
+
+
+def _asset_duplicate_serial_candidates(
+    asset_id, brand, model, description, primary_serial='', secondary_serial=''
+):
+    return [
+        {
+            'assetId': asset_id,
+            'brand': brand,
+            'model': model,
+            'description': description,
+            'serial': serial,
+            'serialType': serial_type,
+        }
+        for serial_type, serial in (
+            ('primary', primary_serial),
+            ('secondary', secondary_serial),
+        )
+        if str(serial or '').strip()
+    ]
+
+
+def _asset_duplicate_serial_details(candidates, serial_index=None):
+    """Return clashes and extend the index so duplicates inside a batch are found."""
+    serial_index = serial_index if serial_index is not None else _asset_duplicate_serial_index()
+    duplicates = []
+    for candidate in candidates:
+        serial = str(candidate.get('serial') or '').strip()
+        key = _asset_duplicate_serial_key(
+            candidate.get('brand'),
+            candidate.get('model'),
+            candidate.get('description'),
+            serial,
+        )
+        if not key:
+            continue
+        asset_id = str(candidate.get('assetId') or '').strip()
+        existing_ids = list(serial_index.get(key, []))
+        if existing_ids:
+            duplicates.append({
+                'serial': serial,
+                'serialType': str(candidate.get('serialType') or 'primary'),
+                'assetId': asset_id,
+                'existingAssetIds': existing_ids,
+                'brand': str(candidate.get('brand') or '').strip(),
+                'model': str(candidate.get('model') or '').strip(),
+                'description': str(candidate.get('description') or '').strip(),
+            })
+        if asset_id and asset_id not in serial_index[key]:
+            serial_index[key].append(asset_id)
+    return duplicates
+
+
+def _asset_duplicate_serial_warning(detail):
+    existing_ids = detail.get('existingAssetIds') or []
+    existing_text = ', '.join(existing_ids[:3])
+    if len(existing_ids) > 3:
+        existing_text += f' and {len(existing_ids) - 3} more'
+    return (
+        f"{str(detail.get('serialType') or 'primary').capitalize()} serial number "
+        f"{detail.get('serial') or '-'} is already used by "
+        f"{existing_text or 'another asset'} with the same brand, model, and description"
+    )
+
+
 def _is_bulk_asset(asset):
     return bool(getattr(asset, 'is_bulk', False))
 
@@ -3803,6 +3904,7 @@ def _asset_import_preview_rows(rows):
     planning_departments = {**departments, **proposed_departments}
     preview_rows = []
     reserved_ids = set()
+    duplicate_serial_index = _asset_duplicate_serial_index()
     for row in rows:
         try:
             payload = _normalise_asset_import_payload(
@@ -3830,13 +3932,35 @@ def _asset_import_preview_rows(rows):
             })
             continue
         reserved_ids.update(preview_ids)
+        primary_serials = (
+            payload['serials'] + [''] * payload['quantity']
+        )[:payload['quantity']]
+        secondary_serials = (
+            payload['secondarySerials'] + [''] * payload['quantity']
+        )[:payload['quantity']]
+        duplicate_serials = _asset_duplicate_serial_details([
+            candidate
+            for index, asset_id in enumerate(preview_ids)
+            for candidate in _asset_duplicate_serial_candidates(
+                asset_id,
+                payload['brand'],
+                payload['model'],
+                payload['description'],
+                primary_serials[index],
+                secondary_serials[index],
+            )
+        ], duplicate_serial_index) if not payload['isBulk'] else []
         preview_rows.append({
             **payload,
             'suggestedAssetIds': preview_ids,
             'assetIdsPreview': preview_ids,
             'idIssue': '',
             'differentDescriptions': _asset_import_different_descriptions(payload),
-            'validationWarnings': _asset_import_validation_warnings(payload),
+            'duplicateSerials': duplicate_serials,
+            'validationWarnings': [
+                *_asset_import_validation_warnings(payload),
+                *(_asset_duplicate_serial_warning(detail) for detail in duplicate_serials),
+            ],
             'validationError': '',
         })
     return preview_rows
@@ -3901,6 +4025,9 @@ def _asset_import_inventory_revision():
             str(asset_id),
             str(getattr(asset, 'brand', '') or ''),
             str(getattr(asset, 'model_number', '') or ''),
+            str(getattr(asset, 'description', '') or ''),
+            str(getattr(asset, 'serial_number', '') or ''),
+            str(getattr(asset, 'secondary_serial_number', '') or ''),
             bool(_is_bulk_asset(asset)),
         )
         for asset_id, asset in data_manager.inventory.items()
@@ -25694,6 +25821,24 @@ def create_asset():
                         'mismatches': serial_mismatches,
                     },
                 }), 409
+            duplicate_serials = _asset_duplicate_serial_details([
+                candidate
+                for index, asset_id in enumerate(plan['ids'])
+                for candidate in _asset_duplicate_serial_candidates(
+                    asset_id,
+                    plan['brand'],
+                    plan['model'],
+                    plan['description'],
+                    plan['serials'][index],
+                    plan['secondarySerials'][index],
+                )
+            ]) if not plan['isBulk'] else []
+            if duplicate_serials and not _request_bool(data.get('confirmDuplicateSerial')):
+                return jsonify({
+                    'error': 'One or more primary serial numbers are already in use for this asset type',
+                    'requiresDuplicateSerialConfirmation': True,
+                    'duplicateSerials': duplicate_serials,
+                }), 409
             audit_timestamp = _asset_audit_timestamp()
             audit_user = _asset_audit_user()
 
@@ -26341,6 +26486,38 @@ def update_asset(asset_id):
                     item for item in data_manager.inventory.values()
                     if _asset_matches_group(item, old_group)
                 ]
+
+        target_asset_ids = [
+            str(getattr(item, 'asset_id', '') or '').strip()
+            for item in target_assets
+        ]
+        duplicate_serials = _asset_duplicate_serial_details([
+            candidate
+            for target in target_assets
+            if not _is_bulk_asset(target)
+            for candidate in _asset_duplicate_serial_candidates(
+                new_asset_id if target is asset else getattr(target, 'asset_id', ''),
+                new_group['brand'],
+                new_group['model'],
+                new_group['description'],
+                (
+                    (data.get('serial') or '').strip()
+                    if target is asset and 'serial' in data
+                    else getattr(target, 'serial_number', '')
+                ),
+                (
+                    (data.get('serial2', data.get('secondarySerial', '')) or '').strip()
+                    if target is asset and ('serial2' in data or 'secondarySerial' in data)
+                    else getattr(target, 'secondary_serial_number', '')
+                ),
+            )
+        ], _asset_duplicate_serial_index(target_asset_ids))
+        if duplicate_serials and not _request_bool(data.get('confirmDuplicateSerial')):
+            return jsonify({
+                'error': 'This primary serial number is already in use for the same asset type',
+                'requiresDuplicateSerialConfirmation': True,
+                'duplicateSerials': duplicate_serials,
+            }), 409
 
         if merge_destination_assets and not _request_bool(data.get('confirmModelGroupMerge')):
             return jsonify({
