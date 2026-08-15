@@ -79,7 +79,7 @@ const financeState = {
   rateCardUom: 'units',
   newClientSalutation: '',
   editorDataLoadedAt: 0,
-  mineOnly: false,
+  mineOnly: true,
   expandedScheduleBatches: {}
 };
 
@@ -3041,7 +3041,7 @@ function financeRenderList(query = '') {
               role="switch"
               aria-checked="${financeState.mineOnly ? 'true' : 'false'}"
               onclick="financeToggleMineOnly()"
-            ><span aria-hidden="true"></span>My quotations</button>
+            ><span aria-hidden="true"></span>My projects</button>
           ` : ''}
         </div>
         <p class="finance-subtitle">Your quotations, versions and client approvals.</p>

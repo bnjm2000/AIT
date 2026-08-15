@@ -444,6 +444,23 @@ class FinanceFeatureTests(unittest.TestCase):
             {row['quotation']['id'] for row in admin_plans},
             {alice_quote['id'], manager_quote['id']},
         )
+        admin_own_plans = self.client.get(
+            '/api/invoice-plans', query_string={'mine': '1'},
+        ).get_json()['data']
+        self.assertEqual(admin_own_plans, [])
+
+        admin_quote = self.create_quote('Admin Billing Project')
+        admin_quote = self.client.put(
+            f"/api/quotations/{admin_quote['id']}",
+            json={**admin_quote, 'status': 'accepted'},
+        ).get_json()['data']
+        admin_own_plans = self.client.get(
+            '/api/invoice-plans', query_string={'mine': '1'},
+        ).get_json()['data']
+        self.assertEqual(
+            [row['quotation']['id'] for row in admin_own_plans],
+            [admin_quote['id']],
+        )
 
     def test_finance_reference_data_is_cached_for_each_request(self):
         with app_module.app.test_request_context('/api/quotations'):
@@ -621,15 +638,23 @@ class FinanceFeatureTests(unittest.TestCase):
         ) as source_file:
             source = source_file.read()
         with open(
+            os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'costing.js'),
+            encoding='utf-8',
+        ) as source_file:
+            costing_source = source_file.read()
+        with open(
             os.path.join(os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css'),
             encoding='utf-8',
         ) as source_file:
             stylesheet = source_file.read()
-        self.assertIn('mineOnly: false', source)
+        self.assertIn('mineOnly: true', source)
         self.assertIn("typeof isPlatformAdminUser === 'function'", source)
         self.assertIn("params.set('mine', '1')", source)
         self.assertIn('finance-list-mine-toggle', source)
-        self.assertIn('My quotations</button>', source)
+        self.assertIn('My projects</button>', source)
+        self.assertIn('mineOnly: true', costing_source)
+        self.assertIn('costing-list-mine-toggle', costing_source)
+        self.assertIn('My projects</button>', costing_source)
         self.assertIn('finance-toolbar-title-line', source)
         self.assertIn(
             '.finance-toolbar-title-line .finance-list-mine-toggle {',
@@ -7229,6 +7254,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('data-section="invoices">Invoices', finance_source)
         self.assertIn('function invoiceOpenPlan', invoice_source)
         self.assertIn('50% deposit / 50% balance', invoice_source)
+        self.assertIn('mineOnly: true', invoice_source)
+        self.assertIn("params.set('mine', '1')", invoice_source)
+        self.assertIn('invoice-list-mine-toggle', invoice_source)
+        self.assertIn('My projects</button>', invoice_source)
         self.assertIn("filename='js/invoices.js'", template_source)
 
     def test_cancelled_quotation_can_create_a_cancellation_invoice_plan(self):

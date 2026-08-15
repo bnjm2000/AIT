@@ -5771,6 +5771,41 @@ def _event_model_group_key(group):
     )
 
 
+def _event_model_group_description_aliases(group):
+    """Return raw and quotation-display descriptions for one model group."""
+    group = group or {}
+    description = str(group.get('description') or '').strip()
+    display_description = ' '.join(filter(None, (
+        str(group.get('brand') or '').strip(),
+        str(group.get('model') or '').strip(),
+        description,
+    )))
+    return {
+        value.casefold()
+        for value in (description, display_description)
+        if value
+    } or {''}
+
+
+def _event_model_groups_match(left, right):
+    """Compare inventory groups while accepting quotation display wording."""
+    if not left or not right:
+        return False
+    identity_fields_match = (
+        _normalise_department_code(left.get('department'))
+        == _normalise_department_code(right.get('department'))
+        and str(left.get('brand') or '').strip().casefold()
+        == str(right.get('brand') or '').strip().casefold()
+        and str(left.get('model') or '').strip().casefold()
+        == str(right.get('model') or '').strip().casefold()
+    )
+    return bool(
+        identity_fields_match
+        and _event_model_group_description_aliases(left)
+        & _event_model_group_description_aliases(right)
+    )
+
+
 def _event_model_required_quantity(event, group):
     group_key = _event_model_group_key(group)
     total = 0
@@ -6245,8 +6280,9 @@ def _event_subproject_set_group_quantity(subproject, group, quantity):
     ]
 
 
-def _sync_event_model_markers_from_subprojects(event):
-    """Rebuild aggregate model markers from room requirements."""
+def _sync_event_model_markers_from_subprojects(event, group_keys=None):
+    """Rebuild all or selected aggregate markers from room requirements."""
+    selected_keys = set(group_keys) if group_keys is not None else None
     totals = {}
     for subproject in getattr(event, 'subprojects', []) or []:
         if not isinstance(subproject, dict):
@@ -6266,9 +6302,18 @@ def _sync_event_model_markers_from_subprojects(event):
 
     preserved = [
         ref for ref in getattr(event, 'prepared_items', []) or []
-        if not _parse_model_marker(ref)
+        if (
+            not _parse_model_marker(ref)
+            or (
+                selected_keys is not None
+                and _event_model_group_key(_parse_model_marker(ref))
+                not in selected_keys
+            )
+        )
     ]
-    for row in totals.values():
+    for key, row in totals.items():
+        if selected_keys is not None and key not in selected_keys:
+            continue
         if row['quantity'] > 0:
             preserved.append(_make_model_marker(row, row['quantity']))
     event.prepared_items = preserved
@@ -14733,14 +14778,7 @@ def _display_model_description(group):
 
 
 def _model_marker_matches_group(marker, group):
-    return (
-        marker and
-        marker['department'] == group['department'] and
-        marker['brand'] == group['brand'] and
-        marker['model'] == group['model'] and
-        str(marker.get('description') or '').strip().casefold() ==
-        str(group.get('description') or '').strip().casefold()
-    )
+    return bool(marker and _event_model_groups_match(marker, group))
 
 
 def _set_event_subproject_item_group(item, group):
@@ -14758,7 +14796,18 @@ def _update_event_subproject_model_group_references(event, old_group, new_group)
     for subproject in getattr(event, 'subprojects', []) or []:
         if not isinstance(subproject, dict):
             continue
-        matches = list(_event_subproject_group_items(subproject, old_group))
+        # Quotation-derived room rows historically stored the full display
+        # text (``brand model description``), while inventory stores the raw
+        # description. Accept that spelling only for identifying the source;
+        # destination quantity lookup remains exact to avoid double-counting
+        # the same row during canonicalisation.
+        matches = [
+            item for item in subproject.get('items') or []
+            if _event_model_groups_match(
+                _event_subproject_item_group(item),
+                old_group,
+            )
+        ]
         if not matches:
             continue
         destination_quantity = _event_subproject_required_quantity(
@@ -14967,10 +15016,82 @@ _ASSET_MODEL_GROUP_AUDIT_FIELDS = {
 }
 
 
+def _asset_historical_ids(asset, current_id=''):
+    """Return every Asset ID recorded for the same durable inventory row."""
+    asset_ids = {
+        str(current_id or getattr(asset, 'asset_id', '') or '').strip(),
+    }
+    for audit_record in getattr(asset, 'change_history', []) or []:
+        if not isinstance(audit_record, dict):
+            continue
+        for change in audit_record.get('changes') or []:
+            if (
+                not isinstance(change, dict)
+                or str(change.get('field') or '').strip() != 'asset_id'
+            ):
+                continue
+            asset_ids.update({
+                str(change.get('old') or '').strip(),
+                str(change.get('new') or '').strip(),
+            })
+    return {asset_id for asset_id in asset_ids if asset_id}
+
+
+def _inventory_historical_asset_id_mapping(
+    inventory,
+    destination_ids=None,
+):
+    """Map unambiguous retired IDs to the current or newly assigned ID.
+
+    A retired ID is ignored when it is currently owned by another inventory
+    row or is about to become another row's new ID. This makes the mapping safe
+    for overlapping bulk renumbers and for Asset IDs which were later reused.
+    """
+    inventory = inventory or {}
+    live_ids = {
+        str(asset_id or '').strip()
+        for asset_id in inventory
+        if str(asset_id or '').strip()
+    }
+    destinations = {
+        str(current_id or '').strip(): str(new_id or '').strip()
+        for current_id, new_id in (destination_ids or {}).items()
+        if (
+            str(current_id or '').strip() in inventory
+            and str(new_id or '').strip()
+        )
+    }
+    if not destinations:
+        destinations = {asset_id: asset_id for asset_id in live_ids}
+    reserved_new_ids = set(destinations.values())
+    alias_candidates = {}
+    for current_id, destination_id in destinations.items():
+        asset = inventory.get(current_id)
+        if not asset:
+            continue
+        for historical_id in _asset_historical_ids(asset, current_id):
+            if (
+                historical_id == current_id
+                or historical_id in live_ids
+                or historical_id in reserved_new_ids
+            ):
+                continue
+            alias_candidates.setdefault(historical_id, set()).add(destination_id)
+    return {
+        historical_id: next(iter(destination_set))
+        for historical_id, destination_set in alias_candidates.items()
+        if len(destination_set) == 1
+    }
+
+
 def _asset_historical_model_groups(asset, additional_groups=None):
     """Return the current and former inventory groups for one physical asset."""
     current = _asset_group_from_item(asset)
-    groups = [current]
+    # The current inventory description is already canonical.  The expanded
+    # ``brand model description`` spelling is only a compatibility alias for
+    # historical quotation/event rows; treating every current group as an
+    # alias would rewrite unrelated, valid quotation display text.
+    groups = [(current, False)]
     state = dict(current)
 
     for audit_record in reversed(getattr(asset, 'change_history', []) or []):
@@ -14984,29 +15105,75 @@ def _asset_historical_model_groups(asset, additional_groups=None):
         if touched_group and all(
             state.get(field) for field in ('department', 'brand', 'model')
         ):
-            groups.append(dict(state))
+            groups.append((dict(state), True))
 
     for group in additional_groups or []:
         if isinstance(group, dict) and all(
             str(group.get(field) or '').strip()
             for field in ('department', 'brand', 'model')
         ):
-            groups.append({
+            groups.append(({
                 'department': str(group.get('department') or '').strip().upper(),
                 'brand': str(group.get('brand') or '').strip(),
                 'model': str(group.get('model') or '').strip(),
                 'description': str(group.get('description') or '').strip(),
-            })
+            }, True))
 
     unique = []
     seen = set()
-    for group in groups:
-        key = _event_model_group_key(group)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(group)
+    for group, is_historical in groups:
+        descriptions = {str(group.get('description') or '').strip()}
+        if is_historical:
+            descriptions.add(' '.join(filter(None, (
+                str(group.get('brand') or '').strip(),
+                str(group.get('model') or '').strip(),
+                str(group.get('description') or '').strip(),
+            ))))
+        for description in descriptions:
+            candidate = {**group, 'description': description}
+            key = _event_model_group_key(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(candidate)
     return unique
+
+
+def _rewrite_event_model_marker_group_labels(
+    event,
+    alias_destinations,
+    destination_groups,
+):
+    """Canonicalise renamed marker labels without changing their quantities.
+
+    Aggregate marker quantities can intentionally differ from room totals
+    (for example, when spare units were added at event level). A historical
+    rename repair must therefore relabel the marker in place instead of
+    rebuilding it from the subproject requirements.
+    """
+    changed = 0
+    prepared_items = getattr(event, 'prepared_items', None)
+    if not isinstance(prepared_items, list):
+        return changed
+
+    for index, value in enumerate(prepared_items):
+        marker = _parse_model_marker(value)
+        if not marker:
+            continue
+        source_key = _event_model_group_key(marker)
+        destinations = alias_destinations.get(source_key) or set()
+        if len(destinations) != 1:
+            continue
+        destination_key = next(iter(destinations))
+        destination_group = destination_groups.get(destination_key)
+        if destination_key == source_key or not destination_group:
+            continue
+        prepared_items[index] = _make_model_marker(
+            destination_group,
+            marker['quantity'],
+        )
+        changed += 1
+    return changed
 
 
 def _event_inventory_asset_references(event, inventory):
@@ -15060,8 +15227,6 @@ def _repair_prepared_event_asset_group_links(
         row for row in (getattr(event, 'subprojects', []) or [])
         if isinstance(row, dict)
     ]
-    if not subprojects:
-        return 0
 
     event_references = _event_inventory_asset_references(event, inventory)
     if candidate_asset_ids is None:
@@ -15070,13 +15235,11 @@ def _repair_prepared_event_asset_group_links(
         candidates = {
             str(asset_id or '').strip()
             for asset_id in candidate_asset_ids
-            if str(asset_id or '').strip() in event_references
+            if str(asset_id or '').strip() in inventory
         }
-    if not candidates:
-        return 0
-
     previous_groups_by_asset = previous_groups_by_asset or {}
     current_groups = {}
+    destination_groups = {}
     historical_groups = {}
     alias_destinations = {}
     repair_whole_groups = candidate_asset_ids is None
@@ -15103,23 +15266,30 @@ def _repair_prepared_event_asset_group_links(
         groups = _asset_historical_model_groups(asset, extras)
         group_keys = {_event_model_group_key(group) for group in groups}
         current_groups[asset_id] = current_group
+        destination_groups[current_key] = current_group
         historical_groups[asset_id] = group_keys
         for group_key in group_keys:
             alias_destinations.setdefault(group_key, set()).add(current_key)
 
     changed = 0
+    repair_group_families = set()
 
     # Whole-group renames preserve the complete planned quantity, including
     # units which have not been prepared yet.
     if repair_whole_groups:
-        room_groups = {}
+        event_groups = {}
         for subproject in subprojects:
             for item in subproject.get('items') or []:
                 group = _event_subproject_item_group(item)
                 if group:
-                    room_groups[_event_model_group_key(group)] = group
+                    event_groups[_event_model_group_key(group)] = group
+        if not subprojects:
+            for value in getattr(event, 'prepared_items', []) or []:
+                group = _parse_model_marker(value)
+                if group:
+                    event_groups[_event_model_group_key(group)] = group
 
-        for source_key, source_group in list(room_groups.items()):
+        for source_key, source_group in list(event_groups.items()):
             destinations = alias_destinations.get(source_key) or set()
             if len(destinations) != 1:
                 continue
@@ -15127,18 +15297,35 @@ def _repair_prepared_event_asset_group_links(
             if destination_key == source_key:
                 continue
             evidence_id = next((
-                asset_id for asset_id in candidates
+                asset_id for asset_id in current_groups
                 if source_key in historical_groups.get(asset_id, set())
                 and _event_model_group_key(current_groups[asset_id])
                 == destination_key
             ), None)
             if not evidence_id:
                 continue
-            changed += _update_event_subproject_model_group_references(
-                event,
-                source_group,
-                current_groups[evidence_id],
-            )
+            if subprojects:
+                group_changes = _update_event_subproject_model_group_references(
+                    event,
+                    source_group,
+                    current_groups[evidence_id],
+                )
+            else:
+                group_changes = _update_event_model_group_references(
+                    event,
+                    source_group,
+                    current_groups[evidence_id],
+                )
+            changed += group_changes
+
+        # Historical repairs should update the stale marker's identity while
+        # retaining its exact quantity. Rebuilding from room rows here can
+        # silently discard deliberate event-level spares or adjustments.
+        changed += _rewrite_event_model_marker_group_labels(
+            event,
+            alias_destinations,
+            destination_groups,
+        )
 
     # A single-asset rename creates a split group. Move its room ownership and
     # quantity without disturbing the remaining assets in the source group.
@@ -15174,13 +15361,19 @@ def _repair_prepared_event_asset_group_links(
                 max(1, _safe_int(marker.get('quantity'), 1))
                 if marker else 1
             )
-            changed += _move_event_subproject_model_group_quantity(
+            group_changes = _move_event_subproject_model_group_quantity(
                 event,
                 source_group,
                 current_group,
                 quantity,
                 asset_id,
             )
+            changed += group_changes
+            if group_changes:
+                repair_group_families.add(frozenset(
+                    set(historical_groups.get(asset_id, set()))
+                    | {current_key}
+                ))
 
         if owners:
             continue
@@ -15215,16 +15408,36 @@ def _repair_prepared_event_asset_group_links(
                     quantity,
                     max(1, _safe_int(marker.get('quantity'), 1)),
                 )
-        changed += _move_event_subproject_model_group_quantity(
+        group_changes = _move_event_subproject_model_group_quantity(
             event,
             source_group,
             current_group,
             quantity,
             asset_id,
         )
+        changed += group_changes
+        if group_changes:
+            repair_group_families.add(frozenset(
+                set(historical_groups.get(asset_id, set()))
+                | {current_key}
+            ))
 
-    if changed:
-        _sync_event_model_markers_from_subprojects(event)
+    if subprojects and repair_group_families:
+        before_markers = list(getattr(event, 'prepared_items', []) or [])
+        for family_keys in repair_group_families:
+            has_existing_marker = any(
+                _event_model_group_key(marker) in family_keys
+                for value in getattr(event, 'prepared_items', []) or []
+                for marker in [_parse_model_marker(value)]
+                if marker
+            )
+            if has_existing_marker:
+                _sync_event_model_markers_from_subprojects(
+                    event,
+                    family_keys,
+                )
+        if event.prepared_items != before_markers:
+            changed += 1
     return changed
 
 
@@ -26247,6 +26460,14 @@ def bulk_renumber_assets():
                 for old_id, new_id in asset_id_mapping.items()
                 if old_id != new_id
             }
+            historical_id_mapping = _inventory_historical_asset_id_mapping(
+                data_manager.inventory,
+                asset_id_mapping,
+            )
+            reference_mapping = {
+                **historical_id_mapping,
+                **changed_mapping,
+            }
 
             if not changed_mapping:
                 return jsonify({
@@ -26284,7 +26505,7 @@ def bulk_renumber_assets():
             for container in data_manager.containers.values():
                 changed = _replace_asset_ids_in_container(
                     container,
-                    changed_mapping,
+                    reference_mapping,
                 )
                 if changed:
                     containers_updated += 1
@@ -26297,7 +26518,7 @@ def bulk_renumber_assets():
             for event in data_manager.events.values():
                 event_changed = _replace_asset_ids_in_event(
                     event,
-                    changed_mapping,
+                    reference_mapping,
                 )
 
                 if event_changed:
@@ -26322,7 +26543,7 @@ def bulk_renumber_assets():
             stale_ids = set(asset_ids) - set(new_asset_ids)
             data_manager.save_inventory(drop_asset_ids=stale_ids)
             finance_documents_updated = _finance_sync_inventory_id_mapping(
-                changed_mapping,
+                reference_mapping,
             )
 
         invalidate_cache()
@@ -26545,6 +26766,18 @@ def update_asset(asset_id):
             for item in target_assets
             if str(getattr(item, 'asset_id', '') or '').strip()
         }
+        base_asset_id_mapping = (
+            {old_asset_id: new_asset_id}
+            if new_asset_id != old_asset_id else {}
+        )
+        historical_id_mapping = _inventory_historical_asset_id_mapping(
+            data_manager.inventory,
+            {old_asset_id: new_asset_id},
+        )
+        reference_id_mapping = {
+            **historical_id_mapping,
+            **base_asset_id_mapping,
+        }
 
         audit_timestamp = _asset_audit_timestamp()
         audit_user = _asset_audit_user()
@@ -26657,19 +26890,19 @@ def update_asset(asset_id):
             asset.asset_id = new_asset_id
             data_manager.inventory[new_asset_id] = asset
 
-            # Cascade asset ID through containers.
-            for container in data_manager.containers.values():
-                container_changed = _replace_asset_ids_in_container(
-                    container,
-                    {old_asset_id: new_asset_id},
-                )
+        # Cascade the current and any unambiguous retired IDs through containers.
+        for container in data_manager.containers.values():
+            container_changed = _replace_asset_ids_in_container(
+                container,
+                reference_id_mapping,
+            )
 
-                if container_changed:
-                    id_references_changed += container_changed
-                    containers_updated += 1
+            if container_changed:
+                id_references_changed += container_changed
+                containers_updated += 1
 
-            if containers_updated:
-                data_manager.save_containers()
+        if containers_updated:
+            data_manager.save_containers()
 
         # Cascade through every event file.
         events_updated = 0
@@ -26694,10 +26927,10 @@ def update_asset(asset_id):
         for event in data_manager.events.values():
             event_changed = 0
 
-            if new_asset_id != old_asset_id:
+            if reference_id_mapping:
                 event_changed += _replace_asset_ids_in_event(
                     event,
-                    {old_asset_id: new_asset_id},
+                    reference_id_mapping,
                 )
 
             # Rewrite model requirement rows when model-type fields change.
@@ -26795,6 +27028,7 @@ def update_asset(asset_id):
                 group_changed
                 and (apply_to == 'allSimilar' or len(old_group_assets) == 1)
             ),
+            additional_asset_id_mapping=historical_id_mapping,
         )
 
         invalidate_cache()
@@ -30165,9 +30399,21 @@ def _finance_sync_inventory_edit(
     new_group,
     target_asset_ids=None,
     apply_group_change=False,
+    additional_asset_id_mapping=None,
 ):
     """Keep live draft quotation lines aligned with intentional inventory edits."""
-    id_mapping = {}
+    id_mapping = {
+        str(source_id or '').strip(): str(destination_id or '').strip()
+        for source_id, destination_id in (
+            additional_asset_id_mapping or {}
+        ).items()
+        if (
+            str(source_id or '').strip()
+            and str(destination_id or '').strip()
+            and str(source_id or '').strip()
+            != str(destination_id or '').strip()
+        )
+    }
     old_asset_id = str(old_asset_id or '').strip()
     new_asset_id = str(new_asset_id or '').strip()
     if old_asset_id and new_asset_id and old_asset_id != new_asset_id:
@@ -41309,6 +41555,10 @@ def invoice_plans_collection():
     with _finance_lock:
         finance_data = _load_finance_data()
         query = str(request.args.get('query') or '').strip().casefold()
+        mine_only = str(request.args.get('mine') or '').strip().lower() in {
+            '1', 'true', 'yes', 'on',
+        }
+        current_username = _finance_current_username().casefold()
         status_filters = {
             status
             for value in request.args.getlist('status')
@@ -41323,6 +41573,12 @@ def invoice_plans_collection():
         rows = []
         for quotation in finance_data.get('documents') or []:
             if quotation.get('type') != 'quotation' or not _finance_user_can_access(quotation):
+                continue
+            if (
+                mine_only
+                and _finance_document_owner_username(quotation).casefold()
+                != current_username
+            ):
                 continue
             quotation_id = str(quotation.get('id') or '')
             existing = plans.get(quotation_id) or _invoice_plan_legacy_seed(

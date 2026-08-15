@@ -14,7 +14,7 @@ const costingState = {
   listLoading: false,
   listMeta: { total: 0, hasMore: false, nextOffset: null, statusTotal: 0, statusCounts: {} },
   statuses: [],
-  mineOnly: false,
+  mineOnly: true,
   sort: 'updated',
   summaryGrouping: 'category',
   addCategory: '',
@@ -662,7 +662,7 @@ function costingRenderList() {
   root.innerHTML = `
     <div class="finance-toolbar costing-toolbar">
       <div class="finance-toolbar-heading"><div class="finance-toolbar-title-line"><h2>Costings</h2>
-        ${showMineToggle ? `<button type="button" class="finance-switch finance-list-mine-toggle costing-list-mine-toggle ${costingState.mineOnly ? 'on' : ''}" role="switch" aria-checked="${costingState.mineOnly ? 'true' : 'false'}" onclick="costingToggleMineOnly()"><span aria-hidden="true"></span>My costings</button>` : ''}
+        ${showMineToggle ? `<button type="button" class="finance-switch finance-list-mine-toggle costing-list-mine-toggle ${costingState.mineOnly ? 'on' : ''}" role="switch" aria-checked="${costingState.mineOnly ? 'true' : 'false'}" onclick="costingToggleMineOnly()"><span aria-hidden="true"></span>My projects</button>` : ''}
         </div>
         <p class="finance-subtitle">Your costings, linked quotations and project profitability.</p></div>
       <div class="finance-toolbar-actions">

@@ -8,6 +8,7 @@ const invoiceState = {
   current: null,
   query: '',
   statuses: [],
+  mineOnly: true,
   searchTimer: null,
   saveTimer: null,
   activeSave: null,
@@ -244,6 +245,7 @@ async function loadInvoices(query = '', options = {}) {
   try {
     const params = new URLSearchParams();
     if (invoiceState.query) params.set('query', invoiceState.query);
+    if (invoiceListCanToggleMine() && invoiceState.mineOnly) params.set('mine', '1');
     invoiceState.statuses.forEach(status => params.append('status', status));
     params.set('limit', '40');
     if (append && invoiceState.listMeta.nextOffset != null) params.set('offset', String(invoiceState.listMeta.nextOffset));
@@ -288,6 +290,19 @@ function invoiceQueueSearch(value) {
   invoiceState.searchTimer = setTimeout(() => loadInvoices(value), 320);
 }
 
+function invoiceListCanToggleMine() {
+  return (typeof isAdminUser === 'function' && isAdminUser())
+    || (typeof isPlatformAdminUser === 'function' && isPlatformAdminUser());
+}
+
+function invoiceToggleMineOnly() {
+  invoiceState.mineOnly = !invoiceState.mineOnly;
+  const toggle = document.querySelector('.invoice-list-mine-toggle');
+  toggle?.classList.toggle('on', invoiceState.mineOnly);
+  toggle?.setAttribute('aria-checked', invoiceState.mineOnly ? 'true' : 'false');
+  loadInvoices(invoiceState.query);
+}
+
 function invoiceToggleFilter(status) {
   if (status === 'all') {
     invoiceState.statuses = [];
@@ -318,6 +333,7 @@ function invoiceFilterMarkup() {
 function invoiceRenderList() {
   const root = invoiceRoot();
   if (!root) return;
+  const showMineToggle = invoiceListCanToggleMine();
   const source = invoiceState.view === 'issued' ? invoiceState.issuedInvoices : invoiceState.rows;
   const visible = invoiceState.statuses.length
     ? source.filter(row => invoiceState.statuses.includes(
@@ -327,7 +343,10 @@ function invoiceRenderList() {
   root.innerHTML = `
     <header class="invoice-list-header">
       <div>
-        <h2>Invoices</h2>
+        <div class="finance-toolbar-title-line">
+          <h2>Invoices</h2>
+          ${showMineToggle ? `<button type="button" class="finance-switch finance-list-mine-toggle invoice-list-mine-toggle ${invoiceState.mineOnly ? 'on' : ''}" role="switch" aria-checked="${invoiceState.mineOnly ? 'true' : 'false'}" onclick="invoiceToggleMineOnly()"><span aria-hidden="true"></span>My projects</button>` : ''}
+        </div>
         <p>${invoiceState.view === 'issued' ? 'Review every issued invoice by invoice number and project.' : 'Build installment plans, issue invoices and track every payment.'}</p>
       </div>
       <div class="invoice-list-actions">
