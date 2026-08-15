@@ -238,12 +238,52 @@ _company_storage_cache_lock = _company_storage_service._lock
 
 _manager_caches = {}
 
+class _CompanyScopedRLock:
+    """Serialize one kind of write per company without blocking other tenants."""
+
+    def __init__(self, name):
+        self.name = str(name or 'action')
+        self._guard = threading.RLock()
+        self._locks = {}
+        self._local = threading.local()
+
+    def _lock(self):
+        company_code = _current_company_code()
+        with self._guard:
+            return self._locks.setdefault(company_code, threading.RLock())
+
+    def acquire(self, *args, **kwargs):
+        lock = self._lock()
+        acquired = lock.acquire(*args, **kwargs)
+        if acquired:
+            stack = getattr(self._local, 'stack', None)
+            if stack is None:
+                stack = []
+                self._local.stack = stack
+            stack.append(lock)
+        return acquired
+
+    def release(self):
+        stack = getattr(self._local, 'stack', None) or []
+        if not stack:
+            raise RuntimeError(f'{self.name} lock is not held by this thread')
+        stack.pop().release()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.release()
+        return False
+
+
 # Cross-device actions can otherwise race on the same physical asset.
 _transfer_action_lock = threading.RLock()
 _prepare_action_lock = threading.RLock()
-_inventory_action_lock = threading.RLock()
+_inventory_action_lock = _CompanyScopedRLock('inventory action')
 _planning_templates_lock = threading.RLock()
-_finance_lock = threading.RLock()
+_finance_lock = _CompanyScopedRLock('finance action')
 _event_creation_lock = threading.RLock()
 _event_file_action_locks = defaultdict(threading.RLock)
 _upload_processing_executor = ThreadPoolExecutor(
@@ -3874,6 +3914,23 @@ def _asset_import_inventory_revision():
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _asset_import_department_revision(departments=None):
+    departments = _load_departments() if departments is None else departments
+    rows = [
+        (
+            _normalise_department_code(code),
+            str((department or {}).get('name') or code).strip(),
+        )
+        for code, department in (departments or {}).items()
+    ]
+    encoded = json.dumps(
+        sorted(rows, key=lambda row: row[0].casefold()),
+        ensure_ascii=False,
+        separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _asset_import_plan_rows_digest(rows):
     fields = (
         'brand', 'model', 'description', 'version', 'department', 'quantity',
@@ -3921,16 +3978,19 @@ def _asset_import_plan_response(rows):
     record_count = _asset_import_requested_record_count(rows)
     planned_rows = _asset_import_preview_rows(rows)
     revision = _asset_import_inventory_revision()
+    department_revision = _asset_import_department_revision()
     token = _asset_import_plan_serializer().dumps({
         'company': _current_company_code(),
         'user': str(session.get('user') or ''),
         'revision': revision,
+        'departmentRevision': department_revision,
         'rowsDigest': _asset_import_plan_rows_digest(planned_rows),
     })
     return {
         'rows': planned_rows,
         'planToken': token,
         'inventoryRevision': revision,
+        'departmentRevision': department_revision,
         'inventoryRecordsPlanned': record_count,
     }
 
@@ -25449,10 +25509,21 @@ def import_assets_from_workbook():
         except ValueError as error:
             return jsonify({'error': str(error), 'code': 'asset_import_plan_required'}), 409
 
-        if plan.get('revision') != _asset_import_inventory_revision():
+        inventory_changed = (
+            plan.get('revision') != _asset_import_inventory_revision()
+        )
+        departments_changed = (
+            plan.get('departmentRevision')
+            != _asset_import_department_revision()
+        )
+        if inventory_changed or departments_changed:
             refreshed = _asset_import_plan_response(raw_rows)
             return jsonify({
-                'error': 'Inventory changed after this import was previewed. Review the refreshed Asset IDs and confirm again.',
+                'error': (
+                    'Inventory or departments changed after this import was '
+                    'previewed. Review the refreshed matches and Asset IDs, '
+                    'then confirm again.'
+                ),
                 'code': 'asset_import_plan_stale',
                 'data': refreshed,
             }), 409
@@ -38052,6 +38123,21 @@ def _finance_document_list_summary(document):
         'invoiceSentDate': str(document.get('invoiceSentDate') or ''),
         'paymentDueDate': str(document.get('paymentDueDate') or ''),
         'paymentTerms': str(document.get('paymentTerms') or ''),
+        'invoiceDate': str(document.get('invoiceDate') or ''),
+        'dueDate': str(document.get('dueDate') or ''),
+        'invoiceLabel': str(document.get('invoiceLabel') or ''),
+        'invoiceAmount': round(max(0, _safe_float(
+            document.get('invoiceAmount'), totals.get('total', 0)
+        )), 2),
+        'sourceQuotationId': str(document.get('sourceQuotationId') or ''),
+        'sourceQuotationNumber': str(
+            document.get('sourceQuotationNumber') or ''
+        ),
+        'invoicePlanPayments': [
+            copy.deepcopy(row)
+            for row in document.get('invoicePlanPayments') or []
+            if isinstance(row, dict)
+        ],
         'paidAt': str(document.get('paidAt') or ''),
         'statusChangedAt': str(document.get('statusChangedAt') or ''),
         'validUntil': str(document.get('validUntil') or ''),
@@ -38112,12 +38198,15 @@ def _finance_list_or_create(document_type):
                 for status in str(value or '').lower().split(',')
                 if status
             }
-            if (
-                document_type == 'quotation'
-                and status_filters
-                and not status_filters.issubset(FINANCE_QUOTATION_STATUSES)
-            ):
-                return jsonify({'error': 'Invalid quotation status filter'}), 400
+            allowed_statuses = (
+                set(FINANCE_QUOTATION_STATUSES)
+                if document_type == 'quotation'
+                else set(FINANCE_INVOICE_STATUSES)
+            )
+            if status_filters and not status_filters.issubset(allowed_statuses):
+                return jsonify({
+                    'error': f'Invalid {document_type} status filter'
+                }), 400
             summary_view = (
                 str(request.args.get('view') or '').strip().lower() == 'summary'
             )
@@ -38156,10 +38245,10 @@ def _finance_list_or_create(document_type):
                     1 for row in source_rows
                     if str(row.get('status') or 'draft').strip().lower() == status
                 )
-                for status in FINANCE_QUOTATION_STATUSES
-            } if document_type == 'quotation' else {}
+                for status in allowed_statuses
+            }
             status_total = sum(status_counts.values())
-            if document_type == 'quotation' and status_filters:
+            if status_filters:
                 source_rows = [
                     row for row in source_rows
                     if str(row.get('status') or 'draft').strip().lower() in status_filters
@@ -39773,12 +39862,29 @@ def costings_collection():
                     row.get('createdBy') or '',
                 )).casefold()
             ]
+        status_counts = {
+            status: sum(1 for row in rows if row.get('status') == status)
+            for status in ('draft', 'linked', 'converted')
+        }
+        status_total = sum(status_counts.values())
         if statuses:
             rows = [row for row in rows if row.get('status') in statuses]
-        rows.sort(
-            key=lambda row: (row.get('updatedAt') or '', row.get('projectName') or ''),
-            reverse=True,
-        )
+        sort_by = str(request.args.get('sort') or 'updated').strip().lower()
+        if sort_by == 'project':
+            rows.sort(key=lambda row: (
+                str(row.get('projectName') or '').casefold(),
+                str(row.get('updatedAt') or ''),
+            ))
+        else:
+            rows.sort(
+                key=lambda row: (row.get('updatedAt') or '', row.get('projectName') or ''),
+                reverse=True,
+            )
+        total = len(rows)
+        offset = max(0, request.args.get('offset', type=int) or 0)
+        requested_limit = request.args.get('limit', type=int)
+        limit = min(max(1, requested_limit or 40), 100)
+        rows = rows[offset:offset + limit]
         summaries = [{
             'id': row['id'],
             'projectName': row['projectName'],
@@ -39796,7 +39902,22 @@ def costings_collection():
             'updatedAt': row.get('updatedAt') or '',
             'updatedBy': row.get('updatedBy') or '',
         } for row in rows]
-        return jsonify({'success': True, 'data': summaries})
+        next_offset = offset + len(summaries)
+        has_more = next_offset < total
+        return jsonify({
+            'success': True,
+            'data': summaries,
+            'meta': {
+                'view': 'summary',
+                'total': total,
+                'offset': offset,
+                'limit': limit,
+                'hasMore': has_more,
+                'nextOffset': next_offset if has_more else None,
+                'statusTotal': status_total,
+                'statusCounts': status_counts,
+            },
+        })
 
     payload = request.get_json(silent=True) or {}
     if not str(payload.get('projectName') or '').strip():
@@ -40665,6 +40786,9 @@ def _normalise_invoice_plan(value, quotation, existing=None):
     )
     plan = {
         'id': str(existing.get('id') or value.get('id') or new_id('invoice-plan'))[:80],
+        'documentVersion': max(1, _safe_int(
+            existing.get('documentVersion', value.get('documentVersion')), 1
+        )),
         'quotationId': str(quotation.get('id') or '')[:80],
         'quotationNumber': str(quotation.get('number') or '')[:80],
         'status': status,
@@ -40904,12 +41028,46 @@ def _invoice_plan_response(finance_data, quotation, plan, include_quotation=Fals
     return payload
 
 
+def _invoice_plan_list_response(finance_data, quotation, plan):
+    """Return only the fields needed by the invoice-plan directory."""
+    summary = _invoice_plan_summary(
+        plan, (quotation.get('totals') or {}).get('total', 0)
+    )
+    return {
+        'plan': {
+            'id': str(plan.get('id') or ''),
+            'documentVersion': max(
+                1, _safe_int(plan.get('documentVersion'), 1)
+            ),
+            'status': str(plan.get('status') or 'draft'),
+            'strategy': str(plan.get('strategy') or 'custom'),
+            'strategyLabel': str(
+                plan.get('strategyLabel') or 'Custom installment plan'
+            ),
+            'installmentCount': len(plan.get('installments') or []),
+            'updatedAt': str(plan.get('updatedAt') or ''),
+            'summary': summary,
+        },
+        'quotation': _finance_document_list_summary(quotation),
+    }
+
+
 @app.route('/api/invoice-plans', methods=['GET'])
 @require_sales
 def invoice_plans_collection():
     with _finance_lock:
         finance_data = _load_finance_data()
         query = str(request.args.get('query') or '').strip().casefold()
+        status_filters = {
+            status
+            for value in request.args.getlist('status')
+            for status in str(value or '').strip().lower().split(',')
+            if status
+        }
+        if status_filters and not status_filters.issubset(
+            set(FINANCE_INVOICE_PLAN_STATUSES)
+        ):
+            return jsonify({'error': 'Invalid invoice-plan status filter'}), 400
         plans = finance_data.get('invoicePlans') or {}
         rows = []
         for quotation in finance_data.get('documents') or []:
@@ -40923,11 +41081,28 @@ def invoice_plans_collection():
                 continue
             normalised_quote = _normalise_finance_document(quotation, 'quotation', quotation)
             plan = _normalise_invoice_plan(existing or {}, normalised_quote, existing or {})
-            row = _invoice_plan_response(finance_data, normalised_quote, plan)
+            row = _invoice_plan_list_response(
+                finance_data, normalised_quote, plan
+            )
             search_text = _finance_list_search_text(normalised_quote)
             if query and query not in search_text:
                 continue
             rows.append(row)
+        status_counts = {
+            status: sum(
+                1 for row in rows
+                if str((row.get('plan') or {}).get('status') or 'draft')
+                == status
+            )
+            for status in FINANCE_INVOICE_PLAN_STATUSES
+        }
+        status_total = sum(status_counts.values())
+        if status_filters:
+            rows = [
+                row for row in rows
+                if str((row.get('plan') or {}).get('status') or 'draft')
+                in status_filters
+            ]
         rows.sort(
             key=lambda row: (
                 str((row.get('plan') or {}).get('updatedAt') or ''),
@@ -40935,7 +41110,27 @@ def invoice_plans_collection():
             ),
             reverse=True,
         )
-        return jsonify({'success': True, 'data': rows})
+        total = len(rows)
+        offset = max(0, request.args.get('offset', type=int) or 0)
+        requested_limit = request.args.get('limit', type=int)
+        limit = min(max(1, requested_limit or 40), 100)
+        page_rows = rows[offset:offset + limit]
+        next_offset = offset + len(page_rows)
+        has_more = next_offset < total
+        return jsonify({
+            'success': True,
+            'data': page_rows,
+            'meta': {
+                'view': 'summary',
+                'total': total,
+                'offset': offset,
+                'limit': limit,
+                'hasMore': has_more,
+                'nextOffset': next_offset if has_more else None,
+                'statusTotal': status_total,
+                'statusCounts': status_counts,
+            },
+        })
 
 
 @app.route('/api/invoice-plans/<quotation_id>', methods=['GET', 'PUT'])
@@ -40988,6 +41183,47 @@ def invoice_plan_item(quotation_id):
             })
 
         requested = request.get_json() or {}
+        base_plan = requested.pop('_baseDocument', None)
+        current_document_version = max(
+            1, _safe_int((existing or {}).get('documentVersion'), 1)
+        )
+        if 'documentVersion' in requested:
+            expected_document_version = max(
+                1, _safe_int(requested.get('documentVersion'), 1)
+            )
+            if expected_document_version != current_document_version:
+                current_plan = _normalise_invoice_plan(
+                    existing or {}, quotation, existing or {}
+                )
+                can_merge = (
+                    isinstance(base_plan, dict)
+                    and str(base_plan.get('id') or '')
+                    == str(current_plan.get('id') or '')
+                    and max(1, _safe_int(
+                        base_plan.get('documentVersion'), 1
+                    )) == expected_document_version
+                )
+                if can_merge:
+                    try:
+                        requested = three_way_merge(
+                            base_plan, requested, current_plan
+                        )
+                        requested['documentVersion'] = current_document_version
+                    except FinanceMergeConflict:
+                        can_merge = False
+                if not can_merge:
+                    return jsonify({
+                        'error': 'This invoice plan was updated by another user',
+                        'code': 'document_version_conflict',
+                        'expectedVersion': expected_document_version,
+                        'actualVersion': current_document_version,
+                        'data': _invoice_plan_response(
+                            finance_data,
+                            quotation,
+                            current_plan,
+                            include_quotation=True,
+                        ),
+                    }), 409
         plan = _normalise_invoice_plan(requested, quotation, existing or {})
         previous_details = (
             existing.get('invoiceDetails')
@@ -41013,6 +41249,7 @@ def invoice_plan_item(quotation_id):
                 'plan-updated', 'Updated invoice strategy or payment records'
             ))
         plan['history'] = history[-1000:]
+        plan['documentVersion'] = current_document_version + 1
         plans[str(quotation_id)] = plan
         _invoice_plan_sync_documents(finance_data, plan, quotation)
         _save_finance_data(finance_data)
@@ -41075,16 +41312,20 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             requested_amount = round(max(0, _safe_float(
                 installment.get('amount'), 0,
             )), 2)
-            if (
-                already_invoiced > 0.005
-                and already_invoiced + requested_amount > quotation_total + 0.01
-            ):
+            if already_invoiced + requested_amount > quotation_total + 0.01:
+                if already_invoiced >= quotation_total - 0.01 and quotation_total > 0:
+                    error_message = (
+                        'This accepted quotation has already been invoiced in full. '
+                        'Delete or void an existing invoice before issuing another.'
+                    )
+                else:
+                    error_message = (
+                        'This invoice would exceed the remaining accepted quotation '
+                        'amount. Reduce the installment, or delete or void an existing '
+                        'invoice first.'
+                    )
                 return jsonify({
-                    'error': (
-                        'This quotation has already been invoiced for its full '
-                        'amount. Delete or void an existing invoice before '
-                        'issuing another one.'
-                    ),
+                    'error': error_message,
                 }), 409
 
         request_data = request.get_json() or {}

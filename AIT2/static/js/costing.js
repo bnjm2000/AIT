@@ -12,6 +12,7 @@ const costingState = {
   listQuery: '',
   listRequestSeq: 0,
   listLoading: false,
+  listMeta: { total: 0, hasMore: false, nextOffset: null, statusTotal: 0, statusCounts: {} },
   statuses: [],
   mineOnly: false,
   sort: 'updated',
@@ -58,26 +59,7 @@ async function costingHandleRealtimeChanges(changes) {
     costingRenderEditor();
   }
   if (!currentId) {
-    await Promise.all(costingIds.map(async costingId => {
-      try {
-        const response = await apiCall(`/api/costings/${encodeURIComponent(costingId)}`);
-        const detail = response.data;
-        const summary = {
-          ...detail,
-          lineCount: (detail.lineItems || []).length
-        };
-        const index = costingState.documents.findIndex(row => String(row.id) === costingId);
-        if (index >= 0) costingState.documents[index] = summary;
-        else costingState.documents.unshift(summary);
-      } catch (error) {
-        if (error?.status === 404) {
-          costingState.documents = costingState.documents.filter(
-            row => String(row.id) !== costingId
-          );
-        }
-      }
-    }));
-    costingRenderList();
+    await costingLoadList();
   }
   return true;
 }
@@ -547,12 +529,14 @@ async function costingLoadLookups() {
   }
 }
 
-async function costingLoadList() {
+async function costingLoadList(options = {}) {
   const root = costingRoot();
   if (!root) return;
+  const append = options.append === true;
+  if (costingState.listLoading && append) return;
   const requestSeq = ++costingState.listRequestSeq;
   costingState.listLoading = true;
-  if (!root.querySelector('.costing-toolbar')) {
+  if (!append && !root.querySelector('.costing-toolbar')) {
     root.innerHTML = '<div class="loading">Loading costings...</div>';
   }
   try {
@@ -560,9 +544,18 @@ async function costingLoadList() {
     if (costingState.listQuery) params.set('query', costingState.listQuery);
     if (costingListCanToggleMine() && costingState.mineOnly) params.set('mine', '1');
     costingState.statuses.forEach(status => params.append('status', status));
+    params.set('sort', costingState.sort);
+    params.set('limit', '40');
+    if (append && costingState.listMeta.nextOffset != null) {
+      params.set('offset', String(costingState.listMeta.nextOffset));
+    }
     const response = await apiCall(`/api/costings?${params.toString()}`);
     if (requestSeq !== costingState.listRequestSeq) return;
-    costingState.documents = response.data || [];
+    const incoming = response.data || [];
+    costingState.documents = append
+      ? [...costingState.documents, ...incoming.filter(row => !costingState.documents.some(existing => existing.id === row.id))]
+      : incoming;
+    costingState.listMeta = { ...costingState.listMeta, ...(response.meta || {}) };
     costingRenderList();
   } catch (error) {
     if (requestSeq !== costingState.listRequestSeq) return;
@@ -606,7 +599,7 @@ function costingSetListSort(value) {
   if (typeof financeCloseMenus === 'function') financeCloseMenus();
   const label = document.getElementById('costingListSortLabel');
   if (label) label.textContent = costingListSortLabel();
-  costingRenderList();
+  costingLoadList();
 }
 
 function costingListCanToggleMine() {
@@ -632,29 +625,28 @@ function costingToggleMineOnly() {
 function costingListResultsHtml() {
   const rows = costingSortedDocuments();
   const showSalesperson = costingListShowsSalesperson();
-  const counts = costingState.documents.reduce((result, row) => {
-    result[row.status] = (result[row.status] || 0) + 1;
-    return result;
-  }, {});
+  const counts = costingState.listMeta.statusCounts || {};
+  const total = Number(costingState.listMeta.total || rows.length);
+  const statusTotal = Number(costingState.listMeta.statusTotal || total);
   return `<div class="finance-card" id="costingListResults">
     <div class="finance-list-status-filters" aria-label="Filter costing statuses">
-      <button type="button" class="finance-list-filter ${!costingState.statuses.length ? 'active' : ''}" onclick="costingToggleStatus('all')">All<span>${costingState.documents.length}</span></button>
+      <button type="button" class="finance-list-filter ${!costingState.statuses.length ? 'active' : ''}" onclick="costingToggleStatus('all')">All<span>${statusTotal}</span></button>
       ${['draft', 'linked', 'converted'].map(status => `<button type="button" class="finance-list-filter status-${status} ${costingState.statuses.includes(status) ? 'active' : ''}" aria-pressed="${costingState.statuses.includes(status) ? 'true' : 'false'}" onclick="costingToggleStatus('${status}')">${status === 'draft' ? 'Draft' : status === 'linked' ? 'Quotation linked' : 'Quotation made'}<span>${counts[status] || 0}</span></button>`).join('')}
     </div>
     ${rows.length ? `<div class="costing-list-wrap"><table class="finance-list-table costing-list-table">
       <thead><tr><th>Number</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th class="finance-list-status-heading">Status</th><th>Items</th><th style="text-align:right;">Client price</th><th style="text-align:right;">Profit</th><th>Last modified</th></tr></thead>
       <tbody>${rows.map(row => `<tr class="finance-list-row" data-costing-id="${costingAttr(row.id)}" onclick="costingOpen('${costingAttr(row.id)}')" oncontextmenu="costingOpenContextMenu(event,'${costingAttr(row.id)}')">
-        <td><span class="finance-doc-number">${costingEscape(row.convertedQuotationNumber || 'Not linked')}</span><br><small>${row.convertedQuotationNumber ? 'Linked costing' : 'Costing draft'}</small></td>
-        <td class="finance-project-cell"><strong>${costingEscape(row.projectName || 'Project name required')}</strong>${row.eventLocation ? `<small class="finance-project-dates">${costingEscape(row.eventLocation)}</small>` : ''}</td>
-        ${showSalesperson ? `<td><strong>${costingEscape(row.salesperson || row.createdBy || 'Unassigned')}</strong>${row.salespersonUsername || row.createdBy ? `<br><small>${costingEscape(row.salespersonUsername || row.createdBy)}</small>` : ''}</td>` : ''}
-        <td class="finance-list-status-cell"><span class="costing-status is-${costingAttr(row.status)}">${row.status === 'converted' ? 'Quotation made' : row.status === 'linked' ? 'Quotation linked' : 'Draft'}</span></td>
-        <td>${Number(row.lineCount || 0)}</td>
-        <td style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.sale))}</td>
-        <td class="${costingNumber(row.totals?.profit) < 0 ? 'costing-negative' : 'costing-positive'}" style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.profit))}</td>
-        <td>${costingEscape(typeof financeDateTime === 'function' ? financeDateTime(row.updatedAt) : String(row.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
+        <td data-label="Quotation"><span class="finance-doc-number">${costingEscape(row.convertedQuotationNumber || 'Not linked')}</span><br><small>${row.convertedQuotationNumber ? 'Linked costing' : 'Costing draft'}</small></td>
+        <td data-label="Project" class="finance-project-cell"><strong>${costingEscape(row.projectName || 'Project name required')}</strong>${row.eventLocation ? `<small class="finance-project-dates">${costingEscape(row.eventLocation)}</small>` : ''}</td>
+        ${showSalesperson ? `<td data-label="Salesperson"><strong>${costingEscape(row.salesperson || row.createdBy || 'Unassigned')}</strong>${row.salespersonUsername || row.createdBy ? `<br><small>${costingEscape(row.salespersonUsername || row.createdBy)}</small>` : ''}</td>` : ''}
+        <td data-label="Status" class="finance-list-status-cell"><span class="costing-status is-${costingAttr(row.status)}">${row.status === 'converted' ? 'Quotation made' : row.status === 'linked' ? 'Quotation linked' : 'Draft'}</span></td>
+        <td data-label="Items">${Number(row.lineCount || 0)}</td>
+        <td data-label="Client price" style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.sale))}</td>
+        <td data-label="Profit" class="${costingNumber(row.totals?.profit) < 0 ? 'costing-negative' : 'costing-positive'}" style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.profit))}</td>
+        <td data-label="Modified">${costingEscape(typeof financeDateTime === 'function' ? financeDateTime(row.updatedAt) : String(row.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
       </tr>`).join('')}</tbody>
     </table></div>
-    <div class="finance-list-pagination"><span>Showing ${rows.length} costing${rows.length === 1 ? '' : 's'}</span></div>` : '<div class="finance-empty">No costings match the current search or filters.<br><button type="button" class="btn btn-primary" style="margin-top:14px" onclick="costingCreate()">Create the first costing</button></div>'}
+    <div class="finance-list-pagination"><span>Showing ${rows.length} of ${total} costing${total === 1 ? '' : 's'}</span>${costingState.listMeta.hasMore ? '<button type="button" class="btn btn-secondary" onclick="costingLoadMore()">Load more</button>' : ''}</div>` : '<div class="finance-empty">No costings match the current search or filters.<br><button type="button" class="btn btn-primary" style="margin-top:14px" onclick="costingCreate()">Create the first costing</button></div>'}
   </div>`;
 }
 
@@ -686,6 +678,10 @@ function costingQueueListSearch(value) {
   costingState.listQuery = String(value || '').trim();
   clearTimeout(costingState.listTimer);
   costingState.listTimer = setTimeout(costingLoadList, 350);
+}
+
+function costingLoadMore() {
+  if (costingState.listMeta.hasMore) costingLoadList({ append: true });
 }
 
 function costingToggleStatus(status) {
@@ -2071,19 +2067,6 @@ async function costingVendorChanged(index, value, input) {
     costingQueueSave();
     costingRenderEditor();
   } catch {}
-}
-
-function costingToggleMultiplierLabel(index) {
-  const line = costingLines()[index];
-  if (!line) return;
-  line.multiplierLabel = line.multiplierLabel === 'Day' ? 'Mult' : 'Day';
-  costingQueueSave();
-  costingRenderEditor();
-}
-
-function costingToggleAllMultiplierLabels() {
-  const next = costingLines().some(line => line.multiplierLabel !== 'Day') ? 'Day' : 'Mult';
-  costingSetAllMultiplierLabels(next);
 }
 
 function costingSetAllMultiplierLabels(label, encodedCategory = '') {

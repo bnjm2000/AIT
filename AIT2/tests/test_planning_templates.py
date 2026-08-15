@@ -744,7 +744,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("'profit-loss': '<path", app_source)
         self.assertIn("companiesTab.dataset.label = 'Companies'", app_source)
 
-    def test_prepare_trial_and_legacy_workspaces_are_both_available(self):
+    def test_only_current_prepare_workspace_is_rendered(self):
         self.login('admin')
         response = self.client.get('/events')
         page = response.get_data(as_text=True)
@@ -753,8 +753,9 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("showSection('prepare-new')", page)
         self.assertIn('id="prepare-new-section" class="content-section"', page)
         self.assertIn('id="prepare-new-page-root"', page)
-        self.assertIn("showSection('prepare')", page)
-        self.assertIn('Prepare (Legacy)', page)
+        self.assertNotIn("showSection('prepare')", page)
+        self.assertNotIn('Prepare (Legacy)', page)
+        self.assertNotIn('id="prepare-section"', page)
 
         script = APP_BUNDLE_SOURCE
 
@@ -762,8 +763,8 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('async function prepareNewApplyRealtimeEvent(event)', script)
         self.assertIn("case \"prepare-new\":", script)
         self.assertIn("planOpenEventChooser('prepare-new')", script)
-        self.assertIn("'prepare (legacy)': 'prepare'", script)
         self.assertIn("'prepare': 'prepare-new'", script)
+        self.assertIn("if (sectionName === 'prepare') sectionName = 'prepare-new'", script)
         self.assertIn('function openPrepareWorkspaceForEvent(eventId)', script)
         self.assertIn('function openReturnWorkspaceForEvent(eventId)', script)
         self.assertIn(

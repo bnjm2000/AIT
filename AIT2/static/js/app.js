@@ -3571,9 +3571,8 @@ function sectionFromSidebarLabel(item) {
     'activity log': 'logs',
     'logs': 'logs',
     'maintenance report': 'maintenance-report',
-    'prepare events': 'prepare',
-    'prepare assets': 'prepare',
-    'prepare (legacy)': 'prepare',
+    'prepare events': 'prepare-new',
+    'prepare assets': 'prepare-new',
     'prepare': 'prepare-new',
     'return events': 'return',
     'return assets': 'return',
@@ -3614,7 +3613,6 @@ function sectionFromSidebarLabel(item) {
     ['manpower & transport', 'workforce'],
     ['manpower and transport', 'workforce'],
     ['manpower', 'workforce'],
-    ['prepare (legacy)', 'prepare'],
     ['prepare', 'prepare-new'],
     ['return', 'return'],
     ['transfer', 'transfer'],
@@ -3862,6 +3860,42 @@ function updateAppSectionHistory(sectionName, replace = false) {
 }
 
 function showSection(sectionName, options = {}) {
+  // Preserve old bookmarks without rendering the retired legacy workspace.
+  if (sectionName === 'prepare') sectionName = 'prepare-new';
+  if (!options.skipPendingSave) {
+    const leavingQuotation = sectionName !== 'quotations'
+      && document.getElementById('quotations-section')?.classList.contains('active')
+      && typeof financeHasPendingChanges === 'function'
+      && financeHasPendingChanges();
+    if (leavingQuotation) {
+      financeFlushPendingSave().then(saved => {
+        if (!saved) {
+          showNotification('info', 'Review the unsaved quotation changes before leaving.');
+          return;
+        }
+        financeState.current = null;
+        financeState.snapshotMode = false;
+        showSection(sectionName, { ...options, skipPendingSave: true });
+      }).catch(error => showNotification('error', error.message || 'Failed to save quotation'));
+      return;
+    }
+    const leavingInvoice = sectionName !== 'invoices'
+      && document.getElementById('invoices-section')?.classList.contains('active')
+      && typeof invoiceHasPendingChanges === 'function'
+      && invoiceHasPendingChanges();
+    if (leavingInvoice) {
+      invoiceFlushPendingSave().then(saved => {
+        if (!saved) {
+          showNotification('info', 'Review the unsaved invoice changes before leaving.');
+          return;
+        }
+        invoiceState.current = null;
+        invoiceState.basePlan = null;
+        showSection(sectionName, { ...options, skipPendingSave: true });
+      }).catch(error => showNotification('error', error.message || 'Failed to save invoice plan'));
+      return;
+    }
+  }
   const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies", "accounting"]);
   const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
@@ -3985,9 +4019,6 @@ function showSection(sectionName, options = {}) {
       break;
     case "maintenance-report":
       loadMaintenanceReportSection();
-      break;
-    case "prepare":
-      loadPrepareEvents();
       break;
     case "return":
       loadReturnEvents();
@@ -5307,9 +5338,6 @@ async function forceEventState(eventId, newState) {
 
         // Refresh all relevant views
         setTimeout(() => {
-            if (document.getElementById('prepare-section').classList.contains('active')) {
-                loadPrepareEvents();
-            }
             if (document.getElementById('dashboard-section').classList.contains('active')) {
                 loadDashboard();
             }
@@ -5341,9 +5369,6 @@ async function removeForcedState(eventId) {
 
         // Refresh all relevant views
         setTimeout(() => {
-            if (document.getElementById('prepare-section').classList.contains('active')) {
-                loadPrepareEvents();
-            }
             if (document.getElementById('dashboard-section').classList.contains('active')) {
                 loadDashboard();
             }
@@ -5596,6 +5621,14 @@ async function loadInventory() {
       '<p style="color: red; text-align: center;">Error loading inventory</p>';
   }
 }
+
+window.addEventListener('beforeunload', event => {
+  const hasPendingFinance = typeof financeHasPendingChanges === 'function' && financeHasPendingChanges();
+  const hasPendingInvoice = typeof invoiceHasPendingChanges === 'function' && invoiceHasPendingChanges();
+  if (!hasPendingFinance && !hasPendingInvoice) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 function inventoryAssetMatchesIdentifier(asset, assetId) {
   const target = String(assetId || '').trim().toLowerCase();
@@ -8204,9 +8237,6 @@ async function confirmDeleteAsset() {
     if (document.getElementById('events-section')?.classList.contains('active')) {
       await loadAllEvents();
     }
-    if (document.getElementById('prepare-section')?.classList.contains('active')) {
-      await loadPrepareEvents();
-    }
     if (document.getElementById('containers-section')?.classList.contains('active')) {
       await loadContainers();
     }
@@ -8310,9 +8340,6 @@ async function confirmBulkAssetDelete() {
     await loadInventory();
     if (document.getElementById('events-section')?.classList.contains('active')) {
       await loadAllEvents();
-    }
-    if (document.getElementById('prepare-section')?.classList.contains('active')) {
-      await loadPrepareEvents();
     }
     if (document.getElementById('containers-section')?.classList.contains('active')) {
       await loadContainers();
@@ -11331,89 +11358,6 @@ async function generateMaintenanceReportPdf() {
   }
 }
 
-
-function getPrepareEventProgressTotals(event) {
-  return {
-    totalRequired: Math.max(0, Number(event?.assetCount || 0)),
-    totalAssigned: Math.max(0, Number(event?.preparedCount || 0))
-  };
-}
-
-function createPrepareEventCard(event) {
-  const card = document.createElement("div");
-  card.className = `event-card ${getEventStateClass(event.state)}`;
-  card.dataset.eventId = String(event.id);
-
-  // Helper function to escape HTML
-  const escapeHtml = (str) => {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  };
-
-  const dateRange =
-    event.startDate === event.endDate
-      ? formatDate(event.startDate)
-      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-
-  // Use the canonical event totals so miscellaneous/loan items are included.
-  const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
-  let modelSummary = "";
-
-  if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-    const models = Object.values(event.modelGroups);
-
-    // Show first 2 models as preview
-    modelSummary =
-      '<div style="margin: 10px 0; font-size: 12px; color: #666;">';
-    models.slice(0, 2).forEach((model) => {
-      const statusIcon = getModelStatusIcon(model.status);
-      const assignedCount = getPreparedQuantity(model);
-      modelSummary += `<div>${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)} (${assignedCount}/${model.requiredQuantity})</div>`;
-    });
-
-    if (models.length > 2) {
-      modelSummary += `<div style="font-style: italic;">... and ${
-        models.length - 2
-      } more</div>`;
-    }
-    modelSummary += "</div>";
-  }
-
-  const progressPercent =
-    totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
-
-    card.innerHTML = `
-        <div class="event-header">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div class="event-id">ID: ${event.id}</div>
-                <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${event.tag === 'dry hire' ? 'background: #17a2b8; color: white;' : 'background: #28a745; color: white;'}">
-                    ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
-                </span>
-            </div>
-            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(eventStateDisplayLabel(event.state))}</div>
-        </div>
-        <div class="event-title">${escapeHtml(event.name)}</div>
-        <div class="event-date">${escapeHtml(dateRange)}</div>
-        ${modelSummary}
-        <div style="margin: 15px 0;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <small style="color: #666;">Preparation Progress</small>
-                <small style="color: #666;">${totalAssigned}/${totalRequired} assets</small>
-            </div>
-            <div style="background: #e9ecef; border-radius: 10px; height: 6px; overflow: hidden;">
-                <div class="event-card-progress-bar" style="height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
-            </div>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-success" onclick="openPrepareWorkspaceForEvent(${event.id})">Prepare Assets</button>
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
-        </div>
-    `;
-
-  return card;
-}
 
 async function openPrepareEventModal(eventId) {
     try {
@@ -18560,9 +18504,6 @@ function finishEventPreparation(eventId) {
 
     // Force refresh multiple views
     setTimeout(() => {
-        if (document.getElementById('prepare-section').classList.contains('active')) {
-            loadPrepareEvents();
-        }
         if (document.getElementById('dashboard-section').classList.contains('active')) {
             loadDashboard();
         }
@@ -19540,6 +19481,8 @@ let assetImportState = {
   planning: false,
   planToken: '',
   inventoryRevision: '',
+  departmentRevision: '',
+  validationCache: null,
   page: 0
 };
 const ASSET_IMPORT_REVIEW_PAGE_SIZE = 100;
@@ -19571,17 +19514,63 @@ function assetImportSerialList(value) {
   return positionalAssetSerialList(value);
 }
 
+function assetImportValidationCache() {
+  if (assetImportState.validationCache) return assetImportState.validationCache;
+  const supplied = Array.isArray(assetImportState.departments) ? assetImportState.departments : [];
+  const sourceDepartments = supplied.length ? supplied : Object.values(departments || {});
+  const departmentList = sourceDepartments
+    .map(department => ({
+      code: assetImportNormaliseDepartmentCode(department?.code),
+      name: String(department?.name || department?.code || '').trim(),
+      pending: false
+    }))
+    .filter(department => department.code);
+  const pendingCodeNames = new Map();
+  const pendingNameCodes = new Map();
+  assetImportState.rows.forEach(row => {
+    if (!assetImportBoolean(row?.createDepartment)) return;
+    const code = assetImportNormaliseDepartmentCode(row?.newDepartmentCode || row?.department);
+    const name = String(row?.newDepartmentName || row?.department || code).trim();
+    if (code) {
+      if (!pendingCodeNames.has(code)) pendingCodeNames.set(code, new Set());
+      pendingCodeNames.get(code).add(name.toLocaleLowerCase());
+    }
+    if (name) {
+      const key = name.toLocaleLowerCase();
+      if (!pendingNameCodes.has(key)) pendingNameCodes.set(key, new Set());
+      pendingNameCodes.get(key).add(code);
+    }
+    if (code && !departmentList.some(department => department.code === code)) {
+      departmentList.push({ code, name, pending: true });
+    }
+  });
+  const descriptionsByModel = new Map();
+  (assets || []).forEach(asset => {
+    const key = `${normalizeAddAssetLookup(asset?.brand)}\u0000${normalizeAddAssetLookup(asset?.model)}`;
+    if (!descriptionsByModel.has(key)) descriptionsByModel.set(key, new Set());
+    descriptionsByModel.get(key).add(String(asset?.description || '').trim() || '(blank description)');
+  });
+  assetImportState.validationCache = {
+    departmentList,
+    pendingCodeNames,
+    pendingNameCodes,
+    descriptionsByModel
+  };
+  return assetImportState.validationCache;
+}
+
+function invalidateAssetImportValidationCache() {
+  assetImportState.validationCache = null;
+}
+
 function assetImportExistingDescriptions(row) {
   const brand = normalizeAddAssetLookup(row?.brand);
   const model = normalizeAddAssetLookup(row?.model);
   const description = normalizeAddAssetLookup(row?.description);
-  return [...new Set((assets || [])
-    .filter(asset => (
-      normalizeAddAssetLookup(asset.brand) === brand &&
-      normalizeAddAssetLookup(asset.model) === model &&
-      normalizeAddAssetLookup(asset.description) !== description
-    ))
-    .map(asset => String(asset.description || '').trim() || '(blank description)'))]
+  const descriptions = assetImportValidationCache().descriptionsByModel
+    .get(`${brand}\u0000${model}`) || new Set();
+  return [...descriptions]
+    .filter(value => normalizeAddAssetLookup(value === '(blank description)' ? '' : value) !== description)
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
@@ -19590,26 +19579,21 @@ function assetImportNormaliseDepartmentCode(value) {
 }
 
 function assetImportDepartmentList() {
-  const supplied = Array.isArray(assetImportState.departments) ? assetImportState.departments : [];
-  const list = supplied.length ? supplied : Object.values(departments || {});
-  const normalized = list
-    .map(department => ({
-      code: assetImportNormaliseDepartmentCode(department?.code),
-      name: String(department?.name || department?.code || '').trim(),
-      pending: false
-    }))
-    .filter(department => department.code);
-  assetImportState.rows.forEach(row => {
-    if (!assetImportBoolean(row?.createDepartment)) return;
-    const code = assetImportNormaliseDepartmentCode(row?.newDepartmentCode || row?.department);
-    if (!code || normalized.some(department => department.code === code)) return;
-    normalized.push({
-      code,
-      name: String(row?.newDepartmentName || row?.department || code).trim(),
-      pending: true
-    });
-  });
-  return normalized;
+  return assetImportValidationCache().departmentList;
+}
+
+function assetImportDepartmentConflictErrors(newCode, newName) {
+  const errors = [];
+  const cache = assetImportValidationCache();
+  const codeNames = cache.pendingCodeNames.get(newCode) || new Set();
+  const nameCodes = cache.pendingNameCodes.get(String(newName || '').toLocaleLowerCase()) || new Set();
+  if (newCode && codeNames.size > 1) {
+    errors.push(`New department code ${newCode} has conflicting names in this import`);
+  }
+  if (newName && nameCodes.size > 1) {
+    errors.push(`New department name ${newName} has conflicting codes in this import`);
+  }
+  return errors;
 }
 
 function assetImportDepartmentResolution(value) {
@@ -19660,17 +19644,7 @@ function assetImportRowErrors(row, index) {
       if (codeMatch) errors.push(`Department code ${newCode} already exists as ${codeMatch.name}`);
       const nameMatch = departmentList.find(department => department.name.toLocaleLowerCase() === newName.toLocaleLowerCase());
       if (nameMatch) errors.push(`Department name ${newName} already exists as ${nameMatch.code}`);
-      assetImportState.rows.forEach((candidate, candidateIndex) => {
-        if (candidateIndex === index || !assetImportBoolean(candidate?.createDepartment)) return;
-        const candidateCode = assetImportNormaliseDepartmentCode(candidate?.newDepartmentCode);
-        const candidateName = String(candidate?.newDepartmentName || '').trim();
-        if (newCode && candidateCode === newCode && candidateName.toLocaleLowerCase() !== newName.toLocaleLowerCase()) {
-          errors.push(`New department code ${newCode} has conflicting names in this import`);
-        }
-        if (newName && candidateName.toLocaleLowerCase() === newName.toLocaleLowerCase() && candidateCode !== newCode) {
-          errors.push(`New department name ${newName} has conflicting codes in this import`);
-        }
-      });
+      errors.push(...assetImportDepartmentConflictErrors(newCode, newName));
     }
   }
   if (assetImportBoolean(row?.createDepartment) && departmentResolution.matched) {
@@ -19687,17 +19661,7 @@ function assetImportRowErrors(row, index) {
     if (codeMatch) errors.push(`Department code ${newCode} already exists as ${codeMatch.name}`);
     const nameMatch = existingDepartments.find(department => department.name.toLocaleLowerCase() === newName.toLocaleLowerCase());
     if (nameMatch) errors.push(`Department name ${newName} already exists as ${nameMatch.code}`);
-    assetImportState.rows.forEach((candidate, candidateIndex) => {
-      if (candidateIndex === index || !assetImportBoolean(candidate?.createDepartment)) return;
-      const candidateCode = assetImportNormaliseDepartmentCode(candidate?.newDepartmentCode || candidate?.department);
-      const candidateName = String(candidate?.newDepartmentName || '').trim();
-      if (newCode && candidateCode === newCode && candidateName.toLocaleLowerCase() !== newName.toLocaleLowerCase()) {
-        errors.push(`New department code ${newCode} has conflicting names in this import`);
-      }
-      if (newName && candidateName.toLocaleLowerCase() === newName.toLocaleLowerCase() && candidateCode !== newCode) {
-        errors.push(`New department name ${newName} has conflicting codes in this import`);
-      }
-    });
+    errors.push(...assetImportDepartmentConflictErrors(newCode, newName));
   }
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) errors.push('Quantity must be a whole number from 1 to 500');
   if (row?.dateOfPurchase && !/^\d{4}-\d{2}-\d{2}$/.test(String(row.dateOfPurchase))) {
@@ -19976,6 +19940,7 @@ function updateAssetImportRow(index, field, value) {
   else if (field === 'tags') row[field] = normalizeAssetTags(value);
   else if (field === 'serials' || field === 'secondarySerials') row[field] = assetImportSerialList(value);
   else row[field] = value;
+  invalidateAssetImportValidationCache();
   if (field === 'department') {
     row.createDepartment = false;
     row.newDepartmentCode = '';
@@ -19996,6 +19961,8 @@ function updateAssetImportRow(index, field, value) {
 function commitAssetImportRowChanges() {
   assetImportState.planToken = '';
   assetImportState.inventoryRevision = '';
+  assetImportState.departmentRevision = '';
+  invalidateAssetImportValidationCache();
   refreshAssetImportStatus();
   clearTimeout(__assetImportPlanTimer);
   __assetImportPlanTimer = setTimeout(refreshAssetImportPlan, 180);
@@ -20018,6 +19985,8 @@ async function refreshAssetImportPlan() {
     }));
     assetImportState.planToken = String(response.data?.planToken || '');
     assetImportState.inventoryRevision = String(response.data?.inventoryRevision || '');
+    assetImportState.departmentRevision = String(response.data?.departmentRevision || '');
+    invalidateAssetImportValidationCache();
     assetImportState.planning = false;
     renderAssetImportReview();
     return Boolean(assetImportState.planToken);
@@ -20047,6 +20016,7 @@ function setAssetImportDepartmentCreation(index, enabled) {
 
 function removeAssetImportRow(index) {
   assetImportState.rows.splice(index, 1);
+  invalidateAssetImportValidationCache();
   renderAssetImportReview();
   commitAssetImportRowChanges();
 }
@@ -20067,6 +20037,8 @@ async function previewAssetImportFile(input) {
       planning: false,
       planToken: String(response.data?.planToken || ''),
       inventoryRevision: String(response.data?.inventoryRevision || ''),
+      departmentRevision: String(response.data?.departmentRevision || ''),
+      validationCache: null,
       page: 0
     };
     closeModal('addAssetModal');
@@ -20105,7 +20077,8 @@ async function confirmAssetImport() {
     closeModal('assetImportModal');
     assetImportState = {
       rows: [], rejected: [], departments: [], fileName: '', submitting: false,
-      planning: false, planToken: '', inventoryRevision: '', page: 0
+      planning: false, planToken: '', inventoryRevision: '',
+      departmentRevision: '', validationCache: null, page: 0
     };
     const created = Number(response.data?.inventoryRecordsCreated || 0);
     showNotification('success', `${response.message || 'Assets imported'} (${created} inventory record${created === 1 ? '' : 's'})`);
@@ -20115,7 +20088,9 @@ async function confirmAssetImport() {
       assetImportState.rows = error.payload.data.rows || assetImportState.rows;
       assetImportState.planToken = String(error.payload.data.planToken || '');
       assetImportState.inventoryRevision = String(error.payload.data.inventoryRevision || '');
-      showNotification('warning', 'Inventory changed. The Asset ID preview has been refreshed; review it and confirm again.');
+      assetImportState.departmentRevision = String(error.payload.data.departmentRevision || '');
+      invalidateAssetImportValidationCache();
+      showNotification('warning', 'Inventory or departments changed. The preview has been refreshed; review it and confirm again.');
       renderAssetImportReview();
       return;
     }
@@ -20972,12 +20947,6 @@ document.addEventListener("DOMContentLoaded", function () {
           loadAllEvents();
         }
 
-        // Also refresh prepare section if it's active
-        if (
-          document.getElementById("prepare-section").classList.contains("active")
-        ) {
-          loadPrepareEvents();
-        }
         if (document.getElementById("plan-section")?.classList.contains("active")) {
           await refreshPlanSelectedEvent();
         }
@@ -21015,15 +20984,6 @@ document.addEventListener("DOMContentLoaded", function () {
         await apiCall(`/api/events/${eventId}/prepare`, "POST", { assetId });
         closeModal("prepareAssetModal");
         showNotification("success", "Asset prepared successfully!");
-
-        // Refresh prepare events view
-        if (
-          document
-            .getElementById("prepare-section")
-            .classList.contains("active")
-        ) {
-          loadPrepareEvents();
-        }
 
         // Reset form
         prepareAssetForm.reset();
@@ -23970,9 +23930,6 @@ async function refreshEventOverviewViews() {
     refreshes.push(loadAllEvents());
   }
 
-  if (document.getElementById('prepare-section')?.classList.contains('active')) {
-    refreshes.push(loadPrepareEvents());
-  }
 
   if (document.getElementById('prepare-new-section')?.classList.contains('active')) {
     refreshes.push(refreshPrepareNewSelectedEvent({ preserve: true }));
@@ -24291,22 +24248,6 @@ async function updateEventAssetOverview(event) {
     }
   }
 
-  if (document.getElementById('prepare-section')?.classList.contains('active')) {
-    const preparableEvents = events.filter(item =>
-      !['Pending Closure', 'Closed', 'Overdue'].includes(item.state)
-      && Number(item.assetCount ?? 0) >= 0
-    );
-    if (getEventPageView('prepare') === 'card') {
-      const existingCard = document.querySelector(
-        `#prepare-events .event-card[data-event-id="${event.id}"]`
-      );
-      if (existingCard) existingCard.replaceWith(createPrepareEventCard(event));
-      else renderPrepareEventsCards(preparableEvents);
-    } else {
-      renderPrepareEventsTable(preparableEvents);
-    }
-  }
-
   if (document.getElementById('return-section')?.classList.contains('active')) {
     returnPageHandleRealtimeEvent(event);
   }
@@ -24561,9 +24502,6 @@ async function refreshVisibleDataFromRealtime() {
         break;
       case "freelancer-workspace":
         if (typeof loadFreelancerWorkspace === "function") await loadFreelancerWorkspace();
-        break;
-      case "prepare":
-        await loadPrepareEvents();
         break;
       case "return":
         await loadReturnEvents();

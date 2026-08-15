@@ -471,7 +471,7 @@ def test_maintenance_report_is_responsive_informative_and_keeps_export_controls(
 def test_maintenance_report_pdf_uses_only_committed_assets_and_generated_timestamp():
     script = APP_BUNDLE_SOURCE
     export_start = script.index("async function generateMaintenanceReportPdf()")
-    export_end = script.index("function getPrepareEventProgressTotals", export_start)
+    export_end = script.index("async function openPrepareEventModal", export_start)
     export_script = script[export_start:export_end]
     pdf_start = script.index("function buildMaintenanceReportPdfPages")
     pdf_end = script.index("async function generateMaintenanceReportPdf()", pdf_start)

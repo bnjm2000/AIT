@@ -12,6 +12,7 @@ _SERVER_OWNED_FIELDS = frozenset({
     'updatedBy',
     'updatedByName',
     'totals',
+    'summary',
     'vendorDiscrepancies',
     'checksum',
     'quotationLineCount',

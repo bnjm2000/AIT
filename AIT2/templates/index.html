@@ -1142,29 +1142,17 @@
         overflow: hidden;
       }
 
-      .asset-import-row.has-error {
-        border-color: #dc8d93;
-      }
-
       .asset-import-row-head {
-        display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 12px;
         min-height: 38px;
         padding: 7px 10px;
-        border-bottom: 1px solid #e7eeeb;
         background: #f9fbfa;
       }
 
       .asset-import-row-title {
-        min-width: 0;
         color: #2d443d;
         font-size: 11px;
-      }
-
-      .asset-import-row-title strong {
-        margin-right: 7px;
       }
 
       .asset-import-remove {
@@ -10695,7 +10683,6 @@
           <button type="button" class="nav-item{{ ' active' if initial_section == 'prepare-new' else '' }}" onclick="showSection('prepare-new')">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM12 12v9M4.5 8 12 12l7.5-4m-4.5 6 1.6 1.6L20 12"></path></svg></span><span>Prepare</span>
           </button>
-          <button type="button" class="nav-item" onclick="showSection('prepare')" hidden><span>Prepare (Legacy)</span></button>
           <button type="button" class="nav-item{{ ' active' if initial_section == 'return' else '' }}" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 6 6"></path></svg></span><span>Return Assets</span><span id="overdue-counter" style="background:#dc3545;color:white;border-radius:50%;padding:2px 8px;font-size:12px;margin-left:8px;display:none" title="Overdue events requiring asset returns">0</span>
           </button>
@@ -11470,17 +11457,6 @@
             <section class="mr-preview"><div class="mr-preview-head"><h3>Report preview</h3><span>The PDF includes every matching record; the screen preview shows up to 60.</span></div><div id="maintenance-report-preview">
               <div class="loading">Loading maintenance records...</div>
             </div></section>
-          </div>
-
-          <!-- Prepare Events Section -->
-    <div id="prepare-section" class="content-section{{ ' active' if initial_section == 'prepare' else '' }}">
-            <div class="content-header">
-              <h2 class="content-title">Prepare (Legacy)</h2>
-            </div>
-
-            <div class="events-grid" id="prepare-events">
-              <div class="loading">Loading events...</div>
-            </div>
           </div>
 
           <!-- Delivery Order Tab -->

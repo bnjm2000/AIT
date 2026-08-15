@@ -335,6 +335,27 @@ class AssetTemplateImportTests(unittest.TestCase):
         self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
         self.assertIn('RACE#02', self.data_manager.inventory)
 
+    def test_department_change_invalidates_import_plan_before_creation(self):
+        plan = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'Acme', 'model': 'Department Race', 'department': 'AX',
+            'quantity': 1, 'isBulk': False, 'assetIdPrefix': 'DEPT-RACE',
+        }]}).get_json()['data']
+        departments = app_module._load_departments()
+        departments['NEW'] = {'code': 'NEW', 'name': 'New Department'}
+        app_module._save_departments(departments)
+
+        stale = self.client.post('/api/assets/import', json={
+            'rows': plan['rows'], 'planToken': plan['planToken'],
+        })
+
+        self.assertEqual(stale.status_code, 409, stale.get_data(as_text=True))
+        payload = stale.get_json()
+        self.assertEqual(payload['code'], 'asset_import_plan_stale')
+        self.assertNotEqual(
+            payload['data']['departmentRevision'], plan['departmentRevision'],
+        )
+        self.assertNotIn('DEPT-RACE#01', self.data_manager.inventory)
+
     def test_one_new_department_declaration_resolves_sibling_rows(self):
         rows = [
             {

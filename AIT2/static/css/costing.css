@@ -579,6 +579,7 @@
 }
 
 @media (max-width: 620px) {
+  .costing-list-table { min-width: 0; }
   .costing-project-card, .costing-kpis, .costing-side-panel { grid-template-columns: 1fr; }
   .costing-project-field { border-right: 0; border-bottom: 1px solid #e4e9ef; }
   .costing-project-field:last-child { border-bottom: 0; }

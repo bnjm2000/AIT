@@ -41,50 +41,50 @@ function ensureEventListViewStyles() {
     .event-list-table .event-primary-action { min-height:29px;padding:5px 9px;border-radius:5px;font-size:9px; }
     .event-list-table .event-overflow-button { width:29px;min-height:29px;border-radius:5px;font-size:14px; }
     .event-list-table .event-card-menu { max-height:min(430px,calc(100vh - 20px));overflow-y:auto;z-index:2000; }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
+    #return-section :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
       --event-state: #ec407a;
       --event-soft: #fff0f5;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-planning {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-planning {
       --event-state: #6d28d9;
       --event-soft: #f3efff;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-preparing {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-preparing {
       --event-state: #0877e8;
       --event-soft: #edf6ff;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ready {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-ready {
       --event-state: #16a34a;
       --event-soft: #edf9f0;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ongoing,
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-last-day {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-ongoing,
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-last-day {
       --event-state: #0b97a4;
       --event-soft: #edfafa;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-returning {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-returning {
       --event-state: #f97316;
       --event-soft: #fff5ea;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-overdue {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-overdue {
       --event-state: #ef3340;
       --event-soft: #fff0f1;
     }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-closed {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-closed {
       --event-state: #64748b;
       --event-soft: #f1f5f9;
     }
-    :is(#prepare-section, #return-section) .event-card {
+    #return-section .event-card {
       border: 1px solid #e5e7eb;
       border-left: 5px solid var(--event-state, #64748b);
       background: var(--event-soft, #f1f5f9);
       color: #111827;
     }
-    :is(#prepare-section, #return-section) .event-state {
+    #return-section .event-state {
       background: var(--event-soft, #f1f5f9);
       color: var(--event-state, #64748b);
     }
-    :is(#prepare-section, #return-section) .event-card-progress-bar {
+    #return-section .event-card-progress-bar {
       background: var(--event-state, #16a34a) !important;
     }
     .events-workflow-card { container-type: inline-size; }
@@ -1088,7 +1088,6 @@ function getEventPageView(scope) {
 
 function setEventPageView(scope, view) {
   localStorage.setItem(`${scope}EventsView`, view);
-  if (scope === 'prepare') loadPrepareEvents();
   if (scope === 'return') loadReturnEvents();
 }
 
@@ -1096,71 +1095,6 @@ function updateEventPageToolbarState(scope) {
   const view = getEventPageView(scope);
   document.getElementById(`${scope}CardViewBtn`)?.classList.toggle('active', view === 'card');
   document.getElementById(`${scope}ListViewBtn`)?.classList.toggle('active', view === 'list');
-}
-
-function renderPrepareEventsTable(list) {
-  const container = document.getElementById('prepare-events');
-  if (!container) return;
-  container.classList.remove('events-grid');
-  const sorted = sortEventsForView(list, 'prepare');
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
-    return;
-  }
-  const rows = sorted.map(event => {
-    const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
-    return `
-      <tr class="${getEventStateClass(event.state)}">
-        <td><strong>${escapeHtml(String(event.id))}</strong></td>
-        <td>${eventTagBadgeHtml(event)}</td>
-        <td class="event-list-title">${escapeHtml(event.name || '')}</td>
-        <td>${escapeHtml(eventDateRangeText(event))}</td>
-        <td>${eventStateBadgeHtml(event)}</td>
-        <td>${renderProgressCell(totalAssigned, totalRequired)}</td>
-        <td style="white-space:nowrap;"><button class="btn btn-success btn-sm" onclick="openPrepareWorkspaceForEvent(${event.id})">Prepare Assets</button> <button class="btn btn-primary btn-sm" onclick="viewEvent(${event.id})">View Details</button></td>
-      </tr>
-    `;
-  }).join('');
-  container.innerHTML = `
-    <div class="event-list-table-wrap">
-      <table class="event-list-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Date</th><th>State</th><th>Progress</th><th>Actions</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderPrepareEventsCards(list) {
-  const container = document.getElementById('prepare-events');
-  if (!container) return;
-  container.classList.add('events-grid');
-  container.innerHTML = '';
-  const sorted = sortEventsForView(list, 'prepare');
-  if (!sorted.length) {
-    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
-    return;
-  }
-  sorted.forEach(event => container.appendChild(createPrepareEventCard(event)));
-}
-
-async function loadPrepareEvents() {
-  try {
-    ensureEventPageToolbar('prepare');
-    updateEventPageToolbarState('prepare');
-    const response = await apiCall('/api/events?view=summary');
-    events = response.data || [];
-    updateOverdueCounter(countOverdueEvents(events));
-    const preparableEvents = events.filter(event =>
-      !['Pending Closure', 'Closed', 'Overdue'].includes(event.state)
-      && event.assetCount >= 0
-    );
-    if (getEventPageView('prepare') === 'list') renderPrepareEventsTable(preparableEvents);
-    else renderPrepareEventsCards(preparableEvents);
-  } catch (error) {
-    const container = document.getElementById('prepare-events');
-    if (container) container.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
-  }
 }
 
 async function loadReturnEvents(options = {}) {
@@ -1339,9 +1273,6 @@ function schedulePrepareUiSync(eventId, delay = 600) {
     try {
       const response = await apiCall(`/api/events/${eventId}`);
       applyPrepareCanonicalProgress(response.data || {});
-      if (document.getElementById('prepare-section')?.classList.contains('active')) {
-        await loadPrepareEvents();
-      }
       if (
         document.getElementById('prepare-new-section')?.classList.contains('active') &&
         Number(prepareNewPageState.eventId) === Number(eventId)

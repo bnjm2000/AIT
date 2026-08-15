@@ -92,6 +92,7 @@
 .invoice-list-table tbody tr.is-cancelled:hover td { background-color: #f8fafc; }
 .invoice-list-table td > strong { display: block; color: var(--invoice-ink); font-size: .82rem; }
 .invoice-list-table td > small { display: block; margin-top: 2px; color: var(--invoice-muted); font-size: .7rem; }
+.invoice-save-state { color: var(--invoice-muted); font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .invoice-positive { color: #087a55 !important; }
 .invoice-due { color: #c2410c !important; }
 .invoice-row-open,
@@ -296,6 +297,38 @@
 }
 
 @media (max-width: 640px) {
+  .invoice-list-scroll { overflow: visible; }
+  .invoice-list-table { display: block; min-width: 0; }
+  .invoice-list-table thead { display: none; }
+  .invoice-list-table tbody { display: grid; gap: 10px; padding: 10px; }
+  .invoice-list-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(92px, .42fr) minmax(0, 1fr);
+    border: 1px solid var(--invoice-border);
+    border-radius: 8px;
+    background: #fff;
+    overflow: visible;
+  }
+  .invoice-list-table tbody td {
+    display: block;
+    min-width: 0;
+    height: auto;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 1px solid #edf1f4;
+    text-align: left;
+  }
+  .invoice-list-table tbody td:nth-child(2n) { border-left: 1px solid #edf1f4; }
+  .invoice-list-table tbody td::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--invoice-muted);
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
   .invoice-list-header,
   .invoice-editor-header { align-items: stretch; flex-direction: column; }
   .invoice-search { width: 100%; }

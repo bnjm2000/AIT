@@ -91,6 +91,18 @@ function financeValuesEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function financeHasPendingChanges() {
+  return Boolean(
+    financeState.current
+    && !financeState.snapshotMode
+    && (
+      financeState.saveTimer
+      || financeState.activeSaves.size
+      || !financeValuesEqual(financeState.current, financeState.baseDocument)
+    )
+  );
+}
+
 async function financeHandleRealtimeChanges(changes) {
   const rows = Array.isArray(changes) ? changes : [];
   const quotationIds = [...new Set(rows
@@ -293,10 +305,6 @@ const compareState = {
   showLoans: true,
   loading: false
 };
-
-function financeMeta() {
-  return { singular: 'Quotation', plural: 'Quotations', endpoint: '/api/quotations', section: 'quotations' };
-}
 
 function financeEscape(value) {
   if (typeof escapeHtml === 'function') return escapeHtml(String(value ?? ''));
@@ -683,13 +691,6 @@ function financeScheduleTokenHasDate(token, document = financeState.current) {
       || financeAdditionalScheduleRows(token, document).some(row => Boolean(row?.date));
   }
   return financeScheduleRowsForKind(token, document).some(row => Boolean(row?.date));
-}
-
-function financeCustomScheduleSummary(group) {
-  return (group?.dates || []).filter(row => row?.date).map(row => {
-    const date = financeScheduleDateLabel(row.date, 'long');
-    return `${date}${row.time ? `, ${row.time}hrs` : ''}`;
-  }).join('; ');
 }
 
 function financeScheduleOrderPreview(document = financeState.current) {
@@ -2138,17 +2139,6 @@ function financeDeleteGroupChildren(indexes) {
   financeRenderEditor();
 }
 
-function financeDeleteGroupChild(index) {
-  const lines = financeState.current?.lineItems || [];
-  const removed = lines[index];
-  if (!removed?.groupId) return financeDeleteLine(index);
-  financeDetachLineFromGroup(removed);
-  lines.splice(index, 1);
-  financeSyncDocumentDepartments();
-  financeQueueSave();
-  financeRenderEditor();
-}
-
 function financeIsLockedAdjustment(row) {
   return !!row?.lockedTotalAdjustment || String(row?.id || '').startsWith('locked_total_');
 }
@@ -2343,12 +2333,6 @@ function financeValidityCountdown(document) {
     : days < 0
       ? 'Expired'
       : `${days} day${days === 1 ? '' : 's'} left`;
-}
-
-function financeValiditySummary(document) {
-  if (!document?.sentAt) return 'Not sent';
-  const sent = financeDateOnly(document.sentAt);
-  return `Sent ${sent || '—'} · ${financeValidityCountdown(document)}`;
 }
 
 function financeAgeText(days) {
@@ -2966,16 +2950,16 @@ function financeRenderListRow(document, showSalesperson = financeListShowsSalesp
   const eventDates = financeEventDateSummary(document);
   return `
     <tr class="finance-list-row ${document.status === 'cancelled' ? 'is-cancelled' : ''}" data-document-id="${financeEscapeAttr(document.id)}" onclick="financeOpenDocument('${financeEscapeAttr(document.id)}')" oncontextmenu="financeOpenQuotationContextMenu(event,'${financeEscapeAttr(document.id)}')">
-      <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Ver ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
-      <td><strong>${financeEscape(financeClientName(client) || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
-      <td class="finance-project-cell"><strong>${financeEscape(document.projectName || 'Project name required')}</strong>${eventDates ? `<small class="finance-project-dates">${financeEscape(eventDates)}</small>` : ''}</td>
-      ${showSalesperson ? `<td><strong>${financeEscape(document.salesperson || document.createdByName || document.createdBy || 'Unassigned')}</strong>${document.salespersonUsername || document.createdBy ? `<br><small>${financeEscape(document.salespersonUsername || document.createdBy)}</small>` : ''}</td>` : ''}
-      <td>${financePairedEventStatus(document)}</td>
-      <td><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
-      <td>${financeSnapshotControl(document)}</td>
-      <td class="finance-list-status-cell"><div class="finance-list-status-actions">${financeStatusControl(document, 'list')}</div></td>
-      <td class="finance-list-export-cell"><div class="finance-list-export-action">${financeExportQuotationButton(document)}${financeExportInvoiceButton(document)}</div></td>
-      <td style="text-align:right;font-weight:750;">${financeEscape(financeMoney(total))}</td>
+      <td data-label="Quotation"><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Ver ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
+      <td data-label="Client"><strong>${financeEscape(financeClientName(client) || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
+      <td data-label="Project" class="finance-project-cell"><strong>${financeEscape(document.projectName || 'Project name required')}</strong>${eventDates ? `<small class="finance-project-dates">${financeEscape(eventDates)}</small>` : ''}</td>
+      ${showSalesperson ? `<td data-label="Salesperson"><strong>${financeEscape(document.salesperson || document.createdByName || document.createdBy || 'Unassigned')}</strong>${document.salespersonUsername || document.createdBy ? `<br><small>${financeEscape(document.salespersonUsername || document.createdBy)}</small>` : ''}</td>` : ''}
+      <td data-label="Event">${financePairedEventStatus(document)}</td>
+      <td data-label="Date"><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
+      <td data-label="Versions">${financeSnapshotControl(document)}</td>
+      <td data-label="Status" class="finance-list-status-cell"><div class="finance-list-status-actions">${financeStatusControl(document, 'list')}</div></td>
+      <td data-label="Export" class="finance-list-export-cell"><div class="finance-list-export-action">${financeExportQuotationButton(document)}${financeExportInvoiceButton(document)}</div></td>
+      <td data-label="Total" style="text-align:right;font-weight:750;">${financeEscape(financeMoney(total))}</td>
     </tr>
   `;
 }
@@ -3321,13 +3305,6 @@ function financeClientDisplay(client) {
   return financeClientName(client) || client?.contactPerson || client?.company || '';
 }
 
-function financeFilterClients(query) {
-  const clean = String(query || '').trim().toLowerCase();
-  return financeState.clients.filter(client => !clean || [
-    client.name, client.company, client.contactPerson, client.email, client.phone
-  ].some(value => String(value || '').toLowerCase().includes(clean))).slice(0, 12);
-}
-
 function financeClientRows(query) {
   const clean = String(query || '').trim().toLowerCase();
   return (financeState.clients || [])
@@ -3378,29 +3355,6 @@ function financeOpenClientPicker() {
   setTimeout(() => search?.focus(), 50);
 }
 
-function financeShowClientSuggestions(query = '') {
-  const results = document.getElementById('financeClientResults');
-  if (!results) return;
-  const rows = financeFilterClients(query);
-  results.innerHTML = rows.map(client => `
-    <button type="button" class="finance-client-option" onclick="financeApplySavedClient('${financeEscapeAttr(encodeURIComponent(client.name))}')">
-      <strong>${financeEscape(financeClientName(client) || client.contactPerson || client.company)}</strong>
-      <span>${financeEscape(client.company || client.email || client.phone || '')}</span>
-    </button>
-  `).join('') || '<div class="finance-suggestion-empty">No matching clients</div>';
-  results.classList.add('open');
-}
-
-function financeApplySavedClient(encodedName) {
-  const name = decodeURIComponent(encodedName);
-  const client = financeState.clients.find(row => row.name === name);
-  if (!client || !financeState.current) return;
-  financeState.current.client = { ...client };
-  financeState.current.clientRecordName = client.name;
-  financeQueueSave();
-  financeRenderEditor();
-}
-
 function financeApplySavedClientByIndex(index) {
   const client = financeState.clients[Number(index)];
   if (!client || !financeState.current) return;
@@ -3420,13 +3374,6 @@ function financeEventDisplay(eventId) {
   const event = financeFindEvent(eventId);
   if (!event) return eventId ? `Event #${eventId}` : '';
   return `#${event.id} — ${event.name || 'Untitled event'}${event.location ? ` @ ${event.location}` : ''}`;
-}
-
-function financeFilterEvents(query) {
-  const clean = String(query || '').trim().toLowerCase();
-  return (financeState.events || []).filter(event => !clean || [
-    event.id, event.name, event.location, event.state, event.startDate, event.endDate
-  ].some(value => String(value || '').toLowerCase().includes(clean))).slice(0, 12);
 }
 
 function financeEventRows(query) {
@@ -3510,19 +3457,6 @@ async function financeOpenEventPicker(documentId = financeState.current?.id) {
     if (results) results.innerHTML = '<div class="finance-suggestion-empty">Unable to load events</div>';
     showNotification('error', error.message || 'Unable to load events');
   }
-}
-
-function financeShowEventSuggestions(query = '') {
-  const results = document.getElementById('financeEventResults');
-  if (!results) return;
-  const rows = financeFilterEvents(query);
-  results.innerHTML = rows.map(event => `
-    <button type="button" class="finance-client-option" onmousedown="event.preventDefault();financePairEvent(${Number(event.id) || 0})">
-      <strong>${financeEscape(financeEventDisplay(event.id))}</strong>
-      <span>${financeEscape([event.startDate, event.endDate, event.state].filter(Boolean).join(' · '))}</span>
-    </button>
-  `).join('') || '<div class="finance-suggestion-empty">No matching events</div>';
-  results.classList.add('open');
 }
 
 async function financePairEvent(eventId) {
@@ -5312,7 +5246,7 @@ function financeRenderEditor() {
   if (snapshotMode) financeApplySnapshotReadOnly(root);
 }
 
-function financeBackToList() {
+async function financeBackToList() {
   clearTimeout(financeState.saveTimer);
   const leave = () => {
     financeState.current = null;
@@ -5322,11 +5256,24 @@ function financeBackToList() {
   };
   if (financeState.snapshotMode) return leave();
   if (financeQuotationIsBlank(financeState.current)) {
-    return apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE')
-      .catch(() => null)
-      .finally(leave);
+    try {
+      await apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE');
+      leave();
+    } catch (error) {
+      showNotification('error', error.message || 'Unable to discard the blank quotation');
+    }
+    return;
   }
-  financeFlushPendingSave().finally(leave);
+  try {
+    const saved = await financeFlushPendingSave();
+    if (!saved) {
+      showNotification('info', 'Review the unsaved quotation changes before leaving.');
+      return;
+    }
+    leave();
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to save quotation');
+  }
 }
 
 async function financeSaveAndExit() {
@@ -5339,7 +5286,8 @@ async function financeSaveAndExit() {
       financeLoadList();
       return;
     }
-    await financeSaveCurrent(false);
+    const saved = await financeFlushPendingSave();
+    if (!saved) return;
     showNotification('success', 'Quotation saved');
     financeState.current = null;
     financeState.snapshotMode = false;
@@ -5862,7 +5810,7 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
         return latest;
       }
       if (state) state.textContent = 'Conflict needs review';
-      return newestLocal;
+      return null;
     }
     if (state) state.textContent = 'Save failed';
     if (notify) showNotification('error', error.message || 'Failed to save quotation');
@@ -5871,12 +5819,19 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
 }
 
 async function financeFlushPendingSave() {
-  if (financeState.saveTimer) await financeSaveCurrent(false);
+  const hasUnsavedChanges = () => Boolean(financeState.current && !financeValuesEqual(financeState.current, financeState.baseDocument));
+  if (financeState.saveTimer || hasUnsavedChanges()) {
+    const saved = await financeSaveCurrent(false);
+    if (!saved) return null;
+  }
   if (financeState.activeSaves.size) {
     await Promise.allSettled([...financeState.activeSaves]);
   }
-  if (financeState.saveTimer) await financeSaveCurrent(false);
-  return financeState.current;
+  if (financeState.saveTimer || hasUnsavedChanges()) {
+    const saved = await financeSaveCurrent(false);
+    if (!saved) return null;
+  }
+  return hasUnsavedChanges() ? null : financeState.current;
 }
 
 function financeSearchCatalog(query) {
@@ -6202,39 +6157,6 @@ function financeEnsureSentModal() {
   document.body.appendChild(modal);
 }
 
-function financeEnsureInvoicedModal() {
-  if (document.getElementById('financeInvoicedModal')) return;
-  const modal = document.createElement('div');
-  modal.id = 'financeInvoicedModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:480px;">
-      <div class="modal-header"><h3 class="modal-title">Mark quotation as Invoiced</h3><button type="button" class="close-btn" onclick="closeModal('financeInvoicedModal')">×</button></div>
-      <p style="color:#64748b;margin-bottom:16px;">Confirm when the invoice was sent and the agreed payment terms.</p>
-      <div class="finance-invoiced-fields">
-        <label class="finance-field"><span>Invoice sent date</span><input id="financeInvoiceSentDate" class="finance-input" type="date" value="${financeTodayIso()}" oninput="financeUpdateInvoiceDuePreview()"></label>
-        <label class="finance-field"><span>Payment terms</span><input id="financeInvoicePaymentTerms" class="finance-input" value="30 Days" placeholder="For example, 30 Days" oninput="financeUpdateInvoiceDuePreview()"></label>
-      </div>
-      <div class="finance-payment-preview" id="financeInvoiceDuePreview">Pay by: 30 days</div>
-      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;"><button type="button" class="btn btn-secondary" onclick="closeModal('financeInvoicedModal')">Cancel</button><button type="button" class="btn btn-primary" onclick="financeConfirmInvoiced()">Mark as Invoiced</button></div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function financeUpdateInvoiceDuePreview() {
-  const terms = document.getElementById('financeInvoicePaymentTerms')?.value || '';
-  const sentDate = document.getElementById('financeInvoiceSentDate')?.value || '';
-  const days = financePaymentTermDays(terms, 30);
-  const dueDate = financePaymentDueDisplay(sentDate, days);
-  const preview = document.getElementById('financeInvoiceDuePreview');
-  if (preview) {
-    preview.textContent = dueDate
-      ? `Pay by: ${dueDate} · ${financePaymentTermSummary(terms, days)}`
-      : 'Choose a valid invoice sent date';
-  }
-}
-
 async function financeRequestStatus(documentId, status, context) {
   document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
   financeState.statusTargetId = documentId;
@@ -6246,16 +6168,6 @@ async function financeRequestStatus(documentId, status, context) {
     document.getElementById('financeSentValidityAmount').value = financeValidityAmount(documentRow);
     financeSetSentValidityUnit(financeValidityUnit(documentRow));
     openModal('financeSentModal');
-    return;
-  }
-  if (status === 'invoiced') {
-    financeEnsureInvoicedModal();
-    const sentDate = document.getElementById('financeInvoiceSentDate');
-    const paymentTerms = document.getElementById('financeInvoicePaymentTerms');
-    if (sentDate) sentDate.value = financeDateOnly(documentRow.invoiceSentDate) || financeTodayIso();
-    if (paymentTerms) paymentTerms.value = documentRow.paymentTerms || '30 Days';
-    financeUpdateInvoiceDuePreview();
-    openModal('financeInvoicedModal');
     return;
   }
   if (status === 'accepted') {
@@ -6289,16 +6201,6 @@ async function financeConfirmSent() {
     validityAmount: amount,
     validityUnit: unit,
     validityDays: days
-  });
-}
-
-async function financeConfirmInvoiced() {
-  const invoiceSentDate = document.getElementById('financeInvoiceSentDate')?.value || financeTodayIso();
-  const paymentTerms = document.getElementById('financeInvoicePaymentTerms')?.value.trim() || '30 Days';
-  closeModal('financeInvoicedModal');
-  await financeCommitStatus(financeState.statusTargetId, 'invoiced', {
-    invoiceSentDate,
-    paymentTerms
   });
 }
 
@@ -6529,11 +6431,6 @@ function profitLossEventChooserEvents() {
 
 function profitLossCurrentEventId() {
   return profitLossState.eventId;
-}
-
-function profitLossEventTitle(event) {
-  if (!event) return 'Choose event';
-  return `#${event.id} ${event.name || 'Untitled event'}`;
 }
 
 async function financeLoadProgressiveEvents(targetState, preferredEventId, chooserContext) {
@@ -7961,41 +7858,4 @@ async function compareBulkAction(action) {
     }
     return;
   }
-}
-
-function compareEnsureQuotationPickerModal() {
-  if (document.getElementById('compareQuotationPickerModal')) return;
-  const modal = document.createElement('div');
-  modal.id = 'compareQuotationPickerModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content finance-picker-modal">
-      <div class="modal-header"><h3 class="modal-title">Choose Quotation</h3><button type="button" class="close-btn" onclick="closeModal('compareQuotationPickerModal')">&times;</button></div>
-      <div id="compareQuotationPickerResults" class="finance-picker-results"></div>
-      <div class="modal-actions finance-picker-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('compareQuotationPickerModal')">Cancel</button></div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function compareOpenQuotationPicker() {
-  compareEnsureQuotationPickerModal();
-  const results = document.getElementById('compareQuotationPickerResults');
-  const rows = compareState.data?.quotations || [];
-  if (results) {
-    results.innerHTML = rows.map(row => `
-      <button type="button" class="finance-picker-option" onclick="compareChooseQuotation('${financeEscapeAttr(row.id)}')">
-        <strong>${financeEscape(row.number || 'Quotation')}</strong>
-        <span>${financeEscape([row.projectName, row.client?.name || row.client?.company].filter(Boolean).join(' - '))}</span>
-      </button>
-    `).join('') || '<div class="finance-suggestion-empty">No quotations are paired to this event.</div>';
-  }
-  openModal('compareQuotationPickerModal');
-}
-
-async function compareChooseQuotation(quotationId) {
-  compareState.quotationId = quotationId || '';
-  compareState.viewId = 'all';
-  closeModal('compareQuotationPickerModal');
-  await selectCompareEvent(compareState.eventId, { keepQuotation: true });
 }

@@ -1402,6 +1402,62 @@
 .finance-add-group-button { white-space: nowrap; }
 
 @media (max-width: 680px) {
+  .finance-list-table,
+  .costing-list-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .finance-list-table thead,
+  .costing-list-table thead {
+    display: none;
+  }
+
+  .finance-list-table tbody,
+  .costing-list-table tbody {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .finance-list-table .finance-list-row,
+  .costing-list-table .finance-list-row {
+    display: grid;
+    grid-template-columns: minmax(92px, .42fr) minmax(0, 1fr);
+    border: 1px solid #dce7e3;
+    border-radius: 8px;
+    background: #fff;
+    overflow: visible;
+  }
+
+  .finance-list-table .finance-list-row > td,
+  .costing-list-table .finance-list-row > td {
+    display: block;
+    min-width: 0;
+    height: auto;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 1px solid #eef2f1;
+    text-align: left !important;
+  }
+
+  .finance-list-table .finance-list-row > td::before,
+  .costing-list-table .finance-list-row > td::before {
+    display: block;
+    margin-bottom: 2px;
+    color: #75847f;
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .finance-list-table .finance-list-row > td:nth-child(2n),
+  .costing-list-table .finance-list-row > td:nth-child(2n) {
+    border-left: 1px solid #eef2f1;
+  }
+
   .finance-line-group-basics { grid-template-columns: 1fr; }
   .finance-line-group-header td small,
   .costing-line-group-header td small { display: none; }

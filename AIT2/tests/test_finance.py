@@ -6130,7 +6130,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('detail: financevaliditycountdown(document)', source)
         self.assertIn('financepaymentduedisplay', source)
         self.assertIn('financepaymenttermsummary', source)
-        self.assertIn('choose a valid invoice sent date', source)
+        self.assertNotIn('financeensureinvoicedmodal', source)
         self.assertIn('financeclientpickermodal', source)
         self.assertIn('financeeventpickermodal', source)
         self.assertIn('profit &amp; loss', source)
@@ -6450,6 +6450,76 @@ class FinanceFeatureTests(unittest.TestCase):
             response.get_json()['data']['plan']['installments'][0]['dueDate'],
             expected_due_date,
         )
+
+    def test_first_invoice_cannot_exceed_accepted_quotation_total(self):
+        quotation = self.create_quote('First Invoice Overage')
+        quotation['lineItems'] = [{
+            'id': 'overage-line', 'description': 'Production package',
+            'department': 'Audio', 'days': 1, 'quantity': 1, 'unitPrice': 100,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        plan_response = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'custom',
+                'installments': [{
+                    'id': 'too-large', 'label': 'Too large',
+                    'mode': 'amount', 'value': accepted['totals']['total'] + 1,
+                }],
+            },
+        )
+        self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
+
+        issued = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/too-large/issue",
+            json={},
+        )
+
+        self.assertEqual(issued.status_code, 409, issued.get_data(as_text=True))
+        self.assertIn('exceed', issued.get_json()['error'].lower())
+        self.assertFalse([
+            row for row in self.client.get('/api/invoices').get_json()['data']
+            if row.get('sourceQuotationId') == accepted['id']
+        ])
+
+    def test_invoice_plan_merges_non_overlapping_stale_edits(self):
+        quotation = self.create_quote('Concurrent Invoice Plan')
+        quotation['lineItems'] = [{
+            'id': 'concurrent-plan-line', 'description': 'Production package',
+            'department': 'Audio', 'days': 1, 'quantity': 1, 'unitPrice': 100,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        base = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+
+        first = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={**base, 'strategyLabel': 'Milestone billing', '_baseDocument': base},
+        )
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        stale_details = dict(base.get('invoiceDetails') or {})
+        stale_details['reference'] = 'PO-CONCURRENT'
+        second = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                **base,
+                'invoiceDetails': stale_details,
+                '_baseDocument': base,
+            },
+        )
+
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        merged = second.get_json()['data']['plan']
+        self.assertEqual(merged['strategyLabel'], 'Milestone billing')
+        self.assertEqual(merged['invoiceDetails']['reference'], 'PO-CONCURRENT')
+        self.assertGreater(merged['documentVersion'], base['documentVersion'])
 
     def test_issued_invoice_survives_plan_switch_and_blocks_duplicate_issue(self):
         quotation = self.create_quote('Immutable Issued Invoice')
@@ -7181,6 +7251,14 @@ class FinanceFeatureTests(unittest.TestCase):
 
     def test_invoice_can_be_renumbered_and_deleted_without_sticking_installment(self):
         quotation = self.create_quote('Invoice Actions Project')
+        quotation['lineItems'] = [{
+            'id': 'invoice-actions-line',
+            'description': 'Administration services',
+            'department': 'Administration',
+            'days': 1,
+            'quantity': 1,
+            'unitPrice': 80,
+        }]
         accepted = self.client.put(
             f"/api/quotations/{quotation['id']}",
             json={**quotation, 'status': 'accepted'},
