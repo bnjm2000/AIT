@@ -5727,7 +5727,7 @@ def _model_key_from_parts(dept, brand, model, description=''):
     )
 
 
-def _event_physical_ref_group_key(value):
+def _event_physical_ref_group_key(value, inventory=None):
     """Return the inventory model key represented by an event physical ref."""
     prepared_marker = _parse_prepared_model_marker(value)
     if prepared_marker:
@@ -5740,7 +5740,12 @@ def _event_physical_ref_group_key(value):
 
     marker = _parse_bulk_marker(value)
     asset_id = marker['bulkId'] if marker else value
-    asset = data_manager.inventory.get(asset_id) if data_manager else None
+    inventory_source = (
+        inventory
+        if inventory is not None
+        else (data_manager.inventory if data_manager else {})
+    )
+    asset = inventory_source.get(asset_id)
     if not asset:
         return None
     return _event_asset_group_key(asset)
@@ -6398,7 +6403,7 @@ def _event_subproject_ref_quantity(ref):
     return 1
 
 
-def _reconcile_event_subproject_extras(event):
+def _reconcile_event_subproject_extras(event, inventory=None):
     """Make normal/extra preparation ownership authoritative per room.
 
     Exact references that fit a room requirement live on that requirement's
@@ -6462,7 +6467,7 @@ def _reconcile_event_subproject_extras(event):
             for ref in item.get('assetRefs') or []:
                 if ref not in active_physical or ref in claimed or ref in normal_refs:
                     continue
-                if _event_physical_ref_group_key(ref) != group_key:
+                if _event_physical_ref_group_key(ref, inventory) != group_key:
                     if ref not in candidate_extras:
                         candidate_extras.append(ref)
                     continue
@@ -6483,7 +6488,7 @@ def _reconcile_event_subproject_extras(event):
             for ref in list(candidate_extras):
                 if ref not in active_physical or ref in claimed:
                     continue
-                if _event_physical_ref_group_key(ref) != group_key:
+                if _event_physical_ref_group_key(ref, inventory) != group_key:
                     continue
                 quantity = _event_subproject_ref_quantity(ref)
                 partially_fills_bulk_requirement = bool(
@@ -15437,6 +15442,25 @@ def _repair_prepared_event_asset_group_links(
                     family_keys,
                 )
         if event.prepared_items != before_markers:
+            changed += 1
+
+    # Plan room requirements are authoritative for preparation. A physical
+    # asset may have been classified as an extra only because its saved model
+    # label no longer matched inventory before the rename repair. Once the
+    # identity is repaired, immediately consume matching active extras into
+    # open room requirements so the UI cannot show both "needed" and "spare"
+    # for the same available unit.
+    should_reconcile_rooms = bool(
+        repair_whole_groups
+        or changed
+        or candidates.intersection(event_references)
+    )
+    if subprojects and should_reconcile_rooms:
+        room_reconciliation = _reconcile_event_subproject_extras(
+            event,
+            inventory,
+        )
+        if room_reconciliation['changed']:
             changed += 1
     return changed
 

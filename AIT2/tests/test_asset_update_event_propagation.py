@@ -564,6 +564,110 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             ['[MODEL]AX|TestBrand|OldModel|2|New desc'],
         )
 
+    def test_rename_repair_promotes_matching_spare_into_plan_requirement(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.description = 'New desc'
+        asset.change_history = [{
+            'date': '2026-08-13T10:00:00',
+            'user': 'admin',
+            'action': 'updated',
+            'changes': [{
+                'field': 'description',
+                'label': 'Description',
+                'old': 'Legacy desc',
+                'new': 'New desc',
+            }],
+        }]
+        event = self.make_event(
+            112,
+            prepared=[
+                '[MODEL]AX|TestBrand|OldModel|1|Legacy desc',
+                'A#01',
+            ],
+            actual=['A#01'],
+            extra=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'legacy-required-line',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Legacy desc',
+                'quantity': 1,
+                'preparedQuantity': 0,
+                'assetRefs': [],
+            }],
+            'extraRefs': ['A#01'],
+        }]
+
+        changes = app_module._repair_prepared_event_asset_group_links(
+            event,
+            self.data_manager.inventory,
+        )
+
+        self.assertGreater(changes, 0)
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(item['assetRefs'], ['A#01'])
+        self.assertEqual(event.subprojects[0]['extraRefs'], [])
+        self.assertEqual(event.extra_assets, [])
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+
+    def test_future_inventory_rename_promotes_matching_prepared_spare(self):
+        event = self.make_event(
+            113,
+            prepared=[
+                '[MODEL]AX|TestBrand|OldModel|1|Old desc',
+                'A#01',
+            ],
+            actual=['A#01'],
+            extra=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'required-line-before-rename',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'preparedQuantity': 0,
+                'assetRefs': [],
+            }],
+            'extraRefs': ['A#01'],
+        }]
+
+        response = self.put_asset('A#01', description='New desc')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        current_items = app_module._event_subproject_group_items(
+            event.subprojects[0],
+            {
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'New desc',
+            },
+        )
+        self.assertEqual(len(current_items), 1)
+        self.assertEqual(current_items[0]['assetRefs'], ['A#01'])
+        self.assertEqual(event.subprojects[0]['extraRefs'], [])
+        self.assertEqual(event.extra_assets, [])
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+
     def test_bulk_asset_detail_change_updates_assigned_quantity_and_unassigned_model_events(self):
         marker = app_module._bulk_marker('BULK-0001', 4)
         assigned = self.make_event(
