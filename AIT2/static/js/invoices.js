@@ -19,7 +19,10 @@ const invoiceState = {
   remoteUpdatePending: false,
   listMeta: { total: 0, hasMore: false, nextOffset: null, statusTotal: 0, statusCounts: {} },
   listLoading: false,
+  listRequestVersion: 0,
   paidTarget: null,
+  sentTarget: null,
+  defaultPaymentTermDays: null,
   clients: []
 };
 
@@ -52,9 +55,21 @@ async function invoiceHandleRealtimeChanges(changes) {
     .filter(Boolean))];
   const currentQuotationId = String(invoiceState.current?.quotation?.id || '');
   if (currentQuotationId && quotationIds.includes(currentQuotationId)) {
-    const response = await apiCall(
-      `/api/invoice-plans/${encodeURIComponent(currentQuotationId)}`
-    );
+    let response;
+    try {
+      response = await apiCall(
+        `/api/invoice-plans/${encodeURIComponent(currentQuotationId)}`
+      );
+    } catch (error) {
+      if (error.payload?.code !== 'quotation_not_invoice_ready') throw error;
+      invoiceState.current = null;
+      invoiceState.basePlan = null;
+      invoiceState.dirty = false;
+      invoiceState.remoteUpdatePending = false;
+      showNotification('info', 'This quotation is no longer ready for invoicing.');
+      await loadInvoices(invoiceState.query);
+      return true;
+    }
     if (!invoiceState.dirty) {
       invoiceState.current = response.data;
       invoiceState.basePlan = invoiceClone(response.data.plan);
@@ -133,6 +148,30 @@ function invoiceStatusLabel(status) {
     .split('-')
     .map(part => part ? part[0].toUpperCase() + part.slice(1) : '')
     .join(' ');
+}
+
+function invoiceStatusBadgeMarkup(status) {
+  const value = String(status || 'draft').toLowerCase();
+  return `<span class="invoice-status" data-status="${invoiceAttr(value)}"><span></span>${invoiceStatusLabel(value)}</span>`;
+}
+
+function invoiceDocumentStatusChoices(status) {
+  const value = String(status || 'draft').toLowerCase();
+  if (value === 'draft') return ['draft', 'sent'];
+  if (value === 'paid') return ['paid'];
+  if (value === 'void') return ['void'];
+  return [...new Set([value, 'paid', 'void'])];
+}
+
+function invoicePaymentTermDays(value, fallback = 30) {
+  const text = String(value || '').trim().toLowerCase();
+  if (/(due on receipt|on receipt|immediate|cod)/.test(text)) return 0;
+  const match = text.match(/\b(\d{1,4})\b/);
+  if (!match) return Math.max(0, Number(fallback || 30));
+  const amount = Math.max(0, Math.min(3650, Number(match[1])));
+  if (text.includes('week')) return Math.min(3650, amount * 7);
+  if (text.includes('month')) return Math.min(3650, amount * 30);
+  return amount;
 }
 
 function invoiceClientLabel(quotation) {
@@ -240,19 +279,33 @@ async function loadInvoices(query = '', options = {}) {
   if (invoiceState.listLoading && append) return;
   if (!append) invoiceState.current = null;
   invoiceState.query = String(query || '').trim();
+  const requestVersion = ++invoiceState.listRequestVersion;
+  const requestedView = invoiceState.view;
+  const requestedQuery = invoiceState.query;
+  const requestedMineOnly = invoiceState.mineOnly;
+  const requestedStatuses = [...invoiceState.statuses];
+  const requestIsCurrent = () => (
+    requestVersion === invoiceState.listRequestVersion
+    && requestedView === invoiceState.view
+    && requestedQuery === invoiceState.query
+    && requestedMineOnly === invoiceState.mineOnly
+    && requestedStatuses.length === invoiceState.statuses.length
+    && requestedStatuses.every((status, index) => status === invoiceState.statuses[index])
+  );
   invoiceState.listLoading = true;
-  if (!append) root.innerHTML = `<div class="invoice-loading"><span></span>${invoiceState.view === 'issued' ? 'Loading issued invoices...' : 'Loading invoice-ready quotations...'}</div>`;
+  if (!append) root.innerHTML = `<div class="invoice-loading"><span></span>${requestedView === 'issued' ? 'Loading issued invoices...' : 'Loading invoice-ready quotations...'}</div>`;
   try {
     const params = new URLSearchParams();
-    if (invoiceState.query) params.set('query', invoiceState.query);
-    if (invoiceListCanToggleMine() && invoiceState.mineOnly) params.set('mine', '1');
-    invoiceState.statuses.forEach(status => params.append('status', status));
+    if (requestedQuery) params.set('query', requestedQuery);
+    if (invoiceListCanToggleMine() && requestedMineOnly) params.set('mine', '1');
+    requestedStatuses.forEach(status => params.append('status', status));
     params.set('limit', '40');
     if (append && invoiceState.listMeta.nextOffset != null) params.set('offset', String(invoiceState.listMeta.nextOffset));
-    if (invoiceState.view === 'issued') {
+    if (requestedView === 'issued') {
       params.set('view', 'summary');
       params.set('sort', 'number');
       const response = await apiCall(`/api/invoices?${params}`);
+      if (!requestIsCurrent()) return;
       const incoming = response.data || [];
       invoiceState.issuedInvoices = append
         ? [...invoiceState.issuedInvoices, ...incoming.filter(row => !invoiceState.issuedInvoices.some(existing => existing.id === row.id))]
@@ -260,6 +313,7 @@ async function loadInvoices(query = '', options = {}) {
       invoiceState.listMeta = { ...invoiceState.listMeta, ...(response.meta || {}) };
     } else {
       const response = await apiCall(`/api/invoice-plans${params.size ? `?${params}` : ''}`);
+      if (!requestIsCurrent()) return;
       const incoming = response.data || [];
       invoiceState.rows = append
         ? [...invoiceState.rows, ...incoming.filter(row => !invoiceState.rows.some(existing => existing.quotation?.id === row.quotation?.id))]
@@ -268,9 +322,13 @@ async function loadInvoices(query = '', options = {}) {
     }
     invoiceRenderList();
   } catch (error) {
-    root.innerHTML = `<div class="invoice-empty"><strong>Invoices could not be loaded</strong><span>${invoiceEscape(error.message)}</span></div>`;
+    if (requestIsCurrent()) {
+      root.innerHTML = `<div class="invoice-empty"><strong>Invoices could not be loaded</strong><span>${invoiceEscape(error.message)}</span></div>`;
+    }
   } finally {
-    invoiceState.listLoading = false;
+    if (requestVersion === invoiceState.listRequestVersion) {
+      invoiceState.listLoading = false;
+    }
   }
 }
 
@@ -399,7 +457,7 @@ function invoiceListRowMarkup(row) {
       <td data-label="Quotation"><strong>${invoiceEscape(quotation.number)}</strong><small>${invoiceDateLabel(quotation.acceptedAt || quotation.updatedAt)}</small></td>
       <td data-label="Project"><strong>${invoiceEscape(quotation.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(quotation))}</small></td>
       <td data-label="Strategy"><strong>${invoiceEscape(plan.strategyLabel || 'Not configured')}</strong><small>${installmentCount} installment${installmentCount === 1 ? '' : 's'}</small></td>
-      <td data-label="Status">${invoiceStatusControlMarkup(plan.status, `list-${quotation.id}`, `invoiceSetListStatus('${invoiceAttr(quotation.id)}',STATUS_VALUE)`)}</td>
+      <td data-label="Status">${invoiceStatusBadgeMarkup(plan.status)}</td>
       <td data-label="Invoiced"><strong>${invoiceMoney(summary.invoiced)}</strong><small>of ${invoiceMoney(summary.quotationTotal)}</small></td>
       <td data-label="Paid"><strong class="invoice-positive">${invoiceMoney(summary.paid)}</strong></td>
       <td data-label="Due"><strong class="${Number(summary.due || 0) > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(summary.due)}</strong></td>
@@ -426,27 +484,32 @@ function invoiceIssuedAmountDue(invoice) {
 
 function invoiceIssuedRowMarkup(invoice) {
   const due = invoiceIssuedAmountDue(invoice);
-  const isCancelled = ['cancelled', 'void'].includes(String(invoice.status || '').toLowerCase());
+  const status = String(invoice.status || 'draft').toLowerCase();
+  const isDraft = status === 'draft';
+  const isCancelled = ['cancelled', 'void'].includes(status);
+  const countdown = ['sent', 'partially-paid', 'overdue'].includes(status)
+    ? invoiceDueCountdown(invoice.paymentDueDate || invoice.dueDate)
+    : '';
   return `
     <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
       <td data-label="Invoice"><strong>${invoiceEscape(invoice.number || 'Unnumbered invoice')}</strong><small>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</small></td>
       <td data-label="Quotation"><strong>${invoiceEscape(invoice.sourceQuotationNumber || 'Not linked')}</strong></td>
       <td data-label="Project"><strong>${invoiceEscape(invoice.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(invoice))}</small></td>
       <td data-label="Label"><strong>${invoiceEscape(invoice.invoiceLabel || '-')}</strong></td>
-      <td data-label="Status">${invoiceStatusControlMarkup(invoice.status || 'draft', `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, INVOICE_DOCUMENT_STATUSES)}</td>
+      <td data-label="Status">${invoiceStatusControlMarkup(status, `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, invoiceDocumentStatusChoices(status))}</td>
       <td data-label="Amount"><strong>${invoiceMoney(invoice.invoiceAmount || invoice.totals?.total)}</strong></td>
-      <td data-label="Due"><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong></td>
+      <td data-label="Due"><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong>${countdown ? `<small>${invoiceEscape(countdown)}</small>` : ''}</td>
       <td data-label="Actions"><div class="invoice-directory-actions">
         <button type="button" title="Preview invoice" onclick="event.stopPropagation();invoiceOpenPdf('${invoiceAttr(invoice.id)}')"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></button>
-        <button type="button" title="Renumber invoice" onclick="event.stopPropagation();invoiceRenumber('${invoiceAttr(invoice.id)}')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>
-        <button type="button" class="danger" title="Delete invoice" onclick="event.stopPropagation();invoiceDeleteIssued('${invoiceAttr(invoice.id)}')"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"></path></svg></button>
+        ${isDraft ? `<button type="button" title="Renumber draft invoice" onclick="event.stopPropagation();invoiceRenumber('${invoiceAttr(invoice.id)}','directory')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>
+        <button type="button" class="danger" title="Delete draft invoice" onclick="event.stopPropagation();invoiceDeleteIssued('${invoiceAttr(invoice.id)}','directory')"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"></path></svg></button>` : ''}
       </div></td>
     </tr>
   `;
 }
 
-async function invoiceRenumber(invoiceId) {
-  const invoice = invoiceState.issuedInvoices.find(row => row.id === invoiceId);
+async function invoiceRenumber(invoiceId, origin = 'directory') {
+  const invoice = invoiceFindDocument(invoiceId);
   if (!invoice) return;
   const number = await showAppPrompt({
     title: 'Renumber invoice',
@@ -461,20 +524,24 @@ async function invoiceRenumber(invoiceId) {
   const clean = String(number || '').trim();
   if (!clean || clean === invoice.number) return;
   try {
-    await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'PUT', { number: clean });
+    await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'PUT', {
+      number: clean,
+      ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
+    });
     showNotification('success', `Invoice ID changed to ${clean}`);
-    await loadInvoices(invoiceState.query);
+    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to renumber invoice');
   }
 }
 
-async function invoiceDeleteIssued(invoiceId) {
-  const invoice = invoiceState.issuedInvoices.find(row => row.id === invoiceId);
+async function invoiceDeleteIssued(invoiceId, origin = 'directory') {
+  const invoice = invoiceFindDocument(invoiceId);
   if (!invoice) return;
   const confirmed = await showAppConfirm({
     title: 'Delete invoice?',
-    message: `${invoice.number || 'This invoice'} will be removed. Its installment will return to a planned state and can be issued again. Payment records are retained.`,
+    message: `${invoice.number || 'This invoice'} will be removed. Its installment will return to a planned state and the invoice number will become available again.`,
     confirmText: 'Delete invoice',
     cancelText: 'Keep invoice',
     variant: 'danger'
@@ -483,7 +550,8 @@ async function invoiceDeleteIssued(invoiceId) {
   try {
     await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'DELETE');
     showNotification('success', `${invoice.number || 'Invoice'} deleted`);
-    await loadInvoices(invoiceState.query);
+    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to delete invoice');
   }
@@ -542,30 +610,6 @@ function invoiceCloseStatusMenus(exceptId = '') {
   document.querySelectorAll('[data-invoice-status-portal]').forEach(menu => {
     if (menu.dataset.invoiceStatusPortal !== exceptId) menu.remove();
   });
-}
-
-async function invoiceSetListStatus(quotationId, status, conflictRetry = 0) {
-  const row = invoiceState.rows.find(item => item.quotation?.id === quotationId);
-  if (!row) return;
-  invoiceCloseStatusMenus();
-  try {
-    const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(quotationId)}`, 'PUT', {
-      status,
-      documentVersion: row.plan?.documentVersion
-    });
-    Object.assign(row, response.data);
-    invoiceRenderList();
-  } catch (error) {
-    if (
-      error.payload?.code === 'document_version_conflict'
-      && error.payload?.data
-      && conflictRetry < 1
-    ) {
-      Object.assign(row, error.payload.data);
-      return invoiceSetListStatus(quotationId, status, conflictRetry + 1);
-    }
-    showNotification('error', error.message || 'Unable to update invoice status');
-  }
 }
 
 async function invoiceOpenPlan(quotationId, options = {}) {
@@ -658,7 +702,7 @@ function invoiceRenderEditor() {
         <div><span>${invoiceEscape(quotation.number)}</span><h2>${invoiceEscape(details.projectName || 'Untitled project')}</h2><p>${invoiceEscape(invoiceClientDisplay(client) || 'No client')}</p></div>
       </div>
       <div class="invoice-editor-actions">
-        ${invoiceStatusControlMarkup(plan.status || 'draft', `editor-status-${quotation.id}`, 'invoiceSetPlanStatus(STATUS_VALUE)')}
+        ${invoiceStatusBadgeMarkup(plan.status || 'draft')}
         <span id="invoiceSaveState" class="invoice-save-state">${invoiceState.remoteUpdatePending ? 'Review concurrent changes' : invoiceState.dirty ? 'Unsaved changes' : 'All changes saved'}</span>
         <button type="button" class="btn invoice-save" onclick="invoiceSavePlan()" ${invoiceState.saving ? 'disabled' : ''}>
           ${invoiceState.saving ? '<span class="invoice-button-spinner"></span>Saving' : 'Save plan'}
@@ -746,8 +790,9 @@ function invoiceMetric(label, amount, detail, tone = '') {
 
 function invoiceInstallmentMarkup(row, index) {
   const issued = !!row.invoiceId;
+  const status = String(row.status || 'draft').toLowerCase();
   const detailsEditable = !issued || (
-    String(row.status || 'draft').toLowerCase() === 'draft' && !row.invoiceFrozen
+    status === 'draft' && !row.invoiceFrozen
   );
   return `
     <article class="invoice-installment ${issued ? 'issued' : ''}">
@@ -759,8 +804,9 @@ function invoiceInstallmentMarkup(row, index) {
       <div class="invoice-installment-amount"><span>Invoice amount</span><strong>${invoiceMoney(row.amount)}</strong></div>
       <div class="invoice-installment-actions">
         ${issued ? `
-          ${invoiceStatusControlMarkup(row.status || 'draft', `installment-status-${row.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(row.invoiceId)}',${index},STATUS_VALUE,'editor')`, INVOICE_DOCUMENT_STATUSES)}
+          ${invoiceStatusControlMarkup(status, `installment-status-${row.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(row.invoiceId)}',${index},STATUS_VALUE,'editor')`, invoiceDocumentStatusChoices(status))}
           <button type="button" class="invoice-pdf-button" onclick="invoiceOpenPdf('${invoiceAttr(row.invoiceId)}',${index})"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>${invoiceEscape(row.invoiceNumber || 'Export PDF')}</button>
+          ${detailsEditable ? `<button type="button" class="invoice-icon-button" title="Renumber draft invoice" onclick="invoiceRenumber('${invoiceAttr(row.invoiceId)}','editor')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button><button type="button" class="invoice-icon-button danger" title="Delete draft invoice" onclick="invoiceDeleteIssued('${invoiceAttr(row.invoiceId)}','editor')"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"></path></svg></button>` : ''}
         ` : `
           <button type="button" class="invoice-issue-button" onclick="invoiceIssueInstallment(${index})">Issue invoice</button>
           <button type="button" class="invoice-remove-button" title="Remove installment" onclick="invoiceRemoveInstallment(${index})"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></button>
@@ -931,14 +977,6 @@ function invoiceUpdateDiscount(key, value) {
   invoiceMarkDirty();
   if (key === 'invoiceDiscountMode') invoiceRenderEditor();
   else invoiceRefreshCalculatedValues();
-}
-
-function invoiceSetPlanStatus(status) {
-  if (!invoiceState.current) return;
-  invoiceState.current.plan.status = status;
-  invoiceCloseStatusMenus();
-  invoiceMarkDirty();
-  invoiceSavePlan();
 }
 
 function invoiceUpdateInstallment(index, key, value) {
@@ -1198,6 +1236,67 @@ function invoiceEnsurePaidModal() {
   document.body.appendChild(modal);
 }
 
+function invoiceEnsureSentModal() {
+  if (document.getElementById('invoiceSentModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'invoiceSentModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content invoice-paid-modal invoice-sent-modal">
+      <div class="modal-header"><h3 class="modal-title">Mark invoice as sent</h3><button type="button" class="close-btn" onclick="closeModal('invoiceSentModal')">&times;</button></div>
+      <p>Confirm when the invoice was sent and how many days the client has to pay.</p>
+      <div class="invoice-sent-fields">
+        <label><span>Date sent</span><input id="invoiceSentDate" type="date" oninput="invoiceRefreshSentDueDate()"></label>
+        <label><span>Due in days</span><input id="invoiceSentDueDays" type="number" min="0" max="3650" step="1" oninput="invoiceRefreshSentDueDate()"></label>
+      </div>
+      <div class="invoice-paid-amount"><span>Payment due date</span><strong id="invoiceSentDueDate">-</strong></div>
+      <div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('invoiceSentModal')">Cancel</button><button type="button" class="btn invoice-paid-confirm" onclick="invoiceConfirmSent()">Mark as sent</button></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function invoiceRefreshSentDueDate() {
+  const sentDate = document.getElementById('invoiceSentDate')?.value;
+  const dueDays = Number(document.getElementById('invoiceSentDueDays')?.value || 0);
+  const output = document.getElementById('invoiceSentDueDate');
+  if (!output || !sentDate || !Number.isFinite(dueDays)) return;
+  const due = new Date(`${sentDate}T00:00:00`);
+  due.setDate(due.getDate() + Math.max(0, dueDays));
+  output.textContent = invoiceDateLabel(
+    new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  );
+}
+
+async function invoiceDefaultPaymentDays() {
+  if (invoiceState.defaultPaymentTermDays != null) {
+    return invoiceState.defaultPaymentTermDays;
+  }
+  try {
+    const response = await apiCall('/api/pdf-settings');
+    invoiceState.defaultPaymentTermDays = invoicePaymentTermDays(
+      response.data?.defaultPaymentTerms, 30
+    );
+  } catch (_error) {
+    invoiceState.defaultPaymentTermDays = 30;
+  }
+  return invoiceState.defaultPaymentTermDays;
+}
+
+async function invoiceOpenSentModal(invoiceId, index, origin) {
+  const invoice = invoiceFindDocument(invoiceId);
+  invoiceState.sentTarget = {
+    invoiceId, index, origin, documentVersion: invoice?.documentVersion
+  };
+  invoiceEnsureSentModal();
+  const sentDate = document.getElementById('invoiceSentDate');
+  const dueDays = document.getElementById('invoiceSentDueDays');
+  if (sentDate) sentDate.value = invoiceToday();
+  if (dueDays) dueDays.value = String(await invoiceDefaultPaymentDays());
+  invoiceRefreshSentDueDate();
+  openModal('invoiceSentModal');
+}
+
 function invoiceFindDocument(invoiceId) {
   const directoryInvoice = invoiceState.issuedInvoices.find(row => row.id === invoiceId);
   if (directoryInvoice) return directoryInvoice;
@@ -1206,16 +1305,36 @@ function invoiceFindDocument(invoiceId) {
   return {
     id: invoiceId,
     number: installment.invoiceNumber,
+    status: installment.status,
+    documentVersion: installment.invoiceDocumentVersion,
     invoiceAmount: installment.amount,
+    paymentTermDays: installment.paymentTermDays,
+    paymentDueDate: installment.paymentDueDate,
+    dueDate: installment.dueDate,
     invoicePlanPayments: invoiceState.current?.plan?.payments || []
   };
+}
+
+async function invoiceReloadCurrentPlan() {
+  const quotationId = invoiceState.current?.quotation?.id;
+  if (!quotationId) return;
+  const response = await apiCall(
+    `/api/invoice-plans/${encodeURIComponent(quotationId)}`
+  );
+  invoiceState.current = response.data;
+  invoiceState.basePlan = invoiceClone(response.data.plan);
+  invoiceState.dirty = false;
+  invoiceState.remoteUpdatePending = false;
+  invoiceRenderEditor();
 }
 
 async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = 'editor') {
   if (!invoiceId) return;
   invoiceCloseStatusMenus();
+  const currentInvoice = invoiceFindDocument(invoiceId);
+  if (String(currentInvoice?.status || '').toLowerCase() === String(status || '').toLowerCase()) return;
   if (status === 'paid') {
-    const invoice = invoiceFindDocument(invoiceId);
+    const invoice = currentInvoice;
     invoiceState.paidTarget = { invoiceId, index, origin };
     invoiceEnsurePaidModal();
     const receivedDate = document.getElementById('invoicePaidReceivedDate');
@@ -1225,21 +1344,47 @@ async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = '
     openModal('invoicePaidModal');
     return;
   }
+  if (status === 'sent') {
+    await invoiceOpenSentModal(invoiceId, index, origin);
+    return;
+  }
   try {
-    const response = await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'PUT', { status });
+    const response = await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'PUT', {
+      status,
+      ...(currentInvoice?.documentVersion ? { documentVersion: currentInvoice.documentVersion } : {})
+    });
     if (origin === 'directory') {
       await loadInvoices(invoiceState.query);
     } else {
-      const row = invoiceState.current?.plan?.installments?.[index];
-      if (row) {
-        row.status = response.data.status;
-        row.invoiceFrozen = !!response.data.invoiceSentSnapshot;
-      }
-      await invoiceSavePlan({ silent: true });
-      invoiceRenderEditor();
+      await invoiceReloadCurrentPlan();
     }
   } catch (error) {
     showNotification('error', error.message || 'Unable to update invoice status');
+  }
+}
+
+async function invoiceConfirmSent() {
+  const target = invoiceState.sentTarget;
+  const invoiceSentDate = document.getElementById('invoiceSentDate')?.value;
+  const paymentTermDays = Number(document.getElementById('invoiceSentDueDays')?.value);
+  if (!target?.invoiceId) return;
+  if (!invoiceSentDate || !Number.isInteger(paymentTermDays) || paymentTermDays < 0 || paymentTermDays > 3650) {
+    showNotification('error', 'Enter a valid sent date and due-in-days value');
+    return;
+  }
+  closeModal('invoiceSentModal');
+  try {
+    await apiCall(`/api/invoices/${encodeURIComponent(target.invoiceId)}`, 'PUT', {
+      status: 'sent', invoiceSentDate, paymentTermDays,
+      ...(target.documentVersion ? { documentVersion: target.documentVersion } : {})
+    });
+    showNotification('success', 'Invoice marked as sent');
+    if (target.origin === 'directory') await loadInvoices(invoiceState.query);
+    else await invoiceReloadCurrentPlan();
+  } catch (error) {
+    showNotification('error', error.message || 'Unable to mark invoice as sent');
+  } finally {
+    invoiceState.sentTarget = null;
   }
 }
 

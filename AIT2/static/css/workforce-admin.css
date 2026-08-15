@@ -68,6 +68,24 @@
   gap: 10px;
 }
 
+.wf-worker-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: min(520px, 100%);
+}
+
+.wf-worker-history-actions .wf-event-history-search {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.wf-worker-export-help {
+  margin: 0 0 16px;
+  color: var(--wf-muted);
+}
+
 .wf-page-actions .wf-event-picker {
   width: min(620px, 58vw);
   min-width: min(430px, 54vw);
@@ -2637,6 +2655,17 @@ button.wf-calendar-day.selected.has-conflict:hover {
 
   .wf-page-actions .wf-event-picker {
     min-width: 0;
+    width: 100%;
+  }
+
+  .wf-worker-history-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .wf-worker-history-actions .wf-event-history-search {
+    flex-basis: auto;
     width: 100%;
   }
 

@@ -667,3 +667,193 @@ def build_workforce_schedule_pdf(
         canvasmaker=NumberedCanvas,
     )
     return buffer.getvalue()
+
+
+def build_worker_period_schedule_pdf(
+    payload,
+    *,
+    company=None,
+    logo_path="",
+    show_rates=False,
+    generated_by="",
+):
+    """Build one worker's assignments across every event in a date range."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    company = company or payload.get("company") or {}
+    subject = payload.get("subject") or {}
+    rows = [row for row in payload.get("rows", []) if isinstance(row, dict)]
+    rows.sort(key=lambda row: (
+        str(row.get("date") or ""),
+        str(row.get("callTime") or "99:99"),
+        str(row.get("eventName") or "").casefold(),
+        str(row.get("department") or "").casefold(),
+    ))
+    page_width, page_height = A4
+    margin = 11 * mm
+    accent_hex = _safe_colour(company.get("themeColor"), SHOWBASE_GREEN)
+    accent = colors.HexColor(accent_hex)
+    header_hex = accent_hex if _contrast_colour(accent_hex) == "#FFFFFF" else _darken_colour(accent_hex)
+    header_accent = colors.HexColor(header_hex)
+    ink = colors.HexColor(SHOWBASE_INK)
+    muted = colors.HexColor(SHOWBASE_MUTED)
+    border = colors.HexColor(SHOWBASE_BORDER)
+    buffer = BytesIO()
+    company_name = str(company.get("companyName") or company.get("name") or "Showbase").strip()
+    letterhead_enabled = company.get("letterheadEnabled", True) is not False
+    footer_text = str(company.get("footerText") or "").replace("\n", " | ").strip()
+    generated_at = datetime.now().strftime("%d %B %Y, %H:%Mhrs")
+
+    def draw_page(canvas, _doc):
+        canvas.saveState()
+        logo_drawn = False
+        if letterhead_enabled and logo_path and os.path.isfile(logo_path):
+            try:
+                image = ImageReader(logo_path)
+                width, height = image.getSize()
+                scale = min((38 * mm) / width, (12 * mm) / height)
+                canvas.drawImage(image, margin, page_height - 19 * mm,
+                                 width=width * scale, height=height * scale,
+                                 preserveAspectRatio=True, mask="auto")
+                logo_drawn = True
+            except Exception:
+                logo_drawn = False
+        if letterhead_enabled and not logo_drawn and company_name:
+            canvas.setFillColor(ink)
+            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 14)
+            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+        canvas.setStrokeColor(border)
+        canvas.setLineWidth(.5)
+        canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
+        footer_line = footer_text or company_name
+        canvas.setFillColor(muted)
+        canvas.setFont(_canvas_font(footer_line, "Helvetica"), 5.8)
+        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        canvas.restoreState()
+
+    class NumberedCanvas(Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_pages = []
+
+        def showPage(self):
+            self._saved_pages.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            page_count = len(self._saved_pages)
+            for page_number, page in enumerate(self._saved_pages, start=1):
+                self.__dict__.update(page)
+                draw_page(self, None)
+                self.saveState()
+                self.setFillColor(muted)
+                self.setFont("Helvetica", 5.8)
+                self.drawRightString(page_width - margin, 7.5 * mm,
+                                     f"Page {page_number} of {page_count}")
+                self.restoreState()
+                Canvas.showPage(self)
+            Canvas.save(self)
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, leftMargin=margin, rightMargin=margin,
+        topMargin=25 * mm, bottomMargin=17 * mm,
+        title=f"{subject.get('name') or 'Worker'} Schedule", author=company_name,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "PeriodScheduleTitle", parent=styles["Heading1"], fontName="Helvetica-Bold",
+        fontSize=19, leading=22, textColor=ink, spaceAfter=3,
+    )
+    cell = ParagraphStyle(
+        "PeriodScheduleCell", parent=styles["BodyText"], fontName="Helvetica",
+        fontSize=7.2, leading=8.8, textColor=ink,
+    )
+    bold = ParagraphStyle("PeriodScheduleBold", parent=cell, fontName="Helvetica-Bold")
+    header = ParagraphStyle("PeriodScheduleHeader", parent=bold, textColor=colors.white)
+    center = ParagraphStyle("PeriodScheduleCenter", parent=cell, alignment=TA_CENTER)
+    right = ParagraphStyle("PeriodScheduleRight", parent=cell, alignment=TA_RIGHT)
+    label = ParagraphStyle(
+        "PeriodScheduleLabel", parent=cell, fontName="Helvetica-Bold",
+        fontSize=5.8, leading=7, textColor=muted,
+    )
+    value = ParagraphStyle("PeriodScheduleValue", parent=cell, fontName="Helvetica-Bold")
+    start_date = str(payload.get("startDate") or "")
+    end_date = str(payload.get("endDate") or "")
+    range_label = _date_label(start_date, False)
+    if end_date and end_date != start_date:
+        range_label += f" - {_date_label(end_date, False)}"
+    metadata = [
+        ("Worker", subject.get("name") or "-"),
+        ("Date range", range_label or "-"),
+        ("Generated by", generated_by or "-"),
+        ("Generated on", generated_at),
+    ]
+    metadata_rows = []
+    cells = [[_paragraph(a, label), _paragraph(b, value)] for a, b in metadata]
+    for index in range(0, len(cells), 2):
+        metadata_rows.append(cells[index] + cells[index + 1])
+    story = [
+        _paragraph("WORKER SCHEDULE", title_style),
+        HRFlowable(width="100%", thickness=.8, color=accent),
+        Spacer(1, 3 * mm),
+        Table(metadata_rows, colWidths=[24 * mm, doc.width / 2 - 24 * mm] * 2,
+              style=TableStyle([
+                  ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                  ("BOX", (0, 0), (-1, -1), .45, border),
+                  ("INNERGRID", (0, 0), (-1, -1), .3, border),
+                  ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                  ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                  ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                  ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+                  ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+              ])),
+        Spacer(1, 5 * mm),
+    ]
+    headers = ["Date", "Event / ID", "Location", "Department", "Role", "Call time"]
+    if show_rates:
+        headers.append("Rate")
+    table_rows = [[_paragraph(text, header) for text in headers]]
+    for row in rows:
+        event_label = f"{row.get('eventName') or 'Event'} · #{row.get('eventId') or '-'}"
+        if row.get("room"):
+            event_label += f" ({row['room']})"
+        values = [
+            _paragraph(_date_label(row.get("date")), cell),
+            _paragraph(event_label, bold),
+            _paragraph(row.get("location") or "Not set", cell),
+            _paragraph(row.get("department") or "Unassigned", cell),
+            _paragraph(row.get("role") or "Role not set", cell),
+            _paragraph(row.get("callTime") or "Not set", center),
+        ]
+        if show_rates:
+            values.append(_paragraph(row.get("rate") or "Not set", right))
+        table_rows.append(values)
+    if not rows:
+        table_rows.append([_paragraph("No assignments fall within this date range.", cell)] + [""] * (len(headers) - 1))
+    widths = [28, 52, 38, 31, 43, 24] + ([30] if show_rates else [])
+    scale = doc.width / (sum(widths) * mm)
+    table = Table(table_rows, colWidths=[width * mm * scale for width in widths], repeatRows=1)
+    commands = [
+        ("BACKGROUND", (0, 0), (-1, 0), header_accent),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BOX", (0, 0), (-1, -1), .5, border),
+        ("INNERGRID", (0, 0), (-1, -1), .35, border),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+    if not rows:
+        commands.append(("SPAN", (0, 1), (-1, 1)))
+    table.setStyle(TableStyle(commands))
+    story.append(table)
+    doc.build(story, canvasmaker=NumberedCanvas)
+    return buffer.getvalue()

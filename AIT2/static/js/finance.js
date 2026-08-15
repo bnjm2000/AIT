@@ -6734,7 +6734,9 @@ function profitLossExpenseCategoryMarkup(expense) {
   const source = String(expense?.source || 'manual');
   const categoryKey = String(expense?.categoryKey || '');
   let category = String(expense?.categoryLabel || expense?.category || 'Other expense');
-  if (
+  if (categoryKey === 'vendor-service') {
+    category = 'Vendor';
+  } else if (
     source === 'worker-invoice'
     || (source === 'worker-claim' && ['meal', 'transport'].includes(categoryKey))
     || (source === 'manual' && categoryKey === 'meal')
@@ -6772,6 +6774,7 @@ function profitLossChartColour(group, index, row = {}) {
   }
   const palettes = {
     manpower: ['#2563eb', '#0ea5e9', '#06b6d4', '#6366f1', '#0284c7'],
+    vendor: ['#0f766e', '#14b8a6', '#0d9488', '#115e59'],
     transport: ['#f59e0b'],
     other: ['#64748b', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'],
     commission: ['#8b5cf6'],
@@ -7131,6 +7134,7 @@ function renderProfitLossPage() {
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
         <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
+        ${financeNumber(summary.vendorServiceCost) > 0 ? `<div class="pnl-calc-row"><span>Vendor Services</span><strong>- ${financeSgd(summary.vendorServiceCost)}</strong></div>` : ''}
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
         <h4>Less: Other Expenses</h4>
@@ -7294,13 +7298,13 @@ function profitLossCommissionChange(index, field, value) {
   if (field === 'calculationMode') row.calculationMode = value === 'amount' ? 'amount' : 'percent';
   if (field === 'percent') {
     row.percent = Math.max(0, Math.min(100, financeNumber(value)));
-    row.amount = Math.round(financeNumber(profitLossState.data?.summary?.revenue) * row.percent) / 100;
+    row.amount = Math.round(financeNumber(profitLossState.data?.summary?.commissionBase) * row.percent) / 100;
     row.calculationMode = 'percent';
   }
   if (field === 'amount') {
     row.amount = Math.max(0, financeCurrencyNumber(value));
-    const revenue = financeNumber(profitLossState.data?.summary?.revenue);
-    row.percent = revenue ? Math.round(row.amount / revenue * 100 * 10000) / 10000 : 0;
+    const commissionBase = financeNumber(profitLossState.data?.summary?.commissionBase);
+    row.percent = commissionBase ? Math.round(row.amount / commissionBase * 100 * 10000) / 10000 : 0;
     row.calculationMode = 'amount';
   }
   profitLossRenderCommissionRows();

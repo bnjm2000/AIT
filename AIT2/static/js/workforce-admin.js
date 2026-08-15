@@ -2378,15 +2378,86 @@ function renderFreelancerWorkspace() {
     <section class="wf-panel wf-freelancer-events-panel">
       <header class="wf-panel-header"><div><h3>Events &amp; Submissions</h3>
         <p>Most recent events are shown first. Expand an event to manage its files.</p></div>
-        <input class="wf-search wf-event-history-search" type="search"
-          placeholder="Search event name, location, date or role"
-          oninput="renderFreelancerWorkspaceEvents(this.value)">
+        <div class="wf-worker-history-actions">
+          ${isVendor ? '' : '<button class="wf-button" type="button" onclick="openWorkerScheduleExport()">Export PDF</button>'}
+          <input class="wf-search wf-event-history-search" type="search"
+            placeholder="Search event name, location, date or role"
+            oninput="renderFreelancerWorkspaceEvents(this.value)">
+        </div>
       </header>
       <div class="wf-history-table-head"><span>Event &amp; Location</span><span>Date &amp; Role</span>
         <span>Invoice</span><span>Claims</span><span>Total</span><span></span></div>
       <div class="wf-history-list" id="wfFreelancerWorkspaceEvents"></div>
     </section>`;
   renderFreelancerWorkspaceEvents('');
+}
+
+function workforceLocalDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function ensureWorkerScheduleExportModal() {
+  ensureWorkforceModals();
+  if (document.getElementById('wfWorkerScheduleExportModal')) return;
+  document.body.insertAdjacentHTML('beforeend', wfModal(
+    'wfWorkerScheduleExportModal',
+    'Export Worker Schedule',
+    `<form id="wfWorkerScheduleExportForm" onsubmit="exportWorkerPeriodSchedule(event)">
+      <div class="wf-modal-body">
+        <p class="wf-worker-export-help">Choose the assignments to include in the worker's schedule.</p>
+        <div class="wf-form-grid">
+          <label class="wf-field"><span>From date *</span><input id="wfWorkerScheduleStartDate" type="date" required></label>
+          <label class="wf-field"><span>To date *</span><input id="wfWorkerScheduleEndDate" type="date" required></label>
+          <label class="wf-check full"><input id="wfWorkerScheduleShowRates" type="checkbox"> Include rates</label>
+        </div>
+        <div class="wf-error" id="wfWorkerScheduleExportError"></div>
+      </div>
+      <div class="wf-modal-actions">
+        <button class="wf-button" type="button" onclick="closeWorkforceModal('wfWorkerScheduleExportModal')">Cancel</button>
+        <button class="wf-button primary" type="submit">Export PDF</button>
+      </div>
+    </form>`
+  ));
+}
+
+function openWorkerScheduleExport() {
+  const data = workforcePageState.freelancerWorkspaceData;
+  const subject = data?.subject || data?.freelancer;
+  if (!subject?.id || data?.subjectType === 'vendor') return;
+  ensureWorkerScheduleExportModal();
+  const assignmentDates = (data.events || []).flatMap(event =>
+    (event.roles || []).flatMap(role => role.workDates || [])
+  ).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))).sort();
+  const today = workforceLocalDateValue();
+  document.getElementById('wfWorkerScheduleStartDate').value = assignmentDates[0] || today;
+  document.getElementById('wfWorkerScheduleEndDate').value = assignmentDates.at(-1) || today;
+  document.getElementById('wfWorkerScheduleShowRates').checked = false;
+  document.getElementById('wfWorkerScheduleExportError').textContent = '';
+  openWorkforceModal('wfWorkerScheduleExportModal');
+}
+
+function exportWorkerPeriodSchedule(event) {
+  event.preventDefault();
+  const data = workforcePageState.freelancerWorkspaceData;
+  const subject = data?.subject || data?.freelancer;
+  const startDate = document.getElementById('wfWorkerScheduleStartDate')?.value || '';
+  const endDate = document.getElementById('wfWorkerScheduleEndDate')?.value || '';
+  const error = document.getElementById('wfWorkerScheduleExportError');
+  if (!subject?.id || !startDate || !endDate || endDate < startDate) {
+    if (error) error.textContent = endDate < startDate
+      ? 'To date must be on or after the from date.'
+      : 'Choose a valid date range.';
+    return;
+  }
+  const params = new URLSearchParams({ startDate, endDate });
+  if (document.getElementById('wfWorkerScheduleShowRates')?.checked) {
+    params.set('showRates', '1');
+  }
+  window.open(`/api/workforce/subjects/${encodeURIComponent(subject.id)}/schedule.pdf?${params}`, '_blank', 'noopener');
+  closeWorkforceModal('wfWorkerScheduleExportModal');
 }
 
 function renderFreelancerWorkspaceEvents(search = '') {

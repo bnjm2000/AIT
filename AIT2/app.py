@@ -106,6 +106,7 @@ from services.company_storage_context import (
     attach_company_storage_contexts,
     build_company_storage_contexts,
 )
+from event_report import build_event_report_pdf
 from utils import sanitize_filename
 from workforce import (
     VALID_STATUSES,
@@ -130,7 +131,10 @@ from workforce import (
     upload_absolute_path,
     worker_submissions,
 )
-from workforce_schedule import build_workforce_schedule_pdf
+from workforce_schedule import (
+    build_worker_period_schedule_pdf,
+    build_workforce_schedule_pdf,
+)
 
 
 def _load_local_env_file():
@@ -10892,6 +10896,116 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
     })
 
 
+def _workforce_department_display(departments, code):
+    clean_code = str(code or '').strip().upper()
+    if isinstance(departments, dict):
+        row = departments.get(clean_code) or {}
+    else:
+        row = next((
+            item for item in departments or []
+            if isinstance(item, dict)
+            and str(item.get('code') or '').strip().upper() == clean_code
+        ), {})
+    name = str(row.get('name') or row.get('Name') or clean_code or 'Unassigned').strip()
+    return f'{name} ({clean_code})' if clean_code and name.casefold() != clean_code.casefold() else name
+
+
+@app.route('/api/workforce/subjects/<subject_id>/schedule.pdf', methods=['GET'])
+@require_admin
+def download_worker_period_schedule_pdf(subject_id):
+    """Export one worker's assignments across all events in a chosen period."""
+    manager = _current_data_manager_object()
+    workforce = load_workforce(_workforce_folder(manager))
+    subject, subject_type = _workforce_subject(workforce, subject_id)
+    if not subject or subject_type != 'worker':
+        return jsonify({'error': 'Worker not found'}), 404
+    start_date = str(request.args.get('startDate') or '').strip()
+    end_date = str(request.args.get('endDate') or '').strip()
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', start_date) or not re.fullmatch(
+        r'\d{4}-\d{2}-\d{2}', end_date
+    ):
+        return jsonify({'error': 'Choose a valid start and end date'}), 400
+    try:
+        start_value = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_value = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Choose a valid start and end date'}), 400
+    if end_value < start_value:
+        return jsonify({'error': 'End date must be on or after the start date'}), 400
+    if (end_value - start_value).days > 3660:
+        return jsonify({'error': 'Date range cannot exceed 10 years'}), 400
+
+    department_records = _department_codes_for_manager(manager)
+    rows = []
+    for raw_event_id, stored_rows in (workforce.get('assignments') or {}).items():
+        try:
+            event_id = int(raw_event_id)
+        except (TypeError, ValueError):
+            continue
+        event = manager.events.get(event_id)
+        if not event:
+            continue
+        room_options = _workforce_subproject_options(event)
+        show_room = len(room_options) > 1
+        for stored_row in stored_rows if isinstance(stored_rows, list) else []:
+            if (
+                not isinstance(stored_row, dict)
+                or _workforce_assignment_subject_id(stored_row) != str(subject_id)
+            ):
+                continue
+            assignment = _workforce_row_with_subproject(stored_row, event, room_options)
+            work_dates = _workforce_assignment_work_dates(assignment, event)
+            date_departments = _workforce_schedule_date_values(
+                assignment, 'dateDepartments', work_dates
+            )
+            date_roles = _workforce_schedule_date_values(
+                assignment, 'dateRoles', work_dates
+            )
+            call_times = normalize_call_times(assignment.get('callTimes'))
+            for date_value in work_dates:
+                if not (start_date <= date_value <= end_date):
+                    continue
+                department_code = date_departments.get(date_value) or assignment.get('department') or ''
+                role_name = date_roles.get(date_value) or assignment.get('roleName') or 'Role not set'
+                daily_rate = money(assignment.get('dailyRate'), None)
+                rows.append({
+                    'date': date_value,
+                    'eventId': event_id,
+                    'eventName': event.name or f'Event {event_id}',
+                    'location': getattr(event, 'location', '') or 'Not set',
+                    'room': assignment.get('subprojectName') if show_room else '',
+                    'department': _workforce_department_display(
+                        department_records, department_code
+                    ),
+                    'role': str(role_name or 'Role not set'),
+                    'callTime': str(call_times.get(date_value) or 'Not set'),
+                    'rate': f'${daily_rate:,.2f}/day' if daily_rate is not None else 'Not set',
+                })
+    show_rates = str(request.args.get('showRates') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
+    pdf_settings = _normalise_pdf_settings(_load_pdf_settings())
+    pdf_bytes = build_worker_period_schedule_pdf(
+        {
+            'subject': {'id': str(subject_id), 'name': subject.get('name') or 'Worker'},
+            'startDate': start_date,
+            'endDate': end_date,
+            'rows': rows,
+        },
+        company=pdf_settings,
+        logo_path=_pdf_logo_path(pdf_settings),
+        show_rates=show_rates,
+        generated_by=_user_display_name(session.get('user')),
+    )
+    filename = sanitize_filename(str(subject.get('name') or 'Worker'))
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f'{filename}-schedule-{start_date}-to-{end_date}.pdf',
+    )
+
+
 @app.route('/api/events/<int:event_id>/workforce/schedule.pdf', methods=['GET'])
 @require_admin
 def download_workforce_schedule_pdf(event_id):
@@ -10942,6 +11056,284 @@ def download_workforce_schedule_pdf(event_id):
         mimetype='application/pdf',
         as_attachment=False,
         download_name=f'{event_name}-{suffix}.pdf',
+    )
+
+
+def _event_report_assets(event, manager):
+    """Return requirement rows with prepared/returned physical asset history."""
+    required_rows = {}
+    extra_refs = set(getattr(event, 'extra_assets', []) or [])
+
+    def add_row(key, item, department, required, kind, source=None):
+        row = required_rows.setdefault(key, {
+            'item': item,
+            'department': department or 'UN',
+            'required': 0,
+            'prepared': 0,
+            'returned': 0,
+            'assetIds': [],
+            'kind': kind,
+            'source': source,
+        })
+        row['required'] += max(0, _safe_int(required, 0))
+        return row
+
+    for ref in getattr(event, 'prepared_items', []) or []:
+        custom = _parse_custom_marker(ref)
+        bulk = _parse_bulk_marker(ref)
+        if isinstance(ref, str) and ref.startswith('[MODEL]'):
+            parts = ref[7:].split('|')
+            if len(parts) < 4:
+                continue
+            department, brand, model = parts[:3]
+            quantity = max(1, _safe_int(parts[3], 1))
+            description = '|'.join(parts[4:]).strip() if len(parts) > 4 else ''
+            key = ('model',) + _model_key_from_parts(
+                department, brand, model, description
+            )
+            add_row(
+                key,
+                ' '.join(filter(None, (brand, model, description))).strip() or 'Asset',
+                department,
+                quantity,
+                'model',
+                {'department': department, 'brand': brand, 'model': model, 'description': description},
+            )
+        elif custom:
+            row = add_row(
+                ('custom', custom.get('uid') or ref),
+                custom.get('name') or 'Custom item',
+                custom.get('department') or 'UN',
+                custom.get('quantity') or 1,
+                'custom',
+                {'ref': ref},
+            )
+            quantity = max(1, _safe_int(custom.get('quantity'), 1))
+            if ref in (getattr(event, 'returned_items', []) or []):
+                row['returned'] += quantity
+                row['assetIds'].append('Custom item (returned)')
+            elif ref in (getattr(event, 'actually_prepared', []) or []):
+                row['prepared'] += quantity
+                row['assetIds'].append('Custom item (prepared)')
+            elif ref in (getattr(event, 'custom_collected', []) or []):
+                row['assetIds'].append('Custom item (collected)')
+        elif bulk:
+            asset = manager.inventory.get(bulk['bulkId'])
+            item = ' '.join(filter(None, (
+                getattr(asset, 'brand', ''), getattr(asset, 'model_number', ''),
+                getattr(asset, 'description', ''),
+            ))).strip() or bulk['bulkId']
+            add_row(
+                ('bulk', bulk['bulkId']), item,
+                getattr(asset, 'department_code', 'UN'), bulk['quantity'], 'bulk',
+                {'bulkId': bulk['bulkId']},
+            )
+        elif isinstance(ref, str) and ref:
+            asset = manager.inventory.get(ref)
+            item = ' '.join(filter(None, (
+                getattr(asset, 'brand', ''), getattr(asset, 'model_number', ''),
+                getattr(asset, 'description', ''),
+            ))).strip() or ref
+            add_row(
+                ('direct', ref), item, getattr(asset, 'department_code', 'UN'),
+                1, 'direct', {'ref': ref},
+            )
+
+    prepared_refs = list(dict.fromkeys(
+        list(getattr(event, 'actually_prepared', []) or [])
+        + list(getattr(event, 'returned_items', []) or [])
+    ))
+    used_physical = set()
+    for row in required_rows.values():
+        if row['kind'] == 'model':
+            source = row['source'] or {}
+            for ref in prepared_refs:
+                if ref in used_physical or ref in extra_refs:
+                    continue
+                asset = manager.inventory.get(ref)
+                if not asset:
+                    continue
+                if _model_key_from_parts(
+                    asset.department_code, asset.brand, asset.model_number,
+                    asset.description,
+                ) != _model_key_from_parts(
+                    source.get('department'), source.get('brand'),
+                    source.get('model'), source.get('description')
+                ):
+                    continue
+                used_physical.add(ref)
+                status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
+                row[status] += 1
+                row['assetIds'].append(f'{ref} ({status})')
+        elif row['kind'] == 'direct':
+            ref = row['source']['ref']
+            if ref in prepared_refs:
+                used_physical.add(ref)
+                status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
+                row[status] += 1
+                row['assetIds'].append(f'{ref} ({status})')
+            else:
+                row['assetIds'].append(f'{ref} (assigned)')
+        elif row['kind'] == 'bulk':
+            bulk_id = row['source']['bulkId']
+            for ref in prepared_refs:
+                marker = _parse_bulk_marker(ref)
+                if not marker or marker['bulkId'] != bulk_id:
+                    continue
+                status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
+                row[status] += marker['quantity']
+                row['assetIds'].append(f"{bulk_id} × {marker['quantity']} ({status})")
+
+    for ref in prepared_refs:
+        if ref in used_physical or _parse_bulk_marker(ref) or _parse_custom_marker(ref):
+            continue
+        asset = manager.inventory.get(ref)
+        if not asset:
+            continue
+        status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
+        row = add_row(
+            ('extra', ref),
+            ' '.join(filter(None, (asset.brand, asset.model_number, asset.description))).strip(),
+            asset.department_code, 0, 'extra', {'ref': ref},
+        )
+        row[status] = 1
+        row['assetIds'].append(f'{ref} ({status}; extra)')
+
+    result = []
+    for row in required_rows.values():
+        result.append({
+            'item': row['item'],
+            'department': row['department'],
+            'required': row['required'],
+            'prepared': row['prepared'],
+            'returned': row['returned'],
+            'assetIds': ', '.join(row['assetIds']) or 'Not prepared',
+        })
+    return sorted(result, key=lambda row: (
+        str(row['department']).casefold(), str(row['item']).casefold()
+    ))
+
+
+def _event_report_workforce(report_data):
+    subject_maps = {
+        'worker': {str(row.get('id')): row for row in report_data.get('freelancers', [])},
+        'vendor': {str(row.get('id')): row for row in report_data.get('vendors', [])},
+        'app-user': {str(row.get('username')): row for row in report_data.get('appUsers', [])},
+    }
+    departments = {
+        str(row.get('code') or '').upper(): row
+        for row in report_data.get('allDepartments', [])
+        if isinstance(row, dict)
+    }
+    manpower = []
+    services = []
+    show_rooms = len(report_data.get('subprojects') or []) > 1
+    for row in report_data.get('assignments', []):
+        subject_type = str(row.get('subjectType') or '').strip() or (
+            'vendor' if row.get('vendorId') else 'worker'
+        )
+        if subject_type == 'app-user':
+            subject = subject_maps['app-user'].get(str(row.get('userUsername') or ''), {})
+        else:
+            subject = subject_maps.get(subject_type, {}).get(
+                str(row.get('vendorId') or row.get('freelancerId') or ''), {}
+            )
+        name = str(subject.get('name') or 'Unassigned')
+        room = str(row.get('subprojectName') or '') if show_rooms else ''
+        dates = list(row.get('workDates') or [])
+        if subject_type == 'vendor' and row.get('providerType') == 'service':
+            schedule = ', '.join(
+                f"{date_value} {str((row.get('callTimes') or {}).get(date_value) or '').strip()}".strip()
+                for date_value in dates
+            ) or f"{max(1, _safe_int(row.get('days'), 1))} day(s)"
+            code = str(row.get('department') or '')
+            services.append({
+                'name': name,
+                'room': room or '-',
+                'department': _workforce_department_display(departments, code),
+                'service': str(row.get('serviceName') or row.get('roleName') or 'Vendor service'),
+                'schedule': schedule,
+            })
+            continue
+        for date_value in dates or ['']:
+            code = str((row.get('dateDepartments') or {}).get(date_value) or row.get('department') or '')
+            role = str((row.get('dateRoles') or {}).get(date_value) or row.get('roleName') or 'Role not set')
+            manpower.append({
+                'date': date_value or 'Date not set',
+                'name': name,
+                'room': room or '-',
+                'department': _workforce_department_display(departments, code),
+                'role': role,
+                'callTime': str((row.get('callTimes') or {}).get(date_value) or 'Not set'),
+                'pax': max(1, _safe_int(row.get('pax'), 1)) if subject_type == 'vendor' else 1,
+            })
+    manpower.sort(key=lambda row: (row['date'], row['callTime'], row['name'].casefold()))
+    services.sort(key=lambda row: (row['department'].casefold(), row['name'].casefold()))
+    return manpower, services
+
+
+def _event_report_transport(report_data):
+    rows = []
+    for booking in report_data.get('transportBookings', []):
+        outbound = ' '.join(filter(None, (
+            str(booking.get('departDate') or ''), str(booking.get('departTime') or ''),
+        ))) or 'Time not set'
+        if booking.get('twoWay'):
+            returning = ' '.join(filter(None, (
+                str(booking.get('returnDate') or ''), str(booking.get('returnTime') or ''),
+            ))) or 'Time not set'
+            outbound = f'{outbound}; return {returning}'
+        rows.append({
+            'time': outbound,
+            'route': ' to '.join(filter(None, (
+                str(booking.get('locationFrom') or ''), str(booking.get('locationTo') or ''),
+            ))) or '-',
+            'company': str(booking.get('company') or '-'),
+            'vehicle': ' · '.join(filter(None, (
+                str(booking.get('vehicleType') or ''), str(booking.get('vehicleNumber') or ''),
+            ))) or '-',
+            'driver': ' · '.join(filter(None, (
+                str(booking.get('driver') or ''),
+                format_user_phone(booking.get('driverContact') or booking.get('contactNumber')),
+            ))) or '-',
+        })
+    return rows
+
+
+@app.route('/api/events/<int:event_id>/report.pdf', methods=['GET'])
+@require_auth
+@require_event_access
+def download_event_report_pdf(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    report_data = _admin_workforce_payload(event_id)
+    manpower, vendor_services = _event_report_workforce(report_data)
+    pdf_settings = _normalise_pdf_settings(_load_pdf_settings())
+    pdf_bytes = build_event_report_pdf(
+        {
+            'event': {
+                'id': event.event_id,
+                'name': event.name,
+                'location': getattr(event, 'location', '') or '',
+                'startDate': _event_date_for_input(event.start_date),
+                'endDate': _event_date_for_input(event.end_date),
+                'state': event.state,
+                'notes': getattr(event, 'notes', '') or '',
+            },
+            'assets': _event_report_assets(event, data_manager),
+            'manpower': manpower,
+            'vendorServices': vendor_services,
+            'transport': _event_report_transport(report_data),
+        },
+        company=pdf_settings,
+        logo_path=_pdf_logo_path(pdf_settings),
+        generated_by=_user_display_name(session.get('user')),
+    )
+    event_name = sanitize_filename(str(event.name or f'Event-{event_id}'))
+    return send_file(
+        io.BytesIO(pdf_bytes), mimetype='application/pdf', as_attachment=False,
+        download_name=f'{event_name}-event-report.pdf',
     )
 
 
@@ -29717,6 +30109,46 @@ def _finance_payment_due_date(sent_date, payment_terms, default_days=30):
     return (sent + timedelta(days=days)).strftime('%Y-%m-%d'), days
 
 
+def _invoice_sent_timing(request_data):
+    """Validate and calculate the dates that start an invoice's payment clock."""
+    request_data = request_data if isinstance(request_data, dict) else {}
+    sent_date = str(
+        request_data.get('invoiceSentDate')
+        or request_data.get('sentDate')
+        or datetime.now().strftime('%Y-%m-%d')
+    )[:10]
+    try:
+        sent_day = datetime.strptime(sent_date, '%Y-%m-%d').date()
+    except ValueError as exc:
+        raise ValueError('Enter a valid invoice sent date') from exc
+
+    default_terms = str(
+        _load_pdf_settings().get('defaultPaymentTerms') or '30 Days'
+    )
+    default_days = _finance_payment_term_days(default_terms, 30)
+    raw_days = request_data.get('paymentTermDays', default_days)
+    try:
+        due_days = int(str(raw_days).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Due in days must be a whole number') from exc
+    if due_days < 0 or due_days > 3650:
+        raise ValueError('Due in days must be between 0 and 3650')
+
+    due_date = (sent_day + timedelta(days=due_days)).strftime('%Y-%m-%d')
+    sent_at = datetime.combine(
+        sent_day, datetime.now().time().replace(microsecond=0)
+    ).isoformat(timespec='seconds')
+    return {
+        'invoiceSentDate': sent_date,
+        'paymentTermDays': due_days,
+        'paymentDueDate': due_date,
+        'dueDate': due_date,
+        'sentAt': sent_at,
+        'invoicedAt': sent_at,
+        'statusChangedAt': sent_at,
+    }
+
+
 def _finance_price_book_line_key(line):
     line = line if isinstance(line, dict) else {}
     catalog_key = str(line.get('catalogKey') or '').strip()
@@ -31816,12 +32248,17 @@ def _next_finance_number(documents, document_type):
         ) + 1
         return _finance_format_number(prefix, year, sequence, 1)
     pattern = re.compile(rf'^{re.escape(prefix)}-{year}-(\d+)$', re.IGNORECASE)
-    values = []
+    values = set()
     for row in documents:
         match = pattern.match(str(row.get('number') or ''))
         if match:
-            values.append(_safe_int(match.group(1), 0))
-    return f"{prefix}-{year}-{max(values, default=0) + 1:04d}"
+            sequence = _safe_int(match.group(1), 0)
+            if sequence > 0:
+                values.add(sequence)
+    sequence = 1
+    while sequence in values:
+        sequence += 1
+    return f"{prefix}-{year}-{sequence:04d}"
 
 
 def _costing_item_key(line):
@@ -34268,8 +34705,46 @@ def _finance_reset_to_draft_revision(document):
 def _finance_expire_sent_documents(finance_data):
     today = datetime.now().date()
     changed = False
+    changed_invoice_plan_ids = set()
     for document in finance_data.get('documents') or []:
-        if document.get('type') != 'quotation':
+        document_type = str(document.get('type') or '')
+        if document_type == 'invoice':
+            status = str(document.get('status') or '').strip().lower()
+            if status not in {'sent', 'partially-paid'}:
+                continue
+            try:
+                due_date = datetime.strptime(
+                    str(
+                        document.get('paymentDueDate')
+                        or document.get('dueDate')
+                        or ''
+                    )[:10],
+                    '%Y-%m-%d',
+                ).date()
+            except ValueError:
+                due_date = None
+            if due_date and due_date < today:
+                changed_at = datetime.now().isoformat(timespec='seconds')
+                document['status'] = 'overdue'
+                document['statusChangedAt'] = changed_at
+                document['updatedAt'] = changed_at
+                quotation_id = str(document.get('sourceQuotationId') or '')
+                stored_plan = (finance_data.get('invoicePlans') or {}).get(
+                    quotation_id
+                )
+                if isinstance(stored_plan, dict):
+                    for installment in stored_plan.get('installments') or []:
+                        if str(installment.get('invoiceId') or '') == str(
+                            document.get('id') or ''
+                        ):
+                            installment['status'] = 'overdue'
+                    stored_plan['status'] = _invoice_plan_summary_status(
+                        stored_plan
+                    )
+                    changed_invoice_plan_ids.add(quotation_id)
+                changed = True
+            continue
+        if document_type != 'quotation':
             continue
         if _finance_refresh_saved_revision_statuses(document):
             changed = True
@@ -34302,6 +34777,15 @@ def _finance_expire_sent_documents(finance_data):
             document['updatedAt'] = changed_at
             _finance_update_revision_status(document)
             changed = True
+    for quotation_id in changed_invoice_plan_ids:
+        stored_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
+        if not isinstance(stored_plan, dict):
+            continue
+        stored_plan['documentVersion'] = max(
+            1, _safe_int(stored_plan.get('documentVersion'), 1)
+        ) + 1
+        stored_plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        stored_plan['updatedBy'] = 'system'
     return changed
 
 
@@ -35507,16 +35991,17 @@ def _finance_profit_loss_manual_revenue(data, event_id):
     }
 
 
-def _normalise_profit_loss_commission(value, revenue=0):
+def _normalise_profit_loss_commission(value, commission_base=0):
     value = value if isinstance(value, dict) else {}
     mode = str(value.get('calculationMode') or value.get('mode') or 'percent').strip().lower()
     if mode not in {'percent', 'amount'}:
         mode = 'percent'
     percent = round(max(0, min(100, _safe_float(value.get('percent'), 0))), 4)
     entered_amount = round(max(0, _safe_float(value.get('amount'), 0)), 2)
-    amount = round(revenue * percent / 100, 2) if mode == 'percent' else entered_amount
+    commission_base = max(0, _safe_float(commission_base, 0))
+    amount = round(commission_base * percent / 100, 2) if mode == 'percent' else entered_amount
     if mode == 'amount':
-        percent = round((amount / revenue * 100) if revenue else 0, 4)
+        percent = round((amount / commission_base * 100) if commission_base else 0, 4)
     return {
         'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or new_id('commission'),
         'recipient': str(value.get('recipient') or value.get('payee') or '').strip()[:180],
@@ -35526,7 +36011,7 @@ def _normalise_profit_loss_commission(value, revenue=0):
     }
 
 
-def _finance_profit_loss_event_commissions(data, event_id, revenue=0, create=False):
+def _finance_profit_loss_event_commissions(data, event_id, commission_base=0, create=False):
     commissions = _finance_profit_loss_store(data).setdefault('commissions', {})
     key = str(int(event_id))
     if create:
@@ -35534,7 +36019,7 @@ def _finance_profit_loss_event_commissions(data, event_id, revenue=0, create=Fal
     else:
         rows = commissions.get(key, []) if isinstance(commissions.get(key), list) else []
     return [
-        _normalise_profit_loss_commission(row, revenue)
+        _normalise_profit_loss_commission(row, commission_base)
         for row in rows
         if isinstance(row, dict)
     ]
@@ -35780,40 +36265,128 @@ def _finance_profit_loss_assignment_estimate(assignment):
     return round(rate * days, 2)
 
 
+def _finance_profit_loss_submission_invoices(
+    workforce, event_id, included_subject_ids, subject_departments=None
+):
+    """Total non-denied invoices for only the requested workforce subjects."""
+    included_subject_ids = {str(value) for value in included_subject_ids if str(value)}
+    total = 0.0
+    departments = {}
+    event_rows = (
+        (workforce.get('submissions') or {}).get(str(event_id), {})
+        if isinstance(workforce, dict)
+        else {}
+    )
+
+    def add_department(department, amount):
+        department = str(department or 'Unallocated')
+        departments[department] = round(
+            departments.get(department, 0) + amount, 2
+        )
+
+    for subject_id, submissions in event_rows.items() if isinstance(event_rows, dict) else []:
+        if str(subject_id) not in included_subject_ids or not isinstance(submissions, dict):
+            continue
+        departments_for_subject = list(
+            (subject_departments or {}).get(str(subject_id), [])
+        )
+        for invoice in submissions.get('invoices', []) or []:
+            if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
+                continue
+            amount = round(money(invoice.get('amount'), 0.0) or 0.0, 2)
+            total = round(total + amount, 2)
+            allocated = 0.0
+            for allocation in invoice.get('allocations', []) or []:
+                if not isinstance(allocation, dict):
+                    continue
+                allocation_amount = round(money(allocation.get('amount'), 0.0) or 0.0, 2)
+                allocated = round(allocated + allocation_amount, 2)
+                add_department(allocation.get('department'), allocation_amount)
+            remainder = round(amount - allocated, 2)
+            if remainder > 0:
+                add_department(
+                    departments_for_subject[0] if len(departments_for_subject) == 1 else 'Unallocated',
+                    remainder,
+                )
+    return {'total': round(total, 2), 'departments': departments}
+
+
 def _finance_profit_loss_workforce_costs(event_id):
     workforce = load_workforce(_workforce_folder())
     totals = submission_totals(workforce, event_id)
     assignment_department_estimates = {}
-    for assignment in event_assignments(workforce, event_id):
+    vendor_service_department_estimates = {}
+    assignments = [
+        row for row in event_assignments(workforce, event_id)
+        if isinstance(row, dict)
+    ]
+    assignments_by_subject = {}
+    assignment_departments = {}
+    for assignment in assignments:
+        subject_id = _workforce_assignment_subject_id(assignment)
+        if subject_id:
+            assignments_by_subject.setdefault(subject_id, []).append(assignment)
+            department = str(assignment.get('department') or 'Unassigned')
+            departments = assignment_departments.setdefault(subject_id, [])
+            if department not in departments:
+                departments.append(department)
+    service_vendor_ids = {
+        subject_id
+        for subject_id, rows in assignments_by_subject.items()
+        if rows and all(
+            (row.get('subjectType') == 'vendor' or row.get('vendorId'))
+            and str(row.get('providerType') or '').lower() == 'service'
+            for row in rows
+        )
+    }
+    manpower_subject_ids = set(assignments_by_subject) - service_vendor_ids
+    for assignment in assignments:
         if not isinstance(assignment, dict):
             continue
         department = str(assignment.get('department') or 'Unassigned')
-        assignment_department_estimates[department] = round(
-            assignment_department_estimates.get(department, 0)
-            + _finance_profit_loss_assignment_estimate(assignment),
-            2,
+        target = (
+            vendor_service_department_estimates
+            if _workforce_assignment_subject_id(assignment) in service_vendor_ids
+            else assignment_department_estimates
+        )
+        target[department] = round(
+            target.get(department, 0) + _finance_profit_loss_assignment_estimate(assignment), 2
         )
     assignment_estimate = round(
         sum(assignment_department_estimates.values()),
         2,
     )
-    invoice_total = round(_safe_float(totals.get('invoice'), 0), 2)
+    vendor_service_estimate = round(sum(vendor_service_department_estimates.values()), 2)
+    manpower_invoices = _finance_profit_loss_submission_invoices(
+        workforce, event_id, manpower_subject_ids, assignment_departments
+    )
+    vendor_service_invoices = _finance_profit_loss_submission_invoices(
+        workforce, event_id, service_vendor_ids, assignment_departments
+    )
+    invoice_total = manpower_invoices['total']
     if invoice_total > 0:
-        manpower_departments = {
-            str(department or 'Unassigned'): round(
-                _safe_float((row or {}).get('invoice'), 0),
-                2,
-            )
-            for department, row in (totals.get('departments') or {}).items()
-            if _safe_float((row or {}).get('invoice'), 0) > 0
-        }
+        manpower_departments = manpower_invoices['departments']
     else:
         manpower_departments = assignment_department_estimates
+    vendor_service_cost = (
+        vendor_service_invoices['total']
+        if vendor_service_invoices['total'] > 0
+        else vendor_service_estimate
+    )
+    vendor_service_departments = (
+        vendor_service_invoices['departments']
+        if vendor_service_invoices['total'] > 0
+        else vendor_service_department_estimates
+    )
     return {
         'manpowerCost': invoice_total if invoice_total > 0 else assignment_estimate,
         'manpowerInvoiceCost': invoice_total,
         'manpowerEstimatedCost': assignment_estimate,
         'manpowerDepartments': manpower_departments,
+        'vendorServiceCost': round(vendor_service_cost, 2),
+        'vendorServiceInvoiceCost': vendor_service_invoices['total'],
+        'vendorServiceEstimatedCost': vendor_service_estimate,
+        'vendorServiceDepartments': vendor_service_departments,
         'workerClaimsCost': round(_safe_float(totals.get('claims'), 0), 2),
         'transportCost': round(_safe_float(totals.get('transport'), 0), 2),
         'rawTotals': totals,
@@ -35849,6 +36422,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         else {}
     )
     subject_departments = {}
+    subject_provider_types = {}
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
@@ -35858,7 +36432,12 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
             or ''
         )
         department = str(assignment.get('department') or '').strip()
-        if not subject_id or not department:
+        if not subject_id:
+            continue
+        subject_provider_types.setdefault(subject_id, set()).add(
+            str(assignment.get('providerType') or 'manpower').strip().lower()
+        )
+        if not department:
             continue
         departments = subject_departments.setdefault(subject_id, [])
         if department not in departments:
@@ -35877,6 +36456,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         if not isinstance(rows, dict):
             continue
         subject_name = _finance_profit_loss_subject_name(workforce, subject_id)
+        is_vendor_service = subject_provider_types.get(str(subject_id)) == {'service'}
         invoices = rows.get('invoices') if isinstance(rows.get('invoices'), list) else []
         for invoice in invoices:
             if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
@@ -35910,13 +36490,13 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'id': f'worker-invoice-{subject_id}-{invoice_id}'[:120],
                 'sourceId': invoice_id,
                 'source': 'worker-invoice',
-                'sourceLabel': 'Invoice',
+                'sourceLabel': 'Vendor invoice' if is_vendor_service else 'Invoice',
                 'readOnly': True,
                 'eventId': int(event_id),
                 'description': f'{subject_name} - Invoice'[:300],
-                'category': 'Manpower',
-                'categoryKey': 'manpower',
-                'categoryLabel': 'Manpower',
+                'category': 'Vendor service' if is_vendor_service else 'Manpower',
+                'categoryKey': 'vendor-service' if is_vendor_service else 'manpower',
+                'categoryLabel': 'Vendor' if is_vendor_service else 'Manpower',
                 'department': ', '.join(departments) or 'Unallocated',
                 'vendor': subject_name,
                 'amount': round(amount, 2),
@@ -36099,11 +36679,17 @@ def _finance_profit_loss_payload(event, finance_data):
         2,
     )
     other_expenses = round(worker_other_claims + manual_other_expenses, 2)
-    direct_costs = round(manpower_cost + transport_cost, 2)
+    vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
+    direct_costs = round(manpower_cost + transport_cost + vendor_service_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
-    commissions = _finance_profit_loss_event_commissions(finance_data, event_id, revenue)
+    commission_base = max(0, before_commission)
+    commissions = _finance_profit_loss_event_commissions(
+        finance_data, event_id, commission_base
+    )
     commission = round(sum(_safe_float(row.get('amount'), 0) for row in commissions), 2)
-    commission_rate = round((commission / revenue * 100) if revenue else 0, 4)
+    commission_rate = round(
+        (commission / commission_base * 100) if commission_base else 0, 4
+    )
     net_profit = round(before_commission - commission, 2)
     profit_margin = round((net_profit / revenue * 100) if revenue else 0, 2)
     expense_category_totals = {}
@@ -36185,6 +36771,27 @@ def _finance_profit_loss_payload(event, finance_data):
             'label': f"Manpower - {row['label']}",
             'amount': row['amount'],
         })
+    vendor_service_department_rows = []
+    for department, amount in sorted(
+        (workforce_costs.get('vendorServiceDepartments') or {}).items(),
+        key=lambda row: str(row[0]).casefold(),
+    ):
+        amount = round(_safe_float(amount, 0), 2)
+        if amount <= 0:
+            continue
+        department = str(department or 'Unallocated')
+        vendor_service_department_rows.append({
+            'department': department,
+            'label': f'Vendor - {department}',
+            'amount': amount,
+        })
+        profit_chart.append({
+            'key': f'vendor-{_normalise_department_code(department).lower()}',
+            'group': 'vendor',
+            'department': department,
+            'label': f'Vendor - {department}',
+            'amount': amount,
+        })
     if transport_cost > 0:
         profit_chart.append({
             'key': 'transport',
@@ -36229,6 +36836,7 @@ def _finance_profit_loss_payload(event, finance_data):
         'crewTransportClaims': crew_transport_claims,
         'manualTransportExpenses': manual_transport_expenses,
         'transport': transport_cost,
+        'vendorServices': vendor_service_cost,
         'workerClaims': round(
             crew_transport_claims + worker_meal_claims + worker_other_claims,
             2,
@@ -36280,6 +36888,9 @@ def _finance_profit_loss_payload(event, finance_data):
                 quotation_budgets['transport'] - transport_cost,
                 2,
             ),
+            'vendorServiceCost': vendor_service_cost,
+            'vendorServiceInvoiceCost': workforce_costs['vendorServiceInvoiceCost'],
+            'vendorServiceEstimatedCost': workforce_costs['vendorServiceEstimatedCost'],
             'workerClaimsCost': round(
                 crew_transport_claims + worker_meal_claims + worker_other_claims,
                 2,
@@ -36288,6 +36899,7 @@ def _finance_profit_loss_payload(event, finance_data):
             'manualOtherExpenses': manual_other_expenses,
             'otherExpenses': other_expenses,
             'beforeCommission': before_commission,
+            'commissionBase': commission_base,
             'commissionRate': commission_rate,
             'commission': commission,
             'netProfit': net_profit,
@@ -36295,6 +36907,7 @@ def _finance_profit_loss_payload(event, finance_data):
         },
         'breakdown': breakdown,
         'manpowerDepartments': manpower_department_rows,
+        'vendorServiceDepartments': vendor_service_department_rows,
         'expenses': worker_submission_expenses + [
             _profit_loss_expense_payload(row)
             for row in expenses
@@ -38644,6 +39257,9 @@ def _finance_document_list_summary(document):
         'invoiceSentDate': str(document.get('invoiceSentDate') or ''),
         'paymentDueDate': str(document.get('paymentDueDate') or ''),
         'paymentTerms': str(document.get('paymentTerms') or ''),
+        'paymentTermDays': max(
+            0, min(3650, _safe_int(document.get('paymentTermDays'), 30))
+        ),
         'invoiceDate': str(document.get('invoiceDate') or ''),
         'dueDate': str(document.get('dueDate') or ''),
         'invoiceLabel': str(document.get('invoiceLabel') or ''),
@@ -38861,6 +39477,14 @@ def _finance_get_update_delete(document_id, document_type):
         if request.method == 'GET':
             return jsonify({'success': True, 'data': _normalise_finance_document(existing, document_type, existing)})
         if request.method == 'DELETE':
+            if (
+                document_type == 'invoice'
+                and str(existing.get('status') or 'draft').strip().lower()
+                != 'draft'
+            ):
+                return jsonify({
+                    'error': 'Only draft invoices can be deleted'
+                }), 409
             finance_data['documents'] = [
                 row for row in finance_data.get('documents') or []
                 if str(row.get('id')) != str(document_id)
@@ -38894,10 +39518,24 @@ def _finance_get_update_delete(document_id, document_type):
                     plan['summary'] = _invoice_plan_summary(
                         plan, (quotation.get('totals') or {}).get('total', 0)
                     )
+                    plan['status'] = _invoice_plan_summary_status(plan)
+                    plan['documentVersion'] = max(
+                        1, _safe_int(plan.get('documentVersion'), 1)
+                    ) + 1
+                    plan['updatedAt'] = datetime.now().isoformat(
+                        timespec='seconds'
+                    )
+                    plan['updatedBy'] = _finance_current_username()
                     finance_data['invoicePlans'][quotation_id] = plan
                     _invoice_plan_sync_documents(finance_data, plan, quotation)
             _save_finance_data(finance_data)
             log_action(f"Deleted {document_type} {existing.get('number', document_id)}")
+            if document_type == 'invoice':
+                mark_realtime_change('finance', {
+                    'quotationId': str(existing.get('sourceQuotationId') or ''),
+                    'invoiceId': document_id,
+                    'action': 'invoice-deleted',
+                })
             return jsonify({'success': True})
 
         request_data = request.get_json() or {}
@@ -38949,27 +39587,45 @@ def _finance_get_update_delete(document_id, document_type):
         ):
             return jsonify({'error': 'Expired status is set automatically'}), 400
         if document_type == 'invoice':
-            locked_detail_fields = {'invoiceLabel', 'dueDate'}
-            changed_locked_fields = {
-                key for key in locked_detail_fields
-                if key in request_data
-                and str(request_data.get(key) or '').strip()
-                != str(existing.get(key) or '').strip()
-            }
+            existing_status = str(
+                existing.get('status') or 'draft'
+            ).strip().lower()
+            if raw_requested_status == 'draft' and existing_status != 'draft':
+                return jsonify({
+                    'error': 'A sent invoice cannot be returned to draft'
+                }), 409
             if (
-                changed_locked_fields
-                and raw_requested_status != 'draft'
-                and (
-                    str(existing.get('status') or 'draft').strip().lower() != 'draft'
-                    or isinstance(existing.get('invoiceSentSnapshot'), dict)
-                )
+                existing_status in {'paid', 'void'}
+                and raw_requested_status
+                and raw_requested_status != existing_status
             ):
                 return jsonify({
-                    'error': 'Invoice label and due date can only be edited while the invoice is a draft'
+                    'error': f"A {existing_status} invoice status cannot be changed"
                 }), 409
+            lifecycle_fields = {'status'}
+            if existing_status == 'draft' and raw_requested_status == 'sent':
+                lifecycle_fields.update({
+                    'invoiceSentDate', 'sentDate', 'paymentTermDays',
+                })
+            changed_detail_fields = {
+                key for key in request_data
+                if key not in lifecycle_fields
+                and key not in {'documentVersion', '_baseDocument'}
+            }
+            if existing_status != 'draft' and changed_detail_fields:
+                return jsonify({
+                    'error': 'Invoice details can only be edited while the invoice is a draft'
+                }), 409
+            if 'number' in request_data and not str(
+                request_data.get('number') or ''
+            ).strip():
+                return jsonify({'error': 'Invoice number is required'}), 400
+            if raw_requested_status == 'sent' and existing_status == 'draft':
+                try:
+                    request_data.update(_invoice_sent_timing(request_data))
+                except ValueError as exc:
+                    return jsonify({'error': str(exc)}), 400
         updated = _normalise_finance_document(request_data, document_type, existing)
-        if document_type == 'invoice' and raw_requested_status == 'draft':
-            updated.pop('invoiceSentSnapshot', None)
         previous_document = _normalise_finance_document(
             existing,
             document_type,
@@ -39174,8 +39830,14 @@ def _finance_get_update_delete(document_id, document_type):
         if document_type == 'invoice':
             quotation_id = str(updated.get('sourceQuotationId') or '')
             stored_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
-            if isinstance(stored_plan, dict):
-                for installment in stored_plan.get('installments') or []:
+            quotation = _finance_find_document(
+                finance_data, quotation_id, 'quotation'
+            ) if quotation_id else None
+            if isinstance(stored_plan, dict) and quotation:
+                plan = _normalise_invoice_plan(
+                    stored_plan, quotation, stored_plan
+                )
+                for installment in plan.get('installments') or []:
                     if str(installment.get('invoiceId') or '') != str(document_id):
                         continue
                     installment.update({
@@ -39191,6 +39853,29 @@ def _finance_get_update_delete(document_id, document_type):
                         ),
                         'invoiceNumber': updated.get('number') or installment.get('invoiceNumber'),
                     })
+                action_detail = (
+                    f"Changed {existing.get('number') or document_id} status "
+                    f"to {updated.get('status')}"
+                    if str(existing.get('status') or 'draft')
+                    != str(updated.get('status') or 'draft')
+                    else f"Updated draft invoice {updated.get('number') or document_id}"
+                )
+                plan['history'].append(_invoice_plan_history_entry(
+                    'invoice-updated', action_detail
+                ))
+                plan['summary'] = _invoice_plan_summary(
+                    plan, (quotation.get('totals') or {}).get('total', 0)
+                )
+                plan['status'] = _invoice_plan_summary_status(plan)
+                plan['documentVersion'] = max(
+                    1, _safe_int(plan.get('documentVersion'), 1)
+                ) + 1
+                plan['updatedAt'] = datetime.now().isoformat(
+                    timespec='seconds'
+                )
+                plan['updatedBy'] = _finance_current_username()
+                finance_data.setdefault('invoicePlans', {})[quotation_id] = plan
+                _invoice_plan_sync_documents(finance_data, plan, quotation)
         if document_type == 'quotation':
             _sync_costing_from_quotation(finance_data, updated)
             _finance_expire_sent_documents(finance_data)
@@ -39225,6 +39910,12 @@ def _finance_get_update_delete(document_id, document_type):
                 )
         else:
             log_action(f"Updated {document_type} {updated['number']}")
+            if document_type == 'invoice':
+                mark_realtime_change('finance', {
+                    'quotationId': str(updated.get('sourceQuotationId') or ''),
+                    'invoiceId': document_id,
+                    'action': 'invoice-updated',
+                })
         return jsonify({'success': True, 'data': updated})
 
 
@@ -39797,18 +40488,17 @@ def finance_profit_loss_update_commissions(event_id):
             event_id,
         )['canEditFinancials']:
             return _finance_profit_loss_expense_access_denied()
-        quotation_rows = _finance_quotations_for_event(
-            finance_data,
-            event_id,
-            accessible_only=False,
+        commission_base = max(
+            0,
+            _safe_float(
+                _finance_profit_loss_payload(event, finance_data)
+                .get('summary', {})
+                .get('beforeCommission'),
+                0,
+            ),
         )
-        quotation_rows = [
-            row for row in quotation_rows
-            if _finance_profit_loss_can_use_quotation(row)
-        ]
-        revenue = round(_safe_float((quotation_rows[0] if quotation_rows else {}).get('totals', {}).get('netSubtotal'), 0), 2)
         normalised = [
-            _normalise_profit_loss_commission(row, revenue)
+            _normalise_profit_loss_commission(row, commission_base)
             for row in rows[:50]
             if isinstance(row, dict)
         ]
@@ -41037,6 +41727,74 @@ def _invoice_plan_history_entry(action, detail=''):
     }
 
 
+def _invoice_plan_summary_status(plan):
+    """Derive the project status exclusively from its issued invoices."""
+    plan = plan if isinstance(plan, dict) else {}
+    statuses = [
+        str(row.get('status') or 'draft').strip().lower()
+        for row in plan.get('installments') or []
+        if isinstance(row, dict) and row.get('invoiceId')
+    ]
+    active_statuses = [status for status in statuses if status != 'void']
+    if not active_statuses:
+        return (
+            'cancelled'
+            if statuses or str(plan.get('status') or '').lower() == 'cancelled'
+            else 'draft'
+        )
+    if len(active_statuses) == 1:
+        status = active_statuses[0]
+        return status if status in FINANCE_INVOICE_PLAN_STATUSES else 'draft'
+    if all(status == 'paid' for status in active_statuses):
+        return 'paid'
+    if any(
+        status in {'paid', 'partially-paid'} for status in active_statuses
+    ):
+        return 'partially-paid'
+    if any(status == 'sent' for status in active_statuses):
+        return 'sent'
+    if any(status == 'overdue' for status in active_statuses):
+        return 'overdue'
+    return 'draft'
+
+
+def _invoice_plan_with_document_state(finance_data, plan):
+    """Return a plan whose invoice rows reflect the canonical documents."""
+    response_plan = copy.deepcopy(plan if isinstance(plan, dict) else {})
+    invoice_documents = {
+        str(row.get('id') or ''): row
+        for row in finance_data.get('documents') or []
+        if row.get('type') == 'invoice'
+    }
+    for installment in response_plan.get('installments') or []:
+        invoice = invoice_documents.get(str(installment.get('invoiceId') or ''))
+        if not invoice:
+            continue
+        installment.update({
+            'invoiceNumber': (
+                invoice.get('number') or installment.get('invoiceNumber')
+            ),
+            'invoiceDocumentVersion': max(
+                1, _safe_int(invoice.get('documentVersion'), 1)
+            ),
+            'status': invoice.get('status') or installment.get('status'),
+            'invoiceDate': invoice.get('invoiceDate') or '',
+            'invoiceSentDate': invoice.get('invoiceSentDate') or '',
+            'paymentTermDays': invoice.get('paymentTermDays', 30),
+            'paymentDueDate': (
+                invoice.get('paymentDueDate')
+                or invoice.get('dueDate')
+                or ''
+            ),
+            'dueDate': invoice.get('dueDate') or '',
+            'invoiceFrozen': isinstance(
+                invoice.get('invoiceSentSnapshot'), dict
+            ),
+        })
+    response_plan['status'] = _invoice_plan_summary_status(response_plan)
+    return response_plan
+
+
 def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
     value = value if isinstance(value, dict) else {}
     existing = existing if isinstance(existing, dict) else {}
@@ -41334,6 +42092,7 @@ def _normalise_invoice_plan(value, quotation, existing=None):
         'updatedBy': _finance_current_username(),
     }
     plan['summary'] = _invoice_plan_summary(plan, quotation_total)
+    plan['status'] = _invoice_plan_summary_status(plan)
     return plan
 
 
@@ -41520,22 +42279,7 @@ def _invoice_plan_sync_documents(finance_data, plan, quotation):
 
 
 def _invoice_plan_response(finance_data, quotation, plan, include_quotation=False):
-    invoice_documents = {
-        str(row.get('id') or ''): row
-        for row in finance_data.get('documents') or []
-        if row.get('type') == 'invoice'
-    }
-    response_plan = copy.deepcopy(plan)
-    for installment in response_plan.get('installments') or []:
-        invoice = invoice_documents.get(str(installment.get('invoiceId') or ''))
-        if not invoice:
-            continue
-        installment['invoiceNumber'] = invoice.get('number') or installment.get('invoiceNumber')
-        installment['status'] = invoice.get('status') or installment.get('status')
-        installment['invoiceDate'] = invoice.get('invoiceDate') or ''
-        installment['invoiceFrozen'] = isinstance(
-            invoice.get('invoiceSentSnapshot'), dict
-        )
+    response_plan = _invoice_plan_with_document_state(finance_data, plan)
     response_plan['summary'] = _invoice_plan_summary(
         response_plan, (quotation.get('totals') or {}).get('total', 0)
     )
@@ -41551,6 +42295,7 @@ def _invoice_plan_response(finance_data, quotation, plan, include_quotation=Fals
 
 def _invoice_plan_list_response(finance_data, quotation, plan):
     """Return only the fields needed by the invoice-plan directory."""
+    plan = _invoice_plan_with_document_state(finance_data, plan)
     summary = _invoice_plan_summary(
         plan, (quotation.get('totals') or {}).get('total', 0)
     )
@@ -41578,6 +42323,8 @@ def _invoice_plan_list_response(finance_data, quotation, plan):
 def invoice_plans_collection():
     with _finance_lock:
         finance_data = _load_finance_data()
+        if _finance_expire_sent_documents(finance_data):
+            _save_finance_data(finance_data)
         query = str(request.args.get('query') or '').strip().casefold()
         mine_only = str(request.args.get('mine') or '').strip().lower() in {
             '1', 'true', 'yes', 'on',
@@ -41598,6 +42345,10 @@ def invoice_plans_collection():
         for quotation in finance_data.get('documents') or []:
             if quotation.get('type') != 'quotation' or not _finance_user_can_access(quotation):
                 continue
+            if str(quotation.get('status') or '').lower() not in {
+                'accepted', 'cancelled'
+            }:
+                continue
             if (
                 mine_only
                 and _finance_document_owner_username(quotation).casefold()
@@ -41608,8 +42359,6 @@ def invoice_plans_collection():
             existing = plans.get(quotation_id) or _invoice_plan_legacy_seed(
                 finance_data, quotation
             )
-            if str(quotation.get('status') or '').lower() not in {'accepted', 'cancelled'} and not isinstance(existing, dict):
-                continue
             normalised_quote = _normalise_finance_document(quotation, 'quotation', quotation)
             plan = _normalise_invoice_plan(existing or {}, normalised_quote, existing or {})
             row = _invoice_plan_list_response(
@@ -41669,6 +42418,8 @@ def invoice_plans_collection():
 def invoice_plan_item(quotation_id):
     with _finance_lock:
         finance_data = _load_finance_data()
+        if _finance_expire_sent_documents(finance_data):
+            _save_finance_data(finance_data)
         quotation = _invoice_plan_find_quotation(finance_data, quotation_id)
         if not quotation:
             return jsonify({'error': 'Quotation not found'}), 404
@@ -41676,6 +42427,16 @@ def invoice_plan_item(quotation_id):
         existing = plans.get(str(quotation_id)) or _invoice_plan_legacy_seed(
             finance_data, quotation
         )
+        if str(quotation.get('status') or '').lower() not in {
+            'accepted', 'cancelled'
+        }:
+            return jsonify({
+                'error': (
+                    'This quotation is no longer accepted or cancelled and '
+                    'is not available for invoicing'
+                ),
+                'code': 'quotation_not_invoice_ready',
+            }), 409
         if isinstance(existing, dict):
             existing = copy.deepcopy(existing)
             invoice_documents = {
@@ -41700,10 +42461,6 @@ def invoice_plan_item(quotation_id):
                     ),
                     'invoiceNumber': invoice.get('number') or installment.get('invoiceNumber'),
                 })
-        if not isinstance(existing, dict) and quotation.get('status') not in {'accepted', 'cancelled'}:
-            return jsonify({
-                'error': 'Only accepted or cancelled quotations can start an invoice plan'
-            }), 409
         if request.method == 'GET':
             plan = _normalise_invoice_plan(existing or {}, quotation, existing or {})
             return jsonify({
@@ -41808,6 +42565,16 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
         existing_plan = (finance_data.get('invoicePlans') or {}).get(str(quotation_id))
         if not quotation or not isinstance(existing_plan, dict):
             return jsonify({'error': 'Invoice plan not found'}), 404
+        if str(quotation.get('status') or '').lower() not in {
+            'accepted', 'cancelled'
+        }:
+            return jsonify({
+                'error': (
+                    'This quotation is no longer accepted or cancelled and '
+                    'cannot be invoiced'
+                ),
+                'code': 'quotation_not_invoice_ready',
+            }), 409
         plan = _normalise_invoice_plan(existing_plan, quotation, existing_plan)
         installment = next((
             row for row in plan.get('installments') or []
@@ -41902,6 +42669,11 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             source['paymentTermDays'] = payment_term_days
         source['invoiceDate'] = invoice_date
         source['dueDate'] = due_date
+        if source['status'] == 'sent':
+            try:
+                source.update(_invoice_sent_timing(request_data))
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
         invoice = _normalise_finance_document(source, 'invoice')
         invoice['number'] = _next_finance_number(
             finance_data.get('documents') or [], 'invoice'
@@ -41921,11 +42693,15 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             'invoice-issued',
             f"Issued {invoice['number']} for {installment.get('label')} ({invoice.get('currency') or '$'} {installment.get('amount', 0):.2f})",
         ))
+        plan['documentVersion'] = max(
+            1, _safe_int(plan.get('documentVersion'), 1)
+        ) + 1
         plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         plan['updatedBy'] = _finance_current_username()
         plan['summary'] = _invoice_plan_summary(
             plan, (quotation.get('totals') or {}).get('total', 0)
         )
+        plan['status'] = _invoice_plan_summary_status(plan)
         finance_data.setdefault('invoicePlans', {})[str(quotation_id)] = plan
         _invoice_plan_sync_documents(finance_data, plan, quotation)
         _save_finance_data(finance_data)
@@ -42025,11 +42801,10 @@ def mark_invoice_paid(document_id):
         plan['summary'] = _invoice_plan_summary(
             plan, (quotation.get('totals') or {}).get('total', 0)
         )
-        plan['status'] = (
-            'paid'
-            if plan['summary']['due'] <= 0.005
-            else 'partially-paid'
-        )
+        plan['status'] = _invoice_plan_summary_status(plan)
+        plan['documentVersion'] = max(
+            1, _safe_int(plan.get('documentVersion'), 1)
+        ) + 1
         plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         plan['updatedBy'] = _finance_current_username()
         finance_data.setdefault('invoicePlans', {})[quotation_id] = plan

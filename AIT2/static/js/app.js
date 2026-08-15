@@ -15150,6 +15150,7 @@ function eventOverviewIcon(kind) {
     truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
     note: '<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path>',
     file: '<path d="M6 3h8l4 4v14H6zM14 3v5h5"></path>',
+    pdf: '<path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h4"></path>',
     logs: '<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path>',
     edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"></path>',
     plan: '<path d="M4 4h16v16H4zM8 8h8M8 12h6M8 16h4"></path>',
@@ -15504,6 +15505,7 @@ function eventOverviewInternalUsers(event) {
 }
 
 function eventOverviewNavigate(kind, eventId) {
+  if (kind === 'report') return exportEventOverviewPdf(eventId);
   eventOverviewFlushNotesSave();
   closeModal('eventDetailsModal');
   if (kind === 'plan') return openEventPlanning(eventId);
@@ -15512,6 +15514,19 @@ function eventOverviewNavigate(kind, eventId) {
   if (kind === 'return') return openReturnWorkspaceForEvent(eventId);
   if (kind === 'delivery') return openDeliveryOrderTab(eventId);
   if (kind === 'packing') return openPackingListPage(eventId);
+}
+
+async function exportEventOverviewPdf(eventId) {
+  const id = Number(eventId);
+  if (!Number.isInteger(id) || id <= 0) return;
+  const reportWindow = window.open('about:blank', '_blank');
+  await eventOverviewFlushNotesSave();
+  if (reportWindow) {
+    reportWindow.opener = null;
+    reportWindow.location.replace(`/api/events/${id}/report.pdf`);
+  } else {
+    showNotification('error', 'Allow pop-ups to export the event PDF.');
+  }
 }
 
 function closeEventOverview(options = {}) {
@@ -15551,7 +15566,8 @@ async function viewEvent(eventId, options = {}) {
       isAdminUser() ? ['manpower', 'Manpower'] : null,
       ['return', 'Return'],
       ['delivery', 'Delivery Order'],
-      ['packing', 'Packing List']
+      ['packing', 'Packing List'],
+      ['report', 'Export PDF']
     ].filter(Boolean);
     const content = `<div class="event-overview-hero">
       <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-title-actions">${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}</div></div>

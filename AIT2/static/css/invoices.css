@@ -111,6 +111,7 @@
 .invoice-status {
   min-height: 31px; display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid #d8dee7; border-radius: 6px; background: #f8fafc; color: #475467; font-size: .73rem; font-weight: 800; cursor: pointer; white-space: nowrap;
 }
+.invoice-status:not(button) { cursor: default; }
 .invoice-status > span,
 .invoice-status-menu button > span { width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; }
 .invoice-status[data-status="sent"] > span,
@@ -238,6 +239,9 @@
 .invoice-installment-amount { align-self: center; }
 .invoice-installment-amount strong { font-size: .86rem; }
 .invoice-installment-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.invoice-icon-button { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border: 1px solid var(--invoice-border); border-radius: 6px; background: #fff; color: #475467; cursor: pointer; }
+.invoice-icon-button.danger { color: #b42318; }
+.invoice-icon-button svg { width: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .invoice-issue-button,
 .invoice-pdf-button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--invoice-green); border-radius: 6px; background: var(--invoice-green); color: #fff; font-size: .72rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .invoice-pdf-button { border-color: #2563eb; background: #2563eb; }
@@ -271,6 +275,9 @@
 .invoice-paid-modal > p { margin: 0 0 16px; color: #667085; font-size: .82rem; line-height: 1.5; }
 .invoice-paid-modal > label { display: grid; gap: 6px; color: #475467; font-size: .75rem; font-weight: 700; }
 .invoice-paid-modal input { height: 38px; padding: 0 10px; border: 1px solid var(--invoice-border); border-radius: 6px; color: var(--invoice-ink); }
+.invoice-sent-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.invoice-sent-fields label { display: grid; gap: 6px; color: #475467; font-size: .75rem; font-weight: 700; }
+.invoice-sent-fields input { width: 100%; }
 .invoice-paid-amount { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 12px; border: 1px solid #a7e3cd; border-radius: 7px; background: #ecfdf5; }
 .invoice-paid-amount span { color: #087a55; font-size: .75rem; font-weight: 700; }
 .invoice-paid-amount strong { color: #065f46; font-size: 1.1rem; }
@@ -297,6 +304,7 @@
 }
 
 @media (max-width: 640px) {
+  .invoice-sent-fields { grid-template-columns: 1fr; }
   .invoice-list-scroll { overflow: visible; }
   .invoice-list-table { display: block; min-width: 0; }
   .invoice-list-table thead { display: none; }
