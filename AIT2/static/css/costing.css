@@ -253,6 +253,9 @@
 .costing-category-title input { min-width: 0; max-width: 320px; height: 24px; flex: 1 1 140px; padding: 2px 3px; border: 1px solid transparent; border-radius: 5px; color: #102840; background: transparent; font: inherit; font-size: 12px; font-weight: 750; outline: 0; }
 .costing-category-title input:focus { border-bottom-color: #08a3b6; }
 .costing-category-title input:disabled { opacity: 1; }
+.costing-category-name-combobox { min-width: 0; flex: 1 1 140px; max-width: 320px; }
+.costing-category-name-combobox > input { width: 100%; max-width: none; }
+.costing-rename-category-suggestions { font-size: 12px; font-weight: 500; }
 .costing-category-toggle { flex: 0 0 22px; margin-right: 0; }
 .costing-category-drag-handle { margin-right: 0 !important; }
 .costing-category-card.dragging { opacity: .55; }

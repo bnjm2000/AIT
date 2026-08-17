@@ -821,6 +821,16 @@ class PlanningTemplateTests(unittest.TestCase):
 
         self.assertIn('function getDeliveryOrderAssetCatalog()', script)
         self.assertIn("id: 'doCatalogSearch'", script)
+        self.assertIn('function deliveryOrderAddItemKeydown(event)', script)
+        self.assertIn("showbaseLineWorkspace.selectFirstSuggestion('doCatalogResults')", script)
+        self.assertIn(
+            "onkeydown: \"showbaseLineWorkspace.suggestionKeydown(event,'doCatalogDepartmentResults')\"",
+            script,
+        )
+        self.assertIn(
+            "onkeydown=\"showbaseLineWorkspace.suggestionKeydown(event,this.closest('.do-line-category-combobox')?.querySelector('.do-line-category-suggestions'))\"",
+            script,
+        )
         self.assertIn('showbaseLineWorkspace.addRowMarkup({', script)
         self.assertIn('groupAction: "financeOpenLineGroupEditor(\'delivery-order\')"', script)
         self.assertIn('class="finance-lines-table do-line-table showbase-category-table"', script)
@@ -846,7 +856,11 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('function removeDeliveryOrderRow(button)', script)
         self.assertIn('function normaliseDoOrdering(items, storedOrdering = [])', script)
         self.assertIn('function deliveryOrderAlphabeticalItems(items)', script)
+        self.assertIn('function deliveryOrderAssetsBeforeMiscellaneous(items)', script)
+        self.assertIn('function deliveryOrderItemIsMiscellaneous(item)', script)
         self.assertIn(': deliveryOrderAlphabeticalItems(items);', script)
+        self.assertIn('const hasStoredOrdering = Array.isArray(storedOrdering) && storedOrdering.length > 0;', script)
+        self.assertIn('return hasStoredOrdering\n    ? orderedItems\n    : deliveryOrderAssetsBeforeMiscellaneous(orderedItems);', script)
         self.assertIn("catalogKey: `inventory|${key}`", script)
         self.assertIn('sourceAssetIds: [...(selected?.sourceAssetIds || [])]', script)
         self.assertIn('async function deliveryOrderAddCatalogItem()', script)
@@ -891,11 +905,33 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('class="do-job-band"', script)
         self.assertIn('class="asset-id-line"', script)
         self.assertIn('class="do-pdf-category-heading"', script)
-        self.assertIn('class="do-pdf-group-row"', script)
+        self.assertIn('class="do-pdf-group-row${record.item.isContinuation', script)
+        self.assertIn('class="do-pdf-group-child-row', script)
+        self.assertIn('class="quantity-col do-pdf-group-child-quantity-cell"', script)
+        self.assertIn("' is-custom-text' : ''}\">${quantity}${description}${renderAssetIdsLine(record.item.assetIds)}</div>", script)
+        self.assertIn('.items-table .do-pdf-group-row .quantity-col {', script)
+        self.assertIn('.do-pdf-group-child-quantity {\n            font-weight: 400;', script)
+        self.assertIn("String(item.description || 'Item').trim()", script)
+        self.assertIn('groupDisplayEntries = (items, groupId)', script)
+        self.assertIn('groupCustomText: customText', script)
+        self.assertIn("do-pdf-group-child-description${record.item.groupCustomText ? ' is-custom-text' : ''}", script)
         self.assertIn("description: item.groupTitle || 'Group'", script)
-        self.assertIn('function getAssetIdsByItem(event, item, department)', script)
+        self.assertIn('const groupQuantity = Math.max(1, Number(item.groupHeaderQuantity) || 1)', script)
+        self.assertIn('quantity: entry.quantity * groupQuantity', script)
+        self.assertIn('function deliveryOrderGroupQuantityChange(encodedGroupId, value)', script)
+        self.assertIn('groupHeaderQuantity: Math.max(1, Number(ci.groupHeaderQuantity) || 1)', script)
+        self.assertIn('function continuationGroupRecord(startIndex)', script)
+        self.assertIn("record.item.isContinuation ? ' (continued)' : ''", script)
+        self.assertIn("record.item.isBeforeCustomText ? ' is-before-custom-text' : ''", script)
+        self.assertIn('function getAssetIdsByItem(event, item, department, options = {})', script)
+        self.assertIn('const allocatedAssetIds = new Set();', script)
+        self.assertIn('excludedIds: allocatedAssetIds', script)
+        self.assertIn('ids.forEach(id => allocatedAssetIds.add(String(id)))', script)
+        self.assertIn('.filter(id => !excludedIds.has(String(id)))', script)
         self.assertIn('(line.assetRefs || []).map(String)', script)
-        self.assertIn('const linkedIds = sortedUniqueIds(item.assetRefs);', script)
+        self.assertIn('const linkedIds = withinDeliveryOrderQuantity(item.assetRefs);', script)
+        self.assertIn('(item.sourceAssetIds || []).filter(id => recordsById.has(String(id)))', script)
+        self.assertIn('.slice(0, deliveryOrderQuantity);', script)
         self.assertIn("id.startsWith('[BULK]')", script)
         self.assertIn("id.startsWith('[MODEL]')", script)
         self.assertIn('border-left: 0.5pt solid #cbd5e1 !important;', script)
@@ -943,10 +979,15 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('--do-category-width:110px;--do-quantity-width:54px;--do-action-width:34px;', page)
         self.assertIn('.do-item-row td { padding:1px 2px;color:#2d433d;vertical-align:middle; }', page)
         self.assertIn('.do-line-category-suggestions { top:calc(100% + 3px);bottom:auto;max-height:210px; }', page)
+        self.assertIn('.finance-group-child-row .showbase-group-custom-text { width:100%;text-align:left; }', page)
+        self.assertIn('.finance-group-child-row:has(+ .do-group-custom-text-row) td { padding-bottom:0; }', page)
+        self.assertIn('.do-group-custom-text-row td { padding-top:0; }', page)
         self.assertNotIn('.do-item-row .finance-line-input {', page)
         self.assertIn('.do-action-cell .do-del { width:22px;height:22px;padding:0; }', page)
         self.assertIn("value: '',\n      placeholder: 'Category'", script)
         self.assertIn("document.getElementById('doCatalogDepartment')?.value||''", script)
+        self.assertIn('id="financeLineGroupQuantityField" hidden', finance_script)
+        self.assertIn("mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {}", finance_script)
         self.assertIn("showNotification('warning', 'Choose a category before adding the item')", script)
         self.assertNotIn("selected?.department || 'MISC'", script)
 
@@ -990,6 +1031,9 @@ class PlanningTemplateTests(unittest.TestCase):
                     'description': 'DO-only cable loom',
                     'quantity': 1,
                     'subprojectId': 'main',
+                    'groupId': 'group-1',
+                    'groupTitle': 'Cable package',
+                    'groupHeaderQuantity': 4,
                 }],
             },
             'ordering': {'main::Audio': ['DOCUSTOM|do-line-1', 'ROOM|main|main-model-a']},
@@ -1020,6 +1064,10 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(
             reloaded.events[self.event.event_id].delivery_order['custom']['Audio'][0]['description'],
             'DO-only cable loom',
+        )
+        self.assertEqual(
+            reloaded.events[self.event.event_id].delivery_order['custom']['Audio'][0]['groupHeaderQuantity'],
+            4,
         )
         self.assertEqual(reloaded.events[self.event.event_id].asset_models, original_models)
         self.assertEqual(reloaded.events[self.event.event_id].subprojects, original_rooms)

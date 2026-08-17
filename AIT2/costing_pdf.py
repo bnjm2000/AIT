@@ -10,12 +10,12 @@ import os
 from quotation_pdf import (
     _canvas_font,
     _cjk_markup,
-    _escaped_line_breaks,
+    _group_content_markup,
     _group_display_entries,
-    _group_display_entry_chunks,
     _group_line_description,
     _paragraph,
     _safe_hex,
+    _split_paragraph_by_height,
     _text,
 )
 
@@ -503,6 +503,11 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
         49 * mm, 11 * mm, 12 * mm, 27 * mm, 35 * mm,
         19 * mm, 20 * mm, 22 * mm, 20 * mm, 21 * mm, 21 * mm,
     ]
+    item_cell_width = column_widths[0] - 6  # 3pt padding on each side.
+    group_content_page_height = max(
+        table_left.leading * 12,
+        doc.height - (35 * mm) - table_left.leading,
+    )
     headers = [
         'ITEM', 'QTY', '', 'VENDOR', 'REMARKS', 'UNIT COST',
         'COST TOTAL', 'MARGIN', 'CALC. PRICE', 'UNIT PRICE', 'SALE PRICE',
@@ -605,11 +610,19 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                     )) or '-'
                     group_title = _text(line.get('groupTitle') or 'Group')
                     item_flowables = []
-                    for chunk_index, chunk in enumerate(
-                        _group_display_entry_chunks(
-                            _group_display_entries(line_unit)
+                    content_markup = _group_content_markup(
+                        _group_display_entries(line_unit)
+                    )
+                    content_chunks = (
+                        _split_paragraph_by_height(
+                            Paragraph(content_markup, table_left),
+                            item_cell_width,
+                            group_content_page_height,
                         )
-                    ):
+                        if content_markup
+                        else [None]
+                    )
+                    for chunk_index, chunk in enumerate(content_chunks):
                         title_markup = _cjk_markup(
                             escape(
                                 group_title
@@ -618,19 +631,12 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                             ),
                             bold=True,
                         )
-                        child_markup = '<br/>'.join(
-                            _cjk_markup(_escaped_line_breaks(
-                                f"{entry['quantity']:g}x {entry['description']}"
-                                if entry.get('showQuantity')
-                                else entry['description']
-                            ))
-                            for entry in chunk
-                        )
-                        item_flowables.append(Paragraph(
-                            f'<b>{title_markup}</b>'
-                            + (f'<br/>{child_markup}' if child_markup else ''),
-                            table_left,
-                        ))
+                        item_flowable = [
+                            Paragraph(f'<b>{title_markup}</b>', table_left),
+                        ]
+                        if chunk is not None:
+                            item_flowable.append(chunk)
+                        item_flowables.append(item_flowable)
                 else:
                     quantity = max(0, _number(line.get('quantity')))
                     unit_cost = max(0, _number(line.get('itemCost')))

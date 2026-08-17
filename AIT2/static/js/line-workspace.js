@@ -76,6 +76,40 @@
       return true;
     },
 
+    suggestionRoot(resultsOrId) {
+      if (resultsOrId && typeof resultsOrId !== 'string') return resultsOrId;
+      return document.getElementById(String(resultsOrId || ''));
+    },
+
+    hideSuggestions(resultsOrId) {
+      const results = this.suggestionRoot(resultsOrId);
+      if (!results) return false;
+      results.classList.remove('open');
+      return true;
+    },
+
+    selectFirstSuggestion(resultsOrId) {
+      const results = this.suggestionRoot(resultsOrId);
+      const suggestion = results?.querySelector('button:not([disabled])');
+      if (!results?.classList.contains('open') || !suggestion) return false;
+      suggestion.click();
+      return true;
+    },
+
+    suggestionKeydown(event, resultsOrId) {
+      if (event?.key === 'Enter' && this.selectFirstSuggestion(resultsOrId)) {
+        event.preventDefault();
+        return true;
+      }
+      if (event?.key === 'Escape') {
+        event.preventDefault();
+        this.hideSuggestions(resultsOrId);
+        event.currentTarget?.blur();
+        return true;
+      }
+      return false;
+    },
+
     addRowMarkup(options = {}) {
       const search = options.search || {};
       const category = options.category || {};
@@ -83,13 +117,22 @@
       const optionalAttribute = (name, value) => (
         value ? ` ${name}="${escapeAttribute(value)}"` : ''
       );
+      const searchBlur = search.onblur || (search.resultsId
+        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestions(${JSON.stringify(String(search.resultsId))}),120)`
+        : '');
+      const categoryBlur = category.onblur || (category.resultsId
+        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestions(${JSON.stringify(String(category.resultsId))}),120)`
+        : '');
+      const categoryKeydown = category.onkeydown || (category.resultsId
+        ? `showbaseLineWorkspace.suggestionKeydown(event,${JSON.stringify(String(category.resultsId))})`
+        : '');
       return `<div class="finance-add-row finance-add-row-expanded showbase-line-workspace-add-row ${escapeAttribute(options.className || '')}">
         <div class="finance-add-item-wrap ${escapeAttribute(search.wrapClass || '')}">
-          <input id="${escapeAttribute(search.id || '')}" class="finance-input" placeholder="${escapeAttribute(search.placeholder || '')}" autocomplete="off"${optionalAttribute('oninput', search.oninput)}${optionalAttribute('onkeydown', search.onkeydown)}>
+          <input id="${escapeAttribute(search.id || '')}" class="finance-input" placeholder="${escapeAttribute(search.placeholder || '')}" autocomplete="off"${optionalAttribute('oninput', search.oninput)}${optionalAttribute('onblur', searchBlur)}${optionalAttribute('onkeydown', search.onkeydown)}>
           <div id="${escapeAttribute(search.resultsId || '')}" class="finance-catalog-results"></div>
         </div>
         <div class="finance-inline-combobox">
-          <input id="${escapeAttribute(category.id || '')}" class="finance-input" value="${escapeAttribute(category.value || '')}" placeholder="${escapeAttribute(category.placeholder || 'Category')}" autocomplete="off"${optionalAttribute('oninput', category.oninput)}${optionalAttribute('onfocus', category.onfocus)}${optionalAttribute('onblur', category.onblur)}${optionalAttribute('onkeydown', category.onkeydown)}>
+          <input id="${escapeAttribute(category.id || '')}" class="finance-input" value="${escapeAttribute(category.value || '')}" placeholder="${escapeAttribute(category.placeholder || 'Category')}" autocomplete="off"${optionalAttribute('oninput', category.oninput)}${optionalAttribute('onfocus', category.onfocus)}${optionalAttribute('onblur', categoryBlur)}${optionalAttribute('onkeydown', categoryKeydown)}>
           <div class="finance-inline-suggestions" id="${escapeAttribute(category.resultsId || '')}"></div>
         </div>
         ${extraMarkup}

@@ -276,6 +276,7 @@ const financeLineGroupState = {
   subprojectId: 'main',
   title: '',
   category: '',
+  groupQuantity: 1,
   displayFields: ['brand', 'model', 'description'],
   selected: [],
   customText: '',
@@ -3643,7 +3644,7 @@ function financeShowDepartmentSuggestions(index, query, targetId) {
   const results = document.getElementById(targetId);
   if (!results) return;
   results.innerHTML = financeDepartmentSuggestions(query).map(value => `
-    <button type="button" onmousedown="event.preventDefault();financeChooseDepartment(${index},'${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+    <button type="button" onmousedown="event.preventDefault()" onclick="financeChooseDepartment(${index},'${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
   `).join('');
   results.classList.add('open');
 }
@@ -3672,7 +3673,7 @@ function financeShowAddDepartmentSuggestions(query) {
   const results = document.getElementById('financeAddDepartmentResults');
   if (!results) return;
   results.innerHTML = financeDepartmentSuggestions(query).map(value => `
-    <button type="button" onmousedown="event.preventDefault();financeChooseAddDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+    <button type="button" onmousedown="event.preventDefault()" onclick="financeChooseAddDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
   `).join('');
   results.classList.add('open');
 }
@@ -3813,6 +3814,10 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
           ? first.category || first.department || 'MISC'
           : financeLineSystem(first) || financeState.addDepartment || 'General')
   );
+  financeLineGroupState.groupQuantity = Math.max(
+    1,
+    financeNumber(first.groupHeaderQuantity, 1)
+  );
   financeLineGroupState.displayFields = Array.isArray(first.groupDisplayFields) && first.groupDisplayFields.length
     ? [...first.groupDisplayFields]
     : ['brand', 'model', 'description'];
@@ -3846,6 +3851,7 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
           <div class="finance-line-group-basics">
             <label class="finance-field"><span>Group header</span><input id="financeLineGroupTitle" class="finance-input" maxlength="500" placeholder="e.g. Wireless microphone package"></label>
             <label class="finance-field"><span>Category</span><input id="financeLineGroupCategory" class="finance-input" maxlength="200" placeholder="e.g. Audio System"></label>
+            <label class="finance-field" id="financeLineGroupQuantityField" hidden><span>Group quantity</span><input id="financeLineGroupQuantity" class="finance-input" type="number" min="1" max="999" step="1" value="1"></label>
           </div>
           <fieldset class="finance-line-group-fields"><legend>Show for assets</legend>
             <label><input type="checkbox" value="brand" onchange="financeLineGroupFieldsChanged()"> Brand</label>
@@ -3864,6 +3870,16 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
   document.getElementById('financeLineGroupHeading').textContent = existing.length ? 'Edit group' : 'Add group';
   document.getElementById('financeLineGroupTitle').value = financeLineGroupState.title;
   document.getElementById('financeLineGroupCategory').value = financeLineGroupState.category;
+  const quantityField = document.getElementById('financeLineGroupQuantityField');
+  const quantityControl = document.getElementById('financeLineGroupQuantity');
+  if (quantityField && quantityControl) {
+    quantityField.hidden = mode !== 'delivery-order';
+    quantityField.closest('.finance-line-group-basics')?.classList.toggle(
+      'has-group-quantity',
+      mode === 'delivery-order'
+    );
+    quantityControl.value = financeLineGroupState.groupQuantity;
+  }
   document.getElementById('financeLineGroupCustomText').value = financeLineGroupState.customText;
   modal.querySelectorAll('.finance-line-group-fields input').forEach(input => {
     input.checked = financeLineGroupState.displayFields.includes(input.value);
@@ -4051,6 +4067,10 @@ function financeSaveLineGroup() {
   const mode = financeLineGroupState.mode;
   const title = String(document.getElementById('financeLineGroupTitle')?.value || '').trim();
   const category = String(document.getElementById('financeLineGroupCategory')?.value || '').trim() || 'General';
+  const groupQuantity = Math.max(
+    1,
+    financeNumber(document.getElementById('financeLineGroupQuantity')?.value, 1)
+  );
   const customText = String(document.getElementById('financeLineGroupCustomText')?.value || '').trim();
   const fields = [...document.querySelectorAll('.finance-line-group-fields input:checked')].map(input => input.value);
   if (!title) return showNotification('warning', 'Enter a group header');
@@ -4091,7 +4111,15 @@ function financeSaveLineGroup() {
     if (mode === 'costing') {
       line.groupItemQuantity = Math.max(0, financeNumber(line.quantity, 1));
     }
-    return { ...line, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: false };
+    return {
+      ...line,
+      subprojectId: groupSubprojectId,
+      groupId,
+      groupTitle: title,
+      groupDisplayFields: fields,
+      groupCustomText: false,
+      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {})
+    };
   });
   if (customText) {
     const custom = mode === 'costing'
@@ -4101,7 +4129,16 @@ function financeSaveLineGroup() {
           : financeNewGroupedQuotationLine({ description: customText, isCustom: true }, category));
     if (mode === 'costing') custom.category = category;
     if (mode === 'delivery-order') custom.category = category;
-    grouped.push({ ...custom, subprojectId: groupSubprojectId, groupId, groupTitle: title, groupDisplayFields: fields, groupCustomText: true, isCustom: true });
+    grouped.push({
+      ...custom,
+      subprojectId: groupSubprojectId,
+      groupId,
+      groupTitle: title,
+      groupDisplayFields: fields,
+      groupCustomText: true,
+      isCustom: true,
+      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {})
+    });
   }
   if (mode === 'finance' && financeLineGroupState.commercialHeader && grouped.length) {
     const originalHeader = financeLineGroupState.commercialHeader;
@@ -4252,8 +4289,8 @@ function financeRenderLineGroups() {
             ondrop="financeDropLine(event,${firstGroupIndex})"
             ondragend="financeDragLineEnd()">
             <td class="finance-line-number"><span class="finance-drag-handle finance-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="financeDragLineGroupStart(event,'${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')" ondragend="financeDragLineEnd()">&#9776;</span>${showLineNumbers ? displayNumber : ''}</td>
-            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" title="Edit group contents" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">&#9998;</button></div></td>
-            <td><div class="finance-inline-combobox"><input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(leader))}" aria-label="Category" autocomplete="off" data-finance-department-index="${leaderIndex}" onfocus="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" oninput="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" onchange="financeCommitDepartmentInput(${leaderIndex},this)"><div class="finance-inline-suggestions" id="${leaderResultsId}"></div></div></td>
+            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" class="finance-group-menu-button" title="Edit group" aria-label="Edit ${financeEscapeAttr(leader.groupTitle || 'group')}" aria-haspopup="dialog" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">...</button></div></td>
+            <td><div class="finance-inline-combobox"><input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(leader))}" aria-label="Category" autocomplete="off" data-finance-department-index="${leaderIndex}" onfocus="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" oninput="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'${leaderResultsId}')" onchange="financeCommitDepartmentInput(${leaderIndex},this)" onblur="setTimeout(()=>showbaseLineWorkspace.hideSuggestions('${leaderResultsId}'),120)"><div class="finance-inline-suggestions" id="${leaderResultsId}"></div></div></td>
             <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(leader.days)}" aria-label="Days" onchange="financeLineChange(${leaderIndex},'days',this.value)"></td>
             <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
             <td>${financeUomControl(leader, leaderIndex)}</td>
@@ -4302,7 +4339,9 @@ function financeRenderLineGroups() {
                 data-finance-department-index="${index}"
                 onfocus="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
                 oninput="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
-                onchange="financeCommitDepartmentInput(${index},this)">
+                onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'${departmentResultsId}')"
+                onchange="financeCommitDepartmentInput(${index},this)"
+                onblur="setTimeout(()=>showbaseLineWorkspace.hideSuggestions('${departmentResultsId}'),120)">
               <div class="finance-inline-suggestions" id="${departmentResultsId}"></div>
             </div>
           </td>
@@ -4385,7 +4424,9 @@ function ensureFinanceRateCardModal() {
         <input id="financeRateCardDescription" class="finance-input finance-rate-card-description" required placeholder="Description">
         <div class="finance-inline-combobox finance-rate-card-department-field">
           <input id="financeRateCardDepartment" class="finance-input" required placeholder="Department" autocomplete="off"
-                 oninput="financeShowRateCardDepartmentSuggestions(this.value)" onfocus="financeShowRateCardDepartmentSuggestions(this.value)">
+                 oninput="financeShowRateCardDepartmentSuggestions(this.value)" onfocus="financeShowRateCardDepartmentSuggestions(this.value)"
+                 onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'financeRateCardDepartmentResults')"
+                 onblur="setTimeout(()=>showbaseLineWorkspace.hideSuggestions('financeRateCardDepartmentResults'),120)">
           <div id="financeRateCardDepartmentResults" class="finance-inline-suggestions"></div>
         </div>
         <input id="financeRateCardPrice" class="finance-input finance-rate-card-price" required type="number" min="0.01" step="0.01" placeholder="Rate">
@@ -4468,7 +4509,7 @@ function financeShowRateCardDepartmentSuggestions(query) {
   const root = document.getElementById('financeRateCardDepartmentResults');
   if (!root) return;
   root.innerHTML = financeDepartmentSuggestions(query).map(value => `
-    <button type="button" onmousedown="event.preventDefault();financeChooseRateCardDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+    <button type="button" onmousedown="event.preventDefault()" onclick="financeChooseRateCardDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
   `).join('');
   root.classList.toggle('open', !!root.innerHTML);
 }
@@ -5986,7 +6027,7 @@ function financeRenderCatalog() {
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">Press Add to create a custom item</div>';
-  results.classList.add('open');
+  results.classList.toggle('open', document.activeElement === document.getElementById('financeAddItemInput'));
 }
 
 function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOverride = null) {
@@ -6134,7 +6175,8 @@ function financeAddItemKeydown(event) {
   if (event.key !== 'Enter') return;
   event.preventDefault();
   const query = String(document.getElementById('financeAddItemInput')?.value || '').trim().toLowerCase();
-  if (financeState.catalog.length === 1 && financeState.catalogQuery === query) financeSelectCatalog(0);
+  const results = document.getElementById('financeCatalogResults');
+  if (results?.classList.contains('open') && financeState.catalog.length > 0 && financeState.catalogQuery === query) financeSelectCatalog(0);
   else financeAddCustomItem();
 }
 

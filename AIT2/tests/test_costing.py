@@ -661,6 +661,18 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('<main class="costing-line-workspace">', source)
         self.assertIn("id: 'costingAddCategoryInput'", source)
         self.assertIn('costingShowAddCategorySuggestions', source)
+        self.assertIn("catalogQuery: ''", source)
+        self.assertIn(
+            "costingState.catalog.length > 0 && costingState.catalogQuery === query",
+            source,
+        )
+        self.assertIn(
+            "showbaseLineWorkspace.selectFirstSuggestion('costingAddCategoryResults')",
+            source,
+        )
+        self.assertIn('function costingShowRenameCategorySuggestions(control)', source)
+        self.assertIn('function costingChooseRenameCategory(button)', source)
+        self.assertIn("class=\"finance-inline-combobox costing-category-name-combobox\"", source)
         self.assertIn('costingToggleCategory', source)
         self.assertIn('function costingCategoryDefaults(category', source)
         self.assertIn('multiplier: defaults.multiplier', source)
@@ -776,6 +788,10 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('categoryToggleMarkup(options = {})', shared_source)
         self.assertIn('categoryHeaderRowMarkup(options = {})', shared_source)
         self.assertIn('setCategoryCollapsed(section, collapsed)', shared_source)
+        self.assertIn('selectFirstSuggestion(resultsOrId)', shared_source)
+        self.assertIn('suggestionKeydown(event, resultsOrId)', shared_source)
+        self.assertIn("optionalAttribute('onblur', searchBlur)", shared_source)
+        self.assertIn("optionalAttribute('onblur', categoryBlur)", shared_source)
         self.assertIn('showbase-line-workspace-add-row', shared_source)
         self.assertIn('reorderSubprojectsAtIndex(rows, sourceId, targetIndex)', shared_source)
         self.assertIn("reorderSubprojects(rows, sourceId, targetId, position = 'before')", shared_source)

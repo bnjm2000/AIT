@@ -5,6 +5,7 @@ const costingState = {
   vendors: [],
   lookupsPromise: null,
   catalog: [],
+  catalogQuery: '',
   catalogTimer: null,
   saveTimer: null,
   activeSave: null,
@@ -1306,6 +1307,10 @@ function costingCategoryMarkup(category, readOnly) {
   );
   const defaults = costingCategoryDefaults(category, subprojectId);
   const totals = costingCategoryTotals(category);
+  const categoryNameControl = `<div class="finance-inline-combobox costing-category-name-combobox">
+    <input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : `data-costing-category-source="${costingAttr(encoded)}" onfocus="costingShowRenameCategorySuggestions(this)" oninput="costingShowRenameCategorySuggestions(this)" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,this.closest('.costing-category-name-combobox')?.querySelector('.costing-rename-category-suggestions'))" onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)" onblur="setTimeout(()=>costingHideRenameCategorySuggestions(this),120)"`}>
+    <div class="finance-inline-suggestions costing-rename-category-suggestions"></div>
+  </div>`;
   const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
     colspan: 12,
     className: 'costing-category-header',
@@ -1314,7 +1319,7 @@ function costingCategoryMarkup(category, readOnly) {
       collapsed,
       action: `costingToggleCategory(${JSON.stringify(encoded)})`,
       className: 'finance-collapse-button costing-category-toggle'
-    })}<input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : ''} onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)"></div>
+    })}${categoryNameControl}</div>
       <div class="costing-category-metrics"><span>Category Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></span><b></b><span>Revenue <strong data-category-revenue>${costingEscape(costingMoney(totals.charged))}</strong></span><b></b><span>Profit <strong class="is-profit" data-category-profit-display>${costingEscape(costingMoney(totals.profit))}</strong></span></div>`
   });
   return `<section class="${showbaseLineWorkspace.categorySectionClass({ className: 'costing-category-card', collapsed })}" data-category-total="${costingAttr(encoded)}" ondragover="costingDragCategoryOver(event,'${costingAttr(encoded)}')" ondragleave="costingDragCategoryLeave(event)" ondrop="costingDropCategory(event,'${costingAttr(encoded)}')">
@@ -1424,7 +1429,7 @@ function costingShowAddCategorySuggestions(query = '') {
   const categories = costingAvailableCategories().filter(
     value => !needle || value.toLowerCase().includes(needle)
   );
-  results.innerHTML = categories.map(value => `<button type="button" onmousedown="event.preventDefault();costingChooseAddCategory('${costingAttr(encodeURIComponent(value))}')">${costingEscape(value)}</button>`).join('')
+  results.innerHTML = categories.map(value => `<button type="button" onmousedown="event.preventDefault()" onclick="costingChooseAddCategory('${costingAttr(encodeURIComponent(value))}')">${costingEscape(value)}</button>`).join('')
     || '<div class="finance-suggestion-empty">Enter a new category name</div>';
   results.classList.add('open');
 }
@@ -1441,7 +1446,39 @@ function costingCloseAddCategorySuggestions() {
   document.getElementById('costingAddCategoryResults')?.classList.remove('open');
 }
 
+function costingShowRenameCategorySuggestions(control) {
+  const results = control?.closest('.costing-category-name-combobox')
+    ?.querySelector('.costing-rename-category-suggestions');
+  if (!control || !results) return;
+  const needle = String(control.value || '').trim().toLowerCase();
+  const categories = costingAvailableCategories().filter(
+    value => !needle || value.toLowerCase().includes(needle)
+  );
+  results.innerHTML = categories.map(value => `<button type="button" data-costing-category="${costingAttr(encodeURIComponent(value))}" onmousedown="event.preventDefault()" onclick="costingChooseRenameCategory(this)">${costingEscape(value)}</button>`).join('')
+    || '<div class="finance-suggestion-empty">Enter a new category name</div>';
+  results.classList.add('open');
+}
+
+function costingHideRenameCategorySuggestions(control) {
+  const results = control?.closest('.costing-category-name-combobox')
+    ?.querySelector('.costing-rename-category-suggestions');
+  results?.classList.remove('open');
+}
+
+function costingChooseRenameCategory(button) {
+  const control = button?.closest('.costing-category-name-combobox')?.querySelector('input');
+  if (!control) return false;
+  control.value = decodeURIComponent(button.dataset.costingCategory || '');
+  costingHideRenameCategorySuggestions(control);
+  costingRenameCategory(control.dataset.costingCategorySource || '', control.value);
+  return true;
+}
+
 function costingAddCategoryKeydown(event) {
+  if (event.key === 'Enter' && showbaseLineWorkspace.selectFirstSuggestion('costingAddCategoryResults')) {
+    event.preventDefault();
+    return;
+  }
   if (event.key !== 'Escape') return;
   event.preventDefault();
   costingCloseAddCategorySuggestions();
@@ -2253,8 +2290,10 @@ function costingRefreshCalculations() {
 
 function costingSearchCatalog(value) {
   const query = String(value || '').trim();
+  const queryKey = query.toLowerCase();
   const results = document.getElementById('costingCatalogResults');
   clearTimeout(costingState.catalogTimer);
+  costingState.catalogQuery = queryKey;
   if (query.length < 2) {
     costingState.catalog = [];
     results?.classList.remove('open');
@@ -2265,15 +2304,16 @@ function costingSearchCatalog(value) {
     results.classList.add('open');
   }
   costingState.catalogTimer = setTimeout(async () => {
+    let catalog = [];
     try {
       const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(query)}`);
-      costingState.catalog = response.data || [];
-    } catch {
-      costingState.catalog = [];
-    }
+      catalog = response.data || [];
+    } catch {}
+    if (costingState.catalogQuery !== queryKey) return;
+    costingState.catalog = catalog;
     if (!results) return;
     results.innerHTML = costingState.catalog.map((row, index) => `<button type="button" class="finance-catalog-option" onclick="costingSelectCatalog(${index})"><span><strong>${costingEscape(row.description || 'Inventory item')}</strong><br><small>${costingEscape(row.department || 'General')} &middot; ${costingNumber(row.availableQuantity)} available</small></span><small>Self</small></button>`).join('') || '<div class="finance-suggestion-empty">No inventory match. Add it as a custom item.</div>';
-    results.classList.add('open');
+    results.classList.toggle('open', document.activeElement === document.getElementById('costingAddItemInput'));
   }, 180);
 }
 
@@ -2340,6 +2380,7 @@ function costingSelectCatalog(index) {
   }
   costingState.addCategory = '';
   costingState.catalog = [];
+  costingState.catalogQuery = '';
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -2351,6 +2392,8 @@ function costingAddCustomItem() {
   if (!description) return input?.focus();
   costingLines().push(costingNewLine({ description }));
   costingState.addCategory = '';
+  costingState.catalog = [];
+  costingState.catalogQuery = '';
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
@@ -2359,7 +2402,9 @@ function costingAddCustomItem() {
 function costingAddItemKeydown(event) {
   if (event.key !== 'Enter') return;
   event.preventDefault();
-  if (costingState.catalog.length === 1) costingSelectCatalog(0);
+  const query = String(document.getElementById('costingAddItemInput')?.value || '').trim().toLowerCase();
+  const results = document.getElementById('costingCatalogResults');
+  if (results?.classList.contains('open') && costingState.catalog.length > 0 && costingState.catalogQuery === query) costingSelectCatalog(0);
   else costingAddCustomItem();
 }
 

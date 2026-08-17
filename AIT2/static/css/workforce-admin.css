@@ -1876,6 +1876,13 @@ button.wf-calendar-day.selected.has-conflict:hover {
   gap: 16px;
 }
 
+.wf-freelancer-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .wf-worker-selector-bar {
   margin-bottom: 14px;
 }
@@ -2807,6 +2814,14 @@ button.wf-calendar-day.selected.has-conflict:hover {
   .wf-worker-selector-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .wf-freelancer-heading-actions {
+    width: 100%;
+  }
+
+  .wf-freelancer-heading-actions .wf-button {
+    flex: 1 1 0;
   }
 
   .wf-worker-selector-bar .plan-event-select-wrap {

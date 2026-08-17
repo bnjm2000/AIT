@@ -7,6 +7,32 @@ from data_manager import ConcurrentDataChangeError
 from models import Client, Container, Event, InventoryItem, LogEntry, User
 
 
+class PostgresEventSerializationUnitTests(unittest.TestCase):
+    def test_delivery_order_is_part_of_event_serialization_and_apply(self):
+        from postgres_data_manager import PostgresDataManager
+
+        manager = PostgresDataManager.__new__(PostgresDataManager)
+        manager.events = {}
+        event = Event(160, 'Delivery Event', '20260801', '20260801', [])
+        event.delivery_order = {
+            'documentVersion': 4,
+            'document': {'doNumber': 'DO-0160'},
+            'custom': {'Audio': [{
+                'id': 'line-1',
+                'description': 'Cable',
+                'groupId': 'group-1',
+                'groupHeaderQuantity': 4,
+            }]},
+        }
+
+        payload = manager._event_data(event)
+
+        self.assertEqual(payload['deliveryOrder'], event.delivery_order)
+        restored = Event(160, 'Old Name', '20260801', '20260801', [])
+        manager._apply_event_data(restored, payload)
+        self.assertEqual(restored.delivery_order, event.delivery_order)
+
+
 class PostgresDataManagerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -123,6 +149,10 @@ class PostgresDataManagerTests(unittest.TestCase):
             [],
             prepared_items=['A#01'],
         )
+        event.delivery_order = {
+            'documentVersion': 1,
+            'document': {'doNumber': 'DO-0001'},
+        }
         self.manager.events[1] = event
         self.manager.save_event(event)
         self.manager.clients = {
@@ -163,6 +193,10 @@ class PostgresDataManagerTests(unittest.TestCase):
         )
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])
+        self.assertEqual(
+            reloaded.events[1].delivery_order['document']['doNumber'],
+            'DO-0001',
+        )
         self.assertEqual(reloaded.clients['Client'].company, 'Company')
         self.assertEqual(reloaded.load_departments()['AX']['name'], 'Audio')
         self.assertEqual(reloaded.logs[-1].action, 'Integration test action')

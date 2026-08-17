@@ -314,6 +314,14 @@ function wfFindVendor(id) {
   return wfDirectoryVendors().find(row => String(row.id) === String(id));
 }
 
+function wfWorkerVendorMemberships(workerId) {
+  const workerKey = String(workerId || '');
+  if (!workerKey) return [];
+  return wfDirectoryVendors().filter(vendor =>
+    (vendor.memberIds || []).some(memberId => String(memberId) === workerKey)
+  );
+}
+
 function wfFindAppUser(username) {
   return (workforcePageState.data?.appUsers || [])
     .find(row => String(row.username) === String(username));
@@ -2358,7 +2366,10 @@ function renderFreelancerWorkspace() {
       <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Transport</button>
         <h2>${isVendor ? 'Vendor' : 'Worker'} Submissions</h2>
         <p>Review assignments, invoices and claims for ${wfEscape(company?.name || 'this company')}.</p></div>
-      <button class="wf-button" type="button" onclick="${isVendor ? 'openVendorProfile' : 'openFreelancerProfile'}('${wfAttr(freelancer.id)}')">Edit ${isVendor ? 'Vendor' : 'Worker'}</button>
+      <div class="wf-freelancer-heading-actions">
+        ${isVendor ? '' : '<button class="wf-button" type="button" onclick="openWorkerScheduleExport()">Export PDF</button>'}
+        <button class="wf-button" type="button" onclick="${isVendor ? 'openVendorProfile' : 'openFreelancerProfile'}('${wfAttr(freelancer.id)}')">Edit ${isVendor ? 'Vendor' : 'Worker'}</button>
+      </div>
     </div>
     <div class="plan-event-bar wf-worker-selector-bar">
       <button type="button" class="plan-event-select-wrap" onclick="openFreelancerDirectory('manage')">
@@ -2379,7 +2390,6 @@ function renderFreelancerWorkspace() {
       <header class="wf-panel-header"><div><h3>Events &amp; Submissions</h3>
         <p>Most recent events are shown first. Expand an event to manage its files.</p></div>
         <div class="wf-worker-history-actions">
-          ${isVendor ? '' : '<button class="wf-button" type="button" onclick="openWorkerScheduleExport()">Export PDF</button>'}
           <input class="wf-search wf-event-history-search" type="search"
             placeholder="Search event name, location, date or role"
             oninput="renderFreelancerWorkspaceEvents(this.value)">
@@ -2412,6 +2422,10 @@ function ensureWorkerScheduleExportModal() {
           <label class="wf-field"><span>From date *</span><input id="wfWorkerScheduleStartDate" type="date" required></label>
           <label class="wf-field"><span>To date *</span><input id="wfWorkerScheduleEndDate" type="date" required></label>
           <label class="wf-check full"><input id="wfWorkerScheduleShowRates" type="checkbox"> Include rates</label>
+          <label class="wf-check full" id="wfWorkerScheduleVendorOption" hidden>
+            <input id="wfWorkerScheduleIncludeVendor" type="checkbox">
+            <span id="wfWorkerScheduleVendorLabel">Include vendor</span>
+          </label>
         </div>
         <div class="wf-error" id="wfWorkerScheduleExportError"></div>
       </div>
@@ -2435,6 +2449,15 @@ function openWorkerScheduleExport() {
   document.getElementById('wfWorkerScheduleStartDate').value = assignmentDates[0] || today;
   document.getElementById('wfWorkerScheduleEndDate').value = assignmentDates.at(-1) || today;
   document.getElementById('wfWorkerScheduleShowRates').checked = false;
+  const vendorMemberships = wfWorkerVendorMemberships(subject.id);
+  const vendorOption = document.getElementById('wfWorkerScheduleVendorOption');
+  const vendorInput = document.getElementById('wfWorkerScheduleIncludeVendor');
+  const vendorLabel = document.getElementById('wfWorkerScheduleVendorLabel');
+  vendorOption.hidden = vendorMemberships.length === 0;
+  vendorOption.title = vendorMemberships.map(vendor => vendor.name).filter(Boolean).join(', ');
+  vendorInput.checked = false;
+  vendorInput.disabled = vendorMemberships.length === 0;
+  vendorLabel.textContent = vendorMemberships.length > 1 ? 'Include vendors' : 'Include vendor';
   document.getElementById('wfWorkerScheduleExportError').textContent = '';
   openWorkforceModal('wfWorkerScheduleExportModal');
 }
@@ -2455,6 +2478,9 @@ function exportWorkerPeriodSchedule(event) {
   const params = new URLSearchParams({ startDate, endDate });
   if (document.getElementById('wfWorkerScheduleShowRates')?.checked) {
     params.set('showRates', '1');
+  }
+  if (document.getElementById('wfWorkerScheduleIncludeVendor')?.checked) {
+    params.set('showVendor', '1');
   }
   window.open(`/api/workforce/subjects/${encodeURIComponent(subject.id)}/schedule.pdf?${params}`, '_blank', 'noopener');
   closeWorkforceModal('wfWorkerScheduleExportModal');

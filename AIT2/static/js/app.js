@@ -5793,10 +5793,9 @@ function ensureInventoryBulkEditControls() {
         type="button"
         id="inventory-selected-count"
         class="inventory-selected-count-button"
-        title="Clear selected assets"
-        aria-label="No assets selected"
-        disabled
-      >0 selected</button>
+        title="Select all matching assets"
+        aria-label="Select all matching assets"
+      >Select all</button>
       <button type="button" id="inventory-bulk-maintenance-button" class="btn btn-primary" style="padding:8px 16px;font-size:14px;" disabled>Log Maintenance</button>
       <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
       <button type="button" id="inventory-bulk-delete-button" class="btn btn-danger" style="padding:8px 16px;font-size:14px;" disabled>Delete Selected</button>
@@ -5814,7 +5813,7 @@ function ensureInventoryBulkEditControls() {
     document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
     document.getElementById('inventory-bulk-delete-button')?.addEventListener('click', openBulkAssetDeleteModal);
     document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
-    document.getElementById('inventory-selected-count')?.addEventListener('click', clearInventorySelection);
+    document.getElementById('inventory-selected-count')?.addEventListener('click', toggleInventorySelectionFromCount);
   }
 
   group.style.display = 'flex';
@@ -6371,6 +6370,9 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   pruneInventorySelection();
 
   const selectedCount = selectedInventoryAssetIds.size;
+  const visibleAssets = currentVisibleAssets || getFilteredInventoryData().filteredAssets || [];
+  const visibleIds = visibleAssets.map(inventoryAssetIdentifier).filter(Boolean);
+  const selectedVisibleCount = visibleIds.filter(assetId => selectedInventoryAssetIds.has(assetId)).length;
   const countEl = document.getElementById('inventory-selected-count');
   const maintenanceButton = document.getElementById('inventory-bulk-maintenance-button');
   const editButton = document.getElementById('inventory-bulk-edit-button');
@@ -6378,13 +6380,16 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   const clearButton = document.getElementById('inventory-clear-selection-button');
 
   if (countEl) {
-    countEl.textContent = `${selectedCount} selected`;
-    countEl.disabled = selectedCount === 0;
+    countEl.textContent = selectedCount ? `${selectedCount} selected` : 'Select all';
+    countEl.disabled = selectedCount === 0 && visibleIds.length === 0;
+    countEl.title = selectedCount
+      ? `Clear ${selectedCount} selected asset${selectedCount === 1 ? '' : 's'}`
+      : `Select all ${visibleIds.length} matching asset${visibleIds.length === 1 ? '' : 's'}`;
     countEl.setAttribute(
       'aria-label',
       selectedCount
         ? `Clear ${selectedCount} selected asset${selectedCount === 1 ? '' : 's'}`
-        : 'No assets selected',
+        : `Select all ${visibleIds.length} matching asset${visibleIds.length === 1 ? '' : 's'}`,
     );
   }
   if (maintenanceButton) maintenanceButton.disabled = selectedCount === 0;
@@ -6396,9 +6401,6 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
     input.checked = selectedInventoryAssetIds.has(input.dataset.assetId || '');
   });
 
-  const visibleAssets = currentVisibleAssets || getFilteredInventoryData().filteredAssets || [];
-  const visibleIds = visibleAssets.map(inventoryAssetIdentifier).filter(Boolean);
-  const selectedVisibleCount = visibleIds.filter(assetId => selectedInventoryAssetIds.has(assetId)).length;
   const selectAll = document.getElementById('inventory-select-all-current');
 
   if (selectAll) {
@@ -6455,6 +6457,14 @@ function toggleInventorySelectAll(checked) {
   lastInventorySelectionAnchorId = '';
   updateInventorySelectionUi(filteredAssets);
   displayInventoryTable(filteredAssets);
+}
+
+function toggleInventorySelectionFromCount() {
+  if (selectedInventoryAssetIds.size > 0) {
+    clearInventorySelection();
+    return;
+  }
+  toggleInventorySelectAll(true);
 }
 
 function clearInventorySelection() {
@@ -15151,6 +15161,7 @@ function eventOverviewIcon(kind) {
     note: '<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path>',
     file: '<path d="M6 3h8l4 4v14H6zM14 3v5h5"></path>',
     pdf: '<path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h4"></path>',
+    printer: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"></path><path d="M18 12h.01"></path>',
     logs: '<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path>',
     edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"></path>',
     plan: '<path d="M4 4h16v16H4zM8 8h8M8 12h6M8 16h4"></path>',
@@ -15566,11 +15577,10 @@ async function viewEvent(eventId, options = {}) {
       isAdminUser() ? ['manpower', 'Manpower'] : null,
       ['return', 'Return'],
       ['delivery', 'Delivery Order'],
-      ['packing', 'Packing List'],
-      ['report', 'Export PDF']
+      ['packing', 'Packing List']
     ].filter(Boolean);
     const content = `<div class="event-overview-hero">
-      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-title-actions">${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}</div></div>
+      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-title-actions">${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}<button type="button" title="Export event PDF" aria-label="Export event PDF" onclick="eventOverviewNavigate('report',${Number(event.id)})">${eventOverviewIcon('printer')}</button>${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}</div></div>
         <div class="event-overview-meta"><span>${eventOverviewIcon('calendar')}${escapeHtml(eventOverviewDateRange(event))}</span><span>${eventOverviewIcon('location')}${escapeHtml(event.location || 'Venue not set')}</span></div></section>
       <section class="event-overview-progress"><div class="event-overview-metric"><strong>${required}</strong><span>Required</span></div><div class="event-overview-metric"><strong>${prepared}</strong><span>Prepared</span></div><div class="event-overview-metric"><strong>${returned}</strong><span>Returned</span></div><div class="event-overview-progress-bar"><span style="width:${progress}%"></span></div></section>
     </div>

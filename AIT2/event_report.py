@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape
 from io import BytesIO
 import os
 
-from quotation_pdf import _canvas_font, _paragraph
+from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
 from workforce_schedule import (
     SHOWBASE_BORDER,
     SHOWBASE_GREEN,
@@ -42,7 +43,7 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
-    from reportlab.platypus import HRFlowable, KeepTogether, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import HRFlowable, KeepTogether, LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     event = payload.get("event") or {}
     company = company or payload.get("company") or {}
@@ -102,7 +103,6 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
             page_count = len(self._saved_pages)
             for page_number, page in enumerate(self._saved_pages, start=1):
                 self.__dict__.update(page)
-                draw_page(self, None)
                 self.saveState()
                 self.setFillColor(muted)
                 self.setFont("Helvetica", 5.8)
@@ -135,6 +135,18 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                                 leading=7, textColor=muted)
     meta_value = ParagraphStyle("EventReportMetaValue", parent=bold)
 
+    department_rows = [
+        row for row in payload.get("departments", []) if isinstance(row, dict)
+    ]
+    departments = {}
+    for department in department_rows:
+        code = str(department.get("code") or "").strip().upper()
+        name = str(department.get("name") or department.get("Name") or "").strip().casefold()
+        if code:
+            departments[code] = department
+        if name:
+            departments[name] = department
+
     def section_heading(label, count=""):
         return Table(
             [[_paragraph(label, section), _paragraph(count, center)]],
@@ -146,30 +158,85 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
             ]),
         )
 
-    def data_table(headers, rows, widths, empty_text):
-        table_rows = [[_paragraph(value, table_header) for value in headers]]
+    def department_style(value):
+        clean = str(value or "").strip()
+        code = clean.upper()
+        if "(" in clean and clean.endswith(")"):
+            code = clean.rsplit("(", 1)[1][:-1].strip().upper()
+        department = departments.get(code) or departments.get(clean.casefold()) or {}
+        if not department:
+            return None
+        background_hex = _safe_colour(department.get("color"), "#F8FAFC")
+        return (
+            colors.HexColor(background_hex),
+            colors.HexColor(_safe_colour(
+                department.get("textColor"), _contrast_colour(background_hex)
+            )),
+        )
+
+    def asset_item_cell(item, asset_ids):
+        item_markup = _cjk_markup(escape(_text(item, "Asset")), bold=True)
+        ids_markup = _cjk_markup(escape(str(asset_ids or "").strip()))
+        detail = (
+            f'<br/><font color="#64748B" size="6">Asset IDs: {ids_markup}</font>'
+            if ids_markup else ""
+        )
+        return Paragraph(f"<b>{item_markup}</b>{detail}", cell)
+
+    def data_table(section_label, section_count, headers, rows, widths, empty_text,
+                   *, centered_columns=(), department_column=None):
+        section_row = (
+            [_paragraph(section_label, section)]
+            + [""] * (len(headers) - 3)
+            + [_paragraph(section_count, center), ""]
+        )
+        table_rows = [
+            section_row,
+            [_paragraph(value, table_header) for value in headers],
+        ]
         for row in rows:
             table_rows.append([
-                _paragraph(value, center if index in {2, 3} and len(headers) > 3 else cell)
+                value if hasattr(value, "wrap") else _paragraph(
+                    value, center if index in centered_columns else cell
+                )
                 for index, value in enumerate(row)
             ])
         if not rows:
             table_rows.append([_paragraph(empty_text, cell)] + [""] * (len(headers) - 1))
         scale = doc.width / (sum(widths) * mm)
-        table = Table(table_rows, colWidths=[width * mm * scale for width in widths], repeatRows=1)
+        table = LongTable(
+            table_rows,
+            colWidths=[width * mm * scale for width in widths],
+            repeatRows=2,
+        )
         commands = [
-            ("BACKGROUND", (0, 0), (-1, 0), header_accent),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("SPAN", (0, 0), (-3, 0)),
+            ("SPAN", (-2, 0), (-1, 0)),
+            ("LINEBELOW", (0, 0), (-1, 0), 1, accent),
+            ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
+            ("BACKGROUND", (0, 1), (-1, 1), header_accent),
+            ("TEXTCOLOR", (0, 1), (-1, 1), colors.white),
             ("BOX", (0, 0), (-1, -1), .5, border),
-            ("INNERGRID", (0, 0), (-1, -1), .3, border),
+            ("INNERGRID", (0, 1), (-1, -1), .3, border),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, 0), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 3),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
         ]
         if not rows:
-            commands.append(("SPAN", (0, 1), (-1, 1)))
+            commands.append(("SPAN", (0, 2), (-1, 2)))
+        if department_column is not None:
+            for row_index, row in enumerate(rows, start=2):
+                style = department_style(row[department_column])
+                if not style:
+                    continue
+                commands.extend([
+                    ("BACKGROUND", (department_column, row_index), (department_column, row_index), style[0]),
+                    ("TEXTCOLOR", (department_column, row_index), (department_column, row_index), style[1]),
+                ])
         table.setStyle(TableStyle(commands))
         return table
 
@@ -206,29 +273,30 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     ]
 
     asset_rows = payload.get("assets") or []
-    story.extend([
-        section_heading("ASSETS", f"{sum(int(row.get('required') or 0) for row in asset_rows)} required"),
-        Spacer(1, 2 * mm),
-        data_table(
-            ["Item", "Department", "Required", "Prepared", "Returned", "Asset IDs / status"],
-            [[row.get("item"), row.get("department"), row.get("required"),
-              row.get("prepared"), row.get("returned"), row.get("assetIds")]
-             for row in asset_rows],
-            [70, 30, 19, 19, 18, 55], "No assets are required for this event.",
-        ),
-        Spacer(1, 5 * mm),
-    ])
+    asset_chunks = [asset_rows[index:index + 22] for index in range(0, len(asset_rows), 22)] or [[]]
+    total_required = sum(int(row.get("required") or 0) for row in asset_rows)
+    for chunk_index, chunk in enumerate(asset_chunks):
+        story.append(KeepTogether([data_table(
+            "ASSETS", f"{total_required} required" if chunk_index == 0 else "Continued",
+            ["Item", "Department", "Required", "Prepared", "Returned"],
+            [[asset_item_cell(row.get("item"), row.get("assetIds")), row.get("department"),
+              row.get("required"), row.get("prepared"), row.get("returned")]
+             for row in chunk],
+            [115, 35, 22, 22, 22], "No assets are required for this event.",
+            centered_columns=(2, 3, 4), department_column=1,
+        )]))
+        story.append(Spacer(1, (1 if chunk_index < len(asset_chunks) - 1 else 5) * mm))
 
     manpower_rows = payload.get("manpower") or []
     story.extend([
-        section_heading("MANPOWER", f"{len(manpower_rows)} scheduled row(s)"),
-        Spacer(1, 2 * mm),
         data_table(
+            "MANPOWER", f"{len(manpower_rows)} scheduled row(s)",
             ["Date", "Name", "Room", "Department", "Role", "Call time", "Pax"],
             [[row.get("date"), row.get("name"), row.get("room"), row.get("department"),
               row.get("role"), row.get("callTime"), row.get("pax")]
              for row in manpower_rows],
             [29, 42, 28, 31, 47, 25, 13], "No crew are scheduled for this event.",
+            centered_columns=(5, 6), department_column=3,
         ),
         Spacer(1, 5 * mm),
     ])
@@ -236,22 +304,21 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     vendor_rows = payload.get("vendorServices") or []
     if vendor_rows:
         story.extend([
-            section_heading("VENDOR SERVICES", f"{len(vendor_rows)} service(s)"),
-            Spacer(1, 2 * mm),
             data_table(
+                "VENDOR SERVICES", f"{len(vendor_rows)} service(s)",
                 ["Vendor", "Room", "Department", "Service", "Dates / call time"],
                 [[row.get("name"), row.get("room"), row.get("department"),
                   row.get("service"), row.get("schedule")] for row in vendor_rows],
                 [44, 30, 34, 62, 45], "No vendor services are booked.",
+                department_column=2,
             ),
             Spacer(1, 5 * mm),
         ])
 
     transport_rows = payload.get("transport") or []
     story.extend([
-        section_heading("TRANSPORT", f"{len(transport_rows)} booking(s)"),
-        Spacer(1, 2 * mm),
         data_table(
+            "TRANSPORT", f"{len(transport_rows)} booking(s)",
             ["Trip / time", "Route", "Company", "Vehicle", "Driver / contact"],
             [[row.get("time"), row.get("route"), row.get("company"),
               row.get("vehicle"), row.get("driver")] for row in transport_rows],
@@ -260,9 +327,9 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     ])
     notes = str(event.get("notes") or "").strip()
     if notes:
-        story.extend([
-            Spacer(1, 5 * mm), section_heading("EVENT NOTES"), Spacer(1, 2 * mm),
-            KeepTogether([Table([[_paragraph(notes, cell)]], colWidths=[doc.width],
+        story.extend([Spacer(1, 5 * mm), KeepTogether([
+            section_heading("EVENT NOTES"), Spacer(1, 2 * mm),
+            Table([[_paragraph(notes, cell)]], colWidths=[doc.width],
                                 style=TableStyle([
                                     ("BACKGROUND", (0, 0), (-1, -1), panel),
                                     ("BOX", (0, 0), (-1, -1), .45, border),
@@ -270,7 +337,12 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                                     ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                                     ("TOPPADDING", (0, 0), (-1, -1), 5),
                                     ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                                ]))]),
-        ])
-    doc.build(story, canvasmaker=NumberedCanvas)
+                                ])),
+        ])])
+    doc.build(
+        story,
+        onFirstPage=draw_page,
+        onLaterPages=draw_page,
+        canvasmaker=NumberedCanvas,
+    )
     return buffer.getvalue()

@@ -1098,6 +1098,53 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual((deleted_current['revision'], deleted_current['status']), (1, 'draft'))
         self.assertEqual(deleted_current['revisions'], [])
 
+    def test_deleting_only_saved_revision_rebases_custom_unsaved_draft(self):
+        quotation = self.create_quote('Custom Draft Revision Rebase')
+        custom = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={
+                **quotation,
+                'customNumber': True,
+                'number': 'TC-2027-002-01',
+            },
+        ).get_json()['data']
+        sent = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**custom, 'status': 'sent'},
+        ).get_json()['data']
+        reopened = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={'status': 'draft'},
+        ).get_json()['data']
+        draft_two = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**reopened, 'notes': 'Keep this unsaved draft content'},
+        ).get_json()['data']
+
+        self.assertEqual((draft_two['revision'], draft_two['status']), (2, 'draft'))
+        self.assertEqual(draft_two['number'], 'TC-2027-002-02')
+        self.assertEqual([row['revision'] for row in draft_two['revisions']], [1])
+
+        rebased = self.client.delete(
+            f"/api/quotations/{quotation['id']}/revisions/1"
+        ).get_json()['data']
+        self.assertEqual((rebased['revision'], rebased['status']), (1, 'draft'))
+        self.assertEqual(rebased['number'], 'TC-2027-002-01')
+        self.assertEqual(rebased['revisions'], [])
+        self.assertEqual(rebased['notes'], 'Keep this unsaved draft content')
+
+        malformed = {
+            **draft_two,
+            'revisions': [],
+        }
+        normalised = app_module._normalise_finance_document(
+            malformed,
+            'quotation',
+            malformed,
+        )
+        self.assertEqual((normalised['revision'], normalised['status']), (1, 'draft'))
+        self.assertEqual(normalised['number'], 'TC-2027-002-01')
+
     def test_editing_saved_revision_relinks_legacy_line_ids_without_losing_costs(self):
         quotation = self.create_quote('Legacy Revision Line IDs')
         quotation['lineItems'] = [{
@@ -2420,6 +2467,18 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('groupTitle: containerId', source)
         self.assertIn("financeLineGroupState.title = selected.containerId", source)
         self.assertIn('function financeContainerMajorityDepartment(', source)
+        self.assertIn(
+            "results?.classList.contains('open') && financeState.catalog.length > 0",
+            source,
+        )
+        self.assertIn(
+            "onkeydown=\"showbaseLineWorkspace.suggestionKeydown(event,'${departmentResultsId}')\"",
+            source,
+        )
+        self.assertIn(
+            "onblur=\"setTimeout(()=>showbaseLineWorkspace.hideSuggestions('${departmentResultsId}'),120)\"",
+            source,
+        )
 
     def test_rate_card_migrates_legacy_asset_key_before_catalog_lookup(self):
         quotation = self.create_quote('Legacy Rate Card Asset')
@@ -2517,6 +2576,20 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('<span>Total before GST</span>', summary_source)
         self.assertNotIn('finance-total-discount-label', summary_source)
         self.assertNotIn('financeSetTotalDiscountLabel', summary_source)
+
+    def test_quotation_group_header_has_edit_menu_button(self):
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        render_start = source.index('function financeRenderLineGroups()')
+        render_end = source.index('function financeRenderSubprojectTabs()', render_start)
+        render_source = source[render_start:render_end]
+
+        self.assertIn('class="finance-group-menu-button"', render_source)
+        self.assertIn('aria-haspopup="dialog"', render_source)
+        self.assertIn(
+            "financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')",
+            render_source,
+        )
+        self.assertIn('>...</button>', render_source)
 
     def test_selected_department_name_overrides_stale_department_code(self):
         quotation = self.create_quote('Department Canonicalisation')
@@ -3456,6 +3529,138 @@ class FinanceFeatureTests(unittest.TestCase):
                 'groupDisplayFields': ['brand', 'model', 'description'],
             }),
             'Shure SM58 Dynamic microphone',
+        )
+
+    def test_group_pdf_wraps_to_cell_width_and_only_splits_at_page_height(self):
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph
+        from quotation_pdf import (
+            _group_content_markup,
+            _split_paragraph_by_height,
+        )
+
+        style = ParagraphStyle(
+            'MeasuredGroupBody',
+            fontName='Helvetica',
+            fontSize=8.5,
+            leading=11,
+        )
+        cell_width = 72 * mm - 6
+        description = (
+            'DW Collector\'s Series - Natural Finish with Gold '
+            'Lugs 14" x 11" Floor Tom'
+        )
+        paragraph = Paragraph(_group_content_markup([{
+            'description': description,
+            'quantity': 1,
+            'customText': False,
+        }]), style)
+        chunks = _split_paragraph_by_height(paragraph, cell_width, 568)
+
+        self.assertEqual(len(chunks), 1)
+        chunks[0].wrap(cell_width, 1_000)
+        rendered_lines = [
+            ''.join(getattr(word, 'text', '') for word in line.words)
+            for line in chunks[0].blPara.lines
+        ]
+        self.assertTrue(
+            any('Floor Tom' in line for line in rendered_lines),
+            rendered_lines,
+        )
+
+        drum_sizes = (
+            '10" x 8" Rack Tom', '12" x 8" Rack Tom',
+            '13" x 9" Rack Tom', '14" x 11" Floor Tom',
+            '14" x 5.5" Snare', '16" x 13" Floor Tom',
+            '18" x 16" Floor Tom', '20" x 16" Kick',
+            '22" x 17" Kick', '24" x 18" Kick', '8" x 7" Rack Tom',
+        )
+        full_group = Paragraph(_group_content_markup([
+            {
+                'description': (
+                    'DW Collector\'s Series - Natural Finish with Gold '
+                    f'Lugs {size}'
+                ),
+                'quantity': 1,
+                'customText': False,
+            }
+            for size in drum_sizes
+        ]), style)
+        self.assertEqual(
+            len(_split_paragraph_by_height(full_group, cell_width, 568)),
+            1,
+        )
+
+        oversized_group = Paragraph(_group_content_markup([
+            {
+                'description': f'{description} item {index}',
+                'quantity': 1,
+                'customText': False,
+            }
+            for index in range(40)
+        ]), style)
+        oversized_chunks = _split_paragraph_by_height(
+            oversized_group, cell_width, 568,
+        )
+        self.assertGreater(len(oversized_chunks), 1)
+        self.assertTrue(all(
+            chunk.wrap(cell_width, 10_000)[1] <= 568
+            for chunk in oversized_chunks
+        ))
+
+        pdf_source = Path('quotation_pdf.py').read_text(encoding='utf-8')
+        self.assertNotIn('textwrap.wrap(', pdf_source)
+        self.assertNotIn('wrap_width=', pdf_source)
+
+        from quotation_pdf import build_finance_pdf
+
+        group_lines = [{
+            'id': f'drum-{index}',
+            'groupId': 'drum-kit',
+            'groupLeader': index == 0,
+            'groupTitle': 'DW Collectors - Natural Finish w Gold Lug',
+            'groupDisplayFields': ['description'],
+            'groupCustomText': False,
+            'groupItemQuantity': 1,
+            'description': (
+                'DW Collector\'s Series - Natural Finish with Gold '
+                f'Lugs {size}'
+            ),
+            'department': 'Musical Instruments',
+            'days': 4 if index == 0 else 0,
+            'quantity': 1 if index == 0 else 0,
+            'uom': 'units',
+            'unitPrice': 0,
+            'total': 0,
+            'subprojectId': 'main',
+        } for index, size in enumerate(drum_sizes)]
+        pdf = build_finance_pdf({
+            'type': 'quotation',
+            'number': 'QT-WRAP-QA',
+            'projectName': 'Measured PDF wrapping QA',
+            'quotationDate': '2026-08-16',
+            'lineItems': group_lines,
+            'subprojects': [{'id': 'main', 'name': 'Main Room'}],
+            'showLineNumbers': True,
+            'showUnitPrices': False,
+            'showDepartmentSubtotals': False,
+            'totals': {},
+            'terms': 'QA preview',
+        }, {
+            'companyName': 'Showbase QA',
+            'currency': 'SGD',
+            'taxLabel': 'GST',
+            'themeColor': '#334155',
+        })
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertNotIn('(continued)', pdf_text)
+        self.assertTrue(
+            any('Floor Tom' in line for line in pdf_text.splitlines()),
+            pdf_text,
         )
 
     def test_pdf_does_not_insert_blank_page_before_boundary_summary(self):
@@ -6260,7 +6465,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("function financedefaultuom(department, preferred = '')", source)
         self.assertNotIn("financestate.adddepartment = 'manpower'", source)
         self.assertIn("selected.department || 'general'", source)
-        self.assertIn("onmousedown=\"event.preventdefault();financechoosedepartment", source)
+        self.assertIn('onmousedown="event.preventdefault()"', source)
+        self.assertIn('onclick="financechoosedepartment', source)
         self.assertIn('catalogcache', source)
         self.assertNotIn('}, 220);', source)
         self.assertIn('finance-pre-tax-input', source)

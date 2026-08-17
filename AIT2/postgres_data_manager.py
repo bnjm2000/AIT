@@ -431,6 +431,9 @@ class PostgresDataManager(DataManager):
             ),
             'assignedUsers': list(getattr(event, 'assigned_users', []) or []),
             'subprojects': list(getattr(event, 'subprojects', []) or []),
+            'deliveryOrder': copy.deepcopy(
+                dict(getattr(event, 'delivery_order', {}) or {})
+            ),
         }
 
     def _client_data(self, client):
@@ -625,6 +628,7 @@ class PostgresDataManager(DataManager):
                         event_logs=data.get('eventLogs') or [],
                         assigned_users=data.get('assignedUsers') or [],
                         subprojects=data.get('subprojects') or [],
+                        delivery_order=data.get('deliveryOrder') or {},
                     )
                     event._legacy_state_migrated = str(raw_state or '').strip() != event.state
                     events[int(event_id)] = event
@@ -1187,6 +1191,9 @@ class PostgresDataManager(DataManager):
         event.event_logs = self.normalize_event_logs(payload.get('eventLogs') or [])
         event.assigned_users = list(payload.get('assignedUsers') or [])
         event.subprojects = list(payload.get('subprojects') or [])
+        event.delivery_order = copy.deepcopy(
+            dict(payload.get('deliveryOrder') or {})
+        )
         self.events[int(event.event_id)] = event
 
     def delete_event_file(self, event_id):

@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import os
 import re
 import threading
-import textwrap
 
 
 _CJK_TEXT_RE = re.compile(
@@ -130,41 +129,40 @@ def _group_display_entries(lines):
     return entries
 
 
-def _group_display_entry_chunks(entries, max_lines=12, wrap_width=72):
-    """Split a group into table-row-sized chunks that ReportLab can paginate."""
-    expanded = []
-    for source in entries or []:
-        description = _text(source.get('description')).strip() or 'Item'
-        wrapped_lines = []
-        for raw_line in description.splitlines() or [description]:
-            wrapped_lines.extend(textwrap.wrap(
-                raw_line,
-                width=wrap_width,
-                break_long_words=True,
-                break_on_hyphens=False,
-            ) or [''])
-        for index in range(0, len(wrapped_lines), max_lines):
-            expanded.append({
-                **source,
-                'description': '\n'.join(wrapped_lines[index:index + max_lines]),
-                'showQuantity': index == 0 and not source.get('customText'),
-                '_lineCount': min(max_lines, len(wrapped_lines) - index),
-            })
+def _group_content_markup(entries):
+    """Build group contents without inserting width-dependent hard breaks."""
+    return '<br/>'.join(
+        _cjk_markup(_escaped_line_breaks(
+            _text(entry.get('description')).strip()
+            if entry.get('customText')
+            else (
+                f"{float(entry.get('quantity') or 0):g}x "
+                f"{_text(entry.get('description')).strip()}"
+            )
+        ))
+        for entry in entries or []
+    )
 
+
+def _split_paragraph_by_height(paragraph, available_width, max_height):
+    """Split only paragraphs too tall for a page, using ReportLab measurements."""
+    pending = [paragraph]
     chunks = []
-    current = []
-    current_lines = 0
-    for entry in expanded:
-        entry_lines = max(1, int(entry.get('_lineCount') or 1))
-        if current and current_lines + entry_lines > max_lines:
+    while pending:
+        current = pending.pop(0)
+        _, rendered_height = current.wrap(available_width, 1_000_000)
+        if rendered_height <= max_height:
             chunks.append(current)
-            current = []
-            current_lines = 0
-        current.append(entry)
-        current_lines += entry_lines
-    if current:
-        chunks.append(current)
-    return chunks or [[]]
+            continue
+        pieces = current.split(available_width, max_height)
+        if len(pieces) < 2:
+            # ReportLab could not find a legal split point. Keeping the content
+            # intact is safer than truncating it or looping indefinitely.
+            chunks.append(current)
+            continue
+        chunks.append(pieces[0])
+        pending = list(pieces[1:]) + pending
+    return chunks
 
 
 def _is_optional_category(value):
@@ -1165,6 +1163,11 @@ def build_finance_pdf(document, company, logo_path=''):
         14 * mm,
         30 * mm,
     ]
+    description_cell_width = column_widths[1] - 6  # 3pt padding on each side.
+    group_content_page_height = max(
+        body.leading * 12,
+        doc.height - (42 * mm) - body.leading,
+    )
 
     if lines:
         story.append(_paragraph('LINE ITEMS', section_title))
@@ -1315,8 +1318,17 @@ def build_finance_pdf(document, company, logo_path=''):
             )
             is_group = bool(line.get('groupId'))
             if is_group:
-                entry_chunks = _group_display_entry_chunks(
+                content_markup = _group_content_markup(
                     _group_display_entries(line_unit)
+                )
+                entry_chunks = (
+                    _split_paragraph_by_height(
+                        Paragraph(content_markup, body),
+                        description_cell_width,
+                        group_content_page_height,
+                    )
+                    if content_markup
+                    else [None]
                 )
                 display_days = float(line.get('days') or 0)
                 quantity = f"{float(line.get('quantity') or 0):g}"
@@ -1354,19 +1366,11 @@ def build_finance_pdf(document, company, logo_path=''):
                         escape(title if first_chunk else f'{title} (continued)'),
                         bold=True,
                     )
-                    content_markup = '<br/>'.join(
-                        _cjk_markup(_escaped_line_breaks(
-                            f"{entry['quantity']:g}x {entry['description']}"
-                            if entry.get('showQuantity')
-                            else entry['description']
-                        ))
-                        for entry in chunk
-                    )
-                    description_flowable = Paragraph(
-                        f'<b>{title_markup}</b>'
-                        + (f'<br/>{content_markup}' if content_markup else ''),
-                        body,
-                    )
+                    description_flowable = [
+                        Paragraph(f'<b>{title_markup}</b>', body),
+                    ]
+                    if chunk is not None:
+                        description_flowable.append(chunk)
                 else:
                     description_flowable = _paragraph(
                         _group_line_description(line), body

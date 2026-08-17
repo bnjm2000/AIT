@@ -10935,6 +10935,22 @@ def download_worker_period_schedule_pdf(subject_id):
     if (end_value - start_value).days > 3660:
         return jsonify({'error': 'Date range cannot exceed 10 years'}), 400
 
+    show_vendor = str(request.args.get('showVendor') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
+    worker_vendors = {}
+    for vendor in workforce.get('vendors', []):
+        if not isinstance(vendor, dict) or str(subject_id) not in {
+            str(member_id) for member_id in vendor.get('memberIds', [])
+        }:
+            continue
+        vendor_id = str(vendor.get('id') or '').strip()
+        if vendor_id:
+            worker_vendors[vendor_id] = vendor
+    vendor_names = sorted({
+        str(vendor.get('name') or 'Vendor').strip() or 'Vendor'
+        for vendor in worker_vendors.values()
+    }, key=str.casefold)
     department_records = _department_codes_for_manager(manager)
     rows = []
     for raw_event_id, stored_rows in (workforce.get('assignments') or {}).items():
@@ -10948,12 +10964,33 @@ def download_worker_period_schedule_pdf(subject_id):
         room_options = _workforce_subproject_options(event)
         show_room = len(room_options) > 1
         for stored_row in stored_rows if isinstance(stored_rows, list) else []:
-            if (
-                not isinstance(stored_row, dict)
-                or _workforce_assignment_subject_id(stored_row) != str(subject_id)
-            ):
+            if not isinstance(stored_row, dict):
+                continue
+            is_vendor_booking = bool(
+                stored_row.get('vendorId')
+                or stored_row.get('subjectType') == 'vendor'
+            )
+            assignment_subject_id = str(
+                stored_row.get('vendorId')
+                or _workforce_assignment_subject_id(stored_row)
+                or ''
+            )
+            included_vendor = (
+                show_vendor
+                and is_vendor_booking
+                and assignment_subject_id in worker_vendors
+            )
+            included_worker = (
+                not is_vendor_booking
+                and assignment_subject_id == str(subject_id)
+            )
+            if not included_worker and not included_vendor:
                 continue
             assignment = _workforce_row_with_subproject(stored_row, event, room_options)
+            vendor = worker_vendors.get(assignment_subject_id) if included_vendor else None
+            provider_type = str(assignment.get('providerType') or '').strip().lower()
+            if vendor and provider_type not in {'manpower', 'service'}:
+                provider_type = 'service' if assignment.get('serviceName') else 'manpower'
             work_dates = _workforce_assignment_work_dates(assignment, event)
             date_departments = _workforce_schedule_date_values(
                 assignment, 'dateDepartments', work_dates
@@ -10966,8 +11003,47 @@ def download_worker_period_schedule_pdf(subject_id):
                 if not (start_date <= date_value <= end_date):
                     continue
                 department_code = date_departments.get(date_value) or assignment.get('department') or ''
-                role_name = date_roles.get(date_value) or assignment.get('roleName') or 'Role not set'
-                daily_rate = money(assignment.get('dailyRate'), None)
+                if provider_type == 'service':
+                    role_name = (
+                        date_roles.get(date_value)
+                        or assignment.get('serviceName')
+                        or assignment.get('roleName')
+                        or 'Vendor service'
+                    )
+                    rate_value = money(
+                        assignment.get('serviceCost'),
+                        money(assignment.get('dailyRate'), None),
+                    )
+                    rate_label = (
+                        f'${rate_value:,.2f}/service'
+                        if rate_value is not None else 'Not set'
+                    )
+                elif provider_type == 'manpower':
+                    pax = max(1, _safe_int(assignment.get('pax'), 1))
+                    role_name = (
+                        date_roles.get(date_value)
+                        or assignment.get('roleName')
+                        or f'{pax} pax manpower'
+                    )
+                    rate_value = money(
+                        assignment.get('ratePerPax'),
+                        money(assignment.get('dailyRate'), None),
+                    )
+                    rate_label = (
+                        f'${rate_value:,.2f}/pax/day'
+                        if rate_value is not None else 'Not set'
+                    )
+                else:
+                    role_name = (
+                        date_roles.get(date_value)
+                        or assignment.get('roleName')
+                        or 'Role not set'
+                    )
+                    rate_value = money(assignment.get('dailyRate'), None)
+                    rate_label = (
+                        f'${rate_value:,.2f}/day'
+                        if rate_value is not None else 'Not set'
+                    )
                 rows.append({
                     'date': date_value,
                     'eventId': event_id,
@@ -10977,9 +11053,12 @@ def download_worker_period_schedule_pdf(subject_id):
                     'department': _workforce_department_display(
                         department_records, department_code
                     ),
+                    'departmentCode': str(department_code or '').strip().upper(),
                     'role': str(role_name or 'Role not set'),
                     'callTime': str(call_times.get(date_value) or 'Not set'),
-                    'rate': f'${daily_rate:,.2f}/day' if daily_rate is not None else 'Not set',
+                    'rate': rate_label,
+                    'vendorName': str((vendor or {}).get('name') or '').strip(),
+                    'bookingType': provider_type.title() if vendor else '',
                 })
     show_rates = str(request.args.get('showRates') or '').strip().lower() in {
         '1', 'true', 'yes', 'on',
@@ -10987,14 +11066,20 @@ def download_worker_period_schedule_pdf(subject_id):
     pdf_settings = _normalise_pdf_settings(_load_pdf_settings())
     pdf_bytes = build_worker_period_schedule_pdf(
         {
-            'subject': {'id': str(subject_id), 'name': subject.get('name') or 'Worker'},
+            'subject': {
+                'id': str(subject_id),
+                'name': subject.get('name') or 'Worker',
+                'vendorNames': vendor_names,
+            },
             'startDate': start_date,
             'endDate': end_date,
             'rows': rows,
+            'departments': department_records,
         },
         company=pdf_settings,
         logo_path=_pdf_logo_path(pdf_settings),
         show_rates=show_rates,
+        show_vendor=show_vendor,
         generated_by=_user_display_name(session.get('user')),
     )
     filename = sanitize_filename(str(subject.get('name') or 'Worker'))
@@ -11150,6 +11235,26 @@ def _event_report_assets(event, manager):
             for ref in prepared_refs:
                 if ref in used_physical or ref in extra_refs:
                     continue
+                bulk_marker = _parse_bulk_marker(ref)
+                if bulk_marker:
+                    bulk_asset = manager.inventory.get(bulk_marker['bulkId'])
+                    if not bulk_asset or _model_key_from_parts(
+                        bulk_asset.department_code, bulk_asset.brand,
+                        bulk_asset.model_number, bulk_asset.description,
+                    ) != _model_key_from_parts(
+                        source.get('department'), source.get('brand'),
+                        source.get('model'), source.get('description')
+                    ):
+                        continue
+                    used_physical.add(ref)
+                    status = 'returned' if ref in (
+                        getattr(event, 'returned_items', []) or []
+                    ) else 'prepared'
+                    row[status] += bulk_marker['quantity']
+                    row['assetIds'].append(
+                        f"{bulk_marker['bulkId']} × {bulk_marker['quantity']} ({status})"
+                    )
+                    continue
                 asset = manager.inventory.get(ref)
                 if not asset:
                     continue
@@ -11208,9 +11313,11 @@ def _event_report_assets(event, manager):
             'prepared': row['prepared'],
             'returned': row['returned'],
             'assetIds': ', '.join(row['assetIds']) or 'Not prepared',
+            'isMisc': row['kind'] == 'custom',
         })
     return sorted(result, key=lambda row: (
-        str(row['department']).casefold(), str(row['item']).casefold()
+        bool(row.get('isMisc')), str(row['item']).casefold(),
+        str(row['department']).casefold()
     ))
 
 
@@ -11251,6 +11358,7 @@ def _event_report_workforce(report_data):
                 'name': name,
                 'room': room or '-',
                 'department': _workforce_department_display(departments, code),
+                'departmentCode': code.strip().upper(),
                 'service': str(row.get('serviceName') or row.get('roleName') or 'Vendor service'),
                 'schedule': schedule,
             })
@@ -11263,6 +11371,7 @@ def _event_report_workforce(report_data):
                 'name': name,
                 'room': room or '-',
                 'department': _workforce_department_display(departments, code),
+                'departmentCode': code.strip().upper(),
                 'role': role,
                 'callTime': str((row.get('callTimes') or {}).get(date_value) or 'Not set'),
                 'pax': max(1, _safe_int(row.get('pax'), 1)) if subject_type == 'vendor' else 1,
@@ -11325,6 +11434,7 @@ def download_event_report_pdf(event_id):
             'manpower': manpower,
             'vendorServices': vendor_services,
             'transport': _event_report_transport(report_data),
+            'departments': report_data.get('allDepartments', []),
         },
         company=pdf_settings,
         logo_path=_pdf_logo_path(pdf_settings),
@@ -32189,6 +32299,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             document['number'] = _finance_number_with_revision(
                 document.get('number'), revision
             )
+        _finance_rebase_draft_without_saved_revisions(document)
         if not document.get('eventId'):
             document['eventManagedByQuotation'] = False
             document['eventSyncFingerprint'] = ''
@@ -34688,7 +34799,11 @@ def _finance_snapshot_revision(document):
 def _finance_reset_to_draft_revision(document):
     prefix, year, sequence, _revision = _finance_parse_number(document.get('number'))
     document['revision'] = 1
-    if not document.get('customNumber'):
+    if document.get('customNumber'):
+        document['number'] = _finance_number_with_revision(
+            document.get('number'), 1
+        )
+    else:
         document['number'] = _finance_format_number(prefix, year, sequence, 1)
     document['status'] = 'draft'
     document['sentAt'] = ''
@@ -34700,6 +34815,31 @@ def _finance_reset_to_draft_revision(document):
     document['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
     document['revisions'] = []
     document['validUntil'] = ''
+
+
+def _finance_rebase_draft_without_saved_revisions(document):
+    """Keep an unsnapshotted draft on revision 01 without changing its content."""
+    if str(document.get('status') or 'draft').strip().lower() != 'draft':
+        return False
+    if _safe_int(document.get('revision'), 1) <= 1:
+        return False
+    if any(
+        isinstance(row, dict) and isinstance(row.get('snapshot'), dict)
+        for row in document.get('revisions') or []
+    ):
+        return False
+
+    prefix, year, sequence, _revision = _finance_parse_number(
+        document.get('number')
+    )
+    document['revision'] = 1
+    if document.get('customNumber'):
+        document['number'] = _finance_number_with_revision(
+            document.get('number'), 1
+        )
+    else:
+        document['number'] = _finance_format_number(prefix, year, sequence, 1)
+    return True
 
 
 def _finance_expire_sent_documents(finance_data):
@@ -43194,6 +43334,7 @@ def update_or_delete_quotation_revision(document_id, revision):
             else:
                 replacement = dict(current)
                 replacement['revisions'] = remaining
+                _finance_rebase_draft_without_saved_revisions(replacement)
 
             replacement['updatedAt'] = datetime.now().isoformat(timespec='seconds')
             replacement['updatedBy'] = _finance_current_username()

@@ -740,7 +740,7 @@ def test_inventory_selection_can_open_bulk_maintenance_workflow():
     assert "function replaceMaintenanceAssetSelection(assetIds = [])" in script
 
 
-def test_inventory_selected_count_clears_the_current_selection():
+def test_inventory_selected_count_selects_filtered_assets_or_clears_selection():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = APP_BUNDLE_SOURCE
 
@@ -748,9 +748,14 @@ def test_inventory_selected_count_clears_the_current_selection():
     assert 'class="inventory-selected-count-button"' in script
     assert (
         "document.getElementById('inventory-selected-count')?.addEventListener("
-        "'click', clearInventorySelection)"
+        "'click', toggleInventorySelectionFromCount)"
     ) in script
-    assert "countEl.disabled = selectedCount === 0" in script
+    assert "countEl.textContent = selectedCount ? `${selectedCount} selected` : 'Select all'" in script
+    assert "countEl.disabled = selectedCount === 0 && visibleIds.length === 0" in script
+    assert "function toggleInventorySelectionFromCount()" in script
+    assert "if (selectedInventoryAssetIds.size > 0)" in script
+    assert "toggleInventorySelectAll(true);" in script
+    assert "const { filteredAssets } = getFilteredInventoryData();" in script
     assert ".inventory-selected-count-button:hover:not(:disabled)" in template
 
 

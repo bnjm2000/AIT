@@ -546,13 +546,53 @@ function generatePdfDO(data, doWindow) {
 
         .items-table .do-pdf-group-row td {
             padding-top: 1.7mm;
-            padding-bottom: 1.7mm;
+            padding-bottom: 0.5mm;
             border-top: 0.55pt solid #9dc9b0;
-            border-bottom: 0.35pt solid #cfe3d7;
-            background: #eef7f2;
-            color: #173f2b;
-            font-size: 7.6pt;
+            border-bottom: 0;
+            background: #fff;
+            color: #172033;
+            font-size: 8pt;
             font-weight: 700;
+            text-align: left;
+        }
+
+        .items-table .do-pdf-group-row .quantity-col {
+            font-weight: 400;
+            text-align: right;
+        }
+
+        .items-table .do-pdf-group-child-row td {
+            padding-top: 0.45mm;
+            padding-bottom: 0.45mm;
+            border-bottom: 0;
+            text-align: left;
+        }
+
+        .items-table .do-pdf-group-child-row.is-before-custom-text td {
+            padding-bottom: 0;
+        }
+
+        .items-table .do-pdf-group-child-row.is-custom-text td {
+            padding-top: 0;
+        }
+
+        .items-table .do-pdf-group-child-row.is-group-end td {
+            padding-bottom: 1.4mm;
+            border-bottom: 0.35pt solid #e2e8f0;
+        }
+
+        .do-pdf-group-child-description {
+            padding-left: 2.7mm;
+            text-align: left;
+            white-space: normal;
+        }
+
+        .do-pdf-group-child-description.is-custom-text {
+            white-space: pre-line;
+        }
+
+        .do-pdf-group-child-quantity {
+            font-weight: 400;
         }
 
         .do-pdf-category {
@@ -908,7 +948,26 @@ function generatePagesContent(data, formattedDate) {
 
     const renderItemRow = (record) => {
         if (record.item.isGroupHeader) {
-            return `<tr class="do-pdf-group-row"><td colspan="2">${safe(record.item.description)}</td></tr>`;
+            return `
+                <tr class="do-pdf-group-row${record.item.isContinuation ? ' is-continuation' : ''}">
+                    <td>${safe(record.item.description)}${record.item.isContinuation ? ' (continued)' : ''}</td>
+                    <td class="quantity-col">${safe(record.item.quantity)}</td>
+                </tr>
+            `;
+        }
+        if (record.item.isGroupChild) {
+            const description = safe(record.item.description);
+            const quantity = record.item.groupCustomText
+                ? ''
+                : `<span class="do-pdf-group-child-quantity">${safe(record.item.quantity)}x</span> `;
+            return `
+                <tr class="do-pdf-group-child-row${record.item.groupCustomText ? ' is-custom-text' : ''}${record.item.isBeforeCustomText ? ' is-before-custom-text' : ''}${record.item.isGroupEnd ? ' is-group-end' : ''}">
+                    <td>
+                        <div class="do-pdf-group-child-description${record.item.groupCustomText ? ' is-custom-text' : ''}">${quantity}${description}${renderAssetIdsLine(record.item.assetIds)}</div>
+                    </td>
+                    <td class="quantity-col do-pdf-group-child-quantity-cell" aria-hidden="true"></td>
+                </tr>
+            `;
         }
         return `
             <tr>
@@ -928,6 +987,33 @@ function generatePagesContent(data, formattedDate) {
                 ${continued ? '<small>Continued</small>' : ''}
             </div>
         `;
+    };
+
+    const groupDisplayEntries = (items, groupId) => {
+        const buckets = new Map();
+        (items || []).filter(item => String(item.groupId || '') === String(groupId || ''))
+            .forEach(item => {
+                const customText = !!item.groupCustomText;
+                const description = customText
+                    ? String(item.description || 'Item').trim()
+                    : financeGroupedLineDisplay(item);
+                const key = `${customText ? 'custom' : 'asset'}::${description.trim().toLocaleLowerCase()}`;
+                if (!buckets.has(key)) {
+                    buckets.set(key, {
+                        description,
+                        quantity: 0,
+                        groupCustomText: customText,
+                        members: []
+                    });
+                }
+                const bucket = buckets.get(key);
+                bucket.quantity += Math.max(0, Number(item.quantity) || 0);
+                bucket.members.push(item);
+            });
+        return [
+            ...[...buckets.values()].filter(entry => !entry.groupCustomText),
+            ...[...buckets.values()].filter(entry => entry.groupCustomText)
+        ];
     };
 
     const renderCategorySection = (dept, records, options = {}) => `
@@ -989,7 +1075,15 @@ function generatePagesContent(data, formattedDate) {
             #__doMeasureBox .items-table th { padding:2mm 2.7mm;border:0;background:${themeColor};color:#fff;font-size:7pt; }
             #__doMeasureBox .items-table th:last-child { border-left:.5pt solid rgba(255,255,255,.45);text-align:right; }
             #__doMeasureBox .items-table td,#__doMeasureBox .do-measure-table td { padding:.9mm 2.7mm;border:0;border-bottom:.35pt solid #e2e8f0;color:#172033;font-size:8pt;line-height:1.15;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
-            #__doMeasureBox .items-table .do-pdf-group-row td,#__doMeasureBox .do-measure-table .do-pdf-group-row td { padding-top:1.7mm;padding-bottom:1.7mm;border-top:.55pt solid #9dc9b0;border-bottom:.35pt solid #cfe3d7;background:#eef7f2;color:#173f2b;font-size:7.6pt;font-weight:700; }
+            #__doMeasureBox .items-table .do-pdf-group-row td,#__doMeasureBox .do-measure-table .do-pdf-group-row td { padding-top:1.7mm;padding-bottom:.5mm;border-top:.55pt solid #9dc9b0;border-bottom:0;background:#fff;color:#172033;font-size:8pt;font-weight:700;text-align:left; }
+            #__doMeasureBox .items-table .do-pdf-group-row .quantity-col,#__doMeasureBox .do-measure-table .do-pdf-group-row .quantity-col { font-weight:400;text-align:right; }
+            #__doMeasureBox .do-pdf-group-child-row td { padding-top:.45mm;padding-bottom:.45mm;border-bottom:0;text-align:left; }
+            #__doMeasureBox .do-pdf-group-child-row.is-before-custom-text td { padding-bottom:0; }
+            #__doMeasureBox .do-pdf-group-child-row.is-custom-text td { padding-top:0; }
+            #__doMeasureBox .do-pdf-group-child-row.is-group-end td { padding-bottom:1.4mm;border-bottom:.35pt solid #e2e8f0; }
+            #__doMeasureBox .do-pdf-group-child-description { padding-left:2.7mm;text-align:left;white-space:normal; }
+            #__doMeasureBox .do-pdf-group-child-description.is-custom-text { white-space:pre-line; }
+            #__doMeasureBox .do-pdf-group-child-quantity { font-weight:400; }
             #__doMeasureBox .quantity-col { width:22mm;border-left:.5pt solid #cbd5e1!important;text-align:right; }
             #__doMeasureBox .quantity-column { width:22mm; }
             #__doMeasureBox .asset-id-line { display:block;margin-top:.5mm;color:#64748b;font-size:6.5pt;font-style:normal; }
@@ -1084,6 +1178,14 @@ function generatePagesContent(data, formattedDate) {
 
     const categoryHeights = {};
     const records = [];
+    const allocatedAssetIds = new Set();
+    const allocateAssetIds = (item, dept) => {
+        const ids = getAssetIdsByItem(data.event, item, dept, {
+            excludedIds: allocatedAssetIds
+        });
+        ids.forEach(id => allocatedAssetIds.add(String(id)));
+        return ids;
+    };
 
     Object.keys(departments).forEach(dept => {
         const deptItems = departments[dept] || [];
@@ -1097,13 +1199,15 @@ function generatePagesContent(data, formattedDate) {
         const renderedGroups = new Set();
         deptItems.forEach(item => {
             const groupId = String(item.groupId || '');
-            if (groupId && !renderedGroups.has(groupId)) {
+            if (groupId && renderedGroups.has(groupId)) return;
+            if (groupId) {
                 renderedGroups.add(groupId);
+                const groupQuantity = Math.max(1, Number(item.groupHeaderQuantity) || 1);
                 const groupRecord = {
                     dept,
                     item: {
                         description: item.groupTitle || 'Group',
-                        quantity: '',
+                        quantity: groupQuantity,
                         isGroupHeader: true
                     },
                     groupId,
@@ -1112,18 +1216,49 @@ function generatePagesContent(data, formattedDate) {
                 };
                 groupRecord.height = measureRow(renderItemRow(groupRecord));
                 records.push(groupRecord);
+                const entries = groupDisplayEntries(deptItems, groupId);
+                entries.forEach((entry, entryIndex) => {
+                    const assetLookupItem = {
+                        ...(entry.members[0] || {}),
+                        quantity: entry.quantity * groupQuantity,
+                        assetRefs: entry.members.flatMap(member => member.assetRefs || []),
+                        sourceAssetIds: entry.members.flatMap(member => member.sourceAssetIds || [])
+                    };
+                    const assetIds = data.showAssetIds && !entry.groupCustomText
+                        ? allocateAssetIds(assetLookupItem, dept)
+                        : [];
+                    const childRecord = {
+                        dept,
+                        item: {
+                            description: entry.description,
+                            quantity: entry.quantity,
+                            groupCustomText: entry.groupCustomText,
+                            isGroupChild: true,
+                            isBeforeCustomText: !entry.groupCustomText
+                                && !!entries[entryIndex + 1]?.groupCustomText,
+                            isGroupEnd: entryIndex === entries.length - 1,
+                            assetIds: [...new Set(assetIds)].slice(
+                                0,
+                                Math.max(0, Number(entry.quantity) || 0) * groupQuantity
+                            )
+                        },
+                        groupId,
+                        height: 0
+                    };
+                    childRecord.height = measureRow(renderItemRow(childRecord));
+                    records.push(childRecord);
+                });
+                return;
             }
             const assetIds = data.showAssetIds
-                ? getAssetIdsByItem(data.event, item, dept)
+                ? allocateAssetIds(item, dept)
                 : [];
 
             const record = {
                 dept,
                 item: {
                     ...item,
-                    description: groupId && !item.groupCustomText
-                        ? financeGroupedLineDisplay(item)
-                        : item.description,
+                    description: item.description,
                     assetIds
                 },
                 groupId,
@@ -1135,7 +1270,49 @@ function generatePagesContent(data, formattedDate) {
         });
     });
 
+    const continuationGroupHeights = new Map();
+    records.filter(record => record.item?.isGroupHeader).forEach(record => {
+        const continuation = {
+            ...record,
+            item: { ...record.item, isContinuation: true }
+        };
+        continuationGroupHeights.set(
+            `${record.dept}::${record.groupId}`,
+            measureRow(renderItemRow(continuation))
+        );
+    });
+
     measureBox.remove();
+
+    function continuationGroupRecord(startIndex) {
+        const child = records[startIndex];
+        const previous = records[startIndex - 1];
+        if (
+            !child?.item?.isGroupChild
+            || !child.groupId
+            || previous?.groupId !== child.groupId
+        ) return null;
+        let headerIndex = startIndex - 1;
+        while (
+            headerIndex >= 0
+            && records[headerIndex].groupId === child.groupId
+            && !records[headerIndex].item?.isGroupHeader
+        ) headerIndex -= 1;
+        const original = records[headerIndex];
+        if (!original?.item?.isGroupHeader) return null;
+        const continuation = {
+            ...original,
+            item: {
+                ...original.item,
+                isContinuation: true
+            },
+            keepWithNext: true,
+            generatedContinuation: true,
+            height: continuationGroupHeights.get(`${original.dept}::${original.groupId}`)
+                || original.height
+        };
+        return continuation;
+    }
 
     function costToAdd(page, record) {
         const needsDeptHeader = page.lastDept !== record.dept;
@@ -1151,6 +1328,13 @@ function generatePagesContent(data, formattedDate) {
             height: 0,
             lastDept: null
         };
+
+        const continuation = continuationGroupRecord(startIndex);
+        if (continuation) {
+            testPage.height += costToAdd(testPage, continuation);
+            testPage.records.push(continuation);
+            testPage.lastDept = continuation.dept;
+        }
 
         for (let i = startIndex; i < endIndex; i++) {
             const record = records[i];
@@ -1175,6 +1359,13 @@ function generatePagesContent(data, formattedDate) {
             lastDept: null
         };
 
+        const continuation = continuationGroupRecord(startIndex);
+        if (continuation) {
+            page.height += costToAdd(page, continuation);
+            page.records.push(continuation);
+            page.lastDept = continuation.dept;
+        }
+
         let i = startIndex;
 
         while (i < endIndex) {
@@ -1185,13 +1376,14 @@ function generatePagesContent(data, formattedDate) {
                 ? nextRecord.height
                 : 0;
 
-            if (page.records.length > 0 && page.height + cost + keepWithNextCost > budget) {
+            const hasContentRecord = page.records.some(row => !row.generatedContinuation);
+            if (hasContentRecord && page.height + cost + keepWithNextCost > budget) {
                 break;
             }
 
             // If one single row is taller than the available area,
             // keep it on the page instead of creating an infinite loop.
-            if (page.records.length === 0 && cost > budget) {
+            if (!hasContentRecord && page.height + cost > budget) {
                 page.records.push(record);
                 page.height += cost;
                 page.lastDept = record.dept;
@@ -1354,19 +1546,75 @@ function normaliseDoOrdering(items, storedOrdering = []) {
   return ordering;
 }
 
+function deliveryOrderItemIsMiscellaneous(item) {
+  const source = String(item?.source || '').toLowerCase();
+  if (source === 'event-custom' || source === 'custom-prepared') return true;
+  if (source !== 'do-custom') return false;
+  if (item?.isCustom) return true;
+  return !item?.catalogKey
+    && !(item?.sourceAssetIds || []).length
+    && !String(item?.brand || '').trim()
+    && !String(item?.model || '').trim();
+}
+
+function deliveryOrderAssetsBeforeMiscellaneous(items) {
+  const rows = [...(items || [])];
+  const renderedGroups = new Set();
+  const units = [];
+  rows.forEach(item => {
+    const groupId = String(item?.groupId || '');
+    if (!groupId) {
+      units.push({ rows: [item], miscellaneous: deliveryOrderItemIsMiscellaneous(item) });
+      return;
+    }
+    if (renderedGroups.has(groupId)) return;
+    renderedGroups.add(groupId);
+    const members = rows.filter(candidate => String(candidate?.groupId || '') === groupId);
+    units.push({
+      rows: [
+        ...members.filter(member => !member.groupCustomText),
+        ...members.filter(member => member.groupCustomText)
+      ],
+      miscellaneous: members.every(deliveryOrderItemIsMiscellaneous)
+    });
+  });
+  return [
+    ...units.filter(unit => !unit.miscellaneous),
+    ...units.filter(unit => unit.miscellaneous)
+  ].flatMap(unit => unit.rows);
+}
+
 function deliveryOrderAlphabeticalItems(items) {
-  return [...(items || [])].sort((left, right) => {
-    const leftGroup = String(left?.groupTitle || '').trim();
-    const rightGroup = String(right?.groupTitle || '').trim();
-    const leftLabel = [leftGroup, left?.description, left?.brand, left?.model]
+  const rows = [...(items || [])];
+  const renderedGroups = new Set();
+  const units = [];
+  rows.forEach(item => {
+    const groupId = String(item?.groupId || '');
+    if (!groupId) {
+      units.push([item]);
+      return;
+    }
+    if (renderedGroups.has(groupId)) return;
+    renderedGroups.add(groupId);
+    const members = rows.filter(candidate => String(candidate?.groupId || '') === groupId);
+    units.push([
+      ...members.filter(member => !member.groupCustomText),
+      ...members.filter(member => member.groupCustomText)
+    ]);
+  });
+  units.sort((leftUnit, rightUnit) => {
+    const left = leftUnit[0] || {};
+    const right = rightUnit[0] || {};
+    const leftLabel = [left.groupTitle, left.description, left.brand, left.model]
       .filter(Boolean).join(' ');
-    const rightLabel = [rightGroup, right?.description, right?.brand, right?.model]
+    const rightLabel = [right.groupTitle, right.description, right.brand, right.model]
       .filter(Boolean).join(' ');
     return leftLabel.localeCompare(rightLabel, undefined, {
       numeric: true,
       sensitivity: 'base'
-    }) || String(left?.key || '').localeCompare(String(right?.key || ''), undefined, { numeric: true });
+    }) || String(left.key || '').localeCompare(String(right.key || ''), undefined, { numeric: true });
   });
+  return deliveryOrderAssetsBeforeMiscellaneous(units.flat());
 }
 
 function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', subprojectId = '') {
@@ -1400,7 +1648,8 @@ function reorderDoItems(eventId, dept, fromIndex, toIndex, position = 'before', 
 function applyDoOrdering(items, dept, eventId, subprojectId = '') {
   const state = getDoEdits(eventId);
   const storedOrdering = state.ordering?.[deliveryOrderOrderingKey(subprojectId, dept)];
-  const sourceItems = Array.isArray(storedOrdering) && storedOrdering.length
+  const hasStoredOrdering = Array.isArray(storedOrdering) && storedOrdering.length > 0;
+  const sourceItems = hasStoredOrdering
     ? items
     : deliveryOrderAlphabeticalItems(items);
   const ordering = normaliseDoOrdering(
@@ -1418,7 +1667,12 @@ function applyDoOrdering(items, dept, eventId, subprojectId = '') {
     }
   });
   itemsMap.forEach(item => orderedItems.push(item));
-  return orderedItems;
+  // Asset-first and alphabetical ordering are defaults only. Once the user
+  // drags a line, the stored order is authoritative and must not be sorted
+  // again while rendering.
+  return hasStoredOrdering
+    ? orderedItems
+    : deliveryOrderAssetsBeforeMiscellaneous(orderedItems);
 }
 
 function setupDoItemDragHandlers(previewContainer, eventId) {
@@ -1530,6 +1784,7 @@ function deliveryOrderDepartmentControlMarkup({ value, groupId = '', label = 'Ca
         aria-label="${escapeHtmlAttr(label)}" autocomplete="off" data-do-group-id="${escapeHtmlAttr(encodedGroupId)}"
         onfocus="deliveryOrderRenderLineDepartmentSuggestions(this)"
         oninput="deliveryOrderRenderLineDepartmentSuggestions(this)"
+        onkeydown="showbaseLineWorkspace.suggestionKeydown(event,this.closest('.do-line-category-combobox')?.querySelector('.do-line-category-suggestions'))"
         onchange="deliveryOrderCommitLineDepartment(this)"
         onblur="setTimeout(()=>deliveryOrderHideLineDepartmentSuggestions(this),120)">
       <div class="finance-inline-suggestions do-line-category-suggestions"></div>
@@ -1593,6 +1848,10 @@ function deliveryOrderCommitLineGroup(groupId, subprojectId, groupedLines) {
   const eventId = event.id || event.event_id || window.currentEventId || '0';
   const state = getDoEdits(eventId);
   const targetSubprojectId = String(subprojectId || 'main');
+  const groupHeaderQuantity = Math.max(
+    1,
+    Number((groupedLines || []).find(line => line.groupHeaderQuantity != null)?.groupHeaderQuantity) || 1
+  );
   Object.keys(state.custom || {}).forEach(category => {
     state.custom[category] = (state.custom[category] || []).filter(line => !(
       String(line.groupId || '') === String(groupId || '')
@@ -1620,6 +1879,7 @@ function deliveryOrderCommitLineGroup(groupId, subprojectId, groupedLines) {
         ? [...line.groupDisplayFields]
         : ['brand', 'model', 'description'],
       groupCustomText: !!line.groupCustomText,
+      groupHeaderQuantity,
       isCustom: !!line.isCustom
     });
     deliveryOrderEditorState.collapsedCategories[`${eventId}::${targetSubprojectId}::${category}`] = false;
@@ -1631,6 +1891,30 @@ function deliveryOrderCommitLineGroup(groupId, subprojectId, groupedLines) {
   Promise.resolve(populateDeliveryItemsPreview(event)).then(() => {
     deliveryOrderEditorState.pendingRevealKey = '';
   });
+  return true;
+}
+
+function deliveryOrderGroupQuantityChange(encodedGroupId, value) {
+  const event = currentDeliveryOrderEvent;
+  const groupId = decodeURIComponent(encodedGroupId || '');
+  if (!event || !groupId) return false;
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const subprojectId = String(deliveryOrderActiveSubprojectId(event) || 'main');
+  const quantity = Math.max(1, Number(value) || 1);
+  const state = getDoEdits(eventId);
+  let changed = false;
+  Object.values(state.custom || {}).forEach(lines => {
+    (lines || []).forEach(line => {
+      if (
+        String(line.groupId || '') !== groupId
+        || String(line.subprojectId || 'main') !== subprojectId
+      ) return;
+      line.groupHeaderQuantity = quantity;
+      changed = true;
+    });
+  });
+  if (!changed) return false;
+  saveDoEdits(eventId, state, { immediate: true });
   return true;
 }
 
@@ -1726,6 +2010,7 @@ function deliveryOrderRenderCatalogResults() {
   const query = search.value.trim().toLowerCase();
   deliveryOrderEditorState.selectedCatalogItem = null;
   if (!query) {
+    deliveryOrderEditorState.catalogMatches = [];
     results.innerHTML = '';
     results.classList.remove('open');
     return;
@@ -1756,6 +2041,13 @@ function deliveryOrderSelectCatalogItem(index) {
     results.innerHTML = '';
     results.classList.remove('open');
   }
+}
+
+function deliveryOrderAddItemKeydown(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  showbaseLineWorkspace.selectFirstSuggestion('doCatalogResults');
+  deliveryOrderAddCatalogItem();
 }
 
 function deliveryOrderRenderDepartmentSuggestions() {
@@ -1991,7 +2283,7 @@ async function populateDeliveryItemsPreview(event) {
       resultsId: 'doCatalogResults',
       placeholder: 'Search inventory or enter an item',
       oninput: 'deliveryOrderRenderCatalogResults()',
-      onkeydown: "if(event.key==='Enter'){event.preventDefault();deliveryOrderAddCatalogItem();}"
+      onkeydown: 'deliveryOrderAddItemKeydown(event)'
     },
     category: {
       id: 'doCatalogDepartment',
@@ -2000,7 +2292,8 @@ async function populateDeliveryItemsPreview(event) {
       placeholder: 'Category',
       oninput: 'deliveryOrderRenderDepartmentSuggestions()',
       onfocus: 'deliveryOrderRenderDepartmentSuggestions()',
-      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||''),120)"
+      onblur: "setTimeout(()=>deliveryOrderSelectDepartment(document.getElementById('doCatalogDepartment')?.value||''),120)",
+      onkeydown: "showbaseLineWorkspace.suggestionKeydown(event,'doCatalogDepartmentResults')"
     },
     extraMarkup: '<input id="doCatalogQuantity" class="finance-input do-catalog-quantity" type="number" min="1" max="999" value="1" aria-label="Quantity">',
     addAction: 'deliveryOrderAddCatalogItem()',
@@ -2011,8 +2304,8 @@ async function populateDeliveryItemsPreview(event) {
     const encodedDepartment = encodeURIComponent(department);
     const collapseKey = `${eventId}::${subprojectId}::${department}`;
     const collapsed = !!deliveryOrderEditorState.collapsedCategories[collapseKey];
-    const lineMarkup = (item, index, groupChild = false) => `
-      <tr class="finance-line-row do-item-row${groupChild ? ' finance-group-child-row' : ''}${deliveryOrderEditorState.pendingRevealKey === item.key ? ' is-new' : ''}"
+    const lineMarkup = (item, index, groupChild = false, groupEnd = false) => `
+      <tr class="finance-line-row do-item-row${groupChild ? ' finance-group-child-row' : ''}${groupEnd ? ' is-group-end' : ''}${item.groupCustomText ? ' do-group-custom-text-row' : ''}${deliveryOrderEditorState.pendingRevealKey === item.key ? ' is-new' : ''}"
           data-key="${escA(item.key)}"
           data-custom-id="${escA(item.customId || '')}"
           data-kind="${escA(item.source || '')}"
@@ -2049,10 +2342,15 @@ async function populateDeliveryItemsPreview(event) {
         <tr class="finance-line-row finance-line-group-header finance-group-commercial-row do-line-group-header">
           <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Edit group" onclick="financeOpenLineGroupEditor('delivery-order','${escA(groupId)}')">${escapeHtml(item.groupTitle || 'Group')}</button><button type="button" title="Edit group contents" aria-label="Edit group contents" onclick="financeOpenLineGroupEditor('delivery-order','${escA(groupId)}')">&#9998;</button></div></td>
           <td class="do-category-cell">${deliveryOrderDepartmentControlMarkup({ value: department, groupId, label: 'Group category' })}</td>
-          <td class="do-quantity-cell"><span class="do-group-count">${members.length} item${members.length === 1 ? '' : 's'}</span></td>
+          <td class="do-quantity-cell"><input type="number" class="finance-line-input do-group-qty" value="${escA(Math.max(1, Number(item.groupHeaderQuantity) || 1))}" min="1" max="999" step="1" aria-label="Group quantity" onchange="deliveryOrderGroupQuantityChange('${escA(encodedGroupId)}',this.value)"></td>
           <td class="do-action-cell"><button type="button" class="finance-delete-line do-del" title="Delete group" aria-label="Delete group" onclick="return deliveryOrderDeleteLineGroup('${escA(encodedGroupId)}')">&times;</button></td>
         </tr>`;
-      return header + members.map(row => lineMarkup(row.item, row.index, true)).join('');
+      return header + members.map((row, memberIndex) => lineMarkup(
+        row.item,
+        row.index,
+        true,
+        memberIndex === members.length - 1
+      )).join('');
     }).join('');
 
     const categoryHeader = showbaseLineWorkspace.categoryHeaderRowMarkup({
@@ -2289,6 +2587,7 @@ function groupItemsByDepartment(event, subprojectId = null) {
           groupTitle: ci.groupTitle || '',
           groupDisplayFields: Array.isArray(ci.groupDisplayFields) ? [...ci.groupDisplayFields] : [],
           groupCustomText: !!ci.groupCustomText,
+          groupHeaderQuantity: Math.max(1, Number(ci.groupHeaderQuantity) || 1),
           isCustom: !!ci.isCustom
         });
       });
@@ -2325,7 +2624,7 @@ function groupItemsByDepartment(event, subprojectId = null) {
   return departments;
 }
 
-function getAssetIdsByItem(event, item, department) {
+function getAssetIdsByItem(event, item, department, options = {}) {
     if (!item) return [];
 
     const assetRecords = Object.values(event?.assetsByDepartment || {})
@@ -2341,11 +2640,50 @@ function getAssetIdsByItem(event, item, department) {
     };
     const sortedUniqueIds = values => [...new Set((values || []).map(String).filter(isIndividualAssetId))]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const excludedSource = options.excludedIds;
+    const excludedIds = excludedSource && typeof excludedSource.has === 'function'
+        ? excludedSource
+        : new Set((excludedSource || []).map(String));
+    const deliveryOrderQuantity = Math.max(0, Number(item.quantity) || 0);
+    const withinDeliveryOrderQuantity = values => sortedUniqueIds(values)
+        .filter(id => !excludedIds.has(String(id)))
+        .slice(0, deliveryOrderQuantity);
 
     // Room requirements carry the exact stable references assigned during planning.
     // Prefer those references so identical models in different rooms are not mixed.
-    const linkedIds = sortedUniqueIds(item.assetRefs);
+    const linkedIds = withinDeliveryOrderQuantity(item.assetRefs);
     if (linkedIds.length || (item.assetRefs || []).length) return linkedIds;
+
+    // Grouped inventory rows retain the inventory IDs represented by their
+    // catalog selection. Only keep IDs that are actually prepared for this
+    // event, and never print more IDs than the quantity on the DO line.
+    const preparedSourceIds = withinDeliveryOrderQuantity(
+        (item.sourceAssetIds || []).filter(id => recordsById.has(String(id)))
+    );
+    if (preparedSourceIds.length) return preparedSourceIds;
+
+    // If stable catalog references are unavailable (older saved groups), match
+    // prepared records by product identity as a backwards-compatible fallback.
+    if (item.source === 'do-custom' && (item.brand || item.model)) {
+        const inventoryById = new Map((assets || [])
+            .filter(asset => asset?.id)
+            .map(asset => [String(asset.id), asset]));
+        const targetBrand = String(item.brand || '').trim().toLocaleLowerCase();
+        const targetModel = String(item.model || '').trim().toLocaleLowerCase();
+        const targetDescription = String(financeGroupedLineDescription(item) || '')
+            .trim().toLocaleLowerCase();
+        const matchingPreparedIds = assetRecords.filter(record => {
+            const inventoryRecord = inventoryById.get(String(record?.id || '')) || {};
+            const brand = String(record?.brand || inventoryRecord.brand || '').trim().toLocaleLowerCase();
+            const model = String(record?.model || inventoryRecord.model || '').trim().toLocaleLowerCase();
+            const description = String(record?.description || inventoryRecord.description || '').trim().toLocaleLowerCase();
+            return (!targetBrand || brand === targetBrand)
+                && (!targetModel || model === targetModel)
+                && (!targetDescription || !description || description === targetDescription);
+        }).map(record => record.id);
+        const matchedIds = withinDeliveryOrderQuantity(matchingPreparedIds);
+        if (matchedIds.length) return matchedIds;
+    }
 
     if (!event?.assetsByDepartment || item.source !== 'model') return [];
 
@@ -2361,7 +2699,7 @@ function getAssetIdsByItem(event, item, department) {
     const model = String(item.model || (keyParts[0] === 'MG' ? keyParts[3] : '')).trim();
     if (!brand && !model) return [];
 
-    return sortedUniqueIds((event.assetsByDepartment[deptCode] || [])
+    return withinDeliveryOrderQuantity((event.assetsByDepartment[deptCode] || [])
         .filter(asset => (
             String(asset?.brand || '').trim() === brand
             && String(asset?.model || '').trim() === model
