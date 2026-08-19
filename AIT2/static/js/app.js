@@ -6882,8 +6882,12 @@ function inventoryConditionChartHtml(counts, compact = false) {
 }
 
 function inventoryAssetGroupKey(asset) {
-  return [asset?.department, asset?.brand, asset?.model, asset?.description]
-    .map(value => String(value || '').trim().toLocaleLowerCase())
+  return [
+    normalizeDepartmentCode(asset?.department || 'UN'),
+    String(asset?.brand || '').trim(),
+    String(asset?.model || '').trim(),
+    String(asset?.description || '').trim()
+  ]
     .join('\u001f');
 }
 
@@ -7258,7 +7262,7 @@ function displayInventoryTable(assetsToShow) {
         const latest = inventoryLatestMaintenance(group.assets);
         return `
           <section class="inventory-model-group">
-            <button type="button" class="inventory-model-summary" aria-expanded="${expanded}" onclick="toggleInventoryModelGroup('${escapeHtmlAttr(encodedKey)}')">
+            <button type="button" class="inventory-model-summary" aria-expanded="${expanded}" data-group-key="${escapeHtmlAttr(encodedKey)}" onclick="toggleInventoryModelGroup(this.dataset.groupKey)">
               <span class="inventory-model-name"><strong>${escapeHtml(group.brand)} ${escapeHtml(group.model)}</strong><span>${group.assets.length} inventory record${group.assets.length === 1 ? '' : 's'}</span></span>
               <span class="inventory-model-description">${escapeHtml(inventoryGroupDescription(group))}</span>
               <span>${departmentBadgeHtml(group.department)}</span>
@@ -18771,9 +18775,7 @@ function addAssetToEditModelGroup(modelGroups, asset, quantity = 1) {
 
   if (!brand || !model) return null;
 
-  const modelKey = [department, brand, model, description]
-    .map(value => String(value || '').trim().toLowerCase())
-    .join('|');
+  const modelKey = [department, brand, model, description].join('|');
   if (!modelGroups[modelKey]) {
     modelGroups[modelKey] = {
       department,
@@ -19012,9 +19014,9 @@ function renderEditContainerSearchSection(filteredContainers, filteredModels, ev
 function modelGroupMatchesEditGroup(group, department, brand, model, description = '') {
   return (
     normalizeDepartmentCode(group?.department || 'UN') === normalizeDepartmentCode(department || 'UN') &&
-    String(group?.brand || '').trim().toLowerCase() === String(brand || '').trim().toLowerCase() &&
-    String(group?.model || '').trim().toLowerCase() === String(model || '').trim().toLowerCase() &&
-    String(group?.description || '').trim().toLowerCase() === String(description || '').trim().toLowerCase()
+    String(group?.brand || '').trim() === String(brand || '').trim() &&
+    String(group?.model || '').trim() === String(model || '').trim() &&
+    String(group?.description || '').trim() === String(description || '').trim()
   );
 }
 

@@ -24,7 +24,8 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "function inventoryAssetGroupKey(asset)" in script
     assert "const groups = groupInventoryAssets(filteredAssets).length;" in script
     assert "groupInventoryByModel" not in script
-    assert "[asset?.department, asset?.brand, asset?.model, asset?.description]" in script
+    assert "normalizeDepartmentCode(asset?.department || 'UN')" in script
+    assert "String(asset?.description || '').trim()" in script
     assert "description: String(asset.description || '').trim()" in script
     assert "return inventoryAssetGroupKey(asset) === inventoryAssetGroupKey(group);" in script
     assert "function inventoryConditionCounts(assetList)" in script
@@ -35,6 +36,9 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "bulkMissingQuantity" in script
     assert "bulkDegradedQuantity" in script
     assert "function toggleInventoryModelGroup(encodedKey)" in script
+    assert 'data-group-key="${escapeHtmlAttr(encodedKey)}"' in script
+    assert 'onclick="toggleInventoryModelGroup(this.dataset.groupKey)"' in script
+    assert "toggleInventoryModelGroup('${escapeHtmlAttr(encodedKey)}')" not in script
     assert "inventoryAvailabilityChartHtml(availability, true)" in script
     assert "assets available" in script
     assert "withQuantity(counts.degradedAvailable, 'Degraded')" in script
@@ -43,6 +47,24 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "`${conditionCounts.degraded} degraded`" in script
     assert "degraded total" not in script
     assert "`${availability.degradedAvailable} degraded available`" in script
+
+
+def test_inventory_and_plan_group_identity_preserves_capitalisation():
+    script = APP_BUNDLE_SOURCE
+    inventory_key = script.split(
+        "function inventoryAssetGroupKey(asset)", 1
+    )[1].split("function groupInventoryAssets", 1)[0]
+    plan_grouping = script.split(
+        "function addAssetToEditModelGroup", 1
+    )[1].split("function buildEditAvailableAssetLookup", 1)[0]
+    plan_matching = script.split(
+        "function modelGroupMatchesEditGroup", 1
+    )[1].split("function getCurrentEditModelQuantity", 1)[0]
+
+    assert "toLocaleLowerCase" not in inventory_key
+    assert "toLowerCase" not in plan_grouping
+    assert "toLowerCase" not in plan_matching
+    assert "const modelKey = [department, brand, model, description].join('|');" in plan_grouping
 
 
 def test_flagged_inventory_statuses_show_immediate_history_tooltips():

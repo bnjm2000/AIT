@@ -181,6 +181,29 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
             1,
         )
 
+    def test_description_capitalisation_remains_a_separate_asset_group(self):
+        self.data_manager.inventory['A-CAPS#01'] = self.make_asset(
+            'A-CAPS#01',
+            brand='TestBrand',
+            model='RegularModel',
+            description='regular item',
+        )
+        self.make_event(100)
+        self.login_as()
+
+        response = self.client.get('/api/events/100/availability')
+        self.assertEqual(
+            response.status_code, 200, response.get_data(as_text=True)
+        )
+        groups = [
+            row for row in response.get_json()['data']
+            if row['model'] == 'RegularModel'
+        ]
+        self.assertEqual(
+            {(row['description'], row['physical']) for row in groups},
+            {('Regular item', 6), ('regular item', 1)},
+        )
+
     def test_regular_ooc_asset_stays_in_total_but_is_not_available(self):
         self.make_event(100)
         self.data_manager.inventory['A#01'].is_ooc = True

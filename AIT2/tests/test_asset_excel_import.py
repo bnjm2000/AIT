@@ -150,6 +150,22 @@ class AssetTemplateImportTests(unittest.TestCase):
         self.assertEqual(excel_response.status_code, 200, excel_response.get_data(as_text=True))
         self.assertEqual(excel_response.get_json()['data']['rows'][0]['serials'], ['12345678'])
 
+    def test_preview_reports_description_capitalisation_as_a_distinct_variant(self):
+        response = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'Shure',
+            'model': 'SM58',
+            'description': 'black microphone',
+            'department': 'AX',
+            'quantity': 1,
+            'isBulk': False,
+            'serials': [],
+            'assetIdPrefix': 'CASE',
+        }]})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        row = response.get_json()['data']['rows'][0]
+        self.assertEqual(row['differentDescriptions'], ['Black microphone'])
+
     def test_serial_mismatch_and_future_purchase_date_are_warnings_not_blockers(self):
         response = self.client.post(
             '/api/assets/import-preview',

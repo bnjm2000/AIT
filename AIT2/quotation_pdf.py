@@ -80,9 +80,9 @@ def _group_description_part(line):
         boundary = description[len(prefix):len(prefix) + 1]
         if boundary and not re.match(r'[\s\-\u2013\u2014:|/]', boundary):
             continue
-        remainder = re.sub(
-            r'^[\s\-\u2013\u2014:|/]+', '', description[len(prefix):]
-        ).strip()
+        # Preserve punctuation that belongs to the inventory description. A
+        # leading "- " is meaningful content, not merely a display separator.
+        remainder = description[len(prefix):].strip()
         if remainder:
             return remainder
     return description

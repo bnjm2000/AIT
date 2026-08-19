@@ -3754,7 +3754,10 @@ function financeGroupedLineDescription(line) {
     if (!description.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())) continue;
     const boundary = description.slice(prefix.length, prefix.length + 1);
     if (boundary && !/[\s\-\u2013\u2014:|/]/.test(boundary)) continue;
-    const remainder = description.slice(prefix.length).replace(/^[\s\-\u2013\u2014:|/]+/, '').trim();
+    // The separator is part of the inventory description. For example,
+    // "Brand Model - Green" must remain "- Green" when only the description
+    // field is displayed in a group.
+    const remainder = description.slice(prefix.length).trim();
     if (remainder) return remainder;
   }
   return description;

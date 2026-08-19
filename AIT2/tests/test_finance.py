@@ -3531,6 +3531,29 @@ class FinanceFeatureTests(unittest.TestCase):
             'Shure SM58 Dynamic microphone',
         )
 
+        hyphenated = {
+            'groupId': 'drum-package',
+            'brand': "DW Collector's Series",
+            'model': '10" x 9" Rack Tom',
+            'description': "DW Collector's Series 10\" x 9\" Rack Tom - Green",
+            'groupItemQuantity': 1,
+        }
+        self.assertEqual(_group_description_part(hyphenated), '- Green')
+        self.assertEqual(
+            _group_line_description({
+                **hyphenated,
+                'groupDisplayFields': ['description'],
+            }),
+            '- Green',
+        )
+        self.assertEqual(
+            _group_line_description({
+                **hyphenated,
+                'groupDisplayFields': ['brand', 'model', 'description'],
+            }),
+            "DW Collector's Series 10\" x 9\" Rack Tom - Green",
+        )
+
     def test_group_pdf_wraps_to_cell_width_and_only_splits_at_page_height(self):
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.units import mm
@@ -7853,6 +7876,44 @@ class FinanceFeatureTests(unittest.TestCase):
                 datetime.strptime(sent_date, '%Y-%m-%d')
                 + timedelta(days=21)
             ).strftime('%Y-%m-%d'),
+        )
+
+        # The displayed invoice due date is canonical. A stale, later hidden
+        # payment-clock date must not leave an already-due invoice as Sent.
+        finance_data = app_module._load_finance_data()
+        stored = app_module._finance_find_document(
+            finance_data, invoice['id'], 'invoice'
+        )
+        visible_due_date = (
+            datetime.now() - timedelta(days=2)
+        ).strftime('%Y-%m-%d')
+        stored['status'] = 'sent'
+        stored['dueDate'] = visible_due_date
+        stored['paymentDueDate'] = (
+            datetime.now() + timedelta(days=21)
+        ).strftime('%Y-%m-%d')
+        plan = finance_data['invoicePlans'][accepted['id']]
+        plan_installment = next(
+            row for row in plan['installments']
+            if row.get('invoiceId') == invoice['id']
+        )
+        plan_installment['dueDate'] = visible_due_date
+        plan_installment['status'] = 'sent'
+        app_module._save_finance_data(finance_data)
+
+        corrected = self.client.get(
+            f"/api/invoices/{invoice['id']}"
+        ).get_json()['data']
+        self.assertEqual(corrected['status'], 'overdue')
+        self.assertEqual(corrected['dueDate'], visible_due_date)
+        self.assertEqual(corrected['paymentDueDate'], visible_due_date)
+        corrected_plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        self.assertEqual(corrected_plan['status'], 'overdue')
+        self.assertEqual(
+            corrected_plan['installments'][0]['paymentDueDate'],
+            visible_due_date,
         )
 
         second_quote = self.create_quote('Overdue Clock')

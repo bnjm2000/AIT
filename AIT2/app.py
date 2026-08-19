@@ -3891,13 +3891,13 @@ def _asset_import_auto_ids(payload, reserved_ids=None):
 def _asset_import_different_descriptions(payload):
     brand = str(payload.get('brand') or '').strip().casefold()
     model = str(payload.get('model') or '').strip().casefold()
-    description = str(payload.get('description') or '').strip().casefold()
+    description = str(payload.get('description') or '').strip()
     matches = {
         str(getattr(asset, 'description', '') or '').strip() or '(blank description)'
         for asset in data_manager.inventory.values()
         if str(getattr(asset, 'brand', '') or '').strip().casefold() == brand
         and str(getattr(asset, 'model_number', '') or '').strip().casefold() == model
-        and str(getattr(asset, 'description', '') or '').strip().casefold() != description
+        and str(getattr(asset, 'description', '') or '').strip() != description
     }
     return sorted(matches, key=str.casefold)
 
@@ -5790,7 +5790,7 @@ def _event_model_group_description_aliases(group):
         description,
     )))
     return {
-        value.casefold()
+        value
         for value in (description, display_description)
         if value
     } or {''}
@@ -5803,10 +5803,10 @@ def _event_model_groups_match(left, right):
     identity_fields_match = (
         _normalise_department_code(left.get('department'))
         == _normalise_department_code(right.get('department'))
-        and str(left.get('brand') or '').strip().casefold()
-        == str(right.get('brand') or '').strip().casefold()
-        and str(left.get('model') or '').strip().casefold()
-        == str(right.get('model') or '').strip().casefold()
+        and str(left.get('brand') or '').strip()
+        == str(right.get('brand') or '').strip()
+        and str(left.get('model') or '').strip()
+        == str(right.get('model') or '').strip()
     )
     return bool(
         identity_fields_match
@@ -15145,8 +15145,8 @@ def _asset_matches_group(asset, group):
         (asset.department_code or '').strip().upper() == group['department'] and
         (asset.brand or '').strip() == group['brand'] and
         (asset.model_number or '').strip() == group['model'] and
-        (asset.description or '').strip().casefold() ==
-        str(group.get('description') or '').strip().casefold()
+        (asset.description or '').strip() ==
+        str(group.get('description') or '').strip()
     )
 
 
@@ -30219,6 +30219,16 @@ def _finance_payment_due_date(sent_date, payment_terms, default_days=30):
     return (sent + timedelta(days=days)).strftime('%Y-%m-%d'), days
 
 
+def _finance_invoice_due_date(document):
+    """Return the canonical due date shown on an invoice."""
+    document = document if isinstance(document, dict) else {}
+    return str(
+        document.get('dueDate')
+        or document.get('paymentDueDate')
+        or ''
+    ).strip()[:10]
+
+
 def _invoice_sent_timing(request_data):
     """Validate and calculate the dates that start an invoice's payment clock."""
     request_data = request_data if isinstance(request_data, dict) else {}
@@ -32311,6 +32321,11 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         )
         document['paymentDueDate'] = payment_due_date
         document['paymentTermDays'] = payment_term_days
+    if document_type == 'invoice' and document.get('dueDate'):
+        # `dueDate` is the date users see and edit on the invoice. Keep the
+        # countdown field aligned so a stale hidden value cannot suppress an
+        # overdue status.
+        document['paymentDueDate'] = _finance_invoice_due_date(document)
     range_start, range_end = _finance_event_date_range(document)
     document['eventDays'] = _finance_date_days(range_start, range_end)
     _recalculate_finance_adjustments(document)
@@ -34854,11 +34869,7 @@ def _finance_expire_sent_documents(finance_data):
                 continue
             try:
                 due_date = datetime.strptime(
-                    str(
-                        document.get('paymentDueDate')
-                        or document.get('dueDate')
-                        or ''
-                    )[:10],
+                    _finance_invoice_due_date(document),
                     '%Y-%m-%d',
                 ).date()
             except ValueError:
@@ -39395,7 +39406,7 @@ def _finance_document_list_summary(document):
         'acceptedAt': str(document.get('acceptedAt') or ''),
         'invoicedAt': str(document.get('invoicedAt') or ''),
         'invoiceSentDate': str(document.get('invoiceSentDate') or ''),
-        'paymentDueDate': str(document.get('paymentDueDate') or ''),
+        'paymentDueDate': _finance_invoice_due_date(document),
         'paymentTerms': str(document.get('paymentTerms') or ''),
         'paymentTermDays': max(
             0, min(3650, _safe_int(document.get('paymentTermDays'), 30))
@@ -41922,9 +41933,7 @@ def _invoice_plan_with_document_state(finance_data, plan):
             'invoiceSentDate': invoice.get('invoiceSentDate') or '',
             'paymentTermDays': invoice.get('paymentTermDays', 30),
             'paymentDueDate': (
-                invoice.get('paymentDueDate')
-                or invoice.get('dueDate')
-                or ''
+                _finance_invoice_due_date(invoice)
             ),
             'dueDate': invoice.get('dueDate') or '',
             'invoiceFrozen': isinstance(
