@@ -126,6 +126,14 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertIn('Description: Old desc -> Updated description', action)
         self.assertIn('Notes: - -> Keep with receiver rack', action)
 
+    def test_updated_notes_are_returned_in_progressive_summary_view(self):
+        response = self.put_asset('A#01', notes='Keep with receiver rack')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        summary = self.client.get('/api/assets?view=summary').get_json()['data']
+        asset = next(row for row in summary if row.get('internalId') == 'A#01')
+        self.assertEqual(asset['notes'], 'Keep with receiver rack')
+
     def test_asset_edit_warns_before_reusing_serial_in_same_asset_group(self):
         response = self.put_asset('A#02', serial='sn-a#01')
 

@@ -1,0 +1,563 @@
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\delivery-order.js:227:        showNotification('error', 'No event selected');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\delivery-order.js:1787:        onkeydown="showbaseLineWorkspace.suggestionKeydown(event,this.closest('.do-line-category-combobox')?.querySelector('.do-line-category-suggestions'))"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\delivery-order.js:2162:      onmousedown="event.preventDefault()" onclick="deliveryOrderSelectLineDepartment(this)">${escapeHtml(name)}</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:125:    all: 'allEventsSortSelect',
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:126:    prepare: 'prepareEventsSortSelect',
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:127:    return: 'returnEventsSortSelect'
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:258:  return document.querySelector('.events-view-toggle [data-events-view].active')?.dataset.eventsView
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:268:  document.querySelectorAll('.events-view-toggle [data-events-view]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:319:  document.querySelectorAll('#eventTypeFilterMenu [data-event-type]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:330:  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:359:    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:368:      document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:386:  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:399:    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:667:  document.querySelectorAll('.event-card-menu.open, .event-card-menu[data-event-menu-portal="true"]').forEach(menu => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:1076:      <select id="${scope}EventsSortSelect" class="form-input" style="width:auto;min-width:160px;" onchange="${scope === 'prepare' ? 'loadPrepareEvents()' : 'loadReturnEvents()'}">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\events-overview.js:1280:        await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\costing.js:1311:    <input aria-label="Category name" value="${costingAttr(category)}" ${readOnly ? 'disabled' : `data-costing-category-source="${costingAttr(encoded)}" onfocus="costingShowRenameCategorySuggestions(this)" oninput="costingShowRenameCategorySuggestions(this)" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,this.closest('.costing-category-name-combobox')?.querySelector('.costing-rename-category-suggestions'))" onchange="costingRenameCategory('${costingAttr(encoded)}',this.value)" onblur="setTimeout(()=>costingHideRenameCategorySuggestions(this),120)"`}>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\costing.js:1457:  results.innerHTML = categories.map(value => `<button type="button" data-costing-category="${costingAttr(encodeURIComponent(value))}" onmousedown="event.preventDefault()" onclick="costingChooseRenameCategory(this)">${costingEscape(value)}</button>`).join('')
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\costing.js:1478:  if (event.key === 'Enter' && showbaseLineWorkspace.selectFirstSuggestion('costingAddCategoryResults')) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\packing-list.js:664:    showNotification('error', 'No event selected');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\packing-list.js:674:    showNotification('error', 'No event selected');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:297:  const existingCards = [...document.querySelectorAll('.event-card[data-event-key]')];
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:454:  event[slotsKey] = Math.max(0, Number(event[slotsKey] || 0) - selectedFiles.length);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:484:    event[slotsKey] = Number(event[slotsKey] || 0) + selectedFiles.length;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:561:  document.querySelectorAll('.event-dropzone').forEach(zone => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:683:document.querySelectorAll('[data-event-tab]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:686:    document.querySelectorAll('[data-event-tab]').forEach(item => item.classList.toggle('active', item === button));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:704:document.querySelectorAll('[data-close-claim]').forEach(button => button.addEventListener('click', closeClaimModal));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:713:  const button = event.currentTarget.querySelector('[type="submit"]');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\worker.js:743:  const button = event.currentTarget.querySelector('[type="submit"]');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:451:      <button type="button" class="${mode === 'event' ? 'selected' : ''}" role="radio" aria-checked="${mode === 'event'}" onclick="financeSetScheduleMode('event')">Event</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:717:  const note = document.querySelector('.finance-event-schedule-heading p');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:1858:              onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(selected || 'None')}<span>&#8964;</span></button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:2941:    financeOpenEventPicker(documentId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3390:function financeEnsureEventPickerModal() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3391:  if (document.getElementById('financeEventPickerModal')) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3393:  modal.id = 'financeEventPickerModal';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3397:      <div class="modal-header"><h3 class="modal-title">Pair existing event</h3><button type="button" class="close-btn" onclick="closeModal('financeEventPickerModal')">×</button></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3398:      <input id="financeEventPickerSearch" class="finance-input" placeholder="Search events by name, location, date or status..." autocomplete="off" oninput="financeRenderEventPickerResults(this.value)">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3399:      <div id="financeEventPickerResults" class="finance-picker-results"></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3401:        <button type="button" class="btn btn-secondary" onclick="closeModal('financeEventPickerModal')">Cancel</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3408:function financeRenderEventPickerResults(query = '') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3409:  const results = document.getElementById('financeEventPickerResults');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3413:    <button type="button" class="finance-picker-option" onclick="financePairEvent(${Number(event.id) || 0})">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3427:      const search = document.getElementById('financeEventPickerSearch');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3428:      if (document.getElementById('financeEventPickerModal')?.classList.contains('active')) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3429:        financeRenderEventPickerResults(search?.value || '');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3435:  financeRenderEventPickerResults(
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3436:    document.getElementById('financeEventPickerSearch')?.value || ''
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3441:  financeRenderEventPickerResults(
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3442:    document.getElementById('financeEventPickerSearch')?.value || ''
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3446:async function financeOpenEventPicker(documentId = financeState.current?.id) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3448:  financeEnsureEventPickerModal();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3449:  const search = document.getElementById('financeEventPickerSearch');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3451:  const results = document.getElementById('financeEventPickerResults');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3453:  openModal('financeEventPickerModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3469:    closeModal('financeEventPickerModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3475:  const selectedEvent = financeFindEvent(id);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3485:    closeModal('financeEventPickerModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3488:      eventState: selectedEvent?.state || '',
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3489:      eventName: selectedEvent?.name || '',
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:3696:      <button type="button" class="finance-line-select-button" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeUomLabel(line.uom))}<span>⌄</span></button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:4437:          <button id="financeRateCardUomButton" type="button" class="finance-line-select-button" onclick="financeToggleMenu('finance-rate-card-uom-menu',event)">unit(s)<span>⌄</span></button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:4515:    <button type="button" onmousedown="event.preventDefault()" onclick="financeChooseRateCardDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:5265:            <button type="button" id="financeEventSearch" class="finance-picker-button" onclick="financeOpenEventPicker()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6473:function profitLossEventChooserEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6481:async function financeLoadProgressiveEvents(targetState, preferredEventId, chooserContext) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6487:      typeof planEventChooserState !== 'undefined' &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6488:      planEventChooserState.context === chooserContext &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6489:      document.getElementById('planEventChooserModal')?.classList.contains('active')
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6490:    ) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6518:    await selectProfitLossEvent(profitLossState.eventId, { renderLoading: false });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6526:async function selectProfitLossEvent(eventId, options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6545:  await selectProfitLossEvent(eventId, { renderLoading: false });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6567:          <div><strong>Select quotation</strong><span>The quotation total will become the event revenue.</span></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6575:          <div><strong>Enter revenue manually</strong><span>This amount is saved specifically to the selected event.</span></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6983:  const selectedEvent = profitLossState.events.find(
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6994:      <button type="button" class="plan-event-select-wrap"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:6996:              onclick="planOpenEventChooser('profit-loss')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7001:            <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7009:        <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7032:    showNotification('error', 'Select an event before exporting Profit & Loss');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7072:  const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7141:      <button type="button" class="plan-event-select-wrap"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7143:              onclick="planOpenEventChooser('profit-loss')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7148:            <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7156:        <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7470:function compareEventChooserEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7527:    await selectCompareEvent(compareState.eventId, { renderLoading: false, keepQuotation: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7535:async function selectCompareEvent(eventId, options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\finance.js:7563:  await selectCompareEvent(eventId, { renderLoading: false, keepQuotation: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:387:    eventId: row.querySelector('[data-field="eventId"]')?.value
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:392:  return `<div class="accounting-journal-line" data-accounting-journal-line data-line-id="${accountingAttr(line.id)}"><span class="line-number">${index + 1}</span><label class="account"><span>Account</span><select data-field="accountCode" ${readonly ? 'disabled' : ''}><option value="">Choose account</option>${accountingAccountOptions(line.accountCode)}</select></label><label class="description"><span>Description</span><input data-field="description" value="${accountingAttr(line.description)}" ${readonly ? 'readonly' : ''}></label><label><span>Debit</span><input data-field="debit" type="number" min="0" step="0.01" value="${line.debit || ''}" oninput="accountingUpdateJournalBalance()" ${readonly ? 'readonly' : ''}></label><label><span>Credit</span><input data-field="credit" type="number" min="0" step="0.01" value="${line.credit || ''}" oninput="accountingUpdateJournalBalance()" ${readonly ? 'readonly' : ''}></label><label><span>GST code</span><select data-field="taxCode" ${readonly ? 'disabled' : ''}>${(accountingState.data?.taxCodes || []).map(row => `<option value="${accountingAttr(row.code)}" ${row.code === line.taxCode ? 'selected' : ''}>${accountingEscape(row.code)} · ${accountingEscape(row.name)}</option>`).join('')}</select></label><label><span>Taxable value</span><input data-field="taxBase" type="number" step="0.01" value="${line.taxBase || ''}" ${readonly ? 'readonly' : ''}></label><label><span>GST amount</span><input data-field="gstAmount" type="number" step="0.01" value="${line.gstAmount || ''}" ${readonly ? 'readonly' : ''}></label>${readonly ? '' : `<button type="button" class="accounting-remove-line" title="Remove line" onclick="accountingRemoveJournalLine(${index})">&times;</button>`}<input data-field="contact" type="hidden" value="${accountingAttr(line.contact)}"><input data-field="eventId" type="hidden" value="${accountingAttr(line.eventId)}"></div>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:432:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-journal-form" onsubmit="accountingSaveJournal(event)"><div class="accounting-form-grid three"><label><span>Date</span><input id="accountingJournalDate" type="date" value="${accountingAttr(journal?.date || new Date().toISOString().slice(0, 10))}" ${readonly ? 'readonly' : ''}></label><label><span>Reference</span><input id="accountingJournalReference" value="${accountingAttr(journal?.reference || '')}" ${readonly ? 'readonly' : ''}></label><label><span>Status</span><select id="accountingJournalStatus" ${readonly ? 'disabled' : ''}><option value="draft" ${journal?.status !== 'posted' ? 'selected' : ''}>Draft</option><option value="posted" ${journal?.status === 'posted' ? 'selected' : ''}>Post now</option></select></label><label class="span-all"><span>Description</span><input id="accountingJournalDescription" value="${accountingAttr(journal?.description || '')}" required ${readonly ? 'readonly' : ''}></label></div><div id="accountingJournalLines" class="accounting-journal-lines"></div>${readonly ? '' : '<button type="button" class="accounting-add-line" onclick="accountingAddJournalLine()">+ Add line</button>'}<div id="accountingJournalBalance" class="accounting-journal-balance"></div><div class="modal-actions">${journal && !readonly ? '<button type="button" class="btn btn-danger" onclick="accountingDeleteJournal()">Delete draft</button>' : ''}<button type="button" class="btn btn-secondary" onclick="closeModal(\'accountingModal\')">Close</button>${readonly ? (!journal.reversedJournalId ? `<button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal');accountingReverseJournal('${accountingAttr(journal.id)}')">Reverse</button>` : '') : '<button type="submit" class="btn btn-primary">Save journal</button>'}</div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:478:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingPostSource(event)"><div class="accounting-source-summary"><span><strong>${accountingEscape(source.number)}</strong><small>${accountingEscape(source.contact || source.kind)}</small></span><b>${accountingMoney(source.gross)}</b></div><div class="accounting-form-grid two"><label><span>Posting date</span><input id="accountingSourceDate" type="date" value="${accountingAttr(source.date)}"></label>${isPurchase ? `<label><span>Expense account</span><select id="accountingSourceAccount">${accountingAccountOptions(source.accountCode, ['expense'])}</select></label><label><span>GST treatment</span><select id="accountingSourceTax"><option value="OP">OP · Out of scope / no claim</option><option value="TX9">TX9 · Claimable GST at 9%</option><option value="TX0">TX0 · Zero-rated taxable purchase</option><option value="BL">BL · Blocked input tax</option></select></label><label><span>Credit account</span><select id="accountingSourceCounter">${accountingAccountOptions(accountingState.data.settings?.defaultPayableAccount || '2000', ['asset', 'liability'])}</select></label>` : ''}</div>${isPurchase ? '<div class="accounting-notice neutral"><strong>Input GST is never claimed automatically.</strong><span>Select TX9 only when a valid tax invoice supports the claim and the expense is allowable.</span></div>' : ''}<div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Post to ledger</button></div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:493:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingImportBankCsv(event)"><div class="accounting-form-grid two"><label><span>Bank account</span><select id="accountingImportBankAccount">${accountingAccountOptions(accountingState.data?.settings?.defaultBankAccount || '1000', ['asset'])}</select></label><label><span>Statement CSV</span><input id="accountingBankCsv" type="file" accept=".csv,text/csv" required></label></div><div class="accounting-notice neutral"><strong>Accepted columns</strong><span>Date plus Amount, or separate Debit and Credit columns. Description and Reference are optional. Duplicate rows are skipped.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Import statement</button></div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:517:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingSaveBankTransaction(event)"><div class="accounting-form-grid two"><label><span>Date</span><input id="accountingBankDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label><label><span>Bank account</span><select id="accountingBankAccountInput">${accountingAccountOptions(accountingState.data?.settings?.defaultBankAccount || '1000', ['asset'])}</select></label><label class="span-all"><span>Description</span><input id="accountingBankDescription" required></label><label><span>Reference</span><input id="accountingBankReference"></label><label><span>Amount</span><input id="accountingBankAmount" type="number" step="0.01" required></label></div><div class="accounting-notice neutral"><strong>Amount direction</strong><span>Use a positive amount for money in and a negative amount for money out.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Add transaction</button></div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:534:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingMatchBankTransaction(event,'${accountingAttr(transaction.id)}')"><div class="accounting-source-summary"><span><strong>${accountingEscape(transaction.description)}</strong><small>${accountingDate(transaction.date)} · ${accountingEscape(transaction.reference || 'No reference')}</small></span><b>${accountingMoney(transaction.amount)}</b></div><div class="accounting-form-grid two"><label><span>Match to account</span><select id="accountingBankMatchAccount">${accountingAccountOptions(defaultAccount)}</select></label><label><span>GST treatment</span><select id="accountingBankMatchTax">${incoming ? '<option value="OP">OP · No GST</option><option value="SR9">SR9 · Standard-rated receipt</option>' : '<option value="OP">OP · No GST claim</option><option value="TX9">TX9 · Claimable GST at 9%</option><option value="TX0">TX0 · Zero-rated purchase</option><option value="BL">BL · Blocked input tax</option>'}</select></label><label class="span-all"><span>Ledger description</span><input id="accountingBankMatchDescription" value="${accountingAttr(transaction.description)}"></label></div><div class="accounting-notice neutral"><strong>Posting result</strong><span>A balanced journal will be posted and linked to this statement line.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Match and post</button></div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\accounting.js:553:  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-account-form" onsubmit="accountingSaveAccount(event)"><div class="accounting-form-grid two"><label><span>Account code</span><input id="accountingAccountCode" maxlength="30" required></label><label><span>Account name</span><input id="accountingAccountName" maxlength="160" required></label><label><span>Account type</span><select id="accountingAccountType"><option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="revenue">Revenue</option><option value="expense">Expense</option></select></label><label><span>Group</span><input id="accountingAccountGroup" maxlength="120"></label></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Add account</button></div></form>`;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\login.js:109:loginById('workerChoice').addEventListener('click', () => selectAccessType('worker'));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\login.js:110:loginById('adminChoice').addEventListener('click', () => selectAccessType('admin'));
+templates\index.html:4004:      .events-sort-control select {
+templates\index.html:4049:      .events-sort-control select {
+templates\index.html:4194:      .add-event-tag-selector {
+templates\index.html:4202:      .add-event-tag-selector .form-label {
+templates\index.html:4230:      .add-event-tag-options[data-selected="dry-hire"] .add-event-tag-indicator {
+templates\index.html:4277:      .event-assignee-picker {
+templates\index.html:4299:      .event-assignee-selected {
+templates\index.html:4367:      .event-assignee-card.selected {
+templates\index.html:5613:      .plan-event-select-wrap,
+templates\index.html:6022:      .plan-event-select-wrap {
+templates\index.html:6038:      .plan-event-select-wrap:hover {
+templates\index.html:6043:      .plan-event-select-wrap:focus-visible {
+templates\index.html:6061:      .plan-event-select {
+templates\index.html:6082:      .plan-event-picker-chevron {
+templates\index.html:7085:      :is(#planEventChooserModal, #returnEventChooserModal) .modal-content {
+templates\index.html:7099:      :is(#planEventChooserModal, #returnEventChooserModal) .modal-header {
+templates\index.html:7105:      :is(#planEventChooserModal, #returnEventChooserModal) .modal-title {
+templates\index.html:7110:      .plan-event-chooser-search {
+templates\index.html:7115:      .plan-event-chooser-search span {
+templates\index.html:7124:      .plan-event-chooser-search input {
+templates\index.html:7134:      .plan-event-chooser-filters {
+templates\index.html:7143:      .plan-event-chooser-filter {
+templates\index.html:7162:      .plan-event-chooser-filter.active {
+templates\index.html:7169:      .plan-event-chooser-count {
+templates\index.html:7180:      .plan-event-chooser-filter.active .plan-event-chooser-count {
+templates\index.html:7184:      .plan-event-chooser-filter-all .plan-event-chooser-count {
+templates\index.html:7189:      .plan-event-chooser-filter-active .plan-event-chooser-count {
+templates\index.html:7194:      .plan-event-chooser-filter-planning .plan-event-chooser-count {
+templates\index.html:7199:      .plan-event-chooser-filter-preparing .plan-event-chooser-count {
+templates\index.html:7204:      .plan-event-chooser-filter-ongoing .plan-event-chooser-count {
+templates\index.html:7209:      .plan-event-chooser-filter-returning .plan-event-chooser-count {
+templates\index.html:7214:      .plan-event-chooser-filter-completed .plan-event-chooser-count {
+templates\index.html:7219:      .plan-event-chooser-table {
+templates\index.html:7229:      .plan-event-chooser-head,
+templates\index.html:7237:      .plan-event-chooser-head {
+templates\index.html:7248:      .plan-event-chooser-results {
+templates\index.html:7338:      .plan-event-chooser-footer {
+templates\index.html:7349:      .plan-event-chooser-pages {
+templates\index.html:7355:      .plan-event-chooser-page {
+templates\index.html:7368:      .plan-event-chooser-page.active {
+templates\index.html:7375:        :is(#planEventChooserModal, #returnEventChooserModal) .modal-content {
+templates\index.html:7381:        .plan-event-chooser-head {
+templates\index.html:7464:        .plan-event-select-wrap {
+templates\index.html:7685:      .prepare-new-top .plan-event-select-wrap {
+templates\index.html:8574:        .prepare-new-top .plan-event-select-wrap {
+templates\index.html:8771:      .return-event-select-wrap {
+templates\index.html:8787:      .return-event-select-wrap:hover {
+templates\index.html:8792:      .return-event-select-wrap:focus-visible {
+templates\index.html:9670:      .transfer-event-picker {
+templates\index.html:9675:      .transfer-event-picker:hover,
+templates\index.html:9676:      .transfer-event-picker:focus-visible {
+templates\index.html:9681:      .transfer-event-picker:focus-visible {
+templates\index.html:9765:      .transfer-event-select {
+templates\index.html:10834:              <select id="allEventsSortSelect" onchange="renderAllEventsList(events)">
+templates\index.html:11822:          <div class="add-event-tag-selector">
+templates\index.html:11826:              data-selected="events"
+templates\index.html:11852:            <select class="sr-only" id="eventTag" required aria-hidden="true" tabindex="-1">
+templates\index.html:11893:          <div class="event-assignee-picker" data-event-assignee-context="add">
+templates\index.html:11901:            <div id="addEventAssigneeSelected" class="event-assignee-selected">
+templates\index.html:11910:              oninput="renderEventAssigneePicker('add')"
+templates\index.html:12280:            <select class="form-input" id="transferFromEvent" required>
+templates\index.html:12281:              <option value="">Select source event...</option>
+templates\index.html:12286:            <select class="form-input" id="transferToEvent" required>
+templates\index.html:12287:              <option value="">Select destination event...</option>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\admin-settings.js:1220:            <button id="activeCompanyTrigger" type="button" class="company-select-trigger" aria-haspopup="listbox" aria-expanded="false" onclick="toggleCompanySwitcher(event)">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\line-workspace.js:100:      if (event?.key === 'Enter' && this.selectFirstSuggestion(resultsOrId)) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\line-workspace.js:156:      event.dataTransfer.setData(options.mimeType, JSON.stringify(selected));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\line-workspace.js:157:      event.dataTransfer.setData('text/plain', String(selected[0]));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:470:  const submit = event.submitter || event.currentTarget.querySelector('[type="submit"]');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:584:        onclick="toggleWorkforceScheduleSelect('${wfAttr(id)}',event)">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:591:          onclick="chooseWorkforceScheduleSelect(this,event)">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:607:function toggleWorkforceScheduleSelect(id, event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:617:function chooseWorkforceScheduleSelect(option, event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:669:      ${wfManpowerEventPickerHtml(data, 'Choose an event for the manpower schedule')}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-schedule.js:772:  if (!event.target.closest('.wf-schedule-select')) closeWorkforceScheduleSelects();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:44:const workforceEventChooserState = {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:458:          if (planEventChooserState.context === 'workforce') renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:466:        if (planEventChooserState.context === 'workforce') renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:504:  closeModal('planEventChooserModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1433:function wfManpowerEventPickerHtml(data, ariaLabel = 'Choose an event') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1441:  return `<button type="button" class="plan-event-select-wrap"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1443:      onclick="openWorkforceEventChooser()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1445:    <div class="wf-event-picker-content">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1457:    <span class="plan-event-picker-chevron" aria-hidden="true">&#8964;</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1520:          ${wfManpowerEventPickerHtml(data, 'Choose an event for manpower and transport')}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1879:function openWorkforceEventChooser() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1880:  planOpenEventChooser('workforce');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1881:  refreshWorkforceEventChooserOptions();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1884:async function refreshWorkforceEventChooserOptions() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1885:  const requestId = ++workforceEventChooserState.requestId;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1888:      requestId === workforceEventChooserState.requestId &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1889:      planEventChooserState.context === 'workforce' &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1890:      document.getElementById('planEventChooserModal')?.classList.contains('active')
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1891:    ) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1897:        if (requestId !== workforceEventChooserState.requestId) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1902:    if (requestId !== workforceEventChooserState.requestId) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:1908:    if (requestId !== workforceEventChooserState.requestId) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2340:      <p>Select a worker from Manpower &amp; Transport to view their events.</p></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2374:    <div class="plan-event-bar wf-worker-selector-bar">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2375:      <button type="button" class="plan-event-select-wrap" onclick="openFreelancerDirectory('manage')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2381:        <span class="plan-event-picker-chevron">&#8964;</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2818:  const eventDate = calendar.querySelector(`.wf-calendar-day[data-date="${date}"]`);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2820:    eventDate.classList.add('selected');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:2847:  calendar?.querySelectorAll('.wf-calendar-day.event-date').forEach(day => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:3960:  const button = event.currentTarget.querySelector('[type="submit"]');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:4043:          onclick="selectWorkforceReviewStatus(event,'${status}')">${status}</button>`
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:4054:function selectWorkforceReviewStatus(event, status) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\workforce-admin.js:4382:  document.querySelectorAll('.wf-allocation-input').forEach(input => input.addEventListener('input', () => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:228:    await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:893:      <button type="button" class="plan-event-select-wrap"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:895:              onclick="planOpenEventChooser('prepare-new')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:909:        <span class="plan-event-picker-chevron" aria-hidden="true">\u2304</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1063:        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1069:      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1071:    const selected = prepareNewPageState.events.find(event =>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1077:      await selectPrepareNewEvent(selected.id, { renderLoading: false });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1089:async function selectPrepareNewEvent(eventId, options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1117:async function refreshPrepareNewSelectedEvent(options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1143:      queueMicrotask(() => refreshPrepareNewSelectedEvent({ preserve: true }));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1155:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1183:    await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1196:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1203:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1214:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1236:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1260:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1284:  await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\prepare.js:1338:    await refreshPrepareNewSelectedEvent({ preserve: false });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:95:          <p>Move selected physical assets from one event directly into another event workflow.</p>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:107:            <label class="transfer-event-kicker" for="transferSourceSelect">From event</label>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:108:            <select id="transferSourceSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:124:            <label class="transfer-event-kicker" for="transferTargetSelect">To event</label>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:125:            <select id="transferTargetSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:156:  const selectableEvents = transferSelectableEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:157:  if (!selectableEvents.length) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:165:  return '<div class="transfer-empty"><strong>Choose both events</strong><span>Select a source and destination above to compare assets and choose exact Asset IDs.</span></div>';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:168:function transferSelectableEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:184:  return transferSelectableEvents().find(event => String(event.id || '') === id) || null;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:216:  const selected = transferEnsureTargetSubproject(event);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:287:function renderTransferEventPickerCard(role, event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:301:            class="transfer-event-card transfer-event-picker ${event ? 'has-metric' : 'is-empty'}"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:303:            onclick="planOpenEventChooser('${pickerContext}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:365:  const selectedSource = transferEventById(transferPageState.sourceEventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:366:  const selectedTarget = transferEventById(transferPageState.targetEventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:384:        ${renderTransferEventPickerCard('source', selectedSource)}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:388:        ${renderTransferEventPickerCard('target', selectedTarget)}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:419:  document.querySelectorAll('#prepareEventContent [id]').forEach(el => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:428:  document.querySelectorAll('#prepareEventContent details[open]').forEach(details => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:432:  const modalContent = document.querySelector('#prepareEventModal .modal-content');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:458:  const modalContent = document.querySelector('#prepareEventModal .modal-content');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:715:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:716:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:740:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:741:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:760:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:778:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:796:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:797:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:824:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:849:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:938:  const fromEventId = sourceSelect.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:939:  const toEventId = targetSelect.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1506:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1507:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1509:    showNotification('warning', 'Select both source and destination events first');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1944:  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1945:  const toEventId = document.getElementById('transferTargetSelect')?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\transfer.js:1950:    showNotification('warning', 'Select both source and destination events first');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:1346:    selectEl.addEventListener('change', () => applyMaintenanceStatusSelectStyle(selectEl));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:1484:      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:1493:      if (!event.target.closest('.maintenance-custom-select')) closeMaintenanceCustomSelects();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:1495:    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMaintenanceCustomSelects(); });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:3248:  const eventPicker = document.getElementById('returnEventPickerButton');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:3252:    showNotification('warning', 'Select an event first');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:3253:    eventPicker?.focus();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:3259:    instructions: 'Scan an asset QR code, barcode, or serial number to return it from the selected event.',
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:4923:  await uploadEventFileSelection(eventId, input?.files || []);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:4926:async function uploadEventFileSelection(eventId, fileList) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:4943:  if (selectedSize > EVENT_FILES_TOTAL_LIMIT_BYTES) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:4944:    showNotification("error", "Selected files exceed the 20 MB total event limit");
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5029:  document.querySelectorAll(".events-tab").forEach((tab) => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5193:      || document.querySelector(".summary-deployed .events-summary-icon");
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5469:    if (eventIdSpan && currentStateSpan && stateSelect) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5486:        // Reset select and store event ID
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5488:        stateSelect.setAttribute('data-event-id', eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5512:    const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5543:    const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5766:  row.querySelector('[data-inventory-export-pdf="true"]')?.addEventListener('click', generateInventoryPdf);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5812:    document.getElementById('inventory-bulk-maintenance-button')?.addEventListener('click', openMaintenanceForSelectedInventoryAssets);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5815:    document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5816:    document.getElementById('inventory-selected-count')?.addEventListener('click', toggleInventorySelectionFromCount);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5913:    sortSelect.removeEventListener("change", displayFilteredInventory);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5914:    sortSelect.removeEventListener("change", handleInventorySortChange);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:5915:    sortSelect.addEventListener("change", handleInventorySortChange);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:6419:function toggleInventoryAssetSelection(assetId, checked, selectionEvent = null) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:6427:    selectionEvent?.shiftKey && anchorIndex >= 0 && currentIndex >= 0
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:6641:           onclick="toggleInventoryAssetSelection(this.dataset.assetId, this.checked, event)"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:7180:      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:8323:          This permanently deletes the selected assets from inventory and removes them from any tagged events. Enter your admin password to confirm.
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:9658:    document.getElementById('containerSortSelect')?.addEventListener('change', () => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:10168:  preview.querySelector('img')?.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:11959:  document.querySelectorAll('.calendar-event[data-calendar-event-id]').forEach(bar => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:11978:        <button type="button" class="calendar-month-jump" onclick="toggleCalendarMonthPicker(event)" aria-expanded="false" aria-controls="calendarMonthPicker">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12164:    if (!calendarSelectionState || calendarSelectionState.pointerId !== event.pointerId) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12171:  const finishSelection = event => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12172:    if (!calendarSelectionState || calendarSelectionState.pointerId !== event.pointerId) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12177:    openAddEventModalForRange(selection.startKey, selection.endKey);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12179:  grid.addEventListener('pointerup', finishSelection);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12180:  grid.addEventListener('pointercancel', clearCalendarSelectionPreview);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12205:function toggleCalendarMonthPicker(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12235:  if (!picker || picker.hidden || event.target.closest('.calendar-month-heading')) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12362:  const existingPopup = document.querySelector('.day-events-popup');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12418:  const popup = document.querySelector('.day-events-popup');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12734:    const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:12759:        const assetElement = document.querySelector(`[onclick*="assignAdditionalAsset(${eventId}, '${assetId}')"]`).closest('div');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13038:    const requiredEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(1) .stat-number');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13039:    const preparedEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(2) .stat-number');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13040:    const extraEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(3) .stat-number');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13428:function returnPageSelectableEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13433:  const selectedId = Number(returnPageState.eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13434:  return returnPageSelectableEvents()
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13437:      Number(event.id) === selectedId
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13664:    typeof planEventChooserState !== 'undefined' &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13665:    planEventChooserState.context === 'return' &&
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13666:    document.getElementById('planEventChooserModal')?.classList.contains('active')
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13667:  ) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13670:function returnOpenEventChooser() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:13671:  planOpenEventChooser('return');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14117:  const list = modal.querySelector('#eventActivityList');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14118:  const subtitle = modal.querySelector('#eventActivitySubtitle');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14258:                  class="return-event-select-wrap return-surface"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14259:                  id="returnEventPickerButton"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14262:                  onclick="returnOpenEventChooser()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14391:      : (eligible[0] || returnPageSelectableEvents()[0]);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14401:    const detailResponse = await apiCall(`/api/events/${selected.id}`);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14403:    returnPageState.eventId = Number(selected.id);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14420:async function returnPageSelectEvent(eventId) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14654:    showNotification('warning', 'Select an event first');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14736:    const selectElement = document.getElementById('returnEventSelect');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14737:    const eventId = selectElement?.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:14972:      const btn = document.querySelector(`[onclick*="returnAllForDepartment(${eventId}, '${department.replace("'", "\\'")}')"]`);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15013:    const eventSelect = document.getElementById('returnEventSelect');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15015:    const eventId = eventSelect.value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15019:        showNotification('warning', 'Please select an event first');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15087:      const selectableEvents = transferSelectableEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15088:      updateOverdueCounter(selectableEvents.filter(event => event.state === 'Overdue').length);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15112:      transferSelectableEvents().map(event => String(event.id || ''))
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15473:  await uploadEventFileSelection(eventId, fileList);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15612:    const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:15807:    selectEl.addEventListener('change', () => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16310:      <button type="button" class="maintenance-event-suggestion${index === 0 ? ' active' : ''}" data-event-index="${index}" role="option" aria-selected="${index === 0 ? 'true' : 'false'}">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16317:  state.popup.querySelectorAll('[data-event-index]').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16320:      selectMaintenanceEventReference(state, Number(button.dataset.eventIndex));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16328:  state.popup.querySelectorAll('[data-event-index]').forEach((button, index) => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16336:function selectMaintenanceEventReference(state, eventIndex) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16337:  const selectedEvent = state.events[eventIndex];
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16339:  if (!selectedEvent || !context) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16341:  const token = maintenanceEventReferenceToken(selectedEvent);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:16427:      selectMaintenanceEventReference(state, state.activeIndex);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17199:  const fromSelect = document.getElementById("transferFromEvent");
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17200:  const toSelect = document.getElementById("transferToEvent");
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17206:  fromSelect.innerHTML = '<option value="">Select source event...</option>';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17207:  toSelect.innerHTML = '<option value="">Select destination event...</option>';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17691:  document.querySelectorAll('#eventLogsModal .event-log-category').forEach(button => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17718:  eventLogModalState.search = String(modal.querySelector('#eventLogSearch')?.value || '');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17719:  eventLogModalState.person = String(modal.querySelector('#eventLogPersonSearch')?.value || '');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17726:  const count = modal.querySelector('.event-log-visible-count');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17727:  const rows = modal.querySelector('#eventLogRows');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17768:    const body = modal?.querySelector('.event-logs-body');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17775:    body.querySelector('#eventLogSearch')?.addEventListener('input', renderEventLogModalRows);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17776:    body.querySelector('#eventLogPersonSearch')?.addEventListener('input', renderEventLogModalRows);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17779:    const body = document.querySelector('#eventLogsModal .event-logs-body');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17871:        <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleEventLogSection('${logSectionId}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17992:                            <select class="form-input" id="editEventTag" required>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17993:                                <option value="events" ${(event.tag === 'events' || !event.tag) ? 'selected' : ''}>Events</option>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:17994:                                <option value="dry hire" ${event.tag === 'dry hire' ? 'selected' : ''}>Dry Hire</option>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:18006:                    ${eventAssigneePickerMarkup('edit', event.assignedUsernames || (event.assignedUsers || []).map(user => user.username))}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:18017:    renderEventAssigneePicker('edit');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20470:  const options = document.querySelector(".add-event-tag-options");
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20474:    options.dataset.selected = normalizedTag === "dry hire" ? "dry-hire" : "events";
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20476:  document.querySelectorAll("[data-add-event-tag]").forEach(option => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20546:function eventAssigneePickerMarkup(context, assigned = []) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20558:    <div class="event-assignee-picker" data-event-assignee-context="${context}">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20566:      <div id="${prefix}AssigneeSelected" class="event-assignee-selected"></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20573:        oninput="renderEventAssigneePicker('${context}')"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20580:function renderEventAssigneePicker(context) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20582:  const selected = eventAssigneeState(context);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20614:      <button type="button" class="event-assignee-card ${checked ? 'selected' : ''}" onclick="toggleEventAssignee('${context}','${escapeJs(username)}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20620:        <span class="event-assignee-action">${checked ? 'Selected' : 'Select'}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20632:  renderEventAssigneePicker(context);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20637:  renderEventAssigneePicker(context);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20646:  renderEventAssigneePicker(context);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20653:  renderEventAssigneePicker('add');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20656:    renderEventAssigneePicker('add');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:20667:  renderEventAssigneePicker('add');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:21045:          await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:21048:          await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:21615:        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${escapeJs(assetId)}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24029:    refreshes.push(refreshPrepareNewSelectedEvent({ preserve: true }));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24298:  const modalScroller = document.querySelector('#eventDetailsModal .event-overview-body');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24497:      document.querySelectorAll(`.event-card[data-event-id="${eventId}"]`).forEach(card => card.remove());
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24503:  const selectedEventDeleted = (
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24520:  if (selectedEventDeleted) queueRealtimeRefresh();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:24589:        await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\app.js:25326:  modal.querySelector('#kcSearch').addEventListener('input', (e) => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:165:function eventSelectSubproject(stateName, subprojectId, renderFunction) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:202:                onclick="eventSelectSubproject('${stateName}','${EVENT_CONSOLIDATED_SUBPROJECT_ID}','${renderFunction}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:227:                  onclick="eventSelectSubproject('${stateName}','${planEncode(room.id)}','${renderFunction}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:382:      await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:384:      await refreshPrepareNewSelectedEvent({ preserve: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:438:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:674:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:906:var planEventChooserState = {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:914:var PLAN_EVENT_CHOOSER_FILTERS = [
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1039:function planEventChooserFilterKey(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1049:function planEventChooserSearchText(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1064:function planEventChooserDateValue(value) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1077:function planEventChooserFormattedDate(value) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1078:  const dateValue = planEventChooserDateValue(value);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1088:  const aDate = planEventChooserDateValue(a?.startDate);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1089:  const bDate = planEventChooserDateValue(b?.startDate);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1101:function planEventChooserDateRange(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1102:  const start = planEventChooserFormattedDate(event?.startDate);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1103:  const end = planEventChooserFormattedDate(event?.endDate);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1108:function planEventChooserRelativeDate(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1109:  const startValue = planEventChooserDateValue(event?.startDate);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1120:function planEventChooserSecondaryLabel(event) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1131:function planEventChooserSourceEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1132:  if (planEventChooserState.context === 'transfer-source' || planEventChooserState.context === 'transfer-target') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1133:    return transferSelectableEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1135:  if (planEventChooserState.context === 'prepare-new') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1138:  if (planEventChooserState.context === 'profit-loss' && typeof profitLossEventChooserEvents === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1139:    return profitLossEventChooserEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1141:  if (planEventChooserState.context === 'compare' && typeof compareEventChooserEvents === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1142:    return compareEventChooserEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1144:  if (planEventChooserState.context === 'return' && typeof returnPageSelectableEvents === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1145:    return returnPageSelectableEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1147:  if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1153:function planEventChooserCurrentEventId() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1154:  if (planEventChooserState.context === 'transfer-source') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1157:  if (planEventChooserState.context === 'transfer-target') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1160:  if (planEventChooserState.context === 'profit-loss' && typeof profitLossCurrentEventId === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1163:  if (planEventChooserState.context === 'compare' && typeof compareCurrentEventId === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1166:  if (planEventChooserState.context === 'return' && typeof returnPageState !== 'undefined') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1169:  if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1172:  return planEventChooserState.context === 'prepare-new'
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1177:function planEventChooserFilteredEvents() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1178:  const search = String(planEventChooserState.search || '').trim().toLowerCase();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1179:  const filter = planEventChooserState.filter || 'ALL';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1180:  return planEventChooserSourceEvents()
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1185:        planEventChooserFilterKey(event) === filter
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1187:      (!search || planEventChooserSearchText(event).includes(search))
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1189:    .sort(planEventChooserState.context === 'profit-loss'
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1194:function ensurePlanEventChooserModal() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1195:  let modal = document.getElementById('planEventChooserModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1199:  modal.id = 'planEventChooserModal';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1205:        <h3 class="modal-title">Other Events <span title="Select any event to update its plan">&#9432;</span></h3>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1206:        <button type="button" class="close-btn" aria-label="Close event picker"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1207:                onclick="closeModal('planEventChooserModal')">&times;</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1209:      <div class="plan-event-chooser-search">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1211:        <input type="search" id="planEventChooserSearch"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1213:               oninput="planEventChooserSearchChanged(this.value)">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1215:      <div class="plan-event-chooser-filters" id="planEventChooserFilters"></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1216:      <div class="plan-event-chooser-table">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1217:        <div class="plan-event-chooser-head">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1224:        <div class="plan-event-chooser-results" id="planEventChooserResults"></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1226:      <div class="plan-event-chooser-footer" id="planEventChooserFooter"></div>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1230:    if (event.target === modal) closeModal('planEventChooserModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1236:function renderPlanEventChooser() {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1237:  const filters = document.getElementById('planEventChooserFilters');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1238:  const results = document.getElementById('planEventChooserResults');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1239:  const footer = document.getElementById('planEventChooserFooter');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1242:  const counts = planEventChooserSourceEvents().reduce((summary, event) => {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1243:    const key = planEventChooserFilterKey(event);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1252:  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1254:            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1255:            onclick="planSetEventChooserFilter('${filter.key}')">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1257:      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1261:  const events = planEventChooserFilteredEvents();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1262:  const pageCount = Math.max(1, Math.ceil(events.length / planEventChooserState.pageSize));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1263:  planEventChooserState.page = Math.min(Math.max(1, planEventChooserState.page), pageCount);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1264:  const start = (planEventChooserState.page - 1) * planEventChooserState.pageSize;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1265:  const visibleEvents = events.slice(start, start + planEventChooserState.pageSize);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1269:            class="plan-event-option ${Number(event.id) === Number(planEventChooserCurrentEventId()) ? 'current' : ''}"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1276:        <span>${escapeHtml(planEventChooserSecondaryLabel(event))}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1279:        ${escapeHtml(planEventChooserDateRange(event))}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1280:        <span>${escapeHtml(planEventChooserRelativeDate(event))}</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1292:    if (pageCount <= 7 || page === 1 || page === pageCount || Math.abs(page - planEventChooserState.page) <= 1) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1304:              class="plan-event-chooser-page ${page === planEventChooserState.page ? 'active' : ''}"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1305:              onclick="planSetEventChooserPage(${page})">${page}</button>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1312:    <div class="plan-event-chooser-pages">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1313:      <button type="button" class="plan-event-chooser-page"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1314:              ${planEventChooserState.page <= 1 ? 'disabled' : ''}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1315:              onclick="planSetEventChooserPage(${planEventChooserState.page - 1})"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1318:      <button type="button" class="plan-event-chooser-page"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1319:              ${planEventChooserState.page >= pageCount ? 'disabled' : ''}
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1320:              onclick="planSetEventChooserPage(${planEventChooserState.page + 1})"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1326:function planOpenEventChooser(context = 'plan') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1327:  const modal = ensurePlanEventChooserModal();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1328:  planEventChooserState.context = context;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1329:  planEventChooserState.search = '';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1330:  planEventChooserState.filter = 'ALL';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1331:  planEventChooserState.page = 1;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1335:      'transfer-source': ['Choose From Event', 'Select the event assets are moving out from'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1336:      'transfer-target': ['Choose To Event', 'Select the event assets are moving into'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1337:      'profit-loss': ['Choose Profit & Loss Event', 'Select an event to review revenue, costs, and net profit'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1338:      compare: ['Choose Event to Compare', 'Select an event to compare against its quotation'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1339:      return: ['Choose Event to Return', 'Select an event to receive its returned assets'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1340:      workforce: ['Choose Event for Manpower', 'Select an event to manage its manpower and transport'],
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1341:      plan: ['Other Events', 'Select any event to update its plan']
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1346:  const search = document.getElementById('planEventChooserSearch');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1348:  renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1349:  openModal('planEventChooserModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1352:function planEventChooserSearchChanged(value) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1353:  planEventChooserState.search = value;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1354:  planEventChooserState.page = 1;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1355:  renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1358:function planSetEventChooserFilter(filter) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1359:  planEventChooserState.filter = filter || 'ALL';
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1360:  planEventChooserState.page = 1;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1361:  renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1364:function planSetEventChooserPage(page) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1365:  planEventChooserState.page = Math.max(1, Number(page || 1));
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1366:  renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1370:  closeModal('planEventChooserModal');
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1371:  if (Number(eventId) === Number(planEventChooserCurrentEventId())) return;
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1372:  if (planEventChooserState.context === 'transfer-source') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1376:  if (planEventChooserState.context === 'transfer-target') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1380:  if (planEventChooserState.context === 'prepare-new') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1381:    await selectPrepareNewEvent(eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1384:  if (planEventChooserState.context === 'profit-loss' && typeof selectProfitLossEvent === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1385:    await selectProfitLossEvent(eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1388:  if (planEventChooserState.context === 'compare' && typeof selectCompareEvent === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1389:    await selectCompareEvent(eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1392:  if (planEventChooserState.context === 'return' && typeof returnPageSelectEvent === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1393:    await returnPageSelectEvent(eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1396:  if (planEventChooserState.context === 'workforce' && typeof changeWorkforceEvent === 'function') {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:1400:  await selectPlanEvent(eventId);
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2066:          <p>The selected quantity will be removed from this inventory requirement and added to the event as a loan item.</p>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2221:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2250:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2516:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2733:          <button type="button" class="plan-event-select-wrap"
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2735:                  onclick="planOpenEventChooser()">
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2749:            <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2813:        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2822:      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2829:    const selected = planPageState.events.find(item =>
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2834:      await selectPlanEvent(selected.id, { renderLoading: false });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2846:async function selectPlanEvent(eventId, options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2871:async function refreshPlanSelectedEvent(options = {}) {
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2905:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2920:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2946:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:2966:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3031:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3086:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3113:    await refreshPlanSelectedEvent();
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3253:    await refreshPlanSelectedEvent({ templates: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3273:    await refreshPlanSelectedEvent({ templates: true });
+C:\Users\AVECp\Documents\AIT\AIT2\static\js\plan.js:3349:    await refreshPlanSelectedEvent();

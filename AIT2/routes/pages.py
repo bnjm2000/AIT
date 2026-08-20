@@ -10,6 +10,7 @@ APP_PAGE_SECTIONS = {
     "/events": "events",
     "/plan": "plan",
     "/manpower": "workforce",
+    "/transport": "transport",
     "/invoice-claims": "invoice-claims",
     "/prepare": "prepare-new",
     "/return": "return",
@@ -38,6 +39,7 @@ APP_ADMIN_PAGE_SECTIONS = {
     "plan",
     "compare",
     "workforce",
+    "transport",
     "invoice-claims",
     "vehicles",
     "logs",
@@ -78,6 +80,7 @@ def register_app_page_routes(
     @app.route("/events")
     @app.route("/plan")
     @app.route("/manpower")
+    @app.route("/transport")
     @app.route("/invoice-claims")
     @app.route("/prepare")
     @app.route("/return")

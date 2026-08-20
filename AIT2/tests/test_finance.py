@@ -1970,7 +1970,10 @@ class FinanceFeatureTests(unittest.TestCase):
         )
 
         self.login('bob')
-        self.assertEqual(self.client.get('/api/finance/rate-card').get_json()['data'], [])
+        bob_rows = self.client.get('/api/finance/rate-card').get_json()['data']
+        self.assertTrue(bob_rows)
+        self.assertTrue(all(not row.get('isCustom') for row in bob_rows))
+        self.assertTrue(all(row.get('unitPrice') == 0 for row in bob_rows))
 
     def test_sales_admin_uses_latest_company_rate_while_managers_keep_their_own(self):
         catalog_line = self.client.get(
@@ -2091,7 +2094,7 @@ class FinanceFeatureTests(unittest.TestCase):
         catalog_row = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
         self.assertEqual(catalog_row['unitPrice'], 555)
 
-    def test_changed_line_price_is_remembered_without_mutating_or_reverting_other_quotes(self):
+    def test_changed_line_price_does_not_overwrite_rate_card_or_other_quotes(self):
         catalog_line = self.client.get(
             '/api/finance/catalog?query=SB18'
         ).get_json()['data'][0]
@@ -2125,7 +2128,7 @@ class FinanceFeatureTests(unittest.TestCase):
         remembered = self.client.get(
             '/api/finance/catalog?query=SB18'
         ).get_json()['data'][0]
-        self.assertEqual(remembered['unitPrice'], 175)
+        self.assertEqual(remembered['unitPrice'], 100)
         self.assertEqual(remembered['uom'], 'sqm')
 
         second['notes'] = 'An unrelated change to the older quotation'
@@ -2145,7 +2148,7 @@ class FinanceFeatureTests(unittest.TestCase):
         remembered_after_autosave = self.client.get(
             '/api/finance/catalog?query=SB18'
         ).get_json()['data'][0]
-        self.assertEqual(remembered_after_autosave['unitPrice'], 175)
+        self.assertEqual(remembered_after_autosave['unitPrice'], 100)
 
     def test_remembered_inventory_rate_survives_line_removal(self):
         catalog_line = self.client.get(
@@ -2222,7 +2225,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
 
         rate_rows = self.client.get('/api/finance/rate-card').get_json()['data']
-        self.assertFalse(any(row['description'] == 'Custom scenic backdrop' for row in rate_rows))
+        original_rate = next(
+            row for row in rate_rows
+            if row['description'] == 'Custom scenic backdrop'
+        )
+        self.assertEqual(original_rate['unitPrice'], 1000)
         revised = next(row for row in rate_rows if row['description'] == 'Revised scenic backdrop')
         self.assertEqual((revised['brand'], revised['model']), ('Scenic Works SG', 'Backdrop B'))
         self.assertEqual(revised['unitPrice'], 1250)
@@ -3064,7 +3071,8 @@ class FinanceFeatureTests(unittest.TestCase):
         hidden_text = '\n'.join(page.extract_text() or '' for page in hidden_reader.pages)
         hidden_last_page_text = hidden_reader.pages[-1].extract_text() or ''
         self.assertIn('DESCRIPTION', hidden_text)
-        self.assertIn('UNIT PRICE', hidden_text)
+        self.assertNotIn('UNIT PRICE', hidden_text)
+        self.assertNotIn('DISC %', hidden_text)
         self.assertNotIn('$123.45', hidden_text)
         self.assertNotIn('10% department discount', hidden_text)
         self.assertLess(hidden_text.index('Edgar Tan'), hidden_text.index('Patricia & Edgar Pte Ltd'))
@@ -6550,7 +6558,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('financepaymenttermsummary', source)
         self.assertNotIn('financeensureinvoicedmodal', source)
         self.assertIn('financeclientpickermodal', source)
-        self.assertIn('financeeventpickermodal', source)
+        self.assertNotIn('financeeventpickermodal', source)
+        self.assertIn("planopeneventchooser('quotation-link')", source)
         self.assertIn('profit &amp; loss', source)
         self.assertIn('financeopencomparepage', source)
         self.assertIn('/api/finance/profit-loss/', source)

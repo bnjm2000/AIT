@@ -143,6 +143,17 @@ def _dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def _transport_location_parts(name, address=""):
+    location_name = str(name or "").strip()
+    location_address = str(address or "").strip()
+    if not location_address:
+        matched = re.match(r"^(.*?)\s*\(([^()]+)\)\s*$", location_name)
+        if matched:
+            location_name = matched.group(1).strip()
+            location_address = matched.group(2).strip()
+    return location_name, location_address
+
+
 def normalize_workforce(data) -> dict:
     source = data if isinstance(data, dict) else {}
     normalized = empty_workforce()
@@ -192,6 +203,27 @@ def normalize_workforce(data) -> dict:
     for vehicle in normalized["vehicles"]:
         if isinstance(vehicle, dict):
             vehicle.pop("capacity", None)
+    for location in normalized["transportLocations"]:
+        if not isinstance(location, dict):
+            continue
+        name, address = _transport_location_parts(
+            location.get("name"), location.get("address")
+        )
+        location["name"] = name
+        location["address"] = address
+    for bookings in normalized["transportBookings"].values():
+        for booking in _list(bookings):
+            if not isinstance(booking, dict):
+                continue
+            for field in ("From", "To"):
+                name, address = _transport_location_parts(
+                    booking.get(f"location{field}Name")
+                    or booking.get(f"location{field}"),
+                    booking.get(f"location{field}Address"),
+                )
+                booking[f"location{field}"] = name
+                booking[f"location{field}Name"] = name
+                booking[f"location{field}Address"] = address
     return normalized
 
 

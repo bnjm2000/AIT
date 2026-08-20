@@ -907,7 +907,7 @@ var planEventChooserState = {
   search: '',
   filter: 'ALL',
   page: 1,
-  pageSize: 8,
+  pageSize: 10,
   context: 'plan'
 };
 
@@ -918,6 +918,7 @@ var PLAN_EVENT_CHOOSER_FILTERS = [
   { key: 'PREPARING', label: 'Preparing' },
   { key: 'ONGOING', label: 'Ongoing' },
   { key: 'RETURNING', label: 'Returning' },
+  { key: 'OVERDUE', label: 'Overdue' },
   { key: 'COMPLETED', label: 'Completed' }
 ];
 
@@ -1029,8 +1030,14 @@ function planEventTypeBadgeHtml(event) {
 
 function planEventStateBadgeHtml(event) {
   const state = String(event?.state || 'New');
+  const palette = typeof getEventWorkflowPalette === 'function'
+    ? getEventWorkflowPalette(eventStateDisplayLabel(state))
+    : null;
+  const style = palette
+    ? ` style="background:${escapeHtmlAttr(palette.soft)};color:${escapeHtmlAttr(palette.main)}"`
+    : '';
   return `
-    <span class="plan-badge plan-badge-state-${escapeHtmlAttr(planStateSlug(state))}">
+    <span class="plan-badge plan-badge-state-${escapeHtmlAttr(planStateSlug(state))}"${style}>
       ${escapeHtml(eventStateDisplayLabel(state))}
     </span>
   `;
@@ -1041,7 +1048,8 @@ function planEventChooserFilterKey(event) {
   if (['new', 'added', 'planning'].includes(state)) return 'PLANNING';
   if (['preparing', 'ready'].includes(state)) return 'PREPARING';
   if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
-  if (['returning', 'overdue'].includes(state)) return 'RETURNING';
+  if (state === 'returning') return 'RETURNING';
+  if (state === 'overdue') return 'OVERDUE';
   if (['pending-closure', 'closed', 'completed'].includes(state)) return 'COMPLETED';
   return 'PLANNING';
 }
@@ -1147,6 +1155,12 @@ function planEventChooserSourceEvents() {
   if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
     return workforcePageState.eventOptions || [];
   }
+  if (planEventChooserState.context === 'transport' && typeof workforcePageState !== 'undefined') {
+    return workforcePageState.eventOptions || [];
+  }
+  if (planEventChooserState.context === 'quotation-link' && typeof financeState !== 'undefined') {
+    return financeState.events || [];
+  }
   return planPageState.events || [];
 }
 
@@ -1169,6 +1183,12 @@ function planEventChooserCurrentEventId() {
   if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
     return workforcePageState.eventId;
   }
+  if (planEventChooserState.context === 'transport' && typeof workforcePageState !== 'undefined') {
+    return workforcePageState.eventId;
+  }
+  if (planEventChooserState.context === 'quotation-link' && typeof financeState !== 'undefined') {
+    return financeState.current?.eventId || null;
+  }
   return planEventChooserState.context === 'prepare-new'
     ? prepareNewPageState.eventId
     : planPageState.eventId;
@@ -1186,9 +1206,7 @@ function planEventChooserFilteredEvents() {
       ) &&
       (!search || planEventChooserSearchText(event).includes(search))
     ))
-    .sort(planEventChooserState.context === 'profit-loss'
-      ? planCompareEventsByEventIdDesc
-      : planCompareEventsByStartDate);
+    .sort(planCompareEventsByEventIdDesc);
 }
 
 function ensurePlanEventChooserModal() {
@@ -1338,6 +1356,8 @@ function planOpenEventChooser(context = 'plan') {
       compare: ['Choose Event to Compare', 'Select an event to compare against its quotation'],
       return: ['Choose Event to Return', 'Select an event to receive its returned assets'],
       workforce: ['Choose Event for Manpower', 'Select an event to manage its manpower and transport'],
+      transport: ['Choose Event for Transport', 'Select an event to manage its transport bookings'],
+      'quotation-link': ['Pair Existing Event', 'Select the event to link to this quotation'],
       plan: ['Other Events', 'Select any event to update its plan']
     };
     const [titleText, titleHelp] = headings[context] || headings.plan;
@@ -1395,6 +1415,14 @@ async function planChooseEvent(eventId) {
   }
   if (planEventChooserState.context === 'workforce' && typeof changeWorkforceEvent === 'function') {
     await changeWorkforceEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'transport' && typeof changeTransportEvent === 'function') {
+    await changeTransportEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'quotation-link' && typeof financePairEvent === 'function') {
+    await financePairEvent(eventId);
     return;
   }
   await selectPlanEvent(eventId);
@@ -2807,18 +2835,21 @@ async function loadPlanPage() {
   root.innerHTML = '<div class="loading">Loading planning workspace...</div>';
 
   try {
+    if (!planPageState.eventId && typeof workflowRememberedEventId === 'function') {
+      planPageState.eventId = workflowRememberedEventId();
+    }
     const [eventOptionsLoad, assetsResponse, templatesResponse, containerCache] = await Promise.all([
       startProgressiveEventOptions(planPageState.eventId, loaded => {
-        planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+        planPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
         if (activeModal('planEventChooserModal')) renderPlanEventChooser();
       }),
       apiCall('/api/assets/available'),
       apiCall('/api/planning-templates'),
       refreshContainersCache(true)
     ]);
-    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
     eventOptionsLoad.completion.then(loaded => {
-      planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+      planPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
       if (activeModal('planEventChooserModal')) renderPlanEventChooser();
     }).catch(error => console.warn('Unable to load more event options:', error));
     planPageState.assets = assetsResponse.data || [];
@@ -2848,6 +2879,7 @@ async function selectPlanEvent(eventId, options = {}) {
   const id = Number(eventId);
   if (!id) return;
   planPageState.eventId = id;
+  if (typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
   const root = document.getElementById('plan-page-root');
   if (options.renderLoading !== false && root) {
     root.innerHTML = '<div class="loading">Loading event plan...</div>';

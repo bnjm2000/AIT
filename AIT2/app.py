@@ -4887,9 +4887,9 @@ def _prepare_scan_options(data):
         'source': prepare_source,
         'fromContainer': from_container,
         'quickAddSpecified': explicit_quick_add is not None,
-        # Existing container scans historically became part of the event. An
-        # explicit quickAdd=false from the UI now overrides that legacy default.
-        'addScannedAssetsToEvent': bool(from_container if explicit_quick_add is None else explicit_quick_add),
+        # Container contents only become requirements when Quick Add is
+        # explicitly enabled. Otherwise non-required contents are extras.
+        'addScannedAssetsToEvent': bool(explicit_quick_add) if explicit_quick_add is not None else False,
     }
 
 
@@ -9328,6 +9328,66 @@ def _workforce_assignment_matches_schedule_group(
     )
 
 
+def _merge_undefined_workforce_role(rows, source, event):
+    """Merge duplicate undefined-role rows into one multi-date assignment."""
+    if not isinstance(source, dict) or _workforce_assignment_base_role(source):
+        return source
+    source_id = _workforce_assignment_subject_id(source)
+    source_department = _normalise_department_code(source.get('department'))
+    source_room = str(source.get('subprojectId') or '')
+    source_type = str(source.get('subjectType') or '')
+    target = next((
+        row for row in rows
+        if (
+            isinstance(row, dict)
+            and row is not source
+            and not _workforce_assignment_base_role(row)
+            and _workforce_assignment_subject_id(row) == source_id
+            and _normalise_department_code(row.get('department')) == source_department
+            and str(row.get('subprojectId') or '') == source_room
+            and str(row.get('subjectType') or '') == source_type
+            and str(row.get('providerType') or '') == str(
+                source.get('providerType') or ''
+            )
+        )
+    ), None)
+    if target is None:
+        return source
+
+    target_dates = _workforce_assignment_work_dates(target, event)
+    source_dates = _workforce_assignment_work_dates(source, event)
+    call_times = {
+        **normalize_call_times(target.get('callTimes')),
+        **normalize_call_times(source.get('callTimes')),
+    }
+    date_departments = {
+        **_workforce_schedule_date_values(target, 'dateDepartments'),
+        **_workforce_schedule_date_values(source, 'dateDepartments'),
+    }
+    date_roles = {
+        **_workforce_schedule_date_values(target, 'dateRoles'),
+        **_workforce_schedule_date_values(source, 'dateRoles'),
+    }
+    merged_dates = sorted(set([*target_dates, *source_dates]))
+    if source.get('dailyRate') is not None:
+        target['dailyRate'] = source.get('dailyRate')
+    _set_workforce_assignment_dates(target, merged_dates)
+    target['callTimes'] = {
+        date_value: value for date_value, value in call_times.items()
+        if date_value in merged_dates
+    }
+    target['dateDepartments'] = {
+        date_value: value for date_value, value in date_departments.items()
+        if date_value in merged_dates
+    }
+    target['dateRoles'] = {
+        date_value: value for date_value, value in date_roles.items()
+        if date_value in merged_dates and str(value or '').strip()
+    }
+    rows.remove(source)
+    return target
+
+
 def _set_workforce_assignment_dates(assignment, dates):
     """Set a row's dates and prune every date-keyed field in one place."""
     normalized_dates = sorted(set(dates))
@@ -11196,12 +11256,12 @@ def _event_report_assets(event, manager):
             quantity = max(1, _safe_int(custom.get('quantity'), 1))
             if ref in (getattr(event, 'returned_items', []) or []):
                 row['returned'] += quantity
-                row['assetIds'].append('Custom item (returned)')
+                row['assetIds'].append(custom.get('name') or 'Custom item')
             elif ref in (getattr(event, 'actually_prepared', []) or []):
                 row['prepared'] += quantity
-                row['assetIds'].append('Custom item (prepared)')
+                row['assetIds'].append(custom.get('name') or 'Custom item')
             elif ref in (getattr(event, 'custom_collected', []) or []):
-                row['assetIds'].append('Custom item (collected)')
+                row['assetIds'].append(custom.get('name') or 'Custom item')
         elif bulk:
             asset = manager.inventory.get(bulk['bulkId'])
             item = ' '.join(filter(None, (
@@ -11233,7 +11293,7 @@ def _event_report_assets(event, manager):
         if row['kind'] == 'model':
             source = row['source'] or {}
             for ref in prepared_refs:
-                if ref in used_physical or ref in extra_refs:
+                if ref in used_physical:
                     continue
                 bulk_marker = _parse_bulk_marker(ref)
                 if bulk_marker:
@@ -11251,9 +11311,7 @@ def _event_report_assets(event, manager):
                         getattr(event, 'returned_items', []) or []
                     ) else 'prepared'
                     row[status] += bulk_marker['quantity']
-                    row['assetIds'].append(
-                        f"{bulk_marker['bulkId']} × {bulk_marker['quantity']} ({status})"
-                    )
+                    row['assetIds'].append(f"{bulk_marker['bulkId']} × {bulk_marker['quantity']}")
                     continue
                 asset = manager.inventory.get(ref)
                 if not asset:
@@ -11269,16 +11327,16 @@ def _event_report_assets(event, manager):
                 used_physical.add(ref)
                 status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
                 row[status] += 1
-                row['assetIds'].append(f'{ref} ({status})')
+                row['assetIds'].append(str(ref))
         elif row['kind'] == 'direct':
             ref = row['source']['ref']
             if ref in prepared_refs:
                 used_physical.add(ref)
                 status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
                 row[status] += 1
-                row['assetIds'].append(f'{ref} ({status})')
+                row['assetIds'].append(str(ref))
             else:
-                row['assetIds'].append(f'{ref} (assigned)')
+                row['assetIds'].append(str(ref))
         elif row['kind'] == 'bulk':
             bulk_id = row['source']['bulkId']
             for ref in prepared_refs:
@@ -11287,28 +11345,13 @@ def _event_report_assets(event, manager):
                     continue
                 status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
                 row[status] += marker['quantity']
-                row['assetIds'].append(f"{bulk_id} × {marker['quantity']} ({status})")
-
-    for ref in prepared_refs:
-        if ref in used_physical or _parse_bulk_marker(ref) or _parse_custom_marker(ref):
-            continue
-        asset = manager.inventory.get(ref)
-        if not asset:
-            continue
-        status = 'returned' if ref in (getattr(event, 'returned_items', []) or []) else 'prepared'
-        row = add_row(
-            ('extra', ref),
-            ' '.join(filter(None, (asset.brand, asset.model_number, asset.description))).strip(),
-            asset.department_code, 0, 'extra', {'ref': ref},
-        )
-        row[status] = 1
-        row['assetIds'].append(f'{ref} ({status}; extra)')
+                row['assetIds'].append(f"{bulk_id} × {marker['quantity']}")
 
     result = []
     for row in required_rows.values():
         result.append({
             'item': row['item'],
-            'department': row['department'],
+            'department': _finance_compare_department_name(row['department']),
             'required': row['required'],
             'prepared': row['prepared'],
             'returned': row['returned'],
@@ -11316,8 +11359,9 @@ def _event_report_assets(event, manager):
             'isMisc': row['kind'] == 'custom',
         })
     return sorted(result, key=lambda row: (
-        bool(row.get('isMisc')), str(row['item']).casefold(),
-        str(row['department']).casefold()
+        str(row['department']).casefold(),
+        str(row['item']).casefold(),
+        bool(row.get('isMisc')),
     ))
 
 
@@ -11382,6 +11426,20 @@ def _event_report_workforce(report_data):
 
 
 def _event_report_transport(report_data):
+    def location_parts(booking, side):
+        prefix = 'locationFrom' if side == 'from' else 'locationTo'
+        name = str(booking.get(f'{prefix}Name') or '').strip()
+        address = str(booking.get(f'{prefix}Address') or '').strip()
+        legacy = str(booking.get(prefix) or '').strip()
+        if not name and legacy:
+            matched = re.match(r'^(.*?)\s*\(([^()]*)\)\s*$', legacy)
+            if matched:
+                name = matched.group(1).strip()
+                address = address or matched.group(2).strip()
+            else:
+                name = legacy
+        return name or '-', address
+
     rows = []
     for booking in report_data.get('transportBookings', []):
         outbound = ' '.join(filter(None, (
@@ -11392,11 +11450,14 @@ def _event_report_transport(report_data):
                 str(booking.get('returnDate') or ''), str(booking.get('returnTime') or ''),
             ))) or 'Time not set'
             outbound = f'{outbound}; return {returning}'
+        from_name, from_address = location_parts(booking, 'from')
+        to_name, to_address = location_parts(booking, 'to')
         rows.append({
             'time': outbound,
-            'route': ' to '.join(filter(None, (
-                str(booking.get('locationFrom') or ''), str(booking.get('locationTo') or ''),
-            ))) or '-',
+            'fromName': from_name,
+            'fromAddress': from_address,
+            'toName': to_name,
+            'toAddress': to_address,
             'company': str(booking.get('company') or '-'),
             'vehicle': ' · '.join(filter(None, (
                 str(booking.get('vehicleType') or ''), str(booking.get('vehicleNumber') or ''),
@@ -12377,9 +12438,11 @@ def create_workforce_staff_assignment(event_id):
             } if call_time else {},
             'createdAt': now_iso(),
         }
-        workforce.setdefault('assignments', {}).setdefault(
+        assignment_rows = workforce.setdefault('assignments', {}).setdefault(
             str(event_id), []
-        ).append(assignment)
+        )
+        assignment_rows.append(assignment)
+        _merge_undefined_workforce_role(assignment_rows, assignment, event)
     display_name = _user_display_name(username) or username
     log_action(
         f"Assigned full-time staff {display_name} to event {event_id}"
@@ -12539,9 +12602,13 @@ def create_workforce_assignment(event_id):
                 'callTimes': {},
                 'createdAt': now_iso(),
             }
-            workforce.setdefault('assignments', {}).setdefault(
-                str(event_id), []
-            ).append(assignment)
+            assignment_rows = workforce.setdefault(
+                'assignments', {}
+            ).setdefault(str(event_id), [])
+            assignment_rows.append(assignment)
+            _merge_undefined_workforce_role(
+                assignment_rows, assignment, event
+            )
             subject_name = freelancer.get('name')
             log_message = (
                 f"Assigned worker {subject_name} to event {event_id}"
@@ -12681,6 +12748,9 @@ def update_workforce_assignment(event_id, assignment_id):
                 ),
                 'updatedAt': now_iso(),
             })
+        _merge_undefined_workforce_role(
+            event_assignments(workforce, event_id), assignment, event
+        )
     log_action(
         f"Updated workforce assignment for event {event_id}"
         f"{f' in {subproject_name}' if subproject_name else ''}"
@@ -13041,6 +13111,14 @@ def _transport_payload(raw):
     trip_type = str(payload.get('tripType') or 'depart').strip().lower()
     if trip_type not in {'depart', 'return'}:
         trip_type = 'depart'
+    from_name, from_address = _transport_location_parts(
+        payload.get('locationFromName') or payload.get('locationFrom'),
+        payload.get('locationFromAddress'),
+    )
+    to_name, to_address = _transport_location_parts(
+        payload.get('locationToName') or payload.get('locationTo'),
+        payload.get('locationToAddress'),
+    )
     return {
         'subprojectId': str(payload.get('subprojectId') or '').strip(),
         'vendorId': str(payload.get('vendorId') or '').strip(),
@@ -13049,8 +13127,12 @@ def _transport_payload(raw):
         'tripType': trip_type,
         'driver': str(payload.get('driver') or '').strip(),
         'driverContact': normalize_phone(payload.get('driverContact')),
-        'locationFrom': str(payload.get('locationFrom') or '').strip(),
-        'locationTo': str(payload.get('locationTo') or '').strip(),
+        'locationFrom': from_name,
+        'locationFromName': from_name,
+        'locationFromAddress': from_address,
+        'locationTo': to_name,
+        'locationToName': to_name,
+        'locationToAddress': to_address,
         'twoWay': bool(payload.get('twoWay')),
         'departDate': str(payload.get('departDate') or '').strip(),
         'departTime': str(payload.get('departTime') or '').strip(),
@@ -13853,10 +13935,10 @@ def create_transport_booking(event_id):
                 return jsonify({'error': 'Choose a saved transport profile'}), 404
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
-                workforce, booking_data['locationFrom']
+                workforce, booking_data['locationFromName'], booking_data['locationFromAddress']
             )
             _remember_transport_location(
-                workforce, booking_data['locationTo']
+                workforce, booking_data['locationToName'], booking_data['locationToAddress']
             )
         trip_driver = booking_data['driver']
         if 'sourceType' not in payload and not trip_driver:
@@ -13992,10 +14074,10 @@ def update_transport_booking(event_id, booking_id):
                 return jsonify({'error': 'Choose a saved transport profile'}), 404
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
-                workforce, booking_data['locationFrom']
+                workforce, booking_data['locationFromName'], booking_data['locationFromAddress']
             )
             _remember_transport_location(
-                workforce, booking_data['locationTo']
+                workforce, booking_data['locationToName'], booking_data['locationToAddress']
             )
         if (
             booking_data['status'] == 'Paid'
@@ -25602,11 +25684,13 @@ def get_assets():
                 'bulkFaultQuantity': bulk_fault_counts['total'] if is_bulk else 0,
                 'degradedReasons': _asset_degraded_reasons(asset),
                 'bulkDegradedReasons': _bulk_degraded_reasons(asset) if is_bulk else [],
+                # Notes are needed by the inventory editor even in progressive
+                # summary mode; omitting them made a saved note appear to vanish.
+                'notes': getattr(asset, 'notes', ''),
             }
             if not summary_view:
                 asset_payload.update({
                     'changeHistory': getattr(asset, 'change_history', []),
-                    'notes': getattr(asset, 'notes', ''),
                     'maintenanceLogs': [
                         maintenance_log_to_display_string(log, include_changes=False)
                         for log in maintenance_records
@@ -34436,12 +34520,25 @@ def _costing_vendor_discrepancies(costing):
         if not name or name.casefold() == 'self':
             continue
         key = _costing_vendor_key(name, line.get('vendorType'), line.get('vendorId'))
-        aggregate[key] = round(
-            aggregate.get(key, 0) + _safe_float(line.get('costTotal'), 0), 2
+        bucket = aggregate.setdefault(key, {
+            'amount': 0.0,
+            'vendorName': name,
+            'vendorType': line.get('vendorType') or 'vendor',
+            'vendorId': line.get('vendorId') or '',
+        })
+        bucket['amount'] = round(
+            bucket['amount'] + _safe_float(line.get('costTotal'), 0), 2
         )
     warnings = []
-    for key, expected in aggregate.items():
-        snapshot = (costing.get('vendorSnapshots') or {}).get(key) or {}
+    for key, bucket in aggregate.items():
+        expected = bucket['amount']
+        # Older sheets can have snapshots keyed before a vendor was matched or
+        # renamed. Fall back to the live line identity instead of reporting a
+        # real directory vendor as missing.
+        snapshot = {
+            **bucket,
+            **((costing.get('vendorSnapshots') or {}).get(key) or {}),
+        }
         kind, profile = _costing_find_vendor(
             workforce,
             snapshot.get('vendorName'),
@@ -35894,28 +35991,13 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
         )
         if not key or not payload:
             continue
-        previous_key = _finance_price_book_line_key(previous_line)
-        if previous_key and previous_key.casefold() != key.casefold():
-            previous_payload = _finance_price_book_payload(
-                previous_line,
-                owner,
-                document.get('updatedAt'),
-            ) or {
-                'description': str(previous_line.get('description') or '').strip(),
-                'department': previous_line.get('department') or 'Unknown Department',
-                'departmentCode': previous_line.get('departmentCode') or '',
-                'brand': str(previous_line.get('brand') or '').strip()[:240],
-                'model': str(previous_line.get('model') or '').strip()[:240],
-                'owner': owner,
-                'updatedAt': document.get('updatedAt'),
-            }
-            price_book[f"{owner}::{previous_key}"] = {
-                **previous_payload,
-                'deleted': True,
-            }
-        price_book[f"{owner}::{key}"] = payload
+        # Quotation editing may seed a new remembered item, but it must never
+        # overwrite an established rate. Explicit changes belong to Rate Card.
+        price_book.setdefault(f"{owner}::{key}", payload)
         for asset_id in line.get('sourceAssetIds') or []:
-            price_book[f"{owner}::asset:{str(asset_id).lower()}"] = payload
+            price_book.setdefault(
+                f"{owner}::asset:{str(asset_id).lower()}", payload
+            )
 
 
 def _finance_price_book_key_is_visible(key):
@@ -35971,6 +36053,43 @@ def _finance_rate_card_rows(finance_data):
         for row in inventory_rows.values()
     }
 
+    for canonical in inventory_rows.values():
+        identity = canonical['catalogKey'].lower()
+        rows[identity] = {
+            'id': identity,
+            **canonical,
+            'unitPrice': 0,
+            'uom': 'units',
+            'isCustom': False,
+            'isContainer': False,
+        }
+
+    for container in getattr(data_manager, 'containers', {}).values():
+        container_id = str(
+            getattr(container, 'container_id', '') or ''
+        ).strip()
+        if not container_id:
+            continue
+        catalog_key = f'container:{container_id}'
+        identity = catalog_key.lower()
+        rows[identity] = {
+            'id': identity,
+            'catalogKey': catalog_key,
+            'sourceAssetIds': [],
+            'brand': '',
+            'model': '',
+            'description': f'Container {container_id}',
+            'department': 'Container',
+            'departmentCode': 'CONTAINER',
+            'unitPrice': 0,
+            'uom': 'units',
+            'isCustom': False,
+            'isContainer': True,
+            'containerId': container_id,
+            'containerSerial': _container_serial_number(container),
+            'searchTags': [],
+        }
+
     def resolve_inventory(line, catalog_key):
         canonical = inventory_rows.get(str(catalog_key or '').lower())
         if not canonical:
@@ -36012,6 +36131,10 @@ def _finance_rate_card_rows(finance_data):
             'unitPrice': line.get('unitPrice') or 0,
             'uom': line.get('uom') or 'units',
             'isCustom': bool(line.get('isCustom') or not catalog_key),
+            'isContainer': bool(
+                line.get('isContainer')
+                or str(catalog_key).lower().startswith('container:')
+            ),
             'searchTags': line.get('searchTags') or [],
         }
 
@@ -36036,13 +36159,17 @@ def _finance_rate_card_rows(finance_data):
             'brand': payload.get('brand') or '',
             'model': payload.get('model') or '',
         })
-        catalog_key, _ = resolve_inventory(tombstone_line, catalog_key)
+        catalog_key, canonical = resolve_inventory(tombstone_line, catalog_key)
         identity = catalog_key.lower() or (
             f"custom:{str(payload.get('department') or 'Unknown Department').strip().lower()}::"
             f"{str(payload.get('description') or base_key.removeprefix('custom:')).strip().lower()}"
         )
         if payload.get('deleted'):
-            rows.pop(identity, None)
+            if canonical or identity in rows and rows[identity].get('isContainer'):
+                rows[identity]['unitPrice'] = 0
+                rows[identity]['uom'] = 'units'
+            else:
+                rows.pop(identity, None)
             continue
         add_row({
             'catalogKey': catalog_key,
@@ -36223,6 +36350,7 @@ def _normalise_profit_loss_expense(value, event_id):
         'notes': str(value.get('notes') or '').strip()[:1000],
         'attachment': attachment,
         'extraction': value.get('extraction') if isinstance(value.get('extraction'), dict) else {},
+        'needsReview': bool(value.get('needsReview')),
         'createdAt': str(value.get('createdAt') or now_iso()),
         'createdBy': str(value.get('createdBy') or _finance_current_username()).strip(),
         'updatedAt': str(value.get('updatedAt') or now_iso()),
@@ -36739,7 +36867,28 @@ def _finance_profit_loss_payload(event, finance_data):
         )
         if _finance_profit_loss_can_use_quotation(row)
     ]
-    quotation = quotations[0] if quotations else None
+    accepted_quotations = [
+        row for row in quotations
+        if str(row.get('status') or '').strip().lower() == 'accepted'
+        or bool(str(row.get('acceptedAt') or '').strip())
+    ]
+    accepted_quotations.sort(
+        key=lambda row: (
+            str(row.get('acceptedAt') or ''),
+            str(row.get('updatedAt') or ''),
+            _safe_int(row.get('revision'), 0),
+            str(row.get('number') or ''),
+        ),
+        reverse=True,
+    )
+    # Once an event has an accepted quotation, its budgets and revenue must
+    # never drift to a newer draft. Legacy linked events without an acceptance
+    # timestamp retain their existing fallback until a quotation is accepted.
+    quotation = (
+        accepted_quotations[0]
+        if accepted_quotations
+        else (quotations[0] if quotations else None)
+    )
     manual_revenue = _finance_profit_loss_manual_revenue(finance_data, event_id)
     revenue = round(
         _safe_float(
@@ -40323,7 +40472,7 @@ def finance_rate_card():
                         ' '.join(normalize_asset_tags(row.get('searchTags') or [])),
                     )).casefold()
                 ]
-            return jsonify({'success': True, 'data': rows[:500]})
+            return jsonify({'success': True, 'data': rows})
 
         payload = request.get_json(silent=True) or {}
         description = str(payload.get('description') or '').strip()[:1000]
@@ -40729,8 +40878,9 @@ def finance_profit_loss_add_expense(event_id):
         ),
         'attachment': attachment,
         'extraction': extraction,
+        'needsReview': bool(attachment),
     }, event_id)
-    if expense['amount'] <= 0:
+    if expense['amount'] <= 0 and not attachment:
         if attachment:
             delete_upload(_workforce_folder(), attachment)
         return jsonify({'error': 'Expense amount is required'}), 400
@@ -40791,6 +40941,8 @@ def finance_profit_loss_update_expense(event_id, expense_id):
             return jsonify({'success': True, 'data': payload})
 
         incoming = request.get_json(silent=True) or {}
+        if 'needsReview' not in incoming:
+            incoming['needsReview'] = False
         updated = _normalise_profit_loss_expense({
             **existing,
             **incoming,

@@ -289,18 +289,23 @@ function wfScheduleStaffCard(row, date) {
   const role = wfScheduleRole(row, date);
   const dateConflicts = (row.dateConflicts || []).filter(conflict => String(conflict.date || '') === String(date));
   const conflictTitle = wfConflictTooltipText(dateConflicts);
+  const roomName = wfSubprojectName(row);
+  const roomLabel = roomName.trim().split(/\s+/)[0] || 'Room';
   return `<article class="wf-schedule-person ${dateConflicts.length ? 'has-conflict' : ''}" style="${wfDepartmentStyle(departmentCode)}"
     role="button" tabindex="0" title="Open event assignment"
     onclick="if(!event.target.closest('input,button,label'))openWorkforceScheduledAssignment('${wfAttr(row.id)}')"
     onkeydown="if((event.key==='Enter'||event.key===' ')&&!event.target.closest('input,button')){event.preventDefault();openWorkforceScheduledAssignment('${wfAttr(row.id)}')}">
     <div class="wf-schedule-person-main">
-      <span class="wf-avatar ${subject.type}">${wfEscape(wfInitials(subject.name))}</span>
       <div><strong>${wfEscape(subject.name)}${dateConflicts.length ? `<span class="wf-schedule-conflict wf-instant-tooltip" data-wf-tooltip="${wfAttr(conflictTitle)}" role="img" aria-label="${wfAttr(`Schedule conflict. ${conflictTitle}`)}">!</span>` : ''}</strong>
         <button type="button" class="wf-schedule-role" title="Change role for ${wfAttr(wfScheduleDateLabel(date))}"
           onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','role')">${wfEscape(role)}</button>
         ${wfScheduleRate(row) ? `<small class="wf-schedule-rate">${wfEscape(wfScheduleRate(row))}</small>` : ''}</div>
-      <button type="button" class="wf-schedule-dept wf-schedule-dept-edit" title="Change department for ${wfAttr(wfScheduleDateLabel(date))}"
-        onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','department')">${wfEscape(department.code)}</button>
+      <span class="wf-schedule-assignment-tags">
+        ${roomName ? `<button type="button" class="wf-schedule-room" style="${wfRoomChipStyle(row)}" title="${wfAttr(roomName)} — change assigned room"
+          onclick="event.stopPropagation();openWorkforceScheduledAssignment('${wfAttr(row.id)}')">${wfEscape(roomLabel)}</button>` : ''}
+        <button type="button" class="wf-schedule-dept wf-schedule-dept-edit" title="Change department for ${wfAttr(wfScheduleDateLabel(date))}"
+          onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','department')">${wfEscape(department.code)}</button>
+      </span>
     </div>
     <div class="wf-schedule-person-meta">
       <label title="Set call time for this assignment on ${wfAttr(wfScheduleDateLabel(date))}">
@@ -831,11 +836,11 @@ function ensureFullTimeStaffModal() {
   document.body.insertAdjacentHTML('beforeend', wfModal('wfFullTimeStaffModal', 'Add Full-time Staff', `<form id="wfFullTimeStaffForm">
     <div class="wf-modal-body"><div class="wf-form-grid">
       <label class="wf-field full"><span>App user *</span><select id="wfFullTimeStaffUser" required></select></label>
-      <label class="wf-field wf-room-field full"><span>Room / Sub-project *</span><select id="wfFullTimeStaffRoom"></select></label>
       <label class="wf-field"><span>Department *</span><select id="wfFullTimeStaffDepartment" required></select></label>
+      <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfFullTimeStaffRoom"></select></label>
       <label class="wf-field"><span>Role / Position</span><input id="wfFullTimeStaffRole" maxlength="100"></label>
-      <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfFullTimeStaffDates"></div></div>
       <label class="wf-field"><span>Daily rate ($)</span><input id="wfFullTimeStaffRate" type="number" min="0" step=".01"></label>
+      <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfFullTimeStaffDates"></div></div>
       <label class="wf-field"><span>Initial call time</span><input id="wfFullTimeStaffCallTime" type="time"></label>
     </div><p class="wf-help">Full-time staff can submit claims. Invoice uploads start with zero slots; an admin can add one when needed.</p>
     <div class="wf-error" id="wfFullTimeStaffError"></div></div>
@@ -859,13 +864,15 @@ function ensureWorkforceDayStaffModal() {
   ));
 }
 
-function openWorkforceDayStaffPicker(date) {
+function openWorkforceDayStaffPicker(date = '', department = '') {
   ensureWorkforceDayStaffModal();
   const modal = document.getElementById('wfScheduleDayStaffModal');
   modal.dataset.date = date;
+  modal.dataset.department = department;
   document.getElementById('wfScheduleDayStaffSearch').value = '';
-  document.getElementById('wfScheduleDayStaffDate').textContent =
-    `The new assignment will start with ${wfScheduleDateLabel(date, { weekday: true })} selected.`;
+  document.getElementById('wfScheduleDayStaffDate').textContent = date
+    ? `The new assignment will start with ${wfScheduleDateLabel(date, { weekday: true })} selected.`
+    : `The new assignment will start in ${department || 'the selected department'}.`;
   renderWorkforceDayStaffPicker('');
   openWorkforceModal('wfScheduleDayStaffModal');
 }
@@ -892,12 +899,14 @@ function renderWorkforceDayStaffPicker(search = '') {
 }
 
 function chooseWorkforceDayStaff(type, id) {
-  const date = document.getElementById('wfScheduleDayStaffModal')?.dataset.date || '';
+  const modal = document.getElementById('wfScheduleDayStaffModal');
+  const date = modal?.dataset.date || '';
+  const department = modal?.dataset.department || '';
   workforcePageState.assignmentPrefillDates = date ? [date] : [];
   closeWorkforceModal('wfScheduleDayStaffModal');
-  if (type === 'app-user') openFullTimeStaffAssignment('', id);
-  else if (type === 'vendor') openVendorAssignment(id);
-  else openFreelancerAssignment(id);
+  if (type === 'app-user') openFullTimeStaffAssignment('', id, department);
+  else if (type === 'vendor') openVendorAssignment(id, department);
+  else openFreelancerAssignment(id, department);
 }
 
 function openFullTimeStaffAssignment(assignmentId = '', username = '', department = '') {

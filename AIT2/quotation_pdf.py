@@ -518,10 +518,10 @@ def _schedule_recurring_batch_summary(batch, all_rows):
         if (date_value, _time_value) in details['expected']
     )
     if missing_dates:
-        summary += '; except ' + ', '.join(
-            f"{value.day} {value.strftime('%B %Y')}"
+        summary += '; except ' + _schedule_date_summary([
+            {'date': value.isoformat(), 'time': ''}
             for value in missing_dates
-        )
+        ])
     return summary, required
 
 
@@ -1281,9 +1281,9 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph('DESCRIPTION', table_header_label),
                 _paragraph(multiplier_column_label, table_header_right),
                 _paragraph('QTY', table_header_right),
-                _paragraph('UNIT PRICE', table_header_right),
-                _paragraph('DISC %', table_header_right),
-                _paragraph('TOTAL', table_header_right),
+                _paragraph('UNIT PRICE' if show_unit_prices else '', table_header_right),
+                _paragraph('DISC %' if show_unit_prices else '', table_header_right),
+                _paragraph('TOTAL' if show_unit_prices else '', table_header_right),
             ],
         ])
         column_header_row = department_header_row + 1

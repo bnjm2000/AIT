@@ -187,14 +187,14 @@ function prepareNewToggleActionMenu(event, encodedKey) {
   menu?.classList.toggle('open');
 }
 
-async function prepareNewPromptQuantity({ title, message, confirmText, max = 0 }) {
+async function prepareNewPromptQuantity({ title, message, confirmText, max = 0, defaultValue = 1, inputLabel = 'Quantity' }) {
   const value = await showAppPrompt({
     title,
     message,
     inputType: 'number',
-    inputLabel: 'Quantity',
+    inputLabel,
     placeholder: max > 0 ? `Max ${max}` : 'Quantity',
-    defaultValue: '1',
+    defaultValue: String(defaultValue),
     confirmText,
     cancelText: 'Cancel',
     required: true
@@ -225,7 +225,6 @@ async function prepareNewChangeModelQuantity(group, action, quantity, options = 
     });
     showNotification('success', response.message || 'Prepared quantity updated');
     schedulePrepareUiSync(eventId);
-    await refreshPrepareNewSelectedEvent({ preserve: true });
   } catch (error) {
     showNotification('error', error.message || 'Failed to update prepared quantity');
   }
@@ -389,7 +388,7 @@ function prepareNewModelSection(group) {
           <span>${escapeHtml(group.description || '')}</span>
         </span>
         <span class="prepare-new-model-count"><strong>${required}</strong>Required</span>
-        <span class="prepare-new-model-count"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
+        <span class="prepare-new-model-count ${preparedQuantity < required ? 'is-underprepared' : ''}"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
         <span class="prepare-new-model-actions">${primaryAction}${menu}</span>
       </summary>
       ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
@@ -467,7 +466,7 @@ function renderPrepareNewDirectRequirements(rows) {
             <span>${escapeHtml(row.detail || '')}</span>
           </span>
           <span class="prepare-new-model-count"><strong>${Number(row.required || 0)}</strong>Required</span>
-          <span class="prepare-new-model-count"><strong>${Number(row.packed || 0)}</strong>Prepared</span>
+          <span class="prepare-new-model-count ${Number(row.packed || 0) < Number(row.required || 0) ? 'is-underprepared' : ''}"><strong>${Number(row.packed || 0)}</strong>Prepared</span>
           ${prepareNewStatusBadge(complete ? 'complete' : 'pending', complete ? 'Complete' : 'Prepare')}
         </summary>
         <div class="prepare-new-model-assets">
@@ -1056,16 +1055,19 @@ async function loadPrepareNewPage() {
   prepareNewPageState.loading = true;
   root.innerHTML = '<div class="loading">Loading preparation workspace...</div>';
   try {
+    if (!prepareNewPageState.eventId && typeof workflowRememberedEventId === 'function') {
+      prepareNewPageState.eventId = workflowRememberedEventId();
+    }
     const eventOptionsLoad = await startProgressiveEventOptions(
       prepareNewPageState.eventId,
       loaded => {
-        prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+        prepareNewPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
         if (activeModal('planEventChooserModal')) renderPlanEventChooser();
       }
     );
-    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
     eventOptionsLoad.completion.then(loaded => {
-      prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+      prepareNewPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
       if (activeModal('planEventChooserModal')) renderPlanEventChooser();
     }).catch(error => console.warn('Unable to load more event options:', error));
     const selected = prepareNewPageState.events.find(event =>
@@ -1091,6 +1093,7 @@ async function selectPrepareNewEvent(eventId, options = {}) {
   const id = Number(eventId);
   if (!id) return;
   prepareNewPageState.eventId = id;
+  if (typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
   prepareNewPageState.expandedDepartments.clear();
   prepareNewPageState.expandedModels.clear();
   const root = document.getElementById('prepare-new-page-root');
@@ -1180,7 +1183,6 @@ async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
     showNotification('success', `${preparedAssetId} marked found and assigned`);
     updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
     schedulePrepareUiSync(eventId);
-    await refreshPrepareNewSelectedEvent({ preserve: true });
   } catch (error) {
     showNotification('error', `Failed to prepare missing asset: ${error.message}`);
     updateAllButtonsForAsset(assetId, false);
@@ -1193,14 +1195,12 @@ async function prepareNewAssignAsset(eventId, encodedAssetId) {
   await assignSpecificAsset(eventId, planDecode(encodedAssetId), '', '', {
     subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
   });
-  await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewPrepareAsset(eventId, encodedAssetId) {
   await prepareSpecificAsset(eventId, planDecode(encodedAssetId), {
     subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
   });
-  await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '') {
@@ -1211,7 +1211,6 @@ async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey
   });
   if (!changed) return;
   if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
-  await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey = '') {
@@ -1233,7 +1232,6 @@ async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey 
   // to Available, proving that it is no longer assigned or prepared.
   if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
   if (department) prepareNewPageState.expandedDepartments.add(department);
-  await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewCollectCustom(eventId, encodedAssetId) {
@@ -1257,7 +1255,7 @@ async function prepareNewCollectCustomMany(eventId, encodedAssetIds) {
     showNotification('error', `Failed to collect item: ${error.message}`);
     return;
   }
-  await refreshPrepareNewSelectedEvent({ preserve: true });
+  schedulePrepareUiSync(eventId);
 }
 
 async function prepareNewUncollectCustom(eventId, encodedAssetId) {
@@ -1281,7 +1279,7 @@ async function prepareNewUncollectCustomMany(eventId, encodedAssetIds) {
     showNotification('error', `Failed to uncollect item: ${error.message}`);
     return;
   }
-  await refreshPrepareNewSelectedEvent({ preserve: true });
+  schedulePrepareUiSync(eventId);
 }
 
 function prepareNewSetCustomType(type) {

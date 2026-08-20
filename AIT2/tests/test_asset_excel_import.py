@@ -126,6 +126,7 @@ class AssetTemplateImportTests(unittest.TestCase):
                 self.assertEqual(imported['serials'], ['NEW-1'])
                 self.assertEqual(imported['assetIdsPreview'], ['MIC#01'])
                 self.assertEqual(imported['differentDescriptions'], ['Black microphone'])
+                self.assertEqual(imported['notes'], 'Spare mic')
 
     def test_serials_accept_commas_and_excel_numbers_do_not_gain_decimal_suffix(self):
         csv_response = self.client.post(
@@ -171,7 +172,7 @@ class AssetTemplateImportTests(unittest.TestCase):
             '/api/assets/import-preview',
             data={'file': (io.BytesIO(self.csv_bytes([[
                 'New', 'Warning Model', '', '', 'AX', 3, 'No',
-                'ONLY-ONE', '', '2099-12-31', '', '', 'Store', 'WARN',
+                'ONLY-ONE', '', '2099-12-31', 'Imported note', '', 'Store', 'WARN',
             ]])), 'assets.csv')},
             content_type='multipart/form-data',
         )
@@ -191,6 +192,10 @@ class AssetTemplateImportTests(unittest.TestCase):
         self.assertEqual(self.data_manager.inventory['WARN#01'].serial_number, 'ONLY-ONE')
         self.assertEqual(self.data_manager.inventory['WARN#02'].serial_number, '')
         self.assertEqual(self.data_manager.inventory['WARN#03'].date_of_purchase, '2099-12-31')
+        self.assertTrue(all(
+            self.data_manager.inventory[f'WARN#0{index}'].notes == 'Imported note'
+            for index in (1, 2, 3)
+        ))
 
     def test_duplicate_serial_is_shown_as_import_warning_and_can_be_confirmed(self):
         plan_response = self.client.post('/api/assets/import-plan', json={'rows': [{

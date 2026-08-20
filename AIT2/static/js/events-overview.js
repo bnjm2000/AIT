@@ -1270,6 +1270,13 @@ function applyPrepareCanonicalProgress(event) {
 function schedulePrepareUiSync(eventId, delay = 600) {
   clearTimeout(__prepareUiSyncTimer);
   __prepareUiSyncTimer = setTimeout(async () => {
+    if (
+      document.getElementById('prepare-new-section')?.classList.contains('active') &&
+      document.querySelector('.prepare-new-action-menu.open')
+    ) {
+      schedulePrepareUiSync(eventId, 800);
+      return;
+    }
     try {
       const response = await apiCall(`/api/events/${eventId}`);
       applyPrepareCanonicalProgress(response.data || {});
@@ -1355,7 +1362,7 @@ function eventContainerBulkQuantity(event, bulkId, subprojectId = '', returned =
   }, 0);
 }
 
-async function processUniversalContainer(eventId, containerId) {
+async function processUniversalContainer(eventId, containerId, scannedValue = '') {
   const feedbackDiv = document.getElementById('universal-asset-feedback');
   const input = document.getElementById('universalAssetInput');
   const quickAddEnabled = getPrepareQuickAddEnabled();
@@ -1505,10 +1512,11 @@ async function processUniversalContainer(eventId, containerId) {
     }
   } finally {
     window.__processingContainerBatch = false;
-    if (input) { input.value = ''; input.focus(); }
+    clearWorkflowScanInput(input, scannedValue || containerId);
   }
 
   const failed = results.failedQuantity;
+  playWorkflowTone(failed ? 'error' : 'success');
   const listToHtml = (title, items) => items && items.length ? `
     <section class="prepare-new-container-list">
       <h5>${escapeHtml(title)}</h5>

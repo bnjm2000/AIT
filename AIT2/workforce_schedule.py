@@ -54,6 +54,14 @@ def _short_date_label(value, include_weekday=True):
     return f"{label} ({parsed.strftime('%a')})" if include_weekday else label
 
 
+def _iso_weekday_label(value):
+    """Use the shared operations-report date format."""
+    parsed = _date(value)
+    if not parsed:
+        return str(value or "-")
+    return f"{parsed.strftime('%Y-%m-%d')} ({parsed.strftime('%a').upper()})"
+
+
 def _event_dates(event):
     start = _date(event.get("startDateValue"))
     end = _date(event.get("endDateValue"))
@@ -845,9 +853,10 @@ def build_worker_period_schedule_pdf(
         headers.append("Rate")
     table_rows = [[_paragraph(text, header) for text in headers]]
     for row in rows:
-        event_label = f"{row.get('eventId') or '-'} - {row.get('eventName') or 'Event'}"
+        event_label = f"#{row.get('eventId') or '-'} - {row.get('eventName') or 'Event'}"
+        location_label = str(row.get("location") or "Not set")
         if row.get("room"):
-            event_label += f" ({row['room']})"
+            location_label += f" ({row['room']})"
         role_cell = _paragraph(row.get("role") or "Role not set", cell)
         if row.get("vendorName"):
             booking_label = " - ".join(filter(None, [
@@ -859,9 +868,9 @@ def build_worker_period_schedule_pdf(
                 _paragraph(booking_label, booking_detail),
             ]
         values = [
-            _paragraph(_short_date_label(row.get("date")), cell),
+            _paragraph(_iso_weekday_label(row.get("date")), cell),
             _paragraph(event_label, bold),
-            _paragraph(row.get("location") or "Not set", cell),
+            _paragraph(location_label, cell),
             _paragraph(row.get("department") or "Unassigned", cell),
             role_cell,
             _paragraph(row.get("callTime") or "Not set", center),
@@ -893,6 +902,8 @@ def build_worker_period_schedule_pdf(
         if isinstance(row, dict)
     }
     for row_index, row in enumerate(rows, start=1):
+        if row_index > 1 and str(row.get("date") or "") != str(rows[row_index - 2].get("date") or ""):
+            commands.append(("LINEABOVE", (0, row_index), (-1, row_index), 1.4, ink))
         department = departments.get(str(row.get("departmentCode") or "").strip().upper()) or {}
         if not department:
             continue

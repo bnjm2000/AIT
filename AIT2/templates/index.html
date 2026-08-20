@@ -681,67 +681,25 @@
         z-index: 10 !important;
       }
 
-      /* Event Status Colors */
-      .calendar-event.state-pending {
-        background: #ffc107;
-        color: #000;
-      }
-
-      .calendar-event.state-active {
-        background: #28a745;
-        color: white;
-      }
-
-      .calendar-event.state-closed {
-        background: #6c757d;
-        color: white;
-      }
-
-      .calendar-event.state-pending-closure {
-        background: #7c3aed;
-        color: white;
-      }
-
-      .calendar-event.state-overdue {
-        background: #dc3545;
-        color: white;
-      }
-
-      .calendar-event.state-returned {
-        background: #17a2b8;
-        color: white;
-      }
-
-      /* Dry Hire variants */
-      .calendar-event.dry-hire.state-pending {
-        background: #e0a800;
-        color: #000;
-      }
-
-      .calendar-event.dry-hire.state-active {
-        background: #20a83a;
-        color: white;
-      }
-
-      .calendar-event.dry-hire.state-closed {
-        background: #5a6268;
-        color: white;
-      }
-
-      .calendar-event.dry-hire.state-pending-closure {
-        background: #6d28d9;
-        color: white;
-      }
-
-      .calendar-event.dry-hire.state-overdue {
-        background: #c82333;
-        color: white;
-      }
-
-      .calendar-event.dry-hire.state-returned {
-        background: #138496;
-        color: white;
-      }
+      /* Match the All Events card palette exactly. Event type is represented by
+         the inset marker so Dry Hire never changes the workflow-state colour. */
+      .calendar-event { background: #64748b; box-shadow: inset 3px 0 #5535b8; }
+      .calendar-event.dry-hire { box-shadow: inset 3px 0 #e65f00; }
+      .calendar-event.state-new,
+      .calendar-event.state-added { background: #ec407a; }
+      .calendar-event.state-planning,
+      .calendar-event.state-pending { background: #6d28d9; }
+      .calendar-event.state-preparing { background: #0877e8; }
+      .calendar-event.state-ready,
+      .calendar-event.state-active { background: #16a34a; }
+      .calendar-event.state-ongoing,
+      .calendar-event.state-last-day,
+      .calendar-event.state-returned { background: #0b97a4; }
+      .calendar-event.state-returning { background: #f97316; }
+      .calendar-event.state-pending-closure { background: #334155; }
+      .calendar-event.state-overdue { background: #ef3340; }
+      .calendar-event.state-closed,
+      .calendar-event.state-completed { background: #64748b; }
 
       .calendar-event {
         transition: filter 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
@@ -6125,13 +6083,13 @@
       }
 
       .plan-badge-type-event {
-        background: #e9f7ef;
-        color: #16794a;
+        background: #f0edff;
+        color: #5535b8;
       }
 
       .plan-badge-type-dry-hire {
-        background: #e8f4fd;
-        color: #1769aa;
+        background: #fff1e6;
+        color: #e65f00;
       }
 
       .plan-badge-state-new,
@@ -6166,13 +6124,13 @@
       }
 
       .plan-badge-state-returning {
-        background: #d9f3e0;
-        color: #007c15;
+        background: #fff5ea;
+        color: #f97316;
       }
 
       .plan-badge-state-overdue {
-        background: #f8abb2;
-        color: #000;
+        background: #fff0f1;
+        color: #ef3340;
       }
 
       .plan-badge-state-pending-closure {
@@ -7211,6 +7169,11 @@
         color: #b54708;
       }
 
+      .plan-event-chooser-filter-overdue .plan-event-chooser-count {
+        background: #fff0f1;
+        color: #ef3340;
+      }
+
       .plan-event-chooser-filter-completed .plan-event-chooser-count {
         background: #e2e3e5;
         color: #383d41;
@@ -8219,6 +8182,11 @@
         font-size: 12px;
       }
 
+      .prepare-new-model-count.is-underprepared,
+      .prepare-new-model-count.is-underprepared strong {
+        color: #b45309;
+      }
+
       .prepare-new-spare-label {
         display: block;
         margin-top: 2px;
@@ -8740,7 +8708,7 @@
 
       .return-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(220px, 0.24fr);
+        grid-template-columns: minmax(220px, 0.25fr) minmax(560px, 1fr) minmax(220px, 0.25fr);
         gap: 10px;
         flex: 1;
         min-height: 0;
@@ -9239,6 +9207,67 @@
         overflow-y: auto;
       }
 
+      .return-left {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+      }
+
+      .return-department-summary {
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .return-department-summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .return-custom-group {
+        border-top: 1px solid var(--return-border);
+      }
+
+      .return-custom-group > summary {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 2px;
+        color: var(--return-ink);
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .return-custom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 7px;
+        padding: 7px 0;
+        border-top: 1px solid #eef2f7;
+      }
+
+      .return-custom-row span,
+      .return-custom-row strong,
+      .return-custom-row small {
+        display: block;
+        min-width: 0;
+      }
+
+      .return-custom-row strong {
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .return-custom-row small {
+        margin-top: 2px;
+        color: var(--return-muted);
+        font-size: 9px;
+      }
+
       .return-aside-body {
         padding: 9px 10px;
       }
@@ -9403,6 +9432,12 @@
           overflow: visible;
         }
 
+        .return-left {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          overflow: visible;
+        }
+
         .return-exit-button {
           grid-column: 1 / -1;
           margin-top: 0;
@@ -9453,6 +9488,10 @@
         }
 
         .return-aside {
+          grid-template-columns: 1fr;
+        }
+
+        .return-left {
           grid-template-columns: 1fr;
         }
 
@@ -10678,7 +10717,10 @@
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path></svg></span><span>Plan</span>
           </button>
           <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'workforce' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('workforce')">
-            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path><circle cx="17" cy="18" r="1.5"></circle><circle cx="21" cy="18" r="1.5"></circle></svg></span><span>Manpower &amp; Transport</span>
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0"></path><circle cx="17" cy="8" r="3"></circle><path d="M12.5 19a4.5 4.5 0 0 1 9 0"></path></svg></span><span>Manpower</span>
+          </button>
+          <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'transport' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('transport')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></span><span>Transport</span>
           </button>
           <button type="button" class="nav-item{{ ' active' if initial_section == 'prepare-new' else '' }}" onclick="showSection('prepare-new')">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM12 12v9M4.5 8 12 12l7.5-4m-4.5 6 1.6 1.6L20 12"></path></svg></span><span>Prepare</span>
@@ -10943,7 +10985,13 @@
 
     <div id="workforce-section" class="content-section{{ ' active' if initial_section == 'workforce' else '' }}">
       <div id="workforce-page-root" class="workforce-page">
-        <div class="loading">Loading manpower and transport...</div>
+        <div class="loading">Loading manpower...</div>
+      </div>
+    </div>
+
+    <div id="transport-section" class="content-section{{ ' active' if initial_section == 'transport' else '' }}">
+      <div id="transport-page-root" class="workforce-page wf-transport-page">
+        <div class="loading">Loading transport workspace...</div>
       </div>
     </div>
 

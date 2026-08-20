@@ -1,0 +1,50 @@
+templates/index.html:12279:            <label class="form-label">From Event</label>
+templates/index.html:12285:            <label class="form-label">To Event</label>
+static/js\plan.js:1148:    return workforcePageState.eventOptions || [];
+static/js\plan.js:1269:            class="plan-event-option ${Number(event.id) === Number(planEventChooserCurrentEventId()) ? 'current' : ''}"
+static/js\plan.js:2810:    const [eventOptionsLoad, assetsResponse, templatesResponse, containerCache] = await Promise.all([
+static/js\plan.js:2819:    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+static/js\plan.js:2820:    eventOptionsLoad.completion.then(loaded => {
+static/js\prepare.js:1059:    const eventOptionsLoad = await startProgressiveEventOptions(
+static/js\prepare.js:1066:    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+static/js\prepare.js:1067:    eventOptionsLoad.completion.then(loaded => {
+static/js\transfer.js:82:    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))} · ${event.unreturnedCount || 0} out</option>`;
+static/js\transfer.js:87:    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))}</option>`;
+static/js\finance.js:66:  eventOptionsRequestSeq: 0,
+static/js\finance.js:3413:    <button type="button" class="finance-picker-option" onclick="financePairEvent(${Number(event.id) || 0})">
+static/js\finance.js:3421:  const requestId = ++financeState.eventOptionsRequestSeq;
+static/js\finance.js:3422:  const eventOptionsLoad = await startProgressiveEventOptions(
+static/js\finance.js:3425:      if (requestId !== financeState.eventOptionsRequestSeq) return;
+static/js\finance.js:3433:  if (requestId !== financeState.eventOptionsRequestSeq) return;
+static/js\finance.js:3434:  financeState.events = eventOptionsLoad.first;
+static/js\finance.js:3438:  const loaded = await eventOptionsLoad.completion;
+static/js\finance.js:3439:  if (requestId !== financeState.eventOptionsRequestSeq) return;
+static/js\finance.js:6492:  const eventOptionsLoad = await startProgressiveEventOptions(preferredEventId, update);
+static/js\finance.js:6493:  update(eventOptionsLoad.first);
+static/js\finance.js:6494:  eventOptionsLoad.completion.then(update).catch(error => {
+static/js\finance.js:7724:        <span>${financeEscape(`#${event.id || ''} ${event.name || 'Choose event'}`)}</span>
+static/js\workforce-admin.js:3:  eventOptions: [],
+static/js\workforce-admin.js:453:    if (!workforcePageState.eventOptions.length) {
+static/js\workforce-admin.js:454:      const eventOptionsLoad = await startProgressiveEventOptions(
+static/js\workforce-admin.js:457:          workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+static/js\workforce-admin.js:461:      workforcePageState.eventOptions = eventOptionsLoad.first
+static/js\workforce-admin.js:464:      eventOptionsLoad.completion.then(loaded => {
+static/js\workforce-admin.js:465:        workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+static/js\workforce-admin.js:470:      workforcePageState.eventId = Number(workforcePageState.eventOptions[0]?.id || 0);
+static/js\workforce-admin.js:1894:    const eventOptionsLoad = await startProgressiveEventOptions(
+static/js\workforce-admin.js:1898:        workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+static/js\workforce-admin.js:1903:    workforcePageState.eventOptions = eventOptionsLoad.first
+static/js\workforce-admin.js:1907:    const loaded = await eventOptionsLoad.completion;
+static/js\workforce-admin.js:1909:    workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+static/js\app.js:4693:function eventOptionsEndpoint(offset = 0, eventId = null) {
+static/js\app.js:4712:  const firstResponse = await apiCall(eventOptionsEndpoint());
+static/js\app.js:4719:    const preferredResponse = await apiCall(eventOptionsEndpoint(0, preferredEventId));
+static/js\app.js:4726:      const response = await apiCall(eventOptionsEndpoint(meta.nextOffset));
+static/js\app.js:14366:    const eventOptionsLoad = await startProgressiveEventOptions(
+static/js\app.js:14374:    returnPageState.events = eventOptionsLoad.first;
+static/js\app.js:14375:    eventOptionsLoad.completion.then(loaded => {
+static/js\app.js:17212:    option.value = event.id;
+static/js\app.js:17213:    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${eventStateDisplayLabel(event.state)})`;
+static/js\app.js:17220:    option.value = event.id;
+static/js\app.js:17221:    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${eventStateDisplayLabel(event.state)})`;
+static/js\app.js:24479:    workforcePageState.eventOptions = (workforcePageState.eventOptions || [])

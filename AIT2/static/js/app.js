@@ -393,6 +393,42 @@ function eventStateDisplayLabel(state) {
   return value === 'Added' ? 'New' : value;
 }
 
+function playWorkflowTone(kind = 'success') {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = window.__showbaseAudioContext || new AudioContextClass();
+    window.__showbaseAudioContext = context;
+    const start = context.currentTime;
+    const notes = kind === 'error'
+      ? [{ frequency: 220, offset: 0, duration: 0.13 }, { frequency: 165, offset: 0.13, duration: 0.2 }]
+      : [{ frequency: 660, offset: 0, duration: 0.08 }, { frequency: 880, offset: 0.08, duration: 0.12 }];
+    notes.forEach(note => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = kind === 'error' ? 'square' : 'sine';
+      oscillator.frequency.setValueAtTime(note.frequency, start + note.offset);
+      gain.gain.setValueAtTime(0.0001, start + note.offset);
+      gain.gain.exponentialRampToValueAtTime(0.12, start + note.offset + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + note.offset + note.duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start + note.offset);
+      oscillator.stop(start + note.offset + note.duration);
+    });
+  } catch (error) {
+    // Audio feedback is best-effort and must never interrupt scanning.
+  }
+}
+
+function clearWorkflowScanInput(input, processedValue) {
+  if (!input) return;
+  if (normalizeScannedIdentifier(input.value) === normalizeScannedIdentifier(processedValue)) {
+    input.value = '';
+  }
+  input.focus({ preventScroll: true });
+}
+
 function isAdminUser() {
   return !!(currentUser && currentUser.isAdmin);
 }
@@ -1543,6 +1579,7 @@ async function confirmDegradedAssetUse(assetId, assetDetails = null) {
     : fullAsset;
 
   if (!isAssetDegraded(asset)) return true;
+  playWorkflowTone('error');
 
   const label = [asset?.brand, asset?.model, asset?.description].filter(Boolean).join(' ');
   const reasons = getAssetDegradedReasons(asset);
@@ -3565,6 +3602,7 @@ function sectionFromSidebarLabel(item) {
     'manpower & transport': 'workforce',
     'manpower and transport': 'workforce',
     'manpower': 'workforce',
+    'transport': 'transport',
     'inventory': 'inventory',
     'vehicles': 'vehicles',
     'containers': 'containers',
@@ -3613,6 +3651,7 @@ function sectionFromSidebarLabel(item) {
     ['manpower & transport', 'workforce'],
     ['manpower and transport', 'workforce'],
     ['manpower', 'workforce'],
+    ['transport', 'transport'],
     ['prepare', 'prepare-new'],
     ['return', 'return'],
     ['transfer', 'transfer'],
@@ -3656,6 +3695,7 @@ function navWireIconSvg(section) {
     events: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path>',
     plan: '<rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path>',
     workforce: '<circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0"></path><path d="M16 8h3l2 3v5h-5zM15 16h7"></path><circle cx="17" cy="18" r="1.5"></circle><circle cx="21" cy="18" r="1.5"></circle>',
+    transport: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M9 18h7M3 16h2"></path>',
     'prepare-new': '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="m15 14 1.6 1.6L20 12"></path>',
     return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
     transfer: '<path d="M7 7h13l-4-4M17 17H4l4 4"></path>',
@@ -3684,7 +3724,8 @@ function navLabelForSection(section, fallback = '') {
   return ({
     events: 'All Events',
     plan: 'Plan',
-    workforce: 'Manpower & Transport',
+    workforce: 'Manpower',
+    transport: 'Transport',
     'prepare-new': 'Prepare',
     return: 'Return Assets',
     transfer: 'Transfer Assets',
@@ -3785,6 +3826,7 @@ const APP_SECTION_PATHS = Object.freeze({
   events: '/events',
   plan: '/plan',
   workforce: '/manpower',
+  transport: '/transport',
   'invoice-claims': '/invoice-claims',
   'freelancer-workspace': '/manpower',
   'prepare-new': '/prepare',
@@ -3859,6 +3901,57 @@ function updateAppSectionHistory(sectionName, replace = false) {
   window.history[method]({ section: sectionName }, '', path);
 }
 
+const WORKFLOW_EVENT_STORAGE_KEY = 'showbase.workflowEventId';
+
+function workflowRememberEvent(eventId) {
+  const id = Number(eventId || 0);
+  if (!id) return;
+  try {
+    window.localStorage.setItem(WORKFLOW_EVENT_STORAGE_KEY, String(id));
+  } catch (error) {
+    // Storage can be unavailable in private browser contexts; page state still works.
+  }
+}
+
+function workflowRememberedEventId() {
+  try {
+    const id = Number(window.localStorage.getItem(WORKFLOW_EVENT_STORAGE_KEY) || 0);
+    return id > 0 ? id : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function workflowApplyRememberedEvent(sectionName) {
+  const eventId = workflowRememberedEventId();
+  if (!eventId) return;
+  if (sectionName === 'plan' && typeof planPageState !== 'undefined') {
+    if (Number(planPageState.eventId) !== eventId) {
+      planPageState.eventId = eventId;
+      planPageState.event = null;
+    }
+  } else if (sectionName === 'prepare-new' && typeof prepareNewPageState !== 'undefined') {
+    if (Number(prepareNewPageState.eventId) !== eventId) {
+      prepareNewPageState.eventId = eventId;
+      prepareNewPageState.event = null;
+    }
+  } else if (sectionName === 'return' && typeof returnPageState !== 'undefined') {
+    if (Number(returnPageState.eventId) !== eventId) {
+      returnPageState.eventId = eventId;
+      returnPageState.event = null;
+      returnPageState.loaded = false;
+    }
+  } else if (
+    ['workforce', 'transport'].includes(sectionName) &&
+    typeof workforcePageState !== 'undefined' &&
+    Number(workforcePageState.eventId) !== eventId
+  ) {
+    workforcePageState.eventId = eventId;
+    workforcePageState.data = null;
+    workforcePageState.activeSubprojectId = 'all';
+  }
+}
+
 function showSection(sectionName, options = {}) {
   // Preserve old bookmarks without rendering the retired legacy workspace.
   if (sectionName === 'prepare') sectionName = 'prepare-new';
@@ -3896,7 +3989,7 @@ function showSection(sectionName, options = {}) {
       return;
     }
   }
-  const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "compare", "workforce", "transport", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies", "accounting"]);
   const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
@@ -3929,6 +4022,8 @@ function showSection(sectionName, options = {}) {
 
   const targetSection = document.getElementById(sectionName + "-section");
   if (!targetSection) return;
+
+  workflowApplyRememberedEvent(sectionName);
 
   if (options.updateHistory !== false) {
     updateAppSectionHistory(sectionName, options.replaceHistory === true);
@@ -3998,6 +4093,9 @@ function showSection(sectionName, options = {}) {
       } else if (typeof loadWorkforcePage === "function") {
         loadWorkforcePage();
       }
+      break;
+    case "transport":
+      if (typeof loadTransportPage === "function") loadTransportPage();
       break;
     case "invoice-claims":
       if (typeof loadWorkforceDocumentsPage === "function") loadWorkforceDocumentsPage();
@@ -12828,6 +12926,7 @@ async function processUniversalAsset(eventId) {
     const input = document.getElementById('universalAssetInput');
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     let assetId = normalizeScannedIdentifier(input.value);
+    const scannedValue = assetId;
     const quickAddEnabled = getPrepareQuickAddEnabled();
     const scanPayload = {
       ...prepareQuickAddPayload(),
@@ -12851,7 +12950,7 @@ async function processUniversalAsset(eventId) {
     if (!window.__processingContainerBatch) {
       const container = await getContainerById(assetId, true);
       if (container) {
-        await processUniversalContainer(eventId, container.id);
+        await processUniversalContainer(eventId, container.id, scannedValue);
         return;
       }
     }
@@ -12943,6 +13042,7 @@ async function processUniversalAsset(eventId) {
 
         if (isReturned) {
             showFeedback(feedbackDiv, 'error', `${assetId} has already been returned from this event`);
+            playWorkflowTone('error');
             return;
         }
 
@@ -12952,22 +13052,25 @@ async function processUniversalAsset(eventId) {
                     const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                     await showApiWarning(response);
                     showFeedback(feedbackDiv, 'success', `✅ ${assetId} added into the event`);
+                    playWorkflowTone('success');
                 } else {
                     showFeedback(feedbackDiv, 'info', `${assetId} is already prepared for this event`);
                 }
+                clearWorkflowScanInput(input, scannedValue);
                 refreshPrepareUiAfterAssetChange(eventId);
             } else {
                 // Asset is assigned but not prepared - prepare it
-                if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
+                if (!(await confirmDegradedAssetUse(assetId, assetDetails))) {
+                    clearWorkflowScanInput(input, scannedValue);
+                    return;
+                }
                 const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                 await showApiWarning(response);
                 const responseIsExtra = !!(response?.data?.isExtra);
                 updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
                 showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} assigned and prepared`);
-
-                // Clear input and focus back on it
-                input.value = '';
-                input.focus();
+                playWorkflowTone('success');
+                clearWorkflowScanInput(input, scannedValue);
 
                 refreshPrepareUiAfterAssetChange(eventId);
             }
@@ -12975,24 +13078,28 @@ async function processUniversalAsset(eventId) {
             // Asset is not assigned; prepare it immediately as a manual extra.
             if (!assetDetails) {
                 showFeedback(feedbackDiv, 'error', `${assetId} not found in inventory or not available`);
+                playWorkflowTone('error');
                 return;
             }
 
-            if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
+            if (!(await confirmDegradedAssetUse(assetId, assetDetails))) {
+                clearWorkflowScanInput(input, scannedValue);
+                return;
+            }
             const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
             await showApiWarning(response);
             const responseIsExtra = !!(response?.data?.isExtra);
             updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
             showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} added into the event`);
-
-            input.value = '';
-            input.focus();
+            playWorkflowTone('success');
+            clearWorkflowScanInput(input, scannedValue);
 
             refreshPrepareUiAfterAssetChange(eventId);
         }
 
     } catch (error) {
         showFeedback(feedbackDiv, 'error', `Failed to process asset: ${error.message}`);
+        playWorkflowTone('error');
     }
 }
 
@@ -13715,6 +13822,7 @@ function returnPageChipAssets() {
 function returnPageFilteredAssets() {
   const query = String(returnPageState.search || '').trim().toLowerCase();
   return returnPageAssets().filter(asset => {
+    if (asset.parsedCustom || parseCustomAsset(asset.id, asset)) return false;
     if (returnPageState.outstandingOnly && asset.isReturned) return false;
     if (returnPageState.department !== 'ALL' && asset.department !== returnPageState.department) return false;
     if (!query) return true;
@@ -13859,7 +13967,7 @@ function returnPagePreparedModelRowHtml(asset) {
           <button type="button"
                   class="return-button return-button-primary"
                   ${pending ? 'disabled' : ''}
-                  onclick="returnPageChangePreparedQuantity('return', '${escapeHtmlAttr(encodedId)}', ${outstanding}, this)">
+                  onclick="returnPagePromptPreparedQuantity('return', '${escapeHtmlAttr(encodedId)}', this)">
             ${pending ? 'Returning...' : 'Return all'}
           </button>
         ` : '<span class="return-prepared-complete">Returned</span>'}
@@ -13896,8 +14004,8 @@ function returnPageRenderFilteredAssets(options = {}) {
       const outstanding = departmentAssets
         .reduce((sum, asset) => sum + returnPageOutstandingQuantity(asset), 0);
       return `
-        <section class="return-department-section">
-          <div class="return-department-summary">
+        <details class="return-department-section" open>
+          <summary class="return-department-summary">
             <span class="return-department-name">
               <i class="return-department-dot"
                  style="--department-color:${escapeHtmlAttr(planDepartmentColor(department))}"></i>
@@ -13913,9 +14021,9 @@ function returnPageRenderFilteredAssets(options = {}) {
                 </button>
               ` : ''}
             </span>
-          </div>
+          </summary>
           ${departmentAssets.map(returnPageAssetRowHtml).join('')}
-        </section>
+        </details>
       `;
     }).join('');
 
@@ -14195,6 +14303,39 @@ function returnPageQuickReturnHtml(metrics) {
   `;
 }
 
+function returnPageCustomItemsHtml(event = returnPageState.event) {
+  const rows = returnPageAssets(event).filter(asset => (
+    asset.parsedCustom || parseCustomAsset(asset.id, asset)
+  ));
+  return `
+    <section class="return-surface return-custom-items">
+      <div class="return-card-header"><div><h3>Misc &amp; Loan Items</h3><p>Return non-inventory items.</p></div></div>
+      <div class="return-aside-body">
+        ${[['MISC', 'Misc Items'], ['LOAN', 'Loan Items']].map(([type, label]) => {
+          const items = rows.filter(asset => normalizeCustomType(
+            (asset.parsedCustom || parseCustomAsset(asset.id, asset))?.type
+          ) === type);
+          return `<details class="return-custom-group" open>
+            <summary>${escapeHtml(label)} <span>${items.length}</span></summary>
+            <div>${items.map(asset => {
+              const encodedId = returnPageEncode(asset.id);
+              return `<article class="return-custom-row">
+                <span><strong>${escapeHtml(returnPageAssetTitle(asset))}</strong><small>${escapeHtml(returnPageAssetSubtitle(asset))}</small></span>
+                <button type="button" class="return-button ${asset.isReturned ? '' : 'return-button-primary'}"
+                        onclick="${asset.isReturned
+                          ? `returnPageUnreturnAsset('${escapeHtmlAttr(encodedId)}', this)`
+                          : `returnPageReturnAsset('${escapeHtmlAttr(encodedId)}', this)`}">
+                  ${asset.isReturned ? 'Undo' : 'Return'}
+                </button>
+              </article>`;
+            }).join('') || '<p class="return-help">No items.</p>'}</div>
+          </details>`;
+        }).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function returnPageProgressHtml(event, metrics) {
   const overdue = event.state === 'Overdue';
   return `
@@ -14245,13 +14386,19 @@ function renderReturnPage(options = {}) {
   const consolidated = eventIsConsolidated(returnPageState, event);
   root.classList.toggle('event-consolidated-mode', consolidated);
   const metrics = returnPageMetrics(event);
-  const assetRows = returnPageAssets(event);
-  const hasAssignedAssets = returnPageHasAssignedAssets(event);
+  const assetRows = returnPageAssets(event).filter(asset => (
+    !(asset.parsedCustom || parseCustomAsset(asset.id, asset))
+  ));
+  const hasAssignedAssets = assetRows.length > 0;
   root.innerHTML = `
     <div class="return-page-heading">
       <div><h2>Return Event Assets</h2><p>Receive, verify, and return deployed assets to inventory.</p></div>
     </div>
     <div class="return-layout">
+      <aside class="return-left">
+        ${returnPageQuickReturnHtml(metrics)}
+        ${returnPageCustomItemsHtml(event)}
+      </aside>
       <div class="return-primary">
         <div class="return-event-bar">
           <button type="button"
@@ -14339,7 +14486,6 @@ function renderReturnPage(options = {}) {
       </div>
       <aside class="return-aside">
         ${returnPageEventDetailsHtml(event)}
-        ${returnPageQuickReturnHtml(metrics)}
         ${returnPageProgressHtml(event, metrics)}
         <button type="button"
                 class="return-button return-button-primary return-exit-button"
@@ -14363,6 +14509,7 @@ async function loadReturnWorkspace(options = {}) {
   }
 
   try {
+    if (!returnPageState.eventId) returnPageState.eventId = workflowRememberedEventId();
     const eventOptionsLoad = await startProgressiveEventOptions(
       returnPageState.eventId,
       loaded => {
@@ -14401,6 +14548,7 @@ async function loadReturnWorkspace(options = {}) {
     const detailResponse = await apiCall(`/api/events/${selected.id}`);
     if (version !== returnPageState.requestVersion) return;
     returnPageState.eventId = Number(selected.id);
+    workflowRememberEvent(selected.id);
     returnPageState.event = detailResponse.data;
     returnPageUpsertEventSummary(detailResponse.data);
     returnPageState.loaded = true;
@@ -14427,6 +14575,7 @@ async function returnPageSelectEvent(eventId) {
     const response = await apiCall(`/api/events/${id}`);
     if (version !== returnPageState.requestVersion) return;
     returnPageState.eventId = id;
+    workflowRememberEvent(id);
     returnPageState.event = response.data;
     returnPageUpsertEventSummary(response.data);
     renderReturnPage();
@@ -14507,11 +14656,13 @@ async function returnPageRunAssetAction(action, encodedAssetId, button) {
     await apiCall(path, 'POST', { assetId });
     returnPageState.pendingActions.delete(key);
     await returnPageRefreshSelected();
+    playWorkflowTone('success');
     showNotification('success', action === 'unreturn'
       ? `${customAssetLabelFromId(assetId)} restored to the event`
       : `${customAssetLabelFromId(assetId)} returned successfully`);
   } catch (error) {
     returnPageState.pendingActions.delete(key);
+    playWorkflowTone('error');
     showNotification('error', `${action === 'unreturn' ? 'Undo return' : 'Return'} failed: ${error.message}`);
     try {
       await returnPageRefreshSelected();
@@ -14555,10 +14706,12 @@ async function returnPageChangePreparedQuantity(action, encodedAssetId, quantity
       subprojectId: eventActiveSubproject(returnPageState, returnPageState.event)?.id || '',
     });
     await returnPageRefreshSelected();
+    playWorkflowTone('success');
     showNotification('success', response.message || (
       action === 'unreturn' ? 'Returned quantity restored' : 'Prepared quantity returned'
     ));
   } catch (error) {
+    playWorkflowTone('error');
     showNotification('error', `${action === 'unreturn' ? 'Unreturn' : 'Return'} failed: ${error.message}`);
     try {
       await returnPageRefreshSelected();
@@ -14585,6 +14738,8 @@ async function returnPagePromptPreparedQuantity(action, encodedAssetId, button) 
     message: `How many ${returnPageAssetTitle(asset)} unit(s) would you like to ${action === 'unreturn' ? 'unreturn' : 'return'}?`,
     confirmText: action === 'unreturn' ? 'Unreturn' : 'Return',
     max,
+    defaultValue: max,
+    inputLabel: action === 'unreturn' ? 'Quantity to restore' : 'Quantity returned',
   });
   if (quantity > 0) {
     await returnPageChangePreparedQuantity(action, encodedAssetId, quantity, button);
@@ -14650,6 +14805,7 @@ async function returnPageManualReturn() {
   const input = document.getElementById('returnQuickAssetInput');
   const submit = document.getElementById('returnQuickSubmit');
   let assetId = normalizeScannedIdentifier(input?.value || '');
+  const scannedValue = assetId;
   if (!eventId) {
     showNotification('warning', 'Select an event first');
     return;
@@ -14679,7 +14835,6 @@ async function returnPageManualReturn() {
   const key = `return:${assetId}`;
   if (returnPageState.pendingActions.has(key)) return;
   returnPageState.pendingActions.add(key);
-  if (input) input.disabled = true;
   if (submit) {
     submit.disabled = true;
     submit.textContent = 'Returning…';
@@ -14687,13 +14842,19 @@ async function returnPageManualReturn() {
 
   try {
     await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
-    if (input) input.value = '';
+    const queuedValue = normalizeScannedIdentifier(input?.value || '') !== normalizeScannedIdentifier(scannedValue)
+      ? String(input?.value || '')
+      : '';
+    clearWorkflowScanInput(input, scannedValue);
     await returnPageRefreshSelected({ focusId: 'returnQuickAssetInput' });
+    const refreshedInput = document.getElementById('returnQuickAssetInput');
+    if (queuedValue && refreshedInput && !refreshedInput.value) refreshedInput.value = queuedValue;
+    playWorkflowTone('success');
     showNotification('success', `${customAssetLabelFromId(assetId)} returned successfully`);
   } catch (error) {
+    playWorkflowTone('error');
     showNotification('error', `Return failed: ${error.message}`);
     if (input) {
-      input.disabled = false;
       input.focus();
     }
     try {
@@ -14705,7 +14866,6 @@ async function returnPageManualReturn() {
     returnPageState.pendingActions.delete(key);
     const currentInput = document.getElementById('returnQuickAssetInput');
     if (currentInput && getEventReturnableCount(returnPageState.event) > 0) {
-      currentInput.disabled = false;
       currentInput.focus({ preventScroll: true });
     }
   }
@@ -14733,8 +14893,7 @@ async function returnPageExit() {
 
 
 async function loadEventAssetsForReturn() {
-    const selectElement = document.getElementById('returnEventSelect');
-    const eventId = selectElement?.value;
+    const eventId = returnPageState.eventId;
 
     if (!eventId) {
         document.getElementById('event-summary').style.display = 'none';
@@ -15010,9 +15169,8 @@ async function returnAllForDepartment(eventId, department) {
 }
 
 async function returnManualAssetNew() {
-    const eventSelect = document.getElementById('returnEventSelect');
-    const assetInput = document.getElementById('manualReturnAssetIdNew');
-    const eventId = eventSelect.value;
+    const assetInput = document.getElementById('returnQuickAssetInput');
+    const eventId = returnPageState.eventId;
     let assetId = normalizeScannedIdentifier(assetInput.value);
 
     if (!eventId) {

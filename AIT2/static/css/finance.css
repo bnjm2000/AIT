@@ -2640,6 +2640,30 @@
   overflow-y: auto;
 }
 
+.finance-rate-card-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #dbe3e8;
+  padding: 0 18px;
+}
+
+.finance-rate-card-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #5b6874;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finance-rate-card-tabs button.active {
+  border-bottom-color: #1f785d;
+  color: #155b47;
+}
+
 .finance-rate-card-department h4 {
   position: sticky;
   top: 0;
@@ -4317,6 +4341,29 @@ button.pnl-kpi:focus-visible {
 .pnl-summary-card,
 .pnl-activity {
   padding: 18px;
+}
+
+.pnl-expenses {
+  position: relative;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.pnl-expenses.is-file-dragging {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 2px rgba(245, 158, 11, .2), 0 10px 25px rgba(15, 23, 42, .08);
+}
+
+.pnl-review-pill {
+  display: inline-flex;
+  margin: 5px 0 0 7px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .pnl-calculation h3,

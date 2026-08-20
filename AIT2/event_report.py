@@ -34,6 +34,17 @@ def _date_label(value):
     return raw or "-"
 
 
+def _iso_day_label(value):
+    raw = str(value or "").strip()
+    for pattern in ("%Y-%m-%d", "%Y%m%d", "%d/%m/%Y"):
+        try:
+            parsed = datetime.strptime(raw, pattern)
+            return f"{parsed.strftime('%Y-%m-%d')} ({parsed.strftime('%a').upper()})"
+        except ValueError:
+            continue
+    return raw or "-"
+
+
 def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=""):
     """Return a complete, CJK-capable event operations PDF."""
     from reportlab.lib import colors
@@ -43,7 +54,7 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
-    from reportlab.platypus import HRFlowable, KeepTogether, LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import HRFlowable, KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     event = payload.get("event") or {}
     company = company or payload.get("company") or {}
@@ -184,11 +195,12 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
         return Paragraph(f"<b>{item_markup}</b>{detail}", cell)
 
     def data_table(section_label, section_count, headers, rows, widths, empty_text,
-                   *, centered_columns=(), department_column=None):
+                   *, centered_columns=(), department_column=None,
+                   group_column=None, border_width=.5):
         section_row = (
             [_paragraph(section_label, section)]
-            + [""] * (len(headers) - 3)
-            + [_paragraph(section_count, center), ""]
+            + [""] * max(0, len(headers) - 2)
+            + [_paragraph(section_count, center)]
         )
         table_rows = [
             section_row,
@@ -210,13 +222,12 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
             repeatRows=2,
         )
         commands = [
-            ("SPAN", (0, 0), (-3, 0)),
-            ("SPAN", (-2, 0), (-1, 0)),
+            ("SPAN", (0, 0), (-2, 0)),
             ("LINEBELOW", (0, 0), (-1, 0), 1, accent),
             ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
             ("BACKGROUND", (0, 1), (-1, 1), header_accent),
             ("TEXTCOLOR", (0, 1), (-1, 1), colors.white),
-            ("BOX", (0, 0), (-1, -1), .5, border),
+            ("BOX", (0, 0), (-1, -1), border_width, border),
             ("INNERGRID", (0, 1), (-1, -1), .3, border),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
@@ -237,6 +248,13 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                     ("BACKGROUND", (department_column, row_index), (department_column, row_index), style[0]),
                     ("TEXTCOLOR", (department_column, row_index), (department_column, row_index), style[1]),
                 ])
+        if group_column is not None:
+            previous = None
+            for row_index, row in enumerate(rows, start=2):
+                group_value = str(row[group_column] or '')
+                if previous is not None and group_value != previous:
+                    commands.append(("LINEABOVE", (0, row_index), (-1, row_index), 1.4, ink))
+                previous = group_value
         table.setStyle(TableStyle(commands))
         return table
 
@@ -273,6 +291,41 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     ]
 
     asset_rows = payload.get("assets") or []
+    manpower_rows = payload.get("manpower") or []
+    transport_rows = payload.get("transport") or []
+    asset_summary = {}
+    for row in asset_rows:
+        department = _text(row.get("department"), "Unassigned")
+        asset_summary[department] = asset_summary.get(department, 0) + int(row.get("required") or 0)
+    manpower_summary = {}
+    for row in manpower_rows:
+        key = (_iso_day_label(row.get("date")), _text(row.get("department"), "Unassigned"))
+        manpower_summary[key] = manpower_summary.get(key, 0) + max(1, int(row.get("pax") or 1))
+    story.extend([
+        data_table(
+            "SUMMARY · ASSETS", f"{sum(asset_summary.values())} required",
+            ["Department", "Assets"],
+            [[department, quantity] for department, quantity in sorted(asset_summary.items(), key=lambda item: item[0].casefold())],
+            [380, 100], "No assets are required.", centered_columns=(1,), department_column=0,
+        ),
+        Spacer(1, 4 * mm),
+        data_table(
+            "SUMMARY · MANPOWER", f"{sum(manpower_summary.values())} person-day(s)",
+            ["Date", "Department", "Manpower"],
+            [[date_value, department, quantity] for (date_value, department), quantity in sorted(manpower_summary.items())],
+            [130, 250, 100], "No manpower is scheduled.", centered_columns=(2,), department_column=1,
+            group_column=0, border_width=.8,
+        ),
+        Spacer(1, 4 * mm),
+        data_table(
+            "SUMMARY · TRANSPORT", f"{len(transport_rows)} booking(s)",
+            ["Booked transport", "Count"],
+            [["Event transport bookings", len(transport_rows)]],
+            [380, 100], "No transport is booked.", centered_columns=(1,),
+        ),
+        PageBreak(),
+    ])
+
     asset_chunks = [asset_rows[index:index + 22] for index in range(0, len(asset_rows), 22)] or [[]]
     total_required = sum(int(row.get("required") or 0) for row in asset_rows)
     for chunk_index, chunk in enumerate(asset_chunks):
@@ -282,21 +335,21 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
             [[asset_item_cell(row.get("item"), row.get("assetIds")), row.get("department"),
               row.get("required"), row.get("prepared"), row.get("returned")]
              for row in chunk],
-            [115, 35, 22, 22, 22], "No assets are required for this event.",
+            [250, 80, 50, 50, 50], "No assets are required for this event.",
             centered_columns=(2, 3, 4), department_column=1,
         )]))
         story.append(Spacer(1, (1 if chunk_index < len(asset_chunks) - 1 else 5) * mm))
 
-    manpower_rows = payload.get("manpower") or []
     story.extend([
         data_table(
             "MANPOWER", f"{len(manpower_rows)} scheduled row(s)",
             ["Date", "Name", "Room", "Department", "Role", "Call time", "Pax"],
-            [[row.get("date"), row.get("name"), row.get("room"), row.get("department"),
+            [[_iso_day_label(row.get("date")), row.get("name"), row.get("room"), row.get("department"),
               row.get("role"), row.get("callTime"), row.get("pax")]
              for row in manpower_rows],
-            [29, 42, 28, 31, 47, 25, 13], "No crew are scheduled for this event.",
-            centered_columns=(5, 6), department_column=3,
+            [70, 95, 60, 75, 105, 50, 25], "No crew are scheduled for this event.",
+            centered_columns=(5, 6), department_column=3, group_column=0,
+            border_width=.9,
         ),
         Spacer(1, 5 * mm),
     ])
@@ -309,20 +362,26 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                 ["Vendor", "Room", "Department", "Service", "Dates / call time"],
                 [[row.get("name"), row.get("room"), row.get("department"),
                   row.get("service"), row.get("schedule")] for row in vendor_rows],
-                [44, 30, 34, 62, 45], "No vendor services are booked.",
+                [90, 70, 75, 140, 105], "No vendor services are booked.",
                 department_column=2,
             ),
             Spacer(1, 5 * mm),
         ])
 
-    transport_rows = payload.get("transport") or []
+    def location_cell(name, address):
+        name_markup = _cjk_markup(escape(_text(name)), bold=True)
+        address_markup = _cjk_markup(escape(str(address or '').strip()))
+        detail = f'<br/><font color="#64748B" size="6">{address_markup}</font>' if address_markup else ''
+        return Paragraph(f'<b>{name_markup}</b>{detail}', cell)
+
     story.extend([
         data_table(
             "TRANSPORT", f"{len(transport_rows)} booking(s)",
-            ["Trip / time", "Route", "Company", "Vehicle", "Driver / contact"],
-            [[row.get("time"), row.get("route"), row.get("company"),
+            ["Trip / time", "From", "To", "Company", "Vehicle", "Driver / contact"],
+            [[row.get("time"), location_cell(row.get("fromName"), row.get("fromAddress")),
+              location_cell(row.get("toName"), row.get("toAddress")), row.get("company"),
               row.get("vehicle"), row.get("driver")] for row in transport_rows],
-            [44, 52, 35, 39, 45], "No transport is booked for this event.",
+            [65, 80, 80, 65, 60, 130], "No transport is booked for this event.",
         ),
     ])
     notes = str(event.get("notes") or "").strip()

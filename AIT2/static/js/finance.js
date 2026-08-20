@@ -76,6 +76,7 @@ const financeState = {
   activeSubprojectId: 'main',
   rateCard: [],
   rateCardSearch: '',
+  rateCardTab: 'assets',
   rateCardUom: 'units',
   newClientSalutation: '',
   editorDataLoadedAt: 0,
@@ -3377,46 +3378,6 @@ function financeEventDisplay(eventId) {
   return `#${event.id} — ${event.name || 'Untitled event'}${event.location ? ` @ ${event.location}` : ''}`;
 }
 
-function financeEventRows(query) {
-  const clean = String(query || '').trim().toLowerCase();
-  return (financeState.events || [])
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => !clean || [
-      event.id, event.name, event.location, event.state, event.startDate, event.endDate
-    ].some(value => String(value || '').toLowerCase().includes(clean)))
-    .slice(0, 60);
-}
-
-function financeEnsureEventPickerModal() {
-  if (document.getElementById('financeEventPickerModal')) return;
-  const modal = document.createElement('div');
-  modal.id = 'financeEventPickerModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content finance-picker-modal">
-      <div class="modal-header"><h3 class="modal-title">Pair existing event</h3><button type="button" class="close-btn" onclick="closeModal('financeEventPickerModal')">×</button></div>
-      <input id="financeEventPickerSearch" class="finance-input" placeholder="Search events by name, location, date or status..." autocomplete="off" oninput="financeRenderEventPickerResults(this.value)">
-      <div id="financeEventPickerResults" class="finance-picker-results"></div>
-      <div class="modal-actions finance-picker-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('financeEventPickerModal')">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function financeRenderEventPickerResults(query = '') {
-  const results = document.getElementById('financeEventPickerResults');
-  if (!results) return;
-  const rows = financeEventRows(query);
-  results.innerHTML = rows.map(({ event }) => `
-    <button type="button" class="finance-picker-option" onclick="financePairEvent(${Number(event.id) || 0})">
-      <strong>${financeEscape(financeEventDisplay(event.id))}</strong>
-      <span>${financeEscape([event.startDate, event.endDate, event.state].filter(Boolean).join(' · '))}</span>
-    </button>
-  `).join('') || '<div class="finance-suggestion-empty">No matching events</div>';
-}
-
 async function financeLoadEventOptions(preferredEventId = null) {
   const requestId = ++financeState.eventOptionsRequestSeq;
   const eventOptionsLoad = await startProgressiveEventOptions(
@@ -3424,38 +3385,26 @@ async function financeLoadEventOptions(preferredEventId = null) {
     loaded => {
       if (requestId !== financeState.eventOptionsRequestSeq) return;
       financeState.events = loaded;
-      const search = document.getElementById('financeEventPickerSearch');
-      if (document.getElementById('financeEventPickerModal')?.classList.contains('active')) {
-        financeRenderEventPickerResults(search?.value || '');
+      if (typeof planEventChooserState !== 'undefined' && planEventChooserState.context === 'quotation-link') {
+        renderPlanEventChooser();
       }
     }
   );
   if (requestId !== financeState.eventOptionsRequestSeq) return;
   financeState.events = eventOptionsLoad.first;
-  financeRenderEventPickerResults(
-    document.getElementById('financeEventPickerSearch')?.value || ''
-  );
+  if (typeof renderPlanEventChooser === 'function') renderPlanEventChooser();
   const loaded = await eventOptionsLoad.completion;
   if (requestId !== financeState.eventOptionsRequestSeq) return;
   financeState.events = loaded;
-  financeRenderEventPickerResults(
-    document.getElementById('financeEventPickerSearch')?.value || ''
-  );
+  if (typeof renderPlanEventChooser === 'function') renderPlanEventChooser();
 }
 
 async function financeOpenEventPicker(documentId = financeState.current?.id) {
   financeState.eventPairTargetId = String(documentId || '');
-  financeEnsureEventPickerModal();
-  const search = document.getElementById('financeEventPickerSearch');
-  if (search) search.value = '';
-  const results = document.getElementById('financeEventPickerResults');
-  if (results) results.innerHTML = '<div class="finance-suggestion-empty">Loading events...</div>';
-  openModal('financeEventPickerModal');
-  setTimeout(() => search?.focus(), 50);
+  planOpenEventChooser('quotation-link');
   try {
     await financeLoadEventOptions(financeState.current?.eventId || null);
   } catch (error) {
-    if (results) results.innerHTML = '<div class="finance-suggestion-empty">Unable to load events</div>';
     showNotification('error', error.message || 'Unable to load events');
   }
 }
@@ -3466,7 +3415,7 @@ async function financePairEvent(eventId) {
   if (!targetId || !id) return;
   if (financeState.current?.id === targetId) {
     financeState.current.eventId = id;
-    closeModal('financeEventPickerModal');
+    closeModal('planEventChooserModal');
     financeQueueSave();
     financeRenderEditor();
     return;
@@ -3482,7 +3431,7 @@ async function financePairEvent(eventId) {
         documentVersion: financeState.documents.find(row => row.id === targetId)?.documentVersion
       }
     );
-    closeModal('financeEventPickerModal');
+    closeModal('planEventChooserModal');
     financeUpdateListRow({
       ...response.data,
       eventState: selectedEvent?.state || '',
@@ -3750,17 +3699,23 @@ function financeGroupedLineDescription(line) {
     brand,
     model
   ].filter(Boolean).sort((left, right) => right.length - left.length);
-  for (const prefix of [...new Set(prefixes)]) {
-    if (!description.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())) continue;
-    const boundary = description.slice(prefix.length, prefix.length + 1);
-    if (boundary && !/[\s\-\u2013\u2014:|/]/.test(boundary)) continue;
-    // The separator is part of the inventory description. For example,
-    // "Brand Model - Green" must remain "- Green" when only the description
-    // field is displayed in a group.
-    const remainder = description.slice(prefix.length).trim();
-    if (remainder) return remainder;
+  let remainder = description;
+  for (let pass = 0; pass < 4; pass += 1) {
+    let stripped = false;
+    for (const prefix of [...new Set(prefixes)]) {
+      if (!remainder.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())) continue;
+      const boundary = remainder.slice(prefix.length, prefix.length + 1);
+      if (boundary && !/[\s\-\u2013\u2014:|/]/.test(boundary)) continue;
+      // Strip repeated legacy prefixes too ("Brand Model Brand Model …").
+      const next = remainder.slice(prefix.length).trim();
+      if (!next) break;
+      remainder = next;
+      stripped = true;
+      break;
+    }
+    if (!stripped) break;
   }
-  return description;
+  return remainder;
 }
 
 function financeGroupedLineDisplay(line) {
@@ -4419,7 +4374,12 @@ function ensureFinanceRateCardModal() {
       </div>
       <div class="finance-rate-card-toolbar">
         <input id="financeRateCardSearch" class="finance-input" type="search" placeholder="Search assets or departments..." oninput="financeState.rateCardSearch=this.value;financeRenderRateCard()">
-        <button type="button" class="btn btn-primary" onclick="financeToggleRateCardForm()">+ Add item</button>
+        <button id="financeRateCardAddButton" type="button" class="btn btn-primary" onclick="financeToggleRateCardForm()">+ Add custom item</button>
+      </div>
+      <div class="finance-rate-card-tabs" role="tablist" aria-label="Rate card item type">
+        <button type="button" data-rate-card-tab="assets" onclick="financeSetRateCardTab('assets')">Assets</button>
+        <button type="button" data-rate-card-tab="containers" onclick="financeSetRateCardTab('containers')">Containers</button>
+        <button type="button" data-rate-card-tab="custom" onclick="financeSetRateCardTab('custom')">Custom assets</button>
       </div>
       <form id="financeRateCardForm" class="finance-rate-card-form" hidden onsubmit="financeCreateRateCardItem(event)">
         <input id="financeRateCardBrand" class="finance-input finance-rate-card-brand" placeholder="Brand">
@@ -4454,6 +4414,7 @@ function ensureFinanceRateCardModal() {
 async function financeOpenRateCard() {
   ensureFinanceRateCardModal();
   financeState.rateCardSearch = '';
+  financeState.rateCardTab = 'assets';
   document.getElementById('financeRateCardSearch').value = '';
   document.getElementById('financeRateCardResults').innerHTML = '<div class="finance-suggestion-empty">Loading rates...</div>';
   openModal('financeRateCardModal');
@@ -4470,9 +4431,28 @@ function financeRenderRateCard() {
   const root = document.getElementById('financeRateCardResults');
   if (!root) return;
   const query = String(financeState.rateCardSearch || '').trim().toLowerCase();
-  const filtered = (financeState.rateCard || []).filter(row => !query || [
-    financeLineSystem(row), row.department, row.brand, row.model, row.description, ...(row.searchTags || [])
-  ].join(' ').toLowerCase().includes(query));
+  const activeTab = financeState.rateCardTab || 'assets';
+  document.querySelectorAll('[data-rate-card-tab]').forEach(button => {
+    button.classList.toggle('active', button.dataset.rateCardTab === activeTab);
+    button.setAttribute('aria-selected', String(button.dataset.rateCardTab === activeTab));
+  });
+  const addButton = document.getElementById('financeRateCardAddButton');
+  if (addButton) addButton.hidden = activeTab !== 'custom';
+  if (activeTab !== 'custom') {
+    const form = document.getElementById('financeRateCardForm');
+    if (form) form.hidden = true;
+  }
+  const filtered = (financeState.rateCard || []).filter(row => {
+    const matchesType = activeTab === 'containers'
+      ? row.isContainer
+      : activeTab === 'custom'
+        ? row.isCustom && !row.isContainer
+        : !row.isCustom && !row.isContainer;
+    return matchesType && (!query || [
+      financeLineSystem(row), row.department, row.brand, row.model,
+      row.description, row.containerId, row.containerSerial, ...(row.searchTags || [])
+    ].join(' ').toLowerCase().includes(query));
+  });
   const departments = new Map();
   filtered.forEach(row => {
     const department = financeLineSystem(row);
@@ -4491,14 +4471,20 @@ function financeRenderRateCard() {
           return `
             <div class="finance-rate-card-row">
               <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
-              <label class="finance-money-input"><span>$</span><input type="number" min="0.01" step="0.01" value="${financeEscapeAttr(row.unitPrice)}" aria-label="Rate for ${financeEscapeAttr(title)}" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
+              <label class="finance-money-input"><span>$</span><input type="number" min="0" step="0.01" value="${financeNumber(row.unitPrice) || ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
               <button type="button" class="btn btn-secondary" onclick="financeAddRateCardItemToQuotation(${index})">Add</button>
-              <button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>
+              ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
             </div>
           `;
         }).join('')}
       </section>
     `).join('') || '<div class="finance-suggestion-empty">No remembered rates match this search.</div>';
+}
+
+function financeSetRateCardTab(tab) {
+  financeState.rateCardTab = ['assets', 'containers', 'custom'].includes(tab)
+    ? tab : 'assets';
+  financeRenderRateCard();
 }
 
 function financeToggleRateCardForm() {
@@ -4563,6 +4549,13 @@ async function financeUpdateRateCardItem(index, value) {
   const item = financeState.rateCard[index];
   if (!item) return;
   try {
+    if (financeNumber(value) <= 0 && !item.isCustom) {
+      const response = await apiCall('/api/finance/rate-card', 'DELETE', item);
+      financeState.rateCard = response.data || [];
+      financeState.catalogCache = {};
+      financeRenderRateCard();
+      return;
+    }
     await financeSaveRateCardItem({ ...item, unitPrice: value });
   } catch (error) {
     financeRenderRateCard();
@@ -4589,10 +4582,24 @@ async function financeDeleteRateCardItem(index) {
   } catch (error) {}
 }
 
-function financeAddRateCardItemToQuotation(index) {
+async function financeAddRateCardItemToQuotation(index) {
   const item = financeState.rateCard[index];
   if (!item || financeState.snapshotMode) return;
-  financeAddLineFromCatalog(item);
+  if (item.isContainer) {
+    try {
+      const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(item.containerId || item.description)}`);
+      const container = (response.data || []).find(row => (
+        row.isContainer && String(row.containerId || '').toLowerCase() === String(item.containerId || '').toLowerCase()
+      ));
+      if (!container) throw new Error('Container contents are unavailable');
+      financeAddContainerAsGroup(container);
+    } catch (error) {
+      showNotification('error', error.message || 'Unable to add container');
+      return;
+    }
+  } else {
+    financeAddLineFromCatalog(item);
+  }
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
@@ -6999,11 +7006,12 @@ function profitLossRenderCensored(root, data) {
           <div class="plan-event-title-row">
             <span class="plan-event-id">#${financeEscape(String(event.id || ''))}</span>
             <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+            ${typeof planEventTypeBadgeHtml === 'function' ? planEventTypeBadgeHtml(selectedEvent) : ''}
           </div>
           <div class="plan-event-meta">
             <span>${financeEscape([event.startDate, event.endDate].filter(Boolean).join(' - '))}</span>
             ${event.location ? `<span aria-hidden="true">-</span><span>${financeEscape(event.location)}</span>` : ''}
-            ${event.state ? `<span class="plan-badge">${financeEscape(event.state)}</span>` : ''}
+            ${event.state && typeof planEventStateBadgeHtml === 'function' ? planEventStateBadgeHtml(event) : ''}
           </div>
         </div>
         <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
@@ -7146,11 +7154,12 @@ function renderProfitLossPage() {
           <div class="plan-event-title-row">
             <span class="plan-event-id">#${financeEscape(String(event.id || ''))}</span>
             <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+            ${typeof planEventTypeBadgeHtml === 'function' ? planEventTypeBadgeHtml(selectedEvent) : ''}
           </div>
           <div class="plan-event-meta">
             <span>${financeEscape([event.startDate, event.endDate].filter(Boolean).join(' - '))}</span>
             ${event.location ? `<span aria-hidden="true">-</span><span>${financeEscape(event.location)}</span>` : ''}
-            ${event.state ? `<span class="plan-badge">${financeEscape(event.state)}</span>` : ''}
+            ${event.state && typeof planEventStateBadgeHtml === 'function' ? planEventStateBadgeHtml(event) : ''}
           </div>
         </div>
         <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
@@ -7192,7 +7201,14 @@ function renderProfitLossPage() {
         </div>
       </section>
 
-      <section class="finance-card pnl-expenses">
+      <section class="finance-card pnl-expenses"
+               ondragenter="profitLossExpenseDragOver(event)"
+               ondragover="profitLossExpenseDragOver(event)"
+               ondragleave="profitLossExpenseDragLeave(event)"
+               ondrop="profitLossExpenseDrop(event)">
+        <input id="profitLossExpenseDropInput" type="file" multiple hidden
+               accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+               onchange="profitLossUploadExpenseFiles(this.files);this.value=''">
         <div class="pnl-section-head">
           <h3>Expense Breakdown</h3>
           <div class="pnl-actions">
@@ -7205,7 +7221,7 @@ function renderProfitLossPage() {
             <tbody>
               ${expenses.map(row => `
                 <tr>
-                  <td><strong>${financeEscape(row.description)}</strong></td>
+                  <td><strong>${financeEscape(row.description)}</strong>${row.needsReview ? '<span class="pnl-review-pill">Needs review</span>' : ''}</td>
                   <td><span class="pnl-source-pill pnl-source-${financeEscapeAttr(row.source || 'manual')}">${financeEscape(row.sourceLabel || (row.readOnly ? 'Claim' : 'Added expense'))}</span></td>
                   <td>${profitLossExpenseCategoryMarkup(row)}</td>
                   <td>${financeEscape(row.vendor || '-')}</td>
@@ -7427,6 +7443,7 @@ async function profitLossSubmitExpense(event) {
   try {
     let response;
     if (editingExpenseId) {
+      expense.needsReview = false;
       response = await apiCall(
         `/api/finance/profit-loss/${profitLossState.eventId}/expenses/${encodeURIComponent(editingExpenseId)}`,
         'PUT',
@@ -7445,6 +7462,51 @@ async function profitLossSubmitExpense(event) {
     showNotification('success', editingExpenseId ? 'Expense updated' : (file ? 'Receipt uploaded' : 'Expense added'));
   } catch (error) {
     showNotification('error', error.message || 'Failed to save expense');
+  }
+}
+
+function profitLossExpenseDragOver(event) {
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  event.currentTarget?.classList.add('is-file-dragging');
+}
+
+function profitLossExpenseDragLeave(event) {
+  const section = event.currentTarget;
+  if (!section || (event.relatedTarget && section.contains(event.relatedTarget))) return;
+  section.classList.remove('is-file-dragging');
+}
+
+async function profitLossExpenseDrop(event) {
+  event.preventDefault();
+  event.currentTarget?.classList.remove('is-file-dragging');
+  await profitLossUploadExpenseFiles(event.dataTransfer?.files || []);
+}
+
+async function profitLossUploadExpenseFiles(fileList) {
+  const files = Array.from(fileList || []).filter(file => file && file.name);
+  const eventId = Number(profitLossState.eventId || 0);
+  if (!eventId || !files.length) return;
+  let uploaded = 0;
+  let failed = 0;
+  for (const file of files) {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const response = await apiCall(`/api/finance/profit-loss/${eventId}/expenses`, 'POST', form);
+      profitLossState.data = response.data;
+      uploaded += 1;
+    } catch (error) {
+      failed += 1;
+      console.warn(`Expense upload failed for ${file.name}:`, error);
+    }
+  }
+  renderProfitLossPage();
+  if (uploaded) {
+    showNotification('success', `${uploaded} expense file${uploaded === 1 ? '' : 's'} uploaded for review`);
+  }
+  if (failed) {
+    showNotification('error', `${failed} file${failed === 1 ? '' : 's'} could not be uploaded`);
   }
 }
 
