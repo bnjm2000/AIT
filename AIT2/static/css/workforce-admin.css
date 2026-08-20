@@ -274,6 +274,17 @@
   flex: 0 0 auto;
 }
 
+.wf-manpower-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.wf-manpower-title-row h2 {
+  margin: 0;
+}
+
 .wf-event-picker-content {
   min-width: 0;
   flex: 1;
@@ -2279,6 +2290,10 @@ button.wf-calendar-day.selected.has-conflict:hover {
   font-weight: 750;
 }
 
+.wf-review-form .wf-field[hidden] {
+  display: none;
+}
+
 .wf-field input,
 .wf-field select,
 .wf-field textarea {
@@ -3243,14 +3258,26 @@ button.wf-calendar-day.selected.has-conflict:hover {
   color: #475569;
 }
 
+.wf-status-button.status-queueing {
+  border-color: #bae6fd;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.wf-status-button.status-failed {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  cursor: default;
+}
+
 .wf-admin-upload-status {
   display: grid;
   min-width: 90px;
   gap: 3px;
 }
 
-.wf-admin-progress-track,
-.wf-admin-upload-progress > span {
+.wf-admin-progress-track {
   display: block;
   height: 5px;
   overflow: hidden;
@@ -3258,8 +3285,7 @@ button.wf-calendar-day.selected.has-conflict:hover {
   background: #e2e8f0;
 }
 
-.wf-admin-progress-track > span,
-.wf-admin-upload-progress i {
+.wf-admin-progress-track > span {
   display: block;
   width: 0;
   height: 100%;
@@ -3268,8 +3294,6 @@ button.wf-calendar-day.selected.has-conflict:hover {
 }
 
 .wf-admin-upload-status small { color: var(--wf-muted); font-size: 8px; text-align: right; }
-.wf-admin-upload-progress { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto; gap: 8px; align-items: center; }
-.wf-admin-upload-progress[hidden] { display: none; }
 
 .wf-admin-dropzone {
   min-height: 112px;
@@ -3309,11 +3333,49 @@ button.wf-calendar-day.selected.has-conflict:hover {
   font-size: 12px;
 }
 
-.wf-admin-dropzone small {
+.wf-admin-dropzone > small {
   max-width: 100%;
   overflow: hidden;
   color: var(--wf-muted, #64748b);
   font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-admin-selected-files {
+  display: grid;
+  width: min(100%, 520px);
+  max-height: 190px;
+  gap: 5px;
+  overflow-y: auto;
+  padding: 2px;
+  color: var(--wf-muted, #64748b);
+  font-size: 10px;
+  text-align: left;
+}
+
+.wf-admin-selected-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid #dbe7e3;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .82);
+}
+
+.wf-admin-selected-file > strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-admin-selected-file > small {
+  overflow: hidden;
+  font-size: 9px;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4037,6 +4099,10 @@ button.wf-directory-row {
 
   .wf-manpower-page-heading .wf-button {
     width: 100%;
+  }
+
+  .wf-manpower-title-row .wf-button {
+    width: auto;
   }
 
   .wf-manpower-heading-actions {

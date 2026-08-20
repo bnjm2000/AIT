@@ -1323,6 +1323,132 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(event_linked_costing['vendorDiscrepancies'][0]['actualAmount'], 500)
         self.assertEqual(event_linked_costing['vendorDiscrepancies'][0]['expectedAmount'], 450)
 
+    def test_manual_vendor_assignments_replace_costing_placeholders_and_sum_manpower(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Manually Scheduled Vendor Project',
+            'lineItems': [{
+                'id': 'video-rental',
+                'description': 'Video processor rental',
+                'department': 'Video System',
+                'departmentCode': 'VX',
+                'quantity': 1,
+                'days': 1,
+                'total': 800,
+            }, {
+                'id': 'camera-rental',
+                'description': 'Camera rental',
+                'department': 'Camera System',
+                'departmentCode': 'CAMERASYSTEM',
+                'quantity': 1,
+                'days': 1,
+                'total': 700,
+            }, {
+                'id': 'vendor-crew',
+                'description': 'Vendor crew',
+                'department': 'Manpower',
+                'departmentCode': 'MANPOWER',
+                'quantity': 1,
+                'days': 1,
+                'total': 600,
+            }],
+        }).get_json()['data']
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}", json={'status': 'accepted'},
+        ).get_json()['data']
+        event_id = accepted['eventId']
+        vendor_id = 'vendor-manual-schedule'
+        workforce = load_workforce(self.manager.data_folder)
+        workforce['vendors'].append({
+            'id': vendor_id,
+            'name': 'Manual Schedule Vendor',
+            'memberIds': [],
+            'active': True,
+            'createdAt': '2026-08-20T09:00:00',
+        })
+        workforce['assignments'][str(event_id)] = [{
+            'id': 'manual-video-service',
+            'freelancerId': vendor_id,
+            'vendorId': vendor_id,
+            'subjectType': 'vendor',
+            'providerType': 'service',
+            'department': 'VX',
+            'subprojectId': 'main',
+            'workDates': ['2026-08-20'],
+            'days': 1,
+            'serviceName': 'Video processor rental',
+            'serviceCost': 600,
+        }, {
+            'id': 'manual-camera-service',
+            'freelancerId': vendor_id,
+            'vendorId': vendor_id,
+            'subjectType': 'vendor',
+            'providerType': 'service',
+            'department': 'VX',
+            'subprojectId': 'main',
+            'workDates': ['2026-08-20'],
+            'days': 1,
+            'serviceName': 'Camera rental',
+            'serviceCost': 500,
+        }, {
+            'id': 'manual-vendor-manpower',
+            'freelancerId': vendor_id,
+            'vendorId': vendor_id,
+            'subjectType': 'vendor',
+            'providerType': 'manpower',
+            'department': 'VX',
+            'subprojectId': 'main',
+            'workDates': ['2026-08-20'],
+            'days': 1,
+            'roleName': '2 pax manpower',
+            'pax': 2,
+            'ratePerPax': 300,
+        }]
+        save_workforce(self.manager.data_folder, workforce)
+
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        costs = {
+            'video-rental': 600,
+            'camera-rental': 500,
+            'vendor-crew': 600,
+        }
+        for line in costing['lineItems']:
+            line.update({
+                'vendorName': 'Manual Schedule Vendor',
+                'vendorId': vendor_id,
+                'vendorType': 'vendor',
+                'itemCost': costs[line['id']],
+            })
+        saved = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        saved_costing = saved.get_json()['data']
+        self.assertEqual(saved_costing['totals']['cost'], 1700)
+        self.assertEqual(saved_costing['vendorDiscrepancies'], [])
+
+        workforce = load_workforce(self.manager.data_folder)
+        vendor_rows = [
+            row for row in event_assignments(workforce, event_id)
+            if row.get('vendorId') == vendor_id
+        ]
+        self.assertEqual(len(vendor_rows), 3)
+        self.assertFalse(any(row.get('sourceCostingId') for row in vendor_rows))
+
+        next(
+            row for row in vendor_rows
+            if row['id'] == 'manual-vendor-manpower'
+        )['ratePerPax'] = 250
+        save_workforce(self.manager.data_folder, workforce)
+        refreshed = self.client.get(
+            f"/api/costings/{costing['id']}"
+        ).get_json()['data']
+        self.assertEqual(len(refreshed['vendorDiscrepancies']), 1)
+        self.assertEqual(refreshed['vendorDiscrepancies'][0]['expectedAmount'], 1700)
+        self.assertEqual(refreshed['vendorDiscrepancies'][0]['actualAmount'], 1600)
+
     def test_late_vendor_assignment_updates_only_untouched_event_requirement(self):
         self.login('owner')
         quotation = self.client.post('/api/quotations', json={

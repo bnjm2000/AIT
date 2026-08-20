@@ -687,6 +687,11 @@
   color: var(--schedule-green-dark);
 }
 
+.wf-schedule-role.saving {
+  cursor: wait;
+  opacity: .65;
+}
+
 .wf-schedule-person-main strong {
   color: #17243b;
   font-size: 13px;
@@ -757,6 +762,183 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.wf-schedule-room.saving,
+.wf-schedule-dept.saving {
+  cursor: wait;
+  opacity: .65;
+}
+
+.wf-schedule-tag-menu {
+  position: fixed;
+  z-index: 1400;
+  display: grid;
+  width: max-content;
+  min-width: 148px;
+  max-width: min(260px, calc(100vw - 16px));
+  gap: 2px;
+  overflow: hidden;
+  border: 1px solid #cad6d2;
+  border-radius: 7px;
+  background: #fff;
+  padding: 4px;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 18%);
+}
+
+.wf-schedule-tag-menu > button {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #24364b;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-schedule-tag-menu > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-schedule-tag-menu > button:hover,
+.wf-schedule-tag-menu > button:focus-visible {
+  outline: 0;
+  border-color: #dce5e2;
+  background: #f4f8f7;
+}
+
+.wf-schedule-tag-menu > button.selected {
+  background: #eaf5f1;
+  color: var(--schedule-green-dark);
+}
+
+.wf-schedule-tag-menu .wf-schedule-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  visibility: hidden;
+}
+
+.wf-schedule-tag-menu > button.selected .wf-schedule-icon {
+  visibility: visible;
+}
+
+.wf-schedule-tag-menu-badge {
+  min-width: 31px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: var(--wf-dept-color);
+  color: var(--wf-dept-text);
+  padding: 3px 5px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+}
+
+.wf-schedule-role-popover {
+  width: 238px;
+  max-width: calc(100vw - 16px);
+}
+
+.wf-schedule-role-editor {
+  display: grid;
+  gap: 9px;
+  padding: 4px;
+}
+
+.wf-schedule-role-context {
+  display: grid;
+  gap: 2px;
+  padding: 2px 3px;
+}
+
+.wf-schedule-role-context strong {
+  color: #24364b;
+  font-size: 12px;
+}
+
+.wf-schedule-role-context span,
+.wf-schedule-role-editor label > span,
+.wf-schedule-role-suggestions > span {
+  color: #718096;
+  font-size: 10px;
+}
+
+.wf-schedule-role-editor label {
+  display: grid;
+  gap: 4px;
+}
+
+.wf-schedule-role-editor input {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #c7d3dc;
+  border-radius: 5px;
+  outline: 0;
+  background: #fff;
+  color: #24364b;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.wf-schedule-role-editor input:focus {
+  border-color: var(--schedule-green);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--schedule-green) 15%, transparent);
+}
+
+.wf-schedule-role-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wf-schedule-role-suggestions > span {
+  width: 100%;
+}
+
+.wf-schedule-role-suggestions > button,
+.wf-schedule-role-actions > button {
+  border: 1px solid #cdd9e2;
+  border-radius: 5px;
+  background: #fff;
+  color: #33465b;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.wf-schedule-role-suggestions > button:hover,
+.wf-schedule-role-suggestions > button:focus-visible {
+  border-color: var(--schedule-green);
+  outline: 0;
+  background: #eff8f5;
+  color: var(--schedule-green-dark);
+}
+
+.wf-schedule-role-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.wf-schedule-role-actions > button.primary {
+  border-color: var(--schedule-green);
+  background: var(--schedule-green);
+  color: #fff;
 }
 
 .wf-schedule-room:hover,
@@ -856,116 +1038,6 @@
 .wf-schedule-person-remove:disabled {
   opacity: .5;
   cursor: wait;
-}
-
-.wf-schedule-day-editor {
-  display: grid;
-  gap: 13px;
-}
-
-.wf-schedule-day-editor-context {
-  margin: 0;
-  border-left: 3px solid var(--schedule-green);
-  background: #f3f8f7;
-  color: #314a45;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.wf-schedule-day-departments {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.wf-schedule-day-departments > button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 16px;
-  min-height: 37px;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #d8e0e7;
-  border-radius: 6px;
-  background: #fff;
-  color: #26384d;
-  padding: 6px 8px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.wf-schedule-day-departments > button > span {
-  min-width: 30px;
-  border-radius: 4px;
-  background: var(--wf-dept-color);
-  color: var(--wf-dept-text);
-  padding: 3px 5px;
-  text-align: center;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.wf-schedule-day-departments > button > b {
-  overflow: hidden;
-  font-size: 11px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wf-schedule-day-departments > button:hover,
-.wf-schedule-day-departments > button:focus-visible {
-  border-color: var(--schedule-green);
-  outline: 0;
-  background: #f7fbfa;
-}
-
-.wf-schedule-day-departments > button.selected {
-  border-color: var(--schedule-green);
-  box-shadow: inset 0 0 0 1px var(--schedule-green);
-  background: #eff8f5;
-}
-
-.wf-schedule-day-departments .wf-schedule-icon {
-  width: 14px;
-  height: 14px;
-  color: var(--schedule-green-dark);
-}
-
-.wf-schedule-role-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  margin-top: -7px;
-}
-
-.wf-schedule-role-suggestions > span {
-  color: #718096;
-  font-size: 10px;
-  font-weight: 400;
-}
-
-.wf-schedule-role-suggestions > button {
-  border: 1px solid #cdd9e2;
-  border-radius: 5px;
-  background: #fff;
-  color: #33465b;
-  padding: 4px 7px;
-  font: inherit;
-  font-size: 10.5px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.wf-schedule-role-suggestions > button:hover,
-.wf-schedule-role-suggestions > button:focus-visible {
-  border-color: var(--schedule-green);
-  outline: 0;
-  background: #eff8f5;
-  color: var(--schedule-green-dark);
 }
 
 .wf-schedule-person-download:hover,

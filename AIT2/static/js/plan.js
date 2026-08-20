@@ -17,6 +17,10 @@ var planPageState = {
 };
 
 var EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__';
+var planQuantitySaveTimers = new Map();
+var planQuantitySaveChains = new Map();
+var planCustomQuantityAssetIds = new Map();
+var planRealtimeSuppressedUntil = 0;
 
 function eventSubprojects(event) {
   return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
@@ -260,7 +264,11 @@ function renderEventSubprojectTabs(stateName, event, renderFunction, label, opti
 
 function eventSubprojectDragStart(event, encodedPayload) {
   const payload = planDecode(encodedPayload);
-  if (!payload || !event?.dataTransfer) {
+  if (
+    !payload ||
+    !event?.dataTransfer ||
+    event.target?.closest?.('button, input, select, textarea, a, label')
+  ) {
     event?.preventDefault?.();
     return;
   }
@@ -440,6 +448,7 @@ async function eventSubprojectOrderDrop(event, stateName, targetSubprojectId, ra
 }
 
 function eventSubprojectDragPayload(state, event, payload) {
+  if (eventSubprojects(event).length <= 1) return '';
   const room = eventActiveSubproject(state, event);
   if (!room || eventIsConsolidated(state, event)) return '';
   return planEncode(JSON.stringify({
@@ -1894,10 +1903,10 @@ function planRequirementQuantityControl(group) {
   return `
     <div class="plan-qty-control" aria-label="Required quantity">
       <button type="button" ${quantity <= 1 ? 'disabled' : ''}
-              onclick="planSetModelQuantity(${args},${quantity - 1})">−</button>
+              onclick="planAdjustModelQuantity(${args},-1,this)">−</button>
       <input type="number" min="1" value="${quantity}"
-             onchange="planSetModelQuantity(${args},this.value)">
-      <button type="button" onclick="planSetModelQuantity(${args},${quantity + 1})">+</button>
+             onchange="planSetModelQuantity(${args},this.value,this)">
+      <button type="button" onclick="planAdjustModelQuantity(${args},1,this)">+</button>
     </div>
   `;
 }
@@ -1914,11 +1923,11 @@ function planCustomQuantityControl(custom) {
   return `
     <div class="plan-qty-control" aria-label="Required quantity">
       <button type="button" ${quantity <= 1 ? 'disabled' : ''}
-              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity - 1})">−</button>
+              onclick="planAdjustCustomQuantity('${planEncode(custom.id)}',-1,this)">−</button>
       <input type="number" min="1" value="${quantity}"
-             onchange="planSetCustomQuantity('${planEncode(custom.id)}',this.value)">
+             onchange="planSetCustomQuantity('${planEncode(custom.id)}',this.value,this)">
       <button type="button"
-              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity + 1})">+</button>
+              onclick="planAdjustCustomQuantity('${planEncode(custom.id)}',1,this)">+</button>
     </div>
   `;
 }
@@ -2938,21 +2947,107 @@ async function planAddModel(encodedDepartment, encodedBrand, encodedModel, encod
   } catch (error) {}
 }
 
-async function planSetModelQuantity(encodedDepartment, encodedBrand, encodedModel, encodedDescription, quantity) {
-  const nextQuantity = Math.max(1, Number(quantity || 1));
-  try {
-    await apiCall(`/api/events/${planPageState.eventId}/models`, 'PUT', {
-      department: planDecode(encodedDepartment),
-      brand: planDecode(encodedBrand),
-      model: planDecode(encodedModel),
-      description: planDecode(encodedDescription),
-      quantity: nextQuantity,
-      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+function planQuantityInput(buttonOrInput) {
+  if (!buttonOrInput) return null;
+  if (buttonOrInput.matches?.('input')) return buttonOrInput;
+  return buttonOrInput.closest?.('.plan-qty-control')?.querySelector('input') || null;
+}
+
+function planShowOptimisticQuantity(buttonOrInput, quantity) {
+  const input = planQuantityInput(buttonOrInput);
+  if (!input) return;
+  input.value = String(quantity);
+  input.setAttribute('aria-busy', 'true');
+  const decrement = input.closest('.plan-qty-control')?.querySelector('button');
+  if (decrement) decrement.disabled = quantity <= 1;
+}
+
+function planQuantitySaveKey(kind, eventId, subprojectId, identity) {
+  return JSON.stringify([kind, Number(eventId || 0), String(subprojectId || ''), ...identity]);
+}
+
+function planScheduleQuantitySave(key, save) {
+  clearTimeout(planQuantitySaveTimers.get(key));
+  planQuantitySaveTimers.set(key, setTimeout(async () => {
+    planQuantitySaveTimers.delete(key);
+    const previous = planQuantitySaveChains.get(key) || Promise.resolve();
+    const current = previous.catch(() => {}).then(save);
+    planQuantitySaveChains.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (planQuantitySaveChains.get(key) === current) {
+        planQuantitySaveChains.delete(key);
+      }
+    }
+  }, 450));
+}
+
+function planApplyLocalModelQuantity(eventId, subprojectId, group, quantity) {
+  const event = planPageState.event;
+  if (!event || Number(event.id) !== Number(eventId)) return;
+  const groupKey = eventSubprojectGroupKey(group);
+  const room = eventSubprojects(event).find(
+    item => String(item.id || '') === String(subprojectId || '')
+  );
+  if (room) {
+    const matches = (room.items || []).filter(item => (
+      !item?.isCustom && eventSubprojectGroupKey(item) === groupKey
+    ));
+    matches.forEach((item, index) => {
+      item.quantity = index === 0 ? quantity : 0;
     });
-    await refreshPlanSelectedEvent();
-  } catch (error) {
-    renderPlanPage();
+    return;
   }
+  Object.values(event.modelGroups || {}).forEach(item => {
+    if (eventSubprojectGroupKey(item) === groupKey) {
+      item.requiredQuantity = quantity;
+    }
+  });
+}
+
+function planAdjustModelQuantity(encodedDepartment, encodedBrand, encodedModel, encodedDescription, delta, button) {
+  const input = planQuantityInput(button);
+  const quantity = Math.max(1, Number(input?.value || 1) + Number(delta || 0));
+  planSetModelQuantity(
+    encodedDepartment,
+    encodedBrand,
+    encodedModel,
+    encodedDescription,
+    quantity,
+    input
+  );
+}
+
+function planSetModelQuantity(encodedDepartment, encodedBrand, encodedModel, encodedDescription, quantity, input = null) {
+  const nextQuantity = Math.max(1, Number(quantity || 1));
+  const eventId = Number(planPageState.eventId);
+  const subprojectId = String(
+    eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+  );
+  const group = {
+    department: planDecode(encodedDepartment),
+    brand: planDecode(encodedBrand),
+    model: planDecode(encodedModel),
+    description: planDecode(encodedDescription)
+  };
+  const key = planQuantitySaveKey('model', eventId, subprojectId, [
+    group.department, group.brand, group.model, group.description
+  ]);
+  planShowOptimisticQuantity(input, nextQuantity);
+  planApplyLocalModelQuantity(eventId, subprojectId, group, nextQuantity);
+  planScheduleQuantitySave(key, async () => {
+    try {
+      await apiCall(`/api/events/${eventId}/models`, 'PUT', {
+        ...group,
+        quantity: nextQuantity,
+        subprojectId
+      });
+      if (Number(planPageState.eventId) === eventId) renderPlanRealtimeAssets();
+    } catch (error) {
+      if (Number(planPageState.eventId) === eventId) await refreshPlanSelectedEvent();
+    }
+  });
 }
 
 async function planRemoveModel(encodedDepartment, encodedBrand, encodedModel, encodedDescription) {
@@ -3104,21 +3199,79 @@ function planCancelCustomAssetEdit() {
   if (cancel) cancel.style.display = 'none';
 }
 
-async function planSetCustomQuantity(encodedAssetId, quantity) {
-  try {
-    await apiCall(
-      `/api/events/${planPageState.eventId}/custom-assets/update-quantity`,
-      'PUT',
-      {
-        assetId: planDecode(encodedAssetId),
-        newQuantity: Math.max(1, Number(quantity || 1)),
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    await refreshPlanSelectedEvent();
-  } catch (error) {
-    renderPlanPage();
+function planReplaceLocalAssetReference(eventId, oldAssetId, newAssetId, quantity) {
+  const event = planPageState.event;
+  if (!event || Number(event.id) !== Number(eventId) || !oldAssetId || !newAssetId) return;
+  ['preparedItems', 'actuallyPrepared', 'returnedItems', 'extraAssets', 'customCollected']
+    .forEach(field => {
+      if (!Array.isArray(event[field])) return;
+      event[field] = event[field].map(value => (
+        String(value) === String(oldAssetId) ? newAssetId : value
+      ));
+    });
+  eventSubprojects(event).forEach(room => {
+    (room.items || []).forEach(item => {
+      if (!(item.assetRefs || []).some(ref => String(ref) === String(oldAssetId))) return;
+      item.assetRefs = (item.assetRefs || []).map(ref => (
+        String(ref) === String(oldAssetId) ? newAssetId : ref
+      ));
+      item.quantity = quantity;
+    });
+    room.extraRefs = (room.extraRefs || []).map(ref => (
+      String(ref) === String(oldAssetId) ? newAssetId : ref
+    ));
+  });
+}
+
+function planAdjustCustomQuantity(encodedAssetId, delta, button) {
+  const input = planQuantityInput(button);
+  const quantity = Math.max(1, Number(input?.value || 1) + Number(delta || 0));
+  planSetCustomQuantity(encodedAssetId, quantity, input);
+}
+
+function planSetCustomQuantity(encodedAssetId, quantity, input = null) {
+  const assetId = planDecode(encodedAssetId);
+  const custom = parseCustomAsset(assetId);
+  const nextQuantity = Math.max(1, Number(quantity || 1));
+  const eventId = Number(planPageState.eventId);
+  const subprojectId = String(
+    eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+  );
+  const key = planQuantitySaveKey('custom', eventId, subprojectId, [custom?.uid || assetId]);
+  if (!planCustomQuantityAssetIds.has(key)) {
+    planCustomQuantityAssetIds.set(key, assetId);
   }
+  planShowOptimisticQuantity(input, nextQuantity);
+  planScheduleQuantitySave(key, async () => {
+    const currentAssetId = planCustomQuantityAssetIds.get(key) || assetId;
+    try {
+      planRealtimeSuppressedUntil = Date.now() + 5000;
+      const response = await apiCall(
+        `/api/events/${eventId}/custom-assets/update-quantity`,
+        'PUT',
+        { assetId: currentAssetId, newQuantity: nextQuantity, subprojectId }
+      );
+      const nextAssetId = response.newAssetId || currentAssetId;
+      planCustomQuantityAssetIds.set(key, nextAssetId);
+      planReplaceLocalAssetReference(
+        eventId,
+        response.oldAssetId || currentAssetId,
+        nextAssetId,
+        Number(response.newQuantity || nextQuantity)
+      );
+      if (Number(planPageState.eventId) === eventId) renderPlanRealtimeAssets();
+    } catch (error) {
+      planCustomQuantityAssetIds.delete(key);
+      if (Number(planPageState.eventId) === eventId) await refreshPlanSelectedEvent();
+    }
+  });
+}
+
+function planShouldSuppressRealtime(eventId) {
+  return (
+    Number(planPageState.eventId) === Number(eventId) &&
+    Date.now() < planRealtimeSuppressedUntil
+  );
 }
 
 async function planRemoveCustomAsset(encodedAssetId) {

@@ -38,7 +38,10 @@ const workforcePageState = {
   transportDriverDetails: new Map(),
   viewMode: 'assignments',
   activeSubprojectId: 'all',
-  focusTarget: ''
+  focusTarget: '',
+  pendingUploads: new Map(),
+  uploadActive: false,
+  uploadSequence: 0
 };
 
 const workforceEventChooserState = {
@@ -444,14 +447,22 @@ function openEventWorkforce(eventId, focus = '') {
     showNotification('error', 'Admin privileges are required');
     return;
   }
-  workforcePageState.eventId = Number(eventId);
+  const id = Number(eventId);
+  workforcePageState.eventId = id;
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
   if (typeof resetWorkforceScheduleFilters === 'function') {
     resetWorkforceScheduleFilters();
   }
   workforcePageState.focusTarget = String(focus || '');
-  showSection(focus === 'transport' ? 'transport' : 'workforce');
+  if (id && typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
+  showSection(focus === 'transport' ? 'transport' : 'workforce', { eventId: id });
+}
+
+function openEventWorkforceReview(eventId, submissionId) {
+  const id = String(submissionId || '').trim();
+  if (!id) return;
+  openEventWorkforce(eventId, `review-claim:${id}`);
 }
 
 async function loadWorkforcePage() {
@@ -1032,6 +1043,15 @@ function wfStatusMenu(record) {
       <span class="wf-admin-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:${Number(record.uploadProgress || 0)}%"></span></span>
       <small data-wf-upload-label="${wfAttr(record.id)}">${Math.round(Number(record.uploadProgress || 0))}%</small></span>`;
   }
+  if (record.status === 'Queueing') {
+    return `<span class="wf-admin-upload-status"><span class="wf-status-button status-queueing">Queueing</span>
+      <span class="wf-admin-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:100%"></span></span>
+      <small data-wf-upload-label="${wfAttr(record.id)}">Queueing</small></span>`;
+  }
+  if (record.status === 'Failed') {
+    return `<span class="wf-admin-upload-status"><span class="wf-status-button status-failed" title="${wfAttr(record.processingError || 'Upload failed')}">Failed</span>
+      <small>${wfEscape(record.processingError || 'Upload failed')}</small></span>`;
+  }
   if (record.processingState === 'Queued' || record.submissionStage === 'Queued') {
     return `<span class="wf-status-button ${wfStatusClass('Queued')}">Queued</span>`;
   }
@@ -1116,13 +1136,37 @@ function wfClaimGroupStatusControl(claims, eventId, subjectId, controlKey = '') 
 
 function wfSubmissionRow(record, kind) {
   return `<div class="wf-file-row">
-    <button class="wf-file-name" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')"
-      title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${kind} upload`)}</button>
+    ${record.clientOnly
+      ? `<span class="wf-file-name" title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${kind} upload`)}</span>`
+      : `<button class="wf-file-name" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')"
+          title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${kind} upload`)}</button>`}
     <span class="wf-file-amount">${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}</span>
     ${wfStatusMenu(record)}
-    <button class="wf-icon-button danger" type="button" title="Delete upload"
-      onclick="deleteWorkforceSubmission('${wfAttr(record.id)}')">&times;</button>
+    ${record.clientOnly
+      ? (record.status === 'Failed' ? `<button class="wf-icon-button danger" type="button" title="Dismiss failed upload" onclick="wfDismissPendingUpload('${wfAttr(record.id)}')">&times;</button>` : '<span></span>')
+      : `<button class="wf-icon-button danger" type="button" title="Delete upload"
+          onclick="deleteWorkforceSubmission('${wfAttr(record.id)}')">&times;</button>`}
   </div>`;
+}
+
+function wfPendingSubmissionRows(subjectId, kind) {
+  return [...workforcePageState.pendingUploads.values()].filter(row => (
+    Number(row.eventId) === Number(workforcePageState.eventId) &&
+    String(row.subjectId) === String(subjectId) &&
+    row.kind === kind
+  ));
+}
+
+function wfSubmissionRowsMarkup(rows, subjectId, kind, emptyMarkup) {
+  const combined = [...wfPendingSubmissionRows(subjectId, kind), ...(rows || [])];
+  return combined.length
+    ? combined.map(row => wfSubmissionRow(row, kind)).join('')
+    : emptyMarkup;
+}
+
+function wfDismissPendingUpload(uploadId) {
+  workforcePageState.pendingUploads.delete(uploadId);
+  renderWorkforcePage();
 }
 
 function wfSlotControls(freelancerId, kind, limits) {
@@ -1158,6 +1202,10 @@ function wfSubmissionDrop(event, subjectId, kind) {
   event.currentTarget.classList.remove('is-file-dragging');
   const files = [...(event.dataTransfer?.files || [])];
   if (!files.length) return;
+  if (workforcePageState.uploadActive) {
+    showNotification('warning', 'Please wait for the current upload queue to finish');
+    return;
+  }
   openAdminWorkforceUpload(subjectId, kind);
   const input = document.getElementById('wfAdminUploadFile');
   if (!input) return;
@@ -1165,6 +1213,7 @@ function wfSubmissionDrop(event, subjectId, kind) {
   files.forEach(file => transfer.items.add(file));
   input.files = transfer.files;
   updateAdminWorkforceDropzoneFiles();
+  document.getElementById('wfAdminUploadForm')?.requestSubmit();
 }
 
 function wfWorkerHtml(freelancerId, assignments) {
@@ -1198,12 +1247,12 @@ function wfWorkerHtml(freelancerId, assignments) {
     </div>
     <section class="wf-submission-box" ${wfSubmissionDropAttributes(freelancer.id, 'invoice')}><header><span>Invoice &middot; ${limits.activeInvoices}/${limits.invoiceLimit}</span>
       ${wfSlotControls(freelancer.id, 'invoice', limits)}</header>
-      ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice submitted.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.invoices, freelancer.id, 'invoice', '<div class="wf-empty">No invoice submitted.</div>')}</section>
     <section class="wf-submission-box" ${wfSubmissionDropAttributes(freelancer.id, 'claim')}><header><span class="wf-claims-heading"><span>Claims &middot; ${limits.activeClaims}/${limits.claimLimit}</span>
       ${wfClaimTotalMarkup(submissions.claims || [])}
       ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, freelancer.id, assignments[0]?.department)}</span>
       ${wfSlotControls(freelancer.id, 'claim', limits)}</header>
-      ${submissions.claims?.length ? submissions.claims.map(row => wfSubmissionRow(row, 'claim')).join('') : '<div class="wf-empty">No claims submitted.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.claims, freelancer.id, 'claim', '<div class="wf-empty">No claims submitted.</div>')}</section>
   </article>`;
 }
 
@@ -1244,12 +1293,12 @@ function wfAppUserHtml(subjectId, assignments) {
     </div>
     <section class="wf-submission-box" ${wfSubmissionDropAttributes(subjectId, 'invoice')}><header><span>Invoice &middot; ${limits.activeInvoices}/${limits.invoiceLimit}</span>
       ${wfSlotControls(subjectId, 'invoice', limits)}</header>
-      ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice slot by default.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.invoices, subjectId, 'invoice', '<div class="wf-empty">No invoice slot by default.</div>')}</section>
     <section class="wf-submission-box" ${wfSubmissionDropAttributes(subjectId, 'claim')}><header><span class="wf-claims-heading"><span>Claims &middot; ${limits.activeClaims}/${limits.claimLimit}</span>
       ${wfClaimTotalMarkup(submissions.claims || [])}
       ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, subjectId, assignments[0]?.department)}</span>
       ${wfSlotControls(subjectId, 'claim', limits)}</header>
-      ${submissions.claims?.length ? submissions.claims.map(row => wfSubmissionRow(row, 'claim')).join('') : '<div class="wf-empty">No claims submitted.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.claims, subjectId, 'claim', '<div class="wf-empty">No claims submitted.</div>')}</section>
   </article>`;
 }
 
@@ -1291,7 +1340,7 @@ function wfVendorHtml(vendorId, assignments) {
     </div>
     <section class="wf-submission-box wf-vendor-invoice" ${wfSubmissionDropAttributes(vendor.id, 'invoice')}><header><span>Vendor invoice · ${limits.activeInvoices}/${limits.invoiceLimit}</span>
       ${wfSlotControls(vendor.id, 'invoice', limits)}</header>
-      ${submissions.invoices?.length ? submissions.invoices.map(row => wfSubmissionRow(row, 'invoice')).join('') : '<div class="wf-empty">No invoice submitted.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.invoices, vendor.id, 'invoice', '<div class="wf-empty">No invoice submitted.</div>')}</section>
     <section class="wf-submission-box" ${wfSubmissionDropAttributes(vendor.id, 'claim')}><header><span class="wf-claims-heading"><span>Vendor claims &middot; ${limits.activeClaims || 0}/${limits.claimLimit || 5}</span>
       ${wfClaimTotalMarkup(submissions.claims || [])}
       ${wfClaimGroupStatusControl(submissions.claims || [], workforcePageState.eventId, vendor.id, assignments[0]?.department)}</span>
@@ -1301,7 +1350,7 @@ function wfVendorHtml(vendorId, assignments) {
         claimSlotsRemaining: limits.claimSlotsRemaining ?? 5,
         extraClaims: limits.extraClaims || 0
       })}</header>
-      ${submissions.claims?.length ? submissions.claims.map(row => wfSubmissionRow(row, 'claim')).join('') : '<div class="wf-empty">No claims submitted.</div>'}</section>
+      ${wfSubmissionRowsMarkup(submissions.claims, vendor.id, 'claim', '<div class="wf-empty">No claims submitted.</div>')}</section>
   </article>`;
 }
 
@@ -1636,12 +1685,13 @@ function renderWorkforcePage() {
   const totals = data.totals || {};
   root.innerHTML = `
     <div class="plan-page-heading wf-manpower-page-heading">
-      <div><h2>Manpower</h2>
+      <div><div class="wf-manpower-title-row"><h2>Manpower</h2>
+        <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
+          View all invoices &amp; claims
+        </button>
+      </div>
       <p>Assign workers and vendors, then review their invoices and claims.</p></div>
       <div class="wf-manpower-heading-actions">
-        <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
-          View all invoice &amp; claims
-        </button>
         ${typeof wfWorkforceViewSwitchHtml === 'function' ? wfWorkforceViewSwitchHtml() : ''}
       </div>
     </div>
@@ -1704,6 +1754,10 @@ function renderWorkforcePage() {
       const panel = root.querySelector('.wf-transport-panel');
       panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  } else if (workforcePageState.focusTarget.startsWith('review-claim:')) {
+    const submissionId = workforcePageState.focusTarget.slice('review-claim:'.length);
+    workforcePageState.focusTarget = '';
+    requestAnimationFrame(() => openWorkforceReview(submissionId));
   }
 }
 
@@ -1874,9 +1928,7 @@ function ensureWorkforceModals() {
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAdminUploadSubtitle"></p>
         <div id="wfAdminInvoiceFields"><p class="wf-help">Invoice details will be read when supported and verified during review.</p></div>
         <div id="wfAdminClaimFields" hidden><p class="wf-help">Claim amount and date will be analysed after upload. Verify them during review.</p></div>
-        <label class="wf-field wf-admin-dropzone" id="wfAdminUploadDropzone"><span id="wfAdminUploadFileLabel">Invoice PDF *</span><input id="wfAdminUploadFile" name="files" type="file" required><strong id="wfAdminUploadDropPrompt">Drag &amp; drop or choose a file</strong><small id="wfAdminUploadSelectedFiles">No file selected</small></label>
-        <div class="wf-admin-upload-progress" id="wfAdminUploadProgress" hidden><strong>Uploading</strong>
-          <span><i id="wfAdminUploadProgressBar"></i></span><small id="wfAdminUploadProgressLabel">0%</small></div>
+        <label class="wf-field wf-admin-dropzone" id="wfAdminUploadDropzone"><span id="wfAdminUploadFileLabel">Invoice PDF *</span><input id="wfAdminUploadFile" name="files" type="file" required><strong id="wfAdminUploadDropPrompt">Drag &amp; drop or choose a file</strong><div class="wf-admin-selected-files" id="wfAdminUploadSelectedFiles">No file selected</div></label>
         <div class="wf-error" id="wfAdminUploadError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfAdminUploadModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Upload File</button></footer></form>`) +
@@ -1941,9 +1993,25 @@ function updateAdminWorkforceDropzoneFiles() {
   const label = document.getElementById('wfAdminUploadSelectedFiles');
   if (!input || !label) return;
   const files = [...input.files];
-  label.textContent = files.length
-    ? files.map(file => file.name).join(', ')
-    : 'No file selected';
+  if (!files.length) {
+    label.textContent = 'No file selected';
+    return;
+  }
+  label.innerHTML = files.map(file => {
+    return `<span class="wf-admin-selected-file">
+      <strong title="${wfAttr(file.name)}">${wfEscape(file.name)}</strong>
+      <small>Ready</small>
+    </span>`;
+  }).join('');
+}
+
+function wfUpdatePendingUploadProgress(row) {
+  const percent = Math.max(0, Math.min(100, Number(row.uploadProgress || 0)));
+  const label = row.status === 'Uploading' ? `${Math.round(percent)}%` : row.status;
+  document.querySelectorAll(`[data-wf-upload-progress="${CSS.escape(row.id)}"]`)
+    .forEach(node => { node.style.width = `${percent}%`; });
+  document.querySelectorAll(`[data-wf-upload-label="${CSS.escape(row.id)}"]`)
+    .forEach(node => { node.textContent = label; });
 }
 
 function openWorkforceModal(id) {
@@ -3215,8 +3283,11 @@ function openAdminWorkforceUpload(freelancerId, kind) {
     : 'Invoice files (PDF or Excel) *';
   document.getElementById('wfAdminUploadDropPrompt').textContent = claim ? 'Drag & drop or choose claim files' : 'Drag & drop or choose invoice files';
   updateAdminWorkforceDropzoneFiles();
-  document.querySelector('#wfAdminUploadForm [type="submit"]').textContent = 'Upload Files';
-  document.getElementById('wfAdminUploadProgress').hidden = true;
+  const submit = document.querySelector('#wfAdminUploadForm .wf-button.primary');
+  submit.type = 'submit';
+  submit.onclick = null;
+  submit.disabled = false;
+  submit.textContent = 'Upload Files';
   wfError('wfAdminUploadError');
   openWorkforceModal('wfAdminUploadModal');
 }
@@ -3231,65 +3302,71 @@ function syncAdminClaimCategory() {
 
 async function submitAdminWorkforceUpload(event) {
   event.preventDefault();
+  if (workforcePageState.uploadActive) return;
   const id = document.getElementById('wfAdminUploadFreelancerId').value;
   const kind = document.getElementById('wfAdminUploadKind').value;
   const files = [...document.getElementById('wfAdminUploadFile').files];
   if (!files.length) return;
-  const plural = kind === 'invoice' ? 'invoices' : 'claims';
-  const submissionRows = (workforcePageState.data.submissions[id] ||= { invoices: [], claims: [] })[plural];
-  const optimisticIds = files.map((file, index) => {
-    const uploadId = `admin-upload-${Date.now()}-${index}`;
-    submissionRows.push({
-      id: uploadId, originalName: file.name, amount: null, status: 'Uploading',
-      uploadProgress: 0, clientOnly: true
-    });
-    return uploadId;
+  const pendingRows = files.map((file, index) => {
+    const uploadId = `admin-upload-${Date.now()}-${++workforcePageState.uploadSequence}-${index}`;
+    const row = {
+      id: uploadId,
+      eventId: workforcePageState.eventId,
+      subjectId: id,
+      kind,
+      originalName: file.name,
+      amount: null,
+      status: 'Queued',
+      processingState: 'Queued',
+      uploadProgress: 0,
+      clientOnly: true,
+      file
+    };
+    workforcePageState.pendingUploads.set(uploadId, row);
+    return row;
   });
   renderWorkforcePage();
-  const progress = document.getElementById('wfAdminUploadProgress');
-  progress.hidden = false;
-  let processingShown = false;
-  try {
-    const response = await wfUploadWithProgress(
-      `/api/events/${workforcePageState.eventId}/workforce/submissions/${encodeURIComponent(id)}`,
-      new FormData(event.currentTarget),
-      (value, phase) => {
-        if (phase === 'processing') {
-          if (processingShown) return;
-          processingShown = true;
-          submissionRows.forEach(row => {
-            if (optimisticIds.includes(row.id)) {
-              row.status = 'Pending Review';
-              row.processingState = 'Processing';
-            }
-          });
-          progress.querySelector('strong').textContent = 'Upload complete · Processing';
-          document.getElementById('wfAdminUploadProgressBar').style.width = '100%';
-          document.getElementById('wfAdminUploadProgressLabel').textContent = 'Processing';
-          renderWorkforcePage();
-          return;
+  workforcePageState.uploadActive = true;
+  closeWorkforceModal('wfAdminUploadModal');
+  let uploaded = 0;
+  let failed = 0;
+  for (let index = 0; index < pendingRows.length; index += 1) {
+    const row = pendingRows[index];
+    row.status = 'Uploading';
+    row.processingState = '';
+    renderWorkforcePage();
+    const formData = new FormData();
+    formData.append('kind', kind);
+    formData.append('files', row.file);
+    try {
+      const response = await wfUploadWithProgress(
+        `/api/events/${row.eventId}/workforce/submissions/${encodeURIComponent(id)}`,
+        formData,
+        (value, phase) => {
+          const previousStatus = row.status;
+          row.uploadProgress = value;
+          row.status = phase === 'queueing' ? 'Queueing' : 'Uploading';
+          if (row.status !== previousStatus) renderWorkforcePage();
+          else wfUpdatePendingUploadProgress(row);
         }
-        document.getElementById('wfAdminUploadProgressBar').style.width = `${value}%`;
-        document.getElementById('wfAdminUploadProgressLabel').textContent = `${Math.round(value)}%`;
-        optimisticIds.forEach(uploadId => {
-          const bar = document.querySelector(`[data-wf-upload-progress="${uploadId}"]`);
-          const label = document.querySelector(`[data-wf-upload-label="${uploadId}"]`);
-          if (bar) bar.style.width = `${value}%`;
-          if (label) label.textContent = `${Math.round(value)}%`;
-        });
-      }
-    );
-    progress.querySelector('strong').textContent = 'Upload complete · Processing';
-    workforcePageState.data = response.data;
-    closeWorkforceModal('wfAdminUploadModal');
+      );
+      row.status = 'Queued';
+      row.processingState = 'Queued';
+      row.uploadProgress = 100;
+      workforcePageState.pendingUploads.delete(row.id);
+      workforcePageState.data = response.data;
+      uploaded += 1;
+    } catch (error) {
+      row.status = 'Failed';
+      row.processingState = 'Failed';
+      row.processingError = error.message || 'Upload failed';
+      failed += 1;
+    }
     renderWorkforcePage();
-    showNotification('success', 'Crew upload added');
-  } catch (error) {
-    workforcePageState.data.submissions[id][plural] = submissionRows
-      .filter(row => !optimisticIds.includes(row.id));
-    renderWorkforcePage();
-    wfError('wfAdminUploadError', error.message);
   }
+  workforcePageState.uploadActive = false;
+  if (uploaded) showNotification('success', `${uploaded} file${uploaded === 1 ? '' : 's'} queued for processing`);
+  if (failed) showNotification('error', `${failed} file${failed === 1 ? '' : 's'} could not be uploaded. Check the failed file rows.`);
 }
 
 function wfUploadWithProgress(url, formData, onProgress) {
@@ -3302,7 +3379,7 @@ function wfUploadWithProgress(url, formData, onProgress) {
         onProgress(percent, percent >= 100 ? 'processing' : 'uploading');
       }
     };
-    xhr.upload.onload = () => onProgress(100, 'processing');
+    xhr.upload.onload = () => onProgress(100, 'queueing');
     xhr.onload = () => {
       let payload = {};
       try { payload = JSON.parse(xhr.responseText || '{}'); } catch (_error) {}
@@ -4196,7 +4273,7 @@ function wfReviewClaimCategoryFields(record, verified) {
   const rawCategory = String(record.category || '');
   const category = rawCategory === 'Cab'
     ? 'Transport'
-    : (['Transport', 'Meal'].includes(rawCategory) ? rawCategory : (rawCategory ? 'Other' : ''));
+    : (['Transport', 'Meal', 'Purchase'].includes(rawCategory) ? rawCategory : (rawCategory ? 'Other' : ''));
   const otherValue = category === 'Other' ? rawCategory : '';
   return `<label class="wf-field"><span>Claim date *</span>
       <input id="wfReviewClaimDate" type="date" value="${wfAttr(record.claimDate || '')}" required ${verified ? 'disabled' : ''}>
@@ -4208,6 +4285,7 @@ function wfReviewClaimCategoryFields(record, verified) {
         <option value="Transport" ${category === 'Transport' ? 'selected' : ''}>Transport</option>
         <option value="Meal" ${category === 'Meal' ? 'selected' : ''}>Meal</option>
         <option value="Other" ${category === 'Other' ? 'selected' : ''}>Other</option>
+        <option value="Purchase" ${category === 'Purchase' ? 'selected' : ''}>Purchase</option>
       </select>
     </label>
     <label class="wf-field full" id="wfReviewOtherCategoryField" ${category === 'Other' ? '' : 'hidden'}>

@@ -595,12 +595,17 @@ def build_workforce_schedule_pdf(
             for row in rows:
                 subject = _subject(subject_maps, row)
                 call_time = str((row.get("callTimes") or {}).get(date_value) or "Not set")
+                unbroken_phone = re.sub(
+                    r"\s+", "&#160;", escape(subject.get("phone") or "")
+                )
+                phone_markup = (
+                    f" <nobr><font color='{SHOWBASE_MUTED}'>"
+                    f"{unbroken_phone}</font></nobr>"
+                    if show_phones and subject.get("phone") else ""
+                )
                 values = [
                     Paragraph(_cjk_markup(
-                        f"<b>{escape(subject['name'])}</b>" + (
-                            f" &nbsp; <font color='{SHOWBASE_MUTED}'>{escape(subject['phone'])}</font>"
-                            if show_phones and subject.get("phone") else ""
-                        ),
+                        f"<b>{escape(subject['name'])}</b>{phone_markup}",
                         bold=True,
                     ), cell_style),
                 ]

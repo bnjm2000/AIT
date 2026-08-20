@@ -2318,6 +2318,111 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(stored['unitPrice'], 175)
         self.assertEqual(data['version'], app_module.FINANCE_VERSION)
 
+    def test_finance_migration_and_normalisation_align_special_category_departments(self):
+        data = app_module._finance_defaults()
+        data['version'] = app_module.FINANCE_VERSION - 1
+        data['documents'] = [{
+            'id': 'special-category-quote',
+            'type': 'quotation',
+            'number': 'QT-2026-009-01',
+            'createdBy': 'alice',
+            'salespersonUsername': 'alice',
+            'lineItems': [{
+                'id': 'crew-line',
+                'description': 'Standby crew',
+                'department': 'General',
+                'departmentCode': 'GENERAL',
+                'systemName': 'Manpower',
+                'days': 1,
+                'quantity': 1,
+                'unitPrice': 5000,
+            }, {
+                'id': 'lorry-line',
+                'description': 'Lorry',
+                'department': 'General',
+                'departmentCode': 'GENERAL',
+                'systemName': 'Transportation',
+                'days': 1,
+                'quantity': 1,
+                'unitPrice': 500,
+            }],
+            'revisions': [{
+                'revision': 1,
+                'snapshot': {
+                    'lineItems': [{
+                        'id': 'snapshot-crew',
+                        'department': 'General',
+                        'departmentCode': 'GENERAL',
+                        'systemName': 'Manpower',
+                    }],
+                },
+            }],
+        }]
+        linked_public = {
+            'id': 'linked-crew',
+            'department': 'General',
+            'departmentCode': 'GENERAL',
+            'systemName': 'Manpower',
+        }
+        data['linkedLineItems'] = {
+            'linked-quotation': {
+                'schemaVersion': 1,
+                'quotationId': 'linked-quotation',
+                'costingId': 'linked-costing',
+                'quotationLineCount': 1,
+                'costingLineCount': 0,
+                'lines': [{
+                    'id': 'linked-crew',
+                    'public': linked_public,
+                    'allocations': [],
+                }],
+            },
+        }
+
+        self.assertTrue(app_module._migrate_finance_data(data))
+        quotation = data['documents'][0]
+        self.assertEqual(
+            [
+                (row['department'], row['departmentCode'])
+                for row in quotation['lineItems']
+            ],
+            [
+                ('Manpower', 'MANPOWER'),
+                ('Transportation', 'TRANSPORTATION'),
+            ],
+        )
+        snapshot_line = quotation['revisions'][0]['snapshot']['lineItems'][0]
+        self.assertEqual(
+            (snapshot_line['department'], snapshot_line['departmentCode']),
+            ('Manpower', 'MANPOWER'),
+        )
+        linked_record = data['linkedLineItems']['linked-quotation']
+        self.assertEqual(
+            (
+                linked_record['lines'][0]['public']['department'],
+                linked_record['lines'][0]['public']['departmentCode'],
+            ),
+            ('Manpower', 'MANPOWER'),
+        )
+        self.assertEqual(
+            linked_record['checksum'],
+            app_module._linked_line_record_checksum(linked_record),
+        )
+
+        normalised = app_module._normalise_finance_line({
+            'description': 'New crew line',
+            'department': 'General',
+            'departmentCode': 'GENERAL',
+            'systemName': 'Manpower',
+            'days': 1,
+            'quantity': 1,
+            'unitPrice': 100,
+        })
+        self.assertEqual(
+            (normalised['department'], normalised['departmentCode']),
+            ('Manpower', 'MANPOWER'),
+        )
+
     def test_finance_migration_does_not_restore_deleted_rate_aliases(self):
         catalog_key = 'inventory:ax|l-acoustics|sb18 iii'
         data = app_module._finance_defaults()
@@ -4033,7 +4138,9 @@ class FinanceFeatureTests(unittest.TestCase):
         payload = response.get_json()['data']
         self.assertEqual(payload['summary']['revenue'], 1000)
         self.assertEqual(payload['summary']['manualMealExpenses'], 123.45)
-        self.assertEqual(payload['summary']['manpowerCost'], 123.45)
+        self.assertEqual(payload['summary']['manpowerCost'], 0)
+        self.assertEqual(payload['summary']['manpowerCardCost'], 123.45)
+        self.assertEqual(payload['summary']['mealCost'], 123.45)
         self.assertEqual(payload['summary']['manualOtherExpenses'], 0)
         expense = payload['expenses'][0]
         self.assertEqual(expense['amount'], 123.45)
@@ -4041,6 +4148,84 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('/api/finance/profit-loss/expenses/', expense['attachment']['previewUrl'])
         file_response = self.client.get(expense['attachment']['previewUrl'])
         self.assertEqual(file_response.status_code, 200)
+
+    def test_profit_loss_expense_upload_returns_queued_before_background_extraction(self):
+        self.login('sales-admin')
+        self.data_manager.events[139] = Event(
+            event_id=139,
+            name='Queued Expense Upload',
+            location='Test Venue',
+            start_date='20260821',
+            end_date='20260821',
+            asset_models=[],
+            prepared_items=[],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['sales-admin'],
+        )
+        with patch.object(app_module, '_queue_profit_loss_expense_processing') as queue_processing, \
+             patch.object(app_module, 'extract_claim_amount') as extract:
+            response = self.client.post(
+                '/api/finance/profit-loss/139/expenses',
+                data={'file': (io.BytesIO(b'%PDF-1.4 queued'), 'queued-expense.pdf')},
+                content_type='multipart/form-data',
+            )
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        expense = response.get_json()['expense']
+        self.assertEqual(expense['processingState'], 'Queued')
+        self.assertEqual(expense['submissionStage'], 'Queued')
+        queue_processing.assert_called_once()
+        extract.assert_not_called()
+
+    def test_profit_loss_upload_ui_queues_files_and_shows_each_progress_state(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js'
+        )
+        with open(source_path, encoding='utf-8') as source_file:
+            source = source_file.read()
+        self.assertIn('const profitLossExpenseUploadState = {', source)
+        self.assertIn('function profitLossExpenseUploadRequest(', source)
+        self.assertIn('async function profitLossProcessExpenseUploadQueue()', source)
+        self.assertIn('data-pnl-upload-progress', source)
+        with open(app_module.__file__, encoding='utf-8') as app_source_file:
+            app_source = app_source_file.read()
+        self.assertIn("'profit-loss-expense-processing-started'", app_source)
+
+    def test_profit_loss_needs_review_and_edit_share_attachment_review_editor(self):
+        static_folder = os.path.join(os.path.dirname(app_module.__file__), 'static')
+        with open(os.path.join(static_folder, 'js', 'finance.js'), encoding='utf-8') as source_file:
+            source = source_file.read()
+        with open(os.path.join(static_folder, 'css', 'finance.css'), encoding='utf-8') as css_file:
+            css = css_file.read()
+
+        self.assertIn('class="pnl-review-pill" onclick="${action}"', source)
+        self.assertIn("`profitLossOpenExpenseModal('${financeEscapeAttr(expense.id)}')`", source)
+        self.assertIn('class="pnl-expense-edit" onclick="profitLossOpenExpenseModal', source)
+        self.assertIn('id="profitLossExpensePreviewPanel"', source)
+        self.assertIn('function profitLossRenderExpenseReviewPreview(expense)', source)
+        self.assertIn("preview = document.createElement('iframe')", source)
+        self.assertIn("preview = document.createElement('img')", source)
+        self.assertIn(
+            "`${previewUrl}#toolbar=1&navpanes=0&pagemode=none&view=Fit`",
+            source,
+        )
+        self.assertIn("title.textContent = isReview ? 'Review Expense'", source)
+        self.assertIn('id="profitLossExpenseOtherCategoryField" hidden', source)
+        self.assertIn("profitLossChooseExpenseCategory('${category}')", source)
+        for category in ('Meal', 'Transport', 'Other', 'Purchase'):
+            self.assertIn(category, source)
+        self.assertIn('.pnl-expense-modal.has-preview', css)
+        self.assertIn('grid-template-columns: minmax(0, 1.3fr) minmax(330px, .7fr)', css)
+        self.assertIn('.pnl-expense-fields .finance-field[hidden]', css)
+        self.assertIn("function profitLossOpenClaimReview(submissionId)", source)
+        claim_actions = source.split("row.source === 'worker-claim' ?", 1)[1].split(
+            ': row.readOnly ?', 1
+        )[0]
+        self.assertIn('profitLossOpenClaimReview', claim_actions)
+        self.assertIn('aria-label="Review claim"', claim_actions)
+        self.assertIn('aria-label="Open Manpower"', claim_actions)
+        self.assertNotIn('finance-delete-line', claim_actions)
 
     def test_repeatable_schedule_rows_extend_event_and_pdf(self):
         quotation = self.create_quote('Multi-day Show')
@@ -4873,7 +5058,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         payload = response.get_json()['data']
         summary = payload['summary']
-        self.assertEqual(summary['manpowerCost'], 110)
+        self.assertEqual(summary['manpowerCost'], 385)
+        self.assertEqual(summary['manpowerCardCost'], 385)
         self.assertEqual(summary['vendorServiceCost'], 275)
         self.assertEqual(summary['directCosts'], 385)
         self.assertEqual(summary['beforeCommission'], 615)
@@ -4884,14 +5070,9 @@ class FinanceFeatureTests(unittest.TestCase):
             'department': 'AX', 'label': 'Vendor - AX', 'amount': 275.0,
         }])
         self.assertTrue(any(
-            row.get('group') == 'vendor'
+            row.get('group') == 'manpower'
             and row.get('label') == 'Vendor - AX'
             and row.get('amount') == 275
-            for row in payload['profitChart']
-        ))
-        self.assertFalse(any(
-            row.get('group') == 'manpower'
-            and row.get('amount') == 385
             for row in payload['profitChart']
         ))
         vendor_invoice = next(
@@ -4899,7 +5080,7 @@ class FinanceFeatureTests(unittest.TestCase):
             if row.get('sourceId') == 'vendor-invoice-profit'
         )
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
-        self.assertEqual(vendor_invoice['categoryLabel'], 'Vendor')
+        self.assertEqual(vendor_invoice['categoryLabel'], 'Manpower')
 
     def test_profit_loss_budgets_and_worker_claims_stay_under_manpower(self):
         self.login('sales-admin')
@@ -4917,6 +5098,14 @@ class FinanceFeatureTests(unittest.TestCase):
                 'id': 'manpower', 'catalogKey': '', 'description': 'Crew',
                 'department': 'Manpower', 'departmentCode': 'MANPOWER',
                 'days': 1, 'quantity': 1, 'uom': 'pax', 'unitPrice': 1000,
+                'discountPercent': 0, 'isCustom': True,
+            },
+            {
+                'id': 'general-manpower', 'catalogKey': '',
+                'description': 'Standby and teardown crew',
+                'department': 'General', 'departmentCode': 'GENERAL',
+                'systemName': 'Manpower',
+                'days': 1, 'quantity': 1, 'uom': 'pax', 'unitPrice': 5000,
                 'discountPercent': 0, 'isCustom': True,
             },
             {
@@ -4954,11 +5143,33 @@ class FinanceFeatureTests(unittest.TestCase):
                 'calculationMode': 'percent',
             },
         ]
+        quotation['status'] = 'accepted'
         saved_quote = self.client.put(
             f"/api/quotations/{quotation['id']}",
             json=quotation,
         )
         self.assertEqual(saved_quote.status_code, 200, saved_quote.get_data(as_text=True))
+        accepted_quote = saved_quote.get_json()['data']
+
+        newer_draft = self.create_quote('Newer unaccepted budget')
+        newer_draft['eventId'] = 136
+        newer_draft['lineItems'] = [{
+            'id': 'draft-manpower', 'catalogKey': '',
+            'description': 'Draft crew allowance',
+            'department': 'Manpower', 'departmentCode': 'MANPOWER',
+            'systemName': 'Manpower',
+            'days': 1, 'quantity': 1, 'uom': 'pax', 'unitPrice': 9999,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        draft_response = self.client.put(
+            f"/api/quotations/{newer_draft['id']}",
+            json=newer_draft,
+        )
+        self.assertEqual(
+            draft_response.status_code,
+            200,
+            draft_response.get_data(as_text=True),
+        )
 
         workforce = app_module.load_workforce(app_module._workforce_folder())
         workforce['freelancers'] = [{
@@ -5027,14 +5238,17 @@ class FinanceFeatureTests(unittest.TestCase):
 
         payload = self.client.get('/api/finance/profit-loss/136').get_json()['data']
         summary = payload['summary']
-        self.assertEqual(summary['manpowerCost'], 820)
+        self.assertEqual(payload['quotation']['id'], accepted_quote['id'])
+        self.assertEqual(summary['manpowerCost'], 700)
+        self.assertEqual(summary['manpowerCardCost'], 880)
+        self.assertEqual(summary['mealCost'], 70)
         self.assertEqual(summary['crewTransportClaimsCost'], 50)
-        self.assertEqual(summary['transportCost'], 160)
+        self.assertEqual(summary['transportCost'], 210)
         self.assertEqual(summary['otherExpenses'], 45)
-        self.assertEqual(summary['manpowerBudget'], 810)
-        self.assertEqual(summary['manpowerBudgetVariance'], -10)
+        self.assertEqual(summary['manpowerBudget'], 4860)
+        self.assertEqual(summary['manpowerBudgetVariance'], 3980)
         self.assertEqual(summary['transportBudget'], 450)
-        self.assertEqual(summary['transportBudgetVariance'], 290)
+        self.assertEqual(summary['transportBudgetVariance'], 240)
 
         descriptions = {row['description'] for row in payload['expenses']}
         self.assertIn('Wesley Tan - Invoice', descriptions)
@@ -5044,8 +5258,8 @@ class FinanceFeatureTests(unittest.TestCase):
             row['department']: row['amount']
             for row in payload['manpowerDepartments']
         }
-        self.assertEqual(department_costs['AX'], 780)
-        self.assertEqual(department_costs['Unallocated'], 40)
+        self.assertEqual(department_costs['AX'], 700)
+        self.assertNotIn('Unallocated', department_costs)
         self.assertFalse(any(
             row['label'] == 'Transport claims'
             for row in payload['profitChart']
@@ -5056,12 +5270,93 @@ class FinanceFeatureTests(unittest.TestCase):
             for row in payload['profitChart']
         ))
         self.assertIn(
-            {'group': 'transport', 'amount': 160},
+            {'group': 'transport', 'amount': 210},
             [
                 {'group': row['group'], 'amount': row['amount']}
                 for row in payload['profitChart']
             ],
         )
+        self.assertIn(
+            {'group': 'meal', 'amount': 70},
+            [
+                {'group': row['group'], 'amount': row['amount']}
+                for row in payload['profitChart']
+            ],
+        )
+
+    def test_profit_loss_resolves_full_time_app_user_names(self):
+        self.login('sales-admin')
+        event = Event(
+            event_id=140, name='Full Time Crew Event', location='Studio',
+            start_date='20260823', end_date='20260823', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        self.data_manager.events[140] = event
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['assignments'] = {'140': [{
+            'id': 'staff-row', 'subjectType': 'app-user',
+            'userUsername': 'alice', 'department': 'AX',
+            'dailyRate': 100, 'days': 1,
+        }]}
+        workforce['submissions'] = {'140': {'user:alice': {
+            'invoices': [{
+                'id': 'staff-invoice', 'amount': 100, 'status': 'Approved',
+            }],
+            'claims': [],
+        }}}
+        save_workforce(app_module._workforce_folder(), workforce)
+
+        response = self.client.get('/api/finance/profit-loss/140')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        invoice = next(row for row in payload['expenses'] if row['sourceId'] == 'staff-invoice')
+        self.assertEqual(invoice['vendor'], 'Alice Lim')
+        self.assertEqual(invoice['description'], 'Alice Lim - Invoice')
+        self.assertEqual(invoice['department'], 'AX')
+
+    def test_profit_loss_marks_pending_claims_for_review_without_counting_incomplete_claims(self):
+        self.login('sales-admin')
+        event = Event(
+            event_id=141, name='Pending Claims Event', location='Studio',
+            start_date='20260823', end_date='20260823', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        self.data_manager.events[141] = event
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['freelancers'] = [{
+            'id': 'worker-pending', 'name': 'Pending Worker', 'active': True,
+        }]
+        workforce['assignments'] = {'141': [{
+            'id': 'pending-row', 'freelancerId': 'worker-pending',
+            'department': 'AX', 'dailyRate': 100, 'days': 1,
+        }]}
+        workforce['submissions'] = {'141': {'worker-pending': {
+            'invoices': [],
+            'claims': [{
+                'id': 'claim-pending-review', 'amount': 24,
+                'status': 'Pending Review', 'category': 'Meal',
+                'detailsComplete': False, 'submissionStage': 'Details Required',
+                'processingState': 'Complete',
+            }],
+        }}}
+        save_workforce(app_module._workforce_folder(), workforce)
+
+        added = self.client.post('/api/finance/profit-loss/141/expenses', json={
+            'description': 'Purchased tape', 'category': 'Purchase', 'amount': 12,
+        })
+        self.assertEqual(added.status_code, 201, added.get_data(as_text=True))
+        self.assertEqual(added.get_json()['expense']['sourceLabel'], 'Added')
+
+        payload = self.client.get('/api/finance/profit-loss/141').get_json()['data']
+        claim = next(row for row in payload['expenses'] if row.get('sourceId') == 'claim-pending-review')
+        self.assertEqual(claim['sourceLabel'], 'Claim')
+        self.assertTrue(claim['needsReview'])
+        self.assertFalse(claim['countsTowardCosts'])
+        self.assertEqual(payload['summary']['mealCost'], 0)
+        self.assertEqual(payload['summary']['otherExpenses'], 12)
 
     def test_profit_loss_pdf_exports_project_summary_and_expense_details(self):
         self.login('sales-admin')
@@ -5185,6 +5480,40 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertTrue(manager_payload['permissions']['canViewFinancials'])
         self.assertIn('summary', manager_payload)
+
+        self.login('alice')
+        non_owner_payload = self.client.get(
+            '/api/finance/profit-loss/137'
+        ).get_json()['data']
+        self.assertFalse(
+            non_owner_payload['permissions']['canViewFinancials']
+        )
+        self.assertTrue(non_owner_payload['censored'])
+        self.assertNotIn('summary', non_owner_payload)
+
+        owned_event = Event(
+            event_id=139, name='Sales-owned Event', location='Studio',
+            start_date='20260820', end_date='20260820', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['alice'],
+        )
+        self.data_manager.events[139] = owned_event
+        owned_quotation = self.create_quote('Sales-owned Event')
+        owned_quotation['eventId'] = 139
+        response = self.client.put(
+            f"/api/quotations/{owned_quotation['id']}",
+            json=owned_quotation,
+        )
+        self.assertEqual(
+            response.status_code,
+            200,
+            response.get_data(as_text=True),
+        )
+        owner_payload = self.client.get(
+            '/api/finance/profit-loss/139'
+        ).get_json()['data']
+        self.assertTrue(owner_payload['permissions']['canViewFinancials'])
+        self.assertIn('summary', owner_payload)
 
         self.login('manager-no-sales')
         self.assertEqual(

@@ -142,9 +142,19 @@ class PlanningTemplateTests(unittest.TestCase):
     def test_event_plan_actions_open_new_workspace(self):
         script = APP_BUNDLE_SOURCE
 
+        plan_action = script.split('async function openEventPlanning(eventId)', 1)[1].split(
+            'function openPrepareWorkspaceForEvent', 1
+        )[0]
+        self.assertIn('planPageState.eventId = id;', plan_action)
+        self.assertIn('planPageState.event = null;', plan_action)
+        self.assertIn('workflowRememberEvent(id)', plan_action)
+        self.assertIn("showSection('plan', { eventId: id });", plan_action)
         self.assertIn(
-            "planPageState.eventId = Number(eventId) || null;\n"
-            "  showSection('plan');",
+            'workflowApplyRememberedEvent(sectionName, options.eventId);',
+            script,
+        )
+        self.assertIn(
+            'const explicitEventId = Number(preferredEventId || 0);',
             script,
         )
         self.assertNotIn('Manage Assets', script)
@@ -182,6 +192,8 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__'", script)
         self.assertIn('All requirements', script)
         self.assertIn('function eventSubprojectDragStart(', script)
+        self.assertIn("if (eventSubprojects(event).length <= 1) return '';", script)
+        self.assertIn("event.target?.closest?.('button, input, select, textarea, a, label')", script)
         self.assertIn('function eventSubprojectDrop(', script)
         self.assertIn("/subprojects/move`,", script)
         self.assertIn('function planOpenDeleteSubproject(', script)
@@ -218,6 +230,31 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
         self.assertIn('event-subproject-attention', script)
+
+    def test_plan_quantities_are_optimistic_and_debounced_without_page_refresh(self):
+        script = APP_BUNDLE_SOURCE
+
+        self.assertIn('var planQuantitySaveTimers = new Map();', script)
+        self.assertIn('var planQuantitySaveChains = new Map();', script)
+        self.assertIn('var planCustomQuantityAssetIds = new Map();', script)
+        self.assertIn('function planScheduleQuantitySave(key, save)', script)
+        self.assertIn('}, 450));', script)
+        self.assertIn('const previous = planQuantitySaveChains.get(key) || Promise.resolve();', script)
+        self.assertIn('function planAdjustModelQuantity(', script)
+        self.assertIn('function planAdjustCustomQuantity(', script)
+        self.assertIn("input.setAttribute('aria-busy', 'true');", script)
+        model_setter = script.split('function planSetModelQuantity(', 1)[1].split(
+            'async function planRemoveModel', 1
+        )[0]
+        custom_setter = script.split('function planSetCustomQuantity(', 1)[1].split(
+            'function planShouldSuppressRealtime', 1
+        )[0]
+        self.assertIn('planScheduleQuantitySave(key, async () => {', model_setter)
+        self.assertIn('renderPlanRealtimeAssets()', model_setter)
+        self.assertIn('planScheduleQuantitySave(key, async () => {', custom_setter)
+        self.assertIn('planReplaceLocalAssetReference(', custom_setter)
+        self.assertIn("[custom?.uid || assetId]", custom_setter)
+        self.assertIn('const currentAssetId = planCustomQuantityAssetIds.get(key) || assetId;', custom_setter)
         self.assertIn('function planRequirementRoomAllocations(', script)
         self.assertIn("'Assigned to sub-projects:'", script)
         self.assertIn('allocatedRequired', script)
@@ -767,11 +804,12 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("if (sectionName === 'prepare') sectionName = 'prepare-new'", script)
         self.assertIn('function openPrepareWorkspaceForEvent(eventId)', script)
         self.assertIn('function openReturnWorkspaceForEvent(eventId)', script)
-        self.assertIn(
-            "returnPageState.eventId = Number(eventId) || null;\n"
-            "  showSection('return');",
-            script,
-        )
+        return_action = script.split('function openReturnWorkspaceForEvent(eventId)', 1)[1].split(
+            'function closeEventCardMenus', 1
+        )[0]
+        self.assertIn('returnPageState.eventId = id;', return_action)
+        self.assertIn('returnPageState.loaded = false;', return_action)
+        self.assertIn("showSection('return', { eventId: id });", return_action)
         self.assertNotIn('openReturnAssetsModalWithEvent', script)
         self.assertNotIn('function renderReturnEventsTable', script)
         self.assertNotIn('function renderReturnEventsCards', script)

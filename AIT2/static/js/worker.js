@@ -2,7 +2,12 @@ let workerPortalData = { companies: [] };
 let workerEventTab = 'active';
 let workerPollTimer = null;
 let pendingClaimContext = null;
-let activeUploads = 0;
+const workerUploadState = {
+  rows: new Map(),
+  queue: [],
+  active: false,
+  sequence: 0
+};
 
 const byId = id => document.getElementById(id);
 
@@ -77,10 +82,11 @@ function departmentBadge(assignment = {}) {
 
 function submissionStatusBadge(row) {
   const status = displayStatus(row);
-  if (status === 'Uploading') {
-    return `<span class="upload-status"><em class="status-badge status-uploading">Uploading</em>
-      <span class="upload-progress-track"><span data-upload-progress="${escapeHtml(row.id)}" style="width:${Number(row.uploadProgress || 0)}%"></span></span>
-      <small data-upload-progress-label="${escapeHtml(row.id)}">${Math.round(Number(row.uploadProgress || 0))}%</small></span>`;
+  if (status === 'Uploading' || status === 'Queueing') {
+    const progress = status === 'Queueing' ? 100 : Number(row.uploadProgress || 0);
+    return `<span class="upload-status"><em class="status-badge ${statusClass(status)}">${escapeHtml(status)}</em>
+      <span class="upload-progress-track"><span data-upload-progress="${escapeHtml(row.id)}" style="width:${progress}%"></span></span>
+      <small data-upload-progress-label="${escapeHtml(row.id)}">${status === 'Queueing' ? 'Queueing' : `${Math.round(progress)}%`}</small></span>`;
   }
   if (status === 'Queued' || status === 'Processing') {
     return `<span class="upload-status"><em class="status-badge ${statusClass(status)}">${escapeHtml(status)}</em>
@@ -91,6 +97,10 @@ function submissionStatusBadge(row) {
     return `<button class="status-badge status-denied denial-reason-button" type="button"
       data-denial-toggle="${escapeHtml(row.id)}" aria-expanded="false"
       aria-controls="denialReason-${escapeHtml(row.id)}">Denied</button>`;
+  }
+  if (status === 'Failed') {
+    return `<span class="upload-status"><em class="status-badge status-failed" title="${escapeHtml(row.processingError || 'Upload failed')}">Failed</em>
+      <small>${escapeHtml(row.processingError || 'Upload failed')}</small></span>`;
   }
   return `<em class="status-badge ${statusClass(status)}">${escapeHtml(status)}</em>`;
 }
@@ -142,8 +152,10 @@ function allEvents() {
 function submissionStatusSummary(rows) {
   if (!rows.length) return 'Not submitted';
   if (rows.some(row => displayStatus(row) === 'Uploading')) return 'Uploading';
+  if (rows.some(row => displayStatus(row) === 'Queueing')) return 'Queueing';
   if (rows.some(row => displayStatus(row) === 'Queued')) return 'Queued';
   if (rows.some(row => displayStatus(row) === 'Processing')) return 'Processing';
+  if (rows.some(row => displayStatus(row) === 'Failed')) return 'Failed';
   if (rows.some(row => displayStatus(row) === 'Details Required')) return 'Details Required';
   if (rows.every(row => row.status === 'Payment Confirmed')) return 'Payment Confirmed';
   if (rows.some(row => row.adminStatus === 'Paid')) return 'Paid';
@@ -163,6 +175,10 @@ function eventSubmissionStatusSummary(rows) {
 }
 
 function submissionActions(company, event, row) {
+  if (row.clientOnly && displayStatus(row) === 'Failed') {
+    return `<button class="delete-upload" type="button" title="Dismiss failed upload"
+      data-dismiss-worker-upload="${escapeHtml(row.id)}">Dismiss</button>`;
+  }
   const token = event.token || company.token;
   const received = row.canConfirmPayment
     ? `<button class="received-button" type="button" data-confirm-payment="${escapeHtml(row.id)}"
@@ -216,9 +232,7 @@ function claimRows(company, event, rows) {
 }
 
 function dropZone(company, event, kind) {
-  const remaining = kind === 'invoice'
-    ? event.invoiceSlotsRemaining
-    : event.claimSlotsRemaining;
+  const remaining = workerAvailableUploadSlots(company, event, kind);
   if (remaining <= 0) return '';
   const accept = kind === 'invoice'
     ? '.pdf,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -253,8 +267,12 @@ function eventRequiresWorkerAction(event, invoices = [], claims = []) {
 }
 
 function renderEvent(company, event, open = false) {
-  const invoices = event.submissions.invoices || [];
-  const claims = event.submissions.claims || [];
+  const pendingInvoices = workerPendingUploads(company, event, 'invoice');
+  const pendingClaims = workerPendingUploads(company, event, 'claim');
+  const invoices = [...pendingInvoices, ...(event.submissions.invoices || [])];
+  const claims = [...pendingClaims, ...(event.submissions.claims || [])];
+  const activeInvoiceCount = invoices.filter(row => displayStatus(row) !== 'Failed').length;
+  const activeClaimCount = claims.filter(row => displayStatus(row) !== 'Failed').length;
   const roles = [...new Set(event.assignments.map(row =>
     row.subprojectName
       ? `${row.role} · ${row.subprojectName}`
@@ -277,16 +295,16 @@ function renderEvent(company, event, open = false) {
         <span>Location: ${escapeHtml(event.location || 'TBC')}</span></div>
       <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong>
         <small class="department-badge-list">${departmentRows.map(departmentBadge).join('')}</small></div>
-      <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
-      <div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>
+      <div class="summary-cell"><span>Invoices</span><strong>${activeInvoiceCount} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
+      <div class="summary-cell"><span>Claims</span><strong>${activeClaimCount} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>
       <div class="summary-cell totals"><span>Totals (Submitted)</span><strong>Invoice: &nbsp; ${money(event.invoiceTotal)}</strong><strong>Claims: &nbsp; ${money(event.claimTotal)}</strong></div>
       <span class="event-chevron">v</span>
     </summary>
     <div class="event-submissions">
-      <section><header><h3>Invoices (${invoices.length} of ${event.invoiceLimit})</h3></header>
+      <section><header><h3>Invoices (${activeInvoiceCount} of ${event.invoiceLimit})</h3></header>
         ${invoiceRows(company, event, invoices)}${dropZone(company, event, 'invoice')}
         <footer><strong>Total Invoice Amount</strong><b>${money(event.invoiceTotal)}</b></footer></section>
-      <section><header><h3>Claims (${claims.length} of ${event.claimLimit})</h3></header>
+      <section><header><h3>Claims (${activeClaimCount} of ${event.claimLimit})</h3></header>
         ${claimRows(company, event, claims)}${dropZone(company, event, 'claim')}
         <footer><strong>Total Claims Amount</strong><b>${money(event.claimTotal)}</b></footer></section>
     </div>
@@ -411,81 +429,125 @@ function findContext(companyCode, eventId, subjectId = '') {
   return { company, event };
 }
 
-async function uploadFiles(company, event, kind, files) {
+function workerPendingUploads(company, event, kind) {
+  return [...workerUploadState.rows.values()].filter(row => (
+    row.companyCode === company.code &&
+    Number(row.eventId) === Number(event.id) &&
+    String(row.subjectId || '') === String(event.subjectId || '') &&
+    row.kind === kind
+  ));
+}
+
+function workerAvailableUploadSlots(company, event, kind) {
+  const remaining = Number(kind === 'invoice'
+    ? event.invoiceSlotsRemaining
+    : event.claimSlotsRemaining) || 0;
+  const reserved = workerPendingUploads(company, event, kind)
+    .filter(row => displayStatus(row) !== 'Failed').length;
+  return Math.max(0, remaining - reserved);
+}
+
+function updateWorkerUploadProgress(row) {
+  const progress = Math.max(0, Math.min(100, Number(row.uploadProgress || 0)));
+  const label = row.status === 'Queueing' ? 'Queueing' : `${Math.round(progress)}%`;
+  document.querySelectorAll(`[data-upload-progress="${CSS.escape(row.id)}"]`)
+    .forEach(node => { node.style.width = `${progress}%`; });
+  document.querySelectorAll(`[data-upload-progress-label="${CSS.escape(row.id)}"]`)
+    .forEach(node => { node.textContent = label; });
+}
+
+function uploadFiles(company, event, kind, files) {
   const selectedFiles = [...files];
   if (!selectedFiles.length) return;
-  if (activeUploads > 0) {
-    showMessage(byId('portalMessage'), 'Please wait for the current upload to finish.');
-    return;
-  }
-  const remaining = kind === 'invoice'
-    ? event.invoiceSlotsRemaining
-    : event.claimSlotsRemaining;
+  const remaining = workerAvailableUploadSlots(company, event, kind);
   if (selectedFiles.length > remaining) {
     showMessage(byId('portalMessage'), `Only ${remaining} ${kind} upload slot${remaining === 1 ? ' is' : 's are'} available.`);
     return;
   }
-  const form = new FormData();
-  form.append('token', event.token || company.token);
-  form.append('eventId', event.id);
-  form.append('kind', kind);
-  form.append('warningAcknowledged', 'true');
-  selectedFiles.forEach(file => form.append('files', file, file.name));
-  const plural = kind === 'invoice' ? 'invoices' : 'claims';
-  const optimisticIds = selectedFiles.map((file, index) => {
-    const id = `uploading-${Date.now()}-${index}`;
-    event.submissions[plural].push({
+  selectedFiles.forEach((file, index) => {
+    const id = `worker-upload-${Date.now()}-${++workerUploadState.sequence}-${index}`;
+    const row = {
       id,
+      companyCode: company.code,
+      eventId: event.id,
+      subjectId: event.subjectId || '',
+      kind,
       originalName: file.name,
       submittedAt: new Date().toISOString(),
       amount: null,
       claimDate: '',
       category: '',
-      status: 'Uploading',
+      status: 'Queued',
+      processingState: 'Queued',
+      uploadProgress: 0,
       adminStatus: 'Pending Review',
       contentType: file.type,
       clientOnly: true,
       canEdit: false,
-      canConfirmPayment: false
-    });
-    return id;
+      canConfirmPayment: false,
+      file
+    };
+    workerUploadState.rows.set(id, row);
+    workerUploadState.queue.push(id);
   });
-  const slotsKey = kind === 'invoice' ? 'invoiceSlotsRemaining' : 'claimSlotsRemaining';
-  event[slotsKey] = Math.max(0, Number(event[slotsKey] || 0) - selectedFiles.length);
-  activeUploads += 1;
   showMessage(byId('portalMessage'), '');
   renderPortal();
-  try {
-    let processingShown = false;
-    const response = await uploadWithProgress('/api/worker/submissions', form, (progress, phase) => {
-      if (phase === 'processing' && !processingShown) {
-        processingShown = true;
-        event.submissions[plural].forEach(row => {
-          if (optimisticIds.includes(row.id)) {
-            row.status = 'Processing';
-            row.processingState = 'Processing';
-          }
-        });
-        renderPortal();
-        return;
-      }
-      optimisticIds.forEach(id => {
-        const bar = document.querySelector(`[data-upload-progress="${id}"]`);
-        const label = document.querySelector(`[data-upload-progress-label="${id}"]`);
-        if (bar) bar.style.width = `${progress}%`;
-        if (label) label.textContent = `${Math.round(progress)}%`;
-      });
-    });
-    replaceCompany(response.data);
-  } catch (error) {
-    event.submissions[plural] = event.submissions[plural].filter(
-      row => !optimisticIds.includes(row.id)
-    );
-    event[slotsKey] = Number(event[slotsKey] || 0) + selectedFiles.length;
+  processWorkerUploadQueue();
+}
+
+async function processWorkerUploadQueue() {
+  if (workerUploadState.active) return;
+  workerUploadState.active = true;
+  let uploaded = 0;
+  let failed = 0;
+  while (workerUploadState.queue.length) {
+    const uploadId = workerUploadState.queue.shift();
+    const row = workerUploadState.rows.get(uploadId);
+    if (!row) continue;
+    const { company, event } = findContext(row.companyCode, row.eventId, row.subjectId);
+    if (!company || !event) {
+      row.status = 'Failed';
+      row.processingState = 'Failed';
+      row.processingError = 'This event is no longer available.';
+      failed += 1;
+      renderPortal();
+      continue;
+    }
+    row.status = 'Uploading';
+    row.processingState = '';
+    row.uploadProgress = 0;
     renderPortal();
-    showMessage(byId('portalMessage'), error.message);
-  } finally {
-    activeUploads = Math.max(0, activeUploads - 1);
+    const form = new FormData();
+    form.append('token', event.token || company.token);
+    form.append('eventId', event.id);
+    form.append('kind', row.kind);
+    form.append('warningAcknowledged', 'true');
+    form.append('files', row.file, row.file.name);
+    try {
+      const response = await uploadWithProgress('/api/worker/submissions', form, (progress, phase) => {
+        const previousStatus = row.status;
+        row.uploadProgress = progress;
+        row.status = phase === 'queueing' ? 'Queueing' : 'Uploading';
+        if (row.status !== previousStatus) renderPortal();
+        else updateWorkerUploadProgress(row);
+      });
+      workerUploadState.rows.delete(row.id);
+      uploaded += 1;
+      replaceCompany(response.data);
+    } catch (error) {
+      row.status = 'Failed';
+      row.processingState = 'Failed';
+      row.processingError = error.message || 'The upload could not be completed.';
+      failed += 1;
+      renderPortal();
+    }
+  }
+  workerUploadState.active = false;
+  if (uploaded) {
+    showMessage(byId('portalMessage'), `${uploaded} file${uploaded === 1 ? '' : 's'} queued for processing.`, 'success');
+  }
+  if (failed) {
+    showMessage(byId('portalMessage'), `${failed} file${failed === 1 ? '' : 's'} could not be uploaded. Check the failed file rows.`);
   }
 }
 
@@ -496,10 +558,10 @@ function uploadWithProgress(url, formData, onProgress) {
     xhr.upload.addEventListener('progress', event => {
       if (event.lengthComputable) {
         const percent = (event.loaded / event.total) * 100;
-        onProgress(percent, percent >= 100 ? 'processing' : 'uploading');
+        onProgress(percent, percent >= 100 ? 'queueing' : 'uploading');
       }
     });
-    xhr.upload.addEventListener('load', () => onProgress(100, 'processing'));
+    xhr.upload.addEventListener('load', () => onProgress(100, 'queueing'));
     xhr.addEventListener('load', () => {
       let payload = {};
       try { payload = JSON.parse(xhr.responseText || '{}'); } catch (_error) {}
@@ -560,7 +622,10 @@ function handleDroppedFiles(zone, files) {
 function bindPortalActions() {
   document.querySelectorAll('.event-dropzone').forEach(zone => {
     const input = zone.querySelector('input');
-    input.addEventListener('change', () => handleDroppedFiles(zone, input.files));
+    input.addEventListener('change', () => {
+      handleDroppedFiles(zone, input.files);
+      input.value = '';
+    });
     for (const eventName of ['dragenter', 'dragover']) {
       zone.addEventListener(eventName, event => {
         event.preventDefault();
@@ -574,6 +639,12 @@ function bindPortalActions() {
       });
     }
     zone.addEventListener('drop', event => handleDroppedFiles(zone, event.dataTransfer.files));
+  });
+  document.querySelectorAll('[data-dismiss-worker-upload]').forEach(button => {
+    button.addEventListener('click', () => {
+      workerUploadState.rows.delete(button.dataset.dismissWorkerUpload);
+      renderPortal();
+    });
   });
   document.querySelectorAll('[data-claim-details]').forEach(rowElement => {
     rowElement.addEventListener('click', event => {
@@ -667,7 +738,7 @@ function portalContentSignature(companies) {
 function startStatusPolling() {
   clearInterval(workerPollTimer);
   workerPollTimer = setInterval(async () => {
-    if (document.hidden || activeUploads > 0) return;
+    if (document.hidden || workerUploadState.active) return;
     const previousSignature = portalContentSignature(workerPortalData.companies);
     const refreshedCompanies = await Promise.all(workerPortalData.companies.map(refreshCompany));
     const nextSignature = portalContentSignature(refreshedCompanies);

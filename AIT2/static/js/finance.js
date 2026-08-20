@@ -295,6 +295,13 @@ const profitLossState = {
   editingExpenseId: ''
 };
 
+const profitLossExpenseUploadState = {
+  rows: new Map(),
+  queue: [],
+  active: false,
+  sequence: 0
+};
+
 const compareState = {
   events: [],
   eventId: null,
@@ -6787,15 +6794,15 @@ function profitLossExpenseCategoryMarkup(expense) {
   const categoryKey = String(expense?.categoryKey || '');
   let category = String(expense?.categoryLabel || expense?.category || 'Other expense');
   if (categoryKey === 'vendor-service') {
-    category = 'Vendor';
-  } else if (
-    source === 'worker-invoice'
-    || (source === 'worker-claim' && ['meal', 'transport'].includes(categoryKey))
-    || (source === 'manual' && categoryKey === 'meal')
-  ) {
     category = 'Manpower';
-  } else if (source === 'manual' && categoryKey === 'transport') {
+  } else if (source === 'worker-invoice') {
+    category = 'Manpower';
+  } else if (categoryKey === 'meal') {
+    category = 'Meal';
+  } else if (categoryKey === 'transport') {
     category = 'Transport';
+  } else if (categoryKey === 'purchase') {
+    category = 'Purchase';
   }
 
   const department = String(expense?.department || '').trim();
@@ -6817,6 +6824,84 @@ function profitLossExpenseCategoryMarkup(expense) {
   return `<span class="pnl-category-badge"${style}${title ? ` title="${financeEscapeAttr(title)}"` : ''}>${financeEscape(`${category}${suffix}`)}</span>`;
 }
 
+function profitLossExpenseProcessingMarkup(expense) {
+  const state = String(expense?.processingState || '').trim().toLowerCase();
+  if (state === 'queued') {
+    return '<span class="pnl-upload-state is-queued">Queued</span>';
+  }
+  if (state === 'processing') {
+    return '<span class="pnl-upload-state is-processing"><i></i>Processing</span>';
+  }
+  if (state === 'failed') {
+    const error = expense?.processingError || 'Automatic processing failed';
+    return `<span class="pnl-upload-state is-failed" title="${financeEscapeAttr(error)}">Processing failed</span>`;
+  }
+  if (!expense?.needsReview) return '';
+  const action = expense.source === 'worker-claim'
+    ? `profitLossOpenClaimReview('${financeEscapeAttr(expense.sourceId)}')`
+    : `profitLossOpenExpenseModal('${financeEscapeAttr(expense.id)}')`;
+  return `<button type="button" class="pnl-review-pill" onclick="${action}">Needs review</button>`;
+}
+
+function profitLossOpenClaimReview(submissionId) {
+  if (!submissionId) return;
+  if (typeof openEventWorkforceReview === 'function') {
+    openEventWorkforceReview(profitLossState.eventId, submissionId);
+    return;
+  }
+  profitLossOpenManpower(profitLossState.eventId, 'claims');
+}
+
+function profitLossPendingExpenseUploads(eventId = profitLossState.eventId) {
+  return [...profitLossExpenseUploadState.rows.values()].filter(row => (
+    Number(row.eventId) === Number(eventId)
+  ));
+}
+
+function profitLossUploadStateLabel(row) {
+  return {
+    queued: 'Queued',
+    uploading: `${Math.round(Number(row.progress || 0))}%`,
+    queueing: 'Queueing',
+    failed: 'Failed'
+  }[row.status] || 'Queued';
+}
+
+function profitLossPendingExpenseRowsMarkup() {
+  return profitLossPendingExpenseUploads().map(row => `
+    <tr class="pnl-upload-row" data-pnl-upload-id="${financeEscapeAttr(row.id)}">
+      <td><strong>${financeEscape(row.name)}</strong><span class="pnl-upload-state is-${financeEscapeAttr(row.status)}" data-pnl-upload-state>${financeEscape(profitLossUploadStateLabel(row))}</span></td>
+      <td><span class="pnl-source-pill pnl-source-manual">Uploading</span></td>
+      <td>Pending extraction</td><td>-</td><td>-</td><td>-</td>
+      <td><span class="pnl-file-progress"><span><i data-pnl-upload-progress style="width:${Math.max(0, Math.min(100, Number(row.progress || 0)))}%"></i></span><small data-pnl-upload-label>${financeEscape(profitLossUploadStateLabel(row))}</small></span></td>
+      <td>${row.status === 'failed' ? `<button type="button" class="finance-delete-line" onclick="profitLossDismissExpenseUpload('${financeEscapeAttr(row.id)}')" aria-label="Dismiss failed upload">&times;</button>` : ''}</td>
+    </tr>
+  `).join('');
+}
+
+function profitLossUpdateExpenseUploadRow(uploadId) {
+  const row = profitLossExpenseUploadState.rows.get(uploadId);
+  const element = document.querySelector(`[data-pnl-upload-id="${CSS.escape(uploadId)}"]`);
+  if (!row || !element) return;
+  const progress = Math.max(0, Math.min(100, Number(row.progress || 0)));
+  const label = profitLossUploadStateLabel(row);
+  const bar = element.querySelector('[data-pnl-upload-progress]');
+  const progressLabel = element.querySelector('[data-pnl-upload-label]');
+  const state = element.querySelector('[data-pnl-upload-state]');
+  if (bar) bar.style.width = `${progress}%`;
+  if (progressLabel) progressLabel.textContent = label;
+  if (state) {
+    state.className = `pnl-upload-state is-${row.status}`;
+    state.textContent = label;
+    if (row.error) state.title = row.error;
+  }
+}
+
+function profitLossDismissExpenseUpload(uploadId) {
+  profitLossExpenseUploadState.rows.delete(uploadId);
+  document.querySelector(`[data-pnl-upload-id="${CSS.escape(uploadId)}"]`)?.remove();
+}
+
 function profitLossChartColour(group, index, row = {}) {
   const departmentMeta = group === 'manpower'
     ? profitLossDepartmentMeta(row.department)
@@ -6827,6 +6912,7 @@ function profitLossChartColour(group, index, row = {}) {
   const palettes = {
     manpower: ['#2563eb', '#0ea5e9', '#06b6d4', '#6366f1', '#0284c7'],
     vendor: ['#0f766e', '#14b8a6', '#0d9488', '#115e59'],
+    meal: ['#ec4899'],
     transport: ['#f59e0b'],
     other: ['#64748b', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'],
     commission: ['#8b5cf6'],
@@ -7076,6 +7162,7 @@ function renderProfitLossPage() {
       String(left.expenseDate || left.createdAt || '')
     )
   ));
+  const pendingExpenseRows = profitLossPendingExpenseRowsMarkup();
   const listedExpenseTotal = expenses.reduce((sum, row) => sum + financeNumber(row.amount), 0);
   const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
   const activity = data.activity || [];
@@ -7085,9 +7172,11 @@ function renderProfitLossPage() {
   ].filter(Boolean);
   const manpowerNoteParts = [
     financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`,
+    financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
     financeNumber(summary.crewTransportClaimsCost) > 0 ? `Transport claims ${financeSgd(summary.crewTransportClaimsCost)}` : '',
     financeNumber(summary.workerMealClaimsCost) > 0 ? `Meal claims ${financeSgd(summary.workerMealClaimsCost)}` : '',
-    financeNumber(summary.manualMealExpenses) > 0 ? `Added meals ${financeSgd(summary.manualMealExpenses)}` : ''
+    financeNumber(summary.manualMealExpenses) > 0 ? `Added meals ${financeSgd(summary.manualMealExpenses)}` : '',
+    financeNumber(summary.manualTransportExpenses) > 0 ? `Added transport ${financeSgd(summary.manualTransportExpenses)}` : ''
   ].filter(Boolean);
   const otherNoteParts = [
     financeNumber(summary.workerOtherClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerOtherClaimsCost)}` : '',
@@ -7174,7 +7263,7 @@ function renderProfitLossPage() {
 
     <div class="pnl-kpis">
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
-      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
@@ -7188,7 +7277,7 @@ function renderProfitLossPage() {
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
         <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
-        ${financeNumber(summary.vendorServiceCost) > 0 ? `<div class="pnl-calc-row"><span>Vendor Services</span><strong>- ${financeSgd(summary.vendorServiceCost)}</strong></div>` : ''}
+        ${financeNumber(summary.mealCost) > 0 ? `<div class="pnl-calc-row"><span>Meals</span><strong>- ${financeSgd(summary.mealCost)}</strong></div>` : ''}
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
         <h4>Less: Other Expenses</h4>
@@ -7212,6 +7301,7 @@ function renderProfitLossPage() {
         <div class="pnl-section-head">
           <h3>Expense Breakdown</h3>
           <div class="pnl-actions">
+            <span class="pnl-drop-hint">Drop receipt files anywhere in this card</span>
             <button type="button" class="btn btn-secondary" onclick="profitLossOpenExpenseModal()">Add Expense</button>
           </div>
         </div>
@@ -7219,10 +7309,11 @@ function renderProfitLossPage() {
           <table class="pnl-table">
             <thead><tr><th>Description</th><th>Type</th><th>Category</th><th>Vendor / Payee</th><th>Date</th><th>Amount</th><th>Attachment</th><th></th></tr></thead>
             <tbody>
+              ${pendingExpenseRows}
               ${expenses.map(row => `
                 <tr>
-                  <td><strong>${financeEscape(row.description)}</strong>${row.needsReview ? '<span class="pnl-review-pill">Needs review</span>' : ''}</td>
-                  <td><span class="pnl-source-pill pnl-source-${financeEscapeAttr(row.source || 'manual')}">${financeEscape(row.sourceLabel || (row.readOnly ? 'Claim' : 'Added expense'))}</span></td>
+                  <td><strong>${financeEscape(row.description)}</strong>${profitLossExpenseProcessingMarkup(row)}</td>
+                  <td><span class="pnl-source-pill pnl-source-${financeEscapeAttr(row.source || 'manual')}">${financeEscape(row.sourceLabel || (row.readOnly ? 'Claim' : 'Added'))}</span></td>
                   <td>${profitLossExpenseCategoryMarkup(row)}</td>
                   <td>${financeEscape(row.vendor || '-')}</td>
                   <td>${financeEscape(row.expenseDate || '-')}</td>
@@ -7233,7 +7324,21 @@ function renderProfitLossPage() {
                       <a class="pnl-attachment-download" href="${financeEscapeAttr(row.attachment.downloadUrl || row.attachment.previewUrl)}" download>Download</a>
                     </span>
                   ` : '-'}</td>
-                  <td>${row.readOnly ? `
+                  <td>${row.source === 'worker-claim' ? `
+                    <span class="pnl-expense-actions">
+                      <button type="button" class="pnl-expense-edit" onclick="profitLossOpenClaimReview('${financeEscapeAttr(row.sourceId)}')" aria-label="Review claim" title="Review claim">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
+                      </button>
+                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Manpower" title="Open Manpower">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="8" cy="8" r="3"></circle>
+                          <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
+                          <circle cx="17" cy="18" r="1.5"></circle>
+                          <circle cx="21" cy="18" r="1.5"></circle>
+                        </svg>
+                      </button>
+                    </span>
+                  ` : row.readOnly ? `
                     <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Manpower and Transport" title="Open Manpower and Transport">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="8" cy="8" r="3"></circle>
@@ -7250,7 +7355,7 @@ function renderProfitLossPage() {
                       <button type="button" class="finance-delete-line" onclick="profitLossDeleteExpense('${financeEscapeAttr(row.id)}')" aria-label="Delete expense">&times;</button>
                     </span>`}</td>
                 </tr>
-              `).join('') || '<tr><td colspan="8" class="pnl-empty-row">No invoices, claims, or additional expenses have been added.</td></tr>'}
+              `).join('') || (!pendingExpenseRows ? '<tr><td colspan="8" class="pnl-empty-row">No invoices, claims, or additional expenses have been added.</td></tr>' : '')}
             </tbody>
           </table>
         </div>
@@ -7278,28 +7383,44 @@ function financeEnsureProfitLossExpenseModal() {
   modal.className = 'modal';
   modal.innerHTML = `
     <div class="modal-content pnl-expense-modal">
-      <div class="modal-header"><h3 class="modal-title" id="profitLossExpenseTitle">Add Expense</h3><button type="button" class="close-btn" onclick="closeModal('profitLossExpenseModal')">&times;</button></div>
+      <div class="modal-header"><h3 class="modal-title" id="profitLossExpenseTitle">Add Expense</h3><button type="button" class="close-btn" onclick="profitLossCloseExpenseModal()">&times;</button></div>
       <form id="profitLossExpenseForm" onsubmit="profitLossSubmitExpense(event)">
-        <div class="finance-form-grid">
-          <label class="finance-field finance-span-all"><span>Description</span><input id="profitLossExpenseDescription" class="finance-input" maxlength="300" placeholder="e.g. Stage backdrop invoice"></label>
-          <label class="finance-field"><span>Category</span><input id="profitLossExpenseCategory" class="finance-input" list="profitLossExpenseCategories" placeholder="Miscellaneous"></label>
-          <label class="finance-field"><span>Vendor / Payee</span><input id="profitLossExpenseVendor" class="finance-input" maxlength="180"></label>
-          <label class="finance-field"><span>Amount</span><input id="profitLossExpenseAmount" class="finance-input" inputmode="decimal" placeholder="0.00"></label>
-          <label class="finance-field"><span>Date</span><input id="profitLossExpenseDate" class="finance-input" type="date"></label>
-          <label class="finance-field finance-span-all" id="profitLossExpenseFileField"><span>Receipt or document</span><input id="profitLossExpenseFile" class="finance-input" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
+        <div class="pnl-expense-editor">
+          <section class="pnl-expense-review-preview" id="profitLossExpensePreviewPanel" hidden>
+            <div class="pnl-expense-review-preview-head">
+              <div><span>Uploaded document</span><strong id="profitLossExpensePreviewName"></strong></div>
+              <a id="profitLossExpensePreviewDownload" class="pnl-attachment-download" download>Download</a>
+            </div>
+            <div class="pnl-expense-review-preview-body" id="profitLossExpensePreviewBody"></div>
+          </section>
+          <div class="pnl-expense-fields">
+            <div class="finance-form-grid">
+              <label class="finance-field finance-span-all"><span>Description</span><input id="profitLossExpenseDescription" class="finance-input" maxlength="300" placeholder="e.g. Stage backdrop invoice"></label>
+              <div class="finance-field"><span>Category</span>
+                <div class="finance-custom-control pnl-expense-category-control" onclick="event.stopPropagation()">
+                  <input id="profitLossExpenseCategory" type="hidden" value="">
+                  <button type="button" class="finance-line-select-button" id="profitLossExpenseCategoryButton"
+                          aria-haspopup="menu" onclick="financeToggleMenu('profit-loss-expense-category-menu',event)">
+                    <span id="profitLossExpenseCategoryLabel">Select category</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="finance-custom-menu" id="profit-loss-expense-category-menu" role="menu">
+                    ${['Meal', 'Transport', 'Other', 'Purchase'].map(category => `
+                      <button type="button" data-expense-category="${category}" onclick="profitLossChooseExpenseCategory('${category}')">${category}</button>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+              <label class="finance-field" id="profitLossExpenseOtherCategoryField" hidden><span>Other category</span><input id="profitLossExpenseOtherCategory" class="finance-input" maxlength="120" placeholder="Enter category"></label>
+              <label class="finance-field"><span>Vendor / Payee</span><input id="profitLossExpenseVendor" class="finance-input" maxlength="180"></label>
+              <label class="finance-field"><span>Date</span><input id="profitLossExpenseDate" class="finance-input" type="date"></label>
+              <label class="finance-field"><span>Amount</span><input id="profitLossExpenseAmount" class="finance-input" inputmode="decimal" placeholder="0.00"></label>
+              <label class="finance-field finance-span-all" id="profitLossExpenseFileField"><span>Receipt or document</span><input id="profitLossExpenseFile" class="finance-input" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
+            </div>
+          </div>
         </div>
-        <datalist id="profitLossExpenseCategories">
-          <option value="Transport"></option>
-          <option value="Crew Transport"></option>
-          <option value="Meal Claims"></option>
-          <option value="External Vendors"></option>
-          <option value="Miscellaneous"></option>
-          <option value="Production Supplies"></option>
-          <option value="Parking & Tolls"></option>
-        </datalist>
         <div class="modal-actions finance-picker-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('profitLossExpenseModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Expense</button>
+          <button type="button" class="btn btn-secondary" onclick="profitLossCloseExpenseModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="profitLossExpenseSubmit">Save Expense</button>
         </div>
       </form>
     </div>
@@ -7413,27 +7534,143 @@ function profitLossOpenExpenseModal(expenseId = '') {
       if (input) input.value = value == null ? '' : String(value);
     };
     setValue('profitLossExpenseDescription', expense.description);
-    setValue('profitLossExpenseCategory', expense.category);
+    const category = profitLossExpenseCategorySelection(expense.category);
+    setValue('profitLossExpenseCategory', category.selection);
+    setValue('profitLossExpenseOtherCategory', category.other);
     setValue('profitLossExpenseVendor', expense.vendor);
     setValue('profitLossExpenseAmount', expense.amount);
     setValue('profitLossExpenseDate', expense.expenseDate);
   } else {
     profitLossState.editingExpenseId = '';
   }
+  profitLossSyncExpenseOtherCategory();
+  profitLossRenderExpenseReviewPreview(expense);
   const title = document.getElementById('profitLossExpenseTitle');
   const fileField = document.getElementById('profitLossExpenseFileField');
-  if (title) title.textContent = expense ? 'Edit Expense' : 'Add Expense';
+  const submit = document.getElementById('profitLossExpenseSubmit');
+  const isReview = Boolean(expense?.needsReview && expense?.attachment);
+  if (title) title.textContent = isReview ? 'Review Expense' : (expense ? 'Edit Expense' : 'Add Expense');
+  if (submit) submit.textContent = isReview ? 'Save Review' : 'Save Expense';
   if (fileField) fileField.style.display = expense ? 'none' : 'grid';
   openModal('profitLossExpenseModal');
+}
+
+function profitLossExpenseCategorySelection(value) {
+  const category = String(value || '').trim();
+  const normalized = category.toLowerCase();
+  if (['meal', 'meals'].includes(normalized)) return { selection: 'Meal', other: '' };
+  if (normalized === 'transport' || normalized === 'cab') return { selection: 'Transport', other: '' };
+  if (['purchase', 'purchases'].includes(normalized)) return { selection: 'Purchase', other: '' };
+  if (!category || ['other', 'miscellaneous'].includes(normalized)) {
+    return { selection: category ? 'Other' : '', other: '' };
+  }
+  return { selection: 'Other', other: category };
+}
+
+function profitLossSyncExpenseOtherCategory() {
+  const select = document.getElementById('profitLossExpenseCategory');
+  const field = document.getElementById('profitLossExpenseOtherCategoryField');
+  const input = document.getElementById('profitLossExpenseOtherCategory');
+  const label = document.getElementById('profitLossExpenseCategoryLabel');
+  if (!select || !field || !input) return;
+  const isOther = select.value === 'Other';
+  field.hidden = !isOther;
+  input.required = isOther;
+  if (label) label.textContent = select.value || 'Select category';
+  document.querySelectorAll('[data-expense-category]').forEach(button => {
+    button.classList.toggle('selected', button.dataset.expenseCategory === select.value);
+  });
+}
+
+function profitLossChooseExpenseCategory(category) {
+  const input = document.getElementById('profitLossExpenseCategory');
+  if (!input) return;
+  input.value = category;
+  financeCloseMenus();
+  profitLossSyncExpenseOtherCategory();
+}
+
+function profitLossRenderExpenseReviewPreview(expense) {
+  const modal = document.querySelector('#profitLossExpenseModal .pnl-expense-modal');
+  const panel = document.getElementById('profitLossExpensePreviewPanel');
+  const body = document.getElementById('profitLossExpensePreviewBody');
+  const name = document.getElementById('profitLossExpensePreviewName');
+  const download = document.getElementById('profitLossExpensePreviewDownload');
+  const attachment = expense?.attachment;
+  if (!modal || !panel || !body) return;
+
+  body.replaceChildren();
+  modal.classList.toggle('has-preview', Boolean(attachment));
+  panel.hidden = !attachment;
+  if (!attachment) return;
+
+  const filename = attachment.originalName || 'Expense attachment';
+  const previewUrl = attachment.previewUrl || attachment.downloadUrl || '';
+  const downloadUrl = attachment.downloadUrl || previewUrl;
+  if (name) name.textContent = filename;
+  if (download) {
+    download.href = downloadUrl;
+    download.download = filename;
+    download.hidden = !downloadUrl;
+  }
+
+  const kind = profitLossAttachmentPreviewKind(attachment);
+  let preview = null;
+  if (previewUrl && kind === 'image') {
+    preview = document.createElement('img');
+    preview.src = previewUrl;
+    preview.alt = filename;
+  } else if (previewUrl && (kind === 'pdf' || kind === 'text')) {
+    preview = document.createElement('iframe');
+    preview.src = kind === 'pdf'
+      ? `${previewUrl}#toolbar=1&navpanes=0&pagemode=none&view=Fit`
+      : previewUrl;
+    preview.title = `Preview of ${filename}`;
+    preview.referrerPolicy = 'no-referrer';
+  } else if (previewUrl && kind === 'video') {
+    preview = document.createElement('video');
+    preview.src = previewUrl;
+    preview.controls = true;
+  } else if (previewUrl && kind === 'audio') {
+    preview = document.createElement('audio');
+    preview.src = previewUrl;
+    preview.controls = true;
+  }
+
+  if (preview) {
+    preview.className = 'pnl-expense-review-media';
+    body.appendChild(preview);
+    return;
+  }
+
+  const unavailable = document.createElement('div');
+  unavailable.className = 'pnl-expense-review-unavailable';
+  unavailable.innerHTML = '<strong>Preview unavailable</strong><span>Download the attachment to review it.</span>';
+  body.appendChild(unavailable);
+}
+
+function profitLossCloseExpenseModal() {
+  const body = document.getElementById('profitLossExpensePreviewBody');
+  const modal = document.querySelector('#profitLossExpenseModal .pnl-expense-modal');
+  body?.replaceChildren();
+  modal?.classList.remove('has-preview');
+  profitLossState.editingExpenseId = '';
+  closeModal('profitLossExpenseModal');
 }
 
 async function profitLossSubmitExpense(event) {
   event.preventDefault();
   if (!profitLossState.eventId) return;
   const value = id => document.getElementById(id)?.value.trim() || '';
+  if (!value('profitLossExpenseCategory')) {
+    showNotification('error', 'Choose an expense category');
+    return;
+  }
   const expense = {
     description: value('profitLossExpenseDescription'),
-    category: value('profitLossExpenseCategory') || 'Miscellaneous',
+    category: value('profitLossExpenseCategory') === 'Other'
+      ? (value('profitLossExpenseOtherCategory') || 'Other')
+      : value('profitLossExpenseCategory'),
     vendor: value('profitLossExpenseVendor'),
     amount: value('profitLossExpenseAmount'),
     expenseDate: value('profitLossExpenseDate')
@@ -7456,8 +7693,7 @@ async function profitLossSubmitExpense(event) {
       response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/expenses`, 'POST', form);
     }
     profitLossState.data = response.data;
-    profitLossState.editingExpenseId = '';
-    closeModal('profitLossExpenseModal');
+    profitLossCloseExpenseModal();
     renderProfitLossPage();
     showNotification('success', editingExpenseId ? 'Expense updated' : (file ? 'Receipt uploaded' : 'Expense added'));
   } catch (error) {
@@ -7480,30 +7716,97 @@ function profitLossExpenseDragLeave(event) {
 async function profitLossExpenseDrop(event) {
   event.preventDefault();
   event.currentTarget?.classList.remove('is-file-dragging');
-  await profitLossUploadExpenseFiles(event.dataTransfer?.files || []);
+  profitLossUploadExpenseFiles(event.dataTransfer?.files || []);
 }
 
-async function profitLossUploadExpenseFiles(fileList) {
+function profitLossExpenseUploadRequest(eventId, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append('file', file);
+    xhr.open('POST', `/api/finance/profit-loss/${eventId}/expenses`);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) {
+        onProgress((event.loaded / event.total) * 100, 'uploading');
+      }
+    };
+    xhr.upload.onload = () => onProgress(100, 'queueing');
+    xhr.onload = () => {
+      let payload = {};
+      try { payload = JSON.parse(xhr.responseText || '{}'); } catch (_error) {}
+      if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
+      else reject(new Error(payload.error || 'The expense file could not be uploaded.'));
+    };
+    xhr.onerror = () => reject(new Error('The expense file could not be uploaded.'));
+    xhr.send(form);
+  });
+}
+
+function profitLossUploadExpenseFiles(fileList) {
   const files = Array.from(fileList || []).filter(file => file && file.name);
   const eventId = Number(profitLossState.eventId || 0);
   if (!eventId || !files.length) return;
+  files.forEach(file => {
+    const id = `pnl-upload-${Date.now()}-${++profitLossExpenseUploadState.sequence}`;
+    const row = {
+      id,
+      eventId,
+      file,
+      name: file.name,
+      size: Number(file.size || 0),
+      status: 'queued',
+      progress: 0,
+      error: ''
+    };
+    profitLossExpenseUploadState.rows.set(id, row);
+    profitLossExpenseUploadState.queue.push(id);
+  });
+  renderProfitLossPage();
+  profitLossProcessExpenseUploadQueue();
+}
+
+async function profitLossProcessExpenseUploadQueue() {
+  if (profitLossExpenseUploadState.active) return;
+  profitLossExpenseUploadState.active = true;
   let uploaded = 0;
   let failed = 0;
-  for (const file of files) {
-    const form = new FormData();
-    form.append('file', file);
+  while (profitLossExpenseUploadState.queue.length) {
+    const uploadId = profitLossExpenseUploadState.queue.shift();
+    const row = profitLossExpenseUploadState.rows.get(uploadId);
+    if (!row) continue;
+    row.status = 'uploading';
+    row.progress = 0;
+    profitLossUpdateExpenseUploadRow(uploadId);
     try {
-      const response = await apiCall(`/api/finance/profit-loss/${eventId}/expenses`, 'POST', form);
-      profitLossState.data = response.data;
+      const response = await profitLossExpenseUploadRequest(
+        row.eventId,
+        row.file,
+        (progress, phase) => {
+          row.progress = progress;
+          row.status = phase;
+          profitLossUpdateExpenseUploadRow(uploadId);
+        }
+      );
+      row.status = 'queued';
+      row.progress = 100;
+      if (Number(profitLossState.eventId) === Number(row.eventId)) {
+        profitLossState.data = response.data;
+      }
+      profitLossExpenseUploadState.rows.delete(uploadId);
       uploaded += 1;
     } catch (error) {
+      row.status = 'failed';
+      row.error = error.message || 'Upload failed';
       failed += 1;
-      console.warn(`Expense upload failed for ${file.name}:`, error);
+      console.warn(`Expense upload failed for ${row.name}:`, error);
+    }
+    if (Number(profitLossState.eventId) === Number(row.eventId)) {
+      renderProfitLossPage();
     }
   }
-  renderProfitLossPage();
+  profitLossExpenseUploadState.active = false;
   if (uploaded) {
-    showNotification('success', `${uploaded} expense file${uploaded === 1 ? '' : 's'} uploaded for review`);
+    showNotification('success', `${uploaded} expense file${uploaded === 1 ? '' : 's'} queued for processing`);
   }
   if (failed) {
     showNotification('error', `${failed} file${failed === 1 ? '' : 's'} could not be uploaded`);

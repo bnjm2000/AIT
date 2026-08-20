@@ -3922,9 +3922,11 @@ function workflowRememberedEventId() {
   }
 }
 
-function workflowApplyRememberedEvent(sectionName) {
-  const eventId = workflowRememberedEventId();
+function workflowApplyRememberedEvent(sectionName, preferredEventId = null) {
+  const explicitEventId = Number(preferredEventId || 0);
+  const eventId = explicitEventId || workflowRememberedEventId();
   if (!eventId) return;
+  if (explicitEventId) workflowRememberEvent(explicitEventId);
   if (sectionName === 'plan' && typeof planPageState !== 'undefined') {
     if (Number(planPageState.eventId) !== eventId) {
       planPageState.eventId = eventId;
@@ -4023,7 +4025,7 @@ function showSection(sectionName, options = {}) {
   const targetSection = document.getElementById(sectionName + "-section");
   if (!targetSection) return;
 
-  workflowApplyRememberedEvent(sectionName);
+  workflowApplyRememberedEvent(sectionName, options.eventId);
 
   if (options.updateHistory !== false) {
     updateAppSectionHistory(sectionName, options.replaceHistory === true);
@@ -24553,7 +24555,11 @@ async function refreshEventAssetsOnly(eventIds) {
 
     if (
       document.getElementById('plan-section')?.classList.contains('active') &&
-      Number(planPageState.eventId) === Number(event.id)
+      Number(planPageState.eventId) === Number(event.id) &&
+      !(
+        typeof planShouldSuppressRealtime === 'function' &&
+        planShouldSuppressRealtime(event.id)
+      )
     ) {
       planPageState.event = event;
       try {

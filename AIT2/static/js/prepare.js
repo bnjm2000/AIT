@@ -12,6 +12,8 @@ var prepareNewPageState = {
   renderVersion: 0,
   expandedDepartments: new Set(),
   expandedModels: new Set(),
+  expandedCustomGroups: new Set(),
+  suppressRealtimeUntil: 0,
   activeSubprojectId: ''
 };
 
@@ -129,6 +131,18 @@ function prepareNewSetModelExpanded(encodedKey, open, detailsElement = null) {
   const key = planDecode(encodedKey);
   if (open) prepareNewPageState.expandedModels.add(key);
   else prepareNewPageState.expandedModels.delete(key);
+}
+
+function prepareNewSetCustomGroupExpanded(encodedKey, open, detailsElement = null) {
+  if (
+    detailsElement && (
+      !detailsElement.isConnected ||
+      Number(detailsElement.dataset.prepareRenderVersion || 0) !== prepareNewPageState.renderVersion
+    )
+  ) return;
+  const key = planDecode(encodedKey);
+  if (open) prepareNewPageState.expandedCustomGroups.add(key);
+  else prepareNewPageState.expandedCustomGroups.delete(key);
 }
 
 function prepareNewRenderAfterModelToggle(encodedKey) {
@@ -693,7 +707,7 @@ function renderPrepareNewCustomList() {
     } else if (isPrepared) {
       status = prepareNewStatusBadge('complete', 'Prepared');
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}')">Unprepare</button>`;
+                        onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}', '', this)">Unprepare</button>`;
     } else if (custom.type === 'LOAN' && !isCollected) {
       action = `<button type="button" class="plan-button plan-button-small"
                         onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collect</button>`;
@@ -703,9 +717,9 @@ function renderPrepareNewCustomList() {
         ? `<button type="button" class="plan-button plan-button-small plan-button-secondary"
                    onclick="prepareNewUncollectCustom(${Number(event.id)}, '${encodedId}')">Uncollect</button>
            <button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}', this)">Prepare</button>`
         : `<button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepare</button>`;
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}', this)">Prepare</button>`;
     }
     const detail = custom.type === 'LOAN'
       ? (custom.company ? `From ${custom.company}` : '')
@@ -739,8 +753,13 @@ function renderPrepareNewCustomList() {
     .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
     .forEach(([company, rows]) => sections.push({ label: company, rows, loan: true }));
 
-  return sections.map(section => `
-    <details class="prepare-new-custom-group">
+  return sections.map(section => {
+    const groupKey = section.loan ? `loan:${section.label}` : 'misc';
+    return `
+    <details class="prepare-new-custom-group"
+             ${prepareNewPageState.expandedCustomGroups.has(groupKey) ? 'open' : ''}
+             data-prepare-render-version="${prepareNewPageState.renderVersion}"
+             ontoggle="prepareNewSetCustomGroupExpanded('${planEncode(groupKey)}',this.open,this)">
       <summary>
         <span>${section.loan ? 'Loan from ' : ''}${escapeHtml(section.label)}</span>
         <span class="plan-badge">${section.rows.length}</span>
@@ -748,7 +767,8 @@ function renderPrepareNewCustomList() {
       </summary>
       <div class="prepare-new-custom-group-rows">${section.rows.map(renderRow).join('')}</div>
     </details>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function renderPrepareNewEventDetails() {
@@ -970,7 +990,7 @@ function renderPrepareNewPage() {
         <section class="prepare-new-card prepare-new-assignment-card">
           <div class="prepare-new-card-header">
             <h3><span class="prepare-new-heading-icon">${planMetricIconSvg('assignment')}</span>Assignment Workspace</h3>
-            <span class="prepare-new-status prepare-new-status-${prepareNewIsComplete() ? 'complete' : 'pending'}">
+            <span id="prepareNewAssignmentProgress" class="prepare-new-status prepare-new-status-${prepareNewIsComplete() ? 'complete' : 'pending'}">
               ${totals.prepared} / ${totals.required} prepared
             </span>
           </div>
@@ -1096,6 +1116,7 @@ async function selectPrepareNewEvent(eventId, options = {}) {
   if (typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
   prepareNewPageState.expandedDepartments.clear();
   prepareNewPageState.expandedModels.clear();
+  prepareNewPageState.expandedCustomGroups.clear();
   const root = document.getElementById('prepare-new-page-root');
   if (options.renderLoading !== false && root) {
     root.innerHTML = '<div class="loading">Loading event preparation\u2026</div>';
@@ -1155,6 +1176,7 @@ async function prepareNewApplyRealtimeEvent(event) {
   ) {
     return;
   }
+  if (Date.now() < Number(prepareNewPageState.suppressRealtimeUntil || 0)) return;
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
@@ -1197,19 +1219,65 @@ async function prepareNewAssignAsset(eventId, encodedAssetId) {
   });
 }
 
-async function prepareNewPrepareAsset(eventId, encodedAssetId) {
-  await prepareSpecificAsset(eventId, planDecode(encodedAssetId), {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
-  });
+function prepareNewSetLocalCustomPrepared(assetId, prepared) {
+  const event = prepareNewPageState.event;
+  if (!event || !assetId) return;
+  const values = new Set((event.actuallyPrepared || []).map(String));
+  if (prepared) values.add(String(assetId));
+  else values.delete(String(assetId));
+  event.actuallyPrepared = Array.from(values);
 }
 
-async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '') {
+function prepareNewRenderCustomMutation() {
+  const customList = document.querySelector('.prepare-new-custom-list');
+  if (customList) customList.innerHTML = renderPrepareNewCustomList();
+  const progressCard = document.querySelector('.prepare-new-progress-card');
+  if (progressCard) progressCard.outerHTML = renderPrepareNewOverallProgressCard();
+  const assignmentProgress = document.getElementById('prepareNewAssignmentProgress');
+  if (assignmentProgress) {
+    const totals = prepareNewTotals();
+    const complete = prepareNewIsComplete();
+    assignmentProgress.className = `prepare-new-status prepare-new-status-${complete ? 'complete' : 'pending'}`;
+    assignmentProgress.textContent = `${totals.prepared} / ${totals.required} prepared`;
+  }
+}
+
+async function prepareNewPrepareAsset(eventId, encodedAssetId, button = null) {
+  const assetId = planDecode(encodedAssetId);
+  const isCustom = !!parseCustomAsset(assetId);
+  if (button) button.disabled = true;
+  if (isCustom) prepareNewPageState.suppressRealtimeUntil = Date.now() + 5000;
+  const preparedAssetId = await prepareSpecificAsset(eventId, assetId, {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || '',
+    skipUiSync: isCustom
+  });
+  if (preparedAssetId && isCustom) {
+    prepareNewSetLocalCustomPrepared(preparedAssetId, true);
+    prepareNewRenderCustomMutation();
+  } else if (button) {
+    button.disabled = false;
+  }
+}
+
+async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '', button = null) {
+  const assetId = planDecode(encodedAssetId);
+  const isCustom = !!parseCustomAsset(assetId);
   const panelKey = encodedPanelKey ? planDecode(encodedPanelKey) : '';
   if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
-  const changed = await unprepareSpecificAsset(eventId, planDecode(encodedAssetId), {
-    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+  if (button) button.disabled = true;
+  if (isCustom) prepareNewPageState.suppressRealtimeUntil = Date.now() + 5000;
+  const changed = await unprepareSpecificAsset(eventId, assetId, {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || '',
+    skipUiSync: isCustom
   });
-  if (!changed) return;
+  if (!changed) {
+    if (button) button.disabled = false;
+    return;
+  }
+  if (isCustom) {
+    prepareNewSetLocalCustomPrepared(assetId, false);
+    prepareNewRenderCustomMutation();
+  }
   if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
 }
 

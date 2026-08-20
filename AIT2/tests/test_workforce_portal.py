@@ -1914,6 +1914,14 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         with open(source_path, encoding="utf-8") as source_file:
             source = source_file.read()
+        css_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "css",
+            "workforce-admin.css",
+        )
+        with open(css_path, encoding="utf-8") as css_file:
+            css = css_file.read()
 
         review_source = source.split(
             "async function openWorkforceReview", 1
@@ -1924,6 +1932,12 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertNotIn("worker still needs to complete", review_source)
         self.assertIn("Claim details required", review_source)
         self.assertIn('id="wfReviewClaimNotes"', review_source)
+        self.assertIn('id="wfReviewOtherCategoryField"', source)
+        self.assertIn('<option value="Purchase"', source)
+        self.assertIn('.wf-review-form .wf-field[hidden]', css)
+        self.assertIn('function openEventWorkforceReview(eventId, submissionId)', source)
+        self.assertIn("workforcePageState.focusTarget.startsWith('review-claim:')", source)
+        self.assertIn('openWorkforceReview(submissionId)', source)
         self.assertNotIn(
             "'details-required'].includes(statusKey)", document_source
         )
@@ -2389,6 +2403,11 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(lighting_assignment["department"], "LI")
         self.assertEqual(lighting_assignment["workDates"], ["2026-07-11"])
         self.assertEqual(lighting_assignment["callTimes"], {"2026-07-11": "09:15"})
+        lighting_role = next(
+            row for row in update["workforce"]["roles"]
+            if row["name"] == "Lighting Operator" and row["department"] == "LI"
+        )
+        self.assertEqual(lighting_role["type"], "worker")
 
         payload = self.client.get("/api/events/143/workforce").get_json()["data"]
         current_rows = [
@@ -2680,6 +2699,11 @@ class WorkforcePortalTests(unittest.TestCase):
             ("room-main", "Audio Engineer"),
             ("room-breakout", "Breakout Technician"),
         ):
+            work_dates = (
+                ["2026-07-10", "2026-07-11"]
+                if room_id == "room-main"
+                else ["2026-07-10"]
+            )
             response = self.client.post(
                 "/api/events/143/workforce/assignments",
                 json={
@@ -2687,7 +2711,7 @@ class WorkforcePortalTests(unittest.TestCase):
                     "subprojectId": room_id,
                     "department": "AU",
                     "customRole": role,
-                    "workDates": ["2026-07-10"],
+                    "workDates": work_dates,
                     "dailyRate": 280,
                 },
             )
@@ -2715,6 +2739,50 @@ class WorkforcePortalTests(unittest.TestCase):
             [row["name"] for row in payload["subprojects"]],
             ["Main Room", "Breakout Room"],
         )
+
+        main_assignment = next(
+            row for row in assignments if row["subprojectId"] == "room-main"
+        )
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{main_assignment['id']}/schedule-day",
+            json={
+                "date": "2026-07-11",
+                "department": "AU",
+                "roleName": "Audio Engineer",
+                "subprojectId": "room-breakout",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        updated_assignments = [
+            row
+            for row in response.get_json()["data"]["workforce"]["assignments"]
+            if row["freelancerId"] == worker["id"]
+        ]
+        main_audio = next(
+            row for row in updated_assignments
+            if row["roleName"] == "Audio Engineer"
+            and row["subprojectId"] == "room-main"
+        )
+        breakout_audio = next(
+            row for row in updated_assignments
+            if row["roleName"] == "Audio Engineer"
+            and row["subprojectId"] == "room-breakout"
+        )
+        self.assertEqual(main_audio["workDates"], ["2026-07-10"])
+        self.assertEqual(breakout_audio["workDates"], ["2026-07-11"])
+        self.assertEqual(breakout_audio["subprojectName"], "Breakout Room")
+        self.assertTrue(response.get_json()["data"]["structureChanged"])
+
+        invalid_update = self.client.patch(
+            f"/api/events/143/workforce/assignments/{main_audio['id']}/schedule-day",
+            json={
+                "date": "2026-07-10",
+                "department": "AU",
+                "roleName": "Audio Engineer",
+                "subprojectId": "missing-room",
+            },
+        )
+        self.assertEqual(invalid_update.status_code, 400)
 
         invalid = self.client.post(
             "/api/events/143/workforce/assignments",
@@ -3022,6 +3090,24 @@ class WorkforcePortalTests(unittest.TestCase):
             {"manpower", "service"},
         )
 
+        manpower_assignment = next(
+            row for row in vendor_assignments
+            if row["providerType"] == "manpower"
+        )
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{manpower_assignment['id']}/schedule-day",
+            json={
+                "date": "2026-07-10",
+                "department": "AU",
+                "roleName": "Vendor Crew Lead",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        worker_role_names = {
+            row["name"] for row in response.get_json()["data"]["workforce"]["roles"]
+        }
+        self.assertNotIn("Vendor Crew Lead", worker_role_names)
+
         response = self.client.post(
             f"/api/events/143/workforce/submissions/{vendor_id}",
             data={
@@ -3271,10 +3357,31 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("ADMIN_INVOICE_FILE_ACCEPT", admin_source)
         self.assertIn("'.xlsx'", admin_source)
         self.assertIn("'.xls'", admin_source)
+        self.assertIn('pendingUploads: new Map()', admin_source)
+        self.assertIn('function wfPendingSubmissionRows(', admin_source)
+        self.assertIn('for (let index = 0; index < pendingRows.length; index += 1)', admin_source)
+        self.assertIn("formData.append('files', row.file)", admin_source)
+        self.assertIn("closeWorkforceModal('wfAdminUploadModal')", admin_source)
+        self.assertNotIn('wfAdminUploadProgressBar', admin_source)
+        self.assertIn("document.getElementById('wfAdminUploadForm')?.requestSubmit()", admin_source)
         self.assertIn("event-dropzone", worker_source)
         self.assertIn("dataTransfer.files", worker_source)
+        self.assertIn('const workerUploadState = {', worker_source)
+        self.assertIn('async function processWorkerUploadQueue()', worker_source)
+        self.assertIn("form.append('files', row.file, row.file.name)", worker_source)
+        self.assertIn('data-upload-progress', worker_source)
         self.assertIn(".xlsx", worker_source)
         self.assertIn(".xls", worker_source)
+
+    def test_event_workforce_quick_action_keeps_the_clicked_event(self):
+        static_folder = os.path.join(os.path.dirname(app_module.__file__), "static", "js")
+        with open(os.path.join(static_folder, "workforce-admin.js"), encoding="utf-8") as source_file:
+            source = source_file.read()
+        action = source.split('function openEventWorkforce(eventId', 1)[1].split(
+            'async function loadWorkforcePage', 1
+        )[0]
+        self.assertIn('workflowRememberEvent(id)', action)
+        self.assertIn("showSection(focus === 'transport' ? 'transport' : 'workforce', { eventId: id })", action)
 
     def test_department_assignment_actions_are_in_the_collapsed_header(self):
         static_root = os.path.join(
@@ -3633,6 +3740,43 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertLess(multi_text.index("Department"), multi_text.index("Role / Assignment"))
         self.assertLess(multi_text.index("Role / Assignment"), multi_text.index("Call time"))
 
+    def test_workforce_schedule_pdf_keeps_phone_number_on_one_line(self):
+        payload = {
+            "event": {
+                "id": 143,
+                "name": "Phone wrapping schedule",
+                "location": "Showbase",
+                "startDateValue": "2026-07-10",
+                "endDateValue": "2026-07-10",
+            },
+            "freelancers": [{
+                "id": "worker-phone-wrap",
+                "name": "Alexandra Benjamin Crew",
+                "phone": "91239876",
+            }],
+            "vendors": [],
+            "appUsers": [],
+            "allDepartments": [{"code": "AX", "name": "Audio"}],
+            "departments": [],
+            "assignments": [{
+                "id": "assignment-phone-wrap",
+                "freelancerId": "worker-phone-wrap",
+                "department": "AX",
+                "roleName": "Audio Engineer",
+                "workDates": ["2026-07-10"],
+                "callTimes": {"2026-07-10": "08:00"},
+            }],
+        }
+
+        pdf_bytes = build_workforce_schedule_pdf(payload, show_phones=True)
+        pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(pdf_bytes)).pages
+        ).replace("\u00a0", " ")
+
+        self.assertIn("+65 9123 9876", pdf_text)
+        self.assertNotIn("+65 9123\n9876", pdf_text)
+
     def test_workforce_schedule_pdf_preserves_chinese_text(self):
         payload = {
             "event": {
@@ -3817,11 +3961,60 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("params.set('showVendor', '1')", admin_source)
         self.assertIn("removeWorkforceScheduleDate", source)
         self.assertIn("wf-schedule-person-remove", source)
-        self.assertIn("openWorkforceScheduleDayEditor", source)
-        self.assertIn("saveWorkforceScheduleDayAssignment", source)
+        self.assertNotIn("openWorkforceScheduleDayEditor", source)
+        self.assertNotIn("saveWorkforceScheduleDayAssignment", source)
+        self.assertNotIn("Edit day assignment", source)
+        self.assertNotIn("wfScheduleDayEditorModal", source)
         self.assertIn("wf-schedule-dept-edit", source)
         self.assertIn("wf-schedule-role", source)
-        self.assertIn(".wf-schedule-day-departments", styles)
+        self.assertIn("openWorkforceScheduleRoleEditor", source)
+        self.assertIn("saveWorkforceScheduleRole", source)
+        self.assertIn("wfScheduleRoleSuggestions", source)
+        self.assertIn("wfScheduleRoleUsageKeys", source)
+        self.assertIn("renderWorkforceScheduleRoleSuggestions", source)
+        self.assertIn("chooseWorkforceScheduleRoleSuggestion", source)
+        suggestion_handler = source.split(
+            "function chooseWorkforceScheduleRoleSuggestion", 1
+        )[1].split("\n}", 1)[0]
+        self.assertIn("requestSubmit()", suggestion_handler)
+        self.assertNotIn("input.focus()", suggestion_handler)
+        self.assertIn("roleType === 'vendor'", source)
+        self.assertIn("vendorRoleKeys.has(roleKey)", source)
+        self.assertIn(">Suggested</span>", source)
+        self.assertIn(".wf-schedule-role-popover", styles)
+        self.assertIn(".wf-schedule-role-suggestions", styles)
+        self.assertIn("wfScheduleRoomSelectHtml", source)
+        room_selector = source.split(
+            "function wfScheduleRoomSelectHtml", 1
+        )[1].split("\n}", 1)[0]
+        self.assertIn("if (rooms.length <= 1) return '';", room_selector)
+        self.assertNotIn("is-static", room_selector)
+        self.assertNotIn(".wf-schedule-room.is-static", styles)
+        self.assertIn("toggleWorkforceScheduleRoomMenu", source)
+        self.assertIn("toggleWorkforceScheduleDepartmentMenu", source)
+        self.assertIn("updateWorkforceScheduleDepartment", source)
+        self.assertIn("wfScheduleTagMenu", source)
+        self.assertIn("updateWorkforceAssignmentSubproject", source)
+        self.assertNotIn("/subproject`,", source)
+        self.assertIn("roleName: role === 'Role not set' ? '' : role", source)
+        self.assertIn("subprojectId", source)
+        self.assertIn("const previousChip =", source)
+        self.assertIn("trigger.textContent = label", source)
+        self.assertIn("wfRoomChipStyle({ ...assignment, subprojectId })", source)
+        self.assertIn("trigger.textContent = previousChip.label", source)
+        self.assertNotIn("<select class=\"wf-schedule-room", source)
+        self.assertNotIn(
+            "openWorkforceScheduledAssignment('${wfAttr(row.id)}')\">${wfEscape(roomLabel)}",
+            source,
+        )
+        self.assertIn("const subprojectOrder = roomOrder(a) - roomOrder(b);", source)
+        self.assertLess(
+            source.index("const subprojectOrder = roomOrder(a) - roomOrder(b);"),
+            source.index("const aDepartment = wfScheduleDepartment(a, date);"),
+        )
+        self.assertIn(".wf-schedule-tag-menu", styles)
+        self.assertIn(".wf-schedule-tag-menu-badge", styles)
+        self.assertNotIn(".wf-schedule-day-departments", styles)
         self.assertIn("wfScheduleQuotationLabelHtml", source)
         self.assertIn("quotationScheduleLabels", source)
         self.assertIn(".wf-schedule-day-purpose", styles)

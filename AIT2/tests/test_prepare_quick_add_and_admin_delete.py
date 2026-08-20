@@ -380,6 +380,14 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             source,
         )
         self.assertIn('if (modelKey) prepareNewPageState.expandedModels.add(modelKey);', source)
+        self.assertIn('expandedCustomGroups: new Set()', source)
+        self.assertIn('function prepareNewSetCustomGroupExpanded(', source)
+        self.assertIn("const groupKey = section.loan ? `loan:${section.label}` : 'misc';", source)
+        self.assertIn('prepareNewPageState.expandedCustomGroups.has(groupKey)', source)
+        self.assertIn('function prepareNewRenderCustomMutation()', source)
+        self.assertIn('customList.innerHTML = renderPrepareNewCustomList();', source)
+        self.assertIn('skipUiSync: isCustom', source)
+        self.assertIn('if (!skipUiSync) schedulePrepareUiSync(eventId);', source)
         self.assertIn("const panelKey = 'standalone-extra-assets';", source)
         self.assertIn('modelKey: encodedPanelKey', source)
         self.assertIn(

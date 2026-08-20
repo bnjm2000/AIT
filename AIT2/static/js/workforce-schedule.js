@@ -7,7 +7,8 @@ const workforceScheduleState = {
   bulkTime: '08:00',
   exportScope: 'event',
   exportValue: '',
-  saving: false
+  saving: false,
+  tagMenuTrigger: null
 };
 
 function wfScheduleIcon(name) {
@@ -221,6 +222,15 @@ function wfScheduleDepartments() {
 
 function wfScheduleSortRows(rows, date = '') {
   return [...rows].sort((a, b) => {
+    const rooms = wfSubprojects();
+    const roomOrder = row => {
+      const index = rooms.findIndex(room =>
+        String(room.id || '') === String(wfEffectiveSubprojectId(row) || '')
+      );
+      return index < 0 ? rooms.length : index;
+    };
+    const subprojectOrder = roomOrder(a) - roomOrder(b);
+    if (subprojectOrder) return subprojectOrder;
     const aDepartment = wfScheduleDepartment(a, date);
     const bDepartment = wfScheduleDepartment(b, date);
     if (aDepartment === 'FT' && bDepartment !== 'FT') return -1;
@@ -230,6 +240,135 @@ function wfScheduleSortRows(rows, date = '') {
     );
     return departmentOrder || wfScheduleSubject(a).name.localeCompare(wfScheduleSubject(b).name);
   });
+}
+
+function wfScheduleRoomSelectHtml(row, date) {
+  const rooms = wfSubprojects();
+  if (rooms.length <= 1) return '';
+  const selectedId = wfEffectiveSubprojectId(row);
+  const selected = rooms.find(room => String(room.id) === selectedId) || rooms[0];
+  const label = String(selected?.name || 'Venue').trim().split(/\s+/)[0] || 'Venue';
+  return `<button type="button" class="wf-schedule-room" style="${wfRoomChipStyle(row)}"
+    aria-label="Change assigned venue" aria-haspopup="listbox" aria-expanded="false"
+    title="${wfAttr(selected.name || 'Venue')} — change assigned venue"
+    onclick="toggleWorkforceScheduleRoomMenu(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(label)}</button>`;
+}
+
+function closeWorkforceScheduleTagMenu(refocus = false) {
+  document.getElementById('wfScheduleTagMenu')?.remove();
+  const trigger = workforceScheduleState.tagMenuTrigger;
+  trigger?.setAttribute('aria-expanded', 'false');
+  workforceScheduleState.tagMenuTrigger = null;
+  if (refocus && trigger?.isConnected) trigger.focus();
+}
+
+function openWorkforceScheduleTagMenu(trigger, kind, assignmentId, date, label, options) {
+  closeWorkforceScheduleTagMenu();
+  closeWorkforceScheduleSelects();
+  document.body.insertAdjacentHTML('beforeend', `<div class="wf-schedule-tag-menu" id="wfScheduleTagMenu"
+    data-kind="${wfAttr(kind)}" data-assignment-id="${wfAttr(assignmentId)}" data-date="${wfAttr(date || '')}"
+    role="listbox" aria-label="${wfAttr(label)}">${options.map(option =>
+      `<button type="button" role="option" aria-selected="${option.selected}" class="${option.selected ? 'selected' : ''}"
+        onclick="chooseWorkforceScheduleTag(event,'${wfAttr(kind)}','${wfAttr(assignmentId)}','${wfAttr(date || '')}','${wfAttr(option.value)}')">
+        ${option.badge || ''}<span>${wfEscape(option.label)}</span>${wfScheduleIcon('check')}</button>`
+    ).join('')}</div>`);
+  positionWorkforceScheduleTagMenu(trigger);
+}
+
+function positionWorkforceScheduleTagMenu(trigger) {
+  const menu = document.getElementById('wfScheduleTagMenu');
+  if (!menu || !trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth;
+  const menuHeight = menu.offsetHeight;
+  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
+  menu.style.top = `${rect.bottom + menuHeight + 6 <= window.innerHeight
+    ? rect.bottom + 4
+    : Math.max(8, rect.top - menuHeight - 4)}px`;
+  workforceScheduleState.tagMenuTrigger = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+}
+
+function toggleWorkforceScheduleRoomMenu(event, assignmentId, date) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const trigger = event?.currentTarget;
+  if (!trigger) return;
+  if (
+    document.getElementById('wfScheduleTagMenu')?.dataset.kind === 'room' &&
+    workforceScheduleState.tagMenuTrigger === trigger
+  ) {
+    closeWorkforceScheduleTagMenu(true);
+    return;
+  }
+  const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
+  if (!assignment) return;
+  const selectedId = wfEffectiveSubprojectId(assignment);
+  openWorkforceScheduleTagMenu(
+    trigger,
+    'room',
+    assignmentId,
+    date,
+    'Assigned venue',
+    wfSubprojects().map(room => ({
+      value: room.id,
+      label: room.name || 'Venue',
+      selected: String(room.id) === selectedId
+    }))
+  );
+}
+
+function wfScheduleDepartmentOptions(assignment) {
+  const rows = [...(workforcePageState.data?.departments || [])];
+  if (assignment?.subjectType === 'app-user' && !rows.some(row => row.code === 'FT')) {
+    rows.unshift({ code: 'FT', name: 'Full-time (no department)', color: '#e2e8f0', textColor: '#334155' });
+  }
+  return rows;
+}
+
+function toggleWorkforceScheduleDepartmentMenu(event, assignmentId, date) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const trigger = event?.currentTarget;
+  if (!trigger) return;
+  if (
+    document.getElementById('wfScheduleTagMenu')?.dataset.kind === 'department' &&
+    workforceScheduleState.tagMenuTrigger === trigger
+  ) {
+    closeWorkforceScheduleTagMenu(true);
+    return;
+  }
+  const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
+  if (!assignment) return;
+  const selectedCode = wfScheduleDepartment(assignment, date);
+  openWorkforceScheduleTagMenu(
+    trigger,
+    'department',
+    assignmentId,
+    date,
+    'Assigned department',
+    wfScheduleDepartmentOptions(assignment).map(row => {
+      const meta = wfDepartmentMeta(row.code);
+      return {
+        value: row.code,
+        label: row.name || meta.name,
+        selected: row.code === selectedCode,
+        badge: `<i class="wf-schedule-tag-menu-badge" style="${wfDepartmentStyle(row.code)}">${wfEscape(meta.code)}</i>`
+      };
+    })
+  );
+}
+
+function chooseWorkforceScheduleTag(event, kind, assignmentId, date, value) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const trigger = workforceScheduleState.tagMenuTrigger;
+  closeWorkforceScheduleTagMenu();
+  if (kind === 'department') {
+    updateWorkforceScheduleDepartment(assignmentId, date, value, trigger);
+  } else {
+    updateWorkforceAssignmentSubproject(assignmentId, date, value, trigger);
+  }
 }
 
 function wfScheduleCrewCount(rows, date = '') {
@@ -289,22 +428,21 @@ function wfScheduleStaffCard(row, date) {
   const role = wfScheduleRole(row, date);
   const dateConflicts = (row.dateConflicts || []).filter(conflict => String(conflict.date || '') === String(date));
   const conflictTitle = wfConflictTooltipText(dateConflicts);
-  const roomName = wfSubprojectName(row);
-  const roomLabel = roomName.trim().split(/\s+/)[0] || 'Room';
   return `<article class="wf-schedule-person ${dateConflicts.length ? 'has-conflict' : ''}" style="${wfDepartmentStyle(departmentCode)}"
     role="button" tabindex="0" title="Open event assignment"
     onclick="if(!event.target.closest('input,button,label'))openWorkforceScheduledAssignment('${wfAttr(row.id)}')"
     onkeydown="if((event.key==='Enter'||event.key===' ')&&!event.target.closest('input,button')){event.preventDefault();openWorkforceScheduledAssignment('${wfAttr(row.id)}')}">
     <div class="wf-schedule-person-main">
       <div><strong>${wfEscape(subject.name)}${dateConflicts.length ? `<span class="wf-schedule-conflict wf-instant-tooltip" data-wf-tooltip="${wfAttr(conflictTitle)}" role="img" aria-label="${wfAttr(`Schedule conflict. ${conflictTitle}`)}">!</span>` : ''}</strong>
-        <button type="button" class="wf-schedule-role" title="Change role for ${wfAttr(wfScheduleDateLabel(date))}"
-          onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','role')">${wfEscape(role)}</button>
+        <button type="button" class="wf-schedule-role" title="Rename role for ${wfAttr(wfScheduleDateLabel(date))}"
+          aria-haspopup="dialog" aria-expanded="false"
+          onclick="openWorkforceScheduleRoleEditor(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(role)}</button>
         ${wfScheduleRate(row) ? `<small class="wf-schedule-rate">${wfEscape(wfScheduleRate(row))}</small>` : ''}</div>
       <span class="wf-schedule-assignment-tags">
-        ${roomName ? `<button type="button" class="wf-schedule-room" style="${wfRoomChipStyle(row)}" title="${wfAttr(roomName)} — change assigned room"
-          onclick="event.stopPropagation();openWorkforceScheduledAssignment('${wfAttr(row.id)}')">${wfEscape(roomLabel)}</button>` : ''}
+        ${wfScheduleRoomSelectHtml(row, date)}
         <button type="button" class="wf-schedule-dept wf-schedule-dept-edit" title="Change department for ${wfAttr(wfScheduleDateLabel(date))}"
-          onclick="event.stopPropagation();openWorkforceScheduleDayEditor('${wfAttr(row.id)}','${wfAttr(date)}','department')">${wfEscape(department.code)}</button>
+          aria-haspopup="listbox" aria-expanded="false"
+          onclick="toggleWorkforceScheduleDepartmentMenu(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(department.code)}</button>
       </span>
     </div>
     <div class="wf-schedule-person-meta">
@@ -320,6 +458,50 @@ function wfScheduleStaffCard(row, date) {
         onclick="event.stopPropagation();removeWorkforceScheduleDate('${wfAttr(row.id)}','${wfAttr(date)}',this)">&times;</button>
     </div>
   </article>`;
+}
+
+async function updateWorkforceAssignmentSubproject(assignmentId, date, subprojectId, trigger) {
+  const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
+  if (!assignment || !trigger) return;
+  const role = wfScheduleRole(assignment, date);
+  const selectedRoom = wfSubprojects().find(room => String(room.id) === String(subprojectId));
+  const previousChip = {
+    label: trigger.textContent,
+    style: trigger.getAttribute('style'),
+    title: trigger.getAttribute('title')
+  };
+  if (selectedRoom) {
+    const label = String(selectedRoom.name || 'Venue').trim().split(/\s+/)[0] || 'Venue';
+    trigger.textContent = label;
+    trigger.setAttribute('style', wfRoomChipStyle({ ...assignment, subprojectId }));
+    trigger.setAttribute('title', `${selectedRoom.name || 'Venue'} — saving assigned venue`);
+  }
+  trigger.disabled = true;
+  trigger.classList.add('saving');
+  try {
+    const response = await apiCall(
+      `/api/events/${workforcePageState.eventId}/workforce/assignments/${encodeURIComponent(assignmentId)}/schedule-day`,
+      'PATCH',
+      {
+        date,
+        department: wfScheduleDepartment(assignment, date),
+        roleName: role === 'Role not set' ? '' : role,
+        subprojectId
+      }
+    );
+    workforcePageState.data = response.data.workforce;
+    renderWorkforcePage();
+    showNotification('success', `Assigned venue updated for ${wfScheduleDateLabel(date)}`);
+  } catch (error) {
+    trigger.textContent = previousChip.label;
+    if (previousChip.style == null) trigger.removeAttribute('style');
+    else trigger.setAttribute('style', previousChip.style);
+    if (previousChip.title == null) trigger.removeAttribute('title');
+    else trigger.setAttribute('title', previousChip.title);
+    trigger.disabled = false;
+    trigger.classList.remove('saving');
+    showNotification('error', error.message);
+  }
 }
 
 async function removeWorkforceScheduleDate(assignmentId, date, button) {
@@ -347,147 +529,155 @@ async function removeWorkforceScheduleDate(assignmentId, date, button) {
   }
 }
 
-function ensureWorkforceScheduleDayEditor() {
-  if (document.getElementById('wfScheduleDayEditorModal')) return;
-  ensureWorkforceModals();
-  document.body.insertAdjacentHTML('beforeend', wfModal(
-    'wfScheduleDayEditorModal',
-    'Edit day assignment',
-    `<form id="wfScheduleDayEditorForm" onsubmit="saveWorkforceScheduleDayAssignment(event)">
-      <div class="wf-modal-body wf-schedule-day-editor">
-        <p class="wf-schedule-day-editor-context" id="wfScheduleDayEditorContext"></p>
-        <div class="wf-field full"><span>Department *</span>
-          <div class="wf-schedule-day-departments" id="wfScheduleDayDepartments" role="listbox" aria-label="Department"></div>
-        </div>
-        <label class="wf-field full"><span>Role / Position</span>
-          <input id="wfScheduleDayRole" maxlength="100" placeholder="Role not set" autocomplete="off"
-            oninput="renderWorkforceScheduleRoleSuggestions(this.value)">
-        </label>
-        <div class="wf-schedule-role-suggestions" id="wfScheduleRoleSuggestions"></div>
-        <div class="wf-error" id="wfScheduleDayEditorError"></div>
-      </div>
-      <footer class="wf-modal-actions">
-        <button type="button" class="wf-button" onclick="closeWorkforceModal('wfScheduleDayEditorModal')">Cancel</button>
-        <button type="submit" class="wf-button primary">Save for This Day</button>
-      </footer>
-    </form>`,
-    '',
-    true
-  ));
-}
-
-function wfScheduleDayDepartmentRows(assignment) {
-  const rows = [...(workforcePageState.data?.departments || [])];
-  if (assignment?.subjectType === 'app-user' && !rows.some(row => row.code === 'FT')) {
-    rows.unshift({ code: 'FT', name: 'Full-time (no department)', color: '#e2e8f0', textColor: '#334155' });
-  }
-  return rows;
-}
-
-function renderWorkforceScheduleDayDepartments(assignment, selectedCode) {
-  const root = document.getElementById('wfScheduleDayDepartments');
-  if (!root) return;
-  root.dataset.value = selectedCode;
-  root.innerHTML = wfScheduleDayDepartmentRows(assignment).map(row => {
-    const meta = wfDepartmentMeta(row.code);
-    const color = row.color || meta.color;
-    const textColor = row.textColor || meta.textColor;
-    const selected = row.code === selectedCode;
-    return `<button type="button" role="option" aria-selected="${selected}" class="${selected ? 'selected' : ''}"
-      style="--wf-dept-color:${wfAttr(color)};--wf-dept-text:${wfAttr(textColor)}" onclick="selectWorkforceScheduleDayDepartment('${wfAttr(row.code)}')">
-      <span>${wfEscape(meta.code)}</span><b>${wfEscape(row.name || meta.name)}</b>${selected ? wfScheduleIcon('check') : ''}</button>`;
-  }).join('');
-}
-
-function selectWorkforceScheduleDayDepartment(code) {
-  const modal = document.getElementById('wfScheduleDayEditorModal');
-  const assignment = wfScheduleRows().find(row => String(row.id) === String(modal?.dataset.assignmentId || ''));
-  if (!modal || !assignment) return;
-  renderWorkforceScheduleDayDepartments(assignment, code);
-  renderWorkforceScheduleRoleSuggestions(document.getElementById('wfScheduleDayRole')?.value || '');
-}
-
-function wfScheduleRoleSuggestions(department) {
-  const names = new Set();
-  (workforcePageState.data?.roles || []).forEach(row => {
-    if (!row || String(row.department || '') !== String(department || '')) return;
-    const name = String(row.name || '').trim();
-    if (name) names.add(name);
-  });
-  return [...names].sort((a, b) => a.localeCompare(b));
-}
-
-function renderWorkforceScheduleRoleSuggestions(search = '') {
-  const root = document.getElementById('wfScheduleRoleSuggestions');
-  const department = document.getElementById('wfScheduleDayDepartments')?.dataset.value || '';
-  if (!root) return;
-  const needle = String(search || '').trim().toLowerCase();
-  const names = wfScheduleRoleSuggestions(department).filter(name =>
-    !needle || name.toLowerCase().includes(needle)
-  );
-  root.innerHTML = names.length
-    ? `<span>Suggestions</span>${names.map(name => `<button type="button" onclick="chooseWorkforceScheduleRole('${wfAttr(name)}')">${wfEscape(name)}</button>`).join('')}`
-    : '';
-}
-
-function chooseWorkforceScheduleRole(roleName) {
-  const input = document.getElementById('wfScheduleDayRole');
-  if (!input) return;
-  input.value = roleName;
-  renderWorkforceScheduleRoleSuggestions(roleName);
-  input.focus();
-}
-
-function openWorkforceScheduleDayEditor(assignmentId, date, focusField = '') {
-  ensureWorkforceScheduleDayEditor();
+async function updateWorkforceScheduleDepartment(assignmentId, date, department, trigger) {
   const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
-  const modal = document.getElementById('wfScheduleDayEditorModal');
-  if (!assignment || !modal) return;
-  const subject = wfScheduleSubject(assignment);
-  const department = wfScheduleDepartment(assignment, date);
-  modal.dataset.assignmentId = assignmentId;
-  modal.dataset.date = date;
-  document.getElementById('wfScheduleDayEditorContext').textContent =
-    `${subject.name} · ${wfScheduleDateLabel(date, { weekday: true, year: true })}`;
-  document.getElementById('wfScheduleDayRole').value = wfScheduleRole(assignment, date) === 'Role not set'
-    ? ''
-    : wfScheduleRole(assignment, date);
-  renderWorkforceScheduleDayDepartments(assignment, department);
-  renderWorkforceScheduleRoleSuggestions('');
-  wfError('wfScheduleDayEditorError');
-  openWorkforceModal('wfScheduleDayEditorModal');
-  if (focusField === 'role') {
-    requestAnimationFrame(() => document.getElementById('wfScheduleDayRole')?.focus());
-  }
-}
-
-async function saveWorkforceScheduleDayAssignment(event) {
-  event.preventDefault();
-  const modal = document.getElementById('wfScheduleDayEditorModal');
-  const assignmentId = String(modal?.dataset.assignmentId || '');
-  const date = String(modal?.dataset.date || '');
-  const department = document.getElementById('wfScheduleDayDepartments')?.dataset.value || '';
-  const roleName = document.getElementById('wfScheduleDayRole')?.value.trim() || '';
-  if (!assignmentId || !date || !department) {
-    wfError('wfScheduleDayEditorError', 'Choose a department.');
-    return;
-  }
-  const submit = event.submitter || event.currentTarget.querySelector('[type="submit"]');
-  if (submit) submit.disabled = true;
+  if (!assignment || !trigger) return;
+  const role = wfScheduleRole(assignment, date);
+  trigger.disabled = true;
+  trigger.classList.add('saving');
   try {
     const response = await apiCall(
       `/api/events/${workforcePageState.eventId}/workforce/assignments/${encodeURIComponent(assignmentId)}/schedule-day`,
       'PATCH',
-      { date, department, roleName }
+      { date, department, roleName: role === 'Role not set' ? '' : role }
     );
     workforcePageState.data = response.data.workforce;
-    closeWorkforceModal('wfScheduleDayEditorModal');
     renderWorkforcePage();
-    showNotification('success', `Assignment updated for ${wfScheduleDateLabel(date)}`);
+    showNotification('success', `Department updated for ${wfScheduleDateLabel(date)}`);
   } catch (error) {
-    wfError('wfScheduleDayEditorError', error.message);
-  } finally {
-    if (submit) submit.disabled = false;
+    trigger.disabled = false;
+    trigger.classList.remove('saving');
+    showNotification('error', error.message);
+  }
+}
+
+function wfScheduleRoleUsageKeys(vendorRoles) {
+  const keys = new Set();
+  (workforcePageState.data?.assignments || []).forEach(row => {
+    const isVendor = String(row?.subjectType || '').toLowerCase() === 'vendor' || Boolean(row?.vendorId);
+    if (isVendor !== vendorRoles) return;
+    const dates = Array.isArray(row.workDates) && row.workDates.length ? row.workDates : [''];
+    dates.forEach(date => {
+      const department = wfScheduleDepartment(row, date);
+      const roleName = wfScheduleDateValue(
+        row,
+        'dateRoles',
+        date,
+        row?.roleName || row?.serviceName || ''
+      ).trim();
+      if (department && roleName) keys.add(`${department}|${roleName.toLowerCase()}`);
+    });
+  });
+  return keys;
+}
+
+function wfScheduleRoleSuggestions(department, assignment) {
+  if (String(assignment?.subjectType || '').toLowerCase() === 'vendor' || assignment?.vendorId) return [];
+  const workerRoleKeys = wfScheduleRoleUsageKeys(false);
+  const vendorRoleKeys = wfScheduleRoleUsageKeys(true);
+  const names = new Set();
+  (workforcePageState.data?.roles || []).forEach(row => {
+    if (!row || String(row.department || '') !== String(department || '')) return;
+    const name = String(row.name || '').trim();
+    if (!name) return;
+    const roleType = String(row.type || row.subjectType || '').trim().toLowerCase();
+    if (roleType === 'vendor') return;
+    const roleKey = `${department}|${name.toLowerCase()}`;
+    if (roleType !== 'worker' && vendorRoleKeys.has(roleKey) && !workerRoleKeys.has(roleKey)) return;
+    names.add(name);
+  });
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function openWorkforceScheduleRoleEditor(event, assignmentId, date) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const trigger = event?.currentTarget;
+  if (!trigger) return;
+  if (
+    document.getElementById('wfScheduleTagMenu')?.dataset.kind === 'role' &&
+    workforceScheduleState.tagMenuTrigger === trigger
+  ) {
+    closeWorkforceScheduleTagMenu(true);
+    return;
+  }
+  closeWorkforceScheduleTagMenu();
+  closeWorkforceScheduleSelects();
+  const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
+  if (!assignment || !trigger) return;
+  const currentRole = wfScheduleRole(assignment, date);
+  const subject = wfScheduleSubject(assignment);
+  document.body.insertAdjacentHTML('beforeend', `<div class="wf-schedule-tag-menu wf-schedule-role-popover" id="wfScheduleTagMenu"
+    data-kind="role" data-assignment-id="${wfAttr(assignmentId)}" data-date="${wfAttr(date)}" role="dialog" aria-label="Rename role">
+    <form class="wf-schedule-role-editor" onsubmit="saveWorkforceScheduleRole(event)">
+      <div class="wf-schedule-role-context"><strong>Rename role</strong><span>${wfEscape(subject.name)} · ${wfEscape(wfScheduleDateLabel(date))}</span></div>
+      <label><span>Role / Position</span><input id="wfScheduleRoleInput" maxlength="100" autocomplete="off" placeholder="Role not set"
+        value="${wfAttr(currentRole === 'Role not set' ? '' : currentRole)}" oninput="renderWorkforceScheduleRoleSuggestions(this.value)"></label>
+      <div class="wf-schedule-role-suggestions" id="wfScheduleRoleSuggestions"></div>
+      <div class="wf-schedule-role-actions"><button type="button" onclick="closeWorkforceScheduleTagMenu(true)">Cancel</button>
+        <button type="submit" class="primary">Save</button></div>
+    </form></div>`);
+  renderWorkforceScheduleRoleSuggestions('');
+  positionWorkforceScheduleTagMenu(trigger);
+  requestAnimationFrame(() => {
+    const input = document.getElementById('wfScheduleRoleInput');
+    input?.focus();
+    input?.select();
+  });
+}
+
+function renderWorkforceScheduleRoleSuggestions(search = '') {
+  const menu = document.getElementById('wfScheduleTagMenu');
+  const root = document.getElementById('wfScheduleRoleSuggestions');
+  const assignment = wfScheduleRows().find(row =>
+    String(row.id) === String(menu?.dataset.assignmentId || '')
+  );
+  if (!root || !assignment) return;
+  const department = wfScheduleDepartment(assignment, menu.dataset.date || '');
+  const needle = String(search || '').trim().toLowerCase();
+  const names = wfScheduleRoleSuggestions(department, assignment).filter(name =>
+    !needle || name.toLowerCase().includes(needle)
+  );
+  root.innerHTML = names.length
+    ? `<span>Suggested</span>${names.map(name => `<button type="button" onclick="chooseWorkforceScheduleRoleSuggestion('${wfAttr(name)}')">${wfEscape(name)}</button>`).join('')}`
+    : '';
+}
+
+function chooseWorkforceScheduleRoleSuggestion(roleName) {
+  const input = document.getElementById('wfScheduleRoleInput');
+  if (!input) return;
+  input.value = roleName;
+  input.closest('form')?.requestSubmit();
+}
+
+async function saveWorkforceScheduleRole(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const menu = document.getElementById('wfScheduleTagMenu');
+  const assignmentId = String(menu?.dataset.assignmentId || '');
+  const date = String(menu?.dataset.date || '');
+  const assignment = wfScheduleRows().find(row => String(row.id) === assignmentId);
+  const trigger = workforceScheduleState.tagMenuTrigger;
+  if (!assignment || !trigger || !date) return;
+  const currentRole = wfScheduleRole(assignment, date);
+  const roleName = String(document.getElementById('wfScheduleRoleInput')?.value || '').trim().slice(0, 100);
+  closeWorkforceScheduleTagMenu();
+  if (roleName === (currentRole === 'Role not set' ? '' : currentRole)) return;
+  trigger.disabled = true;
+  trigger.classList.add('saving');
+  try {
+    const response = await apiCall(
+      `/api/events/${workforcePageState.eventId}/workforce/assignments/${encodeURIComponent(assignmentId)}/schedule-day`,
+      'PATCH',
+      { date, department: wfScheduleDepartment(assignment, date), roleName }
+    );
+    workforcePageState.data = response.data.workforce;
+    renderWorkforcePage();
+    showNotification('success', `Role updated for ${wfScheduleDateLabel(date)}`);
+  } catch (error) {
+    trigger.disabled = false;
+    trigger.classList.remove('saving');
+    showNotification('error', error.message);
   }
 }
 
@@ -614,6 +804,7 @@ function toggleWorkforceScheduleSelect(id, event) {
   const select = document.getElementById(id);
   if (!select) return;
   const willOpen = !select.classList.contains('is-open');
+  closeWorkforceScheduleTagMenu();
   closeWorkforceScheduleSelects();
   select.classList.toggle('is-open', willOpen);
   select.querySelector('.wf-schedule-select-trigger')?.setAttribute('aria-expanded', String(willOpen));
@@ -775,13 +966,15 @@ async function applyWorkforceBulkCallTime() {
 
 document.addEventListener('click', event => {
   if (!event.target.closest('.wf-schedule-select')) closeWorkforceScheduleSelects();
+  if (!event.target.closest('.wf-schedule-tag-menu')) closeWorkforceScheduleTagMenu();
 });
 
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
   const trigger = document.querySelector('.wf-schedule-select.is-open .wf-schedule-select-trigger');
   closeWorkforceScheduleSelects();
-  trigger?.focus();
+  if (trigger) trigger.focus();
+  else closeWorkforceScheduleTagMenu(true);
 });
 
 function downloadWorkforceSchedule(scope = 'event', value = '') {

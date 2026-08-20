@@ -29,6 +29,18 @@ def test_planning_primary_action_opens_prepare_and_plan_remains_in_menu():
     assert '<span>Plan</span>' in menu
 
 
+def test_event_quick_actions_pass_the_clicked_event_through_navigation():
+    planning = function_source('openEventPlanning', 'openPrepareWorkspaceForEvent')
+    preparing = function_source('openPrepareWorkspaceForEvent', 'openReturnWorkspaceForEvent')
+    returning = function_source('openReturnWorkspaceForEvent', 'closeEventCardMenus')
+
+    assert "showSection('plan', { eventId: id })" in planning
+    assert "showSection('prepare-new', { eventId: id })" in preparing
+    assert "showSection('return', { eventId: id })" in returning
+    for source in (planning, preparing, returning):
+        assert 'workflowRememberEvent(id)' in source
+
+
 def test_add_event_assignee_picker_has_assign_all_for_active_company_users():
     assert "onclick=\"assignAllEventAssignees('add')\"" in TEMPLATE
     assert '>Assign All</button>' in TEMPLATE

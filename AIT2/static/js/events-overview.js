@@ -649,18 +649,28 @@ async function openEventPlanning(eventId) {
     openPrepareWorkspaceForEvent(eventId);
     return;
   }
-  planPageState.eventId = Number(eventId) || null;
-  showSection('plan');
+  const id = Number(eventId) || null;
+  planPageState.eventId = id;
+  planPageState.event = null;
+  if (id && typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
+  showSection('plan', { eventId: id });
 }
 
 function openPrepareWorkspaceForEvent(eventId) {
-  prepareNewPageState.eventId = Number(eventId) || null;
-  showSection('prepare-new');
+  const id = Number(eventId) || null;
+  prepareNewPageState.eventId = id;
+  prepareNewPageState.event = null;
+  if (id && typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
+  showSection('prepare-new', { eventId: id });
 }
 
 function openReturnWorkspaceForEvent(eventId) {
-  returnPageState.eventId = Number(eventId) || null;
-  showSection('return');
+  const id = Number(eventId) || null;
+  returnPageState.eventId = id;
+  returnPageState.event = null;
+  returnPageState.loaded = false;
+  if (id && typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
+  showSection('return', { eventId: id });
 }
 
 function closeEventCardMenus() {
@@ -1295,26 +1305,29 @@ function schedulePrepareUiSync(eventId, delay = 600) {
 async function prepareSpecificAsset(eventId, assetId, requestData = {}) {
   let actionStarted = false;
   try {
+    const { skipUiSync = false, ...apiRequestData } = requestData || {};
     await ensureAssetsLoaded();
     if (!(await confirmDegradedAssetUse(assetId))) {
       updateAllButtonsForAsset(assetId, false);
-      return;
+      return false;
     }
     actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
-    if (!actionStarted) return;
+    if (!actionStarted) return false;
     const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', {
       assetId,
-      ...requestData
+      ...apiRequestData
     });
     await showApiWarning(response);
     const preparedAssetId = response?.data?.assetId || assetId;
     showNotification('success', `${customAssetLabelFromId(preparedAssetId)} marked as prepared`);
     updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
-    schedulePrepareUiSync(eventId);
+    if (!skipUiSync) schedulePrepareUiSync(eventId);
+    return preparedAssetId;
   } catch (error) {
     console.error('Error in prepareSpecificAsset:', error);
     showNotification('error', `Failed to prepare asset: ${error.message}`);
     updateAllButtonsForAsset(assetId, false);
+    return false;
   } finally {
     if (actionStarted) endPrepareAssetAction(assetId);
   }
@@ -1323,13 +1336,14 @@ async function prepareSpecificAsset(eventId, assetId, requestData = {}) {
 async function unprepareSpecificAsset(eventId, assetId, requestData = {}) {
   if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return false;
   try {
+    const { skipUiSync = false, ...apiRequestData } = requestData || {};
     await apiCall(`/api/events/${eventId}/unprepare`, 'POST', {
       assetId,
-      ...requestData
+      ...apiRequestData
     });
     showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
     updateAllButtonsForAsset(assetId, false);
-    schedulePrepareUiSync(eventId);
+    if (!skipUiSync) schedulePrepareUiSync(eventId);
     return true;
   } catch (error) {
     console.error('Error in unprepareSpecificAsset:', error);

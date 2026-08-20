@@ -598,9 +598,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .status-paid { background: #eff6ff; color: #1d4ed8; }
 .status-payment-confirmed { background: #eef2ff; color: #4338ca; }
 .status-queued,
+.status-queueing,
 .status-awaiting-confirmation,
 .status-processing,
 .status-uploading { background: #ecfeff; color: #0e7490; }
+.status-failed { background: #fff1f2; color: #be123c; }
 
 .upload-status {
   display: grid;

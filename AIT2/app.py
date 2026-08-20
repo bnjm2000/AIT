@@ -9310,18 +9310,31 @@ def _workforce_assignment_base_role(assignment):
 
 
 def _workforce_assignment_matches_schedule_group(
-    candidate, source, subject_id, department, role_name
+    candidate, source, subject_id, department, role_name,
+    subproject_id=None, event=None,
 ):
     """Return whether two rows represent the same department-view role entry."""
+    source_subproject_id = str(source.get('subprojectId') or '')
+    candidate_subproject_id = str(candidate.get('subprojectId') or '')
+    if event is not None:
+        source_subproject_id = _workforce_row_with_subproject(
+            source, event
+        )['subprojectId']
+        candidate_subproject_id = _workforce_row_with_subproject(
+            candidate, event
+        )['subprojectId']
+    target_subproject_id = (
+        source_subproject_id
+        if subproject_id is None
+        else str(subproject_id or '')
+    )
     return (
         isinstance(candidate, dict)
         and candidate is not source
         and _workforce_assignment_subject_id(candidate) == subject_id
         and _normalise_department_code(candidate.get('department')) == department
         and _workforce_assignment_base_role(candidate).casefold() == role_name.casefold()
-        and str(candidate.get('subprojectId') or '') == str(
-            source.get('subprojectId') or ''
-        )
+        and candidate_subproject_id == target_subproject_id
         and str(candidate.get('providerType') or '') == str(
             source.get('providerType') or ''
         )
@@ -10762,6 +10775,10 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
 
     previous_department = ''
     previous_role = ''
+    previous_subproject_id = ''
+    previous_subproject_name = ''
+    subproject_id = ''
+    subproject_name = ''
     subject_name = 'Worker or vendor'
     result_assignment_id = str(assignment_id)
     structure_changed = False
@@ -10791,26 +10808,53 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             assignment, date_value
         )
         previous_role = _workforce_role_on_date(assignment, date_value)
+        effective_assignment = _workforce_row_with_subproject(
+            assignment, event
+        )
+        previous_subproject_id = effective_assignment['subprojectId']
+        previous_subproject_name = effective_assignment['subprojectName']
+        if 'subprojectId' in payload:
+            try:
+                subproject_id, subproject_name = (
+                    _workforce_subproject_details(
+                        event, payload.get('subprojectId')
+                    )
+                )
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
+        else:
+            subproject_id = previous_subproject_id
+            subproject_name = previous_subproject_name
+        is_vendor_assignment = bool(
+            assignment.get('vendorId')
+            or str(assignment.get('subjectType') or '').strip().lower()
+            == 'vendor'
+        )
         matching_role = next((
             row for row in workforce.get('roles', [])
             if isinstance(row, dict)
+            and str(row.get('type') or '').strip().lower() != 'vendor'
             and str(row.get('name') or '').strip().casefold() == role_name.casefold()
             and _normalise_department_code(row.get('department')) == department
-        ), None) if role_name else None
-        if role_name and not matching_role:
+        ), None) if role_name and not is_vendor_assignment else None
+        if role_name and not is_vendor_assignment and not matching_role:
             matching_role = {
                 'id': new_id('role'),
                 'name': role_name,
                 'department': department,
+                'type': 'worker',
                 'createdAt': now_iso(),
             }
             workforce.setdefault('roles', []).append(matching_role)
+        elif matching_role:
+            matching_role.setdefault('type', 'worker')
 
         subject_id = _workforce_assignment_subject_id(assignment)
         target = next((
             row for row in assignments
             if _workforce_assignment_matches_schedule_group(
-                row, assignment, subject_id, department, role_name
+                row, assignment, subject_id, department, role_name,
+                subproject_id, event,
             )
         ), None)
         source_call_time = normalize_call_times(
@@ -10823,6 +10867,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             _normalise_department_code(assignment.get('department')) == department
             and _workforce_assignment_base_role(assignment).casefold()
             == role_name.casefold()
+            and previous_subproject_id == subproject_id
         )
 
         if target:
@@ -10870,6 +10915,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             result_assignment.update({
                 'id': new_id('assignment'),
                 'department': department,
+                'subprojectId': subproject_id,
                 'roleName': role_name,
                 'roleId': str((matching_role or {}).get('id') or ''),
                 'workDates': [date_value],
@@ -10886,6 +10932,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
         else:
             assignment.update({
                 'department': department,
+                'subprojectId': subproject_id,
                 'roleName': role_name,
                 'roleId': str((matching_role or {}).get('id') or ''),
                 'dateDepartments': {},
@@ -10924,6 +10971,11 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
         changes.append(
             f'role from {previous_role or "not set"} to {role_name or "not set"}'
         )
+    if previous_subproject_id != subproject_id:
+        changes.append(
+            f'venue from {previous_subproject_name or "not set"} '
+            f'to {subproject_name or "not set"}'
+        )
     if changes:
         log_action(
             f"Updated {subject_name}'s schedule on {date_value} for event "
@@ -10935,6 +10987,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
         'date': date_value,
         'department': department,
         'roleName': role_name,
+        'subprojectId': subproject_id,
         'structureChanged': structure_changed,
     }
     _workforce_changed(
@@ -12266,11 +12319,13 @@ def create_workforce_role():
         )
         if existing:
             role = existing
+            role.setdefault('type', 'worker')
         else:
             role = {
                 'id': new_id('role'),
                 'name': name,
                 'department': department,
+                'type': 'worker',
                 'createdAt': now_iso(),
             }
             workforce.setdefault('roles', []).append(role)
@@ -12577,12 +12632,14 @@ def create_workforce_assignment(event_id):
                     None,
                 )
                 if duplicate:
+                    duplicate.setdefault('type', 'worker')
                     role_id = str(duplicate.get('id') or '')
                 else:
                     saved_role = {
                         'id': new_id('role'),
                         'name': custom_role,
                         'department': department,
+                        'type': 'worker',
                         'createdAt': now_iso(),
                     }
                     workforce.setdefault('roles', []).append(saved_role)
@@ -29946,7 +30003,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 16
+FINANCE_VERSION = 18
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
@@ -30170,6 +30227,38 @@ def _finance_system_name(department, value=''):
     if base_name.lower() in {'transport', 'transportation'}:
         return 'Transportation'
     return (base_name or 'Unknown')[:200]
+
+
+def _finance_special_category_department(system_name):
+    """Return the canonical stored department for special quote categories."""
+    category = _finance_adjustment_system_name(system_name)
+    if category == 'Manpower':
+        return 'Manpower', 'MANPOWER'
+    if category == 'Transportation':
+        return 'Transportation', 'TRANSPORTATION'
+    return None
+
+
+def _finance_canonicalise_special_category_line(line):
+    """Keep category and stored department aligned for labour and transport."""
+    if not isinstance(line, dict):
+        return False
+    canonical = _finance_special_category_department(
+        _finance_system_name(
+            line.get('department'),
+            line.get('systemName'),
+        )
+    )
+    if not canonical:
+        return False
+    department, department_code = canonical
+    changed = (
+        line.get('department') != department
+        or line.get('departmentCode') != department_code
+    )
+    line['department'] = department
+    line['departmentCode'] = department_code
+    return changed
 
 
 def _finance_is_optional_category(value):
@@ -30641,6 +30730,8 @@ def _migrate_finance_data(data):
             if line.get('systemName') != system_name:
                 line['systemName'] = system_name
                 changed = True
+            if _finance_canonicalise_special_category_line(line):
+                changed = True
             if line.get('uom') == 'pcs':
                 line['uom'] = 'units'
                 changed = True
@@ -30680,6 +30771,36 @@ def _migrate_finance_data(data):
         ]
         if cleaned_adjustments != (document.get('adjustments') or []):
             document['adjustments'] = cleaned_adjustments
+            changed = True
+
+        for revision_row in document.get('revisions') or []:
+            snapshot = (
+                revision_row.get('snapshot')
+                if isinstance(revision_row, dict)
+                else None
+            )
+            if not isinstance(snapshot, dict):
+                continue
+            for line in snapshot.get('lineItems') or []:
+                if _finance_canonicalise_special_category_line(line):
+                    changed = True
+
+    for quotation_id, record in (data.get('linkedLineItems') or {}).items():
+        if not isinstance(record, dict):
+            continue
+        record_changed = False
+        for group in record.get('lines') or []:
+            public_line = (
+                group.get('public') if isinstance(group, dict) else None
+            )
+            if _finance_canonicalise_special_category_line(public_line):
+                record_changed = True
+        if record_changed:
+            record['quotationId'] = str(
+                record.get('quotationId') or quotation_id
+            )
+            record['updatedAt'] = now_iso()
+            record['checksum'] = _linked_line_record_checksum(record)
             changed = True
 
     if _backfill_finance_price_book(data):
@@ -31353,6 +31474,13 @@ def _normalise_finance_line(value):
         value.get('department'),
         value.get('departmentCode'),
     )
+    system_name = _finance_system_name(
+        department,
+        value.get('systemName'),
+    )
+    special_department = _finance_special_category_department(system_name)
+    if special_department:
+        department, department_code = special_department
     raw_uom = str(value.get('uom') or '').strip().lower()
     if raw_uom in {'pax', 'person', 'people'} or (
         not raw_uom
@@ -31394,7 +31522,7 @@ def _normalise_finance_line(value):
         ),
         'department': department[:200],
         'departmentCode': department_code,
-        'systemName': _finance_system_name(department, value.get('systemName')),
+        'systemName': system_name,
         'days': round(days, 4),
         'costingMultiplierLabel': (
             'Day'
@@ -32067,6 +32195,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             inherited_category = category_by_department.get(category_key)
             if inherited_category:
                 normalised['systemName'] = inherited_category
+        _finance_canonicalise_special_category_line(normalised)
         lines.append(normalised)
     if document_type == 'quotation' and existing and 'lineItems' in value:
         _propagate_finance_quotation_price_changes(
@@ -33887,6 +34016,8 @@ def _capture_linked_line_items(finance_data):
             for line in quotation.get('lineItems') or []
             if isinstance(line, dict) and str(line.get('id') or '')
         ]
+        for line in quote_lines:
+            _finance_canonicalise_special_category_line(line)
         if len(quote_lines) != len(quotation.get('lineItems') or []):
             raise ValueError(f'Quotation {quotation_id} contains a line without an ID')
         quote_ids = [str(line.get('id') or '') for line in quote_lines]
@@ -34153,6 +34284,49 @@ def _costing_workforce_department(line):
     return _normalise_department_code(code) or 'UN', category
 
 
+def _costing_assignment_identity(assignment):
+    """Return the vendor/worker identity represented by an event assignment."""
+    if not isinstance(assignment, dict):
+        return '', ''
+    assignment_type = str(
+        assignment.get('costingVendorType')
+        or ('worker' if assignment.get('subjectType') == 'worker' else 'vendor')
+    ).strip().lower()
+    if assignment_type not in {'vendor', 'worker'}:
+        return '', ''
+    assignment_id = (
+        assignment.get('freelancerId')
+        if assignment_type == 'worker'
+        else assignment.get('vendorId') or assignment.get('freelancerId')
+    )
+    return assignment_type, _costing_vendor_key(
+        '', assignment_type, assignment_id
+    )
+
+
+def _costing_assignment_amount(assignment, assignment_type=''):
+    """Calculate the full event cost represented by one workforce assignment."""
+    if not isinstance(assignment, dict):
+        return 0.0
+    assignment_type = str(assignment_type or '').strip().lower()
+    provider_type = str(
+        assignment.get('providerType') or ''
+    ).strip().lower()
+    days = max(1, _safe_int(assignment.get('days'), 1))
+    if provider_type == 'service':
+        return round(max(0, _safe_float(assignment.get('serviceCost'), 0)), 2)
+    if provider_type == 'manpower':
+        pax = max(1, _safe_int(assignment.get('pax'), 1))
+        rate = max(0, _safe_float(
+            assignment.get('ratePerPax'), assignment.get('dailyRate')
+        ))
+        return round(pax * rate * days, 2)
+    rate = max(0, _safe_float(assignment.get('dailyRate'), 0))
+    if assignment_type == 'worker' or rate:
+        return round(rate * days, 2)
+    return round(max(0, _safe_float(assignment.get('serviceCost'), 0)), 2)
+
+
 def _sync_costing_vendor_assignments(costing, event_id):
     """Expose Costing vendor and worker totals as event assignments."""
     event_id = _safe_int(event_id, 0)
@@ -34198,6 +34372,18 @@ def _sync_costing_vendor_assignments(costing, event_id):
     changed = False
     with mutate_workforce(_workforce_folder()) as workforce:
         rows = workforce.setdefault('assignments', {}).setdefault(str(event_id), [])
+        # A real event assignment entered in Manpower is authoritative. Costing
+        # assignments are only placeholders used to bootstrap an otherwise
+        # unassigned vendor/worker; keeping both produces duplicate visible work
+        # and makes reconciliation depend on the incomplete placeholder total.
+        manually_assigned_profiles = {
+            identity_key
+            for row in rows
+            if isinstance(row, dict)
+            and str(row.get('sourceCostingId') or '') != costing_id
+            for _assignment_type, identity_key in [_costing_assignment_identity(row)]
+            if identity_key
+        }
         existing_by_key = {
             str(row.get('costingAllocationKey') or ''): row
             for row in rows
@@ -34215,6 +34401,11 @@ def _sync_costing_vendor_assignments(costing, event_id):
                 allocation['vendorId'],
             )
             if not profile or profile_kind not in {'vendor', 'worker'}:
+                continue
+            profile_key = _costing_vendor_key(
+                '', profile_kind, profile.get('id')
+            )
+            if profile_key in manually_assigned_profiles:
                 continue
             active_keys.add(key)
             expected = round(allocation['amount'], 2)
@@ -34482,38 +34673,24 @@ def _costing_vendor_discrepancies(costing):
         or event_id not in manager.events
     ):
         return []
-    assignment_totals = {}
+    manual_assignment_totals = {}
+    linked_assignment_totals = {}
     if event_id:
         for assignment in event_assignments(workforce, event_id):
-            if (
-                not isinstance(assignment, dict)
-                or str(assignment.get('sourceCostingId') or '')
-                != str(costing.get('id') or '')
-            ):
+            assignment_type, key = _costing_assignment_identity(assignment)
+            if not key:
                 continue
-            assignment_type = str(
-                assignment.get('costingVendorType')
-                or ('worker' if assignment.get('subjectType') == 'worker' else 'vendor')
-            ).strip().lower()
-            assignment_id = (
-                assignment.get('freelancerId')
-                if assignment_type == 'worker'
-                else assignment.get('vendorId') or assignment.get('freelancerId')
+            target = (
+                linked_assignment_totals
+                if str(assignment.get('sourceCostingId') or '')
+                == str(costing.get('id') or '')
+                else manual_assignment_totals
             )
-            key = _costing_vendor_key('', assignment_type, assignment_id)
-            if key:
-                if assignment_type == 'worker':
-                    amount = (
-                        max(0, _safe_float(assignment.get('dailyRate'), 0))
-                        * max(1, _safe_int(assignment.get('days'), 1))
-                    )
-                else:
-                    amount = max(0, _safe_float(assignment.get('serviceCost'), 0))
-                assignment_totals[key] = round(
-                    assignment_totals.get(key, 0)
-                    + amount,
-                    2,
-                )
+            target[key] = round(
+                target.get(key, 0)
+                + _costing_assignment_amount(assignment, assignment_type),
+                2,
+            )
     aggregate = {}
     for line in costing.get('lineItems') or []:
         name = str(line.get('vendorName') or '').strip()
@@ -34554,8 +34731,11 @@ def _costing_vendor_discrepancies(costing):
             })
             continue
         if event_id:
-            actual = assignment_totals.get(
-                _costing_vendor_key('', kind, profile.get('id'))
+            assignment_key = _costing_vendor_key('', kind, profile.get('id'))
+            actual = (
+                manual_assignment_totals.get(assignment_key)
+                if assignment_key in manual_assignment_totals
+                else linked_assignment_totals.get(assignment_key)
             )
         else:
             rental = next((
@@ -36309,11 +36489,22 @@ def _finance_profit_loss_expense_bucket(category):
         return 'transport'
     if any(term in text for term in ('meal', 'food', 'refreshment')):
         return 'meal'
+    if any(term in text for term in ('purchase', 'purchased')):
+        return 'purchase'
     return 'other'
 
 
 def _finance_profit_loss_category_label(category, source='manual'):
     label = re.sub(r'\s+', ' ', str(category or '').strip())
+    bucket = _finance_profit_loss_expense_bucket(label)
+    if bucket == 'meal':
+        return 'Meal'
+    if bucket == 'transport':
+        return 'Transport'
+    if bucket == 'purchase':
+        return 'Purchase'
+    if label.casefold() in {'other', 'miscellaneous', 'other expense', 'other expenses'}:
+        return 'Other'
     if label:
         return label[:80]
     return 'Worker Claims' if source == 'worker-claim' else 'Other Expenses'
@@ -36338,6 +36529,8 @@ def _normalise_profit_loss_expense(value, event_id):
     value = value if isinstance(value, dict) else {}
     attachment = value.get('attachment') if isinstance(value.get('attachment'), dict) else None
     amount = money(value.get('amount'), 0.0)
+    processing_state = str(value.get('processingState') or '').strip()
+    submission_stage = str(value.get('submissionStage') or '').strip()
     return {
         'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or new_id('expense'),
         'eventId': int(event_id),
@@ -36351,6 +36544,11 @@ def _normalise_profit_loss_expense(value, event_id):
         'attachment': attachment,
         'extraction': value.get('extraction') if isinstance(value.get('extraction'), dict) else {},
         'needsReview': bool(value.get('needsReview')),
+        'processingState': processing_state,
+        'processingError': str(value.get('processingError') or '').strip()[:500],
+        'processingStartedAt': str(value.get('processingStartedAt') or ''),
+        'processedAt': str(value.get('processedAt') or ''),
+        'submissionStage': submission_stage,
         'createdAt': str(value.get('createdAt') or now_iso()),
         'createdBy': str(value.get('createdBy') or _finance_current_username()).strip(),
         'updatedAt': str(value.get('updatedAt') or now_iso()),
@@ -36361,7 +36559,7 @@ def _normalise_profit_loss_expense(value, event_id):
 def _profit_loss_expense_payload(expense):
     row = dict(expense or {})
     row.setdefault('source', 'manual')
-    row.setdefault('sourceLabel', 'Added expense')
+    row.setdefault('sourceLabel', 'Added')
     row.setdefault('readOnly', False)
     row.setdefault('department', '')
     row['categoryKey'] = _finance_profit_loss_expense_bucket(row.get('category'))
@@ -36410,7 +36608,7 @@ def _finance_profit_loss_can_use_quotation(document):
     if role in {'owner', 'admin'}:
         return True
     return (
-        role == 'manager'
+        bool(_finance_document_owner_username(document))
         and _finance_document_owner_username(document).casefold()
         == str(session.get('user') or '').strip().casefold()
     )
@@ -36426,10 +36624,7 @@ def _finance_profit_loss_access(finance_data, event_id):
     role = _effective_user_role(session.get('user'))
     can_view = (
         role in {'owner', 'admin'}
-        or (
-            role == 'manager'
-            and any(_finance_profit_loss_can_use_quotation(row) for row in linked)
-        )
+        or any(_finance_profit_loss_can_use_quotation(row) for row in linked)
     )
     return {
         'canViewFinancials': can_view,
@@ -36438,7 +36633,7 @@ def _finance_profit_loss_access(finance_data, event_id):
         'reason': (
             ''
             if can_view
-            else 'Financial details are restricted to administrators and the manager responsible for the linked quotation.'
+            else 'Financial details are restricted to administrators and the owner of the linked quotation.'
         ),
     }
 
@@ -36448,6 +36643,24 @@ def _finance_profit_loss_expense_access_denied():
 
 
 def _finance_profit_loss_line_bucket(line):
+    # P&L budgets follow the client-facing quotation category. A quotation
+    # line can deliberately sit under Manpower or Transportation while its
+    # inventory department remains General, Audio, or another stock-owning
+    # department. Only legacy lines without a category fall back to their
+    # inventory department.
+    category = str((line or {}).get('systemName') or '').strip()
+    if category:
+        clean_category = re.sub(
+            r'\s+(?:department|system)$',
+            '',
+            category.casefold(),
+        )
+        if clean_category == 'manpower':
+            return 'manpower'
+        if clean_category in {'transport', 'transportation'}:
+            return 'transport'
+        return 'other'
+
     name, code = _finance_department_details(
         (line or {}).get('department'),
         (line or {}).get('departmentCode'),
@@ -36674,6 +36887,11 @@ def _finance_profit_loss_workforce_costs(event_id):
 
 def _finance_profit_loss_subject_name(workforce, subject_id):
     subject_id = str(subject_id or '')
+    if subject_id.startswith('user:'):
+        username = subject_id.split(':', 1)[1]
+        manager = _current_data_manager_object()
+        user = getattr(manager, 'users', {}).get(username) if manager else None
+        return str(getattr(user, 'name', '') or username or subject_id).strip() or subject_id
     for bucket in ('freelancers', 'vendors'):
         rows = workforce.get(bucket) if isinstance(workforce, dict) else []
         bucket_rows = rows if isinstance(rows, list) else []
@@ -36705,11 +36923,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
     for assignment in event_assignments(workforce, event_id):
         if not isinstance(assignment, dict):
             continue
-        subject_id = str(
-            assignment.get('freelancerId')
-            or assignment.get('vendorId')
-            or ''
-        )
+        subject_id = _workforce_assignment_subject_id(assignment)
         department = str(assignment.get('department') or '').strip()
         if not subject_id:
             continue
@@ -36775,7 +36989,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'description': f'{subject_name} - Invoice'[:300],
                 'category': 'Vendor service' if is_vendor_service else 'Manpower',
                 'categoryKey': 'vendor-service' if is_vendor_service else 'manpower',
-                'categoryLabel': 'Vendor' if is_vendor_service else 'Manpower',
+                'categoryLabel': 'Manpower',
                 'department': ', '.join(departments) or 'Unallocated',
                 'vendor': subject_name,
                 'amount': round(amount, 2),
@@ -36799,11 +37013,10 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         for claim in claims:
             if not isinstance(claim, dict) or claim.get('status') == 'Denied':
                 continue
-            if 'detailsComplete' in claim and not claim.get('detailsComplete'):
-                continue
             amount = money(claim.get('amount'), 0.0) or 0.0
-            if amount <= 0:
-                continue
+            details_complete = bool(claim.get('detailsComplete', True))
+            status = str(claim.get('status') or 'Pending Review')
+            processing_state = str(claim.get('processingState') or '').strip()
             claim_id = str(claim.get('id') or '')
             submission_id = quote(claim_id)
             original_name = str(claim.get('originalName') or '').strip()
@@ -36815,9 +37028,11 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
                     'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
                 }
-            category = str(claim.get('category') or 'Worker Claims').strip()
+            category = str(claim.get('category') or 'Other').strip()
             category_key = _finance_profit_loss_expense_bucket(category)
-            if category_key == 'meal':
+            if not str(claim.get('category') or '').strip():
+                claim_label = 'Claim'
+            elif category_key == 'meal':
                 claim_label = 'Meal claim'
             elif category_key == 'transport':
                 claim_label = 'Transport claim'
@@ -36834,6 +37049,15 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'source': 'worker-claim',
                 'sourceLabel': 'Claim',
                 'readOnly': True,
+                'needsReview': (
+                    status == 'Pending Review'
+                    or not details_complete
+                    or str(claim.get('submissionStage') or '') == 'Details Required'
+                ),
+                'countsTowardCosts': details_complete,
+                'processingState': processing_state,
+                'processingError': str(claim.get('processingError') or ''),
+                'submissionStage': str(claim.get('submissionStage') or ''),
                 'eventId': int(event_id),
                 'description': f'{subject_name} - {claim_label}'[:300],
                 'category': category[:120],
@@ -36847,7 +37071,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'amount': round(amount, 2),
                 'expenseDate': _finance_normalise_iso_date(claim.get('claimDate') or claim.get('date')),
                 'attachment': attachment,
-                'status': str(claim.get('status') or 'Pending Review'),
+                'status': status,
                 'createdAt': str(claim.get('submittedAt') or ''),
                 'createdBy': subject_name,
                 'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
@@ -36934,7 +37158,7 @@ def _finance_profit_loss_payload(event, finance_data):
     )
     worker_claim_expenses = [
         row for row in worker_submission_expenses
-        if row.get('source') == 'worker-claim'
+        if row.get('source') == 'worker-claim' and row.get('countsTowardCosts', True)
     ]
     manual_transport_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
@@ -36949,7 +37173,7 @@ def _finance_profit_loss_payload(event, finance_data):
     manual_other_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in expenses
-        if _finance_profit_loss_expense_bucket(row.get('category')) == 'other'
+        if _finance_profit_loss_expense_bucket(row.get('category')) in {'other', 'purchase'}
     ), 2)
     crew_transport_claims = round(sum(
         _safe_float(row.get('amount'), 0)
@@ -36964,23 +37188,30 @@ def _finance_profit_loss_payload(event, finance_data):
     worker_other_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
-        if row.get('categoryKey') == 'other'
+        if row.get('categoryKey') in {'other', 'purchase'}
     ), 2)
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
+    meal_cost = round(worker_meal_claims + manual_meal_expenses, 2)
+    vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
     manpower_cost = round(
-        workforce_costs['manpowerCost']
-        + crew_transport_claims
-        + worker_meal_claims
-        + manual_meal_expenses,
+        workforce_costs['manpowerCost'] + vendor_service_cost,
         2,
     )
     transport_cost = round(
-        workforce_costs['transportCost'] + manual_transport_expenses,
+        workforce_costs['transportCost']
+        + crew_transport_claims
+        + manual_transport_expenses,
+        2,
+    )
+    manpower_card_cost = round(
+        manpower_cost
+        + meal_cost
+        + crew_transport_claims
+        + manual_transport_expenses,
         2,
     )
     other_expenses = round(worker_other_claims + manual_other_expenses, 2)
-    vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
-    direct_costs = round(manpower_cost + transport_cost + vendor_service_cost, 2)
+    direct_costs = round(manpower_cost + meal_cost + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
     commission_base = max(0, before_commission)
     commissions = _finance_profit_loss_event_commissions(
@@ -37007,11 +37238,11 @@ def _finance_profit_loss_payload(event, finance_data):
         entry['amount'] = round(entry['amount'] + amount, 2)
 
     for row in worker_claim_expenses:
-        if row.get('categoryKey') == 'other':
+        if row.get('categoryKey') in {'other', 'purchase'}:
             add_expense_category(row)
     for row in expenses:
         payload_row = _profit_loss_expense_payload(row)
-        if payload_row.get('categoryKey') == 'other':
+        if payload_row.get('categoryKey') in {'other', 'purchase'}:
             add_expense_category(payload_row)
 
     expense_categories = sorted(
@@ -37024,23 +37255,6 @@ def _finance_profit_loss_payload(event, finance_data):
         for department, amount in (workforce_costs.get('manpowerDepartments') or {}).items()
         if _safe_float(amount, 0) > 0
     }
-
-    def add_manpower_department_cost(department, amount):
-        amount = round(_safe_float(amount, 0), 2)
-        if amount <= 0:
-            return
-        department = str(department or '').strip() or 'Unallocated'
-        manpower_department_totals[department] = round(
-            manpower_department_totals.get(department, 0) + amount,
-            2,
-        )
-
-    for row in worker_claim_expenses:
-        if row.get('categoryKey') in {'transport', 'meal'}:
-            add_manpower_department_cost(row.get('department'), row.get('amount'))
-    for row in expenses:
-        if _finance_profit_loss_expense_bucket(row.get('category')) == 'meal':
-            add_manpower_department_cost(row.get('department'), row.get('amount'))
 
     manpower_department_rows = []
     for department, amount in sorted(
@@ -37087,10 +37301,17 @@ def _finance_profit_loss_payload(event, finance_data):
         })
         profit_chart.append({
             'key': f'vendor-{_normalise_department_code(department).lower()}',
-            'group': 'vendor',
+            'group': 'manpower',
             'department': department,
             'label': f'Vendor - {department}',
             'amount': amount,
+        })
+    if meal_cost > 0:
+        profit_chart.append({
+            'key': 'meals',
+            'group': 'meal',
+            'label': 'Meals',
+            'amount': meal_cost,
         })
     if transport_cost > 0:
         profit_chart.append({
@@ -37127,7 +37348,9 @@ def _finance_profit_loss_payload(event, finance_data):
         })
 
     breakdown = {
-        'manpower': manpower_cost,
+        'manpower': manpower_card_cost,
+        'manpowerDirect': manpower_cost,
+        'meals': meal_cost,
         'manpowerInvoicesOrEstimate': workforce_costs['manpowerCost'],
         'workerTransportClaims': crew_transport_claims,
         'workerMealClaims': worker_meal_claims,
@@ -37170,13 +37393,15 @@ def _finance_profit_loss_payload(event, finance_data):
             'revenue': revenue,
             'directCosts': direct_costs,
             'manpowerCost': manpower_cost,
+            'manpowerCardCost': manpower_card_cost,
+            'mealCost': meal_cost,
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
             'workerMealClaimsCost': worker_meal_claims,
             'manualMealExpenses': manual_meal_expenses,
             'manpowerBudget': quotation_budgets['manpower'],
             'manpowerBudgetVariance': round(
-                quotation_budgets['manpower'] - manpower_cost,
+                quotation_budgets['manpower'] - manpower_card_cost,
                 2,
             ),
             'transportBookingCost': workforce_costs['transportCost'],
@@ -40816,6 +41041,141 @@ def finance_profit_loss_update_commissions(event_id):
     return jsonify({'success': True, 'data': response_payload})
 
 
+def _queue_profit_loss_expense_processing(args):
+    """Run receipt analysis away from the upload request."""
+    if app.config.get('TESTING'):
+        _process_profit_loss_expense_upload(*args)
+        return None
+
+    future = _upload_processing_executor.submit(
+        _process_profit_loss_expense_upload,
+        *args,
+    )
+
+    def _log_processing_failure(done_future):
+        try:
+            done_future.result()
+        except Exception:
+            logger.exception('Unhandled Profit and Loss upload processing failure')
+
+    future.add_done_callback(_log_processing_failure)
+    return future
+
+
+def _process_profit_loss_expense_upload(
+    manager, data_folder, event_id, expense_id
+):
+    """Extract receipt details while exposing queued/processing state."""
+    manager_token = _request_data_manager.set(manager)
+    try:
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            expenses = _finance_profit_loss_event_expenses(
+                finance_data, event_id, create=True
+            )
+            expense = next((
+                row for row in expenses
+                if str(row.get('id')) == str(expense_id)
+            ), None)
+            if not expense:
+                return
+            expense.update({
+                'processingState': 'Processing',
+                'submissionStage': 'Processing',
+                'processingStartedAt': now_iso(),
+                'processingError': '',
+            })
+            attachment = dict(expense.get('attachment') or {})
+            _save_finance_data(finance_data)
+        mark_realtime_change('finance', {
+            'eventId': event_id,
+            'expenseId': expense_id,
+            'action': 'profit-loss-expense-processing-started',
+        })
+
+        absolute_path = upload_absolute_path(
+            data_folder, attachment.get('storedPath')
+        )
+        if not absolute_path or not os.path.isfile(absolute_path):
+            raise FileNotFoundError('Uploaded expense file could not be found')
+        extraction = extract_claim_amount(
+            absolute_path,
+            attachment.get('contentType', ''),
+            attachment.get('originalName', ''),
+        )
+
+        with _finance_lock:
+            finance_data = _load_finance_data()
+            expenses = _finance_profit_loss_event_expenses(
+                finance_data, event_id, create=True
+            )
+            expense = next((
+                row for row in expenses
+                if str(row.get('id')) == str(expense_id)
+            ), None)
+            if not expense:
+                return
+            if _safe_float(expense.get('amount'), 0) <= 0 and extraction.get('amount') is not None:
+                expense['amount'] = money(extraction.get('amount'), 0.0)
+            if not expense.get('expenseDate') and extraction.get('date'):
+                expense['expenseDate'] = _finance_normalise_iso_date(
+                    extraction.get('date')
+                )
+            expense.update({
+                'extraction': extraction,
+                'needsReview': True,
+                'processingState': 'Complete',
+                'submissionStage': 'Details Required',
+                'processedAt': now_iso(),
+                'updatedAt': now_iso(),
+            })
+            _save_finance_data(finance_data)
+        mark_realtime_change('finance', {
+            'eventId': event_id,
+            'expenseId': expense_id,
+            'action': 'profit-loss-expense-processing-complete',
+        })
+    except Exception as exc:
+        logger.error(
+            'Profit and Loss document processing failed for %s: %s',
+            expense_id,
+            exc,
+            exc_info=True,
+        )
+        try:
+            with _finance_lock:
+                finance_data = _load_finance_data()
+                expenses = _finance_profit_loss_event_expenses(
+                    finance_data, event_id, create=True
+                )
+                expense = next((
+                    row for row in expenses
+                    if str(row.get('id')) == str(expense_id)
+                ), None)
+                if expense:
+                    expense.update({
+                        'processingState': 'Failed',
+                        'submissionStage': 'Details Required',
+                        'processingError': 'Automatic document analysis failed',
+                        'needsReview': True,
+                        'updatedAt': now_iso(),
+                    })
+                    _save_finance_data(finance_data)
+            mark_realtime_change('finance', {
+                'eventId': event_id,
+                'expenseId': expense_id,
+                'action': 'profit-loss-expense-processing-failed',
+            })
+        except Exception:
+            logger.error(
+                'Could not save Profit and Loss processing failure for %s',
+                expense_id,
+                exc_info=True,
+            )
+    finally:
+        _request_data_manager.reset(manager_token)
+
+
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses', methods=['POST'])
 @require_sales
 def finance_profit_loss_add_expense(event_id):
@@ -40836,7 +41196,6 @@ def finance_profit_loss_add_expense(event_id):
     payload = request.form.to_dict() if is_multipart else (request.get_json(silent=True) or {})
     uploaded_file = request.files.get('file') if is_multipart else None
     attachment = None
-    extraction = {}
     amount = payload.get('amount')
     expense_date = payload.get('expenseDate') or payload.get('date')
 
@@ -40849,16 +41208,6 @@ def finance_profit_loss_add_expense(event_id):
                 'profit-loss',
                 'claim',
             )
-            absolute_path = upload_absolute_path(_workforce_folder(), attachment.get('storedPath'))
-            extraction = extract_claim_amount(
-                absolute_path,
-                attachment.get('contentType', ''),
-                attachment.get('originalName', ''),
-            ) if absolute_path else {}
-            if amount in (None, '') and extraction.get('amount') is not None:
-                amount = extraction.get('amount')
-            if not expense_date and extraction.get('date'):
-                expense_date = extraction.get('date')
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
         except Exception as exc:
@@ -40877,8 +41226,10 @@ def finance_profit_loss_add_expense(event_id):
             or 'Other expense'
         ),
         'attachment': attachment,
-        'extraction': extraction,
+        'extraction': {},
         'needsReview': bool(attachment),
+        'processingState': 'Queued' if attachment else '',
+        'submissionStage': 'Queued' if attachment else '',
     }, event_id)
     if expense['amount'] <= 0 and not attachment:
         if attachment:
@@ -40901,6 +41252,28 @@ def finance_profit_loss_add_expense(event_id):
             finance_data,
             event_id,
         )
+    if attachment:
+        manager = _current_data_manager_object()
+        _queue_profit_loss_expense_processing((
+            manager,
+            _workforce_folder(manager),
+            event_id,
+            expense['id'],
+        ))
+        if app.config.get('TESTING'):
+            with _finance_lock:
+                finance_data = _load_finance_data()
+                payload = _finance_profit_loss_payload(event, finance_data)
+                payload['permissions'] = _finance_profit_loss_access(
+                    finance_data,
+                    event_id,
+                )
+                expense = next((
+                    row for row in _finance_profit_loss_event_expenses(
+                        finance_data, event_id
+                    )
+                    if str(row.get('id')) == str(expense['id'])
+                ), expense)
     log_action(f"Added Profit and Loss expense {expense['description']} to event {event_id}")
     mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-added'})
     return jsonify({'success': True, 'data': payload, 'expense': _profit_loss_expense_payload(expense)}), 201

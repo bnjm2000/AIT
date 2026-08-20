@@ -4357,13 +4357,104 @@ button.pnl-kpi:focus-visible {
 .pnl-review-pill {
   display: inline-flex;
   margin: 5px 0 0 7px;
+  border: 0;
   border-radius: 999px;
   background: #fff7ed;
   color: #c2410c;
   padding: 2px 7px;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.pnl-review-pill:hover,
+.pnl-review-pill:focus-visible {
+  background: #ffedd5;
+  color: #9a3412;
+  outline: 2px solid rgba(234, 88, 12, .22);
+  outline-offset: 1px;
+}
+
+.pnl-drop-hint {
+  color: var(--finance-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pnl-upload-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 0 7px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pnl-upload-state.is-queued,
+.pnl-upload-state.is-queueing {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.pnl-upload-state.is-uploading {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.pnl-upload-state.is-processing {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.pnl-upload-state.is-processing i {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: finance-spin .75s linear infinite;
+}
+
+.pnl-upload-state.is-failed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.pnl-upload-row td {
+  background: #f8fafc;
+}
+
+.pnl-file-progress {
+  display: grid;
+  min-width: 110px;
+  gap: 4px;
+}
+
+.pnl-file-progress > span {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.pnl-file-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f59e0b, #ea580c);
+  transition: width .12s linear;
+}
+
+.pnl-file-progress small {
+  color: var(--finance-muted);
+  font-size: 9px;
 }
 
 .pnl-calculation h3,
@@ -5072,6 +5163,139 @@ button.inventory-status-history {
 .pnl-expense-modal {
   width: min(760px, calc(100vw - 32px));
   max-width: 760px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.pnl-expense-modal.has-preview {
+  width: min(1180px, calc(100vw - 32px));
+  max-width: 1180px;
+}
+
+.pnl-expense-editor {
+  padding: 0 20px;
+}
+
+.pnl-expense-modal.has-preview .pnl-expense-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(330px, .7fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.pnl-expense-fields {
+  min-width: 0;
+}
+
+.pnl-expense-fields .finance-field[hidden] {
+  display: none;
+}
+
+.pnl-expense-category-control .finance-line-select-button {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-color: var(--finance-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pnl-expense-category-control .finance-custom-menu {
+  right: auto;
+  left: 0;
+  width: 100%;
+}
+
+.pnl-expense-review-preview {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d8e1e8;
+  border-radius: 10px;
+  background: #eef2f6;
+}
+
+.pnl-expense-review-preview[hidden] {
+  display: none;
+}
+
+.pnl-expense-review-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 13px;
+  border-bottom: 1px solid #d8e1e8;
+  background: #fff;
+}
+
+.pnl-expense-review-preview-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pnl-expense-review-preview-head span {
+  color: var(--finance-muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.pnl-expense-review-preview-head strong {
+  overflow: hidden;
+  color: var(--finance-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pnl-expense-review-preview-body {
+  display: grid;
+  place-items: center;
+  height: min(570px, calc(100vh - 210px));
+  min-height: 390px;
+  overflow: hidden;
+}
+
+.pnl-expense-review-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+  object-fit: contain;
+}
+
+audio.pnl-expense-review-media {
+  width: calc(100% - 30px);
+  height: auto;
+  background: transparent;
+}
+
+.pnl-expense-review-unavailable {
+  display: grid;
+  gap: 5px;
+  padding: 24px;
+  color: var(--finance-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.pnl-expense-review-unavailable strong {
+  color: var(--finance-ink);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .pnl-expense-modal.has-preview .pnl-expense-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pnl-expense-review-preview-body {
+    height: min(390px, 45vh);
+    min-height: 260px;
+  }
 }
 
 @keyframes pnlSoftAppear {
