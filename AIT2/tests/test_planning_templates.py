@@ -168,6 +168,20 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
 
+    def test_custom_item_departments_exclude_asset_support_buckets(self):
+        script = APP_BUNDLE_SOURCE
+        options = script.split('function customDepartmentOptionsHtml(', 1)[1].split(
+            'function departmentCodeToDoName(', 1
+        )[0]
+        custom_card = script.split('function renderPlanCustomItemCard()', 1)[1].split(
+            'function renderPlanTemplateLibrary()', 1
+        )[0]
+
+        self.assertIn('configured.filter(isSelectableCompanyDepartment)', options)
+        self.assertNotIn("{ code: 'UN', name: 'Unknown' }", options)
+        self.assertIn("customDepartmentOptionsHtml('AX')", custom_card)
+        self.assertIn('isSelectableCompanyDepartment(customDepartment)', script)
+
     def test_plan_asset_search_includes_each_asset_description(self):
         script = APP_BUNDLE_SOURCE
 
@@ -255,6 +269,13 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('planReplaceLocalAssetReference(', custom_setter)
         self.assertIn("[custom?.uid || assetId]", custom_setter)
         self.assertIn('const currentAssetId = planCustomQuantityAssetIds.get(key) || assetId;', custom_setter)
+        local_replacer = script.split('function planReplaceLocalAssetReference(', 1)[1].split(
+            'function planAdjustCustomQuantity(', 1
+        )[0]
+        self.assertIn('Object.values(event.assetsByDepartment || {})', local_replacer)
+        self.assertIn('asset.id = newAssetId;', local_replacer)
+        self.assertIn('asset.quantity = quantity;', local_replacer)
+        self.assertIn('asset.displayName = displayName;', local_replacer)
         self.assertIn('function planRequirementRoomAllocations(', script)
         self.assertIn("'Assigned to sub-projects:'", script)
         self.assertIn('allocatedRequired', script)
@@ -817,6 +838,31 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('id="returnAssetModal"', page)
         self.assertNotIn('id="returnAssetsModal"', page)
         self.assertNotIn("switchEditTab('assets')", script)
+
+    def test_shared_event_chooser_expands_for_a_full_ten_event_page(self):
+        project_root = os.path.dirname(app_module.__file__)
+        template = Path(project_root, 'templates', 'index.html').read_text(encoding='utf-8')
+        script = APP_BUNDLE_SOURCE
+
+        self.assertIn('pageSize: 10', script)
+        self.assertIn('max-height: min(940px, calc(100vh - 24px));', template)
+        self.assertNotIn('.modal-content.plan-event-chooser-full-page', template)
+        self.assertNotIn("'plan-event-chooser-full-page'", script)
+        self.assertIn('.filter(filter => Number(counts[filter.key] || 0) > 0)', script)
+        self.assertIn("planEventChooserState.filter !== 'ALL'", script)
+        chooser = script.split('function ensurePlanEventChooserModal()', 1)[1].split(
+            'function planOpenEventChooser', 1
+        )[0]
+        relative_date = script.split('function planEventChooserRelativeDate(event)', 1)[1].split(
+            'function planEventChooserSourceEvents()', 1
+        )[0]
+        self.assertIn('class="plan-badge plan-event-option-id', chooser)
+        self.assertIn("'plan-badge-type-dry-hire' : 'plan-badge-type-event'", chooser)
+        self.assertIn('class="plan-event-option-location-line"', chooser)
+        self.assertNotIn('${planEventTypeBadgeHtml(event)}', chooser)
+        self.assertNotIn('<span>Location</span>', chooser)
+        self.assertIn("['ongoing', 'last-day'].includes(state)", relative_date)
+        self.assertIn('day${daysLeft === 1', relative_date)
 
     def test_return_inventory_rows_offer_fault_logging_but_custom_rows_do_not(self):
         script = APP_BUNDLE_SOURCE

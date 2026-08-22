@@ -7,6 +7,7 @@
     <title>Showbase Worker Portal</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/submission-status.css', v=submission_status_css_version) }}" />
   </head>
   <body>
     <div class="worker-app">
@@ -126,7 +127,7 @@
           <div class="field-grid">
             <label><span>Amount ($)</span><input id="claimAmount" name="amount" type="number" min="0" step=".01" required /></label>
             <label><span>Claim date</span><input id="claimDate" name="claimDate" type="date" required /></label>
-            <label><span>Category</span><select id="claimCategory" name="category" required><option value="" selected disabled>Select category</option><option>Transport</option><option>Meal</option><option>Other</option></select></label>
+            <label><span>Category</span><select id="claimCategory" name="category" required><option value="" selected disabled>Select category</option><option>Meal</option><option>Transport</option><option>Purchase</option><option>Other</option></select></label>
             <label id="otherCategoryField" hidden><span>Other category</span><input id="otherCategory" name="otherCategory" /></label>
             <label class="full"><span>Notes (optional)</span><textarea id="claimNotes" name="notes"></textarea></label>
           </div>

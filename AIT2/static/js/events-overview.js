@@ -41,6 +41,39 @@ function ensureEventListViewStyles() {
     .event-list-table .event-primary-action { min-height:29px;padding:5px 9px;border-radius:5px;font-size:9px; }
     .event-list-table .event-overflow-button { width:29px;min-height:29px;border-radius:5px;font-size:14px; }
     .event-list-table .event-card-menu { max-height:min(430px,calc(100vh - 20px));overflow-y:auto;z-index:2000; }
+    .event-list-type-state { display:grid;justify-items:start;gap:4px; }
+    .event-workflow-icon-strip { display:flex;align-items:center;gap:4px;min-width:0; }
+    .event-workflow-icon-button {
+      --workflow-icon-color:#64748b;
+      display:inline-grid;
+      place-items:center;
+      flex:0 0 28px;
+      width:28px;
+      height:28px;
+      padding:0;
+      border:1px solid color-mix(in srgb,var(--workflow-icon-color) 32%,#d8e0e8);
+      border-radius:7px;
+      background:color-mix(in srgb,var(--workflow-icon-color) 7%,#fff);
+      color:var(--workflow-icon-color);
+      cursor:pointer;
+      transition:transform .14s ease,background .14s ease,border-color .14s ease;
+    }
+    .event-workflow-icon-button:hover,.event-workflow-icon-button:focus-visible {
+      border-color:var(--workflow-icon-color);
+      background:color-mix(in srgb,var(--workflow-icon-color) 13%,#fff);
+      transform:translateY(-1px);
+      outline:none;
+    }
+    .event-workflow-icon-button.status-green { --workflow-icon-color:#15803d; }
+    .event-workflow-icon-button.status-orange { --workflow-icon-color:#d97706; }
+    .event-workflow-icon-button.status-red { --workflow-icon-color:#dc2626; }
+    .event-workflow-icon-button.status-blue { --workflow-icon-color:#2563eb; }
+    .event-workflow-icon-button svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
+    .event-workflow-icon-button .event-finance-symbol { font-size:16px;font-weight:800;line-height:1; }
+    .event-list-workflow-cell { width:1%;white-space:nowrap; }
+    .event-list-workflow-cell .event-workflow-icon-button { flex-basis:25px;width:25px;height:25px;border-radius:6px; }
+    .event-list-workflow-cell .event-workflow-icon-button svg { width:14px;height:14px; }
+    .event-list-workflow-cell .event-workflow-icon-button .event-finance-symbol { font-size:14px; }
     #return-section :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
       --event-state: #ec407a;
       --event-soft: #fff0f5;
@@ -673,6 +706,12 @@ function openReturnWorkspaceForEvent(eventId) {
   showSection('return', { eventId: id });
 }
 
+function openEventTransport(eventId) {
+  if (typeof openEventWorkforce === 'function') {
+    openEventWorkforce(eventId, 'transport');
+  }
+}
+
 function closeEventCardMenus() {
   document.querySelectorAll('.event-card-menu.open, .event-card-menu[data-event-menu-portal="true"]').forEach(menu => {
     menu.classList.remove('open');
@@ -762,12 +801,20 @@ function eventMenuIconHtml(icon) {
       <path d="m9 13 2 2 4-4"></path>
     `,
     workforce: `
-      <circle cx="9" cy="8" r="3"></circle>
-      <path d="M3 20v-2a6 6 0 0 1 12 0v2"></path>
-      <path d="M16 6h5"></path>
-      <path d="M18.5 3.5v5"></path>
-      <path d="M17 13h4"></path>
-      <path d="M19 11v4"></path>
+      <circle cx="7" cy="7" r="2.5"></circle>
+      <path d="M2.5 19a4.5 4.5 0 0 1 9 0"></path>
+      <rect x="13" y="8" width="9" height="10" rx="1.5"></rect>
+      <path d="M16 8V6h3v2M13 12h9"></path>
+    `,
+    transport: `
+      <path d="M3 6h11v10H3z"></path>
+      <path d="M14 10h4l3 3v3h-7z"></path>
+      <circle cx="7" cy="18" r="2"></circle>
+      <circle cx="18" cy="18" r="2"></circle>
+    `,
+    return: `
+      <path d="M9 7 4 12l5 5"></path>
+      <path d="M4 12h10a6 6 0 0 1 6 6"></path>
     `,
     force: `
       <path d="m13 2-9 12h8l-1 8 9-12h-8Z"></path>
@@ -792,6 +839,68 @@ function eventMenuIconHtml(icon) {
   return `<svg class="event-card-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[icon] || ''}</svg>`;
 }
 
+function eventWorkflowIconHtml(kind) {
+  const paths = {
+    plan: '<rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path>',
+    manpower: '<circle cx="7" cy="7" r="2.5"></circle><path d="M2.5 19a4.5 4.5 0 0 1 9 0"></path><rect x="13" y="8" width="9" height="10" rx="1.5"></rect><path d="M16 8V6h3v2M13 12h9"></path>',
+    transport: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M9 18h7M3 16h2"></path>',
+    prepare: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="m15 14 1.6 1.6L20 12"></path>',
+    return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>'
+  };
+  if (kind === 'finance') return '<span class="event-finance-symbol" aria-hidden="true">$</span>';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[kind] || ''}</svg>`;
+}
+
+function eventWorkflowFallbackProgress(event) {
+  const required = Math.max(0, Number(event?.assetCount ?? event?.totalAssets ?? 0));
+  const prepared = Math.max(0, Number(event?.preparedCount ?? event?.totalPrepared ?? 0));
+  const returned = Math.max(0, Number(event?.returnedCount ?? event?.totalReturned ?? 0));
+  const quantityStatus = done => !required || !done ? 'neutral' : done >= required ? 'green' : 'orange';
+  return {
+    plan: { status: required ? 'green' : 'neutral', label: required ? `Plan: ${required} asset requirements added` : 'Plan: no assets added' },
+    manpower: { status: 'neutral', label: 'Manpower & Vendors: no assignments' },
+    transport: { status: 'neutral', label: 'Transport: no trips scheduled' },
+    prepare: { status: quantityStatus(prepared), label: `Prepare: ${Math.min(prepared, required)}/${required} assets prepared` },
+    return: { status: quantityStatus(returned), label: `Return: ${Math.min(returned, required)}/${required} assets returned` },
+    finance: null
+  };
+}
+
+function eventWorkflowProgressHtml(event, extraClass = '') {
+  const progress = event?.workflowProgress || eventWorkflowFallbackProgress(event);
+  const actions = [
+    ['plan', `openEventPlanning(${Number(event.id)})`],
+    ['manpower', `openEventWorkforce(${Number(event.id)})`],
+    ['transport', `openEventTransport(${Number(event.id)})`],
+    ['prepare', `openPrepareWorkspaceForEvent(${Number(event.id)})`],
+    ['return', `openReturnWorkspaceForEvent(${Number(event.id)})`],
+    ['finance', `openEventFinance(${Number(event.id)})`]
+  ];
+  return `<div class="event-workflow-icon-strip ${escapeHtmlAttr(extraClass)}" aria-label="Event workspace progress">${actions.map(([kind, onclick]) => {
+    const item = progress[kind];
+    if (!item) return '';
+    const status = ['green', 'orange', 'red', 'blue'].includes(item.status) ? item.status : 'neutral';
+    const label = String(item.label || kind);
+    return `<button type="button" class="event-workflow-icon-button status-${status}" title="${escapeHtmlAttr(label)}" aria-label="${escapeHtmlAttr(label)}" onclick="${onclick}">${eventWorkflowIconHtml(kind)}</button>`;
+  }).join('')}</div>`;
+}
+
+function openEventFinance(eventId) {
+  const id = Number(eventId) || 0;
+  if (!id) return;
+  if (typeof profitLossState !== 'undefined' && currentUserHasSalesAccess()) {
+    profitLossState.eventId = id;
+    showSection('profit-loss', { eventId: id });
+    return;
+  }
+  if (isAdminUser() && typeof workforceDocumentsState !== 'undefined') {
+    workforceDocumentsState.eventId = id;
+    workforceDocumentsState.page = 1;
+    workforceDocumentsState.statuses.clear();
+    showSection('invoice-claims', { eventId: id });
+  }
+}
+
 function eventCardMenuHtml(event, context = 'card') {
   const detailsAction = context !== 'card' && event.state === 'Closed'
     ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
@@ -804,8 +913,6 @@ function eventCardMenuHtml(event, context = 'card') {
   const adminActions = isAdminUser() ? `
     <button type="button" onclick="openDeliveryOrderTab(${event.id})">${eventMenuIconHtml('delivery')}<span>Generate DO</span></button>
     <button type="button" onclick="openPackingListPage(${event.id})">${eventMenuIconHtml('packing')}<span>Packing List</span></button>
-    <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
-    <button type="button" onclick="openEventWorkforce(${event.id})">${eventMenuIconHtml('workforce')}<span>Manpower &amp; Transport</span></button>
     <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
     <button type="button" class="danger" onclick="deleteEvent(${event.id})">${eventMenuIconHtml('delete')}<span>Delete</span></button>
   ` : '';
@@ -905,10 +1012,7 @@ function createEventsOverviewCard(event) {
       <div class="event-workflow-notice">${escapeHtml(eventOverviewNotice(event, progress))}</div>
     </div>
     <div class="event-workflow-footer">
-      <div class="event-next-action">
-        <strong>Next action</strong>
-        ${escapeHtml(eventNextActionText(event))}
-      </div>
+      ${eventWorkflowProgressHtml(event, 'event-card-workflow-icons')}
       <div class="event-card-controls">
         <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
         ${menuHtml ? `<button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'card')">&#8230;</button>` : ''}
@@ -950,10 +1054,10 @@ function renderAllEventsTable(list) {
     return `
       <tr class="${getEventStateClass(displayState)}" style="--event-state:${palette.main};--event-soft:${palette.soft}">
         <td class="event-list-id"><strong>#${escapeHtml(String(event.id))}</strong></td>
-        <td>${eventTagBadgeHtml(event)}</td>
+        <td><div class="event-list-type-state">${eventTagBadgeHtml(event)}${eventStateBadgeHtml(event, displayState)}</div></td>
         <td class="event-list-title">${escapeHtml(event.name || '')}${location}${assigneeSummary}</td>
         <td>${escapeHtml(eventDateRangeText(event))}</td>
-        <td>${eventStateBadgeHtml(event, displayState)}</td>
+        <td class="event-list-workflow-cell">${eventWorkflowProgressHtml(event, 'event-list-workflow-icons')}</td>
         <td>${renderProgressCell(progress.done, progress.total)}</td>
         <td class="event-list-actions-cell">
           <div class="event-card-controls">
@@ -968,7 +1072,7 @@ function renderAllEventsTable(list) {
   container.innerHTML = `
     <div class="event-list-table-wrap">
       <table class="event-list-table">
-        <thead><tr><th>ID</th><th>Type</th><th>Event</th><th>Date</th><th>State</th><th>Progress</th><th>Next action</th></tr></thead>
+        <thead><tr><th>ID</th><th>Type / State</th><th>Event</th><th>Date</th><th>Workspaces</th><th>Progress</th><th>Next action</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>

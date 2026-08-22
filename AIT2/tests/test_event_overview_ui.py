@@ -14,7 +14,7 @@ def function_source(name, next_name):
     return SCRIPT[start:end]
 
 
-def test_planning_primary_action_opens_prepare_and_plan_remains_in_menu():
+def test_planning_primary_action_opens_prepare_and_plan_is_in_progress_icons():
     primary_action = function_source('getEventPrimaryAction', 'eventNextActionText')
     planning_branch = primary_action.split("if (event.state === 'Planning')", 1)[1].split(
         "if (event.state === 'Preparing')", 1
@@ -24,9 +24,11 @@ def test_planning_primary_action_opens_prepare_and_plan_remains_in_menu():
     assert 'openPrepareWorkspaceForEvent' in planning_branch
     assert "label: 'Plan'" not in planning_branch
 
+    icons = function_source('eventWorkflowProgressHtml', 'openEventFinance')
     menu = function_source('eventCardMenuHtml', 'createEventsOverviewCard')
-    assert 'openEventPlanning(${event.id})' in menu
-    assert '<span>Plan</span>' in menu
+    assert "['plan', `openEventPlanning(${Number(event.id)})`]" in icons
+    assert 'openEventPlanning(${event.id})' not in menu
+    assert '<span>Plan</span>' not in menu
 
 
 def test_event_quick_actions_pass_the_clicked_event_through_navigation():
@@ -39,6 +41,73 @@ def test_event_quick_actions_pass_the_clicked_event_through_navigation():
     assert "showSection('return', { eventId: id })" in returning
     for source in (planning, preparing, returning):
         assert 'workflowRememberEvent(id)' in source
+
+
+def test_grid_and_list_show_progress_icons_and_one_compact_next_action():
+    menu = function_source('eventCardMenuHtml', 'createEventsOverviewCard')
+    cards = function_source('createEventsOverviewCard', 'renderAllEventsCards')
+    table = function_source('renderAllEventsTable', 'renderAllEventsList')
+    icons = function_source('eventWorkflowProgressHtml', 'openEventFinance')
+
+    for kind in ('plan', 'manpower', 'transport', 'prepare', 'return', 'finance'):
+        assert f"['{kind}'," in icons
+    assert 'openEventWorkforce(${event.id})' not in menu
+    assert 'openEventTransport(${event.id})' not in menu
+    assert 'openPrepareWorkspaceForEvent(${event.id})' not in menu
+    assert 'openReturnWorkspaceForEvent(${event.id})' not in menu
+    assert 'eventQuickActionButtonsHtml' not in SCRIPT
+    assert 'event-secondary-action' not in cards
+    assert 'event-secondary-action' not in table
+    assert cards.count('class="event-primary-action"') == 1
+    assert table.count('class="event-primary-action"') == 1
+    assert 'eventWorkflowProgressHtml(event' in cards
+    assert 'eventWorkflowProgressHtml(event' in table
+    assert '<strong>Next action</strong>' not in cards
+    assert '<th>Type / State</th>' in table
+    assert '<th>Workspaces</th>' in table
+
+
+def test_event_card_next_action_and_compact_button_share_one_footer_row():
+    footer_css = TEMPLATE.split('      .event-workflow-footer {', 2)[2].split('}', 1)[0]
+    controls_css = TEMPLATE.split('      .event-card-controls {', 1)[1].split('}', 1)[0]
+    action_css = TEMPLATE.split('      .event-primary-action {', 1)[1].split('}', 1)[0]
+    overflow_css = TEMPLATE.split('      .event-overflow-button {', 1)[1].split('}', 1)[0]
+
+    assert 'display: grid;' in footer_css
+    assert 'grid-template-columns: minmax(0, 1fr) auto;' in footer_css
+    assert 'align-items: center;' in footer_css
+    assert 'justify-self: end;' in controls_css
+    assert 'min-height: 26px;' in action_css
+    assert 'padding: 4px 8px;' in action_css
+    assert 'font-size: 9px;' in action_css
+    assert 'width: 26px;' in overflow_css
+
+
+def test_event_overview_reuses_progress_icons_and_keeps_documents_below():
+    overview = function_source('viewEvent', 'toggleViewSection')
+    navigation = function_source('eventOverviewNavigate', 'exportEventOverviewPdf')
+
+    assert "eventWorkflowProgressHtml(event, 'event-overview-workflow-icons')" in overview
+    assert 'class="event-overview-document-actions"' in overview
+    assert '<span>Delivery Order</span>' in overview
+    assert '<span>Packing List</span>' in overview
+    assert 'class="event-overview-links"' not in overview
+    assert 'event-overview-header-title-actions' in overview
+    assert "kind === 'transport'" in navigation
+    assert 'openEventTransport(eventId)' in navigation
+    assert '.event-overview-workflow-actions' in TEMPLATE
+
+
+def test_manpower_and_vendor_icon_uses_a_person_and_briefcase_everywhere():
+    icon_geometry = (
+        '<circle cx="7" cy="7" r="2.5"></circle>'
+        '<path d="M2.5 19a4.5 4.5 0 0 1 9 0"></path>'
+        '<rect x="13" y="8" width="9" height="10" rx="1.5"></rect>'
+        '<path d="M16 8V6h3v2M13 12h9"></path>'
+    )
+
+    assert SCRIPT.count(icon_geometry) >= 2
+    assert icon_geometry in TEMPLATE
 
 
 def test_add_event_assignee_picker_has_assign_all_for_active_company_users():
@@ -141,6 +210,46 @@ def test_calendar_days_do_not_hide_bars_arriving_from_an_earlier_day():
 
     assert 'z-index:' not in calendar_day_css
     assert 'z-index:' not in calendar_events_css
+
+
+def test_calendar_event_labels_are_regular_weight_white_for_every_status():
+    assert '.calendar-event.state-added { background: #ec407a; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-pending { background: #6d28d9; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-preparing { background: #0877e8; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-active { background: #16a34a; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-returned { background: #0b97a4; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-returning { background: #f97316; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-pending-closure { background: #334155; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-overdue { background: #ef3340; color: #fff; }' in TEMPLATE
+    assert '.calendar-event.state-completed { background: #64748b; color: #fff; }' in TEMPLATE
+    calendar_event_css = TEMPLATE.split('      .calendar-event {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 400;' in calendar_event_css
+    assert 'height: 17px;' in calendar_event_css
+    assert 'text-shadow: 0 1px 2px rgba(2, 6, 23, .72);' in calendar_event_css
+
+
+def test_event_cards_and_calendar_use_a_selective_type_weight_hierarchy():
+    card_css = TEMPLATE.split('      .event-workflow-kicker {', 1)[1].split(
+        '      #events-section .event-list-table-wrap,', 1
+    )[0]
+    assert '.event-workflow-kicker {' in TEMPLATE
+    assert 'font-weight: 500;' in card_css.split('      .event-type-badge,', 1)[0]
+    assert 'font-weight: 500;' in card_css.split('      .event-type-badge,', 1)[1].split(
+        '      .event-type-badge {', 1
+    )[0]
+    assert 'font-weight: 600;' in card_css.split('      .event-workflow-title {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 600;' in card_css.split('      .event-progress-value {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 500;' in card_css.split('      .event-workflow-notice {', 1)[1].split('}', 1)[0]
+    action_css = card_css.split('      .event-primary-action {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 600;' in action_css
+
+    calendar_controls = TEMPLATE.split('      .calendar-nav button {', 1)[1].split(
+        '      .calendar-event {', 1
+    )[0]
+    assert 'font-weight: 400;' in calendar_controls.split('}', 1)[0]
+    assert 'font-weight: 600;' in calendar_controls.split('      .calendar-month-jump {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 500;' in calendar_controls.split('      .calendar-day-header {', 1)[1].split('}', 1)[0]
+    assert 'font-weight: 500;' in calendar_controls.split('      .calendar-day-number {', 1)[1].split('}', 1)[0]
 
 
 def test_calendar_uses_lightweight_cached_month_ranges():

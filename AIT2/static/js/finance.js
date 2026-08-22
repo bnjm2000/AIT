@@ -35,6 +35,7 @@ const financeState = {
   clients: [],
   events: [],
   salespeople: [],
+  invoicePlanTemplates: [],
   catalog: [],
   departments: ['Manpower', 'Transportation'],
   saveTimer: null,
@@ -3076,18 +3077,20 @@ function financeQueueListSearch(query) {
 async function financeLoadEditorData(force = false) {
   if (!force && financeState.editorDataLoadedAt && Date.now() - financeState.editorDataLoadedAt < 30000) return;
   const linkedEventId = Number(financeState.current?.eventId || 0);
-  const [clientsResponse, departmentsResponse, linkedEventResponse, salespeopleResponse] = await Promise.all([
+  const [clientsResponse, departmentsResponse, linkedEventResponse, salespeopleResponse, planTemplatesResponse] = await Promise.all([
     apiCall('/api/clients').catch(() => ({ data: [] })),
     apiCall('/api/finance/departments').catch(() => ({ data: ['Manpower', 'Transportation'] })),
     linkedEventId
       ? apiCall(`/api/events?view=options&eventId=${encodeURIComponent(linkedEventId)}&limit=1`).catch(() => ({ data: [] }))
       : Promise.resolve({ data: [] }),
-    apiCall('/api/finance/salespeople').catch(() => ({ data: [] }))
+    apiCall('/api/finance/salespeople').catch(() => ({ data: [] })),
+    apiCall('/api/invoice-plan-templates').catch(() => ({ data: [] }))
   ]);
   financeState.clients = clientsResponse.data || [];
   financeState.departments = departmentsResponse.data || ['Manpower', 'Transportation'];
   financeState.events = mergeEventsById(financeState.events, linkedEventResponse.data || []);
   financeState.salespeople = salespeopleResponse.data || [];
+  financeState.invoicePlanTemplates = planTemplatesResponse.data || [];
   financeState.editorDataLoadedAt = Date.now();
 }
 
@@ -3590,7 +3593,14 @@ function financeDepartmentSuggestions(query) {
     'Transportation'
   ].forEach(value => {
     const label = String(value || '').trim();
-    if (!label || values.some(existing => existing.toLocaleLowerCase() === label.toLocaleLowerCase())) return;
+    if (
+      !label
+      || !isSelectableCompanyDepartment({
+        code: label,
+        name: label.replace(/\s+(?:department|system)$/i, '')
+      })
+      || values.some(existing => existing.toLocaleLowerCase() === label.toLocaleLowerCase())
+    ) return;
     values.push(label);
   });
   return values.filter(value => !clean || value.toLowerCase().includes(clean)).slice(0, 10);
@@ -5083,6 +5093,44 @@ function financeApplySnapshotReadOnly(root) {
   });
 }
 
+function financePaymentTermsMarkup(currentValue) {
+  const current = String(currentValue || '30 Days').trim() || '30 Days';
+  const saved = (financeState.invoicePlanTemplates || [])
+    .map(row => String(row?.name || '').trim())
+    .filter(Boolean);
+  const known = ['30 Days', ...saved.filter(name => name.toLowerCase() !== '30 days')];
+  const isKnown = known.some(name => name.toLowerCase() === current.toLowerCase());
+  const selected = isKnown ? current : '__custom__';
+  return `
+    <label class="finance-field finance-payment-terms-field"><span>Payment terms</span>
+      <select class="finance-input" onchange="financeSelectPaymentTerms(this.value)">
+        ${known.map(name => `<option value="${financeEscapeAttr(name)}" ${name.toLowerCase() === selected.toLowerCase() ? 'selected' : ''}>${financeEscape(name)}</option>`).join('')}
+        <option value="__custom__" ${selected === '__custom__' ? 'selected' : ''}>Custom…</option>
+      </select>
+      <input id="financeCustomPaymentTerms" class="finance-input ${selected === '__custom__' ? '' : 'hidden'}" value="${financeEscapeAttr(isKnown ? '' : current)}" placeholder="Enter payment term or plan name" oninput="financeFieldChange('paymentTerms',this.value)">
+    </label>`;
+}
+
+function financeSelectPaymentTerms(value) {
+  const custom = document.getElementById('financeCustomPaymentTerms');
+  if (value === '__custom__') {
+    custom?.classList.remove('hidden');
+    custom?.focus();
+    return;
+  }
+  custom?.classList.add('hidden');
+  financeFieldChange('paymentTerms', value);
+}
+
+function financeRememberPaymentTermOption(value) {
+  const name = String(value || '').trim();
+  if (!name || name.toLowerCase() === '30 days') return;
+  if ((financeState.invoicePlanTemplates || []).some(
+    row => String(row?.name || '').trim().toLowerCase() === name.toLowerCase()
+  )) return;
+  financeState.invoicePlanTemplates.push({ id: '', name, installments: [] });
+}
+
 function financeRenderEditor() {
   const root = financeRoot();
   const document = financeState.current;
@@ -5160,7 +5208,7 @@ function financeRenderEditor() {
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
             <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)">${financeValidityUnitControl(validityUnit, 'finance-editor-validity-unit-menu', 'financeSetValidityUnit')}</span></label>
             <label class="finance-field"><span>PO / reference number</span><input class="finance-input" value="${financeEscapeAttr(document.reference || '')}" onchange="financeFieldChange('reference',this.value)"></label>
-            <label class="finance-field"><span>Payment terms</span><input class="finance-input" value="${financeEscapeAttr(document.paymentTerms || '')}" onchange="financeFieldChange('paymentTerms',this.value)"></label>
+            ${financePaymentTermsMarkup(document.paymentTerms)}
           </div>
         </section>
 
@@ -5790,6 +5838,7 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
       financeState.activeSaves.delete(requestPromise);
     }
     financeSyncClientCache(response.data, previousClientRecordName);
+    financeRememberPaymentTermOption(response.data?.paymentTerms);
     let hasPendingChanges = false;
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
@@ -6235,7 +6284,7 @@ async function financeRequestStatus(documentId, status, context) {
       title: pairedEventId ? 'Accept paired quotation?' : 'Accept quotation and create event?',
       message: pairedEventId
         ? `This quotation is paired to Event #${pairedEventId}. Accepting it will not create another event.`
-        : 'This will create an event with the quotation project, location and inventory requirements. Manpower and transportation lines are not added to Prepare.',
+        : 'This will create an event with the quotation project, location and inventory requirements. Manpower & Vendors and transportation lines are not added to Prepare.',
       confirmText: pairedEventId ? 'Accept Quotation' : 'Accept & Create Event',
       cancelText: 'Cancel'
     });
@@ -7113,7 +7162,7 @@ function profitLossRenderCensored(root, data) {
       </div>
     </section>
     <div class="pnl-kpis pnl-kpis-censored" aria-label="Restricted financial summary">
-      ${['Revenue', 'Manpower Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
+      ${['Revenue', 'Manpower & Vendors Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
         .map(label => profitLossKpi(label, 'Restricted', ''))
         .join('')}
     </div>
@@ -7263,7 +7312,7 @@ function renderProfitLossPage() {
 
     <div class="pnl-kpis">
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
-      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Manpower & Vendors Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
@@ -7276,7 +7325,7 @@ function renderProfitLossPage() {
         <h3>Profit Calculation</h3>
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
-        <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
+        <div class="pnl-calc-row"><span>Manpower &amp; Vendors Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
         ${financeNumber(summary.mealCost) > 0 ? `<div class="pnl-calc-row"><span>Meals</span><strong>- ${financeSgd(summary.mealCost)}</strong></div>` : ''}
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
@@ -7329,7 +7378,7 @@ function renderProfitLossPage() {
                       <button type="button" class="pnl-expense-edit" onclick="profitLossOpenClaimReview('${financeEscapeAttr(row.sourceId)}')" aria-label="Review claim" title="Review claim">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
                       </button>
-                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Manpower" title="Open Manpower">
+                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Manpower &amp; Vendors" title="Open Manpower &amp; Vendors">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <circle cx="8" cy="8" r="3"></circle>
                           <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
@@ -7339,7 +7388,7 @@ function renderProfitLossPage() {
                       </button>
                     </span>
                   ` : row.readOnly ? `
-                    <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Manpower and Transport" title="Open Manpower and Transport">
+                    <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Manpower &amp; Vendors" title="Open Manpower &amp; Vendors">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="8" cy="8" r="3"></circle>
                         <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>

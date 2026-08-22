@@ -771,6 +771,8 @@
 }
 
 .wf-schedule-tag-menu {
+  --schedule-green: var(--wf-brand, #0f766e);
+  --schedule-green-dark: var(--wf-brand-dark, #0b5f58);
   position: fixed;
   z-index: 1400;
   display: grid;
@@ -936,8 +938,17 @@
 }
 
 .wf-schedule-role-actions > button.primary {
-  border-color: var(--schedule-green);
-  background: var(--schedule-green);
+  border-color: var(--schedule-green, #0f766e);
+  background: var(--schedule-green, #0f766e);
+  color: #fff;
+}
+
+.wf-schedule-role-actions > button.primary:hover,
+.wf-schedule-role-actions > button.primary:focus-visible {
+  border-color: var(--schedule-green-dark, #0b5f58);
+  outline: 2px solid color-mix(in srgb, var(--schedule-green, #0f766e) 28%, transparent);
+  outline-offset: 1px;
+  background: var(--schedule-green-dark, #0b5f58);
   color: #fff;
 }
 

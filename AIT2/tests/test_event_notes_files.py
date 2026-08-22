@@ -216,7 +216,7 @@ class EventNotesFilesTests(unittest.TestCase):
             self.assertEqual(system_response.status_code, 403)
             self.assertEqual(event_response.status_code, 403)
             self.assertEqual(page_response.status_code, 302)
-            self.assertTrue(page_response.headers['Location'].endswith('/events'))
+            self.assertTrue(page_response.headers['Location'].endswith('/events/1'))
 
     def test_event_detail_update_log_lists_changed_fields(self):
         self.login_as('admin', is_admin=True)

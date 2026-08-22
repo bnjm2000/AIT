@@ -4053,6 +4053,17 @@ class FinanceFeatureTests(unittest.TestCase):
         departments = self.client.get('/api/finance/departments').get_json()['data']
         self.assertIn('Manpower', departments)
         self.assertIn('Transportation', departments)
+        self.assertNotIn('Loan Department', departments)
+        self.assertNotIn('Misc Department', departments)
+        self.assertNotIn('Unknown Department', departments)
+
+        finance_source = (
+            Path(__file__).resolve().parents[1] / 'static' / 'js' / 'finance.js'
+        ).read_text(encoding='utf-8')
+        suggestion_source = finance_source.split(
+            'function financeDepartmentSuggestions(query)', 1
+        )[1].split('function financeShowDepartmentSuggestions', 1)[0]
+        self.assertIn('!isSelectableCompanyDepartment({', suggestion_source)
 
         quote = self.create_quote('Department Cleanup')
         quote['departments'] = ['Audio Department', 'M', 'Ma', 'Man', 'Manpower']
@@ -4224,7 +4235,7 @@ class FinanceFeatureTests(unittest.TestCase):
         )[0]
         self.assertIn('profitLossOpenClaimReview', claim_actions)
         self.assertIn('aria-label="Review claim"', claim_actions)
-        self.assertIn('aria-label="Open Manpower"', claim_actions)
+        self.assertIn('aria-label="Open Manpower &amp; Vendors"', claim_actions)
         self.assertNotIn('finance-delete-line', claim_actions)
 
     def test_repeatable_schedule_rows_extend_event_and_pdf(self):
@@ -5080,7 +5091,7 @@ class FinanceFeatureTests(unittest.TestCase):
             if row.get('sourceId') == 'vendor-invoice-profit'
         )
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
-        self.assertEqual(vendor_invoice['categoryLabel'], 'Manpower')
+        self.assertEqual(vendor_invoice['categoryLabel'], 'Manpower & Vendors')
 
     def test_profit_loss_budgets_and_worker_claims_stay_under_manpower(self):
         self.login('sales-admin')
@@ -6798,7 +6809,7 @@ class FinanceFeatureTests(unittest.TestCase):
         css_path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css')
         with open(css_path, encoding='utf-8') as css_file:
             css_source = css_file.read().lower()
-        self.assertNotIn('<select', source)
+        self.assertIn('financepaymenttermsmarkup', source)
         self.assertNotIn('set all days', source)
         self.assertIn('apply to all lines', source)
         self.assertIn('ondragstart', source)
@@ -6905,7 +6916,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('.pnl-budget-variance.is-over', css_source)
         self.assertNotIn('<th>department</th>', source)
         self.assertNotIn('>view in manpower</button>', source)
-        self.assertIn('aria-label="open manpower and transport"', source)
+        self.assertIn('aria-label="open manpower &amp; vendors"', source)
         self.assertNotIn('<h3>expense categories</h3>', source)
         self.assertIn('/api/finance/compare', source)
         self.assertIn('financeopenclientpicker', source)
@@ -7171,7 +7182,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('Paid on', invoice_text)
         self.assertIn('Deposit', invoice_text)
         self.assertNotIn('Invoiced to date', invoice_text)
-        self.assertIn('Balance remaining', invoice_text)
+        self.assertNotIn('Balance remaining', invoice_text)
         self.assertIn('AMOUNT DUE', invoice_text)
 
     def test_invoice_plan_defaults_new_installments_to_thirty_days(self):
@@ -7611,24 +7622,23 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(pdf.data)).pages
         )
-        self.assertIn('Subtotal', pdf_text)
-        self.assertIn('Discount', pdf_text)
+        self.assertIn('Total (as per quotation)', pdf_text)
+        self.assertIn('Discounts', pdf_text)
         self.assertIn('-$125.00', pdf_text)
-        self.assertIn(f'${discounted_pre_tax:,.2f}', pdf_text)
-        self.assertIn(f'GST ({tax_rate:g}%)', pdf_text)
+        self.assertIn(f'${discounted_total:,.2f}', pdf_text)
+        self.assertIn(f'GST amount included ({tax_rate:g}%)', pdf_text)
         self.assertIn(f'${discounted_tax:,.2f}', pdf_text)
         self.assertNotIn('Total after GST', pdf_text)
         pdf_lines = [line.strip() for line in pdf_text.splitlines()]
         summary_positions = {
             label: pdf_lines.index(label)
-            for label in ('Subtotal', 'Discount', 'Total', 'Balance remaining', 'AMOUNT DUE')
+            for label in ('Total (as per quotation)', 'Discounts', 'Grand Total', 'AMOUNT DUE')
         }
-        gst_position = pdf_lines.index(f'GST ({tax_rate:g}%)')
-        self.assertLess(summary_positions['Subtotal'], summary_positions['Discount'])
-        self.assertLess(summary_positions['Discount'], summary_positions['Total'])
-        self.assertLess(summary_positions['Total'], gst_position)
-        self.assertLess(gst_position, summary_positions['Balance remaining'])
-        self.assertLess(summary_positions['Balance remaining'], summary_positions['AMOUNT DUE'])
+        gst_position = pdf_lines.index(f'GST amount included ({tax_rate:g}%)')
+        self.assertLess(summary_positions['Total (as per quotation)'], summary_positions['Discounts'])
+        self.assertLess(summary_positions['Discounts'], summary_positions['Grand Total'])
+        self.assertLess(summary_positions['Grand Total'], gst_position)
+        self.assertLess(gst_position, summary_positions['AMOUNT DUE'])
 
         sent = self.client.put(
             f"/api/invoices/{invoice['id']}", json={'status': 'sent'},
@@ -7653,8 +7663,8 @@ class FinanceFeatureTests(unittest.TestCase):
         draft = self.client.put(
             f"/api/invoices/{invoice['id']}", json={'status': 'draft'},
         )
-        self.assertEqual(draft.status_code, 409, draft.get_data(as_text=True))
-        self.assertIn('cannot be returned to draft', draft.get_json()['error'])
+        self.assertEqual(draft.status_code, 200, draft.get_data(as_text=True))
+        self.assertEqual(draft.get_json()['data']['status'], 'draft')
 
         invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
         self.assertIn('function invoiceUpdateDiscount', invoice_source)
@@ -7737,7 +7747,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("invoiceDateFromToday(30)", invoice_source)
         self.assertIn("invoiceDueCountdown", invoice_source)
         self.assertIn("This quotation has already been invoiced in full", invoice_source)
-        self.assertIn('.invoice-due-date-field > span small', invoice_css)
+        self.assertIn('.invoice-due-date-field > span button', invoice_css)
 
     def test_invoice_plan_payments_flow_to_invoice_pdf_and_balance_history(self):
         quotation = self.create_quote('Payment History Project')
@@ -7801,13 +7811,34 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(pdf_response.data)).pages
         )
-        self.assertIn('Paid on 11 August 2026', pdf_text)
+        self.assertIn('Amount paid on 11 August 2026', pdf_text)
         self.assertIn('Balance remaining', pdf_text)
         self.assertIn('AMOUNT DUE', pdf_text)
         self.assertNotIn('Invoiced to date', pdf_text)
         self.assertIn(
             f"${accepted['totals']['total'] - 150:,.2f}", pdf_text
         )
+
+        receipt_response = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}/payments/client-deposit/receipt"
+        )
+        self.assertEqual(
+            receipt_response.status_code, 200,
+            (
+                receipt_response.get_data(as_text=True)
+                if receipt_response.status_code != 200 else ''
+            ),
+        )
+        receipt_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(receipt_response.data)).pages
+        )
+        self.assertIn('PAYMENT RECEIPT', receipt_text)
+        self.assertIn('11 August 2026', receipt_text)
+        self.assertIn('$150.00', receipt_text)
+        self.assertIn('Deposit received', receipt_text)
+        self.assertIn(accepted['number'], receipt_text)
+        self.assertIn('Not allocated', receipt_text)
 
     def test_sent_invoice_pdf_is_frozen_when_payments_are_recorded(self):
         quotation = self.create_quote('Frozen Sent Invoice')
@@ -7868,7 +7899,10 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(partial.status_code, 200, partial.get_data(as_text=True))
         self.assertEqual(partial.get_json()['data']['plan']['summary']['paid'], 150)
-        self.assertEqual(pdf_text(), sent_pdf_text)
+        partial_pdf_text = pdf_text()
+        self.assertIn('Amount paid on 11 August 2026', partial_pdf_text)
+        self.assertIn('Balance remaining', partial_pdf_text)
+        self.assertIn('Production package', partial_pdf_text)
 
         paid = self.client.post(
             f"/api/invoices/{issued['id']}/mark-paid",
@@ -7876,7 +7910,9 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(paid.status_code, 200, paid.get_data(as_text=True))
         self.assertEqual(paid.get_json()['plan']['plan']['summary']['due'], 0)
-        self.assertEqual(pdf_text(), sent_pdf_text)
+        paid_pdf_text = pdf_text()
+        self.assertIn('Amount paid on 12 August 2026', paid_pdf_text)
+        self.assertIn('Production package', paid_pdf_text)
 
         stored = self.client.get(
             f"/api/invoices/{issued['id']}"
@@ -7925,8 +7961,11 @@ class FinanceFeatureTests(unittest.TestCase):
                 'dueDate': '2026-09-30',
             },
         )
-        self.assertEqual(draft.status_code, 409, draft.get_data(as_text=True))
-        self.assertIn('cannot be returned to draft', draft.get_json()['error'])
+        self.assertEqual(draft.status_code, 200, draft.get_data(as_text=True))
+        draft_data = draft.get_json()['data']
+        self.assertEqual(draft_data['status'], 'draft')
+        self.assertNotIn('invoiceSentSnapshot', draft_data)
+        self.assertEqual(draft_data['invoiceLabel'], 'Revised invoice')
 
     def test_invoice_workspace_requires_sales_access(self):
         self.login('no-sales')
@@ -7943,6 +7982,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('data-section="invoices">Invoices', finance_source)
         self.assertIn('function invoiceOpenPlan', invoice_source)
         self.assertIn('50% deposit / 50% balance', invoice_source)
+        self.assertIn('+ Create plan', invoice_source)
+        self.assertIn('Receipt PDF', invoice_source)
         self.assertIn('mineOnly: true', invoice_source)
         self.assertIn("params.set('mine', '1')", invoice_source)
         self.assertIn('invoice-list-mine-toggle', invoice_source)
@@ -8042,7 +8083,7 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(pdf_response.data)).pages
         )
-        self.assertNotIn('Paid on 12 August 2026', pdf_text)
+        self.assertIn('Amount paid on 12 August 2026', pdf_text)
         self.assertIn('Balance remaining', pdf_text)
         self.assertIn('AMOUNT DUE', pdf_text)
         self.assertIn('Final production invoice', pdf_text)
@@ -8292,7 +8333,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'overdue',
         )
 
-    def test_only_draft_invoices_can_be_renumbered_or_deleted(self):
+    def test_sent_invoices_are_locked_for_renumbering_but_can_be_deleted(self):
         quotation = self.create_quote('Locked Invoice')
         quotation['lineItems'] = [{
             'id': 'locked-line', 'description': 'Locked invoice test',
@@ -8326,7 +8367,7 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(renumber.status_code, 409, renumber.get_data(as_text=True))
         deleted = self.client.delete(f"/api/invoices/{invoice['id']}")
-        self.assertEqual(deleted.status_code, 409, deleted.get_data(as_text=True))
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
 
     def test_deleted_invoice_number_is_reused(self):
         def issue_for(project):
@@ -8361,6 +8402,164 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         replacement = issue_for('Reusable Three')
         self.assertEqual(replacement['number'], first['number'])
+
+    def test_saved_invoice_plan_seeds_quotation_payment_terms(self):
+        created = self.client.post('/api/invoice-plan-templates', json={
+            'name': 'Milestone plan',
+            'installments': [
+                {'label': 'Booking', 'mode': 'percentage', 'value': 40, 'dueDays': 7},
+                {'label': 'Completion', 'mode': 'percentage', 'value': 60, 'dueDays': 45},
+            ],
+        })
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        template = created.get_json()['data']
+
+        quotation = self.create_quote('Saved Terms Project')
+        quotation['paymentTerms'] = 'Milestone plan'
+        quotation['lineItems'] = [{
+            'id': 'saved-plan-line', 'description': 'Production package',
+            'department': 'Production', 'days': 1, 'quantity': 1,
+            'unitPrice': 100,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        self.assertEqual(plan['strategyLabel'], 'Milestone plan')
+        self.assertEqual(
+            [(row['label'], row['value']) for row in plan['installments']],
+            [('Booking', 40), ('Completion', 60)],
+        )
+
+        renamed = self.client.put(
+            f"/api/invoice-plan-templates/{template['id']}",
+            json={**template, 'name': 'Milestone billing'},
+        )
+        self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
+        self.assertEqual(
+            self.client.delete(
+                f"/api/invoice-plan-templates/{template['id']}"
+            ).status_code,
+            200,
+        )
+
+    def test_paid_invoice_can_return_to_draft_and_delete_clears_payment(self):
+        quotation = self.create_quote('Paid Invoice Reversal')
+        quotation['lineItems'] = [{
+            'id': 'paid-reversal-line', 'description': 'Production package',
+            'department': 'Production', 'days': 1, 'quantity': 1,
+            'unitPrice': 100,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        plan['installments'][0]['id'] = 'paid-reversal'
+        self.client.put(f"/api/invoice-plans/{accepted['id']}", json=plan)
+        invoice = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/paid-reversal/issue",
+            json={'status': 'sent'},
+        ).get_json()['data']
+        self.client.post(
+            f"/api/invoices/{invoice['id']}/mark-paid",
+            json={'receivedDate': '2026-08-12'},
+        )
+        draft = self.client.put(
+            f"/api/invoices/{invoice['id']}", json={'status': 'draft'},
+        )
+        self.assertEqual(draft.status_code, 200, draft.get_data(as_text=True))
+        self.assertEqual(draft.get_json()['data']['status'], 'draft')
+        self.assertNotIn('invoiceSentSnapshot', draft.get_json()['data'])
+        refreshed = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        self.assertEqual(refreshed['payments'], [])
+        self.assertEqual(self.client.delete(
+            f"/api/invoices/{invoice['id']}"
+        ).status_code, 200)
+
+    def test_payment_on_deposit_does_not_zero_balance_invoice_pdf(self):
+        quotation = self.create_quote('Separate Installment Payments')
+        quotation['lineItems'] = [{
+            'id': 'installment-payment-line',
+            'description': 'Production package',
+            'department': 'Production', 'days': 1, 'quantity': 1,
+            'unitPrice': 640,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        plan_response = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={'installments': [
+                {
+                    'id': 'deposit-80', 'label': 'Deposit',
+                    'mode': 'percentage', 'value': 80,
+                },
+                {
+                    'id': 'balance-20', 'label': 'Balance',
+                    'mode': 'percentage', 'value': 20,
+                },
+            ]},
+        )
+        plan = plan_response.get_json()['data']['plan']
+        deposit = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/deposit-80/issue",
+            json={'status': 'sent'},
+        ).get_json()['data']
+        self.client.post(
+            f"/api/invoices/{deposit['id']}/mark-paid",
+            json={'receivedDate': '2026-08-21'},
+        )
+        balance = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/balance-20/issue",
+            json={},
+        ).get_json()['data']
+        expected_balance = plan['installments'][1]['amount']
+        pdf_response = self.client.get(f"/api/invoices/{balance['id']}/pdf")
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf_response.data)).pages
+        )
+        self.assertIn('Balance remaining', pdf_text)
+        self.assertIn('AMOUNT DUE', pdf_text)
+        self.assertGreater(expected_balance, 0)
+        self.assertGreaterEqual(
+            pdf_text.count(f"${expected_balance:,.2f}"), 2
+        )
+        sent = self.client.put(
+            f"/api/invoices/{balance['id']}",
+            json={
+                'status': 'sent', 'invoiceSentDate': '2026-08-22',
+                'paymentTermDays': 30,
+            },
+        )
+        self.assertEqual(sent.status_code, 200, sent.get_data(as_text=True))
+        self.assertEqual(sent.get_json()['data']['invoiceAmount'], expected_balance)
+        sent_plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        sent_balance = next(
+            row for row in sent_plan['installments']
+            if row['invoiceId'] == balance['id']
+        )
+        self.assertEqual(sent_balance['amount'], expected_balance)
+
+        invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
+        status_handler = invoice_source.split(
+            'async function invoiceRequestDocumentStatus', 1
+        )[1].split('async function invoiceConfirmSent', 1)[0]
+        self.assertLess(
+            status_handler.index('invoiceFlushPendingSave()'),
+            status_handler.index('invoiceFindDocument(invoiceId)'),
+        )
 
     def test_quotation_status_choices_stop_before_invoice_workflow(self):
         source = Path('static/js/finance.js').read_text(encoding='utf-8')

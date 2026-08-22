@@ -1733,12 +1733,7 @@ function renderDepartmentManager() {
   const container = document.getElementById('department-admin-table');
   if (!container) return;
 
-  const list = sortedDepartmentList().filter((dept) => {
-    const code = normalizeDepartmentCode(dept.code);
-    if (code === 'LOAN' || code === 'MISC') return false;
-    if (code === 'UN' && Number(dept.assetCount || 0) === 0) return false;
-    return true;
-  });
+  const list = sortedDepartmentList().filter(isSelectableCompanyDepartment);
   if (list.length === 0) {
     container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No departments found.</p>';
     return;

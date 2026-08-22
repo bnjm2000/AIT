@@ -222,6 +222,12 @@ def test_inventory_department_management_is_a_header_action_and_rows_are_compact
     assert "min-height:36px" in template
     assert "'Assets deployed'" in script
     assert "asset.deployedQuantity" in script
+    assert "function isSelectableCompanyDepartment(department)" in script
+    assert "!['LOAN', 'MISC', 'UN'].includes(code)" in script
+    manager = script.split('function renderDepartmentManager()', 1)[1].split(
+        'function ensureDepartmentModal()', 1
+    )[0]
+    assert 'sortedDepartmentList().filter(isSelectableCompanyDepartment)' in manager
 
 
 def test_maintenance_log_controls_use_custom_coloured_selectors_and_drop_upload():
@@ -762,7 +768,7 @@ def test_inventory_selection_can_open_bulk_maintenance_workflow():
     assert "function replaceMaintenanceAssetSelection(assetIds = [])" in script
 
 
-def test_inventory_selected_count_selects_filtered_assets_or_clears_selection():
+def test_inventory_select_all_is_an_obvious_toggle_without_separate_clear_button():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = APP_BUNDLE_SOURCE
 
@@ -772,13 +778,34 @@ def test_inventory_selected_count_selects_filtered_assets_or_clears_selection():
         "document.getElementById('inventory-selected-count')?.addEventListener("
         "'click', toggleInventorySelectionFromCount)"
     ) in script
-    assert "countEl.textContent = selectedCount ? `${selectedCount} selected` : 'Select all'" in script
+    assert '>Select all</button>' in script
+    assert ": 'Select all';" in script
+    assert 'Select all assets' not in script
+    assert 'id="inventory-clear-selection-button"' not in script
+    assert 'Clear ${selectedCount} selected' in script
     assert "countEl.disabled = selectedCount === 0 && visibleIds.length === 0" in script
     assert "function toggleInventorySelectionFromCount()" in script
     assert "if (selectedInventoryAssetIds.size > 0)" in script
+    assert "clearInventorySelection();" in script
     assert "toggleInventorySelectAll(true);" in script
     assert "const { filteredAssets } = getFilteredInventoryData();" in script
     assert ".inventory-selected-count-button:hover:not(:disabled)" in template
+    assert '.inventory-selected-count-button.has-selection' in template
+    assert 'border:1px solid #b6cbc5' in template
+    count_button_css = template[
+        template.index('#inventory-section .inventory-selected-count-button {'):
+        template.index('#inventory-section .inventory-selected-count-button:hover')
+    ]
+    assert 'box-shadow:' not in count_button_css
+
+
+def test_inventory_closed_filter_summaries_highlight_active_selections():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
+
+    assert "filter?.classList.toggle('has-active-selection', hasActiveFilter)" in script
+    assert '`${values.length} of ${total} selected`' in script
+    assert '.inventory-checkbox-filter.has-active-selection > summary' in template
 
 
 def test_maintenance_preselection_is_part_of_modal_initialisation():

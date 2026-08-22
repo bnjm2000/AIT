@@ -365,6 +365,76 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
 
+    def test_shared_workflow_progress_tracks_operations_and_finance_states(self):
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        event = Event(91, 'Progress Event', yesterday, yesterday, [])
+        workforce = {
+            'assignments': {'91': [{
+                'id': 'assignment-1',
+                'freelancerId': 'worker-1',
+                'department': 'AX',
+            }]},
+            'transportBookings': {'91': [{
+                'id': 'depart-1',
+                'tripType': 'depart',
+                'twoWay': False,
+                'status': 'Approved',
+            }]},
+            'submissions': {'91': {
+                'worker-1': {'invoices': [], 'claims': []},
+            }},
+            'uploadAllowances': {},
+        }
+        finance = {'documents': [{
+            'id': 'quotation-91',
+            'type': 'quotation',
+            'eventId': 91,
+            'salespersonUsername': 'admin',
+        }]}
+
+        with app_module.app.test_request_context('/'):
+            app_module.session['user'] = 'admin'
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 2, 1, workforce, finance
+            )
+            self.assertEqual(progress['plan']['status'], 'green')
+            self.assertEqual(progress['manpower']['status'], 'green')
+            self.assertEqual(progress['transport']['status'], 'orange')
+            self.assertEqual(progress['prepare']['status'], 'orange')
+            self.assertEqual(progress['return']['status'], 'orange')
+            self.assertEqual(progress['finance']['status'], 'red')
+
+            workforce['transportBookings']['91'].append({
+                'id': 'return-1', 'tripType': 'return', 'status': 'Approved'
+            })
+            invoice = {'id': 'invoice-1', 'status': 'Pending Review'}
+            workforce['submissions']['91']['worker-1']['invoices'] = [invoice]
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 4, 4, workforce, finance
+            )
+            self.assertEqual(progress['transport']['status'], 'green')
+            self.assertEqual(progress['prepare']['status'], 'green')
+            self.assertEqual(progress['return']['status'], 'green')
+            self.assertEqual(progress['finance']['status'], 'orange')
+
+            invoice['status'] = 'Paid'
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 4, 4, workforce, finance
+            )
+            self.assertEqual(progress['finance']['status'], 'blue')
+
+            invoice['paymentConfirmedAt'] = '2026-08-22T10:00:00'
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 4, 4, workforce, finance
+            )
+            self.assertEqual(progress['finance']['status'], 'green')
+
+            finance['documents'][0]['salespersonUsername'] = 'alice'
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 4, 4, workforce, finance
+            )
+            self.assertIsNone(progress['finance'])
+
     def test_event_summary_pagination_enriches_only_the_requested_page(self):
         self.login('admin')
 

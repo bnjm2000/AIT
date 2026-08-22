@@ -627,6 +627,8 @@ def _amount_from_text(text: str) -> dict:
         ("amount due", 100),
         ("balance due", 98),
         ("grand total", 95),
+        ("other total", 102),
+        ("mop ", 98),
         ("total due", 94),
         ("net total", 90),
         ("total incl", 88),
@@ -733,6 +735,13 @@ def _amount_from_text(text: str) -> dict:
                 score -= 95
             if re.search(r"\b(?:gst|tax)\b", lowered) and "total" not in lowered:
                 score -= 65
+            if re.search(
+                r"\b(?:total\s+)?includes?\s+(?:gst|tax)\s+(?:of|[:=])",
+                lowered,
+            ):
+                # This wording labels the tax component, not the payable total
+                # (for example, "TOTAL INCLUDES GST OF 4.19").
+                score -= 180
             if any(
                 phrase in lowered
                 for phrase in (
@@ -771,6 +780,19 @@ def _amount_from_text(text: str) -> dict:
 
     if not candidates:
         return {"amount": None, "confidence": "Low", "matchedText": ""}
+    occurrence_counts = {}
+    for _score, _line_index, candidate_amount, _line in candidates:
+        amount_key = round(candidate_amount, 2)
+        occurrence_counts[amount_key] = occurrence_counts.get(amount_key, 0) + 1
+    candidates = [
+        (
+            score + min(24, max(0, occurrence_counts[round(amount, 2)] - 1) * 12),
+            line_index,
+            amount,
+            line,
+        )
+        for score, line_index, amount, line in candidates
+    ]
     candidates.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
     score, _line_index, amount, line = candidates[0]
     confidence = "High" if score >= 90 else "Medium" if score >= 60 else "Low"

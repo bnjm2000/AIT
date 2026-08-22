@@ -49,6 +49,7 @@ const workforceEventChooserState = {
 };
 
 const workforceDocumentsState = {
+  eventId: 0,
   rows: [],
   statusCounts: {},
   kindCounts: {},
@@ -392,7 +393,8 @@ function wfDepartmentStyle(code) {
 }
 
 function wfDepartmentOptions(selectedCode = '') {
-  return (workforcePageState.data?.departments || []).map(row => {
+  return (workforcePageState.data?.departments || [])
+    .filter(isSelectableCompanyDepartment).map(row => {
     const department = wfDepartmentMeta(row.code);
     return `<option value="${wfAttr(row.code)}" style="background-color:${department.color};color:${department.textColor}"
       ${row.code === selectedCode ? 'selected' : ''}>${wfEscape(row.name)} (${wfEscape(row.code)})</option>`;
@@ -473,7 +475,7 @@ async function loadWorkforcePage() {
   }
   const requestId = ++workforcePageState.loadRequestId;
   workforcePageState.loading = true;
-  if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading manpower...</div>';
+  if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading manpower &amp; vendors...</div>';
   try {
     if (!workforcePageState.eventOptions.length) {
       const eventOptionsLoad = await startProgressiveEventOptions(
@@ -491,11 +493,18 @@ async function loadWorkforcePage() {
         if (planEventChooserState.context === 'workforce') renderPlanEventChooser();
       }).catch(error => console.warn('Unable to load more event options:', error));
     }
-    if (!workforcePageState.eventId) {
+    const selectedEventIsAvailable = workforcePageState.eventOptions.some(
+      event => Number(event.id) === Number(workforcePageState.eventId)
+    );
+    if (!selectedEventIsAvailable) {
       workforcePageState.eventId = Number(workforcePageState.eventOptions[0]?.id || 0);
+      workforcePageState.data = null;
+      if (workforcePageState.eventId && typeof workflowRememberEvent === 'function') {
+        workflowRememberEvent(workforcePageState.eventId);
+      }
     }
     if (!workforcePageState.eventId) {
-      root.innerHTML = '<div class="wf-panel wf-empty">Create an event before assigning manpower.</div>';
+      root.innerHTML = '<div class="wf-panel wf-empty">Create an event before assigning manpower &amp; vendors.</div>';
       return;
     }
     syncWorkforceRoute({ replace: true });
@@ -616,9 +625,9 @@ function ensureWorkforceDocumentsLayout() {
   root.innerHTML = `<div class="wf-documents-shell">
     <div class="plan-page-heading wf-documents-heading">
       <div>
-        <button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Transport</button>
+        <button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>
         <h2>Invoices &amp; Claims</h2>
-        <p>Review every worker and vendor upload across your company.</p>
+        <p id="wfDocumentsScope">Review every worker and vendor upload across your company.</p>
       </div>
       <div class="wf-documents-sort-note">Newest event dates first, then uploader name</div>
     </div>
@@ -644,6 +653,12 @@ function ensureWorkforceDocumentsLayout() {
 async function loadWorkforceDocumentsPage(options = {}) {
   const root = ensureWorkforceDocumentsLayout();
   if (!root) return;
+  const scope = document.getElementById('wfDocumentsScope');
+  if (scope) {
+    scope.textContent = Number(workforceDocumentsState.eventId || 0) > 0
+      ? `Review invoices and claims for Event #${Number(workforceDocumentsState.eventId)}.`
+      : 'Review every worker and vendor upload across your company.';
+  }
   const requestId = ++workforceDocumentsState.requestId;
   workforceDocumentsState.loading = true;
   const list = document.getElementById('wfDocumentsList');
@@ -655,6 +670,9 @@ async function loadWorkforceDocumentsPage(options = {}) {
     pageSize: String(workforceDocumentsState.pageSize),
     kind: workforceDocumentsState.kind
   });
+  if (Number(workforceDocumentsState.eventId || 0) > 0) {
+    params.set('eventId', String(Number(workforceDocumentsState.eventId)));
+  }
   if (workforceDocumentsState.statuses.size) {
     [...workforceDocumentsState.statuses].forEach(status => params.append('status', status));
   } else {
@@ -1576,8 +1594,15 @@ async function loadTransportPage() {
         if (planEventChooserState.context === 'transport') renderPlanEventChooser();
       }).catch(error => console.warn('Unable to load more event options:', error));
     }
-    if (!workforcePageState.eventId) {
+    const selectedEventIsAvailable = workforcePageState.eventOptions.some(
+      event => Number(event.id) === Number(workforcePageState.eventId)
+    );
+    if (!selectedEventIsAvailable) {
       workforcePageState.eventId = Number(workforcePageState.eventOptions[0]?.id || 0);
+      workforcePageState.data = null;
+      if (workforcePageState.eventId && typeof workflowRememberEvent === 'function') {
+        workflowRememberEvent(workforcePageState.eventId);
+      }
     }
     if (!workforcePageState.eventId) {
       root.innerHTML = '<div class="wf-panel wf-empty">Create an event before booking transport.</div>';
@@ -1685,7 +1710,7 @@ function renderWorkforcePage() {
   const totals = data.totals || {};
   root.innerHTML = `
     <div class="plan-page-heading wf-manpower-page-heading">
-      <div><div class="wf-manpower-title-row"><h2>Manpower</h2>
+      <div><div class="wf-manpower-title-row"><h2>Manpower &amp; Vendors</h2>
         <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
           View all invoices &amp; claims
         </button>
@@ -1699,7 +1724,7 @@ function renderWorkforcePage() {
     <div class="wf-plan-layout">
       <div class="wf-plan-primary">
         <div class="plan-event-bar">
-          ${wfManpowerEventPickerHtml(data, 'Choose an event for manpower')}
+          ${wfManpowerEventPickerHtml(data, 'Choose an event for manpower and vendors')}
 
           <div class="plan-metrics">
             <div class="plan-metric">
@@ -1726,7 +1751,7 @@ function renderWorkforcePage() {
         <section class="wf-panel wf-manpower-panel">
           <header class="wf-panel-header">
             <div>
-              <h3>Manpower / Workers &amp; Vendors</h3>
+              <h3>Manpower &amp; Vendors</h3>
               <p>Departments are created automatically from this event’s outgoing assets.</p>
             </div>
             <div class="wf-toolbar">
@@ -1836,7 +1861,7 @@ function ensureWorkforceModals() {
         <label class="wf-field"><span>Department *</span><select id="wfVendorAssignmentDepartment" required></select></label>
         <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfVendorAssignmentSubproject"></select></label>
         <div class="wf-field"><span>Providing *</span><div class="wf-provider-choice">
-          <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Manpower</label>
+          <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Manpower &amp; Vendors</label>
           <label><input type="radio" name="wfProviderType" value="service" onchange="syncVendorAssignmentFields()"> Service</label>
         </div></div>
         <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfVendorAssignmentDates"></div></div>
@@ -2487,8 +2512,8 @@ async function loadFreelancerWorkspace() {
   const id = workforcePageState.historyFreelancerId;
   if (!id) {
     root.innerHTML = `<div class="plan-page-heading"><h2>Worker Submissions</h2>
-      <p>Select a worker from Manpower &amp; Transport to view their events.</p></div>
-      <button class="wf-button" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Transport</button>`;
+      <p>Select a worker from Manpower &amp; Vendors to view their events.</p></div>
+      <button class="wf-button" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>`;
     return;
   }
   root.innerHTML = '<div class="loading">Loading worker workspace…</div>';
@@ -2513,7 +2538,7 @@ function renderFreelancerWorkspace() {
   const invoiceCount = events.reduce((total, item) => total + item.invoices.length, 0);
   const claimCount = events.reduce((total, item) => total + item.claims.length, 0);
   root.innerHTML = `<div class="plan-page-heading wf-freelancer-page-heading">
-      <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Transport</button>
+      <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>
         <h2>${isVendor ? 'Vendor' : 'Worker'} Submissions</h2>
         <p>Review assignments, invoices and claims for ${wfEscape(company?.name || 'this company')}.</p></div>
       <div class="wf-freelancer-heading-actions">
@@ -3212,7 +3237,7 @@ function openManualDepartment() {
   ensureWorkforceModals();
   document.getElementById('wfDepartmentForm').reset();
   document.getElementById('wfDepartmentPreset').innerHTML = '<option value="">Custom department</option>' +
-    (workforcePageState.data.allDepartments || []).map(row =>
+    (workforcePageState.data.allDepartments || []).filter(isSelectableCompanyDepartment).map(row =>
       `<option value="${wfAttr(row.code)}" data-name="${wfAttr(row.name)}">${wfEscape(row.name)} (${wfEscape(row.code)})</option>`).join('');
   wfError('wfDepartmentError');
   openWorkforceModal('wfDepartmentModal');

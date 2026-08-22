@@ -1629,63 +1629,74 @@ def build_finance_pdf(document, company, logo_path=''):
             if document.get('invoiceAdjustedTax') not in (None, '')
             else round(adjusted_pre_tax * tax_rate / 100, 2)
         )
-        paid_to_date = float(document.get('amountPaidToDate') or 0)
+        adjusted_total = adjusted_pre_tax + adjusted_tax
+        invoice_payments = [
+            row for row in received_payments
+            if str(row.get('invoiceId') or '') == str(document.get('id') or '')
+        ]
+        paid_for_invoice = sum(
+            float(row.get('amount') or 0)
+            for row in invoice_payments
+        )
+        invoice_due = max(0, invoice_amount - paid_for_invoice)
         outstanding = float(
             document.get('amountOutstanding')
             if document.get('amountOutstanding') not in (None, '')
-            else max(0, quotation_total - invoice_discount_amount - paid_to_date)
-        )
-        paid_for_invoice = sum(
-            float(row.get('amount') or 0)
-            for row in received_payments
-            if str(row.get('invoiceId') or '') == str(document.get('id') or '')
-        )
-        invoice_due = max(0, invoice_amount - paid_for_invoice)
-        if invoice_discount_amount > 0 or tax_rate > 0:
-            summary_rows.append([
-                _paragraph('Subtotal', body),
-                _paragraph(_money(quotation_pre_tax, currency), right),
-            ])
-            if invoice_discount_amount > 0:
-                discount_label = 'Discount'
-                if _text(document.get('invoiceDiscountMode')).strip().lower() == 'percentage':
-                    discount_value = float(document.get('invoiceDiscountValue') or 0)
-                    discount_label = f"{discount_label} ({discount_value:g}%)"
-                summary_rows.append([
-                    _paragraph(discount_label, body),
-                    _paragraph(_money(-invoice_discount_amount, currency), right),
-                ])
-            summary_rows.append([
-                _paragraph('Total', body),
-                _paragraph(_money(adjusted_pre_tax, currency), right),
-            ])
-            if tax_rate > 0:
-                summary_rows.append([
-                    _paragraph(f"{tax_label} ({tax_rate:g}%)", body),
-                    _paragraph(_money(adjusted_tax, currency), right),
-                ])
-        else:
-            summary_rows.append(
-                [_paragraph('Quotation total', body), _paragraph(_money(quotation_total, currency), right)]
+            else max(
+                0,
+                adjusted_total - sum(
+                    float(row.get('amount') or 0)
+                    for row in received_payments
+                ),
             )
+        )
+        summary_rows.append([
+            _paragraph('Total (as per quotation)', body),
+            _paragraph(_money(quotation_total, currency), right),
+        ])
+        if invoice_discount_amount > 0:
+            discount_label = 'Discounts'
+            if _text(document.get('invoiceDiscountMode')).strip().lower() == 'percentage':
+                discount_value = float(document.get('invoiceDiscountValue') or 0)
+                discount_label = f"{discount_label} ({discount_value:g}%)"
+            summary_rows.append([
+                _paragraph(discount_label, body),
+                _paragraph(_money(-invoice_discount_amount, currency), right),
+            ])
+        summary_rows.append([
+            _paragraph('Grand Total', body),
+            _paragraph(_money(adjusted_total, currency), right_bold),
+        ])
+        if tax_rate > 0:
+            summary_rows.append([
+                _paragraph(f"{tax_label} amount included ({tax_rate:g}%)", body),
+                _paragraph(_money(adjusted_tax, currency), right),
+            ])
         summary_rows.extend([
             [
-                _paragraph(f"Paid on {_date_long(row.get('date'))}", body),
+                _paragraph(f"Amount paid on {_date_long(row.get('date'))}", body),
                 _paragraph(_money(-float(row.get('amount') or 0), currency), right),
             ]
             for row in received_payments
         ])
-        summary_rows.extend([
-            [
+        if received_payments:
+            summary_rows.append([
                 _paragraph('Balance remaining', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName='Helvetica-Bold')),
                 _paragraph(_money(outstanding, currency), right_bold),
-            ],
+            ])
+        due_caption = []
+        if _text(document.get('invoiceLabel')).strip():
+            due_caption.append(_text(document.get('invoiceLabel')).strip())
+        due_date = document.get('paymentDueDate') or document.get('dueDate')
+        if _text(due_date).strip():
+            due_caption.append(f"Due {_date_long(due_date)}")
+        summary_rows.append(
             [
                 [
                     _paragraph('AMOUNT DUE', ParagraphStyle('InvoiceDueSummaryLabel', parent=body, fontName='Helvetica-Bold', fontSize=11.5, textColor=accent_text)),
                     *(
                         [_paragraph(
-                            document.get('invoiceLabel'),
+                            ' - '.join(due_caption),
                             ParagraphStyle(
                                 'InvoiceDueSummaryCaption',
                                 parent=body,
@@ -1694,13 +1705,13 @@ def build_finance_pdf(document, company, logo_path=''):
                                 textColor=accent_text,
                             ),
                         )]
-                        if _text(document.get('invoiceLabel')).strip()
+                        if due_caption
                         else []
                     ),
                 ],
                 _paragraph(_money(invoice_due, currency), ParagraphStyle('InvoiceDueSummaryAmount', parent=right_bold, fontSize=14, leading=17, textColor=accent_text)),
-            ],
-        ])
+            ]
+        )
     else:
         if show_unit_prices or show_department_subtotals:
             for adjustment in adjustments:
@@ -1860,6 +1871,204 @@ def build_finance_pdf(document, company, logo_path=''):
         onLaterPages=draw_page,
         canvasmaker=NumberedCanvas,
     )
+    return buffer.getvalue()
+
+
+def build_payment_receipt_pdf(receipt, company, logo_path=''):
+    """Return a polished one-page payment receipt as PDF bytes."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.platypus import (
+        Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    )
+
+    receipt = receipt if isinstance(receipt, dict) else {}
+    company = company if isinstance(company, dict) else {}
+    buffer = BytesIO()
+    width, height = A4
+    margin = 18 * mm
+    accent_hex = str(
+        company.get('accentColor') or company.get('themeColor') or '#0f766e'
+    ).strip()
+    if not re.fullmatch(r'#[0-9A-Fa-f]{6}', accent_hex):
+        accent_hex = '#0f766e'
+    accent = colors.HexColor(accent_hex)
+    ink = colors.HexColor('#172033')
+    muted = colors.HexColor('#667085')
+    border = colors.HexColor('#dfe5ec')
+    panel = colors.HexColor('#f7f9fb')
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle(
+        'ReceiptBody', parent=styles['BodyText'], fontName='Helvetica',
+        fontSize=9, leading=12, textColor=ink,
+    )
+    small = ParagraphStyle(
+        'ReceiptSmall', parent=body, fontSize=7.5, leading=10,
+        textColor=muted,
+    )
+    label = ParagraphStyle(
+        'ReceiptLabel', parent=small, fontName='Helvetica-Bold',
+        fontSize=7, leading=9, textColor=muted,
+    )
+    right = ParagraphStyle('ReceiptRight', parent=body, alignment=TA_RIGHT)
+    right_small = ParagraphStyle(
+        'ReceiptRightSmall', parent=small, alignment=TA_RIGHT,
+    )
+    story = []
+
+    company_name = _text(
+        company.get('companyName') or company.get('name') or 'Showbase'
+    ).strip()
+    header_left = []
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            image_reader = ImageReader(logo_path)
+            image_width, image_height = image_reader.getSize()
+            max_width, max_height = 42 * mm, 16 * mm
+            scale = min(max_width / image_width, max_height / image_height)
+            header_left.append(Image(
+                logo_path, width=image_width * scale, height=image_height * scale
+            ))
+            header_left.append(Spacer(1, 2 * mm))
+        except Exception:
+            pass
+    header_left.extend([
+        Paragraph(escape(company_name), ParagraphStyle(
+            'ReceiptCompany', parent=body, fontName='Helvetica-Bold',
+            fontSize=17, leading=20,
+        )),
+        Paragraph(escape(_text(
+            company.get('address') or company.get('companyAddress') or ''
+        )), small),
+    ])
+    contact = ' | '.join(filter(None, [
+        _text(company.get('phone') or company.get('companyPhone')).strip(),
+        _text(company.get('email') or company.get('companyEmail')).strip(),
+    ]))
+    receipt_number = _text(receipt.get('receiptNumber') or 'RECEIPT').strip()
+    header_right = [
+        Paragraph('PAYMENT RECEIPT', ParagraphStyle(
+            'ReceiptTitle', parent=right, fontName='Helvetica-Bold',
+            fontSize=20, leading=23, textColor=accent,
+        )),
+        Paragraph(escape(receipt_number), right_small),
+        Spacer(1, 2 * mm),
+        Paragraph(escape(contact), right_small),
+    ]
+    header = Table(
+        [[header_left, header_right]],
+        colWidths=[95 * mm, 76 * mm],
+        style=TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]),
+    )
+    story.extend([header, Spacer(1, 12 * mm)])
+
+    currency = _text(receipt.get('currency') or company.get('currency') or 'SGD')
+    amount_panel = Table(
+        [[
+            [
+                Paragraph('AMOUNT RECEIVED', ParagraphStyle(
+                    'ReceiptAmountLabel', parent=label, textColor=colors.white,
+                )),
+                Paragraph(_money(receipt.get('amount'), currency), ParagraphStyle(
+                    'ReceiptAmount', parent=body, fontName='Helvetica-Bold',
+                    fontSize=24, leading=28, textColor=colors.white,
+                )),
+            ],
+            [
+                Paragraph('PAYMENT DATE', ParagraphStyle(
+                    'ReceiptDateLabel', parent=label, textColor=colors.white,
+                    alignment=TA_RIGHT,
+                )),
+                Paragraph(escape(_date_long(receipt.get('date'))), ParagraphStyle(
+                    'ReceiptDate', parent=right, fontName='Helvetica-Bold',
+                    fontSize=11, textColor=colors.white,
+                )),
+            ],
+        ]],
+        colWidths=[104 * mm, 67 * mm],
+        style=TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), accent),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 7 * mm),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 7 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 5 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5 * mm),
+        ]),
+    )
+    story.extend([amount_panel, Spacer(1, 9 * mm)])
+
+    received_from = _text(receipt.get('receivedFrom') or 'Not specified').strip()
+    project_name = _text(receipt.get('projectName') or 'Not specified').strip()
+    details = [
+        ('Received from', received_from),
+        ('Payment description', _text(receipt.get('label') or 'Payment received')),
+        ('Project', project_name),
+        ('Quotation', _text(receipt.get('quotationNumber') or 'Not linked')),
+        ('Invoice', _text(receipt.get('invoiceNumber') or 'Not allocated')),
+        ('Reference', _text(receipt.get('reference') or '-')),
+    ]
+    detail_rows = [
+        [Paragraph(escape(detail_label.upper()), label), Paragraph(
+            escape(detail_value), body
+        )]
+        for detail_label, detail_value in details
+    ]
+    detail_table = Table(
+        detail_rows,
+        colWidths=[42 * mm, 129 * mm],
+        style=TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), panel),
+            ('BOX', (0, 0), (-1, -1), .7, border),
+            ('INNERGRID', (0, 0), (-1, -1), .5, border),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4 * mm),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4 * mm),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5 * mm),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5 * mm),
+        ]),
+    )
+    story.extend([
+        Paragraph('PAYMENT DETAILS', ParagraphStyle(
+            'ReceiptSectionTitle', parent=body, fontName='Helvetica-Bold',
+            fontSize=10, leading=13,
+        )),
+        Spacer(1, 3 * mm), detail_table, Spacer(1, 12 * mm),
+        Paragraph(
+            'This receipt acknowledges that the payment shown above has been received.',
+            body,
+        ),
+    ])
+
+    def draw_page(canvas, _doc):
+        canvas.saveState()
+        canvas.setStrokeColor(border)
+        canvas.setLineWidth(.6)
+        canvas.line(margin, 15 * mm, width - margin, 15 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(margin, 10 * mm, company_name)
+        canvas.drawRightString(
+            width - margin, 10 * mm, f'Receipt {receipt_number}'
+        )
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, leftMargin=margin, rightMargin=margin,
+        topMargin=16 * mm, bottomMargin=22 * mm,
+        title=f'Payment Receipt {receipt_number}',
+        author=company_name,
+    )
+    doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
     return buffer.getvalue()
 
 

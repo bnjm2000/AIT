@@ -154,7 +154,36 @@ class PageRoutingTests(unittest.TestCase):
 
         self.login('owner')
         self.assertEqual(self.client.get('/manpower/999/by-day').status_code, 302)
-        self.assertEqual(self.client.get('/manpower/41/by-worker').status_code, 404)
+        invalid_view = self.client.get('/manpower/41/by-worker')
+        self.assertEqual(invalid_view.status_code, 302)
+        self.assertTrue(invalid_view.headers['Location'].endswith('/manpower/41/by-department'))
+
+    def test_unavailable_pages_fall_back_to_next_accessible_event(self):
+        next_event = Event(42, 'Next Accessible Event', '20260720', '20260721', [])
+        next_event.assigned_users = ['user']
+        self.manager.events[42] = next_event
+
+        self.login('user')
+        for path in ('/plan', '/events/999'):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 302, path)
+            self.assertTrue(response.headers['Location'].endswith('/events/42'), path)
+
+        self.login('manager')
+        hidden_portal = self.client.get('/my-claims')
+        self.assertEqual(hidden_portal.status_code, 302)
+        self.assertTrue(hidden_portal.headers['Location'].endswith('/events/42'))
+
+        self.login('owner')
+        fallback_paths = {
+            '/manpower/999/by-day': '/manpower/42/by-day',
+            '/delivery-order/999': '/delivery-order/42',
+            '/packing-list/999': '/packing-list/42',
+        }
+        for path, expected in fallback_paths.items():
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 302, path)
+            self.assertTrue(response.headers['Location'].endswith(expected), path)
 
     def test_client_router_supports_history_navigation(self):
         source = APP_BUNDLE_SOURCE
@@ -176,6 +205,12 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn("eventOverviewSection('rooms', 'Sub-projects'", source)
         self.assertIn('function closeEventOverview(options = {})', source)
         self.assertNotIn('setTimeout(async () => {\n      const detailRoute = appDetailRouteFromPath();', source)
+        permission_ui = source[
+            source.index('function applyPermissionUi()'):
+            source.index('function openEventFromCalendar')
+        ]
+        self.assertIn(".user-only, [data-user-only='true']", permission_ui)
+        self.assertIn("currentUserRole() === 'user'", permission_ui)
 
         workforce_path = os.path.join(
             os.path.dirname(app_module.__file__), 'static', 'js', 'workforce-admin.js'
@@ -198,6 +233,7 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn('class="modal-content event-overview-shell"', template)
         self.assertIn('id="vehicles-section"', template)
         self.assertIn('<span>Vehicles</span>', template)
+        self.assertIn('.user-only {\n        display: none;', template)
         self.assertNotIn('Generate Delivery Order\n          </button>', template)
 
 

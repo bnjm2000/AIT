@@ -594,6 +594,12 @@ function applyPermissionUi() {
     });
   });
 
+  document.querySelectorAll(".user-only, [data-user-only='true']").forEach(el => {
+    el.style.display = currentUserRole() === 'user'
+      ? (el.dataset.userDisplay || 'flex')
+      : 'none';
+  });
+
   document.querySelectorAll(".platform-admin-only, [data-platform-admin-only='true'], .super-admin-only, [data-super-admin-only='true']").forEach(el => {
     el.style.display = isPlatformAdminUser() ? (el.dataset.platformAdminDisplay || el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
   });
@@ -809,15 +815,24 @@ function customAssetLabelFromId(assetId, asset = null) {
   return custom ? customAssetDisplayName(custom) : String(assetId || '');
 }
 
-function customDepartmentOptionsHtml(selected = 'UN') {
-  const list = (typeof sortedDepartmentList === 'function' ? sortedDepartmentList() : Object.values(departments || {}));
-  const fallback = list && list.length ? list : [
+function isSelectableCompanyDepartment(department) {
+  const code = String(department?.code ?? department ?? '').trim().toUpperCase();
+  const name = String(department?.name || '').trim().toLowerCase();
+  return !['LOAN', 'MISC', 'UN'].includes(code)
+    && !['loan', 'misc', 'unknown'].includes(name);
+}
+
+function customDepartmentOptionsHtml(selected = 'AX') {
+  const configured = typeof sortedDepartmentList === 'function'
+    ? sortedDepartmentList()
+    : Object.values(departments || {});
+  const list = configured.filter(isSelectableCompanyDepartment);
+  const fallback = list.length ? list : [
     { code: 'AX', name: 'Audio' },
     { code: 'LX', name: 'Lighting' },
-    { code: 'VX', name: 'Video' },
-    { code: 'UN', name: 'Unknown' }
+    { code: 'VX', name: 'Video' }
   ];
-  const selectedCode = normalizeDepartmentCode(selected || 'UN');
+  const selectedCode = normalizeDepartmentCode(selected || 'AX');
   return fallback.map(dept => {
     const code = normalizeDepartmentCode(dept.code);
     const title = dept.name && dept.name !== code ? `${code} - ${dept.name}` : code;
@@ -1666,6 +1681,7 @@ function mergeDoKeyedObject(baseValue, localValue, latestValue) {
       merged[key] = mergeDoValue(base[key], local[key], merged[key]);
     }
   });
+
   return merged;
 }
 
@@ -3694,7 +3710,7 @@ function navWireIconSvg(section) {
   const paths = {
     events: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path>',
     plan: '<rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path>',
-    workforce: '<circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0"></path><path d="M16 8h3l2 3v5h-5zM15 16h7"></path><circle cx="17" cy="18" r="1.5"></circle><circle cx="21" cy="18" r="1.5"></circle>',
+    workforce: '<circle cx="7" cy="7" r="2.5"></circle><path d="M2.5 19a4.5 4.5 0 0 1 9 0"></path><rect x="13" y="8" width="9" height="10" rx="1.5"></rect><path d="M16 8V6h3v2M13 12h9"></path>',
     transport: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M9 18h7M3 16h2"></path>',
     'prepare-new': '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="m15 14 1.6 1.6L20 12"></path>',
     return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
@@ -3724,7 +3740,8 @@ function navLabelForSection(section, fallback = '') {
   return ({
     events: 'All Events',
     plan: 'Plan',
-    workforce: 'Manpower',
+    workforce: 'Manpower & Vendors',
+    'my-claims': 'My Claims',
     transport: 'Transport',
     'prepare-new': 'Prepare',
     return: 'Return Assets',
@@ -3826,6 +3843,7 @@ const APP_SECTION_PATHS = Object.freeze({
   events: '/events',
   plan: '/plan',
   workforce: '/manpower',
+  'my-claims': '/my-claims',
   transport: '/transport',
   'invoice-claims': '/invoice-claims',
   'freelancer-workspace': '/manpower',
@@ -4000,6 +4018,9 @@ function showSection(sectionName, options = {}) {
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
+  if (sectionName === 'my-claims' && currentUserRole() !== 'user') {
+    return showSection("events", { ...options, replaceHistory: true });
+  }
   if (platformAdminOnlySections.has(sectionName) && !isPlatformAdminUser()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
@@ -4096,10 +4117,18 @@ function showSection(sectionName, options = {}) {
         loadWorkforcePage();
       }
       break;
+    case "my-claims":
+      if (typeof loadMyClaimsPage === "function") loadMyClaimsPage();
+      break;
     case "transport":
       if (typeof loadTransportPage === "function") loadTransportPage();
       break;
     case "invoice-claims":
+      if (typeof workforceDocumentsState !== 'undefined') {
+        workforceDocumentsState.eventId = Object.prototype.hasOwnProperty.call(options, 'eventId')
+          ? Number(options.eventId || 0)
+          : 0;
+      }
       if (typeof loadWorkforceDocumentsPage === "function") loadWorkforceDocumentsPage();
       break;
     case "freelancer-workspace":
@@ -5899,7 +5928,6 @@ function ensureInventoryBulkEditControls() {
       <button type="button" id="inventory-bulk-maintenance-button" class="btn btn-primary" style="padding:8px 16px;font-size:14px;" disabled>Log Maintenance</button>
       <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
       <button type="button" id="inventory-bulk-delete-button" class="btn btn-danger" style="padding:8px 16px;font-size:14px;" disabled>Delete Selected</button>
-      <button type="button" id="inventory-clear-selection-button" class="btn btn-secondary" style="padding:8px 16px;font-size:14px;" disabled>Clear Selection</button>
     `;
 
     const actionRow = document.getElementById('asset-count')?.parentElement || controls.lastElementChild;
@@ -5912,7 +5940,6 @@ function ensureInventoryBulkEditControls() {
     document.getElementById('inventory-bulk-maintenance-button')?.addEventListener('click', openMaintenanceForSelectedInventoryAssets);
     document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
     document.getElementById('inventory-bulk-delete-button')?.addEventListener('click', openBulkAssetDeleteModal);
-    document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
     document.getElementById('inventory-selected-count')?.addEventListener('click', toggleInventorySelectionFromCount);
   }
 
@@ -5943,19 +5970,25 @@ function updateInventoryCheckboxFilterSummary(filterId) {
   if (!summary) return;
 
   const { values, total } = getInventoryCheckboxFilterValues(filterId);
+  const filter = document.getElementById(filterId);
   const isDepartment = filterId === 'department-filter';
   const itemName = isDepartment ? 'Departments' : 'Statuses';
+  const hasActiveFilter = total > 0 && values.length !== total;
+  filter?.classList.toggle('has-active-selection', hasActiveFilter);
+  summary.setAttribute('aria-label', hasActiveFilter
+    ? `${values.length} of ${total} ${itemName.toLowerCase()} selected`
+    : `All ${itemName.toLowerCase()} selected`);
 
   if (total === 0 || values.length === total) {
     summary.textContent = `All ${itemName}`;
   } else if (values.length === 0) {
-    summary.textContent = `No ${itemName}`;
+    summary.textContent = `None selected`;
   } else if (values.length === 1) {
     summary.textContent = isDepartment
       ? inventoryDepartmentLabel(values[0])
       : inventoryStatusText(values[0]);
   } else {
-    summary.textContent = `${values.length} ${itemName}`;
+    summary.textContent = `${values.length} of ${total} selected`;
   }
 }
 
@@ -6477,25 +6510,22 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   const maintenanceButton = document.getElementById('inventory-bulk-maintenance-button');
   const editButton = document.getElementById('inventory-bulk-edit-button');
   const deleteButton = document.getElementById('inventory-bulk-delete-button');
-  const clearButton = document.getElementById('inventory-clear-selection-button');
 
   if (countEl) {
-    countEl.textContent = selectedCount ? `${selectedCount} selected` : 'Select all';
+    const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+    countEl.textContent = selectedCount
+      ? `Clear ${selectedCount} selected`
+      : 'Select all';
     countEl.disabled = selectedCount === 0 && visibleIds.length === 0;
     countEl.title = selectedCount
       ? `Clear ${selectedCount} selected asset${selectedCount === 1 ? '' : 's'}`
       : `Select all ${visibleIds.length} matching asset${visibleIds.length === 1 ? '' : 's'}`;
-    countEl.setAttribute(
-      'aria-label',
-      selectedCount
-        ? `Clear ${selectedCount} selected asset${selectedCount === 1 ? '' : 's'}`
-        : `Select all ${visibleIds.length} matching asset${visibleIds.length === 1 ? '' : 's'}`,
-    );
+    countEl.setAttribute('aria-label', countEl.title);
+    countEl.classList.toggle('has-selection', selectedCount > 0);
   }
   if (maintenanceButton) maintenanceButton.disabled = selectedCount === 0;
   if (editButton) editButton.disabled = selectedCount === 0;
   if (deleteButton) deleteButton.disabled = selectedCount === 0;
-  if (clearButton) clearButton.disabled = selectedCount === 0;
 
   document.querySelectorAll('.inventory-row-select').forEach(input => {
     input.checked = selectedInventoryAssetIds.has(input.dataset.assetId || '');
@@ -14127,7 +14157,7 @@ function eventActivityCategoryMeta(category) {
     details: { label: 'Event details', icon: '✎' },
     prepare: { label: 'Preparing', icon: '✓' },
     return: { label: 'Returning', icon: '↩' },
-    manpower: { label: 'Manpower', icon: '👤' }
+    manpower: { label: 'Manpower & Vendors', icon: '👤' }
   };
   return categories[category] || categories.details;
 }
@@ -15331,7 +15361,9 @@ function eventOverviewIcon(kind) {
     plan: '<path d="M4 4h16v16H4zM8 8h8M8 12h6M8 16h4"></path>',
     prepare: '<path d="M4 12l5 5L20 6"></path>',
     return: '<path d="M9 7l-5 5 5 5M4 12h16"></path>',
-    delivery: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>'
+    delivery: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
+    packing: '<path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"></path>',
+    transport: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[kind] || paths.file}</svg>`;
 }
@@ -15686,6 +15718,7 @@ function eventOverviewNavigate(kind, eventId) {
   if (kind === 'plan') return openEventPlanning(eventId);
   if (kind === 'prepare') return openPrepareWorkspaceForEvent(eventId);
   if (kind === 'manpower' && typeof openEventWorkforce === 'function') return openEventWorkforce(eventId);
+  if (kind === 'transport' && typeof openEventTransport === 'function') return openEventTransport(eventId);
   if (kind === 'return') return openReturnWorkspaceForEvent(eventId);
   if (kind === 'delivery') return openDeliveryOrderTab(eventId);
   if (kind === 'packing') return openPackingListPage(eventId);
@@ -15716,6 +15749,7 @@ function closeEventOverview(options = {}) {
 async function viewEvent(eventId, options = {}) {
   const contentRoot = document.getElementById('eventDetailsContent');
   try {
+    ensureEventListViewStyles();
     window.currentViewedEventId = eventId;
     window.currentEventDetailsMode = 'view';
     window.currentEventId = eventId;
@@ -15729,30 +15763,27 @@ async function viewEvent(eventId, options = {}) {
     const operations = overviewResponse.data || { crew: [], transport: [] };
     window.currentEventData = event;
     if (options.updateHistory !== false) updateAppDetailHistory(`/events/${Number(eventId)}`, options.replaceHistory === true);
-    document.getElementById('eventDetailsTitle').textContent = `Event #${event.id}`;
+    document.getElementById('eventDetailsTitle').innerHTML = `
+      <span>Event #${escapeHtml(String(event.id))}</span>
+      <span class="event-overview-header-title-actions">
+        ${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}
+        <button type="button" title="Export event PDF" aria-label="Export event PDF" onclick="eventOverviewNavigate('report',${Number(event.id)})">${eventOverviewIcon('printer')}</button>
+        ${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}
+      </span>`;
     const required = Number(event.totalAssets || 0);
     const prepared = Number(event.totalPrepared || 0);
     const returned = Number(event.totalReturned || 0);
     const progress = required ? Math.min(100, Math.round((prepared / required) * 100)) : 0;
     const subprojectCount = eventOverviewSubprojectRows(event).length;
-    const links = [
-      isAdminUser() ? ['plan', 'Plan'] : null,
-      ['prepare', 'Prepare'],
-      isAdminUser() ? ['manpower', 'Manpower'] : null,
-      ['return', 'Return'],
-      ['delivery', 'Delivery Order'],
-      ['packing', 'Packing List']
-    ].filter(Boolean);
     const content = `<div class="event-overview-hero">
-      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-title-actions">${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}<button type="button" title="Export event PDF" aria-label="Export event PDF" onclick="eventOverviewNavigate('report',${Number(event.id)})">${eventOverviewIcon('printer')}</button>${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}</div></div>
+      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-workflow-actions">${eventWorkflowProgressHtml(event, 'event-overview-workflow-icons')}<div class="event-overview-document-actions"><button type="button" onclick="eventOverviewNavigate('delivery',${Number(event.id)})">${eventOverviewIcon('delivery')}<span>Delivery Order</span></button><button type="button" onclick="eventOverviewNavigate('packing',${Number(event.id)})">${eventOverviewIcon('packing')}<span>Packing List</span></button></div></div></div>
         <div class="event-overview-meta"><span>${eventOverviewIcon('calendar')}${escapeHtml(eventOverviewDateRange(event))}</span><span>${eventOverviewIcon('location')}${escapeHtml(event.location || 'Venue not set')}</span></div></section>
       <section class="event-overview-progress"><div class="event-overview-metric"><strong>${required}</strong><span>Required</span></div><div class="event-overview-metric"><strong>${prepared}</strong><span>Prepared</span></div><div class="event-overview-metric"><strong>${returned}</strong><span>Returned</span></div><div class="event-overview-progress-bar"><span style="width:${progress}%"></span></div></section>
     </div>
-    <nav class="event-overview-links" aria-label="Event workspaces">${links.map(([kind, label]) => `<button type="button" class="event-overview-link" onclick="eventOverviewNavigate('${kind}',${Number(event.id)})">${eventOverviewIcon(kind === 'manpower' ? 'people' : kind)}<span>${escapeHtml(label)}</span></button>`).join('')}</nav>
     <div class="event-overview-grid"><div class="event-overview-column">
       ${subprojectCount ? eventOverviewSection('rooms', 'Sub-projects', `${subprojectCount} ${subprojectCount === 1 ? 'room' : 'rooms'}`, eventOverviewSubprojects(event)) : ''}
       ${eventOverviewSection('assets', 'Assets', `${prepared} of ${required} prepared`, eventOverviewAssets(event))}
-      ${eventOverviewSection('people', 'Manpower and vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
+      ${eventOverviewSection('people', 'Manpower & Vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
       ${eventOverviewSection('truck', 'Transport', `${operations.transport?.length || 0} booking(s)`, eventOverviewTransport(operations.transport || []))}
     </div><aside class="event-overview-column">
       ${eventOverviewSection('people', 'Internal team', 'Users assigned to this event', eventOverviewInternalUsers(event))}
@@ -17841,7 +17872,7 @@ function eventLogCategoryMeta(category) {
   return ({
     prepare: 'Prepare',
     return: 'Return',
-    manpower: 'Manpower & transport',
+    manpower: 'Manpower & Vendors',
     details: 'Event details',
   })[category] || 'Event details';
 }
@@ -24270,14 +24301,25 @@ async function handleFinanceRealtimePayload(payload) {
   const changes = realtimeChangesForTopic(payload, 'finance');
   if (!changes.length) return false;
   const activeSection = getActiveSectionId();
-  if (activeSection === 'quotations' && typeof financeHandleRealtimeChanges === 'function') {
+  const eventIds = eventIdsFromRealtimePayload(payload);
+  if (
+    eventIds.length &&
+    (
+      activeSection === 'events' ||
+      (
+        activeModal('eventDetailsModal') &&
+        eventIds.some(id => Number(id) === Number(window.currentViewedEventId))
+      )
+    )
+  ) {
+    await refreshEventAssetsOnly(eventIds);
+  } else if (activeSection === 'quotations' && typeof financeHandleRealtimeChanges === 'function') {
     await financeHandleRealtimeChanges(changes);
   } else if (activeSection === 'costing' && typeof costingHandleRealtimeChanges === 'function') {
     await costingHandleRealtimeChanges(changes);
   } else if (activeSection === 'invoices' && typeof invoiceHandleRealtimeChanges === 'function') {
     await invoiceHandleRealtimeChanges(changes);
   } else if (activeSection === 'compare' && typeof refreshCompareForRealtime === 'function') {
-    const eventIds = eventIdsFromRealtimePayload(payload);
     if (
       typeof compareState !== 'undefined'
       && eventIds.some(id => Number(id) === Number(compareState.eventId))
@@ -24285,7 +24327,6 @@ async function handleFinanceRealtimePayload(payload) {
       await refreshCompareForRealtime(compareState.eventId);
     }
   } else if (activeSection === 'profit-loss' && typeof refreshProfitLossForRealtime === 'function') {
-    const eventIds = eventIdsFromRealtimePayload(payload);
     if (
       typeof profitLossState !== 'undefined'
       && eventIds.some(id => Number(id) === Number(profitLossState.eventId))

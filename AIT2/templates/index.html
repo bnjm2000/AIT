@@ -44,6 +44,10 @@
         box-sizing: border-box;
       }
 
+      .user-only {
+        display: none;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background:
@@ -453,10 +457,12 @@
       .calendar-nav button {
         background: #f8f9fa;
         border: 1px solid #dee2e6;
+        color: #243b35;
         padding: 8px 12px;
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
+        font-weight: 400;
       }
 
       .calendar-nav button:hover {
@@ -480,7 +486,7 @@
         color: #172b26;
         font: inherit;
         font-size: 18px;
-        font-weight: 750;
+        font-weight: 600;
         cursor: pointer;
       }
 
@@ -550,7 +556,7 @@
         background: #f8f9fa;
         padding: 8px 4px;
         text-align: center;
-        font-weight: 600;
+        font-weight: 500;
         font-size: 14px;
         color: #495057;
         min-height: 30px;
@@ -615,7 +621,8 @@
       }
 
       .calendar-day-number {
-        font-weight: 600;
+        color: #1f2937;
+        font-weight: 500;
         margin-bottom: 4px;
         font-size: 15px;
         line-height: 1;
@@ -630,6 +637,10 @@
         padding: 0;
       }
 
+      .calendar-day.other-month .calendar-day-number {
+        color: #6b7280;
+      }
+
       .calendar-event-layer {
         position: absolute;
         left: 0;
@@ -640,16 +651,17 @@
 
       .calendar-event {
         color: white;
-        padding: 2px 6px;
+        padding: 2px 7px;
         border-radius: 3px;
-        font-size: 13px;
-        font-weight: 500;
+        font-size: 12px;
+        font-weight: 400;
         cursor: pointer;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: clip;
-        line-height: 1.2;
-        height: 16px;
+        line-height: 1;
+        height: 17px;
+        text-shadow: 0 1px 2px rgba(2, 6, 23, .72);
         display: flex;
         align-items: center;
         position: absolute;
@@ -665,6 +677,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        line-height: 1.15;
         pointer-events: none;
       }
 
@@ -686,20 +699,20 @@
       .calendar-event { background: #64748b; box-shadow: inset 3px 0 #5535b8; }
       .calendar-event.dry-hire { box-shadow: inset 3px 0 #e65f00; }
       .calendar-event.state-new,
-      .calendar-event.state-added { background: #ec407a; }
+      .calendar-event.state-added { background: #ec407a; color: #fff; }
       .calendar-event.state-planning,
-      .calendar-event.state-pending { background: #6d28d9; }
-      .calendar-event.state-preparing { background: #0877e8; }
+      .calendar-event.state-pending { background: #6d28d9; color: #fff; }
+      .calendar-event.state-preparing { background: #0877e8; color: #fff; }
       .calendar-event.state-ready,
-      .calendar-event.state-active { background: #16a34a; }
+      .calendar-event.state-active { background: #16a34a; color: #fff; }
       .calendar-event.state-ongoing,
       .calendar-event.state-last-day,
-      .calendar-event.state-returned { background: #0b97a4; }
-      .calendar-event.state-returning { background: #f97316; }
-      .calendar-event.state-pending-closure { background: #334155; }
-      .calendar-event.state-overdue { background: #ef3340; }
+      .calendar-event.state-returned { background: #0b97a4; color: #fff; }
+      .calendar-event.state-returning { background: #f97316; color: #fff; }
+      .calendar-event.state-pending-closure { background: #334155; color: #fff; }
+      .calendar-event.state-overdue { background: #ef3340; color: #fff; }
       .calendar-event.state-closed,
-      .calendar-event.state-completed { background: #64748b; }
+      .calendar-event.state-completed { background: #64748b; color: #fff; }
 
       .calendar-event {
         transition: filter 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
@@ -717,8 +730,8 @@
         position: absolute;
         bottom: 2px;
         left: 4px;
-        color: #007bff;
-        font-size: 10px;
+        color: #0050a8;
+        font-size: 11px;
         font-weight: 500;
         cursor: pointer;
         text-decoration: underline;
@@ -744,7 +757,8 @@
       }
 
       .day-events-header {
-        font-weight: 600;
+        color: #1f2937;
+        font-weight: 500;
         margin-bottom: 8px;
         padding-bottom: 8px;
         border-bottom: 1px solid #e9ecef;
@@ -771,6 +785,7 @@
         margin: 2px 0;
         border-radius: 3px;
         font-size: 11px;
+        font-weight: 400;
         cursor: pointer;
         white-space: nowrap;
         overflow: hidden;
@@ -794,9 +809,9 @@
         }
         
         .calendar-event {
-          font-size: 10px;
-          height: 14px;
-          padding: 1px 4px;
+          font-size: 11px;
+          height: 15px;
+          padding: 1px 5px;
         }
         
         .calendar-event-layer {
@@ -1051,7 +1066,9 @@
       .asset-import-heading p {
         margin: 3px 0 0;
         color: #667872;
-        font-size: 11px;
+        color: #1f2937;
+        font-size: 12px;
+        font-weight: 600;
       }
 
       .asset-import-body {
@@ -1146,7 +1163,7 @@
         margin-bottom: 4px;
         color: #65766f;
         font-size: 9px;
-        font-weight: 700;
+        font-weight: 500;
         text-transform: uppercase;
       }
 
@@ -1969,6 +1986,18 @@
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
       }
 
+      .inventory-checkbox-filter.has-active-selection > summary {
+        border-color: #4f9f8c;
+        background: #e8f5f2;
+        color: #0f6659;
+        box-shadow: inset 3px 0 0 #0f766e;
+        font-weight: 800;
+      }
+
+      .inventory-checkbox-filter.has-active-selection > summary::after {
+        color: #0f766e;
+      }
+
       .inventory-checkbox-filter-panel {
         position: absolute;
         z-index: 30;
@@ -2001,7 +2030,7 @@
         background: #f3f5ff;
         color: #4f5fbd;
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 500;
         cursor: pointer;
       }
 
@@ -3381,7 +3410,7 @@
         border: 1px solid transparent;
         background: transparent;
         color: #334155;
-        font-weight: 750;
+        font-weight: 600;
       }
 
       .nav-item:hover,
@@ -3829,6 +3858,7 @@
       .events-overview-header .content-title {
         margin: 0;
         color: var(--theme-primary, var(--brand-main, #0f766e));
+        font-weight: 600;
         white-space: nowrap;
       }
 
@@ -3908,7 +3938,7 @@
         gap: 7px;
         padding: 0 14px;
         cursor: pointer;
-        font-weight: 650;
+        font-weight: 500;
       }
 
       .event-type-filter {
@@ -3947,7 +3977,7 @@
       .event-type-filter-menu button[aria-checked="true"] {
         background: #eef2ff;
         color: #4338ca;
-        font-weight: 700;
+        font-weight: 500;
       }
 
       .events-sort-control {
@@ -3956,7 +3986,7 @@
         gap: 4px;
         padding-left: 12px;
         font-size: 13px;
-        font-weight: 650;
+        font-weight: 400;
       }
 
       .events-sort-control select {
@@ -3989,7 +4019,7 @@
         color: #475569;
         padding: 0 34px 0 12px;
         font-size: 12px;
-        font-weight: 750;
+        font-weight: 400;
       }
 
       .events-sort-control::after {
@@ -4011,7 +4041,7 @@
         background: transparent;
         color: #111827;
         cursor: pointer;
-        font-weight: 800;
+        font-weight: 500;
         padding: 0;
       }
 
@@ -4092,14 +4122,14 @@
 
       .events-summary-number {
         font-size: 1.8rem;
-        font-weight: 780;
+        font-weight: 650;
         line-height: 1;
       }
 
       .events-summary-label {
         margin-top: 5px;
         font-size: 13px;
-        font-weight: 750;
+        font-weight: 500;
       }
 
       .events-summary-note {
@@ -4129,13 +4159,14 @@
         background: #fff;
         color: #334155;
         cursor: pointer;
-        font-weight: 650;
+        font-weight: 500;
       }
 
       .events-state-filters button.active {
         border-color: #2563eb;
         background: #2563eb;
         color: #fff;
+        font-weight: 600;
       }
       .events-state-filters button[hidden] { display: none !important; }
 
@@ -4363,7 +4394,7 @@
 
       .event-assignee-summary span {
         color: #64748b;
-        font-weight: 700;
+        font-weight: 400;
       }
 
       .event-assignee-summary strong {
@@ -4372,6 +4403,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         color: #1f2937;
+        font-weight: 500;
       }
 
       .event-assignee-summary.muted strong {
@@ -4584,7 +4616,7 @@
         min-width: 0;
         color: #334155;
         font-size: 11px;
-        font-weight: 750;
+        font-weight: 500;
       }
 
       .event-type-badge,
@@ -4594,7 +4626,7 @@
         border-radius: 6px;
         padding: 4px 8px;
         font-size: 10px;
-        font-weight: 750;
+        font-weight: 500;
       }
 
       .event-type-badge {
@@ -4617,7 +4649,7 @@
         margin: 6px 0 4px;
         color: #111827;
         font-size: 1.08rem;
-        font-weight: 760;
+        font-weight: 600;
         line-height: 1.25;
         overflow-wrap: anywhere;
       }
@@ -4695,7 +4727,7 @@
         border-radius: 50%;
         color: #111827;
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 600;
       }
 
       .event-progress-ring svg {
@@ -4768,7 +4800,7 @@
       .event-progress-value {
         color: #111827;
         font-size: .95rem;
-        font-weight: 780;
+        font-weight: 600;
         white-space: nowrap;
       }
 
@@ -4847,14 +4879,17 @@
         background: var(--event-soft);
         color: var(--event-state);
         font-size: 10px;
-        font-weight: 650;
+        font-weight: 500;
       }
 
       .event-workflow-footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        min-height: 48px;
-        padding: 7px 12px;
+        gap: 8px;
+        min-height: 42px;
+        padding: 6px 12px;
         border-top: 1px solid #e9edf2;
       }
 
@@ -4869,6 +4904,7 @@
         margin-bottom: 3px;
         color: #334155;
         font-size: 9px;
+        font-weight: 500;
         letter-spacing: .04em;
         text-transform: uppercase;
       }
@@ -4877,32 +4913,33 @@
         position: relative;
         display: flex;
         align-items: center;
-        gap: 7px;
+        justify-self: end;
+        gap: 5px;
         flex: 0 0 auto;
       }
 
       .event-primary-action {
-        min-height: 32px;
+        min-height: 26px;
         border: 0;
         border-radius: 7px;
         background: var(--event-state);
         color: #fff;
         cursor: pointer;
-        padding: 6px 11px;
-        font-size: 11px;
-        font-weight: 750;
+        padding: 4px 8px;
+        font-size: 9px;
+        font-weight: 600;
         white-space: nowrap;
       }
 
       .event-overflow-button {
-        width: 32px;
-        min-height: 32px;
+        width: 26px;
+        min-height: 26px;
         border: 1px solid #dce2ea;
         border-radius: 7px;
         background: #fff;
         color: #334155;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 14px;
       }
 
       .event-card-menu {
@@ -7045,7 +7082,7 @@
         flex-direction: column;
         width: min(1120px, calc(100vw - 40px));
         max-width: 1120px;
-        max-height: min(820px, calc(100vh - 40px));
+        max-height: min(940px, calc(100vh - 24px));
         margin: auto;
         padding: 20px;
         overflow: hidden;
@@ -7192,7 +7229,7 @@
       .plan-event-chooser-head,
       .plan-event-option {
         display: grid;
-        grid-template-columns: minmax(260px, 1.7fr) minmax(150px, 0.9fr) minmax(150px, 0.9fr) 118px 20px;
+        grid-template-columns: minmax(340px, 1.8fr) minmax(190px, 1fr) 118px 20px;
         align-items: center;
         gap: 14px;
       }
@@ -7256,18 +7293,38 @@
         white-space: nowrap;
       }
 
-      .plan-event-option-title-line {
+      .plan-event-option-name .plan-event-option-title-line {
         display: flex;
         align-items: center;
         gap: 7px;
         min-width: 0;
+        overflow: visible;
+        margin-top: 0;
+        color: inherit;
+        font-size: inherit;
       }
 
       .plan-event-option-title-line .plan-badge {
+        display: inline-flex;
         flex: 0 0 auto;
         max-width: 72px;
         overflow: hidden;
+        margin-top: 0;
+        font-size: 10px;
         text-overflow: ellipsis;
+      }
+
+      .plan-event-option-title-line .plan-badge-type-event {
+        color: #5535b8;
+      }
+
+      .plan-event-option-title-line .plan-badge-type-dry-hire {
+        color: #e65f00;
+      }
+
+      .plan-event-option-id {
+        min-width: 42px;
+        padding-inline: 7px;
       }
 
       .plan-event-option-name span,
@@ -7281,15 +7338,13 @@
         white-space: nowrap;
       }
 
-      .plan-event-option-dates,
-      .plan-event-option-location {
-        min-width: 0;
-        font-size: 11px;
+      .plan-event-option-name .plan-event-option-location-line {
+        padding-left: 49px;
       }
 
-      .plan-event-option-location {
-        overflow: hidden;
-        text-overflow: ellipsis;
+      .plan-event-option-dates {
+        min-width: 0;
+        font-size: 11px;
       }
 
       .plan-event-option-arrow {
@@ -7351,12 +7406,6 @@
 
         .plan-event-option-dates {
           display: none;
-        }
-
-        .plan-event-option-location {
-          grid-column: 1;
-          color: #667085;
-          font-size: 10px;
         }
 
         .plan-event-option > .plan-badge {
@@ -10682,6 +10731,13 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/split-screen.css', v=split_screen_css_version) }}"
     />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims.css', v=my_claims_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-layout.css', v=my_claims_layout_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-actions.css', v=my_claims_actions_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-preview.css', v=my_claims_preview_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-preview-fix.css', v=my_claims_preview_fix_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-contrast.css', v=my_claims_contrast_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/submission-status.css', v=submission_status_css_version) }}" />
   </head>
   <body>
     <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -10717,7 +10773,10 @@
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path></svg></span><span>Plan</span>
           </button>
           <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'workforce' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('workforce')">
-            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0"></path><circle cx="17" cy="8" r="3"></circle><path d="M12.5 19a4.5 4.5 0 0 1 9 0"></path></svg></span><span>Manpower</span>
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.5"></circle><path d="M2.5 19a4.5 4.5 0 0 1 9 0"></path><rect x="13" y="8" width="9" height="10" rx="1.5"></rect><path d="M16 8V6h3v2M13 12h9"></path></svg></span><span>Manpower &amp; Vendors</span>
+          </button>
+          <button type="button" class="nav-item user-only{{ ' active' if initial_section == 'my-claims' else '' }}" data-user-only="true" onclick="showSection('my-claims')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18H7zM9 7h6M9 11h6M9 15h3"></path><path d="m14 16 1.5 1.5L19 14"></path></svg></span><span>My Claims</span>
           </button>
           <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'transport' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('transport')">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></span><span>Transport</span>
@@ -10985,8 +11044,12 @@
 
     <div id="workforce-section" class="content-section{{ ' active' if initial_section == 'workforce' else '' }}">
       <div id="workforce-page-root" class="workforce-page">
-        <div class="loading">Loading manpower...</div>
+        <div class="loading">Loading manpower &amp; vendors...</div>
       </div>
+    </div>
+
+    <div id="my-claims-section" class="content-section{{ ' active' if initial_section == 'my-claims' else '' }}">
+      <div id="my-claims-root" class="my-claims-page"><div class="loading">Loading your claims...</div></div>
     </div>
 
     <div id="transport-section" class="content-section{{ ' active' if initial_section == 'transport' else '' }}">
@@ -11148,8 +11211,9 @@
               #inventory-section .inventory-control-footer { display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #e3ece9; }
               #inventory-section .inventory-control-footer .btn { min-height:34px;padding:6px 11px;font-size:11px; }
               #inventory-section #asset-count { margin-left:auto;color:var(--inventory-muted);font-size:11px;font-weight:700; }
-              #inventory-section .inventory-selected-count-button { padding:5px 7px;border:1px solid transparent;border-radius:5px;background:transparent;color:#495057;font:700 14px/1.2 inherit;cursor:pointer;transition:background-color .14s ease,border-color .14s ease,color .14s ease; }
-              #inventory-section .inventory-selected-count-button:hover:not(:disabled) { border-color:#b9d8cf;background:var(--inventory-green-soft);color:var(--inventory-green); }
+              #inventory-section .inventory-selected-count-button { display:inline-flex;align-items:center;min-height:34px;padding:7px 12px;border:1px solid #b6cbc5;border-radius:6px;background:#fff;color:#35655a;font:800 11px/1.2 inherit;cursor:pointer;transition:background-color .14s ease,border-color .14s ease,color .14s ease; }
+              #inventory-section .inventory-selected-count-button:hover:not(:disabled) { border-color:#78aa9d;background:#f5faf8;color:#0f6659; }
+              #inventory-section .inventory-selected-count-button.has-selection { background:#edf7f4;border-color:#78aa9d;color:#0f6659; }
               #inventory-section .inventory-selected-count-button:focus-visible { outline:2px solid var(--inventory-green);outline-offset:2px; }
               #inventory-section .inventory-selected-count-button:disabled { cursor:default;opacity:.72; }
               .inventory-catalogue { border:1px solid var(--inventory-line);border-radius:7px;background:#fff;overflow:visible; }
@@ -12196,7 +12260,11 @@
       #eventDetailsModal { --eo-accent:var(--brand-main,#0f766e);--eo-ink:#172b27;--eo-muted:#667872;--eo-border:#dce6e2; }
       #eventDetailsModal .event-overview-shell { width:min(1380px,calc(100vw - 28px));max-width:none;height:min(920px,calc(100vh - 28px));max-height:none;padding:0;overflow:hidden;border:1px solid var(--eo-border);border-radius:8px;background:#f5f8f7; }
       #eventDetailsModal .event-overview-modal-header { min-height:58px;padding:12px 18px;border-bottom:1px solid var(--eo-border);background:#fff; }
-      #eventDetailsModal .event-overview-modal-header h2 { margin:0;color:var(--eo-ink);font-size:16px; }
+      #eventDetailsModal .event-overview-modal-header h2 { display:flex;align-items:center;gap:8px;margin:0;color:var(--eo-ink);font-size:16px; }
+      .event-overview-header-title-actions { display:inline-flex;align-items:center;gap:4px; }
+      .event-overview-header-title-actions button { display:grid;place-items:center;width:27px;height:27px;padding:0;border:1px solid #cedbd7;border-radius:6px;background:#fff;color:#31564c;cursor:pointer; }
+      .event-overview-header-title-actions button:hover { border-color:var(--eo-accent);background:#edf8f5; }
+      .event-overview-header-title-actions svg { width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round; }
       #eventDetailsModal .event-overview-modal-header p { margin:3px 0 0;color:var(--eo-muted);font-size:11px; }
       #eventDetailsModal .event-overview-modal-header .close { display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:6px;background:transparent;color:#53645f; }
       #eventDetailsModal .event-overview-body { height:calc(100% - 58px);padding:16px;overflow:auto; }
@@ -12209,6 +12277,11 @@
       .event-overview-title-actions button { width:31px;height:31px;padding:0;border:1px solid #cedbd7;border-radius:6px;background:#fff;color:#31564c;display:grid;place-items:center;cursor:pointer; }
       .event-overview-title-actions button:hover { border-color:var(--eo-accent);background:#edf8f5; }
       .event-overview-title-actions svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round; }
+      .event-overview-workflow-actions { display:grid;justify-items:end;gap:7px;flex:none; }
+      .event-overview-document-actions { display:flex;align-items:center;justify-content:flex-end;gap:5px; }
+      .event-overview-document-actions button { display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:5px 8px;border:1px solid #cedbd7;border-radius:6px;background:#fff;color:#31564c;font:inherit;font-size:9px;font-weight:700;cursor:pointer; }
+      .event-overview-document-actions button:hover { border-color:var(--eo-accent);background:#edf8f5; }
+      .event-overview-document-actions svg { width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round; }
       .event-overview-eyebrow { display:flex;align-items:center;gap:8px;color:var(--eo-muted);font-size:10px;font-weight:700;text-transform:uppercase; }
       .event-overview-identity h1 { margin:9px 0 12px;color:var(--eo-ink);font-size:23px;line-height:1.2; }
       .event-overview-meta { display:flex;flex-wrap:wrap;gap:8px 16px; }
@@ -12219,7 +12292,7 @@
       .event-overview-metric:nth-child(3) { border-right:0; }
       .event-overview-metric strong { color:var(--eo-ink);font-size:25px; }.event-overview-metric span { margin-top:4px;color:var(--eo-muted);font-size:9px;font-weight:700;text-transform:uppercase; }
       .event-overview-progress-bar { grid-column:1/-1;height:5px;background:#e3ebe8; }.event-overview-progress-bar span { display:block;height:100%;background:var(--eo-accent);transition:width .22s ease; }
-      .event-overview-links { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:14px; }
+      .event-overview-links { display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:14px; }
       .event-overview-link { display:flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 9px;border:1px solid #cedbd7;border-radius:6px;background:#fff;color:#29433c;font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:background .16s,border-color .16s,transform .16s; }
       .event-overview-link:hover { border-color:var(--eo-accent);background:#edf8f5;transform:translateY(-1px); }
       .event-overview-grid { display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.55fr);gap:14px;align-items:start; }.event-overview-column { display:grid;gap:14px;min-width:0; }
@@ -12634,6 +12707,7 @@
     <script src="{{ url_for('static', filename='js/accounting.js', v=accounting_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-schedule.js', v=workforce_schedule_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/my-claims.js', v=my_claims_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/vehicles.js', v=vehicles_js_version) }}"></script>
   </body>
 </html>

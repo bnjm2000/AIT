@@ -587,7 +587,7 @@ function openClaimModal(company, event, row) {
   byId('claimAmount').value = row.amount == null ? '' : Number(row.amount).toFixed(2);
   byId('claimDate').value = row.claimDate || '';
   const normalizedCategory = row.category === 'Cab' ? 'Transport' : row.category;
-  byId('claimCategory').value = ['Transport', 'Meal'].includes(normalizedCategory) ? normalizedCategory : (normalizedCategory ? 'Other' : '');
+  byId('claimCategory').value = ['Meal', 'Transport', 'Purchase'].includes(normalizedCategory) ? normalizedCategory : (normalizedCategory ? 'Other' : '');
   byId('otherCategoryField').hidden = byId('claimCategory').value !== 'Other';
   byId('otherCategory').required = byId('claimCategory').value === 'Other';
   byId('otherCategory').value = byId('claimCategory').value === 'Other' ? normalizedCategory : '';

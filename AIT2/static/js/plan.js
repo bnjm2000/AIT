@@ -1127,22 +1127,18 @@ function planEventChooserRelativeDate(event) {
   if (!Number.isFinite(startValue)) return '';
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  const state = planStateSlug(event?.state);
+  if (['ongoing', 'last-day'].includes(state)) {
+    const endValue = planEventChooserDateValue(event?.endDate || event?.startDate);
+    if (!Number.isFinite(endValue)) return '';
+    const daysLeft = Math.max(0, Math.round((endValue - today.valueOf()) / 86400000) + 1);
+    return `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
+  }
   const days = Math.round((startValue - today.valueOf()) / 86400000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
   if (days === -1) return 'Yesterday';
   return days > 1 ? `in ${days} days` : `${Math.abs(days)} days ago`;
-}
-
-function planEventChooserSecondaryLabel(event) {
-  return String(
-    event?.client ||
-    event?.clientName ||
-    event?.client_name ||
-    event?.clientCompany ||
-    event?.client_company ||
-    ''
-  );
 }
 
 function planEventChooserSourceEvents() {
@@ -1151,6 +1147,9 @@ function planEventChooserSourceEvents() {
   }
   if (planEventChooserState.context === 'prepare-new') {
     return prepareNewPageState.events || [];
+  }
+  if (planEventChooserState.context === 'my-claims' && typeof myClaimsData !== 'undefined') {
+    return myClaimsData?.events || [];
   }
   if (planEventChooserState.context === 'profit-loss' && typeof profitLossEventChooserEvents === 'function') {
     return profitLossEventChooserEvents();
@@ -1188,6 +1187,9 @@ function planEventChooserCurrentEventId() {
   }
   if (planEventChooserState.context === 'return' && typeof returnPageState !== 'undefined') {
     return returnPageState.eventId;
+  }
+  if (planEventChooserState.context === 'my-claims') {
+    return myClaimsSelectedEventId || null;
   }
   if (planEventChooserState.context === 'workforce' && typeof workforcePageState !== 'undefined') {
     return workforcePageState.eventId;
@@ -1244,7 +1246,6 @@ function ensurePlanEventChooserModal() {
         <div class="plan-event-chooser-head">
           <span>Event</span>
           <span>Dates</span>
-          <span>Location</span>
           <span>Status</span>
           <span></span>
         </div>
@@ -1276,14 +1277,24 @@ function renderPlanEventChooser() {
     return summary;
   }, { ALL: 0, ACTIVE: 0 });
 
-  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
-    <button type="button"
-            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
-            onclick="planSetEventChooserFilter('${filter.key}')">
-      ${escapeHtml(filter.label)}
-      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
-    </button>
-  `).join('');
+  if (
+    planEventChooserState.filter !== 'ALL' &&
+    Number(counts[planEventChooserState.filter] || 0) === 0
+  ) {
+    planEventChooserState.filter = 'ALL';
+    planEventChooserState.page = 1;
+  }
+
+  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS
+    .filter(filter => Number(counts[filter.key] || 0) > 0)
+    .map(filter => `
+      <button type="button"
+              class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
+              onclick="planSetEventChooserFilter('${filter.key}')">
+        ${escapeHtml(filter.label)}
+        <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
+      </button>
+    `).join('');
 
   const events = planEventChooserFilteredEvents();
   const pageCount = Math.max(1, Math.ceil(events.length / planEventChooserState.pageSize));
@@ -1297,16 +1308,17 @@ function renderPlanEventChooser() {
             onclick="planChooseEvent(${Number(event.id)})">
       <span class="plan-event-option-name">
         <span class="plan-event-option-title-line">
-          <strong>#${escapeHtml(String(event.id || ''))} &nbsp; ${escapeHtml(planEventOptionLabel(event))}</strong>
-          ${planEventTypeBadgeHtml(event)}
+          <span class="plan-badge plan-event-option-id ${event?.tag === 'dry hire' ? 'plan-badge-type-dry-hire' : 'plan-badge-type-event'}">
+            #${escapeHtml(String(event.id || ''))}
+          </span>
+          <strong>${escapeHtml(planEventOptionLabel(event))}</strong>
         </span>
-        <span>${escapeHtml(planEventChooserSecondaryLabel(event))}</span>
+        <span class="plan-event-option-location-line">${escapeHtml(event.location || event.venue || 'Location not set')}</span>
       </span>
       <span class="plan-event-option-dates">
         ${escapeHtml(planEventChooserDateRange(event))}
         <span>${escapeHtml(planEventChooserRelativeDate(event))}</span>
       </span>
-      <span class="plan-event-option-location">${escapeHtml(event.location || event.venue || '—')}</span>
       ${planEventStateBadgeHtml(event)}
       <span class="plan-event-option-arrow" aria-hidden="true">›</span>
     </button>
@@ -1364,7 +1376,7 @@ function planOpenEventChooser(context = 'plan') {
       'profit-loss': ['Choose Profit & Loss Event', 'Select an event to review revenue, costs, and net profit'],
       compare: ['Choose Event to Compare', 'Select an event to compare against its quotation'],
       return: ['Choose Event to Return', 'Select an event to receive its returned assets'],
-      workforce: ['Choose Event for Manpower', 'Select an event to manage its manpower and transport'],
+      workforce: ['Choose Event for Manpower & Vendors', 'Select an event to manage its manpower and vendors'],
       transport: ['Choose Event for Transport', 'Select an event to manage its transport bookings'],
       'quotation-link': ['Pair Existing Event', 'Select the event to link to this quotation'],
       plan: ['Other Events', 'Select any event to update its plan']
@@ -1416,6 +1428,10 @@ async function planChooseEvent(eventId) {
   }
   if (planEventChooserState.context === 'compare' && typeof selectCompareEvent === 'function') {
     await selectCompareEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'my-claims' && typeof selectMyClaimsEvent === 'function') {
+    selectMyClaimsEvent(eventId);
     return;
   }
   if (planEventChooserState.context === 'return' && typeof returnPageSelectEvent === 'function') {
@@ -2638,7 +2654,7 @@ function renderPlanCustomItemCard() {
             <div class="plan-custom-field">
               <label for="planCustomDepartment">Department</label>
               <select id="planCustomDepartment" required>
-                ${customDepartmentOptionsHtml('UN')}
+                ${customDepartmentOptionsHtml('AX')}
               </select>
             </div>
             <div class="plan-custom-field" id="planCustomCompanyGroup">
@@ -3175,11 +3191,17 @@ function planEditCustomAsset(encodedAssetId) {
   const customDepartment = normalizeDepartmentCode(custom.department || 'UN');
   if (
     departmentInput &&
+    isSelectableCompanyDepartment(customDepartment) &&
     !Array.from(departmentInput.options).some(option => option.value === customDepartment)
   ) {
     departmentInput.add(new Option(customDepartment, customDepartment));
   }
-  setValue('planCustomDepartment', customDepartment);
+  setValue(
+    'planCustomDepartment',
+    isSelectableCompanyDepartment(customDepartment)
+      ? customDepartment
+      : (departmentInput?.options?.[0]?.value || 'AX')
+  );
   setValue('planCustomCompany', custom.type === 'LOAN' ? custom.company : custom.description);
   const submit = document.getElementById('planCustomSubmitButton');
   const cancel = document.getElementById('planCustomCancelEdit');
@@ -3202,6 +3224,7 @@ function planCancelCustomAssetEdit() {
 function planReplaceLocalAssetReference(eventId, oldAssetId, newAssetId, quantity) {
   const event = planPageState.event;
   if (!event || Number(event.id) !== Number(eventId) || !oldAssetId || !newAssetId) return;
+  const nextCustom = parseCustomAsset(newAssetId);
   ['preparedItems', 'actuallyPrepared', 'returnedItems', 'extraAssets', 'customCollected']
     .forEach(field => {
       if (!Array.isArray(event[field])) return;
@@ -3209,6 +3232,23 @@ function planReplaceLocalAssetReference(eventId, oldAssetId, newAssetId, quantit
         String(value) === String(oldAssetId) ? newAssetId : value
       ));
     });
+  Object.values(event.assetsByDepartment || {}).forEach(departmentAssets => {
+    if (!Array.isArray(departmentAssets)) return;
+    departmentAssets.forEach(asset => {
+      if (String(asset?.id || '') !== String(oldAssetId)) return;
+      asset.id = newAssetId;
+      asset.quantity = quantity;
+      if (!nextCustom) return;
+      const displayName = `${quantity}x ${nextCustom.name}`;
+      asset.name = displayName;
+      asset.displayName = displayName;
+      asset.model = nextCustom.name;
+      asset.department = nextCustom.department;
+      asset.company = nextCustom.company;
+      asset.customDescription = nextCustom.description;
+      asset.customType = nextCustom.type;
+    });
+  });
   eventSubprojects(event).forEach(room => {
     (room.items || []).forEach(item => {
       if (!(item.assetRefs || []).some(ref => String(ref) === String(oldAssetId))) return;

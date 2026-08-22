@@ -1190,7 +1190,7 @@ function costingDiscrepancyMarkup() {
   const rows = costingState.current?.vendorDiscrepancies || [];
   if (!rows.length) return '';
   return `<div class="costing-warning" role="alert"><strong>Vendor totals need review</strong>
-    <p>These Manpower &amp; Transport amounts changed independently. Your costing values were left untouched.</p>
+    <p>These Manpower &amp; Vendors and Transport amounts changed independently. Your costing values were left untouched.</p>
     <ul>${rows.map(row => `<li><b>${costingEscape(row.vendorName)}</b>: costing ${costingEscape(costingMoney(row.expectedAmount))}, vendor ${row.actualAmount == null ? 'missing' : costingEscape(costingMoney(row.actualAmount))}</li>`).join('')}</ul></div>`;
 }
 

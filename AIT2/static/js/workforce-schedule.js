@@ -27,7 +27,7 @@ function wfScheduleIcon(name) {
 }
 
 function wfWorkforceViewSwitchHtml() {
-  return `<div class="wf-view-switch" role="group" aria-label="Manpower view">
+  return `<div class="wf-view-switch" role="group" aria-label="Manpower and vendors view">
     <button type="button" class="${workforcePageState.viewMode === 'assignments' ? 'active' : ''}"
       onclick="setWorkforceViewMode('assignments')">By department</button>
     <button type="button" class="${workforcePageState.viewMode === 'schedule' ? 'active' : ''}"
@@ -855,14 +855,14 @@ function renderWorkforceSchedulePage(root, data) {
     })
   ];
   root.innerHTML = `<div class="wf-schedule-page">
-    <header class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"><div><h2>Manpower Schedule</h2>
+    <header class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"><div><h2>Manpower &amp; Vendors Schedule</h2>
       <p>See who is assigned each day, by department and role.</p></div>
       <div class="wf-manpower-heading-actions wf-schedule-actions">
         <button type="button" class="wf-button" onclick="downloadWorkforceSchedule('event')">${wfScheduleIcon('download')} Export Event Schedule</button>
         ${wfWorkforceViewSwitchHtml()}
       </div></header>
     <section class="plan-event-bar wf-schedule-event-bar">
-      ${wfManpowerEventPickerHtml(data, 'Choose an event for the manpower schedule')}
+      ${wfManpowerEventPickerHtml(data, 'Choose an event for the manpower and vendors schedule')}
       <div class="plan-metrics wf-schedule-metrics">
         ${wfScheduleMetricHtml('users', wfScheduleCrewCount(rows), 'Total Crew')}
         ${wfScheduleMetricHtml('briefcase', vendors.size, 'Total Vendors')}
