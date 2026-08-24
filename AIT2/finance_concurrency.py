@@ -106,9 +106,11 @@ def _merge_keyed_rows(base, local, remote, path):
     preferred_order = local_ids if local_reordered or not remote_reordered else remote_ids
     secondary_order = remote_ids if preferred_order is local_ids else local_ids
     ordered_ids = []
+    seen_ids = set()
     for row_id in [*preferred_order, *secondary_order]:
-        if row_id in merged_by_id and row_id not in ordered_ids:
+        if row_id in merged_by_id and row_id not in seen_ids:
             ordered_ids.append(row_id)
+            seen_ids.add(row_id)
     return [merged_by_id[row_id] for row_id in ordered_ids]
 
 

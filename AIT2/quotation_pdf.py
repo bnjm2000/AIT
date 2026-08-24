@@ -91,20 +91,19 @@ def _group_description_part(line):
 def _group_pdf_line_units(lines):
     """Return PDF rows, keeping all members of a group in one logical row."""
     source = [line for line in (lines or []) if isinstance(line, dict)]
-    rendered_groups = set()
+    group_indexes = {}
     units = []
     for line in source:
         group_id = str(line.get('groupId') or '')
         if not group_id:
             units.append([line])
             continue
-        if group_id in rendered_groups:
-            continue
-        rendered_groups.add(group_id)
-        units.append([
-            candidate for candidate in source
-            if str(candidate.get('groupId') or '') == group_id
-        ])
+        group_index = group_indexes.get(group_id)
+        if group_index is None:
+            group_indexes[group_id] = len(units)
+            units.append([line])
+        else:
+            units[group_index].append(line)
     return units
 
 
@@ -530,6 +529,10 @@ def _schedule_rows_summary(document, rows, kind):
     if not rows:
         return ''
 
+    rows_by_batch = {}
+    for row in rows:
+        rows_by_batch.setdefault(str(row.get('batchId') or ''), []).append(row)
+
     batch_segments = []
     covered = set()
     handled_batch_ids = set()
@@ -537,7 +540,7 @@ def _schedule_rows_summary(document, rows, kind):
         if not isinstance(batch, dict) or batch.get('kind') != kind:
             continue
         batch_id = str(batch.get('id') or '')
-        batch_rows = [row for row in rows if str(row.get('batchId') or '') == batch_id]
+        batch_rows = rows_by_batch.get(batch_id, [])
         if not batch_rows:
             continue
         handled_batch_ids.add(batch_id)
@@ -1144,12 +1147,6 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         story.extend([event_panel, Spacer(1, 4 * mm)])
 
-    departments = []
-    for line in lines:
-        department = _line_system_name(line)
-        if department not in departments:
-            departments.append(department)
-
     show_unit_prices = bool(document.get('showUnitPrices'))
     show_department_discounts = bool(document.get('showDepartmentDiscounts'))
     show_department_subtotals = document.get('showDepartmentSubtotals', True) is not False
@@ -1172,37 +1169,43 @@ def build_finance_pdf(document, company, logo_path=''):
     if lines:
         story.append(_paragraph('LINE ITEMS', section_title))
 
-    export_groups = []
-    if lines:
-        for subproject in subprojects:
-            subproject_id = str(subproject.get('id') or 'main')
-            subproject_departments = []
-            for line in lines:
-                if str(line.get('subprojectId') or 'main') != subproject_id:
-                    continue
-                department = _line_system_name(line)
-                if department not in subproject_departments:
-                    subproject_departments.append(department)
-            export_groups.extend(
-                (subproject, department)
-                for department in subproject_departments
-            )
-    department_summaries = []
-    for subproject, department in export_groups:
-        subproject_id = str(subproject.get('id') or 'main')
-        department_lines = [
-            line for line in lines
-            if _line_system_name(line) == department
-            and str(line.get('subprojectId') or 'main') == subproject_id
-        ]
-        if not department_lines:
+    lines_by_group = {}
+    departments_by_subproject = {}
+    for line in lines:
+        subproject_id = str(line.get('subprojectId') or 'main')
+        department = _line_system_name(line)
+        group_key = (subproject_id, department)
+        if group_key not in lines_by_group:
+            lines_by_group[group_key] = []
+            departments_by_subproject.setdefault(subproject_id, []).append(department)
+        lines_by_group[group_key].append(line)
+
+    adjustments_by_group = {}
+    for adjustment in adjustments:
+        if adjustment.get('scope') != 'department':
             continue
+        group_key = (
+            str(adjustment.get('subprojectId') or 'main'),
+            adjustment.get('department'),
+        )
+        adjustments_by_group.setdefault(group_key, []).append(adjustment)
+
+    export_groups = []
+    for subproject in subprojects:
+        subproject_id = str(subproject.get('id') or 'main')
+        for department in departments_by_subproject.get(subproject_id, []):
+            export_groups.append((
+                subproject,
+                department,
+                lines_by_group[(subproject_id, department)],
+            ))
+    department_summaries = []
+    for subproject, department, department_lines in export_groups:
+        subproject_id = str(subproject.get('id') or 'main')
         department_total = sum(float(line.get('total') or 0) for line in department_lines)
         department_total += sum(
             float(row.get('amount') or 0)
-            for row in adjustments
-            if row.get('scope') == 'department' and row.get('department') == department
-            and str(row.get('subprojectId') or 'main') == subproject_id
+            for row in adjustments_by_group.get((subproject_id, department), [])
         )
         department_summaries.append({
             'name': department,
@@ -1224,25 +1227,16 @@ def build_finance_pdf(document, company, logo_path=''):
     }
     current_subproject_id = None
     show_subproject_headers = len(subprojects) > 1
-    for group_index, (subproject, department) in enumerate(export_groups):
+    for group_index, (subproject, department, department_lines) in enumerate(export_groups):
         subproject_id = str(subproject.get('id') or 'main')
         optional_category = _is_optional_category(department)
         first_group_for_subproject = subproject_id != current_subproject_id
         if first_group_for_subproject:
             current_subproject_id = subproject_id
-        department_lines = [
-            line for line in lines
-            if _line_system_name(line) == department
-            and str(line.get('subprojectId') or 'main') == subproject_id
-        ]
-        if not department_lines:
-            continue
         department_total = sum(float(line.get('total') or 0) for line in department_lines)
-        department_adjustments = [
-            row for row in adjustments
-            if row.get('scope') == 'department' and row.get('department') == department
-            and str(row.get('subprojectId') or 'main') == subproject_id
-        ]
+        department_adjustments = adjustments_by_group.get(
+            (subproject_id, department), []
+        )
         department_total += sum(float(row.get('amount') or 0) for row in department_adjustments)
         table_rows = []
         room_header_row = None

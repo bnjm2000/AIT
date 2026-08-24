@@ -105,6 +105,13 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'Closed')
 
+    def test_all_deployed_assets_can_close_when_a_requirement_was_never_prepared(self):
+        event = self.make_event(['A', 'NEVER-PREPARED'], [], ['A'])
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Closed')
+
     def test_unreturned_extra_prevents_closed_state(self):
         event = self.make_event(['A', 'B', 'X'], ['B', 'X'], ['A'], extra_assets=['X'])
 

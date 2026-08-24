@@ -757,10 +757,8 @@ function wfDocumentRow(record) {
     ? `<small class="wf-document-claim-meta"><span class="wf-document-claim-category">${wfEscape(claimCategory)}</span>${claimDescription ? `<span>${wfEscape(claimDescription)}</span>` : ''}</small>`
     : '<small>Invoice</small>';
   const canOpenSubject = ['worker', 'vendor'].includes(subject.type) && subject.id;
-  const departments = (record.departmentDetails || []).map(department => `
-    <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
-      title="${wfAttr(department.name || department.code)}">${wfEscape(department.code || department.name)}</span>
-  `).join('');
+  const departments = wfDocumentDepartmentRoles(record.departmentDetails);
+  const subjectPhone = wfFormatPhone(subject.phone);
   const awaitingUpload = Boolean(record.isAwaitingUpload);
   const fileCell = awaitingUpload
     ? `<div class="wf-document-file is-awaiting" data-label="File">
@@ -785,7 +783,7 @@ function wfDocumentRow(record) {
     <button class="wf-document-uploader wf-document-navigation" data-label="Uploader" type="button"
       ${canOpenSubject ? `onclick="openFreelancerHistory('${wfAttr(subject.id)}')" title="View all events for ${wfAttr(subject.name)}"` : 'disabled'}>
       <span class="wf-avatar ${subject.type === 'vendor' ? 'vendor' : ''}">${wfEscape(wfInitials(subject.name))}</span>
-      <span><strong>${wfEscape(subject.name || 'Unknown')}</strong><small>${wfEscape(subject.type === 'vendor' ? 'Vendor' : (subject.company || 'Worker'))}</small>
+      <span><strong>${wfEscape(subject.name || 'Unknown')}</strong>${subjectPhone ? `<small>${wfEscape(subjectPhone)}</small>` : ''}
         ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
     </button>
     ${fileCell}
@@ -798,6 +796,17 @@ function wfDocumentRow(record) {
 
 function wfDocumentEntry(record) {
   return record.isClaimGroup ? wfDocumentClaimGroup(record) : wfDocumentRow(record);
+}
+
+function wfDocumentDepartmentRoles(departmentDetails = []) {
+  return departmentDetails.map(department => {
+    const roles = [...new Set((department.roles || []).map(role => String(role || '').trim()).filter(Boolean))];
+    return `<span class="wf-document-department-role">
+      <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
+        title="${wfAttr(department.name || department.code)}">${wfEscape(department.code || department.name)}</span>
+      ${roles.length ? `<span class="wf-document-role">${roles.map(wfEscape).join(', ')}</span>` : ''}
+    </span>`;
+  }).join('');
 }
 
 function wfDocumentClaimGroupItem(record, index) {
@@ -828,10 +837,8 @@ function wfDocumentClaimGroup(group) {
     ? event.startDate
     : `${event.startDate} - ${event.endDate}`;
   const canOpenSubject = ['worker', 'vendor'].includes(subject.type) && subject.id;
-  const departments = (group.departmentDetails || []).map(department => `
-    <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
-      title="${wfAttr(department.name || department.code)}">${wfEscape(department.code || department.name)}</span>
-  `).join('');
+  const departments = wfDocumentDepartmentRoles(group.departmentDetails);
+  const subjectPhone = wfFormatPhone(subject.phone);
   const totalLabel = group.claimAmountsComplete
     ? wfMoney(group.claimTotal || 0)
     : `${wfMoney(group.claimTotal || 0)} + pending`;
@@ -852,7 +859,7 @@ function wfDocumentClaimGroup(group) {
       <button class="wf-document-uploader wf-document-navigation" type="button"
         ${canOpenSubject ? `onclick="openFreelancerHistory('${wfAttr(subject.id)}')" title="View all events for ${wfAttr(subject.name)}"` : 'disabled'}>
         <span class="wf-avatar ${subject.type === 'vendor' ? 'vendor' : ''}">${wfEscape(wfInitials(subject.name))}</span>
-        <span><strong>${wfEscape(subject.name || 'Unknown')}</strong><small>${wfEscape(subject.type === 'vendor' ? 'Vendor' : (subject.company || 'Worker'))}</small>
+        <span><strong>${wfEscape(subject.name || 'Unknown')}</strong>${subjectPhone ? `<small>${wfEscape(subjectPhone)}</small>` : ''}
           ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
       </button>
       <button class="wf-document-file wf-document-claim-toggle" type="button"

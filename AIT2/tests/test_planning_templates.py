@@ -885,6 +885,37 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('returnPageLogFault(', return_row)
         self.assertIn('Log fault', return_row)
 
+    def test_return_page_encodes_apostrophes_used_in_inline_asset_actions(self):
+        script = APP_BUNDLE_SOURCE
+        encoder = script.split('function returnPageEncode(value)', 1)[1].split(
+            'function returnPageDecode(value)', 1
+        )[0]
+        return_workspace = script.split('function returnPageEncode(value)', 1)[1].split(
+            'function initializeReturnPage()', 1
+        )[0]
+
+        self.assertIn(".replace(/'/g, '%27')", encoder)
+        self.assertIn('const encodedId = returnPageEncode(asset.id)', return_workspace)
+        self.assertIn("returnPageReturnAsset('${escapeHtmlAttr(encodedId)}', this)", return_workspace)
+        self.assertIn("returnPageUnreturnAsset('${escapeHtmlAttr(encodedId)}', this)", return_workspace)
+
+    def test_prepare_workspace_keeps_returned_requirements_in_prepared_progress(self):
+        script = APP_BUNDLE_SOURCE
+        prepare_totals = script.split('function prepareNewTotals', 1)[1].split(
+            'function prepareNewSubprojectNeedsAttention', 1
+        )[0]
+        prepare_model = script.split('function prepareNewModelSection', 1)[1].split(
+            'function prepareNewDirectAssetCard', 1
+        )[0]
+
+        self.assertIn('function prepareNewPreparedEverQuantity(group)', script)
+        self.assertIn('function prepareNewCountablePreparedEverQuantity(group)', script)
+        self.assertIn('prepareNewCountablePreparedEverQuantity(row)', prepare_totals)
+        self.assertIn('prepareNewPreparedEverQuantity(group)', prepare_model)
+        self.assertIn('prepareNewCountablePreparedEverQuantity(group)', prepare_model)
+        self.assertIn('preparedEverQuantity: assigned', script)
+        self.assertIn('countablePreparedEverQuantity: Math.min(required, countableAssigned)', script)
+
     def test_delivery_order_editor_uses_catalog_departments_and_stable_deletes(self):
         self.login('admin')
         response = self.client.get('/delivery-order')

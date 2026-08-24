@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import json
 import os
 import re
 import secrets
 import threading
 import zipfile
-
-from storage_paths import documents_root_for_data_folder
 from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
 from PIL import Image
+
+from storage_paths import documents_root_for_data_folder
 
 
 WORKFORCE_FILENAME = "Workforce.json"

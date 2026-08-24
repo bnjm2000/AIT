@@ -6529,6 +6529,24 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
 
   document.querySelectorAll('.inventory-row-select').forEach(input => {
     input.checked = selectedInventoryAssetIds.has(input.dataset.assetId || '');
+    input.closest('.inventory-individual-row')?.classList.toggle('is-selected', input.checked);
+  });
+
+  const selectedCountByGroup = new Map(
+    groupInventoryAssets(visibleAssets).map(group => [
+      group.key,
+      group.assets.filter(asset => selectedInventoryAssetIds.has(inventoryAssetIdentifier(asset))).length
+    ])
+  );
+  document.querySelectorAll('.inventory-model-group').forEach(groupEl => {
+    const encodedKey = groupEl.querySelector('.inventory-model-summary')?.dataset.groupKey || '';
+    let groupKey = '';
+    try {
+      groupKey = decodeURIComponent(encodedKey);
+    } catch (_error) {
+      groupKey = encodedKey;
+    }
+    groupEl.classList.toggle('has-selected-assets', (selectedCountByGroup.get(groupKey) || 0) > 0);
   });
 
   const selectAll = document.getElementById('inventory-select-all-current');
@@ -7305,9 +7323,10 @@ function inventoryIndividualRowHtml(asset, isAdmin) {
   const total = inventoryAssetQuantity(asset);
   const availabilityHtml = inventoryAvailabilityBadgesHtml(asset, true);
   const maintenance = inventoryLatestMaintenance([asset]);
+  const isSelected = selectedInventoryAssetIds.has(assetId);
   return `
-    <div class="inventory-individual-row">
-      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
+    <div class="inventory-individual-row ${isSelected ? 'is-selected' : ''}">
+      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${isSelected ? 'checked' : ''} onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
       <div><span class="inventory-individual-id">${escapeHtml(asset.isBulk ? 'Bulk stock' : assetId)}</span><span class="inventory-individual-meta" style="display:block">${escapeHtml(asset.isBulk ? `${total} units` : (asset.serial || '-'))}</span></div>
       <div class="inventory-individual-meta inventory-individual-version">${escapeHtml(asset.version || '-')}</div>
       <div>${availabilityHtml}</div>
@@ -7388,10 +7407,11 @@ function displayInventoryTable(assetsToShow) {
         const encodedKey = encodeURIComponent(group.key);
         const expanded = expandedInventoryModelKeys.has(group.key);
         const availability = inventoryAvailabilityCounts(group.assets);
+        const hasSelectedAssets = group.assets.some(asset => selectedInventoryAssetIds.has(inventoryAssetIdentifier(asset)));
         const degradedMarker = availability.degradedAvailable > 0 ? '*' : '';
         const latest = inventoryLatestMaintenance(group.assets);
         return `
-          <section class="inventory-model-group">
+          <section class="inventory-model-group ${hasSelectedAssets ? 'has-selected-assets' : ''}">
             <button type="button" class="inventory-model-summary" aria-expanded="${expanded}" data-group-key="${escapeHtmlAttr(encodedKey)}" onclick="toggleInventoryModelGroup(this.dataset.groupKey)">
               <span class="inventory-model-name"><strong>${escapeHtml(group.brand)} ${escapeHtml(group.model)}</strong><span>${group.assets.length} inventory record${group.assets.length === 1 ? '' : 's'}</span></span>
               <span class="inventory-model-description">${escapeHtml(inventoryGroupDescription(group))}</span>
@@ -13536,7 +13556,10 @@ const returnPageState = {
 };
 
 function returnPageEncode(value) {
-  return encodeURIComponent(String(value || ''));
+  // encodeURIComponent leaves apostrophes unchanged. These values are also
+  // embedded in single-quoted inline handlers, so encode them explicitly to
+  // keep descriptions such as 18' (W) by 4' (H) from breaking the handler.
+  return encodeURIComponent(String(value || '')).replace(/'/g, '%27');
 }
 
 function returnPageDecode(value) {
@@ -15410,12 +15433,12 @@ function eventOverviewAssets(event) {
     groups.forEach(group => (byDepartment[group.department || 'UN'] ||= []).push(group));
     return Object.entries(byDepartment).sort(([a], [b]) => a.localeCompare(b)).map(([department, rows]) => {
       const requiredTotal = rows.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0);
-      const preparedTotal = rows.reduce((sum, row) => sum + Number(row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0), 0);
+      const preparedTotal = rows.reduce((sum, row) => sum + Number(row.countablePreparedEverQuantity ?? row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0), 0);
       return `<div class="event-overview-department">
         <div class="event-overview-dept-head"><strong>${escapeHtml(department)} Department</strong><span>${preparedTotal} / ${requiredTotal} prepared</span></div>
         ${rows.sort((a, b) => `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`)).map(row => {
           const required = Number(row.requiredQuantity || 0);
-          const prepared = Number(row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0);
+          const prepared = Number(row.countablePreparedEverQuantity ?? row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0);
           const returned = Number(row.countableReturnedQuantity || 0);
           return `<div class="event-overview-asset-row">
             <div class="event-overview-asset-name"><strong>${escapeHtml([row.brand, row.model].filter(Boolean).join(' ') || 'Asset')}</strong><small>${escapeHtml(row.description || '')}</small>${eventOverviewAssignedAssetPills(row)}</div>
@@ -23044,7 +23067,7 @@ if (typeof window !== 'undefined') {
   window.closeEventLogs = closeEventLogs;
 }
 
-//WHAT IS LOVE, BABY DONT HURT ME, DONT HURT ME NO MOREEE
+// Expose maintenance actions used by dynamically rendered controls.
 window.viewMaintenanceLog = viewMaintenanceLog;
 window.openMaintenanceModal = openMaintenanceModal;
 window.switchMaintenanceTab = switchMaintenanceTab;

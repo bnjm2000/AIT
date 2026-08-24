@@ -808,6 +808,18 @@ def test_inventory_closed_filter_summaries_highlight_active_selections():
     assert '.inventory-checkbox-filter.has-active-selection > summary' in template
 
 
+def test_inventory_asset_groups_and_rows_highlight_selected_assets():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = APP_BUNDLE_SOURCE
+
+    assert "groupEl.classList.toggle('has-selected-assets'" in script
+    assert "input.closest('.inventory-individual-row')?.classList.toggle('is-selected', input.checked)" in script
+    assert "const hasSelectedAssets = group.assets.some(" in script
+    assert "inventory-individual-row ${isSelected ? 'is-selected' : ''}" in script
+    assert '.inventory-model-group.has-selected-assets > .inventory-model-summary' in template
+    assert '.inventory-individual-row.is-selected' in template
+
+
 def test_maintenance_preselection_is_part_of_modal_initialisation():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = APP_BUNDLE_SOURCE

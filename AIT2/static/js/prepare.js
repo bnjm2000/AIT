@@ -1,4 +1,4 @@
-// ---------------- Trial Prepare page ----------------
+// ---------------- Prepare workspace ----------------
 var prepareNewPageState = {
   events: [],
   event: null,
@@ -65,6 +65,28 @@ function prepareNewIsComplete(event = prepareNewPageState.event) {
   return totals.lineCount > 0 && totals.prepared >= totals.required;
 }
 
+function prepareNewPreparedEverQuantity(group) {
+  if (!group) return 0;
+  if (typeof group.preparedEverQuantity !== 'undefined') {
+    return Number(group.preparedEverQuantity || 0);
+  }
+  if (typeof group.assignedQuantity !== 'undefined') {
+    return Number(group.assignedQuantity || 0);
+  }
+  return getPreparedQuantity(group) + Number(group.returnedQuantity || 0);
+}
+
+function prepareNewCountablePreparedEverQuantity(group) {
+  if (!group) return 0;
+  if (typeof group.countablePreparedEverQuantity !== 'undefined') {
+    return Number(group.countablePreparedEverQuantity || 0);
+  }
+  const required = Math.max(0, Number(group.requiredQuantity || 0));
+  const prepared = getCountablePreparedQuantity(group) +
+    Number(group.countableReturnedQuantity || 0);
+  return required > 0 ? Math.min(prepared, required) : prepared;
+}
+
 function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewPageState) {
   const groups = prepareNewModelGroups(event, state);
   const customAssets = prepareNewCustomAssets(event, state);
@@ -76,7 +98,7 @@ function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewP
   );
   const required = groups.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0) +
     customAssets.reduce((sum, row) => sum + Number(row.parsedCustom?.quantity || 1), 0);
-  const prepared = groups.reduce((sum, row) => sum + Number(row.countablePreparedQuantity || 0), 0) +
+  const prepared = groups.reduce((sum, row) => sum + prepareNewCountablePreparedEverQuantity(row), 0) +
     customAssets.reduce((sum, row) => (
       (event?.actuallyPrepared || []).includes(row.id) || (event?.returnedItems || []).includes(row.id)
         ? sum + Number(row.parsedCustom?.quantity || 1)
@@ -339,8 +361,9 @@ function prepareNewAssetCard(asset, options = {}) {
 
 function prepareNewModelSection(group) {
   const required = Number(group.requiredQuantity || 0);
-  const preparedQuantity = getPreparedQuantity(group);
-  const countablePrepared = getCountablePreparedQuantity(group);
+  const activePreparedQuantity = getPreparedQuantity(group);
+  const preparedQuantity = prepareNewPreparedEverQuantity(group);
+  const countablePrepared = prepareNewCountablePreparedEverQuantity(group);
   const extraPrepared = getExtraPreparedQuantity(group);
   const isBulk = prepareNewGroupIsBulk(group);
   const openSlots = prepareNewOpenPreparedSlots(group);
@@ -384,7 +407,7 @@ function prepareNewModelSection(group) {
               onclick="prepareNewToggleActionMenu(event, '${encodedKey}')">...</button>
       <span class="prepare-new-action-menu" data-model-key="${escapeHtmlAttr(key)}">
         <button type="button" onclick="event.stopPropagation();prepareNewPrepareQty('${encodedKey}')">Prepare qty</button>
-        ${(isBulk ? preparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
+        ${(isBulk ? activePreparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
       </span>
     </span>
   `;
@@ -602,7 +625,7 @@ function renderPrepareNewAssignment() {
       0
     );
     const assigned = departmentGroups.reduce(
-      (sum, group) => sum + getCountablePreparedQuantity(group),
+      (sum, group) => sum + prepareNewCountablePreparedEverQuantity(group),
       0
     );
     const percent = required ? Math.min(100, Math.round((assigned / required) * 100)) : 0;

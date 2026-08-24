@@ -1299,8 +1299,6 @@ class PostgresDataManager(DataManager):
         self._loaded_revision = next_revision
         self._log_snapshot = current
 
-    # ---------------- Departments ----------------
-
     # ---------------- Company JSON documents ----------------
 
     def load_company_document(self, document_key, default=None):

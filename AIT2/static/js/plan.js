@@ -1,4 +1,4 @@
-// ---------------- Trial Plan page ----------------
+// ---------------- Plan workspace ----------------
 var planPageState = {
   events: [],
   event: null,
@@ -901,9 +901,11 @@ function eventSubprojectModelGroups(event, state) {
       returnedPreparedSlotQuantity: returnedPreparedSlots,
       openPreparedSlots: preparedSlots,
       preparedQuantity: prepared,
+      preparedEverQuantity: assigned,
       countableAssignedQuantity: Math.min(required, countableAssigned),
       countableReturnedQuantity: Math.min(required, countableReturned),
       countablePreparedQuantity: Math.min(required, countablePrepared),
+      countablePreparedEverQuantity: Math.min(required, countableAssigned),
       extraPreparedQuantity: activeExtraSpecific + Math.max(
         0,
         preparedSlots + countableAssignedSpecific - required

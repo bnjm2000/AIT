@@ -126,8 +126,9 @@ def _merge_list(base: list[Any], current: list[Any], desired: list[Any], path: t
     desired_order = [_list_key(value, path) for value in desired]
 
     base_keys = set(base_order)
+    desired_keys = set(desired_order)
     desired_existing_order = [key for key in desired_order if key in base_keys]
-    base_retained_order = [key for key in base_order if key in set(desired_order)]
+    base_retained_order = [key for key in base_order if key in desired_keys]
     desired_reordered_existing = desired_existing_order != base_retained_order
     preferred = desired_order if desired_reordered_existing else current_order
     order = list(dict.fromkeys(preferred + current_order + desired_order))

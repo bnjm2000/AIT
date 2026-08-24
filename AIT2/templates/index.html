@@ -5070,30 +5070,30 @@
        * Events overview and its Add Event dialog retain their current sizing.
        */
       @media (min-width: 769px) {
-        .content-area:has(> .content-section.active:not(#events-section):not(#events-section-legacy)) {
+        .content-area:has(> .content-section.active:not(#events-section)) {
           padding: 24px;
           border-radius: 12px;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) {
           font-size: 12.8px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .content-header {
+        .content-section:not(#events-section) .content-header {
           gap: 11px;
           margin-bottom: 24px;
           padding-bottom: 12px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .content-title {
+        .content-section:not(#events-section) .content-title {
           font-size: 1.6rem;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) .btn {
           min-height: 32px;
@@ -5104,7 +5104,7 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) :is(.form-input, .form-select, .search-bar, textarea, select) {
           min-height: 34px;
@@ -5114,55 +5114,55 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) .form-group {
           margin-bottom: 12px;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) :is(.form-label, .form-group label) {
           margin-bottom: 4px !important;
           font-size: 11.2px !important;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .search-bar {
+        .content-section:not(#events-section) .search-bar {
           margin-bottom: 16px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .stats-grid {
+        .content-section:not(#events-section) .stats-grid {
           gap: 16px;
           margin-bottom: 24px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .stat-card {
+        .content-section:not(#events-section) .stat-card {
           padding: 16px;
           border-radius: 10px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .stat-number {
+        .content-section:not(#events-section) .stat-number {
           margin-bottom: 6px;
           font-size: 2rem;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .stat-label {
+        .content-section:not(#events-section) .stat-label {
           font-size: 11.2px;
           letter-spacing: .8px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .events-grid {
+        .content-section:not(#events-section) .events-grid {
           gap: 16px;
           margin-top: 16px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .event-card {
+        .content-section:not(#events-section) .event-card {
           padding: 16px;
           border-radius: 10px;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) :is(
+        .content-section:not(#events-section) :is(
           .inventory-controls,
           .form-container,
           .items-preview,
@@ -5172,7 +5172,7 @@
           margin-bottom: 16px !important;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) :is(
+        .content-section:not(#events-section) :is(
           .inventory-controls,
           .form-grid,
           .section-actions,
@@ -5182,12 +5182,12 @@
           gap: 12px !important;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) .maintenance-tabs-container,
-        .content-section:not(#events-section):not(#events-section-legacy) .maintenance-tabs {
+        .content-section:not(#events-section) .maintenance-tabs-container,
+        .content-section:not(#events-section) .maintenance-tabs {
           margin-bottom: 16px !important;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) :is(
+        .content-section:not(#events-section) :is(
           .maintenance-tab,
           .events-tab,
           .all-events-tab
@@ -5197,7 +5197,7 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) :is(.table, table) {
           margin-top: 16px;
@@ -5205,13 +5205,13 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) :is(.table, table) :is(th, td) {
           padding: 8px 10px !important;
         }
 
-        .content-section:not(#events-section):not(#events-section-legacy) :is(
+        .content-section:not(#events-section) :is(
           .inventory-checkbox-filter summary,
           .inventory-checkbox-filter-panel
         ) {
@@ -5288,49 +5288,49 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="font-size: 18px"] {
           font-size: 14.4px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="font-size: 16px"] {
           font-size: 12.8px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="font-size: 14px"] {
           font-size: 11.2px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="font-size: 12px"] {
           font-size: 9.6px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="padding: 20px"] {
           padding: 16px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="margin-bottom: 30px"] {
           margin-bottom: 24px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="margin-bottom: 20px"] {
           margin-bottom: 16px !important;
@@ -11070,108 +11070,6 @@
       </div>
     </div>
 
-    <div id="events-section-legacy" class="content-section" hidden>
-      <div class="content-header">
-        <h2 class="content-title">All Events</h2>
-        <button
-          class="btn btn-primary"
-          onclick="openAddEventModal()"
-        >
-          Add Event
-        </button>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-number" id="total-events-legacy">0</div>
-          <div class="stat-label">Total Events</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="active-events-legacy">0</div>
-          <div class="stat-label">Active Events</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="total-assets-legacy">0</div>
-          <div class="stat-label">Total Assets</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-number" id="deployed-assets-legacy">0</div>
-          <div class="stat-label">Assets Deployed</div>
-        </div>
-      </div>
-
-      <!-- All Events Tabs -->
-      <div class="all-events-tabs-container" style="margin-bottom: 20px">
-        <div
-          class="all-events-tabs"
-          style="
-            display: flex;
-            border-bottom: 2px solid #e9ecef;
-            margin-bottom: 20px;
-          "
-        >
-          <button
-            class="all-events-tab active"
-            data-tab="list"
-            onclick="switchAllEventsTab('list')"
-            style="
-              flex: 1;
-              padding: 15px 20px;
-              border: none;
-              background: none;
-              font-size: 16px;
-              font-weight: 500;
-              cursor: pointer;
-              border-bottom: 3px solid transparent;
-              transition: all 0.3s ease;
-            "
-          >
-            📋 List View
-          </button>
-          <button
-            class="all-events-tab"
-            data-tab="calendar"
-            onclick="switchAllEventsTab('calendar')"
-            style="
-              flex: 1;
-              padding: 15px 20px;
-              border: none;
-              background: none;
-              font-size: 16px;
-              font-weight: 500;
-              cursor: pointer;
-              border-bottom: 3px solid transparent;
-              transition: all 0.3s ease;
-            "
-          >
-            📅 Calendar View
-          </button>
-        </div>
-
-        <div class="all-events-tab-content">
-          <!-- List View Tab -->
-          <div id="all-events-list-view-legacy" class="all-events-content active">
-            <input
-              type="text"
-              class="search-bar"
-              placeholder="Search events..."
-              id="event-search-legacy"
-            />
-            <div class="events-grid" id="all-events-legacy">
-              <div class="loading">Loading events...</div>
-            </div>
-          </div>
-          
-          <!-- Calendar View Tab -->
-          <div id="all-events-calendar-view-legacy" class="all-events-content" style="display: none">
-            <div id="calendar-container-legacy" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-              <div class="loading">Loading calendar...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div id="vehicles-section" class="content-section{{ ' active' if initial_section == 'vehicles' else '' }}">
       <div id="vehicles-page-root" class="vehicles-page" aria-live="polite">
         <div class="vehicles-loading">Loading fleet...</div>
@@ -11222,6 +11120,8 @@
               .inventory-model-group + .inventory-model-group { border-top:2px solid #e7eeec; }
               .inventory-model-summary { width:100%;min-height:50px;padding:6px 12px;border:0;background:#fff;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .15s ease; }
               .inventory-model-summary:hover,.inventory-model-summary[aria-expanded="true"] { background:#f4faf8; }
+              .inventory-model-group.has-selected-assets > .inventory-model-summary { background:#edf7f4;box-shadow:inset 3px 0 0 #78aa9d; }
+              .inventory-model-group.has-selected-assets > .inventory-model-summary:hover,.inventory-model-group.has-selected-assets > .inventory-model-summary[aria-expanded="true"] { background:#e7f3ef; }
               .inventory-model-name { min-width:0; }
               .inventory-model-name strong { display:block;color:var(--inventory-ink);font-size:12px;line-height:1.2;overflow-wrap:anywhere; }
               .inventory-model-name span,.inventory-model-description { color:var(--inventory-muted);font-size:10px;overflow-wrap:anywhere; }
@@ -11239,6 +11139,7 @@
               .inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:26px minmax(105px,.85fr) minmax(80px,.55fr) minmax(120px,1fr) minmax(90px,.7fr) minmax(100px,.7fr) 90px;gap:7px;align-items:center; }
               .inventory-individual-head { min-height:25px;padding:2px 7px;color:#71817c;font-size:9px;font-weight:800;text-transform:uppercase; }
               .inventory-individual-row { min-height:36px;padding:3px 7px;border:1px solid #e0e9e6;border-radius:5px;background:#fff;font-size:10px; }
+              .inventory-individual-row.is-selected { border-color:#a8cdc3;background:#eef8f5; }
               .inventory-individual-row input { width:15px;height:15px; }
               .inventory-individual-id { color:var(--inventory-ink);font-weight:800;overflow-wrap:anywhere; }
               .inventory-individual-version { overflow-wrap:anywhere; }

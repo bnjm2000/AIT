@@ -1232,16 +1232,6 @@ class DataManager:
                     delivery_order=delivery_order,
                 )
 
-                event.actually_prepared = actually_prepared
-                event.extra_assets = extra_assets
-                event.tag = tag
-                event.force_state_override = force_state_override
-                event.custom_collected = custom_collected
-                event.notes = raw_notes
-                event.event_logs = event_logs
-                event.assigned_users = assigned_users
-                event.subprojects = subprojects
-                event.delivery_order = delivery_order
                 event._legacy_state_migrated = str(raw_state or '').strip() != state
 
                 self.events[event_id] = event

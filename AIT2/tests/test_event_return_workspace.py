@@ -100,6 +100,14 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         ]
         self.assertEqual(len(returned_rows), 1)
         self.assertEqual(returned_rows[0]['status'], 'returned')
+        event_data = details.get_json()['data']
+        self.assertEqual(event_data['totalPrepared'], 1)
+        self.assertEqual(event_data['totalReturned'], 1)
+        self.assertEqual(event_data['workflowProgress']['prepare']['status'], 'green')
+        self.assertEqual(event_data['workflowProgress']['return']['status'], 'green')
+        model_group = next(iter(event_data['modelGroups'].values()))
+        self.assertEqual(model_group['countablePreparedQuantity'], 0)
+        self.assertEqual(model_group['countablePreparedEverQuantity'], 1)
 
         response = self.client.post(
             f'/api/events/{event.event_id}/unreturn',
@@ -166,6 +174,29 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         self.assertIn(bulk_marker, event.actually_prepared)
         self.assertIn(custom_marker, event.actually_prepared)
 
+    def test_return_supports_custom_marker_with_apostrophes(self):
+        black_drape = app_module._make_custom_marker(
+            'MISC',
+            "Black Drape 18' (W) by 4' (H)",
+            1,
+            'AX',
+            '',
+        )
+        event = self.make_event(
+            prepared_items=[black_drape],
+            actually_prepared=[black_drape],
+        )
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': black_drape},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event = self.data_manager.events[event.event_id]
+        self.assertIn(black_drape, event.returned_items)
+        self.assertIn(black_drape, event.actually_prepared)
+
     def test_close_return_requires_every_asset_to_be_returned(self):
         event = self.make_event(
             actually_prepared=['A-001'],
@@ -193,6 +224,27 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         event = self.data_manager.events[event.event_id]
         self.assertEqual(event.state, 'Closed')
         self.assertFalse(event.force_state_override)
+
+    def test_return_progress_ignores_requirements_that_never_left_the_store(self):
+        event = self.make_event(
+            prepared_items=['A-001', 'NEVER-PREPARED'],
+            returned_items=['A-001'],
+        )
+
+        response = self.client.get(f'/api/events/{event.event_id}')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        data = response.get_json()['data']
+        self.assertEqual(data['totalAssets'], 2)
+        self.assertEqual(data['totalPrepared'], 1)
+        self.assertEqual(data['returnableCount'], 0)
+        self.assertEqual(data['returnableTotalCount'], 1)
+        self.assertEqual(data['workflowProgress']['prepare']['status'], 'orange')
+        self.assertEqual(data['workflowProgress']['return']['status'], 'green')
+        self.assertEqual(
+            data['workflowProgress']['return']['label'],
+            'Return: 1/1 assets returned',
+        )
 
     def test_anonymous_prepared_quantity_supports_partial_return_and_unreturn(self):
         group = {

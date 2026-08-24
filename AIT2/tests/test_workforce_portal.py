@@ -182,7 +182,7 @@ class WorkforcePortalTests(unittest.TestCase):
         with mutate_workforce(self.manager.data_folder) as workforce:
             workforce["freelancers"] = [
                 {"id": "worker-z", "name": "Zoe Crew", "company": "Zed Co"},
-                {"id": "worker-a", "name": "Amy Crew", "company": "Alpha Co"},
+                {"id": "worker-a", "name": "Amy Crew", "company": "Alpha Co", "phone": "+65 9123 4567"},
                 {"id": "worker-b", "name": "Ben Crew", "company": "Beta Co"},
             ]
             workforce["assignments"] = {
@@ -271,6 +271,8 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(data["rows"][0]["event"]["state"], "New")
         self.assertEqual(data["rows"][0]["departmentDetails"][0]["code"], "AU")
         self.assertEqual(data["rows"][0]["departmentDetails"][0]["color"], "#CDEBFF")
+        self.assertEqual(data["rows"][0]["departmentDetails"][0]["roles"], ["Audio Technician"])
+        self.assertEqual(data["rows"][0]["subject"]["phone"], "+6591234567")
         self.assertTrue(data["rows"][0]["downloadUrl"].endswith("?download=1"))
 
         claims = self.client.get(
@@ -357,6 +359,9 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('wfClaimGroupStatusControl', source)
         self.assertIn('wfClaimTotalMarkup', source)
         self.assertIn('toggleWorkforceDocumentClaimGroup', source)
+        self.assertIn('wfDocumentDepartmentRoles', source)
+        self.assertIn('const subjectPhone = wfFormatPhone(subject.phone);', source)
+        self.assertNotIn("subject.company || 'Worker'", source)
         self.assertIn('wfReviewClaimDateCheckHtml', source)
         self.assertIn('wfReviewDateRangesLabel', source)
         self.assertIn('wfReviewHiredDateCheck', source)

@@ -16,6 +16,9 @@ USER_MAINTENANCE_LOG_TYPES = (
     'Repair',
 )
 MAINTENANCE_LOG_TYPES = USER_MAINTENANCE_LOG_TYPES + (ASSET_CHECK_LOG_TYPE,)
+_MAINTENANCE_LOG_TYPE_LOOKUP = {
+    log_type.lower(): log_type for log_type in MAINTENANCE_LOG_TYPES
+}
 _CREATED_AT_UNSET = object()
 
 MAINTENANCE_VERSION_TOKEN = (
@@ -178,8 +181,7 @@ def normalize_maintenance_log_type(value, allow_asset_check=True):
     if not raw:
         return DEFAULT_MAINTENANCE_LOG_TYPE
 
-    lookup = {log_type.lower(): log_type for log_type in MAINTENANCE_LOG_TYPES}
-    normalized = lookup.get(raw.lower())
+    normalized = _MAINTENANCE_LOG_TYPE_LOOKUP.get(raw.lower())
     if not normalized:
         return None
     if normalized == ASSET_CHECK_LOG_TYPE and not allow_asset_check:

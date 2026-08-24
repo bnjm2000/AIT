@@ -457,6 +457,10 @@ def build_workforce_schedule_pdf(
         fontSize=7.4, leading=9, textColor=ink,
     )
     show_room = _event_has_multiple_rooms(payload, event, event_assignments)
+    assignments_by_date = {}
+    for assignment in assignments:
+        for work_date in dict.fromkeys(assignment.get("workDates") or []):
+            assignments_by_date.setdefault(str(work_date), []).append(assignment)
 
     subject_record = None
     if subject_id:
@@ -542,7 +546,7 @@ def build_workforce_schedule_pdf(
     ]
 
     for date_index, date_value in enumerate(dates):
-        rows = [row for row in assignments if date_value in (row.get("workDates") or [])]
+        rows = list(assignments_by_date.get(date_value, []))
         if subject_record and not rows:
             continue
         rows.sort(key=lambda row: (

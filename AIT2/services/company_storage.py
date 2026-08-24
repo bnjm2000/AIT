@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from bisect import insort
 from datetime import datetime
 
 
@@ -100,6 +101,7 @@ class CompanyStorageUsageService:
         }
         seen_paths = set()
         largest_files = []
+        file_order = 0
         category_labels = dict(STORAGE_CATEGORIES)
 
         for root_kind, configured_root in roots:
@@ -133,17 +135,29 @@ class CompanyStorageUsageService:
                     except OSError:
                         modified_at = None
                     safe_relative_path = relative_path.replace("\\", "/")
-                    largest_files.append(
-                        {
-                            "name": os.path.basename(absolute_path),
-                            "relativePath": f"{root_kind}/{safe_relative_path}",
-                            "area": root_kind,
-                            "category": category,
-                            "categoryLabel": category_labels.get(category, "Other"),
-                            "bytes": file_size,
-                            "modifiedAt": modified_at,
-                        }
+                    file_record = {
+                        "name": os.path.basename(absolute_path),
+                        "relativePath": f"{root_kind}/{safe_relative_path}",
+                        "area": root_kind,
+                        "category": category,
+                        "categoryLabel": category_labels.get(category, "Other"),
+                        "bytes": file_size,
+                        "modifiedAt": modified_at,
+                    }
+                    insort(
+                        largest_files,
+                        (
+                            (
+                                -file_size,
+                                file_record["relativePath"].lower(),
+                                file_order,
+                            ),
+                            file_record,
+                        ),
                     )
+                    file_order += 1
+                    if len(largest_files) > 20:
+                        largest_files.pop()
 
         self._add_database_usage(totals, database_url, code)
         breakdown = list(totals.values())
@@ -151,7 +165,6 @@ class CompanyStorageUsageService:
         for item in breakdown:
             item["percent"] = round(item["bytes"] / total_bytes * 100, 1) if total_bytes else 0
         breakdown.sort(key=lambda item: (-item["bytes"], item["label"]))
-        largest_files.sort(key=lambda item: (-item["bytes"], item["relativePath"].lower()))
 
         result = {
             "companyCode": code,
@@ -159,7 +172,7 @@ class CompanyStorageUsageService:
             "fileCount": sum(item["fileCount"] for item in breakdown),
             "recordCount": sum(item["recordCount"] for item in breakdown),
             "breakdown": breakdown,
-            "largestFiles": largest_files[:20],
+            "largestFiles": [item for _sort_key, item in largest_files],
             "calculatedAt": datetime.now().isoformat(timespec="seconds"),
         }
         with self._lock:

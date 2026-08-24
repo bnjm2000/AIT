@@ -13,6 +13,7 @@ from quotation_pdf import (
     _group_content_markup,
     _group_display_entries,
     _group_line_description,
+    _group_pdf_line_units,
     _paragraph,
     _safe_hex,
     _split_paragraph_by_height,
@@ -142,18 +143,19 @@ def _ordered_sections(costing):
             rooms.append({'id': room_id, 'name': 'Main Room' if room_id == 'main' else room_id})
             known_ids.add(room_id)
 
+    categories_by_room = {
+        str(room.get('id') or 'main'): OrderedDict()
+        for room in rooms
+    }
+    for line in lines:
+        room_id = str(line.get('subprojectId') or 'main')
+        category = str(line.get('category') or 'General').strip() or 'General'
+        categories_by_room[room_id].setdefault(category, []).append(line)
+
     sections = []
     for room in rooms:
         room_id = str(room.get('id') or 'main')
-        room_lines = [
-            line for line in lines
-            if str(line.get('subprojectId') or 'main') == room_id
-        ]
-        categories = OrderedDict()
-        for line in room_lines:
-            category = str(line.get('category') or 'General').strip() or 'General'
-            categories.setdefault(category, []).append(line)
-        sections.append((room, categories))
+        sections.append((room, categories_by_room[room_id]))
     return sections
 
 
@@ -551,22 +553,7 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
                 ('GRID', (0, 1), (-1, -1), 0.3, soft_rule),
             ]
-            line_units = []
-            rendered_groups = set()
-            for line in lines:
-                group_id = str(line.get('groupId') or '')
-                if not group_id:
-                    line_units.append([line])
-                    continue
-                if group_id in rendered_groups:
-                    continue
-                rendered_groups.add(group_id)
-                line_units.append([
-                    candidate for candidate in lines
-                    if str(candidate.get('groupId') or '') == group_id
-                ])
-
-            for line_unit in line_units:
+            for line_unit in _group_pdf_line_units(lines):
                 line = next(
                     (member for member in line_unit if member.get('groupLeader')),
                     line_unit[0],

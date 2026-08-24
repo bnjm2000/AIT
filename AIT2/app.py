@@ -25,7 +25,6 @@ from types import SimpleNamespace
 from urllib.parse import quote, unquote_plus
 
 from flask import (
-    abort,
     Flask,
     Response,
     g,
@@ -7362,6 +7361,7 @@ def _refresh_model_group_statuses(model_groups):
             + returned_prepared_slots
         )
         countable_prepared = max(countable_assigned - countable_returned, 0)
+        countable_prepared_ever = countable_assigned
 
         group['assignedQuantity'] = assigned
         group['assignedSpecificQuantity'] = assigned_specific
@@ -7372,9 +7372,14 @@ def _refresh_model_group_statuses(model_groups):
         group['isBulkQuantity'] = _event_group_is_bulk_quantity(group)
         group['returnedQuantity'] = returned
         group['preparedQuantity'] = prepared
+        group['preparedEverQuantity'] = assigned
         group['countableAssignedQuantity'] = countable_assigned
         group['countableReturnedQuantity'] = countable_returned
         group['countablePreparedQuantity'] = min(countable_prepared, required) if required > 0 else countable_prepared
+        group['countablePreparedEverQuantity'] = (
+            min(countable_prepared_ever, required)
+            if required > 0 else countable_prepared_ever
+        )
         group['extraPreparedQuantity'] = (
             _sum_extra_prepared_quantity(group)
             + extra_prepared_slots
@@ -8859,14 +8864,18 @@ def _admin_submission_rows(manager=None, workforce=None):
             str(subject_id),
             ({'name': 'Former worker or vendor'}, 'unknown'),
         )
-        assignment_departments = sorted({
-            str(assignment.get('department') or '').strip()
+        subject_assignments = [
+            assignment
             for assignment in event_assignments(workforce, event_id)
             if (
                 isinstance(assignment, dict)
                 and _workforce_assignment_subject_id(assignment) == str(subject_id)
-                and str(assignment.get('department') or '').strip()
             )
+        ]
+        assignment_departments = sorted({
+            str(assignment.get('department') or '').strip()
+            for assignment in subject_assignments
+            if str(assignment.get('department') or '').strip()
         })
         department_details = [
             {
@@ -8887,6 +8896,22 @@ def _admin_submission_rows(manager=None, workforce=None):
                         (department_by_code.get(code.upper()) or {}).get('color')
                     ),
                 ),
+                'roles': sorted({
+                    str(
+                        assignment.get('roleName')
+                        or assignment.get('serviceName')
+                        or ''
+                    ).strip()
+                    for assignment in subject_assignments
+                    if (
+                        str(assignment.get('department') or '').strip() == code
+                        and str(
+                            assignment.get('roleName')
+                            or assignment.get('serviceName')
+                            or ''
+                        ).strip()
+                    )
+                }),
             }
             for code in assignment_departments
         ]
@@ -8896,6 +8921,7 @@ def _admin_submission_rows(manager=None, workforce=None):
                 'name': str(subject.get('name') or 'Unknown'),
                 'type': subject_type,
                 'company': str(subject.get('company') or ''),
+                'phone': str(subject.get('phone') or ''),
             },
             'departments': assignment_departments,
             'departmentDetails': department_details,
@@ -14697,6 +14723,12 @@ def list_workforce_submissions():
                 str(row.get('description') or row.get('notes') or ''),
                 str(row['subject'].get('name') or ''),
                 str(row['subject'].get('company') or ''),
+                str(row['subject'].get('phone') or ''),
+                ' '.join(
+                    role
+                    for department in row.get('departmentDetails') or []
+                    for role in department.get('roles') or []
+                ),
                 str(row['event'].get('id') or ''),
                 str(row['event'].get('name') or ''),
                 str(row['event'].get('location') or ''),
@@ -17107,10 +17139,8 @@ def update_event_state(event, workforce=None):
 
         returnable_counts = _event_returnable_counts(event)
         returned_any = returnable_counts['returned'] > 0
-        all_required_prepared_ever = required_total == 0 or prepared_ever_total >= required_total
         all_returnable_assets_returned = (
             returned_any and
-            all_required_prepared_ever and
             returnable_counts['returnable'] == 0
         )
         is_ready = required_total > 0 and prepared_active_total >= required_total
@@ -17129,7 +17159,9 @@ def update_event_state(event, workforce=None):
                 event_assignments(closure_workforce, event.event_id)
             )
 
-        # 1. Every returnable asset is back, and required items were fully prepared.
+        # 1. Every asset that actually left the store is back. Requirements
+        # that were never prepared remain visible as a preparation shortfall,
+        # but they are not outstanding returns.
         if all_returnable_assets_returned:
             event.state = (
                 'Closed'
@@ -19775,6 +19807,16 @@ def _event_workflow_progress_payload(
     required = max(0, _safe_int(total_required, 0))
     prepared = max(0, _safe_int(total_prepared, 0))
     returned = max(0, _safe_int(total_returned, 0))
+    returnable_counts = _event_returnable_counts(event)
+    return_total = max(0, _safe_int(returnable_counts.get('total'), 0))
+    return_remaining = max(0, _safe_int(returnable_counts.get('returnable'), 0))
+    return_done = max(0, _safe_int(returnable_counts.get('returned'), 0))
+    # Keep aggregate-only callers useful even when they do not populate the
+    # event's operational reference lists.
+    if return_total <= 0 and returned > 0:
+        return_total = max(prepared, returned)
+        return_done = returned
+        return_remaining = max(0, return_total - return_done)
     workforce = workforce if isinstance(workforce, dict) else {
         'assignments': {}, 'transportBookings': {}, 'submissions': {},
     }
@@ -19841,8 +19883,12 @@ def _event_workflow_progress_payload(
             'label': f'Prepare: {min(prepared, required)}/{required} assets prepared',
         },
         'return': {
-            'status': quantity_state(returned, required),
-            'label': f'Return: {min(returned, required)}/{required} assets returned',
+            'status': (
+                'green' if return_total > 0 and return_remaining == 0
+                else 'orange' if return_done > 0
+                else 'neutral'
+            ),
+            'label': f'Return: {min(return_done, return_total)}/{return_total} assets returned',
         },
         'finance': None,
     }
@@ -20198,19 +20244,19 @@ def get_events():
                     required_quantity = max(0, _safe_int(model_group.get('requiredQuantity', 0), 0))
                     total_required += required_quantity
 
-                    prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedQuantity', 0), 0))
+                    prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedEverQuantity', 0), 0))
                     returned_assets_count = max(0, _safe_int(model_group.get('countableReturnedQuantity', 0), 0))
 
                     total_prepared += min(prepared_assets_count, required_quantity) if required_quantity > 0 else prepared_assets_count
                     total_returned += min(returned_assets_count, required_quantity) if required_quantity > 0 else returned_assets_count
 
                 total_required += custom_counts['required']
-                total_prepared += custom_counts['preparedActive']
+                total_prepared += custom_counts['preparedEver']
                 total_returned += custom_counts['returned']
             else:
                 specific_counts = _event_specific_counts(event)
                 total_required = specific_counts['required'] + custom_counts['required']
-                total_prepared = specific_counts['preparedActive'] + custom_counts['preparedActive']
+                total_prepared = specific_counts['preparedEver'] + custom_counts['preparedEver']
                 total_returned = specific_counts['returned'] + custom_counts['returned']
 
             returnable_counts = _event_returnable_counts(event)
@@ -20607,19 +20653,19 @@ def get_event(event_id):
                 total_required += required_quantity
 
                 # Event/department totals must not include manual extras.
-                prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedQuantity', 0), 0))
+                prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedEverQuantity', 0), 0))
                 returned_assets_count = max(0, _safe_int(model_group.get('countableReturnedQuantity', 0), 0))
 
                 total_prepared += min(prepared_assets_count, required_quantity) if required_quantity > 0 else prepared_assets_count
                 total_returned += min(returned_assets_count, required_quantity) if required_quantity > 0 else returned_assets_count
 
             total_required += custom_counts['required']
-            total_prepared += custom_counts['preparedActive']
+            total_prepared += custom_counts['preparedEver']
             total_returned += custom_counts['returned']
         else:
             specific_counts = _event_specific_counts(event)
             total_required = specific_counts['required'] + custom_counts['required']
-            total_prepared = specific_counts['preparedActive'] + custom_counts['preparedActive']
+            total_prepared = specific_counts['preparedEver'] + custom_counts['preparedEver']
             total_returned = specific_counts['returned'] + custom_counts['returned']
 
         total_extra_assets = _event_extra_asset_quantity(event)
