@@ -2469,7 +2469,6 @@ function renderPlanRequirementsCard() {
 
 function renderPlanEventDetailsCard() {
   const event = planPageState.event || {};
-  const notes = String(event.notes || '');
   const eventDates = event.startDate && event.startDate === event.endDate
     ? event.startDate
     : [event.startDate, event.endDate].filter(Boolean).join(' – ');
@@ -2486,19 +2485,6 @@ function renderPlanEventDetailsCard() {
           <div><dt>Date(s)</dt><dd>${escapeHtml(eventDates || '—')}</dd></div>
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
-          <div class="plan-detail-notes-row">
-            <dd>
-              <textarea class="plan-notes-textarea" id="planEventNotes"
-                        maxlength="50000"
-                        placeholder="Add notes or special requirements for this event..."
-                        oninput="planNotesChanged(this)"
-                        onblur="planFlushNotesSave()">${escapeHtml(notes)}</textarea>
-              <span class="plan-notes-footer">
-                <span id="planNotesSaveState">Saved</span>
-                <span id="planNotesCharacterCount">${notes.length}/50000</span>
-              </span>
-            </dd>
-          </div>
         </dl>
       </div>
     </section>

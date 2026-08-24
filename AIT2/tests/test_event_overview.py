@@ -433,7 +433,33 @@ class EventAssignmentAccessTests(unittest.TestCase):
             progress = app_module._event_workflow_progress_payload(
                 event, 4, 4, 4, workforce, finance
             )
-            self.assertIsNone(progress['finance'])
+            self.assertEqual(progress['finance']['status'], 'green')
+
+            full_time_workforce = {
+                'assignments': {'91': [{
+                    'id': 'staff-1',
+                    'subjectType': 'app-user',
+                    'userUsername': 'admin',
+                    'department': 'FT',
+                }]},
+                'transportBookings': {},
+                'submissions': {'91': {'user:admin': {
+                    'invoices': [], 'claims': [],
+                }}},
+                'uploadAllowances': {},
+            }
+            progress = app_module._event_workflow_progress_payload(
+                event, 0, 0, 0, full_time_workforce, {'documents': []}
+            )
+            self.assertEqual(progress['finance']['status'], 'neutral')
+
+            full_time_workforce['submissions']['91']['user:admin']['claims'] = [{
+                'id': 'staff-claim', 'status': 'Pending Review',
+            }]
+            progress = app_module._event_workflow_progress_payload(
+                event, 0, 0, 0, full_time_workforce, {'documents': []}
+            )
+            self.assertEqual(progress['finance']['status'], 'orange')
 
     def test_event_summary_pagination_enriches_only_the_requested_page(self):
         self.login('admin')

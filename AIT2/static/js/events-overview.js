@@ -888,16 +888,13 @@ function eventWorkflowProgressHtml(event, extraClass = '') {
 function openEventFinance(eventId) {
   const id = Number(eventId) || 0;
   if (!id) return;
+  if (isAdminUser() && typeof openEventWorkforce === 'function') {
+    openEventWorkforce(id, 'department');
+    return;
+  }
   if (typeof profitLossState !== 'undefined' && currentUserHasSalesAccess()) {
     profitLossState.eventId = id;
     showSection('profit-loss', { eventId: id });
-    return;
-  }
-  if (isAdminUser() && typeof workforceDocumentsState !== 'undefined') {
-    workforceDocumentsState.eventId = id;
-    workforceDocumentsState.page = 1;
-    workforceDocumentsState.statuses.clear();
-    showSection('invoice-claims', { eventId: id });
   }
 }
 

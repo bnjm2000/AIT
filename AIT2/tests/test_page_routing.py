@@ -224,6 +224,8 @@ class PageRoutingTests(unittest.TestCase):
             schedule_source = schedule_file.read()
         self.assertIn('function restoreWorkforceRouteState(route)', workforce_source)
         self.assertIn("return `/manpower/${id}/${view}`", workforce_source)
+        self.assertIn("viewMode: 'schedule'", workforce_source)
+        self.assertIn("route.viewMode === 'assignments'", workforce_source)
         self.assertIn('syncWorkforceRoute({ replace: true })', workforce_source)
         self.assertIn("syncWorkforceRoute();", schedule_source)
 
@@ -232,6 +234,8 @@ class PageRoutingTests(unittest.TestCase):
             template = template_file.read()
         self.assertIn('class="modal-content event-overview-shell"', template)
         self.assertIn('id="vehicles-section"', template)
+        self.assertIn("filename='js/custom-select.js'", template)
+        self.assertIn("filename='css/custom-select.css'", template)
         self.assertIn('<span>Vehicles</span>', template)
         self.assertIn('.user-only {\n        display: none;', template)
         self.assertNotIn('Generate Delivery Order\n          </button>', template)

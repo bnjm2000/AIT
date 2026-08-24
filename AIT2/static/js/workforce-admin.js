@@ -36,7 +36,7 @@ const workforcePageState = {
     external: new Set()
   },
   transportDriverDetails: new Map(),
-  viewMode: 'assignments',
+  viewMode: 'schedule',
   activeSubprojectId: 'all',
   focusTarget: '',
   pendingUploads: new Map(),
@@ -393,7 +393,7 @@ function wfDepartmentStyle(code) {
 }
 
 function wfDepartmentOptions(selectedCode = '') {
-  return (workforcePageState.data?.departments || [])
+  return (workforcePageState.data?.allDepartments || [])
     .filter(isSelectableCompanyDepartment).map(row => {
     const department = wfDepartmentMeta(row.code);
     return `<option value="${wfAttr(row.code)}" style="background-color:${department.color};color:${department.textColor}"
@@ -431,9 +431,9 @@ function restoreWorkforceRouteState(route) {
   const eventId = Number(route.eventId);
   const eventChanged = eventId !== Number(workforcePageState.eventId);
   workforcePageState.eventId = eventId;
-  workforcePageState.viewMode = route.viewMode === 'schedule'
-    ? 'schedule'
-    : 'assignments';
+  workforcePageState.viewMode = route.viewMode === 'assignments'
+    ? 'assignments'
+    : 'schedule';
   if (eventChanged) {
     workforcePageState.data = null;
     workforcePageState.activeSubprojectId = 'all';
@@ -453,6 +453,11 @@ function openEventWorkforce(eventId, focus = '') {
   workforcePageState.eventId = id;
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
+  if (focus !== 'transport') {
+    workforcePageState.viewMode = focus === 'department'
+      ? 'assignments'
+      : 'schedule';
+  }
   if (typeof resetWorkforceScheduleFilters === 'function') {
     resetWorkforceScheduleFilters();
   }

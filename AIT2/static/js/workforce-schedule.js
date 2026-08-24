@@ -319,7 +319,10 @@ function toggleWorkforceScheduleRoomMenu(event, assignmentId, date) {
 }
 
 function wfScheduleDepartmentOptions(assignment) {
-  const rows = [...(workforcePageState.data?.departments || [])];
+  const rows = [
+    ...(workforcePageState.data?.allDepartments || [])
+      .filter(isSelectableCompanyDepartment)
+  ];
   if (assignment?.subjectType === 'app-user' && !rows.some(row => row.code === 'FT')) {
     rows.unshift({ code: 'FT', name: 'Full-time (no department)', color: '#e2e8f0', textColor: '#334155' });
   }

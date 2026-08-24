@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Showbase</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom-select.css', v=custom_select_css_version) }}" />
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/workforce-admin.css', v=workforce_css_version) }}"
@@ -7689,7 +7690,7 @@
 
       .prepare-new-top {
         display: grid;
-        grid-template-columns: minmax(260px, 0.86fr) minmax(560px, 1.8fr);
+        grid-template-columns: minmax(260px, 0.86fr) minmax(360px, 1.14fr);
         gap: 10px;
         flex: 0 0 auto;
       }
@@ -8538,7 +8539,7 @@
         }
 
         .prepare-new-top {
-          grid-template-columns: minmax(260px, 0.86fr) minmax(440px, 1.45fr);
+          grid-template-columns: minmax(260px, 0.86fr) minmax(360px, 1.14fr);
         }
 
         .prepare-new-workspace {
@@ -8762,6 +8763,11 @@
         flex: 1;
         min-height: 0;
         overflow: hidden;
+        margin-top: 10px;
+      }
+
+      .return-top-event-bar {
+        flex: 0 0 auto;
       }
 
       .return-primary {
@@ -9015,7 +9021,7 @@
       .return-assets-table-head,
       .return-asset-row {
         display: grid;
-        grid-template-columns: minmax(220px, 1.3fr) minmax(135px, 0.8fr) minmax(110px, auto) minmax(150px, auto);
+        grid-template-columns: minmax(250px, 1fr) minmax(110px, auto) minmax(150px, auto);
         align-items: center;
         gap: 9px;
       }
@@ -9092,6 +9098,21 @@
         font-weight: 700;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .return-asset-title-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .return-asset-title-line .return-asset-name {
+        min-width: 0;
+      }
+
+      .return-asset-title-line .plan-dept-code-badge {
+        flex: 0 0 auto;
       }
 
       .return-asset-row.is-returned .return-asset-name {
@@ -9576,17 +9597,13 @@
           padding: 9px 10px;
         }
 
-        .return-asset-department {
-          grid-column: 1;
-        }
-
         .return-status {
           grid-column: 1;
         }
 
         .return-row-action {
           grid-column: 2;
-          grid-row: 1 / span 3;
+          grid-row: 1 / span 2;
         }
 
         .return-department-summary {
@@ -12610,5 +12627,6 @@
     <script src="{{ url_for('static', filename='js/workforce-schedule.js', v=workforce_schedule_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/my-claims.js', v=my_claims_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/vehicles.js', v=vehicles_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/custom-select.js', v=custom_select_js_version) }}"></script>
   </body>
 </html>

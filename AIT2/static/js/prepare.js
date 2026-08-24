@@ -799,7 +799,7 @@ function renderPrepareNewEventDetails() {
   return `
     <section class="prepare-new-card prepare-new-event-card">
       <div class="prepare-new-card-header event-detail-card-header">
-        <h3>&#128203; Event Details</h3>
+        <h3>Event Details</h3>
         ${eventDetailsActionsHtml(event.id)}
       </div>
       <div class="plan-aside-body">
@@ -809,19 +809,6 @@ function renderPrepareNewEventDetails() {
           <div><dt>Date(s)</dt><dd>${escapeHtml(prepareNewEventDates(event))}</dd></div>
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
-          <div class="plan-detail-notes-row">
-            <dt>Notes</dt>
-            <dd>
-              <textarea id="prepareNewNotes" class="plan-notes-textarea"
-                        maxlength="30000"
-                        placeholder="Add notes or special requirements for this event\u2026"
-                        oninput="prepareNewNotesChanged(this.value)">${escapeHtml(event.notes || '')}</textarea>
-              <div class="plan-notes-footer">
-                <span id="prepareNewNotesSaveState">Saved</span>
-                <span>${String(event.notes || '').length} / 30000</span>
-              </div>
-            </dd>
-          </div>
         </dl>
       </div>
     </section>

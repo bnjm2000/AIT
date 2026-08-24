@@ -7,6 +7,7 @@
     <title>Showbase Worker Portal</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom-select.css', v=custom_select_css_version) }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/submission-status.css', v=submission_status_css_version) }}" />
   </head>
   <body>
@@ -139,5 +140,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/worker.js', v=worker_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/custom-select.js', v=custom_select_js_version) }}"></script>
   </body>
 </html>

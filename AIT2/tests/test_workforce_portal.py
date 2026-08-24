@@ -1157,6 +1157,28 @@ class WorkforcePortalTests(unittest.TestCase):
             5,
         )
 
+    def test_assignment_can_add_any_configured_company_department_to_event(self):
+        self.login("admin", True)
+        worker = self.client.post(
+            "/api/workforce/freelancers",
+            json={"name": "Lighting Crew", "phone": "9666 4411"},
+        ).get_json()["data"]
+
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "freelancerId": worker["id"],
+                "department": "LI",
+                "customRole": "Lighting Technician",
+                "workDates": ["2026-07-10"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()["data"]
+        self.assertIn("LI", {row["code"] for row in payload["departments"]})
+        self.assertEqual(payload["assignments"][0]["department"], "LI")
+
     def test_admin_and_worker_invoice_uploads_accept_excel_files(self):
         freelancer_id = self.create_worker_assignment()
         token = self.worker_token()
@@ -3432,6 +3454,7 @@ class WorkforcePortalTests(unittest.TestCase):
             'async function loadWorkforcePage', 1
         )[0]
         self.assertIn('workflowRememberEvent(id)', action)
+        self.assertIn("focus === 'department'", action)
         self.assertIn("showSection(focus === 'transport' ? 'transport' : 'workforce', { eventId: id })", action)
 
     def test_department_assignment_actions_are_in_the_collapsed_header(self):

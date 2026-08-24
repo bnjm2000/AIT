@@ -3897,7 +3897,7 @@ function appDetailRouteFromPath(pathname = window.location.pathname) {
   if (match) return {
     kind: 'workforce',
     eventId: Number(match[1]),
-    viewMode: match[2] === 'by-day' ? 'schedule' : 'assignments'
+    viewMode: match[2] === 'by-department' ? 'assignments' : 'schedule'
   };
   match = cleanPath.match(/^\/delivery-order\/(\d+)$/);
   if (match) return { kind: 'delivery-order', eventId: Number(match[1]) };
@@ -13964,12 +13964,11 @@ function returnPageAssetRowHtml(asset) {
          data-return-row-id="${escapeHtmlAttr(encodedId)}"
          ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
       <div>
-        <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+        <div class="return-asset-title-line">
+          <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+          ${planDepartmentCodeBadgeHtml(asset.department)}
+        </div>
         <div class="return-asset-subtitle">${escapeHtml(returnPageAssetSubtitle(asset))}</div>
-      </div>
-      <div class="return-asset-department">
-        ${planDepartmentCodeBadgeHtml(asset.department)}
-        <div class="return-asset-location">${escapeHtml(asset.location || (asset.isReturned ? 'Returned to inventory' : '—'))}</div>
       </div>
       <div class="return-status ${asset.isReturned ? 'is-returned' : ''}">
         ${asset.isReturned ? 'Returned' : 'Outstanding'}
@@ -14007,12 +14006,11 @@ function returnPagePreparedModelRowHtml(asset) {
     <div class="return-asset-row ${outstanding <= 0 ? 'is-returned' : ''}"
          data-return-row-id="${escapeHtmlAttr(encodedId)}">
       <div>
-        <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+        <div class="return-asset-title-line">
+          <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+          ${planDepartmentCodeBadgeHtml(asset.department)}
+        </div>
         <div class="return-asset-subtitle">${escapeHtml(returnPageAssetSubtitle(asset))}</div>
-      </div>
-      <div class="return-asset-department">
-        ${planDepartmentCodeBadgeHtml(asset.department)}
-        <div class="return-asset-location">Prepared without asset IDs</div>
       </div>
       <div class="return-status ${outstanding <= 0 ? 'is-returned' : ''}">
         ${escapeHtml(statusText)}
@@ -14449,42 +14447,41 @@ function renderReturnPage(options = {}) {
     <div class="return-page-heading">
       <div><h2>Return Event Assets</h2><p>Receive, verify, and return deployed assets to inventory.</p></div>
     </div>
+    <div class="plan-event-bar return-top-event-bar">
+      <button type="button"
+              class="plan-event-select-wrap"
+              id="returnEventPickerButton"
+              aria-haspopup="dialog"
+              aria-label="Choose an event to return"
+              onclick="returnOpenEventChooser()">
+        <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="plan-event-title-row">
+            <span class="plan-event-id">#${escapeHtml(String(event.id || ''))}</span>
+            <span class="plan-event-name">${escapeHtml(planEventOptionLabel(event))}</span>
+          </div>
+          <div class="plan-event-meta">
+            <span>${escapeHtml(returnPageEventDateText(event))}</span>
+            ${event.location ? `<span aria-hidden="true">•</span><span>${escapeHtml(event.location)}</span>` : ''}
+            ${planEventTypeBadgeHtml(event)}
+            ${planEventStateBadgeHtml(event)}
+          </div>
+        </div>
+        <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="plan-metrics return-metrics">
+        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${metrics.total}</strong><span>Total Assets</span></div></div>
+        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${metrics.returned}</strong><span>Returned</span></div></div>
+        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('calendar')}</div><div><strong>${metrics.remaining}</strong><span>Remaining</span></div></div>
+        <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
+      </div>
+    </div>
     <div class="return-layout">
       <aside class="return-left">
         ${returnPageQuickReturnHtml(metrics)}
         ${returnPageCustomItemsHtml(event)}
       </aside>
       <div class="return-primary">
-        <div class="return-event-bar">
-          <button type="button"
-                  class="return-event-select-wrap return-surface"
-                  id="returnEventPickerButton"
-                  aria-haspopup="dialog"
-                  aria-label="Choose an event to return"
-                  onclick="returnOpenEventChooser()">
-            <div class="return-event-icon">${planMetricIconSvg('calendar')}</div>
-            <div class="return-event-copy">
-              <div class="return-event-title">
-                <strong>#${escapeHtml(String(event.id || ''))}</strong>
-                <strong>${escapeHtml(event.name || `Event ${event.id}`)}</strong>
-              </div>
-              <div class="return-event-meta">
-                <span>${escapeHtml(returnPageEventDateText(event))}</span>
-                ${event.location ? `<span aria-hidden="true">•</span><span>${escapeHtml(event.location)}</span>` : ''}
-                ${planEventTypeBadgeHtml(event)}
-                ${planEventStateBadgeHtml(event)}
-              </div>
-            </div>
-            <span class="return-event-chevron" aria-hidden="true">⌄</span>
-          </button>
-          <div class="return-metrics return-surface">
-            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${metrics.total}</strong><span>Total Assets</span></div></div>
-            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${metrics.returned}</strong><span>Returned</span></div></div>
-            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('calendar')}</div><div><strong>${metrics.remaining}</strong><span>Remaining</span></div></div>
-            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
-          </div>
-        </div>
-
         ${renderEventSubprojectTabs(
           'returnPageState',
           event,
@@ -14529,7 +14526,7 @@ function renderReturnPage(options = {}) {
             </div>
           </div>
           <div class="return-assets-table-head">
-            <span>Asset</span><span>Department / Location</span><span>Status</span><span></span>
+            <span>Asset</span><span>Status</span><span></span>
           </div>
           <div class="return-assets-scroll" id="returnAssetsScroll"></div>
           ` : `

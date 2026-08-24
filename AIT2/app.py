@@ -8710,6 +8710,33 @@ def _event_workforce_departments(event_id, event, manager, workforce):
     return active_rows, configured_rows
 
 
+def _ensure_workforce_event_department(
+    workforce, event_id, department, all_departments
+):
+    """Keep a newly assigned company department available on the event."""
+    code = _normalise_department_code(department)
+    if not code or code == 'FT':
+        return
+    configured = next((
+        row for row in (all_departments or [])
+        if _normalise_department_code(row.get('code')) == code
+    ), None)
+    if not configured:
+        return
+    manual_rows = workforce.setdefault('manualDepartments', {}).setdefault(
+        str(event_id), []
+    )
+    if any(
+        _normalise_department_code(row.get('code')) == code
+        for row in manual_rows if isinstance(row, dict)
+    ):
+        return
+    manual_rows.append({
+        'code': code,
+        'name': str(configured.get('name') or code).strip() or code,
+    })
+
+
 def _workforce_submission_expectation(workforce, event_id, subject_id):
     breakdown = []
     estimate_complete = True
@@ -10184,6 +10211,8 @@ def worker_portal():
         'worker.html',
         worker_js_version=_static_asset_version('js/worker.js'),
         worker_css_version=_static_asset_version('css/worker.css'),
+        custom_select_js_version=_static_asset_version('js/custom-select.js'),
+        custom_select_css_version=_static_asset_version('css/custom-select.css'),
         submission_status_css_version=_static_asset_version('css/submission-status.css'),
     )
 
@@ -11125,16 +11154,19 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
                 'error': 'This person is not assigned on that date'
             }), 400
 
-        allowed_departments, _all_departments = _event_workforce_departments(
+        _departments, all_departments = _event_workforce_departments(
             event_id, event, _current_data_manager_object(), workforce
         )
-        allowed_codes = {row['code'] for row in allowed_departments}
+        allowed_codes = {row['code'] for row in all_departments}
         if assignment.get('subjectType') == 'app-user':
             allowed_codes.add('FT')
         if department not in allowed_codes:
             return jsonify({
-                'error': 'Choose a department used by this event'
+                'error': 'Choose a department configured for this company'
             }), 400
+        _ensure_workforce_event_department(
+            workforce, event_id, department, all_departments
+        )
 
         previous_department = _workforce_department_on_date(
             assignment, date_value
@@ -12802,18 +12834,21 @@ def create_workforce_staff_assignment(event_id):
         return jsonify({'error': str(exc)}), 400
 
     with mutate_workforce(_workforce_folder()) as workforce:
-        departments, _all_departments = _event_workforce_departments(
+        _departments, all_departments = _event_workforce_departments(
             event_id,
             event,
             _current_data_manager_object(),
             workforce,
         )
         if department != 'FT' and department not in {
-            row['code'] for row in departments
+            row['code'] for row in all_departments
         }:
             return jsonify({
-                'error': 'Choose an event asset department or add one manually'
+                'error': 'Choose a department configured for this company'
             }), 400
+        _ensure_workforce_event_department(
+            workforce, event_id, department, all_departments
+        )
         assignment = {
             'id': new_id('assignment'),
             'subjectType': 'app-user',
@@ -12878,15 +12913,15 @@ def create_workforce_assignment(event_id):
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
-        allowed_departments, _all_departments = _event_workforce_departments(
+        _departments, all_departments = _event_workforce_departments(
             event_id,
             data_manager.events[event_id],
             _current_data_manager_object(),
             workforce,
         )
-        if department not in {row['code'] for row in allowed_departments}:
+        if department not in {row['code'] for row in all_departments}:
             return jsonify({
-                'error': 'Choose an event asset department or add one manually'
+                'error': 'Choose a department configured for this company'
             }), 400
         freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
         vendor = find_by_id(workforce.get('vendors'), freelancer_id)
@@ -13008,6 +13043,9 @@ def create_workforce_assignment(event_id):
                 f"{f' as {role_name}' if role_name else ''}"
                 f"{f' in {subproject_name}' if subproject_name else ''}"
             )
+        _ensure_workforce_event_department(
+            workforce, event_id, department, all_departments
+        )
     log_action(log_message)
     _workforce_changed(event_id, 'assignment-created')
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
@@ -13045,6 +13083,14 @@ def update_workforce_assignment(event_id, assignment_id):
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
+        _departments, all_departments = _event_workforce_departments(
+            event_id, event, _current_data_manager_object(), workforce
+        )
+        allowed_codes = {row['code'] for row in all_departments}
+        if department != 'FT' and department not in allowed_codes:
+            return jsonify({
+                'error': 'Choose a department configured for this company'
+            }), 400
         assignment = find_by_id(
             event_assignments(workforce, event_id), assignment_id
         )
@@ -13143,6 +13189,9 @@ def update_workforce_assignment(event_id, assignment_id):
             })
         _merge_undefined_workforce_role(
             event_assignments(workforce, event_id), assignment, event
+        )
+        _ensure_workforce_event_department(
+            workforce, event_id, department, all_departments
         )
     log_action(
         f"Updated workforce assignment for event {event_id}"
@@ -17454,6 +17503,8 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        custom_select_js_version=_static_asset_version('js/custom-select.js'),
+        custom_select_css_version=_static_asset_version('css/custom-select.css'),
         plan_js_version=_static_asset_version('js/plan.js'),
         prepare_js_version=_static_asset_version('js/prepare.js'),
         admin_settings_js_version=_static_asset_version('js/admin-settings.js'),
@@ -17514,6 +17565,8 @@ def login():
             'login.html',
             login_js_version=_static_asset_version('js/login.js'),
             login_css_version=_static_asset_version('css/login.css'),
+            custom_select_js_version=_static_asset_version('js/custom-select.js'),
+            custom_select_css_version=_static_asset_version('css/custom-select.css'),
         )
 
     try:
@@ -19895,10 +19948,9 @@ def _event_workflow_progress_payload(
 
     finance_data = finance_data if isinstance(finance_data, dict) else {}
     current_username = str(session.get('user') or '').strip()
-    role_allows_finance = (
-        _effective_user_role(current_username) in {'owner', 'admin'}
-        or _current_user_has_sales_access()
-    )
+    effective_role = _effective_user_role(current_username)
+    admin_finance_access = effective_role in {'owner', 'admin'}
+    sales_finance_access = _current_user_has_sales_access()
     owned_quotations = [
         document for document in (finance_data.get('documents') or [])
         if isinstance(document, dict)
@@ -19907,7 +19959,9 @@ def _event_workflow_progress_payload(
         and _finance_document_owner_username(document).casefold()
         == current_username.casefold()
     ]
-    if not role_allows_finance or not owned_quotations:
+    if not admin_finance_access and not (
+        sales_finance_access and owned_quotations
+    ):
         return progress
 
     subject_ids = {
@@ -19934,8 +19988,16 @@ def _event_workflow_progress_payload(
             row for row in rows.get('claims', [])
             if isinstance(row, dict) and str(row.get('status') or '') != 'Denied'
         ]
+        is_full_time_subject = any(
+            _workforce_assignment_subject_id(assignment) == subject_id
+            and str(assignment.get('subjectType') or '').lower() == 'app-user'
+            for assignment in assignments
+        )
         if (
-            _worker_upload_limits(workforce, event_id, subject_id)['invoiceLimit'] > 0
+            not is_full_time_subject
+            and _worker_upload_limits(
+                workforce, event_id, subject_id
+            )['invoiceLimit'] > 0
             and not invoices
         ):
             awaiting_invoice_count += 1
@@ -19978,7 +20040,9 @@ def _event_workflow_progress_payload(
     progress['finance'] = {
         'status': finance_status,
         'label': finance_label,
-        'quotationId': str(owned_quotations[0].get('id') or ''),
+        'quotationId': str(
+            owned_quotations[0].get('id') or ''
+        ) if owned_quotations else '',
     }
     return progress
 

@@ -67,6 +67,16 @@ def test_grid_and_list_show_progress_icons_and_one_compact_next_action():
     assert '<th>Workspaces</th>' in table
 
 
+def test_progress_icons_open_the_requested_manpower_views():
+    finance = function_source('openEventFinance', 'eventCardMenuHtml')
+    assert "openEventWorkforce(id, 'department')" in finance
+    assert "profitLossState.eventId = id" in finance
+
+    workforce = (ROOT / 'static' / 'js' / 'workforce-admin.js').read_text(encoding='utf-8')
+    assert "viewMode: 'schedule'" in workforce
+    assert "focus === 'department'" in workforce
+
+
 def test_event_card_next_action_and_compact_button_share_one_footer_row():
     footer_css = TEMPLATE.split('      .event-workflow-footer {', 2)[2].split('}', 1)[0]
     controls_css = TEMPLATE.split('      .event-card-controls {', 1)[1].split('}', 1)[0]
