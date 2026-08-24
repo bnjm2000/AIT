@@ -7156,15 +7156,44 @@ class FinanceFeatureTests(unittest.TestCase):
             [accepted_total / 2, accepted_total / 2],
         )
 
+        detail_before_issue = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']
+        self.assertTrue(detail_before_issue['nextInvoiceNumber'])
+        directory_before_issue = self.client.get(
+            '/api/invoice-plans'
+        ).get_json()['data']
+        listed_before_issue = next(
+            row for row in directory_before_issue
+            if row['quotation']['id'] == accepted['id']
+        )
+        self.assertEqual(listed_before_issue['plan']['invoiceNumber'], '')
+
         issued_response = self.client.post(
             f"/api/invoice-plans/{accepted['id']}/installments/deposit/issue",
-            json={'invoiceDate': '2026-08-10', 'status': 'sent'},
+            json={
+                'invoiceDate': '2026-08-10', 'status': 'sent',
+                'number': 'CLIENT-INV-900',
+            },
         )
         self.assertEqual(issued_response.status_code, 201, issued_response.get_data(as_text=True))
         invoice = issued_response.get_json()['data']
         self.assertEqual(invoice['invoiceAmount'], accepted_total / 2)
         self.assertEqual(invoice['invoiceLabel'], 'Deposit')
         self.assertEqual(invoice['sourceQuotationNumber'], accepted['number'])
+        self.assertEqual(invoice['number'], 'CLIENT-INV-900')
+
+        duplicate_number = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/balance/issue",
+            json={'invoiceDate': '2026-08-10', 'number': 'client-inv-900'},
+        )
+        self.assertEqual(
+            duplicate_number.status_code, 409,
+            duplicate_number.get_data(as_text=True),
+        )
+        self.assertEqual(
+            duplicate_number.get_json()['code'], 'invoice_number_conflict'
+        )
 
         refreshed_plan = self.client.get(
             f"/api/invoice-plans/{accepted['id']}"
@@ -7970,6 +7999,14 @@ class FinanceFeatureTests(unittest.TestCase):
     def test_invoice_workspace_requires_sales_access(self):
         self.login('no-sales')
         self.assertEqual(self.client.get('/api/invoice-plans').status_code, 403)
+        self.assertEqual(
+            self.client.get('/api/statements-of-account/companies').status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get('/api/statements-of-account/pdf?company=Acme').status_code,
+            403,
+        )
         page = self.client.get('/invoices')
         self.assertEqual(page.status_code, 302)
 
@@ -7994,6 +8031,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('function invoiceEnsureSentModal', invoice_source)
         self.assertIn("await apiCall('/api/pdf-settings')", invoice_source)
         self.assertIn('invoiceStatusBadgeMarkup(plan.status)', invoice_source)
+        self.assertIn('Invoice / Quotation', invoice_source)
+        self.assertIn('nextInvoiceNumber', invoice_source)
+        self.assertIn("name: 'invoiceNumber'", invoice_source)
+        self.assertIn('function invoiceOpenSoaModal', invoice_source)
+        self.assertIn('/api/statements-of-account/companies', invoice_source)
+        self.assertIn('Create SOA', invoice_source)
         self.assertIn("filename='js/invoices.js'", template_source)
 
     def test_cancelled_quotation_can_create_a_cancellation_invoice_plan(self):
@@ -8135,6 +8178,86 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertFalse(installment['invoiceId'])
         self.assertFalse(installment['invoiceNumber'])
         self.assertEqual(installment['status'], 'planned')
+
+    def test_statement_of_account_groups_invoices_by_company_not_contact_person(self):
+        issued = []
+        for index, contact_name in enumerate(('Alex Buyer', 'Jamie Buyer'), start=1):
+            quotation = self.create_quote(f'Acme Project {index}')
+            quotation['client'] = {
+                'name': contact_name,
+                'company': 'Acme Events Pte Ltd',
+                'address1': '10 Event Street',
+                'postalCode': '018956',
+            }
+            quotation['lineItems'] = [{
+                'id': f'acme-line-{index}',
+                'description': f'Production package {index}',
+                'department': 'Production',
+                'days': 1,
+                'quantity': 1,
+                'unitPrice': 100 * index,
+            }]
+            accepted = self.client.put(
+                f"/api/quotations/{quotation['id']}",
+                json={**quotation, 'status': 'accepted'},
+            ).get_json()['data']
+            installment_id = f'acme-installment-{index}'
+            self.client.put(
+                f"/api/invoice-plans/{accepted['id']}",
+                json={'installments': [{
+                    'id': installment_id,
+                    'label': f'Invoice {index}',
+                    'mode': 'percentage',
+                    'value': 100,
+                }]},
+            )
+            invoice_response = self.client.post(
+                f"/api/invoice-plans/{accepted['id']}/installments/{installment_id}/issue",
+                json={
+                    'invoiceDate': '2026-08-10',
+                    'number': f'ACME-INV-{index:02d}',
+                },
+            )
+            self.assertEqual(
+                invoice_response.status_code, 201,
+                invoice_response.get_data(as_text=True),
+            )
+            issued.append(invoice_response.get_json()['data'])
+
+        paid = self.client.post(
+            f"/api/invoices/{issued[0]['id']}/mark-paid",
+            json={'receivedDate': '2026-08-15'},
+        )
+        self.assertEqual(paid.status_code, 200, paid.get_data(as_text=True))
+
+        companies = self.client.get(
+            '/api/statements-of-account/companies'
+        ).get_json()['data']
+        acme = next(row for row in companies if row['company'] == 'Acme Events Pte Ltd')
+        self.assertEqual(acme['invoiceCount'], 2)
+        self.assertGreater(acme['outstanding'], 0)
+
+        statement = self.client.get(
+            '/api/statements-of-account/pdf',
+            query_string={
+                'company': 'acme events pte ltd',
+                'statementDate': '2026-08-24',
+            },
+        )
+        self.assertEqual(statement.status_code, 200)
+        statement_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(statement.data)).pages
+        )
+        for expected in (
+            'STATEMENT OF ACCOUNT', 'Acme Events Pte Ltd',
+            'ACME-INV-01', 'ACME-INV-02',
+            'Acme Project 1', 'Acme Project 2',
+            'PAYMENTS RECEIVED', 'BALANCE OUTSTANDING',
+        ):
+            self.assertIn(expected, statement_text)
+        self.assertNotIn('Alex Buyer', statement_text)
+        self.assertNotIn('Jamie Buyer', statement_text)
 
     def test_invoice_project_status_is_derived_from_all_issued_invoices(self):
         quotation = self.create_quote('Milestone Billing')

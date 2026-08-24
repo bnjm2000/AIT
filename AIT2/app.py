@@ -11837,7 +11837,13 @@ def _event_report_workforce(report_data):
                 'callTime': str((row.get('callTimes') or {}).get(date_value) or 'Not set'),
                 'pax': max(1, _safe_int(row.get('pax'), 1)) if subject_type == 'vendor' else 1,
             })
-    manpower.sort(key=lambda row: (row['date'], row['callTime'], row['name'].casefold()))
+    manpower.sort(key=lambda row: (
+        row['room'].casefold(),
+        row['department'].casefold(),
+        row['name'].casefold(),
+        row['date'],
+        row['callTime'],
+    ))
     services.sort(key=lambda row: (row['department'].casefold(), row['name'].casefold()))
     return manpower, services
 
@@ -43079,6 +43085,160 @@ def invoice_item(document_id):
     return _finance_get_update_delete(document_id, 'invoice')
 
 
+def _statement_invoice_paid_amount(document, statement_date=''):
+    invoice_id = str((document or {}).get('id') or '')
+    total = 0.0
+    for payment in (document or {}).get('invoicePlanPayments') or []:
+        if not isinstance(payment, dict):
+            continue
+        if str(payment.get('invoiceId') or '') != invoice_id:
+            continue
+        payment_date = str(payment.get('date') or '')[:10]
+        if statement_date and payment_date and payment_date > statement_date:
+            continue
+        total += _safe_float(payment.get('amount'), 0)
+    return round(max(0, total), 2)
+
+
+def _statement_company_invoices(finance_data, company_name, statement_date=''):
+    company_key = str(company_name or '').strip().casefold()
+    rows = []
+    for document in finance_data.get('documents') or []:
+        if not isinstance(document, dict) or document.get('type') != 'invoice':
+            continue
+        if not _finance_user_can_access(document):
+            continue
+        if str(document.get('status') or '').strip().lower() == 'void':
+            continue
+        client = _normalise_finance_client(document.get('client'))
+        if str(client.get('company') or '').strip().casefold() != company_key:
+            continue
+        invoice_date = str(
+            document.get('invoiceDate') or document.get('createdAt') or ''
+        )[:10]
+        if statement_date and invoice_date and invoice_date > statement_date:
+            continue
+        amount = round(max(0, _safe_float(
+            document.get('invoiceAmount'),
+            (document.get('totals') or {}).get('total'),
+        )), 2)
+        paid = min(amount, _statement_invoice_paid_amount(
+            document, statement_date
+        ))
+        rows.append({
+            'id': str(document.get('id') or ''),
+            'number': str(document.get('number') or ''),
+            'invoiceDate': invoice_date,
+            'dueDate': str(
+                document.get('paymentDueDate') or document.get('dueDate') or ''
+            )[:10],
+            'project': str(
+                document.get('projectName') or document.get('title') or ''
+            ),
+            'reference': str(document.get('reference') or ''),
+            'status': str(document.get('status') or 'draft'),
+            'amount': amount,
+            'paid': paid,
+            'balance': round(max(0, amount - paid), 2),
+            'currency': str(document.get('currency') or 'SGD').upper(),
+            'client': client,
+        })
+    return sorted(rows, key=lambda row: (
+        row.get('invoiceDate') or '', row.get('number') or ''
+    ))
+
+
+@app.route('/api/statements-of-account/companies', methods=['GET'])
+@require_sales
+def statement_of_account_companies():
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        grouped = {}
+        for document in finance_data.get('documents') or []:
+            if not isinstance(document, dict) or document.get('type') != 'invoice':
+                continue
+            if not _finance_user_can_access(document):
+                continue
+            if str(document.get('status') or '').strip().lower() == 'void':
+                continue
+            client = _normalise_finance_client(document.get('client'))
+            company_name = str(client.get('company') or '').strip()
+            if not company_name:
+                continue
+            key = company_name.casefold()
+            row = grouped.setdefault(key, {
+                'company': company_name,
+                'invoiceCount': 0,
+                'outstanding': 0.0,
+            })
+            amount = round(max(0, _safe_float(
+                document.get('invoiceAmount'),
+                (document.get('totals') or {}).get('total'),
+            )), 2)
+            paid = min(amount, _statement_invoice_paid_amount(document))
+            row['invoiceCount'] += 1
+            row['outstanding'] = round(
+                row['outstanding'] + max(0, amount - paid), 2
+            )
+        rows = sorted(grouped.values(), key=lambda row: row['company'].casefold())
+    return jsonify({'success': True, 'data': rows})
+
+
+@app.route('/api/statements-of-account/pdf', methods=['GET'])
+@require_sales
+def statement_of_account_pdf():
+    company_name = str(request.args.get('company') or '').strip()
+    if not company_name:
+        return jsonify({'error': 'Select a company'}), 400
+    statement_date = str(
+        request.args.get('statementDate') or datetime.now().strftime('%Y-%m-%d')
+    )[:10]
+    try:
+        datetime.strptime(statement_date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'error': 'Enter a valid statement date'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        invoices = _statement_company_invoices(
+            finance_data, company_name, statement_date
+        )
+    if not invoices:
+        return jsonify({
+            'error': 'No invoices were found for this company by the statement date'
+        }), 404
+    currencies = {row.get('currency') or 'SGD' for row in invoices}
+    if len(currencies) > 1:
+        return jsonify({
+            'error': 'This company has invoices in multiple currencies. Create separate statements after aligning the invoice currencies.'
+        }), 409
+
+    from statement_pdf import build_statement_of_account_pdf
+
+    pdf_settings = _normalise_pdf_settings(_load_pdf_settings())
+    canonical_company_name = str(
+        (invoices[-1].get('client') or {}).get('company') or company_name
+    ).strip()
+    pdf_bytes = build_statement_of_account_pdf(
+        {
+            'accountCompany': canonical_company_name,
+            'statementDate': statement_date,
+            'currency': next(iter(currencies), 'SGD'),
+            'client': invoices[-1].get('client') or {},
+            'invoices': invoices,
+        },
+        company=pdf_settings,
+        logo_path=_pdf_logo_path(pdf_settings),
+    )
+    filename = sanitize_filename(canonical_company_name) or 'company'
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f'{filename}-statement-of-account-{statement_date}.pdf',
+    )
+
+
 def _invoice_plan_history_entry(action, detail=''):
     username = _finance_current_username()
     return {
@@ -43772,6 +43932,9 @@ def _invoice_plan_response(finance_data, quotation, plan, include_quotation=Fals
     )
     payload = {
         'plan': response_plan,
+        'nextInvoiceNumber': _next_finance_number(
+            finance_data.get('documents') or [], 'invoice'
+        ),
         'quotation': (
             quotation if include_quotation
             else _finance_document_list_summary(quotation)
@@ -43786,6 +43949,11 @@ def _invoice_plan_list_response(finance_data, quotation, plan):
     summary = _invoice_plan_summary(
         plan, (quotation.get('totals') or {}).get('total', 0)
     )
+    invoice_numbers = [
+        str(row.get('invoiceNumber') or '').strip()
+        for row in plan.get('installments') or []
+        if str(row.get('invoiceNumber') or '').strip()
+    ]
     return {
         'plan': {
             'id': str(plan.get('id') or ''),
@@ -43798,6 +43966,8 @@ def _invoice_plan_list_response(finance_data, quotation, plan):
                 plan.get('strategyLabel') or 'Custom installment plan'
             ),
             'installmentCount': len(plan.get('installments') or []),
+            'invoiceNumbers': invoice_numbers,
+            'invoiceNumber': invoice_numbers[0] if invoice_numbers else '',
             'updatedAt': str(plan.get('updatedAt') or ''),
             'summary': summary,
         },
@@ -43918,7 +44088,13 @@ def invoice_plans_collection():
             row = _invoice_plan_list_response(
                 finance_data, normalised_quote, plan
             )
-            search_text = _finance_list_search_text(normalised_quote)
+            search_text = ' '.join((
+                _finance_list_search_text(normalised_quote),
+                *(
+                    str(number or '')
+                    for number in (row.get('plan') or {}).get('invoiceNumbers') or []
+                ),
+            )).lower()
             if query and query not in search_text:
                 continue
             rows.append(row)
@@ -44229,9 +44405,22 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             except ValueError as exc:
                 return jsonify({'error': str(exc)}), 400
         invoice = _normalise_finance_document(source, 'invoice')
-        invoice['number'] = _next_finance_number(
+        requested_number = str(request_data.get('number') or '').strip()[:80]
+        invoice_number = requested_number or _next_finance_number(
             finance_data.get('documents') or [], 'invoice'
         )
+        if any(
+            row.get('type') == 'invoice'
+            and str(row.get('number') or '').strip().casefold()
+            == invoice_number.casefold()
+            for row in finance_data.get('documents') or []
+            if isinstance(row, dict)
+        ):
+            return jsonify({
+                'error': 'Invoice number is already in use',
+                'code': 'invoice_number_conflict',
+            }), 409
+        invoice['number'] = invoice_number
         _ensure_invoice_sent_snapshot(invoice)
         finance_data.setdefault('documents', []).append(invoice)
         installment.update({

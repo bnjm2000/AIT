@@ -2111,6 +2111,7 @@ function planShowRequirementWarning(encodedWarning, legacyWarningType = 'shortag
         const metrics = document.createElement('div');
         metrics.className = 'plan-warning-metrics';
         [
+          ['Total inventory', Math.max(0, Number(availability?.physical || 0)), ''],
           ['Required', required, ''],
           [warningType === 'degraded' ? 'Working stock' : 'Can supply', capacity, ''],
           [warningType === 'degraded' ? 'Degraded needed' : 'Shortage', affected, 'is-warning']

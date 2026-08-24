@@ -66,7 +66,7 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     header_accent = colors.HexColor(header_hex)
     ink = colors.HexColor(SHOWBASE_INK)
     muted = colors.HexColor(SHOWBASE_MUTED)
-    border = colors.HexColor(SHOWBASE_BORDER)
+    border = colors.HexColor("#94A3B8")
     panel = colors.HexColor("#F8FAFC")
     buffer = BytesIO()
     company_name = _text(company.get("companyName") or company.get("name"), "Showbase")
@@ -196,12 +196,9 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
 
     def data_table(section_label, section_count, headers, rows, widths, empty_text,
                    *, centered_columns=(), department_column=None,
-                   group_column=None, border_width=.5):
-        section_row = (
-            [_paragraph(section_label, section)]
-            + [""] * max(0, len(headers) - 2)
-            + [_paragraph(section_count, center)]
-        )
+                   group_column=None, border_width=.8):
+        section_text = section_label + (f"  -  {section_count}" if section_count else "")
+        section_row = [_paragraph(section_text, section)] + [""] * (len(headers) - 1)
         table_rows = [
             section_row,
             [_paragraph(value, table_header) for value in headers],
@@ -222,13 +219,12 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
             repeatRows=2,
         )
         commands = [
-            ("SPAN", (0, 0), (-2, 0)),
+            ("SPAN", (0, 0), (-1, 0)),
             ("LINEBELOW", (0, 0), (-1, 0), 1, accent),
-            ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
             ("BACKGROUND", (0, 1), (-1, 1), header_accent),
             ("TEXTCOLOR", (0, 1), (-1, 1), colors.white),
-            ("BOX", (0, 0), (-1, -1), border_width, border),
-            ("INNERGRID", (0, 1), (-1, -1), .3, border),
+            ("BOX", (0, 0), (-1, -1), max(.8, border_width), border),
+            ("INNERGRID", (0, 1), (-1, -1), .5, border),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -343,12 +339,12 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     story.extend([
         data_table(
             "MANPOWER", f"{len(manpower_rows)} scheduled row(s)",
-            ["Date", "Name", "Room", "Department", "Role", "Call time", "Pax"],
-            [[_iso_day_label(row.get("date")), row.get("name"), row.get("room"), row.get("department"),
+            ["Room", "Department", "Name", "Date", "Role", "Call time", "Pax"],
+            [[row.get("room"), row.get("department"), row.get("name"), _iso_day_label(row.get("date")),
               row.get("role"), row.get("callTime"), row.get("pax")]
              for row in manpower_rows],
-            [70, 95, 60, 75, 105, 50, 25], "No crew are scheduled for this event.",
-            centered_columns=(5, 6), department_column=3, group_column=0,
+            [58, 74, 95, 72, 105, 50, 26], "No crew are scheduled for this event.",
+            centered_columns=(5, 6), department_column=1, group_column=0,
             border_width=.9,
         ),
         Spacer(1, 5 * mm),

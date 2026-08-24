@@ -24,6 +24,8 @@ const invoiceState = {
   sentTarget: null,
   defaultPaymentTermDays: null,
   clients: [],
+  soaCompanies: [],
+  soaCompany: '',
   planTemplates: [],
   planTemplateDraft: null
 };
@@ -154,7 +156,7 @@ function invoiceStatusLabel(status) {
 
 function invoiceStatusBadgeMarkup(status) {
   const value = String(status || 'draft').toLowerCase();
-  return `<span class="invoice-status" data-status="${invoiceAttr(value)}"><span></span>${invoiceStatusLabel(value)}</span>`;
+  return `<span class="invoice-status" data-status="${invoiceAttr(value)}">${invoiceStatusLabel(value)}</span>`;
 }
 
 function invoiceDocumentStatusChoices(status) {
@@ -394,15 +396,105 @@ function invoiceFilterMarkup() {
   const statuses = invoiceState.view === 'issued' ? INVOICE_DOCUMENT_STATUSES : INVOICE_PLAN_STATUSES;
   const counts = invoiceState.listMeta.statusCounts || {};
   return `
-    <div class="invoice-filter-row" aria-label="Filter invoice statuses">
-      <button type="button" class="invoice-filter ${invoiceState.statuses.length ? '' : 'active'}" onclick="invoiceToggleFilter('all')">All <span>${Number(invoiceState.listMeta.statusTotal || source.length)}</span></button>
+    <div class="finance-list-status-filters invoice-filter-row" aria-label="Filter invoice statuses">
+      <button type="button" class="finance-list-filter invoice-filter ${invoiceState.statuses.length ? '' : 'active'}" onclick="invoiceToggleFilter('all')">All <span>${Number(invoiceState.listMeta.statusTotal || source.length)}</span></button>
       ${statuses.filter(status => counts[status]).map(status => `
-        <button type="button" data-status="${status}" class="invoice-filter ${invoiceState.statuses.includes(status) ? 'active' : ''}" onclick="invoiceToggleFilter('${status}')">
+        <button type="button" data-status="${status}" class="finance-list-filter invoice-filter status-${status} ${invoiceState.statuses.includes(status) ? 'active' : ''}" onclick="invoiceToggleFilter('${status}')">
           ${invoiceStatusLabel(status)} <span>${counts[status]}</span>
         </button>
       `).join('')}
     </div>
   `;
+}
+
+function invoiceEnsureSoaModal() {
+  let modal = document.getElementById('invoiceSoaModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'invoiceSoaModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content invoice-soa-modal">
+      <div class="modal-header">
+        <div><h3 class="modal-title">Create Statement of Account</h3><p>Statements are grouped by company, regardless of the contact person.</p></div>
+        <button type="button" class="close-btn" onclick="closeModal('invoiceSoaModal')" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="invoice-soa-body">
+        <label class="invoice-soa-search"><span>Company</span><input id="invoiceSoaSearch" placeholder="Search companies" oninput="invoiceRenderSoaCompanies(this.value)"></label>
+        <div id="invoiceSoaCompanies" class="invoice-soa-company-list" role="listbox" aria-label="Companies"></div>
+        <label class="invoice-soa-date"><span>Statement date</span><input id="invoiceSoaDate" type="date"></label>
+      </div>
+      <div class="modal-actions invoice-soa-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('invoiceSoaModal')">Cancel</button>
+        <button type="button" id="invoiceSoaCreate" class="btn invoice-soa-create" onclick="invoiceCreateSoa()" disabled>Create SOA PDF</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function invoiceRenderSoaCompanies(query = '') {
+  const list = document.getElementById('invoiceSoaCompanies');
+  if (!list) return;
+  const cleanQuery = String(query || '').trim().toLowerCase();
+  const companies = invoiceState.soaCompanies.filter(row => (
+    !cleanQuery || String(row.company || '').toLowerCase().includes(cleanQuery)
+  ));
+  list.innerHTML = companies.length ? companies.map(row => {
+    const selected = row.company === invoiceState.soaCompany;
+    return `
+      <button type="button" class="invoice-soa-company ${selected ? 'selected' : ''}"
+              role="option" aria-selected="${selected ? 'true' : 'false'}"
+              onclick="invoiceSelectSoaCompany('${invoiceAttr(encodeURIComponent(row.company || '').replace(/'/g, '%27'))}')">
+        <span><strong>${invoiceEscape(row.company)}</strong><small>${Number(row.invoiceCount || 0)} invoice${Number(row.invoiceCount || 0) === 1 ? '' : 's'}</small></span>
+        <span><small>Outstanding</small><strong>${invoiceMoney(row.outstanding)}</strong></span>
+      </button>`;
+  }).join('') : '<div class="invoice-soa-empty">No matching companies with invoices.</div>';
+}
+
+function invoiceSelectSoaCompany(encodedCompany) {
+  invoiceState.soaCompany = decodeURIComponent(String(encodedCompany || ''));
+  invoiceRenderSoaCompanies(document.getElementById('invoiceSoaSearch')?.value || '');
+  const createButton = document.getElementById('invoiceSoaCreate');
+  if (createButton) createButton.disabled = !invoiceState.soaCompany;
+}
+
+async function invoiceOpenSoaModal() {
+  invoiceEnsureSoaModal();
+  invoiceState.soaCompany = '';
+  const search = document.getElementById('invoiceSoaSearch');
+  const date = document.getElementById('invoiceSoaDate');
+  const list = document.getElementById('invoiceSoaCompanies');
+  const createButton = document.getElementById('invoiceSoaCreate');
+  if (search) search.value = '';
+  if (date) date.value = invoiceToday();
+  if (createButton) createButton.disabled = true;
+  if (list) list.innerHTML = '<div class="invoice-loading"><span></span>Loading companies...</div>';
+  openModal('invoiceSoaModal');
+  try {
+    const response = await apiCall('/api/statements-of-account/companies');
+    invoiceState.soaCompanies = response.data || [];
+    invoiceRenderSoaCompanies();
+  } catch (error) {
+    if (list) list.innerHTML = `<div class="invoice-soa-empty">${invoiceEscape(error.message || 'Unable to load companies')}</div>`;
+  }
+}
+
+function invoiceCreateSoa() {
+  const company = invoiceState.soaCompany;
+  const statementDate = document.getElementById('invoiceSoaDate')?.value || invoiceToday();
+  if (!company) {
+    showNotification('error', 'Select a company first');
+    return;
+  }
+  const url = `/api/statements-of-account/pdf?company=${encodeURIComponent(company)}&statementDate=${encodeURIComponent(statementDate)}`;
+  const preview = window.open(url, '_blank');
+  if (!preview) {
+    showNotification('error', 'Allow pop-ups to create the SOA PDF');
+    return;
+  }
+  preview.opener = null;
+  closeModal('invoiceSoaModal');
 }
 
 function invoiceRenderList() {
@@ -425,6 +517,10 @@ function invoiceRenderList() {
         <p>${invoiceState.view === 'issued' ? 'Review every issued invoice by invoice number and project.' : 'Build installment plans, issue invoices and track every payment.'}</p>
       </div>
       <div class="invoice-list-actions">
+        <button type="button" class="invoice-soa-button" onclick="invoiceOpenSoaModal()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M15 3v4h4M9 11h6M9 15h6"></path></svg>
+          Create SOA
+        </button>
         <button type="button" class="invoice-view-toggle" onclick="invoiceSetView('${invoiceState.view === 'issued' ? 'plans' : 'issued'}')">
           <svg viewBox="0 0 24 24" aria-hidden="true">${invoiceState.view === 'issued' ? '<path d="M4 6h16M4 12h16M4 18h16"></path>' : '<path d="M7 3h10v18H7zM10 8h4M10 12h4M10 16h4"></path>'}</svg>
           ${invoiceState.view === 'issued' ? 'View billing plans' : 'View all invoices'}
@@ -435,13 +531,13 @@ function invoiceRenderList() {
         </label>
       </div>
     </header>
-    ${invoiceFilterMarkup()}
     <section class="invoice-list-shell">
+      ${invoiceFilterMarkup()}
       ${visible.length ? `
         <div class="invoice-list-scroll">
           ${invoiceState.view === 'issued' ? invoiceIssuedTableMarkup(visible) : `
             <table class="invoice-list-table">
-              <thead><tr><th>Quotation</th><th>Client / Project</th><th>Strategy</th><th>Status</th><th>Invoiced</th><th>Paid</th><th>Due</th><th></th></tr></thead>
+              <thead><tr><th>Invoice / Quotation</th><th>Bill to / Project</th><th>Strategy</th><th>Status</th><th>Invoiced</th><th>Paid</th><th>Due</th><th></th></tr></thead>
               <tbody>${visible.map(invoiceListRowMarkup).join('')}</tbody>
             </table>
           `}
@@ -469,9 +565,14 @@ function invoiceListRowMarkup(row) {
     plan.installmentCount ?? (plan.installments || []).length
   );
   const isCancelled = String(plan.status || '').toLowerCase() === 'cancelled';
+  const invoiceNumbers = Array.isArray(plan.invoiceNumbers)
+    ? plan.invoiceNumbers.filter(Boolean)
+    : [plan.invoiceNumber].filter(Boolean);
+  const primaryInvoiceNumber = invoiceNumbers[0] || '';
+  const additionalInvoices = Math.max(0, invoiceNumbers.length - 1);
   return `
     <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPlan('${invoiceAttr(quotation.id)}')">
-      <td data-label="Quotation"><strong>${invoiceEscape(quotation.number)}</strong><small>${invoiceDateLabel(quotation.acceptedAt || quotation.updatedAt)}</small></td>
+      <td data-label="Invoice / Quotation" class="invoice-number-cell"><strong>${invoiceEscape(primaryInvoiceNumber)}</strong><small>Quotation ${invoiceEscape(quotation.number || '')}${additionalInvoices ? ` · +${additionalInvoices} more invoice${additionalInvoices === 1 ? '' : 's'}` : ''}</small></td>
       <td data-label="Project"><strong>${invoiceEscape(quotation.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(quotation))}</small></td>
       <td data-label="Strategy"><strong>${invoiceEscape(plan.strategyLabel || 'Not configured')}</strong><small>${installmentCount} installment${installmentCount === 1 ? '' : 's'}</small></td>
       <td data-label="Status">${invoiceStatusBadgeMarkup(plan.status)}</td>
@@ -486,7 +587,7 @@ function invoiceListRowMarkup(row) {
 function invoiceIssuedTableMarkup(rows) {
   return `
     <table class="invoice-list-table invoice-issued-table">
-      <thead><tr><th>Invoice ID</th><th>Quotation</th><th>Project / Client</th><th>Label</th><th>Status</th><th>Invoice amount</th><th>Amount due</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Invoice / Quotation</th><th>Project / Client</th><th>Label</th><th>Status</th><th>Date</th><th>Invoice amount</th><th>Amount due</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(invoiceIssuedRowMarkup).join('')}</tbody>
     </table>
   `;
@@ -509,11 +610,11 @@ function invoiceIssuedRowMarkup(invoice) {
     : '';
   return `
     <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
-      <td data-label="Invoice"><strong>${invoiceEscape(invoice.number || 'Unnumbered invoice')}</strong><small>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</small></td>
-      <td data-label="Quotation"><strong>${invoiceEscape(invoice.sourceQuotationNumber || 'Not linked')}</strong></td>
+      <td data-label="Invoice / Quotation" class="invoice-number-cell"><strong>${invoiceEscape(invoice.number || '')}</strong><small>Quotation ${invoiceEscape(invoice.sourceQuotationNumber || '')}</small></td>
       <td data-label="Project"><strong>${invoiceEscape(invoice.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(invoice))}</small></td>
       <td data-label="Label"><strong>${invoiceEscape(invoice.invoiceLabel || '-')}</strong></td>
       <td data-label="Status">${invoiceStatusControlMarkup(status, `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, invoiceDocumentStatusChoices(status))}</td>
+      <td data-label="Date"><strong>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</strong></td>
       <td data-label="Amount"><strong>${invoiceMoney(invoice.invoiceAmount || invoice.totals?.total)}</strong></td>
       <td data-label="Due"><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong>${countdown ? `<small>${invoiceEscape(countdown)}</small>` : ''}</td>
       <td data-label="Actions"><div class="invoice-directory-actions">
@@ -531,8 +632,8 @@ async function invoiceRenumber(invoiceId, origin = 'directory') {
   const number = await showAppPrompt({
     title: 'Renumber invoice',
     message: 'Enter the invoice ID exactly as it should appear on the PDF.',
-    label: 'Invoice ID',
-    value: invoice.number || '',
+    inputLabel: 'Invoice number',
+    defaultValue: invoice.number || '',
     placeholder: 'INV-2026-0001',
     confirmText: 'Update invoice ID',
     cancelText: 'Cancel'
@@ -579,7 +680,7 @@ function invoiceStatusControlMarkup(status, id, actionTemplate, statuses = INVOI
   return `
     <div class="invoice-status-control" onclick="event.stopPropagation()">
       <button type="button" class="invoice-status" data-status="${invoiceAttr(status)}" onclick="invoiceToggleStatusMenu('${invoiceAttr(id)}',event)">
-        <span></span>${invoiceStatusLabel(status)}<svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg>
+        ${invoiceStatusLabel(status)}<svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg>
       </button>
       <div id="${invoiceAttr(id)}" class="invoice-status-menu">
         ${statuses.map(item => `<button type="button" data-status="${item}" onclick="${action(item)}"><span></span>${invoiceStatusLabel(item)}</button>`).join('')}
@@ -1426,15 +1527,25 @@ async function invoiceIssueInstallment(index) {
   }
   const saved = await invoiceSavePlan({ silent: true });
   if (!saved) return;
-  const confirmed = typeof showAppConfirm === 'function' ? await showAppConfirm({
-    title: 'Issue invoice?',
-    message: `${row.label} will be issued for ${invoiceMoney(row.amount)}. The invoice number and amount will then be fixed.`,
-    confirmText: 'Issue invoice', cancelText: 'Cancel'
-  }) : window.confirm('Issue this invoice?');
-  if (!confirmed) { invoiceRenderEditor(); return; }
+  const issueDetails = typeof showAppForm === 'function' ? await showAppForm({
+    title: 'Issue invoice',
+    message: `${row.label} will be issued for ${invoiceMoney(row.amount)}. Confirm or change the invoice number below.`,
+    confirmText: 'Issue invoice',
+    cancelText: 'Cancel',
+    fields: [{
+      name: 'invoiceNumber',
+      label: 'Invoice number',
+      defaultValue: current.nextInvoiceNumber || '',
+      placeholder: 'INV-2026-0001',
+      required: true,
+      maxLength: 80
+    }]
+  }) : (window.confirm('Issue this invoice?') ? { invoiceNumber: current.nextInvoiceNumber || '' } : null);
+  const invoiceNumber = String(issueDetails?.invoiceNumber || '').trim();
+  if (!invoiceNumber) { invoiceRenderEditor(); return; }
   try {
     const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(current.quotation.id)}/installments/${encodeURIComponent(row.id)}/issue`, 'POST', {
-      invoiceDate: invoiceToday(), dueDate: row.dueDate, status: 'draft'
+      invoiceDate: invoiceToday(), dueDate: row.dueDate, status: 'draft', number: invoiceNumber
     });
     invoiceState.current = response.plan;
     showNotification('success', `${response.data.number} created`);

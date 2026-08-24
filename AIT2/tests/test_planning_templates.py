@@ -735,6 +735,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("planEncode(JSON.stringify(warning))", script)
         self.assertIn("Already used by overlapping events", script)
         self.assertIn("plan-warning-event-quantity", script)
+        self.assertIn("'Total inventory'", script)
         self.assertIn("healthyCapacityForThisEvent", script)
         self.assertIn('capacityForThisEvent', script)
         self.assertIn('function planDegradedReasonDetail(availability)', script)

@@ -2680,11 +2680,58 @@ class WorkforcePortalTests(unittest.TestCase):
             self.assertIn(expected, text)
         self.assertIn("Asset IDs:", text)
         self.assertNotIn("Asset IDs / status", text)
+        self.assertIn("MANPOWER - 1 scheduled row(s)", text)
+
+        report_source = Path('event_report.py').read_text(encoding='utf-8')
+        self.assertIn('colors.HexColor("#94A3B8")', report_source)
+        self.assertIn('(0, 0), (-1, 0)', report_source)
+        self.assertIn('["Room", "Department", "Name", "Date"', report_source)
 
         event.assigned_users = ["normal"]
         self.manager.save_event(event)
         self.login("normal", False)
         self.assertEqual(self.client.get("/api/events/143/report.pdf").status_code, 200)
+
+    def test_event_report_manpower_is_sorted_by_room_department_then_name(self):
+        report_data = {
+            'subprojects': [{'id': 'a'}, {'id': 'b'}],
+            'allDepartments': [
+                {'code': 'AU', 'name': 'Audio'},
+                {'code': 'LX', 'name': 'Lighting'},
+            ],
+            'freelancers': [
+                {'id': 'z', 'name': 'Zoe Crew'},
+                {'id': 'a', 'name': 'Alex Crew'},
+                {'id': 'm', 'name': 'Morgan Crew'},
+            ],
+            'vendors': [],
+            'appUsers': [],
+            'assignments': [
+                {
+                    'freelancerId': 'z', 'subprojectName': 'Room B',
+                    'department': 'AU', 'workDates': ['2026-07-10'],
+                },
+                {
+                    'freelancerId': 'm', 'subprojectName': 'Room A',
+                    'department': 'LX', 'workDates': ['2026-07-10'],
+                },
+                {
+                    'freelancerId': 'a', 'subprojectName': 'Room A',
+                    'department': 'AU', 'workDates': ['2026-07-10'],
+                },
+            ],
+        }
+
+        manpower, _services = app_module._event_report_workforce(report_data)
+
+        self.assertEqual(
+            [(row['room'], row['department'], row['name']) for row in manpower],
+            [
+                ('Room A', 'Audio (AU)', 'Alex Crew'),
+                ('Room A', 'Lighting (LX)', 'Morgan Crew'),
+                ('Room B', 'Audio (AU)', 'Zoe Crew'),
+            ],
+        )
 
     def test_event_report_reconciles_bulk_preparation_with_model_requirement(self):
         event = self.manager.events[143]
