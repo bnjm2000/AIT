@@ -866,7 +866,7 @@ function eventWorkflowFallbackProgress(event) {
   };
 }
 
-function eventWorkflowProgressHtml(event, extraClass = '') {
+function eventWorkflowProgressHtml(event, extraClass = '', closeOverviewOnNavigate = false) {
   const progress = event?.workflowProgress || eventWorkflowFallbackProgress(event);
   const actions = [
     ['plan', `openEventPlanning(${Number(event.id)})`],
@@ -876,11 +876,14 @@ function eventWorkflowProgressHtml(event, extraClass = '') {
     ['return', `openReturnWorkspaceForEvent(${Number(event.id)})`],
     ['finance', `openEventFinance(${Number(event.id)})`]
   ];
-  return `<div class="event-workflow-icon-strip ${escapeHtmlAttr(extraClass)}" aria-label="Event workspace progress">${actions.map(([kind, onclick]) => {
+  return `<div class="event-workflow-icon-strip ${escapeHtmlAttr(extraClass)}" aria-label="Event workspace progress">${actions.map(([kind, directAction]) => {
     const item = progress[kind];
     if (!item) return '';
     const status = ['green', 'orange', 'red', 'blue'].includes(item.status) ? item.status : 'neutral';
     const label = String(item.label || kind);
+    const onclick = closeOverviewOnNavigate
+      ? `eventOverviewNavigate('${kind}',${Number(event.id)})`
+      : directAction;
     return `<button type="button" class="event-workflow-icon-button status-${status}" title="${escapeHtmlAttr(label)}" aria-label="${escapeHtmlAttr(label)}" onclick="${onclick}">${eventWorkflowIconHtml(kind)}</button>`;
   }).join('')}</div>`;
 }

@@ -97,7 +97,7 @@ def test_event_overview_reuses_progress_icons_and_keeps_documents_below():
     overview = function_source('viewEvent', 'toggleViewSection')
     navigation = function_source('eventOverviewNavigate', 'exportEventOverviewPdf')
 
-    assert "eventWorkflowProgressHtml(event, 'event-overview-workflow-icons')" in overview
+    assert "eventWorkflowProgressHtml(event, 'event-overview-workflow-icons', true)" in overview
     assert 'class="event-overview-document-actions"' in overview
     assert '<span>Delivery Order</span>' in overview
     assert '<span>Packing List</span>' in overview
@@ -105,6 +105,9 @@ def test_event_overview_reuses_progress_icons_and_keeps_documents_below():
     assert 'event-overview-header-title-actions' in overview
     assert "kind === 'transport'" in navigation
     assert 'openEventTransport(eventId)' in navigation
+    assert "kind === 'finance'" in navigation
+    assert 'openEventFinance(eventId)' in navigation
+    assert 'closeEventOverview({ updateHistory: false })' in navigation
     assert '.event-overview-workflow-actions' in TEMPLATE
 
 

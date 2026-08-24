@@ -4548,6 +4548,7 @@ function showAppDialog(options = {}) {
 
     content.dataset.variant = variant;
     titleEl.textContent = options.title || (isAlert ? 'Notice' : 'Confirm Action');
+    messageEl.className = 'app-dialog-body';
     messageEl.textContent = '';
     if (typeof options.buildMessage === 'function') {
       options.buildMessage(messageEl);
@@ -15733,13 +15734,13 @@ function eventOverviewInternalUsers(event) {
 
 function eventOverviewNavigate(kind, eventId) {
   if (kind === 'report') return exportEventOverviewPdf(eventId);
-  eventOverviewFlushNotesSave();
-  closeModal('eventDetailsModal');
+  closeEventOverview({ updateHistory: false });
   if (kind === 'plan') return openEventPlanning(eventId);
   if (kind === 'prepare') return openPrepareWorkspaceForEvent(eventId);
   if (kind === 'manpower' && typeof openEventWorkforce === 'function') return openEventWorkforce(eventId);
   if (kind === 'transport' && typeof openEventTransport === 'function') return openEventTransport(eventId);
   if (kind === 'return') return openReturnWorkspaceForEvent(eventId);
+  if (kind === 'finance' && typeof openEventFinance === 'function') return openEventFinance(eventId);
   if (kind === 'delivery') return openDeliveryOrderTab(eventId);
   if (kind === 'packing') return openPackingListPage(eventId);
 }
@@ -15796,7 +15797,7 @@ async function viewEvent(eventId, options = {}) {
     const progress = required ? Math.min(100, Math.round((prepared / required) * 100)) : 0;
     const subprojectCount = eventOverviewSubprojectRows(event).length;
     const content = `<div class="event-overview-hero">
-      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-workflow-actions">${eventWorkflowProgressHtml(event, 'event-overview-workflow-icons')}<div class="event-overview-document-actions"><button type="button" onclick="eventOverviewNavigate('delivery',${Number(event.id)})">${eventOverviewIcon('delivery')}<span>Delivery Order</span></button><button type="button" onclick="eventOverviewNavigate('packing',${Number(event.id)})">${eventOverviewIcon('packing')}<span>Packing List</span></button></div></div></div>
+      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-workflow-actions">${eventWorkflowProgressHtml(event, 'event-overview-workflow-icons', true)}<div class="event-overview-document-actions"><button type="button" onclick="eventOverviewNavigate('delivery',${Number(event.id)})">${eventOverviewIcon('delivery')}<span>Delivery Order</span></button><button type="button" onclick="eventOverviewNavigate('packing',${Number(event.id)})">${eventOverviewIcon('packing')}<span>Packing List</span></button></div></div></div>
         <div class="event-overview-meta"><span>${eventOverviewIcon('calendar')}${escapeHtml(eventOverviewDateRange(event))}</span><span>${eventOverviewIcon('location')}${escapeHtml(event.location || 'Venue not set')}</span></div></section>
       <section class="event-overview-progress"><div class="event-overview-metric"><strong>${required}</strong><span>Required</span></div><div class="event-overview-metric"><strong>${prepared}</strong><span>Prepared</span></div><div class="event-overview-metric"><strong>${returned}</strong><span>Returned</span></div><div class="event-overview-progress-bar"><span style="width:${progress}%"></span></div></section>
     </div>

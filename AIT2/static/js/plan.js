@@ -2014,6 +2014,10 @@ function planRequirementWarningForState(group, state = planPageState) {
     return {
       type: 'shortage',
       quantity: shortage,
+      assetName: [group?.brand, group?.model].filter(Boolean).join(' ') || 'Asset',
+      required,
+      capacity: fulfillableForThisEvent,
+      roomAllocations,
       availability,
       reason: `${context}\n\n${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
         `Usable capacity for this event is ${fulfillableForThisEvent}.` +
@@ -2029,6 +2033,10 @@ function planRequirementWarningForState(group, state = planPageState) {
   return {
     type: 'degraded',
     quantity: degradedRequired,
+    assetName: [group?.brand, group?.model].filter(Boolean).join(' ') || 'Asset',
+    required,
+    capacity: healthyCapacity,
+    roomAllocations,
     availability,
     reason: `${context}\n\n${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
       `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.` +
@@ -2059,10 +2067,169 @@ function planSubprojectWarning(room, event = planPageState.event) {
     : null;
 }
 
-function planShowRequirementWarning(encodedReason, warningType = 'shortage') {
+function planShowRequirementWarning(encodedWarning, legacyWarningType = 'shortage') {
+  let warning;
+  const decoded = planDecode(encodedWarning);
+  try {
+    warning = JSON.parse(decoded);
+  } catch (error) {
+    warning = { type: legacyWarningType, reason: decoded };
+  }
+  const warningType = warning?.type === 'degraded' ? 'degraded' : 'shortage';
+  const availability = warning?.availability || {};
+  const required = Math.max(0, Number(warning?.required || 0));
+  const capacity = Math.max(0, Number(warning?.capacity || 0));
+  const affected = Math.max(0, Number(warning?.quantity || Math.max(required - capacity, 0)));
+  const overlappingEvents = Array.isArray(availability?.overlapEvents)
+    ? availability.overlapEvents
+    : [];
+  const overlapTotal = Math.max(0, Number(availability?.overlap || 0));
+  const visibleOverlap = overlappingEvents.reduce(
+    (sum, event) => sum + Math.max(0, Number(event?.quantity || 0)),
+    0
+  );
+  const unavailableFactors = [
+    ['Out of service', Number(availability?.assetOOC || 0) + Number(availability?.bulkMaintenanceOOC || 0)],
+    ['Missing', Number(availability?.assetMissing || 0) + Number(availability?.bulkMaintenanceMissing || 0)]
+  ].filter(([, quantity]) => quantity > 0);
+
   showAppAlert({
     title: warningType === 'degraded' ? 'Degraded Assets Required' : 'Shortage Detected',
-    message: planDecode(encodedReason) || 'This requirement has an availability warning.',
+    buildMessage: container => {
+      container.classList.add('plan-requirement-warning-dialog');
+
+      const introduction = document.createElement('div');
+      introduction.className = 'plan-warning-introduction';
+      introduction.innerHTML = `<strong>${escapeHtml(warning?.assetName || 'Asset requirement')}</strong><span>${escapeHtml(
+        warningType === 'degraded'
+          ? `${affected} unit${affected === 1 ? '' : 's'} would need degraded stock.`
+          : `${affected} unit${affected === 1 ? '' : 's'} cannot currently be supplied.`
+      )}</span>`;
+      container.appendChild(introduction);
+
+      if (required > 0) {
+        const metrics = document.createElement('div');
+        metrics.className = 'plan-warning-metrics';
+        [
+          ['Required', required, ''],
+          [warningType === 'degraded' ? 'Working stock' : 'Can supply', capacity, ''],
+          [warningType === 'degraded' ? 'Degraded needed' : 'Shortage', affected, 'is-warning']
+        ].forEach(([label, value, className]) => {
+          const metric = document.createElement('div');
+          metric.className = `plan-warning-metric ${className}`.trim();
+          metric.innerHTML = `<span>${escapeHtml(label)}</span><strong>${Number(value)}</strong>`;
+          metrics.appendChild(metric);
+        });
+        container.appendChild(metrics);
+      }
+
+      const roomAllocations = Array.isArray(warning?.roomAllocations)
+        ? warning.roomAllocations
+        : [];
+      if (roomAllocations.length > 0) {
+        const roomSection = document.createElement('section');
+        roomSection.className = 'plan-warning-section';
+        roomSection.innerHTML = '<h4>Required by this event</h4>';
+        const roomList = document.createElement('div');
+        roomList.className = 'plan-warning-compact-list';
+        roomAllocations.forEach(room => {
+          const row = document.createElement('div');
+          row.innerHTML = `<span>${escapeHtml(room?.name || 'Unnamed room')}</span><strong>${Math.max(0, Number(room?.quantity || 0))}</strong>`;
+          roomList.appendChild(row);
+        });
+        roomSection.appendChild(roomList);
+        container.appendChild(roomSection);
+      }
+
+      if (overlappingEvents.length > 0) {
+        const eventSection = document.createElement('section');
+        eventSection.className = 'plan-warning-section';
+        eventSection.innerHTML = '<h4>Already used by overlapping events</h4>';
+        const eventList = document.createElement('div');
+        eventList.className = 'plan-warning-event-list';
+        overlappingEvents.forEach(overlapEvent => {
+          const eventId = Number(overlapEvent?.eventId || 0);
+          const eventName = String(overlapEvent?.eventName || `Event ${eventId || ''}`).trim();
+          const quantity = Math.max(0, Number(overlapEvent?.quantity || 0));
+          const startDate = String(overlapEvent?.startDate || '').trim();
+          const endDate = String(overlapEvent?.endDate || '').trim();
+          const dates = startDate && endDate && startDate !== endDate
+            ? `${startDate} - ${endDate}`
+            : (startDate || endDate);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'plan-warning-event-row';
+          button.innerHTML = `
+            <span class="plan-warning-event-name"><strong>${escapeHtml(eventId ? `#${eventId}: ${eventName}` : eventName)}</strong><small>${escapeHtml(dates || 'Overlapping dates')}</small></span>
+            <span class="plan-warning-event-quantity"><strong>${quantity}</strong><small>in use</small></span>
+          `;
+          button.addEventListener('click', () => {
+            document.querySelector('#appDialogModal [data-dialog-confirm]')?.click();
+            if (eventId) setTimeout(() => viewEvent(eventId, { updateHistory: false }), 0);
+          });
+          eventList.appendChild(button);
+        });
+        eventSection.appendChild(eventList);
+        if (overlapTotal > visibleOverlap) {
+          const restricted = document.createElement('p');
+          restricted.className = 'plan-warning-restricted-note';
+          const hiddenQuantity = overlapTotal - visibleOverlap;
+          restricted.textContent = `${hiddenQuantity} additional unit${hiddenQuantity === 1 ? '' : 's'} ${hiddenQuantity === 1 ? 'is' : 'are'} used by overlapping events you cannot access.`;
+          eventSection.appendChild(restricted);
+        }
+        container.appendChild(eventSection);
+      }
+
+      if (unavailableFactors.length > 0) {
+        const factorSection = document.createElement('section');
+        factorSection.className = 'plan-warning-section';
+        factorSection.innerHTML = '<h4>Other unavailable stock</h4>';
+        const factorList = document.createElement('div');
+        factorList.className = 'plan-warning-compact-list';
+        unavailableFactors.forEach(([label, quantity]) => {
+          const row = document.createElement('div');
+          row.innerHTML = `<span>${escapeHtml(label)}</span><strong>${Math.max(0, Number(quantity))}</strong>`;
+          factorList.appendChild(row);
+        });
+        factorSection.appendChild(factorList);
+        container.appendChild(factorSection);
+      }
+
+      const degradedDetails = Array.isArray(availability?.degradedDetails)
+        ? availability.degradedDetails
+        : [];
+      if (warningType === 'degraded' && degradedDetails.length > 0) {
+        const degradedSection = document.createElement('section');
+        degradedSection.className = 'plan-warning-section';
+        degradedSection.innerHTML = '<h4>Why the available stock is degraded</h4>';
+        const degradedList = document.createElement('div');
+        degradedList.className = 'plan-warning-degraded-list';
+        degradedDetails.forEach(detail => {
+          const quantity = Math.max(1, Number(detail?.quantity || 1));
+          const assetId = String(detail?.assetId || '').trim();
+          const assetLabel = detail?.isBulk
+            ? `${quantity} bulk unit${quantity === 1 ? '' : 's'}`
+            : (assetId || `${quantity} asset${quantity === 1 ? '' : 's'}`);
+          const reasons = [...new Set(
+            (Array.isArray(detail?.reasons) ? detail.reasons : [])
+              .map(reason => String(reason || '').trim())
+              .filter(Boolean)
+          )];
+          const row = document.createElement('div');
+          row.innerHTML = `<strong>${escapeHtml(assetLabel)}</strong><span>${escapeHtml(reasons.join('; ') || 'No reason recorded')}</span>`;
+          degradedList.appendChild(row);
+        });
+        degradedSection.appendChild(degradedList);
+        container.appendChild(degradedSection);
+      }
+
+      if (!required && !overlappingEvents.length && !unavailableFactors.length) {
+        const fallback = document.createElement('div');
+        fallback.className = 'plan-warning-fallback';
+        fallback.textContent = warning?.reason || 'This requirement has an availability warning.';
+        container.appendChild(fallback);
+      }
+    },
     variant: 'warning',
   });
 }
@@ -2365,7 +2532,7 @@ function renderPlanRequirementsCard() {
                   <button type="button" class="plan-shortage-info ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
                           title="${escapeHtmlAttr(warningReason)}"
                           aria-label="Show availability warning"
-                          onclick="planShowRequirementWarning('${planEncode(warningReason)}','${warning.type}')">!</button>
+                          onclick="planShowRequirementWarning('${planEncode(JSON.stringify(warning))}')">!</button>
                 ` : ''}
                 ${planDepartmentCodeBadgeHtml(group.department)}
               </div>

@@ -6588,6 +6588,200 @@
         font-weight: 750;
       }
 
+      .plan-requirement-warning-dialog {
+        display: grid;
+        gap: 14px;
+        max-height: min(62vh, 560px);
+        overflow-y: auto;
+        padding-right: 3px;
+        white-space: normal;
+      }
+
+      .plan-warning-introduction {
+        display: grid;
+        gap: 2px;
+      }
+
+      .plan-warning-introduction strong {
+        color: #1f2937;
+        font-size: 15px;
+      }
+
+      .plan-warning-introduction span {
+        color: #667085;
+        font-size: 12px;
+      }
+
+      .plan-warning-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+      }
+
+      .plan-warning-metric {
+        display: grid;
+        gap: 2px;
+        padding: 9px 10px;
+        border: 1px solid #e4e7ec;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+
+      .plan-warning-metric span {
+        color: #667085;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+
+      .plan-warning-metric strong {
+        color: #344054;
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .plan-warning-metric.is-warning {
+        border-color: #f3c1c7;
+        background: #fff1f2;
+      }
+
+      .plan-warning-metric.is-warning strong {
+        color: #b42318;
+      }
+
+      .plan-warning-section {
+        display: grid;
+        gap: 7px;
+      }
+
+      .plan-warning-section h4 {
+        margin: 0;
+        color: #344054;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .02em;
+      }
+
+      .plan-warning-event-list,
+      .plan-warning-compact-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .plan-warning-event-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 9px 10px;
+        border: 1px solid #d9e4e0;
+        border-radius: 7px;
+        background: #f8fbfa;
+        color: #29443c;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .plan-warning-event-row:hover,
+      .plan-warning-event-row:focus-visible {
+        border-color: var(--brand-main);
+        background: #edf8f5;
+      }
+
+      .plan-warning-event-name,
+      .plan-warning-event-quantity {
+        display: grid;
+        min-width: 0;
+      }
+
+      .plan-warning-event-name strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .plan-warning-event-name small,
+      .plan-warning-event-quantity small {
+        color: #667085;
+        font-size: 9px;
+      }
+
+      .plan-warning-event-quantity {
+        min-width: 48px;
+        justify-items: center;
+        padding-left: 10px;
+        border-left: 1px solid #d9e4e0;
+      }
+
+      .plan-warning-event-quantity strong {
+        color: #b42318;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .plan-warning-compact-list > div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 9px;
+        border-radius: 6px;
+        background: #f8fafc;
+        color: #475467;
+        font-size: 11px;
+      }
+
+      .plan-warning-compact-list strong {
+        color: #344054;
+      }
+
+      .plan-warning-degraded-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .plan-warning-degraded-list > div {
+        display: grid;
+        gap: 1px;
+        padding: 8px 9px;
+        border: 1px solid #fed7aa;
+        border-radius: 6px;
+        background: #fff7ed;
+      }
+
+      .plan-warning-degraded-list strong {
+        color: #9a3412;
+        font-size: 11px;
+      }
+
+      .plan-warning-degraded-list span {
+        color: #7c2d12;
+        font-size: 10px;
+      }
+
+      .plan-warning-restricted-note,
+      .plan-warning-fallback {
+        margin: 0;
+        color: #667085;
+        font-size: 10px;
+      }
+
+      @media (max-width: 460px) {
+        .plan-warning-metrics {
+          gap: 5px;
+        }
+
+        .plan-warning-metric {
+          padding: 8px 7px;
+        }
+
+        .plan-warning-metric strong {
+          font-size: 17px;
+        }
+      }
+
       .plan-qty-control {
         display: inline-flex;
         align-items: center;
