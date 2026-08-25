@@ -1241,6 +1241,7 @@ function ensurePlanEventChooserModal() {
         <span aria-hidden="true">&#128269;</span>
         <input type="search" id="planEventChooserSearch"
                placeholder="Search events by name, ID, client, or location..."
+               onkeydown="planEventChooserSearchKeydown(event)"
                oninput="planEventChooserSearchChanged(this.value)">
       </div>
       <div class="plan-event-chooser-filters" id="planEventChooserFilters"></div>
@@ -1291,6 +1292,8 @@ function renderPlanEventChooser() {
     .filter(filter => Number(counts[filter.key] || 0) > 0)
     .map(filter => `
       <button type="button"
+              tabindex="-1"
+              aria-pressed="${planEventChooserState.filter === filter.key ? 'true' : 'false'}"
               class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
               onclick="planSetEventChooserFilter('${filter.key}')">
         ${escapeHtml(filter.label)}
@@ -1307,6 +1310,7 @@ function renderPlanEventChooser() {
   results.innerHTML = visibleEvents.length ? visibleEvents.map(event => `
     <button type="button"
             class="plan-event-option ${Number(event.id) === Number(planEventChooserCurrentEventId()) ? 'current' : ''}"
+            onkeydown="planEventChooserOptionKeydown(event,${Number(event.id)})"
             onclick="planChooseEvent(${Number(event.id)})">
       <span class="plan-event-option-name">
         <span class="plan-event-option-title-line">
@@ -1396,6 +1400,22 @@ function planEventChooserSearchChanged(value) {
   planEventChooserState.search = value;
   planEventChooserState.page = 1;
   renderPlanEventChooser();
+}
+
+function planEventChooserSearchKeydown(event) {
+  if (event.key !== 'Tab' || event.shiftKey) return;
+  const firstEvent = document.querySelector(
+    '#planEventChooserResults .plan-event-option:not([disabled])'
+  );
+  if (!firstEvent) return;
+  event.preventDefault();
+  firstEvent.focus();
+}
+
+function planEventChooserOptionKeydown(event, eventId) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  planChooseEvent(eventId);
 }
 
 function planSetEventChooserFilter(filter) {

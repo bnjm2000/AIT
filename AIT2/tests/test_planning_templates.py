@@ -868,6 +868,35 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('class="plan-event-option-location-line"', chooser)
         self.assertNotIn('${planEventTypeBadgeHtml(event)}', chooser)
         self.assertNotIn('<span>Location</span>', chooser)
+        filter_markup = chooser.split(
+            'filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS', 1
+        )[1].split('const events = planEventChooserFilteredEvents()', 1)[0]
+        self.assertIn('tabindex="-1"', filter_markup)
+        self.assertIn('aria-pressed="${planEventChooserState.filter === filter.key', filter_markup)
+        self.assertNotIn('tabindex="-1"', chooser.split(
+            'results.innerHTML = visibleEvents.length', 1
+        )[1].split('const firstShown', 1)[0])
+        self.assertIn(
+            'onkeydown="planEventChooserSearchKeydown(event)"', chooser
+        )
+        keyboard_handler = script.split(
+            'function planEventChooserSearchKeydown(event)', 1
+        )[1].split('function planSetEventChooserFilter', 1)[0]
+        self.assertIn("event.key !== 'Tab' || event.shiftKey", keyboard_handler)
+        self.assertIn('#planEventChooserResults .plan-event-option:not([disabled])', keyboard_handler)
+        self.assertIn('firstEvent.focus()', keyboard_handler)
+        option_markup = chooser.split(
+            'results.innerHTML = visibleEvents.length', 1
+        )[1].split('const firstShown', 1)[0]
+        self.assertIn(
+            'onkeydown="planEventChooserOptionKeydown(event,${Number(event.id)})"',
+            option_markup,
+        )
+        option_handler = script.split(
+            'function planEventChooserOptionKeydown(event, eventId)', 1
+        )[1].split('function planSetEventChooserFilter', 1)[0]
+        self.assertIn("event.key !== 'Enter'", option_handler)
+        self.assertIn('planChooseEvent(eventId)', option_handler)
         self.assertIn("['ongoing', 'last-day'].includes(state)", relative_date)
         self.assertIn('day${daysLeft === 1', relative_date)
 

@@ -4216,6 +4216,10 @@ class WorkforcePortalTests(unittest.TestCase):
             "font-weight: 400;",
             admin_styles.split(".wf-transport-meta strong {", 1)[1].split("}", 1)[0],
         )
+        transport_event_spacing = admin_styles.split(
+            ".wf-transport-page > .plan-event-bar {", 1
+        )[1].split("}", 1)[0]
+        self.assertIn("margin-bottom: 18px;", transport_event_spacing)
         self.assertIn('class="wf-trip-cost"', admin_source)
         self.assertIn("wfConflictTooltipText(dateConflicts)", source)
         self.assertIn('data-wf-tooltip="${wfAttr(conflictTitle)}"', source)

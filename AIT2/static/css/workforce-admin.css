@@ -3186,6 +3186,10 @@ button.wf-calendar-day.selected.has-conflict:hover {
   margin-bottom: 14px;
 }
 
+.wf-transport-page > .plan-event-bar {
+  margin-bottom: 18px;
+}
+
 .wf-transport-list {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
