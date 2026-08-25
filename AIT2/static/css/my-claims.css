@@ -144,7 +144,7 @@
   font-weight: 800;
 }
 
-.my-claims-primary { background: var(--mc-green); color: #fff; }
+.my-claims-primary { background: var(--mc-green, #0f766e); color: #fff; }
 .my-claims-primary:disabled { opacity: .45; cursor: not-allowed; }
 .my-claims-secondary { background: #eef3f1; color: #314a44; }
 

@@ -586,7 +586,7 @@
 
 .vehicle-modal-panel {
   width: min(620px, 100%);
-  max-height: calc(100dvh - 36px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 36px);
   overflow-y: auto;
   border: 1px solid #d7e3df;
   border-radius: 8px;
@@ -961,7 +961,7 @@
 
   .vehicle-modal-panel {
     width: 100%;
-    max-height: calc(100dvh - 16px);
+    max-height: calc(var(--scaled-dvh, 100dvh) - 16px);
   }
 
   .vehicle-modal footer {

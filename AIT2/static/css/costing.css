@@ -37,6 +37,21 @@
 
 .costing-status.is-converted { background: #ecfdf3; color: #047857; }
 .costing-status.is-linked { background: #eff6ff; color: #1d4ed8; }
+.costing-status.is-not-created { background: #f1f5f9; color: #64748b; }
+.costing-status.is-quotation.is-draft,
+.costing-status.is-event.is-new,
+.costing-status.is-event.is-planning { background: #f1f5f9; color: #475569; }
+.costing-status.is-quotation.is-sent,
+.costing-status.is-event.is-ongoing { background: #eff6ff; color: #1d4ed8; }
+.costing-status.is-quotation.is-accepted,
+.costing-status.is-event.is-ready,
+.costing-status.is-event.is-closed { background: #ecfdf3; color: #047857; }
+.costing-status.is-event.is-preparing,
+.costing-status.is-event.is-returning,
+.costing-status.is-event.is-last-day,
+.costing-status.is-event.is-pending-closure { background: #fff7ed; color: #c2410c; }
+.costing-status.is-quotation.is-cancelled,
+.costing-status.is-event.is-overdue { background: #fef2f2; color: #b91c1c; }
 .costing-positive { color: #087f5b; }
 .costing-negative { color: #c2413b; }
 
@@ -383,6 +398,19 @@
 .costing-vendor-input.is-self.is-self-unlinked { color: #b45309 !important; }
 .costing-vendor-input.is-empty { border-color: transparent !important; color: #dc2626 !important; background: transparent !important; }
 .costing-vendor-input.is-empty::placeholder { color: #dc2626 !important; opacity: 1; }
+.costing-vendor-combobox { width: 100%; }
+.costing-line .costing-vendor-suggestions {
+  right: auto;
+  width: max(190px, 100%);
+  text-align: left;
+}
+.costing-vendor-suggestion {
+  display: grid;
+  gap: 2px;
+}
+.costing-vendor-suggestion strong { color: #172e48; font-size: 11px; }
+.costing-vendor-suggestion small { color: #718096; font-size: 9px; }
+.costing-category-vendor-combobox .costing-vendor-suggestions { top: calc(100% + 3px); }
 
 .costing-line.context-open > td { background: #f0faf6; }
 .costing-inventory-link-modal { z-index: 2200; padding: 18px; }
@@ -492,8 +520,8 @@
 .costing-subtotal-label { display: grid; gap: 1px; margin-right: auto; text-align: left; }
 .costing-subtotal-label strong { color: #172e48; font-size: 10px; }
 .costing-subtotal-label small { color: #7a899b; font-size: 8.5px; }
-.costing-inline-money { display: grid; grid-template-columns: auto 82px; align-items: center; color: #526762; }
-.costing-inline-money input { height: 24px; text-align: right; }
+.costing-inline-money { display: grid; grid-template-columns: auto 82px; align-items: center; color: #172e48; font-size: 10px; font-weight: 700; }
+.costing-inline-money input { height: 24px; color: inherit; font: inherit; text-align: right; }
 
 .costing-add-item {
   border: 1px solid var(--finance-border);

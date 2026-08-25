@@ -1353,7 +1353,7 @@
 .costing-group-item-display span { overflow-wrap: anywhere; }
 .finance-group-item-display small,
 .costing-group-item-display small { color: #7a8580; font-size: 11px; }
-.finance-line-group-modal { width: min(760px, calc(100vw - 28px)); }
+.finance-line-group-modal { width: min(760px, calc(var(--scaled-vw, 100vw) - 28px)); }
 .finance-line-group-form { display: grid; gap: 14px; padding: 18px 20px; }
 .finance-line-group-basics { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
 .finance-line-group-basics.has-group-quantity { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 110px; }
@@ -1488,7 +1488,7 @@
 .finance-side-column {
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 32px);
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: thin;
@@ -1652,6 +1652,23 @@
   color: var(--finance-muted);
 }
 
+.finance-salesperson-reassignment-content {
+  width: min(460px, calc(var(--scaled-vw, 100vw) - 32px));
+  max-width: 460px;
+}
+
+.finance-salesperson-reassignment-content .app-dialog-body > p {
+  margin: 0 0 14px;
+  color: var(--finance-muted);
+  font-size: 12px;
+}
+
+.finance-salesperson-reassignment-content .finance-salesperson-results {
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .finance-field {
   display: grid;
   gap: 5px;
@@ -1750,7 +1767,7 @@
 }
 
 .finance-picker-modal {
-  width: min(760px, calc(100vw - 32px));
+  width: min(760px, calc(var(--scaled-vw, 100vw) - 32px));
   max-width: 760px;
 }
 
@@ -2427,7 +2444,7 @@
 }
 
 .finance-commission-modal {
-  width: min(860px, calc(100vw - 32px));
+  width: min(860px, calc(var(--scaled-vw, 100vw) - 32px));
 }
 
 .pnl-commission-rows {
@@ -2564,8 +2581,17 @@
   cursor: pointer;
 }
 
-.finance-catalog-option:hover {
+.finance-catalog-option:hover,
+.finance-catalog-option:focus-visible {
   background: #eef2ff;
+}
+
+.finance-catalog-option:focus-visible,
+.finance-inline-suggestions button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #0791a5;
+  outline-offset: -2px;
 }
 
 .finance-rate-card-button {
@@ -2586,8 +2612,8 @@
 }
 
 .finance-rate-card-modal {
-  width: min(900px, calc(100vw - 32px));
-  max-height: min(820px, calc(100vh - 32px));
+  width: min(900px, calc(var(--scaled-vw, 100vw) - 32px));
+  max-height: min(820px, calc(var(--scaled-dvh, 100dvh) - 32px));
   overflow: hidden;
 }
 
@@ -2636,7 +2662,7 @@
 }
 
 .finance-rate-card-results {
-  max-height: min(620px, calc(100vh - 230px));
+  max-height: min(620px, calc(var(--scaled-dvh, 100dvh) - 230px));
   overflow-y: auto;
 }
 
@@ -3166,15 +3192,15 @@
 }
 
 .finance-custom-schedule-modal {
-  width: min(720px, calc(100vw - 32px));
+  width: min(720px, calc(var(--scaled-vw, 100vw) - 32px));
   max-width: 720px;
-  max-height: min(820px, calc(100vh - 32px));
+  max-height: min(820px, calc(var(--scaled-dvh, 100dvh) - 32px));
   overflow: hidden;
 }
 
 #financeCustomScheduleBody form {
   display: flex;
-  max-height: calc(100vh - 112px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 112px);
   flex-direction: column;
 }
 
@@ -3468,15 +3494,15 @@
   --finance-border: #e2e8f0;
   --finance-panel: #f8fafc;
   --finance-accent: var(--theme-primary, var(--brand-main, #0f766e));
-  width: min(900px, calc(100vw - 32px));
+  width: min(900px, calc(var(--scaled-vw, 100vw) - 32px));
   max-width: 900px;
-  max-height: min(860px, calc(100vh - 32px));
+  max-height: min(860px, calc(var(--scaled-dvh, 100dvh) - 32px));
   overflow: hidden;
 }
 
 #financeBulkScheduleBody form {
   display: flex;
-  max-height: calc(100vh - 112px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 112px);
   flex-direction: column;
 }
 
@@ -4901,7 +4927,7 @@ button.inventory-status-history {
   position: fixed;
   z-index: 5000;
   width: max-content;
-  max-width: min(280px, calc(100vw - 24px));
+  max-width: min(280px, calc(var(--scaled-vw, 100vw) - 24px));
 }
 
 .inventory-status-tooltip div {
@@ -4911,6 +4937,7 @@ button.inventory-status-history {
 .inventory-status-tooltip em {
   display: block;
   overflow-wrap: anywhere;
+  white-space: pre-line;
   color: #f8fafc;
   font-size: 10px;
   font-style: normal;
@@ -5079,13 +5106,13 @@ button.inventory-status-history {
 }
 
 .pnl-activity {
-  max-height: calc(100vh - 280px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 280px);
   min-height: 240px;
   overflow: hidden;
 }
 
 .pnl-activity-list {
-  max-height: calc(100vh - 350px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 350px);
   overflow: auto;
   padding-right: 4px;
 }
@@ -5161,14 +5188,14 @@ button.inventory-status-history {
 }
 
 .pnl-expense-modal {
-  width: min(760px, calc(100vw - 32px));
+  width: min(760px, calc(var(--scaled-vw, 100vw) - 32px));
   max-width: 760px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 32px);
   overflow: auto;
 }
 
 .pnl-expense-modal.has-preview {
-  width: min(1180px, calc(100vw - 32px));
+  width: min(1180px, calc(var(--scaled-vw, 100vw) - 32px));
   max-width: 1180px;
 }
 
@@ -5253,7 +5280,7 @@ button.inventory-status-history {
 .pnl-expense-review-preview-body {
   display: grid;
   place-items: center;
-  height: min(570px, calc(100vh - 210px));
+  height: min(570px, calc(var(--scaled-dvh, 100dvh) - 210px));
   min-height: 390px;
   overflow: hidden;
 }
@@ -5763,13 +5790,13 @@ audio.pnl-expense-review-media {
 @media (max-width: 520px) {
   .finance-bulk-schedule-modal,
   .finance-custom-schedule-modal {
-    width: calc(100vw - 16px);
-    max-height: calc(100vh - 16px);
+    width: calc(var(--scaled-vw, 100vw) - 16px);
+    max-height: calc(var(--scaled-dvh, 100dvh) - 16px);
   }
 
   #financeBulkScheduleBody form,
   #financeCustomScheduleBody form {
-    max-height: calc(100vh - 88px);
+    max-height: calc(var(--scaled-dvh, 100dvh) - 88px);
   }
 
   .finance-bulk-schedule-content,

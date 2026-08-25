@@ -84,7 +84,7 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
     def draw_page(canvas, _doc):
         canvas.saveState()
         logo_drawn = False
-        if letterhead_enabled and logo_path and os.path.isfile(logo_path):
+        if logo_path and os.path.isfile(logo_path):
             try:
                 image = ImageReader(logo_path)
                 width, height = image.getSize()
@@ -97,6 +97,12 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
+        if logo_drawn and issuer:
+            canvas.setFillColor(ink)
+            canvas.setFont(_canvas_font(issuer, "Helvetica-Bold"), 8.8)
+            canvas.drawRightString(
+                page_width - margin, page_height - 10 * mm, issuer[:72]
+            )
         if letterhead_enabled and not logo_drawn:
             canvas.setFillColor(ink)
             canvas.setFont(_canvas_font(issuer, "Helvetica-Bold"), 14)

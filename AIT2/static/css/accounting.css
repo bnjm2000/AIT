@@ -96,9 +96,9 @@
   width: 36px;
   height: 36px;
   padding: 0;
-  border: 1px solid var(--accounting-green-dark);
+  border: 1px solid var(--accounting-green-dark, #0c6656);
   border-radius: 6px;
-  background: var(--accounting-green);
+  background: var(--accounting-green, #138a72);
   color: #fff;
   cursor: pointer;
 }
@@ -255,7 +255,7 @@
 .accounting-table .money { text-align: right; white-space: nowrap; }
 .accounting-table .actions { text-align: right; white-space: nowrap; }
 .accounting-row-action { padding: 4px 6px; }
-.accounting-row-action.primary { color: #fff; border-radius: 5px; background: var(--accounting-green); }
+.accounting-row-action.primary { color: #fff; border-radius: 5px; background: var(--accounting-green, #138a72); }
 .btn.compact { min-height: 29px; padding: 4px 9px; }
 
 .accounting-status,
@@ -312,7 +312,7 @@
 .accounting-empty { padding: 36px 16px; color: var(--accounting-muted); text-align: center; }
 .accounting-empty.compact { padding: 24px 15px; }
 
-.accounting-modal { width: min(1180px, calc(100vw - 28px)); max-width: 1180px; max-height: calc(100vh - 30px); overflow: auto; }
+.accounting-modal { width: min(1180px, calc(var(--scaled-vw, 100vw) - 28px)); max-width: 1180px; max-height: calc(var(--scaled-dvh, 100dvh) - 30px); overflow: auto; }
 .accounting-modal .modal-header { position: sticky; top: 0; z-index: 4; background: #fff; }
 .accounting-journal-form,
 .accounting-source-form,

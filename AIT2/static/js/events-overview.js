@@ -40,7 +40,7 @@ function ensureEventListViewStyles() {
     .event-list-table .event-card-controls { gap:4px; }
     .event-list-table .event-primary-action { min-height:29px;padding:5px 9px;border-radius:5px;font-size:9px; }
     .event-list-table .event-overflow-button { width:29px;min-height:29px;border-radius:5px;font-size:14px; }
-    .event-list-table .event-card-menu { max-height:min(430px,calc(100vh - 20px));overflow-y:auto;z-index:2000; }
+    .event-list-table .event-card-menu { max-height:min(430px,calc(var(--scaled-dvh, 100dvh) - 20px));overflow-y:auto;z-index:2000; }
     .event-list-type-state { display:grid;justify-items:start;gap:4px; }
     .event-workflow-icon-strip { display:flex;align-items:center;gap:4px;min-width:0; }
     .event-workflow-icon-button {
@@ -755,26 +755,28 @@ function toggleEventCardMenu(event, eventId, context = 'card') {
   }
   target.classList.add('open');
   if (target && shouldOpen) {
-    const buttonRect = event?.currentTarget?.getBoundingClientRect();
+    const buttonRect = event?.currentTarget
+      ? showbaseViewport.rect(event.currentTarget.getBoundingClientRect())
+      : null;
     if (buttonRect) {
       target.__eventMenuOriginParent = target.parentElement;
       target.__eventMenuOriginNextSibling = target.nextSibling;
       document.body.appendChild(target);
       target.dataset.eventMenuPortal = 'true';
-      const menuRect = target.getBoundingClientRect();
+      const menuRect = showbaseViewport.rect(target.getBoundingClientRect());
       const margin = 10;
       const gap = 6;
-      const roomBelow = window.innerHeight - buttonRect.bottom;
+      const roomBelow = showbaseViewport.height() - buttonRect.bottom;
       const preferredTop = roomBelow >= menuRect.height + gap + margin
         ? buttonRect.bottom + gap
         : buttonRect.top - menuRect.height - gap;
       target.style.position = 'fixed';
-      target.style.top = `${Math.max(margin, Math.min(preferredTop, window.innerHeight - menuRect.height - margin))}px`;
-      target.style.left = `${Math.max(margin, Math.min(buttonRect.right - menuRect.width, window.innerWidth - menuRect.width - margin))}px`;
+      target.style.top = `${Math.max(margin, Math.min(preferredTop, showbaseViewport.height() - menuRect.height - margin))}px`;
+      target.style.left = `${Math.max(margin, Math.min(buttonRect.right - menuRect.width, showbaseViewport.width() - menuRect.width - margin))}px`;
       target.style.right = 'auto';
       target.style.bottom = 'auto';
       target.style.zIndex = '2000';
-      target.style.maxHeight = `calc(100vh - ${margin * 2}px)`;
+      target.style.maxHeight = `calc(var(--scaled-dvh, 100dvh) - ${margin * 2}px)`;
       target.style.overflowY = 'auto';
     }
   }

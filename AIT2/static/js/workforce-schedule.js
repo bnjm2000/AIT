@@ -278,11 +278,11 @@ function openWorkforceScheduleTagMenu(trigger, kind, assignmentId, date, label, 
 function positionWorkforceScheduleTagMenu(trigger) {
   const menu = document.getElementById('wfScheduleTagMenu');
   if (!menu || !trigger) return;
-  const rect = trigger.getBoundingClientRect();
+  const rect = showbaseViewport.rect(trigger.getBoundingClientRect());
   const menuWidth = menu.offsetWidth;
   const menuHeight = menu.offsetHeight;
-  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
-  menu.style.top = `${rect.bottom + menuHeight + 6 <= window.innerHeight
+  menu.style.left = `${Math.max(8, Math.min(rect.left, showbaseViewport.width() - menuWidth - 8))}px`;
+  menu.style.top = `${rect.bottom + menuHeight + 6 <= showbaseViewport.height()
     ? rect.bottom + 4
     : Math.max(8, rect.top - menuHeight - 4)}px`;
   workforceScheduleState.tagMenuTrigger = trigger;
@@ -858,7 +858,12 @@ function renderWorkforceSchedulePage(root, data) {
     })
   ];
   root.innerHTML = `<div class="wf-schedule-page">
-    <header class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"><div><h2>Manpower &amp; Vendors Schedule</h2>
+    <header class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"><div>
+      <div class="wf-manpower-title-row"><h2>Manpower &amp; Vendors Schedule</h2>
+        <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
+          View all invoices &amp; claims
+        </button>
+      </div>
       <p>See who is assigned each day, by department and role.</p></div>
       <div class="wf-manpower-heading-actions wf-schedule-actions">
         <button type="button" class="wf-button" onclick="downloadWorkforceSchedule('event')">${wfScheduleIcon('download')} Export Event Schedule</button>

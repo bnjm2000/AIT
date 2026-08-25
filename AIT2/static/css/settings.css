@@ -285,8 +285,8 @@
 
 #companies-section .company-switch-button,
 #companies-section .company-action-buttons .company-create-button {
-  background: var(--settings-accent);
-  border: 1px solid var(--settings-accent);
+  background: var(--settings-accent, #0f766e);
+  border: 1px solid var(--settings-accent, #0f766e);
   color: #fff;
 }
 
@@ -573,7 +573,7 @@
 
 .settings-feature-icon {
   align-items: center;
-  background: var(--settings-accent);
+  background: var(--settings-accent, #0f766e);
   border-radius: 7px;
   color: #fff;
   display: inline-flex;
@@ -722,8 +722,8 @@
 }
 
 #change-password-section .password-save-button {
-  background: var(--settings-accent);
-  border: 1px solid var(--settings-accent);
+  background: var(--settings-accent, #0f766e);
+  border: 1px solid var(--settings-accent, #0f766e);
   color: #fff;
 }
 

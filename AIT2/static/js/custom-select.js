@@ -4,6 +4,28 @@
   let active = null;
   let menu = null;
 
+  function viewportCoordinates() {
+    if (window.showbaseViewport) return window.showbaseViewport;
+    const value = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')
+    );
+    const scale = Number.isFinite(value) && value > 0 ? value : 1;
+    return {
+      rect(rect) {
+        return {
+          top: rect.top / scale,
+          right: rect.right / scale,
+          bottom: rect.bottom / scale,
+          left: rect.left / scale,
+          width: rect.width / scale,
+          height: rect.height / scale
+        };
+      },
+      width: () => window.innerWidth / scale,
+      height: () => window.innerHeight / scale
+    };
+  }
+
   function eligible(select) {
     return select instanceof HTMLSelectElement
       && !select.multiple
@@ -96,12 +118,15 @@
 
   function positionMenu() {
     if (!active || menu.hidden) return;
-    const rect = active.button.getBoundingClientRect();
+    const viewport = viewportCoordinates();
+    const rect = viewport.rect(active.button.getBoundingClientRect());
+    const viewportWidth = viewport.width();
+    const viewportHeight = viewport.height();
     const gap = 5;
     const width = Math.max(rect.width, 180);
-    menu.style.width = `${Math.min(width, window.innerWidth - 16)}px`;
-    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
-    const below = window.innerHeight - rect.bottom - gap;
+    menu.style.width = `${Math.min(width, viewportWidth - 16)}px`;
+    menu.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - menu.offsetWidth - 8))}px`;
+    const below = viewportHeight - rect.bottom - gap;
     const above = rect.top - gap;
     const openAbove = below < Math.min(260, menu.scrollHeight) && above > below;
     menu.style.maxHeight = `${Math.max(120, Math.min(320, openAbove ? above : below))}px`;

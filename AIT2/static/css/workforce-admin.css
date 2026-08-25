@@ -1071,7 +1071,7 @@
   position: fixed;
   z-index: 10020;
   width: max-content;
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: min(320px, calc(var(--scaled-vw, 100vw) - 16px));
   border-radius: 7px;
   background: #172033;
   box-shadow: 0 8px 24px rgb(15 23 42 / 22%);
@@ -2249,7 +2249,7 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-modal-card {
   position: relative;
   width: min(760px, 100%);
-  max-height: calc(100vh - 40px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 40px);
   overflow: auto;
   border-radius: 14px;
   background: white;
@@ -3003,8 +3003,8 @@ button.wf-calendar-day.selected.has-conflict:hover {
 }
 
 .wf-room-tabs button.active {
-  border-color: var(--wf-brand);
-  background: var(--wf-brand);
+  border-color: var(--wf-brand, #0f766e);
+  background: var(--wf-brand, #0f766e);
   color: #fff;
 }
 
@@ -3556,7 +3556,7 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-modal-card {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 40px);
+  max-height: calc(var(--scaled-dvh, 100dvh) - 40px);
   overflow: hidden;
 }
 
@@ -3632,6 +3632,117 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-directory-toolbar > div {
   display: flex;
   gap: 8px;
+}
+
+.wf-location-form {
+  flex-wrap: wrap;
+}
+
+.wf-location-form .wf-search {
+  flex: 1 1 210px;
+}
+
+.wf-location-directory-row > span:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.wf-location-row-actions {
+  display: flex;
+  flex: 0 0 auto !important;
+  gap: 7px;
+}
+
+.wf-location-combobox {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.wf-location-suggestions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: none;
+  max-height: 280px;
+  overflow-y: auto;
+  gap: 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, .16);
+  padding: 6px;
+}
+
+.wf-location-suggestions.open {
+  display: grid;
+}
+
+.wf-location-suggestions button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 9px 10px;
+  color: #263b35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-location-suggestions button:hover,
+.wf-location-suggestions button:focus-visible {
+  outline: 0;
+  background: #eef8f5;
+}
+
+.wf-location-suggestions button > span:last-child {
+  min-width: 0;
+}
+
+.wf-location-suggestions strong,
+.wf-location-suggestions small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-location-suggestions strong {
+  color: #183b34;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wf-location-suggestions small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.wf-location-suggestion-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: #dff3ed;
+  color: #147a68;
+}
+
+.wf-location-suggestion-icon svg {
+  width: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .wf-directory-list {

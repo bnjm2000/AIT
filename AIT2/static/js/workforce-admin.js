@@ -28,6 +28,7 @@ const workforcePageState = {
   selectedTransportProfileId: null,
   selectedFleetVehicleId: null,
   editingTransportId: null,
+  editingLocationId: null,
   returnToTransportBooking: false,
   transportAvailabilityTimer: null,
   transportAvailabilityRequest: 0,
@@ -116,13 +117,13 @@ function ensureWorkforceInstantTooltip() {
 }
 
 function positionWorkforceInstantTooltip(target, tooltip) {
-  const targetRect = target.getBoundingClientRect();
-  const tooltipRect = tooltip.getBoundingClientRect();
+  const targetRect = showbaseViewport.rect(target.getBoundingClientRect());
+  const tooltipRect = showbaseViewport.rect(tooltip.getBoundingClientRect());
   const gap = 9;
   const edge = 8;
   const targetCenter = targetRect.left + (targetRect.width / 2);
   const left = Math.min(
-    window.innerWidth - tooltipRect.width - edge,
+    showbaseViewport.width() - tooltipRect.width - edge,
     Math.max(edge, targetCenter - (tooltipRect.width / 2))
   );
   const showAbove = targetRect.top >= tooltipRect.height + gap + edge;
@@ -1503,10 +1504,7 @@ function wfFormatPhone(value) {
 }
 
 function wfLocationBadge(value, label, explicitAddress = '') {
-  const raw = String(value || '—').trim();
-  const match = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
-  const name = match ? match[1] : raw;
-  const address = String(explicitAddress || (match ? match[2] : '')).trim();
+  const { name, address } = wfLocationParts(value, explicitAddress);
   return `<span class="wf-location-badge"><span class="wf-location-heading"><small class="wf-location-direction">${label}</small><b>${wfEscape(name || '—')}</b></span>
     ${address ? `<em>${wfEscape(address)}</em>` : ''}</span>`;
 }
@@ -1910,9 +1908,10 @@ function ensureWorkforceModals() {
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfTransportProfileModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Save Transport</button></footer></form>`) +
     wfModal('wfLocationsModal', 'Manage Locations', `<div class="wf-modal-body">
-      <form class="wf-inline-form" id="wfLocationForm"><input class="wf-search" id="wfLocationName" placeholder="Venue name" required>
-        <input class="wf-search" id="wfLocationAddress" placeholder="Exact address (optional)">
-        <button class="wf-button primary" type="submit">Add Location</button></form>
+      <form class="wf-inline-form wf-location-form" id="wfLocationForm"><input class="wf-search" id="wfLocationName" placeholder="Location label" aria-label="Location label" required>
+        <input class="wf-search" id="wfLocationAddress" placeholder="Exact address (optional)" aria-label="Exact address">
+        <button class="wf-button primary" id="wfLocationSubmit" type="submit">Add Location</button>
+        <button class="wf-button" id="wfLocationCancelEdit" type="button" hidden onclick="cancelTransportLocationEdit()">Cancel</button></form>
       <div class="wf-directory-list" id="wfLocationsList"></div><div class="wf-error" id="wfLocationError"></div></div>`) +
     wfModal('wfTransportBookingModal', 'Add Transport to Event', `<form id="wfTransportBookingForm"><div class="wf-modal-body">
       <div class="wf-transport-choice-row single">
@@ -1936,11 +1935,10 @@ function ensureWorkforceModals() {
           <label class="wf-field"><span>Vehicle Return Time</span><input id="wfVehicleUseEndTime" type="time" oninput="scheduleTransportAvailability()"></label>
           <small>Return time is required for company vehicles. The return date defaults to the trip date.</small>
         </div>
-        <label class="wf-field"><span>From name *</span><input id="wfLocationFrom" list="wfSavedLocations" required oninput="wfSyncBookingLocation('from')"></label>
+        <label class="wf-field"><span>From label *</span><span class="wf-location-combobox"><input id="wfLocationFrom" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="wfLocationFromSuggestions" required onfocus="wfShowBookingLocationSuggestions('from',this.value)" oninput="wfBookingLocationInput('from')" onkeydown="wfBookingLocationSuggestionKeydown(event,'from')" onblur="setTimeout(()=>wfCloseBookingLocationSuggestions('from'),120)"><span class="wf-location-suggestions" id="wfLocationFromSuggestions" role="listbox"></span></span></label>
         <label class="wf-field"><span>From address</span><input id="wfLocationFromAddress" placeholder="Street address"></label>
-        <label class="wf-field"><span>To name *</span><input id="wfLocationTo" list="wfSavedLocations" required oninput="wfSyncBookingLocation('to')"></label>
+        <label class="wf-field"><span>To label *</span><span class="wf-location-combobox"><input id="wfLocationTo" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="wfLocationToSuggestions" required onfocus="wfShowBookingLocationSuggestions('to',this.value)" oninput="wfBookingLocationInput('to')" onkeydown="wfBookingLocationSuggestionKeydown(event,'to')" onblur="setTimeout(()=>wfCloseBookingLocationSuggestions('to'),120)"><span class="wf-location-suggestions" id="wfLocationToSuggestions" role="listbox"></span></span></label>
         <label class="wf-field"><span>To address</span><input id="wfLocationToAddress" placeholder="Street address"></label>
-        <datalist id="wfSavedLocations"></datalist>
         <label class="wf-check full"><input id="wfSaveBookingLocations" type="checkbox" checked> Save these locations for future bookings</label>
         <label class="wf-field full"><span>Cost (per trip, $)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
       </div>
@@ -3490,25 +3488,59 @@ async function saveTransportProfile(event) {
 
 function openLocationsManager() {
   ensureWorkforceModals();
+  cancelTransportLocationEdit();
   renderTransportLocations();
   openWorkforceModal('wfLocationsModal');
 }
 
+function wfLocationParts(value, explicitAddress = '') {
+  const raw = String(value || '').trim();
+  const suppliedAddress = String(explicitAddress || '').trim();
+  const openingBracket = raw.indexOf(' (');
+  const hasCombinedAddress = !suppliedAddress && openingBracket > 0 && raw.endsWith(')');
+  return {
+    name: hasCombinedAddress ? raw.slice(0, openingBracket).trim() : raw,
+    address: suppliedAddress || (hasCombinedAddress ? raw.slice(openingBracket + 2, -1).trim() : ''),
+  };
+}
+
+function wfSavedTransportLocations() {
+  return (workforcePageState.data?.transportLocations || []).map(row => ({
+    ...row,
+    ...wfLocationParts(row.name, row.address),
+  }));
+}
+
 function renderTransportLocations() {
-  document.getElementById('wfLocationsList').innerHTML = (workforcePageState.data.transportLocations || []).map(row =>
-    `<div class="wf-directory-row"><span><strong>${wfEscape(row.name)}</strong>
-      ${row.address ? `<small>(${wfEscape(row.address)})</small>` : ''}</span>
-      <button class="wf-button danger" type="button" onclick="deleteTransportLocation('${wfAttr(row.id)}')">Remove</button></div>`).join('') ||
+  document.getElementById('wfLocationsList').innerHTML = wfSavedTransportLocations().map(row =>
+    `<div class="wf-directory-row wf-location-directory-row"><span><strong>${wfEscape(row.name)}</strong>
+      ${row.address ? `<small>${wfEscape(row.address)}</small>` : ''}</span>
+      <span class="wf-location-row-actions"><button class="wf-button" type="button" onclick="editTransportLocation('${wfAttr(row.id)}')">Edit</button>
+      <button class="wf-button danger" type="button" onclick="deleteTransportLocation('${wfAttr(row.id)}')">Remove</button></span></div>`).join('') ||
       '<div class="wf-empty">No saved locations yet.</div>';
 }
 
-function wfLocationParts(value, explicitAddress = '') {
-  const raw = String(value || '').trim();
-  const matched = raw.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
-  return {
-    name: matched ? matched[1].trim() : raw,
-    address: String(explicitAddress || (matched ? matched[2] : '')).trim(),
-  };
+function editTransportLocation(id) {
+  const location = wfSavedTransportLocations().find(row => String(row.id) === String(id));
+  if (!location) return;
+  workforcePageState.editingLocationId = String(id);
+  document.getElementById('wfLocationName').value = location.name;
+  document.getElementById('wfLocationAddress').value = location.address;
+  document.getElementById('wfLocationSubmit').textContent = 'Save Changes';
+  document.getElementById('wfLocationCancelEdit').hidden = false;
+  document.getElementById('wfLocationName').focus();
+}
+
+function cancelTransportLocationEdit() {
+  workforcePageState.editingLocationId = null;
+  const nameInput = document.getElementById('wfLocationName');
+  const addressInput = document.getElementById('wfLocationAddress');
+  const submit = document.getElementById('wfLocationSubmit');
+  const cancel = document.getElementById('wfLocationCancelEdit');
+  if (nameInput) nameInput.value = '';
+  if (addressInput) addressInput.value = '';
+  if (submit) submit.textContent = 'Add Location';
+  if (cancel) cancel.hidden = true;
 }
 
 function wfSyncBookingLocation(side) {
@@ -3516,23 +3548,88 @@ function wfSyncBookingLocation(side) {
   const nameInput = document.getElementById(isFrom ? 'wfLocationFrom' : 'wfLocationTo');
   const addressInput = document.getElementById(isFrom ? 'wfLocationFromAddress' : 'wfLocationToAddress');
   if (!nameInput || !addressInput) return;
-  const selected = (workforcePageState.data?.transportLocations || []).find(row => (
+  const selected = wfSavedTransportLocations().find(row => (
     String(row.name || '').trim().toLocaleLowerCase() === nameInput.value.trim().toLocaleLowerCase()
   ));
   if (selected) addressInput.value = selected.address || '';
 }
 
+function wfBookingLocationElements(side) {
+  const isFrom = side === 'from';
+  return {
+    input: document.getElementById(isFrom ? 'wfLocationFrom' : 'wfLocationTo'),
+    address: document.getElementById(isFrom ? 'wfLocationFromAddress' : 'wfLocationToAddress'),
+    results: document.getElementById(isFrom ? 'wfLocationFromSuggestions' : 'wfLocationToSuggestions'),
+  };
+}
+
+function wfShowBookingLocationSuggestions(side, value = '') {
+  const { input, results } = wfBookingLocationElements(side);
+  if (!input || !results) return;
+  const query = String(value || '').trim().toLocaleLowerCase();
+  const options = wfSavedTransportLocations().filter(row => (
+    !query || [row.name, row.address].some(field => (
+      String(field || '').toLocaleLowerCase().includes(query)
+    ))
+  )).slice(0, 8);
+  results.innerHTML = options.map(row => `
+    <button type="button" role="option" data-location-id="${wfAttr(row.id)}" onmousedown="event.preventDefault()" onclick="wfChooseBookingLocation('${wfAttr(side)}',this.dataset.locationId)">
+      <span class="wf-location-suggestion-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"></path><circle cx="12" cy="10" r="2"></circle></svg></span>
+      <span><strong>${wfEscape(row.name)}</strong>${row.address ? `<small>${wfEscape(row.address)}</small>` : '<small>No address saved</small>'}</span>
+    </button>
+  `).join('');
+  const open = options.length > 0;
+  results.classList.toggle('open', open);
+  input.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function wfCloseBookingLocationSuggestions(side) {
+  const { input, results } = wfBookingLocationElements(side);
+  results?.classList.remove('open');
+  input?.setAttribute('aria-expanded', 'false');
+}
+
+function wfBookingLocationInput(side) {
+  wfSyncBookingLocation(side);
+  const { input } = wfBookingLocationElements(side);
+  wfShowBookingLocationSuggestions(side, input?.value || '');
+}
+
+function wfChooseBookingLocation(side, id) {
+  const location = wfSavedTransportLocations().find(row => String(row.id) === String(id));
+  const { input, address } = wfBookingLocationElements(side);
+  if (!location || !input || !address) return false;
+  input.value = location.name;
+  address.value = location.address || '';
+  wfCloseBookingLocationSuggestions(side);
+  return true;
+}
+
+function wfBookingLocationSuggestionKeydown(event, side) {
+  const { results } = wfBookingLocationElements(side);
+  if (event.key === 'Escape') {
+    wfCloseBookingLocationSuggestions(side);
+    return;
+  }
+  if (event.key !== 'ArrowDown' || !results?.classList.contains('open')) return;
+  event.preventDefault();
+  results.querySelector('button')?.focus();
+}
+
 async function saveTransportLocation(event) {
   event.preventDefault();
   try {
-    await apiCall('/api/workforce/transport-locations', 'POST', {
+    const editingId = workforcePageState.editingLocationId;
+    await apiCall(editingId
+      ? `/api/workforce/transport-locations/${encodeURIComponent(editingId)}`
+      : '/api/workforce/transport-locations', editingId ? 'PUT' : 'POST', {
       name: document.getElementById('wfLocationName').value,
       address: document.getElementById('wfLocationAddress').value
     });
-    document.getElementById('wfLocationName').value = '';
-    document.getElementById('wfLocationAddress').value = '';
+    cancelTransportLocationEdit();
     await refreshWorkforcePage();
     renderTransportLocations();
+    showNotification('success', editingId ? 'Location updated' : 'Location added');
   } catch (error) {
     wfError('wfLocationError', error.message);
   }
@@ -3540,6 +3637,9 @@ async function saveTransportLocation(event) {
 
 async function deleteTransportLocation(id) {
   await apiCall(`/api/workforce/transport-locations/${encodeURIComponent(id)}`, 'DELETE');
+  if (String(workforcePageState.editingLocationId || '') === String(id)) {
+    cancelTransportLocationEdit();
+  }
   await refreshWorkforcePage();
   renderTransportLocations();
 }
@@ -3577,10 +3677,18 @@ function applyTransportReturnDefaults() {
 
   const departure = wfTransportDepartureForReturn();
   if (!departure) return;
-  document.getElementById('wfLocationFrom').value = departure.locationTo || '';
-  document.getElementById('wfLocationFromAddress').value = departure.locationToAddress || '';
-  document.getElementById('wfLocationTo').value = departure.locationFrom || '';
-  document.getElementById('wfLocationToAddress').value = departure.locationFromAddress || '';
+  const fromLocation = wfLocationParts(
+    departure.locationToName || departure.locationTo,
+    departure.locationToAddress
+  );
+  const toLocation = wfLocationParts(
+    departure.locationFromName || departure.locationFrom,
+    departure.locationFromAddress
+  );
+  document.getElementById('wfLocationFrom').value = fromLocation.name;
+  document.getElementById('wfLocationFromAddress').value = fromLocation.address;
+  document.getElementById('wfLocationTo').value = toLocation.name;
+  document.getElementById('wfLocationToAddress').value = toLocation.address;
 }
 
 function setTransportTripType(type, applyDefaults = true) {
@@ -3731,10 +3839,6 @@ function openTransportBooking(profileId = '', bookingId = '', preferredSource = 
   );
   document.getElementById('wfBookingVendor').value = profile?.id || '';
   document.getElementById('wfBookingFleetVehicle').value = vehicle?.id || '';
-  document.getElementById('wfSavedLocations').innerHTML =
-    (workforcePageState.data.transportLocations || [])
-      .map(row => `<option value="${wfAttr(row.name)}">${wfEscape(row.address || '')}</option>`)
-      .join('');
   document.getElementById('wfTransportDriver').value = booking?.driver || '';
   document.getElementById('wfTransportDriverContact').value =
     booking?.driverContact || booking?.contactNumber || '';

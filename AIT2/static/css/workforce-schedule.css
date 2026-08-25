@@ -216,7 +216,7 @@
   display: none;
   width: max-content;
   min-width: 100%;
-  max-width: min(280px, calc(100vw - 32px));
+  max-width: min(280px, calc(var(--scaled-vw, 100vw) - 32px));
   max-height: 260px;
   overflow-y: auto;
   border: 1px solid #cbd5e1;
@@ -318,8 +318,8 @@
 }
 
 .wf-rate-toggle input:checked + i {
-  border-color: var(--schedule-green);
-  background: var(--schedule-green);
+  border-color: var(--schedule-green, #0f766e);
+  background: var(--schedule-green, #0f766e);
 }
 
 .wf-rate-toggle input:checked + i::after {
@@ -435,7 +435,7 @@
 
 .wf-schedule-filter-options > button.active {
   border-color: var(--schedule-green);
-  background: var(--schedule-green);
+  background: var(--schedule-green, #0f766e);
   color: #fff;
   font-weight: 650;
 }
@@ -778,7 +778,7 @@
   display: grid;
   width: max-content;
   min-width: 148px;
-  max-width: min(260px, calc(100vw - 16px));
+  max-width: min(260px, calc(var(--scaled-vw, 100vw) - 16px));
   gap: 2px;
   overflow: hidden;
   border: 1px solid #cad6d2;
@@ -850,7 +850,7 @@
 
 .wf-schedule-role-popover {
   width: 238px;
-  max-width: calc(100vw - 16px);
+  max-width: calc(var(--scaled-vw, 100vw) - 16px);
 }
 
 .wf-schedule-role-editor {
@@ -1125,7 +1125,7 @@
 }
 
 .wf-coverage-toggle button.active {
-  background: var(--schedule-green);
+  background: var(--schedule-green, #0f766e);
   color: #fff;
   font-weight: 650;
 }

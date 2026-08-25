@@ -2766,6 +2766,24 @@ def _pdf_logo_path(settings=None, company_code=None):
     return os.path.join(_pdf_assets_folder(company_code), os.path.basename(logo_filename))
 
 
+def _pdf_effective_logo_path(settings=None, company_code=None):
+    """Return the configured PDF logo, falling back to real company branding."""
+    configured_path = _pdf_logo_path(settings, company_code)
+    if configured_path and os.path.isfile(configured_path):
+        return configured_path
+    company_code = company_code or _current_company_code()
+    branding_folder = _company_record_frontend_folder(
+        _company_record_for_code(company_code)
+    )
+    branding_path = os.path.join(branding_folder, 'logo.png')
+    if (
+        os.path.isfile(branding_path)
+        and not _is_inherited_default_company_logo(company_code, branding_path)
+    ):
+        return branding_path
+    return ''
+
+
 def _normalise_pdf_settings(settings, company_code=None):
     defaults = _pdf_settings_defaults()
     merged = defaults.copy()
@@ -14132,10 +14150,10 @@ def _transport_location_parts(name, address=''):
     location_name = str(name or '').strip()
     location_address = str(address or '').strip()
     if not location_address:
-        match = re.match(r'^(.*?)\s*\(([^()]+)\)\s*$', location_name)
-        if match:
-            location_name = match.group(1).strip()
-            location_address = match.group(2).strip()
+        opening_bracket = location_name.find(' (')
+        if opening_bracket > 0 and location_name.endswith(')'):
+            location_address = location_name[opening_bracket + 2:-1].strip()
+            location_name = location_name[:opening_bracket].strip()
     return location_name, location_address
 
 
@@ -14148,8 +14166,9 @@ def _remember_transport_location(workforce, name, address=''):
     existing = next((
         row for row in workforce.get('transportLocations', [])
         if isinstance(row, dict)
-        and str(row.get('name') or '').casefold() == location_name.casefold()
-        and str(row.get('address') or '').casefold() == location_address.casefold()
+        and tuple(value.casefold() for value in _transport_location_parts(
+            row.get('name'), row.get('address')
+        )) == (location_name.casefold(), location_address.casefold())
     ), None)
     if existing:
         return existing
@@ -14235,13 +14254,14 @@ def create_transport_location():
         payload.get('name'), payload.get('address')
     )
     if not name:
-        return jsonify({'error': 'Location name is required'}), 400
+        return jsonify({'error': 'Location label is required'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
         existing = next((
             row for row in workforce.get('transportLocations', [])
             if isinstance(row, dict)
-            and str(row.get('name') or '').casefold() == name.casefold()
-            and str(row.get('address') or '').casefold() == address.casefold()
+            and tuple(value.casefold() for value in _transport_location_parts(
+                row.get('name'), row.get('address')
+            )) == (name.casefold(), address.casefold())
         ), None)
         if existing:
             location = existing
@@ -14253,6 +14273,41 @@ def create_transport_location():
                 'createdAt': now_iso(),
             }
             workforce.setdefault('transportLocations', []).append(location)
+    return jsonify({'success': True, 'data': location})
+
+
+@app.route(
+    '/api/workforce/transport-locations/<location_id>',
+    methods=['PUT'],
+)
+@require_admin
+def update_transport_location(location_id):
+    payload = request.get_json(silent=True) or {}
+    name, address = _transport_location_parts(
+        payload.get('name'), payload.get('address')
+    )
+    if not name:
+        return jsonify({'error': 'Location label is required'}), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        rows = workforce.setdefault('transportLocations', [])
+        location = find_by_id(rows, location_id)
+        if not location:
+            return jsonify({'error': 'Location not found'}), 404
+        duplicate = next((
+            row for row in rows
+            if row is not location and isinstance(row, dict)
+            and tuple(value.casefold() for value in _transport_location_parts(
+                row.get('name'), row.get('address')
+            )) == (name.casefold(), address.casefold())
+        ), None)
+        if duplicate:
+            return jsonify({'error': 'This saved location already exists'}), 409
+        location.update({
+            'name': name,
+            'address': address,
+            'updatedAt': now_iso(),
+        })
+    log_action(f"Updated saved transport location {name}")
     return jsonify({'success': True, 'data': location})
 
 
@@ -34317,6 +34372,8 @@ def _sync_quotation_from_costing(finance_data, costing):
         'projectName': costing.get('projectName') or '',
         'title': costing.get('projectName') or '',
         'eventLocation': costing.get('eventLocation') or '',
+        'salesperson': costing.get('salesperson') or '',
+        'salespersonUsername': costing.get('salespersonUsername') or '',
         'lineItems': quote_lines,
         'subprojects': copy.deepcopy(costing.get('subprojects') or []),
         'adjustments': preserved_adjustments,
@@ -42359,6 +42416,131 @@ def finance_salespeople():
     return jsonify({'success': True, 'data': rows})
 
 
+def _finance_reassign_document_salesperson(document_id, document_type):
+    payload = request.get_json(silent=True) or {}
+    salesperson = str(payload.get('salesperson') or '').strip()[:160]
+    salesperson_username = str(
+        payload.get('salespersonUsername') or ''
+    ).strip()[:160]
+    if not salesperson:
+        return jsonify({'error': 'Choose a salesperson'}), 400
+
+    current_company = _normalise_company_code(
+        _current_company_code(), DEFAULT_COMPANY_CODE
+    )
+    eligible_users = [
+        user for user in data_manager.users.values()
+        if getattr(user, 'is_active', True)
+        and _normalise_company_code(
+            _user_assigned_company_code(user.username),
+            DEFAULT_COMPANY_CODE,
+        ) == current_company
+    ]
+    if salesperson_username:
+        selected_user = next((
+            user for user in eligible_users
+            if str(user.username).casefold() == salesperson_username.casefold()
+        ), None)
+    else:
+        salesperson_key = salesperson.casefold()
+        matches = [
+            user for user in eligible_users
+            if salesperson_key in {
+                str(user.username or '').strip().casefold(),
+                str(getattr(user, 'name', '') or '').strip().casefold(),
+            }
+        ]
+        selected_user = matches[0] if len(matches) == 1 else None
+    if not selected_user:
+        return jsonify({'error': 'Choose an active user in this company'}), 400
+    salesperson_username = str(selected_user.username).strip()[:160]
+    salesperson = str(
+        getattr(selected_user, 'name', '') or selected_user.username
+    ).strip()[:160]
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(
+            finance_data, document_id, document_type
+        )
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({
+                'error': f'{document_type.title()} not found'
+            }), 404
+
+        if document_type == 'costing':
+            primary = _normalise_costing_document(stored, stored)
+            linked = _linked_quotation_for_costing(finance_data, primary)
+            linked_type = 'quotation'
+        else:
+            primary = _normalise_finance_document(
+                stored, 'quotation', stored
+            )
+            linked = _linked_costing_for_quotation(finance_data, primary)
+            linked_type = 'costing'
+
+        now = datetime.now().isoformat(timespec='seconds')
+        username = _finance_current_username()
+
+        def update_owner(document, kind):
+            if not document:
+                return None
+            if kind == 'costing':
+                updated = _normalise_costing_document(document, document)
+            else:
+                updated = _normalise_finance_document(
+                    document, 'quotation', document
+                )
+            updated['salesperson'] = salesperson
+            updated['salespersonUsername'] = salesperson_username
+            updated['documentVersion'] = max(
+                1, _safe_int(updated.get('documentVersion'), 1)
+            ) + 1
+            updated['updatedAt'] = now
+            updated['updatedBy'] = username
+            for index, row in enumerate(finance_data.get('documents') or []):
+                if str(row.get('id') or '') == str(updated.get('id') or ''):
+                    finance_data['documents'][index] = updated
+                    break
+            return updated
+
+        primary = update_owner(primary, document_type)
+        linked = update_owner(linked, linked_type)
+        quotation = primary if document_type == 'quotation' else linked
+        costing = primary if document_type == 'costing' else linked
+        if quotation and quotation.get('eventId'):
+            _finance_sync_managed_event(quotation, finance_data)
+        _save_finance_data(finance_data)
+
+    mark_realtime_change('finance', {
+        'action': 'salesperson-updated',
+        'quotationId': str((quotation or {}).get('id') or ''),
+        'costingId': str((costing or {}).get('id') or ''),
+    })
+    log_action(
+        f"Changed salesperson for {document_type} {document_id} to "
+        f"{salesperson}"
+    )
+    return jsonify({
+        'success': True,
+        'data': primary,
+        'quotationId': str((quotation or {}).get('id') or ''),
+        'costingId': str((costing or {}).get('id') or ''),
+    })
+
+
+@app.route('/api/quotations/<document_id>/salesperson', methods=['PUT'])
+@require_sales
+def quotation_salesperson(document_id):
+    return _finance_reassign_document_salesperson(document_id, 'quotation')
+
+
+@app.route('/api/costings/<document_id>/salesperson', methods=['PUT'])
+@require_sales
+def costing_salesperson(document_id):
+    return _finance_reassign_document_salesperson(document_id, 'costing')
+
+
 @app.route('/api/costings/lookups', methods=['GET'])
 @require_sales
 def costing_lookups():
@@ -42417,13 +42599,24 @@ def costings_collection():
             '1', 'true', 'yes', 'on',
         }
         with _finance_lock:
+            finance_data = _load_finance_data()
+            documents = finance_data.get('documents') or []
             rows = [
                 _normalise_costing_document(row, row)
-                for row in _load_finance_data().get('documents') or []
+                for row in documents
                 if isinstance(row, dict)
                 and row.get('type') == 'costing'
                 and _finance_user_can_access(row)
             ]
+            quotations_by_id = {
+                str(row.get('id') or ''): _normalise_finance_document(
+                    row, 'quotation', row
+                )
+                for row in documents
+                if isinstance(row, dict)
+                and row.get('type') == 'quotation'
+                and row.get('id')
+            }
         if mine_only:
             current_username = _finance_current_username().casefold()
             rows = [
@@ -42466,23 +42659,46 @@ def costings_collection():
         requested_limit = request.args.get('limit', type=int)
         limit = min(max(1, requested_limit or 40), 100)
         rows = rows[offset:offset + limit]
-        summaries = [{
-            'id': row['id'],
-            'projectName': row['projectName'],
-            'eventLocation': row.get('eventLocation') or '',
-            'status': row['status'],
-            'totals': row['totals'],
-            'lineCount': len(row.get('lineItems') or []),
-            'convertedQuotationId': row.get('convertedQuotationId') or '',
-            'convertedQuotationNumber': row.get('convertedQuotationNumber') or '',
-            'salesperson': row.get('salesperson') or _user_display_name(
-                _finance_document_owner_username(row)
-            ),
-            'salespersonUsername': _finance_document_owner_username(row),
-            'createdBy': row.get('createdBy') or '',
-            'updatedAt': row.get('updatedAt') or '',
-            'updatedBy': row.get('updatedBy') or '',
-        } for row in rows]
+        summaries = []
+        for row in rows:
+            quotation_id = str(
+                row.get('convertedQuotationId')
+                or row.get('sourceQuotationId')
+                or ''
+            )
+            quotation = quotations_by_id.get(quotation_id) or {}
+            event_id = _safe_int(quotation.get('eventId'), 0)
+            event = data_manager.events.get(event_id) if event_id else None
+            summaries.append({
+                'id': row['id'],
+                'projectName': row['projectName'],
+                'eventLocation': row.get('eventLocation') or '',
+                'status': row['status'],
+                'totals': row['totals'],
+                'convertedQuotationId': quotation_id,
+                'convertedQuotationNumber': (
+                    quotation.get('number')
+                    or row.get('convertedQuotationNumber')
+                    or row.get('sourceQuotationNumber')
+                    or ''
+                ),
+                'quotationStatus': (
+                    str(quotation.get('status') or '').strip().title()
+                    or 'Not created'
+                ),
+                'eventId': event_id or None,
+                'eventStatus': (
+                    normalize_event_state(getattr(event, 'state', 'New'))
+                    if event else 'Not created'
+                ),
+                'salesperson': row.get('salesperson') or _user_display_name(
+                    _finance_document_owner_username(row)
+                ),
+                'salespersonUsername': _finance_document_owner_username(row),
+                'createdBy': row.get('createdBy') or '',
+                'updatedAt': row.get('updatedAt') or '',
+                'updatedBy': row.get('updatedBy') or '',
+            })
         next_offset = offset + len(summaries)
         has_more = next_offset < total
         return jsonify({
@@ -43228,7 +43444,7 @@ def statement_of_account_pdf():
             'invoices': invoices,
         },
         company=pdf_settings,
-        logo_path=_pdf_logo_path(pdf_settings),
+        logo_path=_pdf_effective_logo_path(pdf_settings),
     )
     filename = sanitize_filename(canonical_company_name) or 'company'
     return send_file(

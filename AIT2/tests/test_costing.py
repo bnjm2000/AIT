@@ -3,6 +3,7 @@ from io import BytesIO
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 import app as app_module
 from data_manager import DataManager
@@ -120,6 +121,242 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(payload['code'], 'document_version_conflict')
         self.assertEqual(payload['actualVersion'], first_document['documentVersion'])
         self.assertEqual(payload['data']['eventLocation'], 'First editor location')
+
+    def test_costing_autosaves_are_serialised_and_rebase_rapid_changes(self):
+        source = (
+            Path(app_module.__file__).resolve().parent
+            / 'static' / 'js' / 'costing.js'
+        ).read_text(encoding='utf-8')
+        save_wrapper = source.split(
+            'async function costingSave(', 1
+        )[1].split('async function costingPerformSave(', 1)[0]
+        self.assertIn('const previousSave = costingState.activeSave;', save_wrapper)
+        self.assertIn('Promise.resolve(previousSave)', save_wrapper)
+        self.assertIn('.then(() => costingPerformSave(', save_wrapper)
+
+        save_worker = source.split(
+            'async function costingPerformSave(', 1
+        )[1].split('async function costingFlushSave(', 1)[0]
+        self.assertIn('financeMergeDocumentConflict(', save_worker)
+        self.assertIn('localSnapshot,', save_worker)
+        self.assertIn('rebased.documentVersion = response.data.documentVersion;', save_worker)
+        self.assertIn("? 'Unsaved changes'", save_worker)
+
+        realtime = source.split(
+            'async function costingHandleRealtimeChanges(', 1
+        )[1].split('function costingRoot()', 1)[0]
+        self.assertIn('if (pendingSave) await pendingSave.catch(() => {});', realtime)
+        self.assertIn(
+            'costingState.current.documentVersion = latest.documentVersion;',
+            realtime,
+        )
+        self.assertIn(
+            'costingState.baseDocument = financeCloneDocument(latest);',
+            realtime,
+        )
+
+    def test_costing_applies_rate_card_prices_and_opens_rate_card(self):
+        root = Path(app_module.__file__).resolve().parent
+        source = (root / 'static' / 'js' / 'costing.js').read_text(
+            encoding='utf-8'
+        )
+        finance_source = (root / 'static' / 'js' / 'finance.js').read_text(
+            encoding='utf-8'
+        )
+
+        new_line = source.split('function costingNewLine(selected)', 1)[1].split(
+            'function costingAppendCatalogSelection', 1
+        )[0]
+        self.assertIn(
+            'const savedUnitPrice = Math.max(0, costingNumber(selected.unitPrice));',
+            new_line,
+        )
+        self.assertIn('salePrice: savedUnitPrice * quantity * multiplier', new_line)
+        self.assertIn("savedUnitPrice > 0 ? 'sale' : 'margin-percent'", new_line)
+        self.assertIn('if (matchingLine && savedUnitPrice <= 0)', new_line)
+        self.assertIn("financeOpenRateCardFor('costing')", source)
+        self.assertIn('async function costingAddRateCardItem(index)', source)
+        self.assertIn("rateCardTarget: 'quotation'", finance_source)
+        self.assertIn("target === 'costing' ? 'costing' : 'quotation'", finance_source)
+
+    def test_costing_and_quotation_asset_add_rows_support_keyboard_flow(self):
+        root = Path(app_module.__file__).resolve().parent
+        costing_source = (root / 'static' / 'js' / 'costing.js').read_text(
+            encoding='utf-8'
+        )
+        finance_source = (root / 'static' / 'js' / 'finance.js').read_text(
+            encoding='utf-8'
+        )
+        workspace_source = (root / 'static' / 'js' / 'line-workspace.js').read_text(
+            encoding='utf-8'
+        )
+        stylesheet = (root / 'static' / 'css' / 'finance.css').read_text(
+            encoding='utf-8'
+        )
+        finance_custom_add = finance_source.split(
+            'async function financeAddCustomItem()', 1
+        )[1].split('function financeAddItemKeydown', 1)[0]
+        costing_custom_add = costing_source.split(
+            'function costingAddCustomItem()', 1
+        )[1].split('function costingAddItemKeydown', 1)[0]
+
+        self.assertIn('hideSuggestionsUnlessFocused(resultsOrId)', workspace_source)
+        self.assertIn('results.contains(document.activeElement)', workspace_source)
+        self.assertIn('onfocusout=', workspace_source)
+        self.assertIn("event?.key === 'Tab' && !event.shiftKey", workspace_source)
+        self.assertIn('suggestionOptionKeydown(event, resultsOrId)', workspace_source)
+        self.assertIn('function financeSortCatalogSuggestions(rows)', finance_source)
+        self.assertIn(
+            'Number(!!left?.isContainer) - Number(!!right?.isContainer)',
+            finance_source,
+        )
+        self.assertIn('function financeCatalogSuggestionKeydown(event, index)', finance_source)
+        self.assertIn('financeStageCatalogSelection(0)', finance_source)
+        self.assertIn('financeAddDepartmentSuggestionKeydown(event', finance_source)
+        self.assertIn('function financeFocusAddItemInput()', finance_source)
+        self.assertIn('financeFocusAddItemInput();', finance_source)
+        self.assertIn('financeFocusAddItemInput();', finance_custom_add)
+        self.assertIn('function costingCatalogSuggestionKeydown(event, index)', costing_source)
+        self.assertIn('costingStageCatalogSelection(0)', costing_source)
+        self.assertIn('costingAddCategorySuggestionKeydown(event', costing_source)
+        self.assertIn('function costingFocusAddItemInput()', costing_source)
+        self.assertIn('options.focusDescription !== false', costing_source)
+        self.assertIn('costingFocusAddItemInput();', costing_custom_add)
+        self.assertIn('.finance-catalog-option:focus-visible', stylesheet)
+
+    def test_costing_vendor_salesperson_and_list_controls_use_app_workflows(self):
+        root = Path(app_module.__file__).resolve().parent
+        source = (root / 'static' / 'js' / 'costing.js').read_text(
+            encoding='utf-8'
+        )
+        finance_source = (root / 'static' / 'js' / 'finance.js').read_text(
+            encoding='utf-8'
+        )
+        stylesheet = (root / 'static' / 'css' / 'costing.css').read_text(
+            encoding='utf-8'
+        )
+
+        self.assertNotIn('list="costingVendorOptions"', source)
+        self.assertNotIn('<datalist id="costingVendorOptions"', source)
+        self.assertIn('function costingShowVendorSuggestions(input, lineIndex = null)', source)
+        self.assertIn('class="finance-inline-suggestions costing-vendor-suggestions"', source)
+        self.assertIn('role="combobox"', source)
+        self.assertIn('function costingChooseSalesperson(encodedUsername)', source)
+        self.assertIn("apiCall('/api/finance/salespeople')", source)
+        self.assertIn('>Event Status</th>', source)
+        self.assertIn('>Quotation Status</th>', source)
+        self.assertNotIn('<th>Items</th>', source)
+        self.assertIn(
+            'class="finance-status costing-list-quotation-status"', source
+        )
+        self.assertIn('costingChangeSalespersonFromMenu()', source)
+        self.assertIn('financeChangeSalespersonFromMenu()', finance_source)
+        self.assertIn(
+            'function financeRenderSalespersonSuggestions(', finance_source
+        )
+        self.assertIn('/salesperson`, \'PUT\'', finance_source)
+        self.assertIn('.costing-vendor-suggestion {', stylesheet)
+        self.assertIn(
+            '.costing-inline-money input { height: 24px; color: inherit; font: inherit;',
+            stylesheet,
+        )
+
+    def test_costing_salesperson_and_linked_workflow_statuses_are_persisted(self):
+        self.login('owner')
+        quotation_response = self.client.post('/api/quotations', json={
+            'projectName': 'Status and Salesperson Project',
+            'lineItems': [{
+                'description': 'Audio package',
+                'department': 'Audio',
+                'quantity': 1,
+                'days': 1,
+                'unitPrice': 200,
+            }],
+        })
+        self.assertEqual(
+            quotation_response.status_code, 201,
+            quotation_response.get_data(as_text=True),
+        )
+        quotation = quotation_response.get_json()['data']
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+
+        reassigned = self.client.put(
+            f"/api/costings/{costing['id']}",
+            json={
+                **costing,
+                'salesperson': 'sales',
+                'salespersonUsername': 'sales',
+            },
+        )
+        self.assertEqual(reassigned.status_code, 200, reassigned.get_data(as_text=True))
+        self.assertEqual(reassigned.get_json()['data']['salespersonUsername'], 'sales')
+        linked_quotation = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(linked_quotation['salespersonUsername'], 'sales')
+
+        invalid_salesperson = self.client.put(
+            f"/api/quotations/{quotation['id']}/salesperson",
+            json={'salesperson': 'Not an active company user'},
+        )
+        self.assertEqual(invalid_salesperson.status_code, 400)
+
+        changed_from_quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}/salesperson",
+            json={
+                'salesperson': 'manager',
+                'salespersonUsername': 'manager',
+            },
+        )
+        self.assertEqual(
+            changed_from_quotation.status_code, 200,
+            changed_from_quotation.get_data(as_text=True),
+        )
+        synced_costing = self.client.get(
+            f"/api/costings/{costing['id']}"
+        ).get_json()['data']
+        self.assertEqual(synced_costing['salespersonUsername'], 'manager')
+
+        changed_from_costing = self.client.put(
+            f"/api/costings/{costing['id']}/salesperson",
+            json={
+                'salesperson': 'sales',
+                'salespersonUsername': 'sales',
+            },
+        )
+        self.assertEqual(
+            changed_from_costing.status_code, 200,
+            changed_from_costing.get_data(as_text=True),
+        )
+        synced_quotation = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(synced_quotation['salespersonUsername'], 'sales')
+
+        draft_row = next(
+            row for row in self.client.get('/api/costings').get_json()['data']
+            if row['id'] == costing['id']
+        )
+        self.assertEqual(draft_row['quotationStatus'], 'Draft')
+        self.assertEqual(draft_row['eventStatus'], 'Not created')
+        self.assertNotIn('lineCount', draft_row)
+
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}", json={'status': 'accepted'},
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.get_data(as_text=True))
+        event_id = accepted.get_json()['data']['eventId']
+        accepted_row = next(
+            row for row in self.client.get('/api/costings').get_json()['data']
+            if row['id'] == costing['id']
+        )
+        self.assertEqual(accepted_row['quotationStatus'], 'Accepted')
+        self.assertEqual(
+            accepted_row['eventStatus'],
+            app_module.normalize_event_state(self.manager.events[event_id].state),
+        )
 
     def test_costing_conversion_keeps_adjustment_subproject(self):
         self.login('owner')

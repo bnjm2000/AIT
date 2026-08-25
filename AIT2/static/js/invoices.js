@@ -708,17 +708,17 @@ function invoiceToggleStatusMenu(id, event) {
   }
   invoiceCloseStatusMenus();
   const trigger = event?.currentTarget || menu.previousElementSibling;
-  const rect = trigger?.getBoundingClientRect();
+  const rect = trigger && showbaseViewport.rect(trigger.getBoundingClientRect());
   if (!rect) return;
   const portal = menu.cloneNode(true);
   portal.id = `${id}-portal`;
   portal.dataset.invoiceStatusPortal = id;
   portal.classList.add('open', 'viewport-menu');
   document.body.appendChild(portal);
-  const menuWidth = Math.max(165, portal.getBoundingClientRect().width || 0);
-  portal.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`;
+  const menuWidth = Math.max(165, portal.offsetWidth || 0);
+  portal.style.left = `${Math.max(8, Math.min(rect.left, showbaseViewport.width() - menuWidth - 8))}px`;
   portal.style.top = `${rect.bottom + 5}px`;
-  portal.style.maxHeight = `${Math.max(96, window.innerHeight - rect.bottom - 17)}px`;
+  portal.style.maxHeight = `${Math.max(96, showbaseViewport.height() - rect.bottom - 17)}px`;
 }
 
 function invoiceCloseStatusMenus(exceptId = '') {

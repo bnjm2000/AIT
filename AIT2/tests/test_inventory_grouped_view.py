@@ -102,6 +102,18 @@ def test_deployed_inventory_badges_show_event_tooltips():
     assert ".inventory-deployment-tooltip-row" in stylesheet
 
 
+def test_scaled_viewport_keeps_inventory_and_plan_tooltips_on_their_triggers():
+    plan_source = (ROOT / "static" / "js" / "plan.js").read_text(encoding="utf-8")
+
+    assert "const showbaseViewport = Object.freeze" in APP_BUNDLE_SOURCE
+    assert "showbaseViewport.rect(target.getBoundingClientRect())" in APP_BUNDLE_SOURCE
+    assert "showbaseViewport.toLayout(rawEventX)" in APP_BUNDLE_SOURCE
+    assert "function inventoryShowAvailabilityTooltip" in APP_BUNDLE_SOURCE
+    assert 'onpointerenter="inventoryShowAvailabilityTooltip' in plan_source
+    assert 'onpointermove="inventoryPositionStatusHistoryTooltip' in plan_source
+    assert 'title="${escapeHtmlAttr(reasonTooltip)}"' not in plan_source
+
+
 def test_ooc_and_degraded_inventory_badges_open_maintenance_history():
     script = APP_BUNDLE_SOURCE
 
@@ -194,7 +206,7 @@ def test_asset_history_uses_timeline_and_event_cards():
 
     assert ".maintenance-history-shell" in template
     assert ".maintenance-timeline-item" in template
-    assert ".maintenance-log-content{width:100%!important;height:calc(100dvh - 16px)!important" in template
+    assert ".maintenance-log-content{width:100%!important;height:calc(var(--scaled-dvh, 100dvh) - 16px)!important" in template
     assert ".maintenance-history-shell{display:block;overflow-y:auto" in template
     assert "#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}" in template
     assert ".maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}" in template

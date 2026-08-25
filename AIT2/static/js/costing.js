@@ -3,10 +3,12 @@ const costingState = {
   current: null,
   baseDocument: null,
   vendors: [],
+  salespeople: [],
   lookupsPromise: null,
   catalog: [],
   catalogQuery: '',
   catalogTimer: null,
+  pendingCatalogSelection: null,
   saveTimer: null,
   activeSave: null,
   changeVersion: 0,
@@ -42,6 +44,9 @@ async function costingHandleRealtimeChanges(changes) {
   if (!costingIds.length) return false;
   const currentId = String(costingState.current?.id || '');
   if (currentId && costingIds.includes(currentId)) {
+    const pendingSave = costingState.activeSave;
+    if (pendingSave) await pendingSave.catch(() => {});
+    if (String(costingState.current?.id || '') !== currentId) return true;
     const response = await apiCall(`/api/costings/${encodeURIComponent(currentId)}`);
     const latest = response.data;
     const base = costingState.baseDocument || costingState.current;
@@ -52,7 +57,8 @@ async function costingHandleRealtimeChanges(changes) {
         costingState.current,
         latest
       );
-      costingState.current.documentVersion = base.documentVersion;
+      costingState.current.documentVersion = latest.documentVersion;
+      costingState.baseDocument = financeCloneDocument(latest);
     } else {
       costingState.current = latest;
       costingState.baseDocument = financeCloneDocument(latest);
@@ -523,10 +529,18 @@ function loadCosting() {
 
 async function costingLoadLookups() {
   try {
-    const response = await apiCall('/api/costings/lookups');
-    costingState.vendors = response.data?.vendors || [];
+    const [vendorResponse, salespeopleResponse] = await Promise.all([
+      apiCall('/api/costings/lookups'),
+      apiCall('/api/finance/salespeople')
+    ]);
+    costingState.vendors = vendorResponse.data?.vendors || [];
+    costingState.salespeople = salespeopleResponse.data || [];
+    if (typeof financeState !== 'undefined') {
+      financeState.salespeople = costingState.salespeople;
+    }
   } catch {
     costingState.vendors = [];
+    costingState.salespeople = [];
   }
 }
 
@@ -623,6 +637,15 @@ function costingToggleMineOnly() {
   costingLoadList();
 }
 
+function costingWorkflowStatusMarkup(value, kind) {
+  const label = String(value || 'Not created').trim() || 'Not created';
+  const statusClass = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (kind === 'quotation' && statusClass !== 'not-created') {
+    return `<span class="finance-status costing-list-quotation-status" data-status="${costingAttr(statusClass)}">${costingEscape(label)}</span>`;
+  }
+  return `<span class="costing-status is-${costingAttr(kind)} is-${costingAttr(statusClass || 'not-created')}">${costingEscape(label)}</span>`;
+}
+
 function costingListResultsHtml() {
   const rows = costingSortedDocuments();
   const showSalesperson = costingListShowsSalesperson();
@@ -635,13 +658,13 @@ function costingListResultsHtml() {
       ${['draft', 'linked', 'converted'].map(status => `<button type="button" class="finance-list-filter status-${status} ${costingState.statuses.includes(status) ? 'active' : ''}" aria-pressed="${costingState.statuses.includes(status) ? 'true' : 'false'}" onclick="costingToggleStatus('${status}')">${status === 'draft' ? 'Draft' : status === 'linked' ? 'Quotation linked' : 'Quotation made'}<span>${counts[status] || 0}</span></button>`).join('')}
     </div>
     ${rows.length ? `<div class="costing-list-wrap"><table class="finance-list-table costing-list-table">
-      <thead><tr><th>Number</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th class="finance-list-status-heading">Status</th><th>Items</th><th style="text-align:right;">Client price</th><th style="text-align:right;">Profit</th><th>Last modified</th></tr></thead>
+      <thead><tr><th>Number</th><th>Project Name</th>${showSalesperson ? '<th>Salesperson</th>' : ''}<th class="finance-list-status-heading">Event Status</th><th class="finance-list-status-heading">Quotation Status</th><th style="text-align:right;">Client price</th><th style="text-align:right;">Profit</th><th>Last modified</th></tr></thead>
       <tbody>${rows.map(row => `<tr class="finance-list-row" data-costing-id="${costingAttr(row.id)}" onclick="costingOpen('${costingAttr(row.id)}')" oncontextmenu="costingOpenContextMenu(event,'${costingAttr(row.id)}')">
         <td data-label="Quotation"><span class="finance-doc-number">${costingEscape(row.convertedQuotationNumber || 'Not linked')}</span><br><small>${row.convertedQuotationNumber ? 'Linked costing' : 'Costing draft'}</small></td>
         <td data-label="Project" class="finance-project-cell"><strong>${costingEscape(row.projectName || 'Project name required')}</strong>${row.eventLocation ? `<small class="finance-project-dates">${costingEscape(row.eventLocation)}</small>` : ''}</td>
         ${showSalesperson ? `<td data-label="Salesperson"><strong>${costingEscape(row.salesperson || row.createdBy || 'Unassigned')}</strong>${row.salespersonUsername || row.createdBy ? `<br><small>${costingEscape(row.salespersonUsername || row.createdBy)}</small>` : ''}</td>` : ''}
-        <td data-label="Status" class="finance-list-status-cell"><span class="costing-status is-${costingAttr(row.status)}">${row.status === 'converted' ? 'Quotation made' : row.status === 'linked' ? 'Quotation linked' : 'Draft'}</span></td>
-        <td data-label="Items">${Number(row.lineCount || 0)}</td>
+        <td data-label="Event Status" class="finance-list-status-cell">${costingWorkflowStatusMarkup(row.eventStatus, 'event')}</td>
+        <td data-label="Quotation Status" class="finance-list-status-cell">${costingWorkflowStatusMarkup(row.quotationStatus, 'quotation')}</td>
         <td data-label="Client price" style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.sale))}</td>
         <td data-label="Profit" class="${costingNumber(row.totals?.profit) < 0 ? 'costing-negative' : 'costing-positive'}" style="text-align:right;font-weight:750;">${costingEscape(costingMoney(row.totals?.profit))}</td>
         <td data-label="Modified">${costingEscape(typeof financeDateTime === 'function' ? financeDateTime(row.updatedAt) : String(row.updatedAt || '').slice(0, 16).replace('T', ' '))}</td>
@@ -702,6 +725,7 @@ function costingEnsureContextMenu() {
   menu.setAttribute('role', 'menu');
   menu.innerHTML = `
     <button type="button" role="menuitem" onclick="event.stopPropagation();costingEditFromMenu()"><span>Edit costing</span></button>
+    <button type="button" role="menuitem" onclick="event.stopPropagation();costingChangeSalespersonFromMenu()"><span>Change salesperson</span></button>
     <button type="button" role="menuitem" onclick="event.stopPropagation();costingDuplicateFromMenu()"><span>Duplicate costing</span></button>
     <button type="button" class="danger" role="menuitem" onclick="event.stopPropagation();costingDeleteFromMenu()"><span>Delete costing</span></button>`;
   document.body.appendChild(menu);
@@ -724,8 +748,10 @@ function costingOpenContextMenu(event, documentId) {
   menu.classList.add('open');
   const width = menu.offsetWidth;
   const height = menu.offsetHeight;
-  menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
-  menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
+  const x = showbaseViewport.toLayout(event.clientX);
+  const y = showbaseViewport.toLayout(event.clientY);
+  menu.style.left = `${Math.max(8, Math.min(x, showbaseViewport.width() - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, showbaseViewport.height() - height - 8))}px`;
   menu.querySelector('button')?.focus();
 }
 
@@ -733,6 +759,19 @@ function costingEditFromMenu() {
   const id = costingState.contextDocumentId;
   costingCloseContextMenu();
   if (id) costingOpen(id);
+}
+
+function costingChangeSalespersonFromMenu() {
+  const id = costingState.contextDocumentId;
+  const source = costingState.documents.find(row => String(row.id) === String(id));
+  costingCloseContextMenu();
+  if (!id || typeof financeOpenSalespersonReassignment !== 'function') return;
+  financeOpenSalespersonReassignment({
+    type: 'costing',
+    id,
+    salesperson: source?.salesperson || source?.createdBy || '',
+    salespersonUsername: source?.salespersonUsername || source?.createdBy || ''
+  });
 }
 
 async function costingDuplicateFromMenu() {
@@ -822,10 +861,6 @@ async function costingOpen(id, options = {}) {
   }
 }
 
-function costingVendorOptions() {
-  return `<datalist id="costingVendorOptions"><option value="Self" label="Self"></option>${costingState.vendors.map(row => `<option value="${costingAttr(row.name)}" label="${costingAttr(row.label || (row.type === 'worker' ? 'Worker' : 'Vendor'))}"></option>`).join('')}</datalist>`;
-}
-
 function costingVendorHue(value) {
   const name = String(value || '').trim().toLowerCase();
   let hash = 17;
@@ -857,6 +892,102 @@ function costingVendorColourChanged(input, lineIndex = -1) {
   input.classList.toggle('is-self-unlinked', isSelf && !linked);
   input.classList.toggle('is-empty', !name);
   input.style.setProperty('--vendor-hue', String(costingVendorHue(name)));
+}
+
+function costingVendorSuggestionRows(query = '') {
+  const needle = String(query || '').trim().toLowerCase();
+  const seen = new Set();
+  return [
+    { name: 'Self', label: 'Company inventory', type: 'self' },
+    ...(costingState.vendors || [])
+  ].filter(row => {
+    const name = String(row?.name || '').trim();
+    const meta = String(row?.label || (row?.type === 'worker' ? 'Worker' : 'Vendor')).trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) return false;
+    seen.add(key);
+    return !needle || name.toLowerCase().includes(needle) || meta.toLowerCase().includes(needle);
+  });
+}
+
+function costingVendorSuggestionResults(input) {
+  return input?.closest('.costing-vendor-combobox')
+    ?.querySelector('.costing-vendor-suggestions');
+}
+
+function costingShowVendorSuggestions(input, lineIndex = null) {
+  const results = costingVendorSuggestionResults(input);
+  if (!input || !results) return;
+  const rows = costingVendorSuggestionRows(input.value);
+  const chooseAction = lineIndex == null
+    ? 'costingChooseCategoryVendorSuggestion(this)'
+    : `costingChooseVendorSuggestion(this,${Number(lineIndex)})`;
+  results.innerHTML = rows.map(row => {
+    const name = String(row.name || '').trim();
+    const meta = row.label || (row.type === 'worker' ? 'Worker' : row.type === 'self' ? 'Company inventory' : 'Vendor');
+    return `<button type="button" class="costing-vendor-suggestion" data-costing-vendor="${costingAttr(encodeURIComponent(name))}" onmousedown="event.preventDefault()" onkeydown="costingVendorSuggestionOptionKeydown(event)" onclick="${chooseAction}"><strong>${costingEscape(name)}</strong><small>${costingEscape(meta)}</small></button>`;
+  }).join('') || '<div class="finance-suggestion-empty">No matching vendor. Keep typing to enter a new one.</div>';
+  results.classList.add('open');
+  input.setAttribute('aria-expanded', 'true');
+}
+
+function costingHideVendorSuggestions(input) {
+  costingVendorSuggestionResults(input)?.classList.remove('open');
+  input?.setAttribute('aria-expanded', 'false');
+}
+
+function costingVendorSuggestionInputKeydown(event, input) {
+  return showbaseLineWorkspace.suggestionKeydown(
+    event,
+    costingVendorSuggestionResults(input)
+  );
+}
+
+function costingVendorSuggestionOptionKeydown(event) {
+  const results = event.currentTarget?.closest('.costing-vendor-suggestions');
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, results)) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget?.click();
+}
+
+function costingChooseVendorSuggestion(button, lineIndex) {
+  const input = button?.closest('.costing-vendor-combobox')?.querySelector('input');
+  if (!input) return false;
+  input.value = decodeURIComponent(button.dataset.costingVendor || '');
+  costingHideVendorSuggestions(input);
+  costingVendorChanged(lineIndex, input.value, input);
+  return true;
+}
+
+function costingChooseCategoryVendorSuggestion(button) {
+  const input = button?.closest('.costing-vendor-combobox')?.querySelector('input');
+  if (!input) return false;
+  input.value = decodeURIComponent(button.dataset.costingVendor || '');
+  costingHideVendorSuggestions(input);
+  input.focus();
+  return true;
+}
+
+function costingLineVendorKeydown(event, input, lineIndex) {
+  if (costingVendorSuggestionInputKeydown(event, input)) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  costingHideVendorSuggestions(input);
+  costingVendorChanged(lineIndex, input.value, input);
+}
+
+function costingVendorInputBlur(input, lineIndex = null) {
+  setTimeout(() => {
+    const results = costingVendorSuggestionResults(input);
+    if (results?.contains(document.activeElement)) return;
+    costingHideVendorSuggestions(input);
+    if (lineIndex == null || !input?.isConnected) return;
+    const line = costingLines()[lineIndex];
+    if (String(line?.vendorName || '').trim() === String(input.value || '').trim()) return;
+    costingVendorChanged(lineIndex, input.value, input);
+  }, 120);
 }
 
 function costingEnsureLineContextMenu() {
@@ -906,8 +1037,10 @@ function costingOpenLineContextMenu(event, lineId) {
   menu.classList.add('open');
   const width = menu.offsetWidth;
   const height = menu.offsetHeight;
-  menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
-  menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
+  const x = showbaseViewport.toLayout(event.clientX);
+  const y = showbaseViewport.toLayout(event.clientY);
+  menu.style.left = `${Math.max(8, Math.min(x, showbaseViewport.width() - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, showbaseViewport.height() - height - 8))}px`;
   menu.querySelector('button')?.focus();
 }
 
@@ -1242,17 +1375,17 @@ function costingRenderEditor() {
       <div class="costing-header-nav">
         <div class="costing-breadcrumb"><button type="button" onclick="costingBackToList()">Costings</button><span>/</span><b>${costingEscape(quotationNumber || current.projectName || 'Draft')}</b></div>
         <div class="costing-header-buttons">
+          <button type="button" class="costing-outline-button" onclick="financeOpenRateCardFor('costing')">Rate Card</button>
           <button type="button" class="costing-outline-button" onclick="${hasLinkedQuotation ? 'costingOpenQuotation()' : 'costingBackToList()'}">&#8249;&nbsp; ${hasLinkedQuotation ? 'Go to Quotation' : 'Back to Costings'}</button>
           <details class="costing-more-menu"><summary>&#8942;&nbsp; More</summary><div><button type="button" class="danger" onclick="costingDelete()">Delete costing</button></div></details>
         </div>
       </div>
     </header>
     ${costingDiscrepancyMarkup()}
-    ${costingVendorOptions()}
     <section class="costing-project-card" aria-label="Costing details">
       <label class="costing-project-field costing-project-name-field"><span>Project Name *</span><input id="costingProjectName" value="${costingAttr(current.projectName)}" maxlength="500" ${readOnly ? 'disabled' : ''} oninput="costingProjectChanged(this.value)"></label>
       <label class="costing-project-field"><span>Event Location</span><input value="${costingAttr(current.eventLocation || '')}" maxlength="600" placeholder="Add location" ${readOnly ? 'disabled' : ''} oninput="costingLocationChanged(this.value)"></label>
-      <div class="costing-project-field"><span>Salesperson</span><strong>${costingEscape(ownerName)}</strong></div>
+      <label class="costing-project-field"><span>Salesperson</span><div class="finance-salesperson-combobox"><input id="costingSalespersonInput" value="${costingAttr(ownerName)}" autocomplete="off" role="combobox" aria-autocomplete="list" ${readOnly ? 'disabled' : ''} onfocus="costingShowSalespersonSuggestions(this.value)" oninput="costingSalespersonInput(this.value)" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'costingSalespersonResults')" onblur="setTimeout(()=>document.getElementById('costingSalespersonResults')?.classList.remove('open'),120)"><span class="finance-salesperson-results" id="costingSalespersonResults"></span></div></label>
       <div class="costing-project-field"><span>Quote No.</span><strong class="costing-quote-chip">${costingEscape(quotationNumber || 'Not created')}</strong></div>
     </section>
 
@@ -1327,7 +1460,7 @@ function costingCategoryMarkup(category, readOnly) {
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-unit-price"><col class="col-sale"><col class="col-menu"></colgroup>
       <thead>
         ${categoryHeader}
-        <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><label>Vendor for this category<input list="costingVendorOptions" placeholder="Select or enter vendor"></label><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Unit Price</th><th>Sale Price</th><th></th></tr>
+        <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><div class="finance-inline-combobox costing-vendor-combobox costing-category-vendor-combobox"><label>Vendor for this category<input autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Select or enter vendor" onfocus="costingShowVendorSuggestions(this)" oninput="costingShowVendorSuggestions(this)" onkeydown="costingVendorSuggestionInputKeydown(event,this)" onblur="costingVendorInputBlur(this)"></label><div class="finance-inline-suggestions costing-vendor-suggestions" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(this),120)"></div></div><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Unit Price</th><th>Sale Price</th><th></th></tr>
       </thead>
       <tbody>${costingGroupedLinesMarkup(lines, readOnly)}</tbody>
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
@@ -1373,7 +1506,7 @@ function costingLineMarkup(line, index, readOnly) {
     <td class="costing-item-cell"><div class="costing-item-entry">${readOnly ? '' : `<span class="finance-drag-handle costing-line-drag-handle" draggable="true" title="Drag to reorder" ondragstart="costingDragLineStart(event,${index})" ondragend="costingDragEnd()">&#9776;</span>`}${itemControl}</div></td>
     <td><input class="costing-number costing-stepper-input" aria-label="Quantity" type="number" min="0" step="1" value="${costingAttr(line.quantity)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'quantity',this.value)"></td>
     <td><div class="costing-multiplier"><input class="costing-stepper-input" aria-label="${line.multiplierLabel === 'Day' ? 'Days' : 'Multiplier'}" type="number" min="0" step=".5" value="${costingAttr(line.multiplier)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'multiplier',this.value)"></div></td>
-    <td><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${costingSelfLinkClass(line)} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" list="costingVendorOptions" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" ${readOnly ? 'disabled' : ''} oninput="costingVendorColourChanged(this,${index})" onchange="costingVendorChanged(${index},this.value,this)"></td>
+    <td><div class="finance-inline-combobox costing-vendor-combobox"><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${costingSelfLinkClass(line)} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" ${readOnly ? 'disabled' : ''} onfocus="costingShowVendorSuggestions(this,${index})" oninput="costingVendorColourChanged(this,${index});costingShowVendorSuggestions(this,${index})" onkeydown="costingLineVendorKeydown(event,this,${index})" onblur="costingVendorInputBlur(this,${index})"><div class="finance-inline-suggestions costing-vendor-suggestions" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(this),120)"></div></div></td>
     <td><textarea class="costing-remarks-input" rows="1" placeholder="Add note" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'remarks',this.value)">${costingEscape(line.remarks || '')}</textarea></td>
     <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.itemCost).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.costTotal).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
@@ -1404,7 +1537,6 @@ function costingAddItemMarkup() {
       placeholder: 'Category',
       oninput: 'costingState.addCategory=this.value;costingShowAddCategorySuggestions(this.value)',
       onfocus: 'costingShowAddCategorySuggestions(this.value)',
-      onblur: 'costingCloseAddCategorySuggestions()',
       onkeydown: 'costingAddCategoryKeydown(event)'
     },
     addAction: 'costingAddCustomItem()'
@@ -1412,7 +1544,20 @@ function costingAddItemMarkup() {
 }
 
 function costingAvailableCategories() {
-  const rows = ['General', ...costingLines().map(line => String(line.category || '').trim())];
+  const companyDepartments = (financeState.departments || []).map(value => (
+    typeof financeDefaultSystemName === 'function'
+      ? financeDefaultSystemName(value)
+      : String(value || '').replace(/\s+(?:department|system)$/i, '').trim()
+  ));
+  const pendingDepartment = typeof financeDefaultSystemName === 'function'
+    ? financeDefaultSystemName(costingState.pendingCatalogSelection?.department)
+    : String(costingState.pendingCatalogSelection?.department || '').replace(/\s+(?:department|system)$/i, '').trim();
+  const rows = [
+    'General',
+    pendingDepartment,
+    ...costingLines().map(line => String(line.category || '').trim()),
+    ...companyDepartments
+  ];
   const seen = new Set();
   return rows.filter(value => {
     const key = value.toLowerCase();
@@ -1429,16 +1574,34 @@ function costingShowAddCategorySuggestions(query = '') {
   const categories = costingAvailableCategories().filter(
     value => !needle || value.toLowerCase().includes(needle)
   );
-  results.innerHTML = categories.map(value => `<button type="button" onmousedown="event.preventDefault()" onclick="costingChooseAddCategory('${costingAttr(encodeURIComponent(value))}')">${costingEscape(value)}</button>`).join('')
+  results.innerHTML = categories.map(value => `<button type="button" onmousedown="event.preventDefault()" onkeydown="costingAddCategorySuggestionKeydown(event,'${costingAttr(encodeURIComponent(value))}')" onclick="costingChooseAddCategory('${costingAttr(encodeURIComponent(value))}')">${costingEscape(value)}</button>`).join('')
     || '<div class="finance-suggestion-empty">Enter a new category name</div>';
   results.classList.add('open');
 }
 
-function costingChooseAddCategory(encodedValue) {
+function costingAddCategorySuggestionKeydown(event, encodedValue) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'costingAddCategoryResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  costingChooseAddCategory(encodedValue, true);
+}
+
+function costingChooseAddCategory(encodedValue, addPending = false) {
   costingState.addCategory = decodeURIComponent(encodedValue);
   const input = document.getElementById('costingAddCategoryInput');
   if (input) input.value = costingState.addCategory;
   costingCloseAddCategorySuggestions();
+  if (addPending && costingState.pendingCatalogSelection) {
+    const pending = costingState.pendingCatalogSelection;
+    costingState.pendingCatalogSelection = null;
+    if (pending.isKeyboardCustom) costingAddCustomItem();
+    else {
+      costingState.catalog = [pending];
+      costingSelectCatalog(0);
+    }
+    return;
+  }
   document.getElementById('costingAddItemInput')?.focus();
 }
 
@@ -1771,6 +1934,51 @@ function costingProjectChanged(value) {
   if (!costingState.current) return;
   costingState.current.projectName = value;
   costingQueueSave();
+}
+
+function costingShowSalespersonSuggestions(value = '') {
+  const results = document.getElementById('costingSalespersonResults');
+  if (!results) return;
+  const query = String(value || '').trim().toLowerCase();
+  const options = (costingState.salespeople || []).filter(user => !query || [
+    user.name, user.username, user.phone
+  ].some(field => String(field || '').toLowerCase().includes(query))).slice(0, 8);
+  results.innerHTML = options.map(user => `
+    <button type="button" data-costing-salesperson="${costingAttr(encodeURIComponent(user.username))}" onmousedown="event.preventDefault()" onkeydown="costingSalespersonSuggestionKeydown(event)" onclick="costingChooseSalesperson(this.dataset.costingSalesperson)">
+      <strong>${costingEscape(user.name || user.username)}</strong>
+      <small>${costingEscape([user.username, user.phone].filter(Boolean).join(' · '))}</small>
+    </button>
+  `).join('');
+  results.classList.toggle('open', options.length > 0);
+}
+
+function costingSalespersonInput(value) {
+  if (!costingState.current) return;
+  costingState.current.salesperson = value;
+  costingState.current.salespersonUsername = '';
+  costingQueueSave();
+  costingShowSalespersonSuggestions(value);
+}
+
+function costingChooseSalesperson(encodedUsername) {
+  const username = decodeURIComponent(encodedUsername || '');
+  const user = (costingState.salespeople || []).find(row => row.username === username);
+  if (!user || !costingState.current) return false;
+  costingState.current.salesperson = user.name || user.username;
+  costingState.current.salespersonUsername = user.username;
+  const input = document.getElementById('costingSalespersonInput');
+  if (input) input.value = costingState.current.salesperson;
+  document.getElementById('costingSalespersonResults')?.classList.remove('open');
+  costingQueueSave();
+  return true;
+}
+
+function costingSalespersonSuggestionKeydown(event) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'costingSalespersonResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget?.click();
 }
 
 function costingLocationChanged(value) {
@@ -2293,6 +2501,7 @@ function costingSearchCatalog(value) {
   const queryKey = query.toLowerCase();
   const results = document.getElementById('costingCatalogResults');
   clearTimeout(costingState.catalogTimer);
+  costingState.pendingCatalogSelection = null;
   costingState.catalogQuery = queryKey;
   if (query.length < 2) {
     costingState.catalog = [];
@@ -2307,14 +2516,21 @@ function costingSearchCatalog(value) {
     let catalog = [];
     try {
       const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(query)}`);
-      catalog = response.data || [];
+      catalog = typeof financeSortCatalogSuggestions === 'function'
+        ? financeSortCatalogSuggestions(response.data || [])
+        : [...(response.data || [])].sort((left, right) => Number(!!left?.isContainer) - Number(!!right?.isContainer));
     } catch {}
     if (costingState.catalogQuery !== queryKey) return;
     costingState.catalog = catalog;
-    if (!results) return;
-    results.innerHTML = costingState.catalog.map((row, index) => `<button type="button" class="finance-catalog-option" onclick="costingSelectCatalog(${index})"><span><strong>${costingEscape(row.description || 'Inventory item')}</strong><br><small>${costingEscape(row.department || 'General')} &middot; ${costingNumber(row.availableQuantity)} available</small></span><small>Self</small></button>`).join('') || '<div class="finance-suggestion-empty">No inventory match. Add it as a custom item.</div>';
-    results.classList.toggle('open', document.activeElement === document.getElementById('costingAddItemInput'));
+    costingRenderCatalog();
   }, 180);
+}
+
+function costingRenderCatalog() {
+  const results = document.getElementById('costingCatalogResults');
+  if (!results) return;
+  results.innerHTML = costingState.catalog.map((row, index) => `<button type="button" class="finance-catalog-option" onkeydown="costingCatalogSuggestionKeydown(event,${index})" onclick="costingSelectCatalog(${index})"><span><strong>${costingEscape(row.description || 'Inventory item')}</strong><br><small>${costingEscape(row.department || 'General')} &middot; ${costingNumber(row.availableQuantity)} available</small></span><span>${costingNumber(row.unitPrice) > 0 ? costingEscape(costingMoney(row.unitPrice)) : '<small>No saved rate</small>'}</span></button>`).join('') || '<div class="finance-suggestion-empty">No inventory match. Add it as a custom item.</div>';
+  results.classList.toggle('open', document.activeElement === document.getElementById('costingAddItemInput'));
 }
 
 function costingNewLine(selected) {
@@ -2325,6 +2541,9 @@ function costingNewLine(selected) {
     || 'General'
   ).trim() || 'General';
   const defaults = costingCategoryDefaults(category);
+  const quantity = Math.max(0, costingNumber(selected.quantityOverride, 1));
+  const multiplier = defaults.multiplier;
+  const savedUnitPrice = Math.max(0, costingNumber(selected.unitPrice));
   const line = costingLineRecalculate({
     id: `costline_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     catalogKey: selected.catalogKey || '',
@@ -2335,7 +2554,7 @@ function costingNewLine(selected) {
     remarks: '',
     category,
     departmentCode: selected.departmentCode || '',
-    quantity: Math.max(0, costingNumber(selected.quantityOverride, 1)),
+    quantity,
     multiplier: defaults.multiplier,
     multiplierLabel: defaults.multiplierLabel,
     subprojectId: costingActiveSubprojectId(),
@@ -2345,14 +2564,14 @@ function costingNewLine(selected) {
     vendorType: 'vendor',
     itemCost: 0,
     targetMarginPercent: defaults.targetMarginPercent,
-    salePrice: 0,
+    salePrice: savedUnitPrice * quantity * multiplier,
     isCustom: !selected.catalogKey
-  }, 'margin-percent');
+  }, savedUnitPrice > 0 ? 'sale' : 'margin-percent');
   costingApplyUnboundNamePolicy(line);
   const matchingLine = costingLines().find(
     row => costingLineSaleGroupKey(row) === costingLineSaleGroupKey(line)
   );
-  if (matchingLine) {
+  if (matchingLine && savedUnitPrice <= 0) {
     const divisor = Math.max(0, costingNumber(line.quantity))
       * Math.max(0, costingNumber(line.multiplier));
     line.salePrice = Math.round(
@@ -2363,9 +2582,7 @@ function costingNewLine(selected) {
   return line;
 }
 
-function costingSelectCatalog(index) {
-  const selected = costingState.catalog[index];
-  if (!selected) return;
+function costingAppendCatalogSelection(selected) {
   if (selected.isContainer && Array.isArray(selected.containerItems)) {
     const groupId = `group_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const groupTitle = typeof financeContainerFamilyLabel === 'function'
@@ -2378,12 +2595,93 @@ function costingSelectCatalog(index) {
   } else {
     costingLines().push(costingNewLine(selected));
   }
+}
+
+function costingCompleteCatalogAdd(options = {}) {
+  costingState.pendingCatalogSelection = null;
   costingState.addCategory = '';
   costingState.catalog = [];
   costingState.catalogQuery = '';
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
+  if (options.focusDescription !== false) costingFocusAddItemInput();
+}
+
+function costingFocusAddItemInput() {
+  requestAnimationFrame(() => {
+    const input = document.getElementById('costingAddItemInput');
+    input?.focus();
+    input?.select();
+  });
+}
+
+function costingSelectCatalog(index) {
+  const selected = costingState.catalog[index];
+  if (!selected) return;
+  costingAppendCatalogSelection(selected);
+  costingCompleteCatalogAdd();
+}
+
+function costingCatalogSuggestionKeydown(event, index) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'costingCatalogResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  costingStageCatalogSelection(index);
+}
+
+function costingStageCatalogSelection(index) {
+  const selected = costingState.catalog[index];
+  if (!selected) return false;
+  costingState.pendingCatalogSelection = selected;
+  const descriptionInput = document.getElementById('costingAddItemInput');
+  if (descriptionInput) descriptionInput.value = selected.description || '';
+  const departmentSource = selected.isContainer && typeof financeContainerMajorityDepartment === 'function'
+    ? financeContainerMajorityDepartment(selected)
+    : selected;
+  const category = typeof financeDefaultSystemName === 'function'
+    ? financeDefaultSystemName(departmentSource.department)
+    : String(departmentSource.department || 'General').replace(/\s+(?:department|system)$/i, '').trim();
+  costingState.addCategory = category || 'General';
+  const categoryInput = document.getElementById('costingAddCategoryInput');
+  if (categoryInput) categoryInput.value = costingState.addCategory;
+  showbaseLineWorkspace.hideSuggestions('costingCatalogResults');
+  categoryInput?.focus();
+  costingShowAddCategorySuggestions(costingState.addCategory);
+  return true;
+}
+
+function costingStageCustomCatalogSelection() {
+  const description = String(document.getElementById('costingAddItemInput')?.value || '').trim();
+  if (!description) return false;
+  costingState.pendingCatalogSelection = { isKeyboardCustom: true, description };
+  showbaseLineWorkspace.hideSuggestions('costingCatalogResults');
+  const categoryInput = document.getElementById('costingAddCategoryInput');
+  categoryInput?.focus();
+  costingShowAddCategorySuggestions(categoryInput?.value || '');
+  return true;
+}
+
+async function costingAddRateCardItem(index) {
+  const item = financeState.rateCard[index];
+  if (!item || !costingState.current || costingState.current.status === 'converted') return;
+  let selected = item;
+  if (item.isContainer) {
+    try {
+      const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(item.containerId || item.description)}`);
+      selected = (response.data || []).find(row => (
+        row.isContainer && String(row.containerId || '').toLowerCase() === String(item.containerId || '').toLowerCase()
+      ));
+      if (!selected) throw new Error('Container contents are unavailable');
+    } catch (error) {
+      showNotification('error', error.message || 'Unable to add container');
+      return;
+    }
+  }
+  costingAppendCatalogSelection(selected);
+  costingCompleteCatalogAdd({ focusDescription: false });
+  showNotification('success', `${item.description} added to costing`);
 }
 
 function costingAddCustomItem() {
@@ -2397,15 +2695,20 @@ function costingAddCustomItem() {
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRenderEditor();
+  costingFocusAddItemInput();
 }
 
 function costingAddItemKeydown(event) {
+  if (event.key === 'Tab') {
+    showbaseLineWorkspace.suggestionKeydown(event, 'costingCatalogResults');
+    return;
+  }
   if (event.key !== 'Enter') return;
   event.preventDefault();
   const query = String(document.getElementById('costingAddItemInput')?.value || '').trim().toLowerCase();
   const results = document.getElementById('costingCatalogResults');
-  if (results?.classList.contains('open') && costingState.catalog.length > 0 && costingState.catalogQuery === query) costingSelectCatalog(0);
-  else costingAddCustomItem();
+  if (results?.classList.contains('open') && costingState.catalog.length > 0 && costingState.catalogQuery === query) costingStageCatalogSelection(0);
+  else costingStageCustomCatalogSelection();
 }
 
 function costingQueueSave() {
@@ -2417,10 +2720,23 @@ function costingQueueSave() {
 }
 
 async function costingSave(notify = false, conflictRetry = 0) {
-  const current = costingState.current;
-  if (!current || current.status === 'converted') return current;
   clearTimeout(costingState.saveTimer);
   costingState.saveTimer = null;
+  const previousSave = costingState.activeSave;
+  const operation = Promise.resolve(previousSave)
+    .catch(() => {})
+    .then(() => costingPerformSave(notify, conflictRetry));
+  costingState.activeSave = operation;
+  try {
+    return await operation;
+  } finally {
+    if (costingState.activeSave === operation) costingState.activeSave = null;
+  }
+}
+
+async function costingPerformSave(notify = false, conflictRetry = 0) {
+  const current = costingState.current;
+  if (!current || current.status === 'converted') return current;
   const version = costingState.changeVersion;
   const localSnapshot = financeCloneDocument(current);
   const baseSnapshot = financeCloneDocument(costingState.baseDocument || current);
@@ -2431,20 +2747,31 @@ async function costingSave(notify = false, conflictRetry = 0) {
     _baseDocument: baseSnapshot,
     quotationSyncMode: costingState.quotationSyncMode || undefined
   };
-  const promise = apiCall(`/api/costings/${encodeURIComponent(current.id)}`, 'PUT', payload);
-  costingState.activeSave = promise;
   try {
-    const response = await promise;
-    if (costingState.current?.id === current.id) {
-      costingState.baseDocument = financeCloneDocument(response.data);
-    }
+    const response = await apiCall(
+      `/api/costings/${encodeURIComponent(current.id)}`, 'PUT', payload
+    );
+    let hasPendingChanges = false;
     if (costingState.current?.id === current.id && version === costingState.changeVersion) {
       costingState.current = response.data;
+      costingState.baseDocument = financeCloneDocument(response.data);
     } else if (costingState.current?.id === current.id) {
+      const newestLocal = financeCloneDocument(costingState.current);
+      const rebased = financeMergeDocumentConflict(
+        localSnapshot,
+        newestLocal,
+        response.data
+      );
+      rebased.documentVersion = response.data.documentVersion;
+      costingState.current = rebased;
+      costingState.baseDocument = financeCloneDocument(response.data);
+      hasPendingChanges = true;
       costingQueueSave();
     }
     const next = document.getElementById('costingSaveState');
-    if (next) next.textContent = 'All changes saved';
+    if (next) next.textContent = hasPendingChanges
+      ? 'Unsaved changes'
+      : 'All changes saved';
     if (notify) showNotification('success', 'Costing saved');
     if (response.quotation?.status === 'draft') costingState.quotationSyncMode = '';
     return response.data;
@@ -2477,7 +2804,7 @@ async function costingSave(notify = false, conflictRetry = 0) {
         costingState.current = mergedLocal;
         costingState.changeVersion += 1;
         costingRenderEditor();
-        return costingSave(notify, conflictRetry + 1);
+        return costingPerformSave(notify, conflictRetry + 1);
       }
       if (decision === 'use-latest') {
         costingState.baseDocument = financeCloneDocument(latest);
@@ -2516,13 +2843,11 @@ async function costingSave(notify = false, conflictRetry = 0) {
         return costingState.current;
       }
       costingState.quotationSyncMode = decision;
-      return costingSave(notify);
+      return costingPerformSave(notify);
     }
     if (state) state.textContent = 'Save failed';
     if (notify) showNotification('error', error.message || 'Failed to save costing');
     throw error;
-  } finally {
-    if (costingState.activeSave === promise) costingState.activeSave = null;
   }
 }
 

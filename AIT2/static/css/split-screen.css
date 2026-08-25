@@ -3,6 +3,24 @@
   :root {
     --ui-scale: 0.8;
   }
+
+  .finance-side-column {
+    top: 4px;
+    max-height: calc(var(--scaled-dvh) - 8px);
+    gap: 12px;
+  }
+
+  .finance-quotation-summary-card {
+    padding-top: 12px;
+  }
+
+  .finance-quotation-summary-card h3 {
+    margin-bottom: 10px;
+  }
+
+  .finance-event-pairing-card .finance-picker-button {
+    min-height: 52px;
+  }
 }
 
 /* Shared compact-desktop behavior for side-by-side working. */

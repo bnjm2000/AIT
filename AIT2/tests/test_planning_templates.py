@@ -849,7 +849,10 @@ class PlanningTemplateTests(unittest.TestCase):
         script = APP_BUNDLE_SOURCE
 
         self.assertIn('pageSize: 10', script)
-        self.assertIn('max-height: min(940px, calc(100vh - 24px));', template)
+        self.assertIn(
+            'max-height: min(940px, calc(var(--scaled-dvh, 100dvh) - 24px));',
+            template,
+        )
         self.assertNotIn('.modal-content.plan-event-chooser-full-page', template)
         self.assertNotIn("'plan-event-chooser-full-page'", script)
         self.assertIn('.filter(filter => Number(counts[filter.key] || 0) > 0)', script)

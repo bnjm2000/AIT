@@ -6989,6 +6989,69 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("description', table_header_label", pdf_source)
         self.assertNotIn('enumerate(department_lines, start=1)', pdf_source)
 
+    def test_payment_terms_and_laptop_sidebar_use_compact_controls(self):
+        root = Path(app_module.__file__).resolve().parent
+        source = (root / 'static' / 'js' / 'finance.js').read_text(
+            encoding='utf-8'
+        )
+        compact_styles = (root / 'static' / 'css' / 'split-screen.css').read_text(
+            encoding='utf-8'
+        )
+        payment_start = source.index('function financePaymentTermsMarkup(')
+        payment_end = source.index(
+            'function financeRememberPaymentTermOption(', payment_start
+        )
+        payment_source = source[payment_start:payment_end]
+
+        self.assertIn("currentValue || '30 Days'", payment_source)
+        self.assertIn('id="financePaymentTermsInput"', payment_source)
+        self.assertIn('role="combobox"', payment_source)
+        self.assertIn('id="financePaymentTermsResults"', payment_source)
+        self.assertIn('role="listbox"', payment_source)
+        self.assertIn('role="option"', payment_source)
+        self.assertIn('function financeShowPaymentTermSuggestions(', payment_source)
+        self.assertIn('function financeChoosePaymentTerm(', payment_source)
+        self.assertNotIn('<select', payment_source)
+        self.assertNotIn('financeCustomPaymentTerms', payment_source)
+        self.assertIn(
+            '@media (min-width: 1301px) and (max-width: 1512px) and (max-height: 982px)',
+            compact_styles,
+        )
+        self.assertIn('--ui-scale: 0.8;', compact_styles)
+        self.assertIn('max-height: calc(var(--scaled-dvh) - 8px);', compact_styles)
+        self.assertIn('.finance-quotation-summary-card', compact_styles)
+        self.assertIn('.finance-event-pairing-card .finance-picker-button', compact_styles)
+
+        viewport_bound_sources = {
+            'finance.css': root / 'static' / 'css' / 'finance.css',
+            'invoices.css': root / 'static' / 'css' / 'invoices.css',
+            'accounting.css': root / 'static' / 'css' / 'accounting.css',
+            'workforce-admin.css': root / 'static' / 'css' / 'workforce-admin.css',
+            'worker.css': root / 'static' / 'css' / 'worker.css',
+            'vehicles.css': root / 'static' / 'css' / 'vehicles.css',
+        }
+        for name, path in viewport_bound_sources.items():
+            with self.subTest(name=name):
+                self.assertIn(
+                    'var(--scaled-', path.read_text(encoding='utf-8')
+                )
+
+        overlay_sources = [
+            root / 'static' / 'js' / 'app.js',
+            root / 'static' / 'js' / 'custom-select.js',
+            root / 'static' / 'js' / 'events-overview.js',
+            root / 'static' / 'js' / 'finance.js',
+            root / 'static' / 'js' / 'invoices.js',
+            root / 'static' / 'js' / 'costing.js',
+            root / 'static' / 'js' / 'workforce-admin.js',
+            root / 'static' / 'js' / 'workforce-schedule.js',
+        ]
+        for path in overlay_sources:
+            with self.subTest(overlay=path.name):
+                self.assertIn(
+                    'showbaseViewport', path.read_text(encoding='utf-8')
+                )
+
     def test_draft_quotation_can_create_a_planning_event_without_acceptance(self):
         quotation = self.create_quote('Early Planning')
         quotation['eventLocation'] = 'Marina Bay Sands'
@@ -7559,7 +7622,10 @@ class FinanceFeatureTests(unittest.TestCase):
         invoice_css = Path('static/css/invoices.css').read_text(encoding='utf-8')
         self.assertIn('class="btn invoice-paid-confirm"', invoice_source)
         self.assertIn('.invoice-paid-modal .invoice-paid-confirm', invoice_css)
-        self.assertIn('background: var(--invoice-green) !important', invoice_css)
+        self.assertIn(
+            'background: var(--invoice-green, var(--company-theme-color, #0f766e)) !important',
+            invoice_css,
+        )
 
     def test_invoice_summary_status_menu_uses_viewport_portal(self):
         invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
@@ -8258,6 +8324,54 @@ class FinanceFeatureTests(unittest.TestCase):
             self.assertIn(expected, statement_text)
         self.assertNotIn('Alex Buyer', statement_text)
         self.assertNotIn('Jamie Buyer', statement_text)
+
+    def test_statement_pdf_draws_logo_even_without_text_letterhead(self):
+        from PIL import Image
+        from statement_pdf import build_statement_of_account_pdf
+
+        logo_path = Path(self.tempdir.name) / 'soa-logo.png'
+        Image.new('RGB', (16, 8), '#0f766e').save(logo_path)
+        pdf = build_statement_of_account_pdf(
+            {
+                'accountCompany': 'Logo Client Pte Ltd',
+                'statementDate': '2026-08-24',
+                'currency': 'SGD',
+                'invoices': [],
+            },
+            company={
+                'companyName': 'Showbase Test',
+                'letterheadEnabled': False,
+            },
+            logo_path=str(logo_path),
+        )
+        page = PdfReader(io.BytesIO(pdf)).pages[0]
+        self.assertTrue(page['/Resources'].get('/XObject'))
+
+    def test_statement_logo_falls_back_to_company_branding(self):
+        branding_folder = Path(self.tempdir.name) / 'branding'
+        branding_folder.mkdir()
+        logo_path = branding_folder / 'logo.png'
+        logo_path.write_bytes(b'company-logo')
+        with (
+            patch.object(app_module, '_pdf_logo_path', return_value=''),
+            patch.object(
+                app_module,
+                '_company_record_for_code',
+                return_value={'frontendFolder': str(branding_folder)},
+            ),
+            patch.object(
+                app_module,
+                '_company_record_frontend_folder',
+                return_value=str(branding_folder),
+            ),
+            patch.object(
+                app_module,
+                '_is_inherited_default_company_logo',
+                return_value=False,
+            ),
+        ):
+            resolved = app_module._pdf_effective_logo_path({}, 'SHOWBASE')
+        self.assertEqual(resolved, str(logo_path))
 
     def test_invoice_project_status_is_derived_from_all_issued_invoices(self):
         quotation = self.create_quote('Milestone Billing')

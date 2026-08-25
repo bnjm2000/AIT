@@ -46,6 +46,7 @@ const financeState = {
   catalogCache: {},
   catalogAbortController: null,
   catalogQuery: '',
+  pendingCatalogSelection: null,
   listTimer: null,
   listLoading: false,
   listRequestSeq: 0,
@@ -66,6 +67,7 @@ const financeState = {
   eventPairTargetId: '',
   eventOptionsRequestSeq: 0,
   contextDocumentId: '',
+  salespersonReassignmentTarget: null,
   addDepartment: '',
   collapsedDepartments: {},
   dragLineIndex: null,
@@ -79,6 +81,7 @@ const financeState = {
   rateCardSearch: '',
   rateCardTab: 'assets',
   rateCardUom: 'units',
+  rateCardTarget: 'quotation',
   newClientSalutation: '',
   editorDataLoadedAt: 0,
   mineOnly: true,
@@ -400,20 +403,31 @@ function financeChooseLocation(encodedLocation) {
   financeFieldChange('eventLocation', location);
 }
 
-function financeShowSalespersonSuggestions(value = '') {
-  const results = document.getElementById('financeSalespersonResults');
-  if (!results) return;
+function financeSalespersonSuggestionRows(value = '') {
   const query = String(value || '').trim().toLowerCase();
-  const options = (financeState.salespeople || []).filter(user => !query || [
+  return (financeState.salespeople || []).filter(user => !query || [
     user.name, user.username, user.phone
   ].some(field => String(field || '').toLowerCase().includes(query))).slice(0, 8);
+}
+
+function financeRenderSalespersonSuggestions(results, value, chooseHandler) {
+  if (!results) return;
+  const options = financeSalespersonSuggestionRows(value);
   results.innerHTML = options.map(user => `
-    <button type="button" onmousedown="event.preventDefault();financeChooseSalesperson('${financeEscapeAttr(encodeURIComponent(user.username))}')">
+    <button type="button" onmousedown="event.preventDefault()" onclick="${chooseHandler}('${financeEscapeAttr(encodeURIComponent(user.username))}')">
       <strong>${financeEscape(user.name || user.username)}</strong>
       <small>${financeEscape([user.username, user.phone].filter(Boolean).join(' · '))}</small>
     </button>
   `).join('');
   results.classList.toggle('open', options.length > 0);
+}
+
+function financeShowSalespersonSuggestions(value = '') {
+  financeRenderSalespersonSuggestions(
+    document.getElementById('financeSalespersonResults'),
+    value,
+    'financeChooseSalesperson'
+  );
 }
 
 function financeSalespersonInput(value) {
@@ -434,6 +448,112 @@ function financeChooseSalesperson(encodedUsername) {
   if (input) input.value = financeState.current.salesperson;
   document.getElementById('financeSalespersonResults')?.classList.remove('open');
   financeQueueSave();
+}
+
+function financeEnsureSalespersonReassignmentModal() {
+  if (typeof ensureAppDialogStyles === 'function') ensureAppDialogStyles();
+  let modal = document.getElementById('financeSalespersonReassignmentModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'financeSalespersonReassignmentModal';
+  modal.className = 'modal app-dialog-modal finance-salesperson-reassignment-modal';
+  modal.innerHTML = `
+    <form class="modal-content app-dialog-content finance-salesperson-reassignment-content" onsubmit="financeSaveSalespersonReassignment(event)">
+      <div class="app-dialog-accent"></div>
+      <div class="modal-header app-dialog-header">
+        <div class="app-dialog-title-wrap"><span class="app-dialog-icon" aria-hidden="true">i</span><h3 class="modal-title app-dialog-title">Change salesperson</h3></div>
+        <button type="button" class="close-btn" aria-label="Close salesperson dialog" onclick="financeCloseSalespersonReassignmentModal()">&times;</button>
+      </div>
+      <div class="modal-body app-dialog-body">
+        <p>Search for an active user in this company.</p>
+        <label class="app-dialog-field"><span>Salesperson</span><span class="finance-salesperson-combobox"><input id="financeReassignSalespersonInput" autocomplete="off" placeholder="Search by name, username or phone" onfocus="financeShowReassignmentSalespersonSuggestions(this.value)" oninput="financeReassignmentSalespersonInput(this)" onblur="setTimeout(()=>document.getElementById('financeReassignSalespersonResults')?.classList.remove('open'),120)"><span class="finance-salesperson-results" id="financeReassignSalespersonResults"></span></span></label>
+      </div>
+      <div class="modal-footer app-dialog-actions">
+        <button type="button" class="btn btn-secondary" onclick="financeCloseSalespersonReassignmentModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="financeReassignSalespersonSave">Save salesperson</button>
+      </div>
+    </form>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function financeShowReassignmentSalespersonSuggestions(value = '') {
+  financeRenderSalespersonSuggestions(
+    document.getElementById('financeReassignSalespersonResults'),
+    value,
+    'financeChooseReassignmentSalesperson'
+  );
+}
+
+function financeReassignmentSalespersonInput(input) {
+  if (!input) return;
+  input.dataset.username = '';
+  financeShowReassignmentSalespersonSuggestions(input.value);
+}
+
+function financeChooseReassignmentSalesperson(encodedUsername) {
+  const username = decodeURIComponent(encodedUsername || '');
+  const user = (financeState.salespeople || []).find(row => row.username === username);
+  const input = document.getElementById('financeReassignSalespersonInput');
+  if (!user || !input) return false;
+  input.value = user.name || user.username;
+  input.dataset.username = user.username;
+  document.getElementById('financeReassignSalespersonResults')?.classList.remove('open');
+  return true;
+}
+
+async function financeOpenSalespersonReassignment(target = {}) {
+  const type = target.type === 'costing' ? 'costing' : 'quotation';
+  const id = String(target.id || '').trim();
+  if (!id) return;
+  financeState.salespersonReassignmentTarget = { type, id };
+  if (!financeState.salespeople.length) {
+    const response = await apiCall('/api/finance/salespeople');
+    financeState.salespeople = response.data || [];
+  }
+  const modal = financeEnsureSalespersonReassignmentModal();
+  const input = modal.querySelector('#financeReassignSalespersonInput');
+  input.value = target.salesperson || '';
+  input.dataset.username = target.salespersonUsername || '';
+  openModal(modal.id);
+  setTimeout(() => {
+    input.focus({ preventScroll: true });
+    input.select();
+    financeShowReassignmentSalespersonSuggestions(input.value);
+  }, 0);
+}
+
+function financeCloseSalespersonReassignmentModal() {
+  closeModal('financeSalespersonReassignmentModal');
+  document.getElementById('financeReassignSalespersonResults')?.classList.remove('open');
+}
+
+async function financeSaveSalespersonReassignment(event) {
+  event?.preventDefault();
+  const target = financeState.salespersonReassignmentTarget;
+  const input = document.getElementById('financeReassignSalespersonInput');
+  const button = document.getElementById('financeReassignSalespersonSave');
+  const salesperson = String(input?.value || '').trim();
+  if (!target?.id || !salesperson) return input?.focus();
+  const resource = target.type === 'costing' ? 'costings' : 'quotations';
+  if (button) button.disabled = true;
+  try {
+    await apiCall(`/api/${resource}/${encodeURIComponent(target.id)}/salesperson`, 'PUT', {
+      salesperson,
+      salespersonUsername: String(input?.dataset.username || '').trim()
+    });
+    financeCloseSalespersonReassignmentModal();
+    if (target.type === 'costing' && typeof costingLoadList === 'function') {
+      await costingLoadList();
+    } else {
+      await financeLoadList(financeState.listQuery);
+    }
+    showNotification('success', `Salesperson changed to ${salesperson}`);
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to change salesperson');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function financeAdditionalScheduleRows(kind, document = financeState.current) {
@@ -2476,6 +2596,10 @@ function financeEnsureQuotationContextMenu() {
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"></rect><path d="M16 8V4H4v12h4"></path></svg>
       <span>Duplicate quotation</span>
     </button>
+    <button type="button" role="menuitem" onclick="event.stopPropagation();financeChangeSalespersonFromMenu()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"></circle><path d="M5 20c.8-4 3.1-6 7-6s6.2 2 7 6"></path></svg>
+      <span>Change salesperson</span>
+    </button>
     <button type="button" role="menuitem" onclick="event.stopPropagation();financeRenumberQuotation()">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h8M4 12h5M4 17h8"></path><path d="M16 5v14M13.5 7.5 16 5l2.5 2.5M13.5 16.5 16 19l2.5-2.5"></path></svg>
       <span>Renumber quotation</span>
@@ -2506,9 +2630,24 @@ function financeOpenQuotationContextMenu(event, documentId) {
   menu.classList.add('open');
   const width = menu.offsetWidth;
   const height = menu.offsetHeight;
-  menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
-  menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
+  const x = showbaseViewport.toLayout(event.clientX);
+  const y = showbaseViewport.toLayout(event.clientY);
+  menu.style.left = `${Math.max(8, Math.min(x, showbaseViewport.width() - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, showbaseViewport.height() - height - 8))}px`;
   menu.querySelector('button')?.focus();
+}
+
+function financeChangeSalespersonFromMenu() {
+  const documentId = financeState.contextDocumentId;
+  const source = financeState.documents.find(row => String(row.id) === String(documentId));
+  financeCloseQuotationContextMenu();
+  if (!documentId) return;
+  financeOpenSalespersonReassignment({
+    type: 'quotation',
+    id: documentId,
+    salesperson: source?.salesperson || source?.createdByName || source?.createdBy || '',
+    salespersonUsername: source?.salespersonUsername || source?.createdBy || ''
+  });
 }
 
 async function financeDuplicateQuotation() {
@@ -3639,16 +3778,33 @@ function financeShowAddDepartmentSuggestions(query) {
   const results = document.getElementById('financeAddDepartmentResults');
   if (!results) return;
   results.innerHTML = financeDepartmentSuggestions(query).map(value => `
-    <button type="button" onmousedown="event.preventDefault()" onclick="financeChooseAddDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+    <button type="button" onmousedown="event.preventDefault()" onkeydown="financeAddDepartmentSuggestionKeydown(event,'${financeEscapeAttr(encodeURIComponent(value))}')" onclick="financeChooseAddDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
   `).join('');
   results.classList.add('open');
 }
 
-function financeChooseAddDepartment(encodedValue) {
+function financeAddDepartmentSuggestionKeydown(event, encodedValue) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'financeAddDepartmentResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  financeChooseAddDepartment(encodedValue, true);
+}
+
+function financeChooseAddDepartment(encodedValue, addPending = false) {
   financeState.addDepartment = decodeURIComponent(encodedValue);
   const input = document.getElementById('financeAddDepartmentInput');
   if (input) input.value = financeState.addDepartment;
   document.getElementById('financeAddDepartmentResults')?.classList.remove('open');
+  if (!addPending || !financeState.pendingCatalogSelection) return;
+  const pending = financeState.pendingCatalogSelection;
+  financeState.pendingCatalogSelection = null;
+  if (pending.isKeyboardCustom) {
+    financeAddCustomItem();
+    return;
+  }
+  financeState.catalog = [pending];
+  financeSelectCatalog(0);
 }
 
 function financeAddDepartmentOverride() {
@@ -4429,7 +4585,12 @@ function ensureFinanceRateCardModal() {
 }
 
 async function financeOpenRateCard() {
+  return financeOpenRateCardFor('quotation');
+}
+
+async function financeOpenRateCardFor(target = 'quotation') {
   ensureFinanceRateCardModal();
+  financeState.rateCardTarget = target === 'costing' ? 'costing' : 'quotation';
   financeState.rateCardSearch = '';
   financeState.rateCardTab = 'assets';
   document.getElementById('financeRateCardSearch').value = '';
@@ -4489,7 +4650,7 @@ function financeRenderRateCard() {
             <div class="finance-rate-card-row">
               <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
               <label class="finance-money-input"><span>$</span><input type="number" min="0" step="0.01" value="${financeNumber(row.unitPrice) || ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
-              <button type="button" class="btn btn-secondary" onclick="financeAddRateCardItemToQuotation(${index})">Add</button>
+              <button type="button" class="btn btn-secondary" onclick="${financeState.rateCardTarget === 'costing' ? 'costingAddRateCardItem' : 'financeAddRateCardItemToQuotation'}(${index})">Add</button>
               ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
             </div>
           `;
@@ -5095,31 +5256,83 @@ function financeApplySnapshotReadOnly(root) {
 
 function financePaymentTermsMarkup(currentValue) {
   const current = String(currentValue || '30 Days').trim() || '30 Days';
-  const saved = (financeState.invoicePlanTemplates || [])
-    .map(row => String(row?.name || '').trim())
-    .filter(Boolean);
-  const known = ['30 Days', ...saved.filter(name => name.toLowerCase() !== '30 days')];
-  const isKnown = known.some(name => name.toLowerCase() === current.toLowerCase());
-  const selected = isKnown ? current : '__custom__';
   return `
     <label class="finance-field finance-payment-terms-field"><span>Payment terms</span>
-      <select class="finance-input" onchange="financeSelectPaymentTerms(this.value)">
-        ${known.map(name => `<option value="${financeEscapeAttr(name)}" ${name.toLowerCase() === selected.toLowerCase() ? 'selected' : ''}>${financeEscape(name)}</option>`).join('')}
-        <option value="__custom__" ${selected === '__custom__' ? 'selected' : ''}>Custom…</option>
-      </select>
-      <input id="financeCustomPaymentTerms" class="finance-input ${selected === '__custom__' ? '' : 'hidden'}" value="${financeEscapeAttr(isKnown ? '' : current)}" placeholder="Enter payment term or plan name" oninput="financeFieldChange('paymentTerms',this.value)">
+      <span class="finance-inline-combobox finance-payment-terms-combobox">
+        <input id="financePaymentTermsInput" class="finance-input" value="${financeEscapeAttr(current)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="financePaymentTermsResults" placeholder="e.g. 30 Days" onfocus="financeShowPaymentTermSuggestions(this.value)" oninput="financePaymentTermsInput(this)" onkeydown="financePaymentTermInputKeydown(event)" onblur="setTimeout(financeClosePaymentTermSuggestions,120)">
+        <span class="finance-inline-suggestions finance-payment-terms-results" id="financePaymentTermsResults" role="listbox" aria-label="Payment term suggestions" onfocusout="setTimeout(financeClosePaymentTermSuggestions,120)"></span>
+      </span>
     </label>`;
 }
 
-function financeSelectPaymentTerms(value) {
-  const custom = document.getElementById('financeCustomPaymentTerms');
-  if (value === '__custom__') {
-    custom?.classList.remove('hidden');
-    custom?.focus();
-    return;
+function financePaymentTermOptions(value = '') {
+  const saved = (financeState.invoicePlanTemplates || [])
+    .map(row => String(row?.name || '').trim())
+    .filter(Boolean);
+  const query = String(value || '').trim().toLowerCase();
+  const seen = new Set();
+  return ['30 Days', ...saved].filter(name => {
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) return false;
+    seen.add(key);
+    return !query || key.includes(query);
+  }).slice(0, 8);
+}
+
+function financeShowPaymentTermSuggestions(value = '') {
+  const input = document.getElementById('financePaymentTermsInput');
+  const results = document.getElementById('financePaymentTermsResults');
+  if (!input || !results) return;
+  const options = financePaymentTermOptions(value);
+  results.innerHTML = options.map(name => `
+    <button type="button" role="option" aria-selected="false" onmousedown="event.preventDefault()" onkeydown="financePaymentTermSuggestionKeydown(event,'${financeEscapeAttr(encodeURIComponent(name))}')" onclick="financeChoosePaymentTerm('${financeEscapeAttr(encodeURIComponent(name))}')">${financeEscape(name)}</button>
+  `).join('');
+  const open = options.length > 0;
+  results.classList.toggle('open', open);
+  input.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function financePaymentTermsInput(input) {
+  financeFieldChange('paymentTerms', input?.value || '');
+  financeShowPaymentTermSuggestions(input?.value || '');
+}
+
+function financePaymentTermInputKeydown(event) {
+  const handled = showbaseLineWorkspace.suggestionKeydown(
+    event, 'financePaymentTermsResults'
+  );
+  if (event.key === 'Escape') {
+    document.getElementById('financePaymentTermsInput')
+      ?.setAttribute('aria-expanded', 'false');
   }
-  custom?.classList.add('hidden');
+  return handled;
+}
+
+function financeClosePaymentTermSuggestions() {
+  const input = document.getElementById('financePaymentTermsInput');
+  const results = document.getElementById('financePaymentTermsResults');
+  if (results?.contains(document.activeElement) || input === document.activeElement) return;
+  results?.classList.remove('open');
+  input?.setAttribute('aria-expanded', 'false');
+}
+
+function financeChoosePaymentTerm(encodedValue) {
+  const value = decodeURIComponent(encodedValue || '');
+  const input = document.getElementById('financePaymentTermsInput');
+  if (input) {
+    input.value = value;
+    input.setAttribute('aria-expanded', 'false');
+  }
+  document.getElementById('financePaymentTermsResults')?.classList.remove('open');
   financeFieldChange('paymentTerms', value);
+}
+
+function financePaymentTermSuggestionKeydown(event, encodedValue) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'financePaymentTermsResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  financeChoosePaymentTerm(encodedValue);
 }
 
 function financeRememberPaymentTermOption(value) {
@@ -5276,7 +5489,8 @@ function financeRenderEditor() {
               value: financeState.addDepartment,
               placeholder: 'Category',
               oninput: 'financeState.addDepartment=this.value;financeShowAddDepartmentSuggestions(this.value)',
-              onfocus: 'financeShowAddDepartmentSuggestions(this.value)'
+              onfocus: 'financeShowAddDepartmentSuggestions(this.value)',
+              onkeydown: "showbaseLineWorkspace.suggestionKeydown(event,'financeAddDepartmentResults')"
             },
             addAction: 'financeAddCustomItem()'
           })}
@@ -5290,7 +5504,7 @@ function financeRenderEditor() {
       </div>
 
       <aside class="finance-side-column">
-        <section class="finance-card finance-section">
+        <section class="finance-card finance-section finance-quotation-summary-card">
           <h3>Quotation summary</h3>
           <div class="finance-summary-row"><span>Items before adjustments</span><strong>${financeEscape(financeMoney(totals.subtotal))}</strong></div>
           ${totals.discount ? `<div class="finance-summary-row"><span>Discounts</span><strong class="finance-negative">${financeEscape(financeMoney(-totals.discount))}</strong></div>` : ''}
@@ -5320,7 +5534,7 @@ function financeRenderEditor() {
           ${financeSwitch('Show sign-off', !!document.showSignOff, "financeToggleDocumentFlag('showSignOff')")}
           <button type="button" class="btn btn-primary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
         </section>
-        <section class="finance-card finance-section">
+        <section class="finance-card finance-section finance-event-pairing-card">
           <h3>Event pairing</h3>
           <p class="finance-side-note">Pair this quotation to an existing event if the event has already been created. Accepted paired quotations will not create another event.</p>
           <div class="finance-event-search-wrap finance-event-actions">
@@ -5943,6 +6157,7 @@ async function financeFlushPendingSave() {
 
 function financeSearchCatalog(query) {
   clearTimeout(financeState.catalogTimer);
+  financeState.pendingCatalogSelection = null;
   const results = document.getElementById('financeCatalogResults');
   const clean = String(query || '').trim();
   const cacheKey = clean.toLowerCase();
@@ -5991,7 +6206,9 @@ function financeSearchCatalog(query) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Failed to search items');
       if (requestSeq !== financeState.catalogRequestSeq) return;
-      financeState.catalog = financeGroupEquivalentContainers(payload.data || []);
+      financeState.catalog = financeGroupEquivalentContainers(
+        financeSortCatalogSuggestions(payload.data || [])
+      );
       financeState.catalogCache[cacheKey] = financeState.catalog;
       financeState.catalogQuery = cacheKey;
     } catch {
@@ -6013,6 +6230,12 @@ function financeSearchCatalog(query) {
 function financeContainerFamilyLabel(containerId) {
   const clean = String(containerId || '').trim();
   return clean.replace(/\s*(?:#|(?:no|number)\.?\s+)\s*[a-z]?\d+(?:[._/-][a-z0-9]+)*\s*$/i, '').trim() || clean;
+}
+
+function financeSortCatalogSuggestions(rows) {
+  return [...(rows || [])].sort((left, right) => (
+    Number(!!left?.isContainer) - Number(!!right?.isContainer)
+  ));
 }
 
 function financeContainerContentsSignature(row) {
@@ -6088,7 +6311,7 @@ function financeRenderCatalog() {
   const results = document.getElementById('financeCatalogResults');
   if (!results) return;
   results.innerHTML = financeState.catalog.map((row, index) => `
-    <button type="button" class="finance-catalog-option" onclick="financeSelectCatalog(${index})">
+    <button type="button" class="finance-catalog-option" onkeydown="financeCatalogSuggestionKeydown(event,${index})" onclick="financeSelectCatalog(${index})">
       <span><strong>${financeCatalogDescription(row)}</strong><br><small>${financeEscape(financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
@@ -6138,7 +6361,10 @@ function financeAddContainerAsGroup(selected) {
   if (!containerId || !containerItems.length) return [];
 
   const containerDepartment = financeContainerMajorityDepartment(selected);
-  const containerCategory = financeCatalogCategory(containerDepartment);
+  const containerCategory = financeCatalogCategory(
+    containerDepartment,
+    financeAddDepartmentOverride()
+  );
   const groupId = `container_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const subprojectId = financeCurrentSubprojectId();
   const grouped = containerItems.map(item => ({
@@ -6159,6 +6385,7 @@ function financeAddContainerAsGroup(selected) {
 function financeSelectCatalog(index) {
   const selected = financeState.catalog[index];
   if (!selected) return;
+  financeState.pendingCatalogSelection = null;
   if (selected.isContainer) {
     financeAddContainerAsGroup(selected);
   } else {
@@ -6169,6 +6396,53 @@ function financeSelectCatalog(index) {
   financeState.catalog = [];
   financeQueueSave();
   financeRenderEditor();
+  financeFocusAddItemInput();
+}
+
+function financeFocusAddItemInput() {
+  requestAnimationFrame(() => {
+    const input = document.getElementById('financeAddItemInput');
+    input?.focus();
+    input?.select();
+  });
+}
+
+function financeCatalogSuggestionKeydown(event, index) {
+  if (showbaseLineWorkspace.suggestionOptionKeydown(event, 'financeCatalogResults')) return;
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  financeStageCatalogSelection(index);
+}
+
+function financeStageCatalogSelection(index) {
+  const selected = financeState.catalog[index];
+  if (!selected) return false;
+  financeState.pendingCatalogSelection = selected;
+  const descriptionInput = document.getElementById('financeAddItemInput');
+  if (descriptionInput) descriptionInput.value = selected.description || '';
+  const departmentSource = selected.isContainer
+    ? financeContainerMajorityDepartment(selected)
+    : selected;
+  const category = financeCatalogCategory(departmentSource);
+  financeState.addDepartment = category;
+  const departmentInput = document.getElementById('financeAddDepartmentInput');
+  if (departmentInput) departmentInput.value = category;
+  showbaseLineWorkspace.hideSuggestions('financeCatalogResults');
+  departmentInput?.focus();
+  financeShowAddDepartmentSuggestions(category);
+  return true;
+}
+
+function financeStageCustomCatalogSelection() {
+  const description = String(document.getElementById('financeAddItemInput')?.value || '').trim();
+  if (!description) return false;
+  financeState.pendingCatalogSelection = { isKeyboardCustom: true, description };
+  showbaseLineWorkspace.hideSuggestions('financeCatalogResults');
+  const departmentInput = document.getElementById('financeAddDepartmentInput');
+  departmentInput?.focus();
+  financeShowAddDepartmentSuggestions(departmentInput?.value || '');
+  return true;
 }
 
 async function financeAddCustomItem() {
@@ -6216,6 +6490,7 @@ async function financeAddCustomItem() {
   financeState.catalogQuery = '';
   financeQueueSave();
   financeRenderEditor();
+  financeFocusAddItemInput();
   try {
     const remembered = (await apiCall(`/api/finance/price-suggestion?description=${encodeURIComponent(description)}`)).data || {};
     const line = financeState.current?.lineItems?.find(row => row.id === lineId);
@@ -6234,16 +6509,21 @@ async function financeAddCustomItem() {
     financeSyncDocumentDepartments();
     financeQueueSave();
     financeRenderEditor();
+    financeFocusAddItemInput();
   } catch {}
 }
 
 function financeAddItemKeydown(event) {
+  if (event.key === 'Tab') {
+    showbaseLineWorkspace.suggestionKeydown(event, 'financeCatalogResults');
+    return;
+  }
   if (event.key !== 'Enter') return;
   event.preventDefault();
   const query = String(document.getElementById('financeAddItemInput')?.value || '').trim().toLowerCase();
   const results = document.getElementById('financeCatalogResults');
-  if (results?.classList.contains('open') && financeState.catalog.length > 0 && financeState.catalogQuery === query) financeSelectCatalog(0);
-  else financeAddCustomItem();
+  if (results?.classList.contains('open') && financeState.catalog.length > 0 && financeState.catalogQuery === query) financeStageCatalogSelection(0);
+  else financeStageCustomCatalogSelection();
 }
 
 function financeEnsureSentModal() {
@@ -6998,13 +7278,13 @@ function profitLossPositionChartTooltip(event, segment) {
   const visual = segment?.closest('.pnl-chart-visual');
   const tooltip = visual?.querySelector('.pnl-chart-tooltip');
   if (!visual || !tooltip) return;
-  const visualRect = visual.getBoundingClientRect();
-  const segmentRect = segment.getBoundingClientRect();
+  const visualRect = showbaseViewport.rect(visual.getBoundingClientRect());
+  const segmentRect = showbaseViewport.rect(segment.getBoundingClientRect());
   const clientX = Number.isFinite(event?.clientX) && event.clientX
-    ? event.clientX
+    ? showbaseViewport.toLayout(event.clientX)
     : segmentRect.left + segmentRect.width / 2;
   const clientY = Number.isFinite(event?.clientY) && event.clientY
-    ? event.clientY
+    ? showbaseViewport.toLayout(event.clientY)
     : segmentRect.top + segmentRect.height / 2;
   const x = Math.min(Math.max(clientX - visualRect.left, 18), visualRect.width - 18);
   const y = Math.min(Math.max(clientY - visualRect.top, 18), visualRect.height - 18);

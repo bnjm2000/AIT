@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: var(--scaled-vh, 100vh);
   background:
     linear-gradient(135deg, rgba(15, 118, 110, .06) 0 1px, transparent 1px) 0 0 / 32px 32px,
     #f6f8fb;
@@ -26,7 +26,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 
 .worker-app {
-  min-height: 100vh;
+  min-height: var(--scaled-vh, 100vh);
 }
 
 .worker-sidebar {
@@ -645,7 +645,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .received-button {
   border: 0;
   border-radius: 7px;
-  background: var(--brand);
+  background: var(--brand, #0f766e);
   color: #fff;
   padding: 6px 9px;
   cursor: pointer;
@@ -822,7 +822,7 @@ textarea { min-height: 78px; resize: vertical; }
   font-weight: 850;
 }
 
-.primary-button { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
+.primary-button { border: 1px solid var(--brand, #0f766e); background: var(--brand, #0f766e); color: #fff; }
 .secondary-button { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
 .primary-button:disabled { opacity: .6; cursor: wait; }
 
@@ -839,8 +839,8 @@ textarea { min-height: 78px; resize: vertical; }
 .worker-modal-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.58); backdrop-filter: blur(3px); }
 .worker-modal-card {
   position: relative;
-  width: min(1120px, calc(100vw - 48px));
-  max-height: calc(100vh - 36px);
+  width: min(1120px, calc(var(--scaled-vw, 100vw) - 48px));
+  max-height: calc(var(--scaled-dvh, 100dvh) - 36px);
   overflow: auto;
   border-radius: 8px;
   background: #fff;

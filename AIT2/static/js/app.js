@@ -1,3 +1,35 @@
+// Keep viewport coordinates and CSS coordinates in the same space when the
+// compact laptop view scales the application with CSS zoom/transform.
+const showbaseViewport = Object.freeze({
+  scale() {
+    const value = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')
+    );
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  },
+  toLayout(value) {
+    return Number(value || 0) / this.scale();
+  },
+  width() {
+    return this.toLayout(window.innerWidth);
+  },
+  height() {
+    return this.toLayout(window.innerHeight);
+  },
+  rect(rect) {
+    const scale = this.scale();
+    return {
+      top: rect.top / scale,
+      right: rect.right / scale,
+      bottom: rect.bottom / scale,
+      left: rect.left / scale,
+      width: rect.width / scale,
+      height: rect.height / scale
+    };
+  }
+});
+window.showbaseViewport = showbaseViewport;
+
 // Application state
 let currentUser = null;
 let events = [];
@@ -2380,7 +2412,7 @@ function ensureBarcodeScannerStyles() {
       }
 
       #barcodeScannerModal .modal-content {
-        max-height: calc(100dvh - 20px);
+        max-height: calc(var(--scaled-dvh, 100dvh) - 20px);
       }
 
       .barcode-scanner-reader {
@@ -7139,17 +7171,36 @@ let inventoryStatusTooltipPinned = false;
 function inventoryPositionStatusHistoryTooltip(event, target) {
   const tooltip = document.getElementById('inventoryStatusHistoryTooltip');
   if (!tooltip || !target) return;
-  const rect = target.getBoundingClientRect();
-  const eventX = Number(event?.clientX);
+  const rect = showbaseViewport.rect(target.getBoundingClientRect());
+  const rawEventX = Number(event?.clientX);
+  const eventX = showbaseViewport.toLayout(rawEventX);
   const xAnchor = Number.isFinite(eventX) && eventX > 0
     ? eventX
     : rect.left + rect.width / 2;
   const below = rect.top < 105;
   const width = Math.max(120, tooltip.offsetWidth || 240);
-  const x = Math.min(Math.max(xAnchor, width / 2 + 8), window.innerWidth - width / 2 - 8);
+  const x = Math.min(
+    Math.max(xAnchor, width / 2 + 8),
+    showbaseViewport.width() - width / 2 - 8
+  );
   tooltip.style.left = `${x}px`;
   tooltip.style.top = `${below ? rect.bottom : rect.top}px`;
   tooltip.classList.toggle('is-below', below);
+}
+
+function inventoryShowAvailabilityTooltip(event, target, encodedText) {
+  let text = String(encodedText || '');
+  try { text = decodeURIComponent(text); } catch (error) {}
+  text = text.trim();
+  if (!text) return;
+  const [heading, ...details] = text.split('\n');
+  const tooltip = ensureInventoryStatusHistoryTooltip();
+  tooltip.innerHTML = '<i aria-hidden="true"></i><div><strong></strong><em></em></div>';
+  tooltip.querySelector('strong').textContent = heading;
+  tooltip.querySelector('em').textContent = details.join('\n').trim();
+  tooltip.style.setProperty('--tooltip-colour', '#1769aa');
+  tooltip.classList.add('is-visible');
+  inventoryPositionStatusHistoryTooltip(event, target);
 }
 
 function inventoryShowStatusHistoryTooltip(event, target, encodedAssetId, status) {
@@ -12545,17 +12596,17 @@ function showDayEvents(event, dayIndex, dateString) {
   `;
 
   // Position popup near the click
-  const rect = event.target.getBoundingClientRect();
+  const rect = showbaseViewport.rect(event.target.getBoundingClientRect());
   popup.style.left = `${rect.left}px`;
   popup.style.top = `${rect.bottom + 5}px`;
 
   // Adjust if popup goes off screen
   document.body.appendChild(popup);
-  const popupRect = popup.getBoundingClientRect();
-  if (popupRect.right > window.innerWidth) {
-    popup.style.left = `${window.innerWidth - popupRect.width - 10}px`;
+  const popupRect = showbaseViewport.rect(popup.getBoundingClientRect());
+  if (popupRect.right > showbaseViewport.width()) {
+    popup.style.left = `${showbaseViewport.width() - popupRect.width - 10}px`;
   }
-  if (popupRect.bottom > window.innerHeight) {
+  if (popupRect.bottom > showbaseViewport.height()) {
     popup.style.top = `${rect.top - popupRect.height - 5}px`;
   }
 
@@ -17837,11 +17888,11 @@ function ensureEventLogsModalStyles() {
   style.id = 'event-logs-modal-styles';
   style.textContent = `
     #eventLogsModal { z-index:1450;--el-accent:var(--brand-primary,#0f766e);--el-ink:#172b26;--el-muted:#64748b;--el-line:#dce7e3; }
-    #eventLogsModal .event-logs-content { width:min(860px,calc(100vw - 28px));max-width:none;max-height:calc(100vh - 28px);padding:0;overflow:hidden;border:1px solid var(--el-line);border-radius:8px;background:#f7faf9; }
+    #eventLogsModal .event-logs-content { width:min(860px,calc(var(--scaled-vw, 100vw) - 28px));max-width:none;max-height:calc(var(--scaled-dvh, 100dvh) - 28px);padding:0;overflow:hidden;border:1px solid var(--el-line);border-radius:8px;background:#f7faf9; }
     #eventLogsModal .event-logs-header { min-height:58px;padding:12px 15px;border-bottom:1px solid var(--el-line);background:#fff; }
     #eventLogsModal .event-logs-header h3 { margin:0;color:var(--el-ink);font-size:15px; }
     #eventLogsModal .event-logs-header p { margin:3px 0 0;color:var(--el-muted);font-size:10px; }
-    #eventLogsModal .event-logs-body { max-height:calc(100vh - 88px);padding:12px;overflow:auto; }
+    #eventLogsModal .event-logs-body { max-height:calc(var(--scaled-dvh, 100dvh) - 88px);padding:12px;overflow:auto; }
     #eventLogsModal .event-logs-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px;border:1px solid var(--el-line);border-radius:7px;background:#fff;overflow:hidden; }
     #eventLogsModal .event-logs-stat { min-height:61px;padding:10px 11px;border-right:1px solid var(--el-line); }
     #eventLogsModal .event-logs-stat:last-child { border-right:0; }

@@ -1712,8 +1712,13 @@ function planAvailabilityLabelHtml(group, availability, reasonTooltip = '') {
   return `
     <button type="button"
             class="plan-availability-count"
-            title="${escapeHtmlAttr(reasonTooltip)}"
             aria-label="Show why only ${escapeHtmlAttr(countText)}"
+            onpointerenter="inventoryShowAvailabilityTooltip(event,this,'${planEncode(reasonTooltip)}')"
+            onpointermove="inventoryPositionStatusHistoryTooltip(event,this)"
+            onpointerleave="inventoryHideStatusHistoryTooltip()"
+            onfocus="inventoryShowAvailabilityTooltip(event,this,'${planEncode(reasonTooltip)}')"
+            onblur="inventoryHideStatusHistoryTooltip()"
+            onkeydown="if(event.key==='Escape'){inventoryHideStatusHistoryTooltip(true);this.blur();}"
             onclick="planShowAvailabilityReason('${planEncode(JSON.stringify(planAvailabilityDetail(group, availability, reasonTooltip)))}')">
       ${escapeHtml(countText)}
     </button>

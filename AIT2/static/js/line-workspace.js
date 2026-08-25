@@ -88,6 +88,12 @@
       return true;
     },
 
+    hideSuggestionsUnlessFocused(resultsOrId) {
+      const results = this.suggestionRoot(resultsOrId);
+      if (!results || results.contains(document.activeElement)) return false;
+      return this.hideSuggestions(results);
+    },
+
     selectFirstSuggestion(resultsOrId) {
       const results = this.suggestionRoot(resultsOrId);
       const suggestion = results?.querySelector('button:not([disabled])');
@@ -97,6 +103,15 @@
     },
 
     suggestionKeydown(event, resultsOrId) {
+      if (event?.key === 'Tab' && !event.shiftKey) {
+        const results = this.suggestionRoot(resultsOrId);
+        const suggestion = results?.querySelector('button:not([disabled])');
+        if (results?.classList.contains('open') && suggestion) {
+          event.preventDefault();
+          suggestion.focus();
+          return true;
+        }
+      }
       if (event?.key === 'Enter' && this.selectFirstSuggestion(resultsOrId)) {
         event.preventDefault();
         return true;
@@ -110,6 +125,19 @@
       return false;
     },
 
+    suggestionOptionKeydown(event, resultsOrId) {
+      if (event?.key !== 'Tab') return false;
+      const results = this.suggestionRoot(resultsOrId);
+      const suggestions = [...(results?.querySelectorAll('button:not([disabled])') || [])];
+      const currentIndex = suggestions.indexOf(event.currentTarget);
+      const targetIndex = currentIndex + (event.shiftKey ? -1 : 1);
+      const target = suggestions[targetIndex];
+      if (!target) return false;
+      event.preventDefault();
+      target.focus();
+      return true;
+    },
+
     addRowMarkup(options = {}) {
       const search = options.search || {};
       const category = options.category || {};
@@ -118,10 +146,10 @@
         value ? ` ${name}="${escapeAttribute(value)}"` : ''
       );
       const searchBlur = search.onblur || (search.resultsId
-        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestions(${JSON.stringify(String(search.resultsId))}),120)`
+        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(${JSON.stringify(String(search.resultsId))}),120)`
         : '');
       const categoryBlur = category.onblur || (category.resultsId
-        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestions(${JSON.stringify(String(category.resultsId))}),120)`
+        ? `setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(${JSON.stringify(String(category.resultsId))}),120)`
         : '');
       const categoryKeydown = category.onkeydown || (category.resultsId
         ? `showbaseLineWorkspace.suggestionKeydown(event,${JSON.stringify(String(category.resultsId))})`
@@ -129,11 +157,11 @@
       return `<div class="finance-add-row finance-add-row-expanded showbase-line-workspace-add-row ${escapeAttribute(options.className || '')}">
         <div class="finance-add-item-wrap ${escapeAttribute(search.wrapClass || '')}">
           <input id="${escapeAttribute(search.id || '')}" class="finance-input" placeholder="${escapeAttribute(search.placeholder || '')}" autocomplete="off"${optionalAttribute('oninput', search.oninput)}${optionalAttribute('onblur', searchBlur)}${optionalAttribute('onkeydown', search.onkeydown)}>
-          <div id="${escapeAttribute(search.resultsId || '')}" class="finance-catalog-results"></div>
+          <div id="${escapeAttribute(search.resultsId || '')}" class="finance-catalog-results" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused('${escapeAttribute(search.resultsId || '')}'),120)"></div>
         </div>
         <div class="finance-inline-combobox">
           <input id="${escapeAttribute(category.id || '')}" class="finance-input" value="${escapeAttribute(category.value || '')}" placeholder="${escapeAttribute(category.placeholder || 'Category')}" autocomplete="off"${optionalAttribute('oninput', category.oninput)}${optionalAttribute('onfocus', category.onfocus)}${optionalAttribute('onblur', categoryBlur)}${optionalAttribute('onkeydown', categoryKeydown)}>
-          <div class="finance-inline-suggestions" id="${escapeAttribute(category.resultsId || '')}"></div>
+          <div class="finance-inline-suggestions" id="${escapeAttribute(category.resultsId || '')}" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused('${escapeAttribute(category.resultsId || '')}'),120)"></div>
         </div>
         ${extraMarkup}
         <button type="button" class="btn btn-primary" onclick="${escapeAttribute(options.addAction || '')}">+ Add</button>

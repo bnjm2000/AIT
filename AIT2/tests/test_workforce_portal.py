@@ -2324,6 +2324,64 @@ class WorkforcePortalTests(unittest.TestCase):
             location["address"], "1 Raffles Boulevard, Singapore 039593"
         )
 
+        nested_address = self.client.post(
+            "/api/workforce/transport-locations",
+            json={
+                "name": (
+                    "New Bahru (46 Kim Yam Road New Bahru "
+                    "(School Block), Singapore 239351)"
+                ),
+            },
+        )
+        self.assertEqual(
+            nested_address.status_code, 200,
+            nested_address.get_data(as_text=True),
+        )
+        new_bahru = nested_address.get_json()["data"]
+        self.assertEqual(new_bahru["name"], "New Bahru")
+        self.assertEqual(
+            new_bahru["address"],
+            "46 Kim Yam Road New Bahru (School Block), Singapore 239351",
+        )
+
+        edited = self.client.put(
+            f"/api/workforce/transport-locations/{new_bahru['id']}",
+            json={
+                "name": "New Bahru School Block",
+                "address": "46 Kim Yam Road, Singapore 239351",
+            },
+        )
+        self.assertEqual(edited.status_code, 200, edited.get_data(as_text=True))
+        self.assertEqual(
+            edited.get_json()["data"]["name"], "New Bahru School Block"
+        )
+        self.assertEqual(
+            edited.get_json()["data"]["address"],
+            "46 Kim Yam Road, Singapore 239351",
+        )
+
+    def test_transport_location_ui_uses_editable_custom_suggestions(self):
+        root = Path(app_module.__file__).resolve().parent
+        source = (root / "static" / "js" / "workforce-admin.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (root / "static" / "css" / "workforce-admin.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("<span>From label *</span>", source)
+        self.assertIn("<span>To label *</span>", source)
+        self.assertNotIn('list="wfSavedLocations"', source)
+        self.assertNotIn('<datalist id="wfSavedLocations">', source)
+        self.assertIn("function wfShowBookingLocationSuggestions(", source)
+        self.assertIn("function wfChooseBookingLocation(", source)
+        self.assertIn("function editTransportLocation(id)", source)
+        self.assertIn("editingId ? 'PUT' : 'POST'", source)
+        self.assertIn("<small>${wfEscape(row.address)}</small>", source)
+        self.assertNotIn("<small>(${wfEscape(row.address)})</small>", source)
+        self.assertIn(".wf-location-suggestions {", styles)
+        self.assertIn(".wf-location-suggestion-icon", styles)
+
     def test_assignment_work_dates_can_be_created_and_edited(self):
         freelancer_id = self.create_worker_assignment()
         payload = self.client.get(
@@ -4174,6 +4232,13 @@ class WorkforcePortalTests(unittest.TestCase):
             'class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"',
             source,
         )
+        schedule_heading = source.split(
+            'class="plan-page-heading wf-manpower-page-heading wf-schedule-heading"',
+            1,
+        )[1].split('<section class="plan-event-bar', 1)[0]
+        self.assertIn('class="wf-manpower-title-row"', schedule_heading)
+        self.assertIn('View all invoices &amp; claims', schedule_heading)
+        self.assertIn("showSection('invoice-claims')", schedule_heading)
         self.assertIn("wfManpowerEventPickerHtml(data", source)
         self.assertIn("function wfManpowerEventPickerHtml", admin_source)
         self.assertIn("wf-event-picker-content", admin_source)
