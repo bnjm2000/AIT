@@ -902,7 +902,10 @@ def build_finance_pdf(document, company, logo_path=''):
     currency = _text(document.get('currency') or company.get('currency') or 'SGD')
     totals = document.get('totals') or {}
     client = document.get('client') or {}
-    lines = document.get('lineItems') or []
+    lines = [
+        line for line in (document.get('lineItems') or [])
+        if not (isinstance(line, dict) and line.get('hiddenFromQuotation'))
+    ]
     adjustments = document.get('adjustments') or []
     subprojects = document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]
     multiplier_labels = {

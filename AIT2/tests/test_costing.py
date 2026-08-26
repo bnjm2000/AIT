@@ -1333,6 +1333,10 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('function costingSplitLineFromMenu()', source)
         self.assertIn('function costingDuplicateLineFromMenu()', source)
         self.assertIn('function costingDeleteLineFromMenu()', source)
+        self.assertIn('function costingToggleQuotationVisibilityFromMenu()', source)
+        self.assertIn('Hide from quotation', source)
+        self.assertIn('Show in quotation', source)
+        self.assertIn('is-hidden-from-quotation', source)
         self.assertIn('function costingUnbindSameNamePricesFromMenu()', source)
         self.assertIn('function costingLinkSameNamePricesFromMenu()', source)
         self.assertIn('Unbind unit prices', source)
@@ -1341,6 +1345,99 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn("costingApplyInventoryLink('costing')", source)
         self.assertIn('is-self-linked', styles)
         self.assertIn('is-self-unlinked', styles)
+        self.assertIn('.costing-line.is-hidden-from-quotation > td', styles)
+
+    def test_hidden_costing_line_is_zeroed_and_omitted_from_quotation_views(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Hidden costing line',
+            'lineItems': [{
+                'id': 'visible-speaker',
+                'description': 'Speaker package',
+                'department': 'Audio',
+                'quantity': 2,
+                'days': 1,
+                'totalMode': 'amount',
+                'total': 200,
+            }, {
+                'id': 'hidden-cable',
+                'description': 'Cable package',
+                'department': 'Audio',
+                'quantity': 1,
+                'days': 1,
+                'totalMode': 'amount',
+                'total': 80,
+            }],
+        }).get_json()['data']
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        hidden_line = next(
+            row for row in costing['lineItems'] if row['id'] == 'hidden-cable'
+        )
+        hidden_line.update({
+            'hiddenFromQuotation': True,
+            'quotationSalePriceBeforeHide': hidden_line['salePrice'],
+            'salePrice': 0,
+        })
+
+        hidden_response = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            hidden_response.status_code, 200,
+            hidden_response.get_data(as_text=True),
+        )
+        saved_costing = hidden_response.get_json()['data']
+        saved_hidden = next(
+            row for row in saved_costing['lineItems'] if row['id'] == 'hidden-cable'
+        )
+        self.assertTrue(saved_hidden['hiddenFromQuotation'])
+        self.assertEqual(saved_hidden['salePrice'], 0)
+        self.assertEqual(saved_hidden['quotationSalePriceBeforeHide'], 80)
+
+        linked_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        quote_hidden = next(
+            row for row in linked_quote['lineItems']
+            if row['description'] == 'Cable package'
+        )
+        self.assertTrue(quote_hidden['hiddenFromQuotation'])
+        self.assertEqual(quote_hidden['unitPrice'], 0)
+        self.assertEqual(quote_hidden['total'], 0)
+        self.assertEqual(linked_quote['totals']['netSubtotal'], 200)
+        from quotation_pdf import build_finance_pdf
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(BytesIO(build_finance_pdf(
+                linked_quote, {'name': 'Costing Test'}
+            ))).pages
+        )
+        self.assertIn('Speaker package', pdf_text)
+        self.assertNotIn('Cable package', pdf_text)
+
+        round_trip = self.client.put(
+            f"/api/quotations/{linked_quote['id']}", json=linked_quote,
+        )
+        self.assertEqual(
+            round_trip.status_code, 200, round_trip.get_data(as_text=True)
+        )
+        preserved_costing = self.client.get(
+            f"/api/costings/{costing['id']}"
+        ).get_json()['data']
+        preserved_hidden = next(
+            row for row in preserved_costing['lineItems']
+            if row['description'] == 'Cable package'
+        )
+        self.assertTrue(preserved_hidden['hiddenFromQuotation'])
+        self.assertEqual(preserved_hidden['quotationSalePriceBeforeHide'], 80)
+
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        pdf_source = Path('quotation_pdf.py').read_text(encoding='utf-8')
+        self.assertIn('if (line.hiddenFromQuotation) return;', finance_source)
+        self.assertIn('!row.line.hiddenFromQuotation', finance_source)
+        self.assertIn("line.get('hiddenFromQuotation')", pdf_source)
 
     def test_conversion_carries_sale_fields_adjustment_and_inventory_links_only(self):
         self.login('owner')

@@ -7256,6 +7256,112 @@ def _event_reserved_quantities_by_key(event):
     return reserved
 
 
+def _event_plan_asset_health(event):
+    """Summarise whether planned model requirements can be fulfilled healthily."""
+    requirements = {
+        key: max(0, _safe_int(quantity, 0))
+        for key, quantity in _event_model_quantities_by_key(event).items()
+        if _safe_int(quantity, 0) > 0
+    }
+    if not requirements:
+        return {
+            'status': 'neutral',
+            'shortageQuantity': 0,
+            'degradedQuantity': 0,
+        }
+
+    manager_cache = _current_manager_cache()
+    capacity_by_key = manager_cache.get('event_plan_capacity_by_key')
+    if not isinstance(capacity_by_key, dict):
+        capacity_by_key = defaultdict(lambda: {
+            'physical': 0,
+            'unavailable': 0,
+            'degraded': 0,
+        })
+        for asset in data_manager.inventory.values():
+            if not asset or _is_disposed(asset):
+                continue
+            key = _event_asset_group_key(asset)
+            quantity = _asset_inventory_quantity(asset)
+            row = capacity_by_key[key]
+            row['physical'] += quantity
+            if getattr(asset, 'is_missing', False) or getattr(
+                asset, 'is_ooc', False
+            ):
+                row['unavailable'] += quantity
+                continue
+            if _is_bulk_asset(asset):
+                faults = _bulk_maintenance_quantity_counts(asset)
+                row['unavailable'] += faults['ooc'] + faults['missing']
+                degraded = faults['degraded']
+                if _is_degraded(asset):
+                    degraded = max(
+                        degraded,
+                        max(quantity - faults['ooc'] - faults['missing'], 0),
+                    )
+                row['degraded'] += degraded
+            elif _is_degraded(asset):
+                row['degraded'] += quantity
+        capacity_by_key = {
+            key: dict(value) for key, value in capacity_by_key.items()
+        }
+        manager_cache['event_plan_capacity_by_key'] = capacity_by_key
+
+    demand_by_event = manager_cache.get('event_plan_demand_by_event')
+    if not isinstance(demand_by_event, dict):
+        demand_by_event = {
+            int(other.event_id): dict(_event_reserved_quantities_by_key(other))
+            for other in data_manager.events.values()
+            if other
+        }
+        manager_cache['event_plan_demand_by_event'] = demand_by_event
+
+    overlapping_demand = defaultdict(int)
+    for other in data_manager.events.values():
+        if not other or int(other.event_id) == int(event.event_id):
+            continue
+        if not _ranges_overlap(
+            getattr(event, 'start_date', ''),
+            getattr(event, 'end_date', ''),
+            getattr(other, 'start_date', ''),
+            getattr(other, 'end_date', ''),
+        ):
+            continue
+        for key, quantity in demand_by_event.get(int(other.event_id), {}).items():
+            overlapping_demand[key] += max(0, _safe_int(quantity, 0))
+
+    shortage_quantity = 0
+    degraded_quantity = 0
+    for key, required in requirements.items():
+        inventory = capacity_by_key.get(key) or {}
+        capacity = max(
+            _safe_int(inventory.get('physical'), 0)
+            - _safe_int(inventory.get('unavailable'), 0)
+            - overlapping_demand.get(key, 0),
+            0,
+        )
+        if required > capacity:
+            shortage_quantity += required - capacity
+            continue
+        degraded_capacity = min(
+            max(0, _safe_int(inventory.get('degraded'), 0)),
+            capacity,
+        )
+        healthy_capacity = max(capacity - degraded_capacity, 0)
+        if required > healthy_capacity:
+            degraded_quantity += required - healthy_capacity
+
+    return {
+        'status': (
+            'red' if shortage_quantity > 0
+            else 'orange' if degraded_quantity > 0
+            else 'green'
+        ),
+        'shortageQuantity': shortage_quantity,
+        'degradedQuantity': degraded_quantity,
+    }
+
+
 def _active_physical_asset_refs_for_event(event):
     """Specific non-bulk asset IDs assigned/prepared for an event and not returned."""
     refs = set()
@@ -19986,14 +20092,33 @@ def _event_workflow_progress_payload(
             return 'neutral'
         return 'green' if done >= total else 'orange'
 
+    plan_health = _event_plan_asset_health(event)
+    if plan_health['status'] == 'red':
+        shortage = plan_health['shortageQuantity']
+        plan_status = 'red'
+        plan_label = (
+            f'Plan: shortage of {shortage} asset unit'
+            f'{"s" if shortage != 1 else ""}'
+        )
+    elif plan_health['status'] == 'orange':
+        degraded = plan_health['degradedQuantity']
+        plan_status = 'orange'
+        plan_label = (
+            f'Plan: {degraded} degraded asset unit'
+            f'{"s" if degraded != 1 else ""} required'
+        )
+    else:
+        plan_status = 'green' if required > 0 else 'neutral'
+        plan_label = (
+            f'Plan: {required} asset requirement'
+            f'{"s" if required != 1 else ""} added'
+            if required > 0 else 'Plan: no assets added'
+        )
+
     progress = {
         'plan': {
-            'status': 'green' if required > 0 else 'neutral',
-            'label': (
-                f'Plan: {required} asset requirement'
-                f'{"s" if required != 1 else ""} added'
-                if required > 0 else 'Plan: no assets added'
-            ),
+            'status': plan_status,
+            'label': plan_label,
         },
         'manpower': {
             'status': 'green' if assignments else 'neutral',
@@ -32210,9 +32335,13 @@ def _backfill_finance_clients(finance_data, manager=None):
 
 def _normalise_finance_line(value):
     value = value if isinstance(value, dict) else {}
+    hidden_from_quotation = bool(value.get('hiddenFromQuotation'))
     quantity = max(0, _safe_float(value.get('quantity'), 1))
     days = max(0, _safe_float(value.get('days'), 1))
-    unit_price = max(0, _safe_float(value.get('unitPrice'), 0))
+    unit_price = (
+        0 if hidden_from_quotation
+        else max(0, _safe_float(value.get('unitPrice'), 0))
+    )
     discount = max(-9999, min(100, _safe_float(value.get('discountPercent'), 0)))
     gross = quantity * days * unit_price
     calculated_total = gross * (1 - discount / 100)
@@ -32221,7 +32350,7 @@ def _normalise_finance_line(value):
         if str(value.get('totalMode') or '').strip().lower() == 'amount'
         else 'calculated'
     )
-    total = (
+    total = 0 if hidden_from_quotation else (
         max(0, _safe_float(value.get('total'), calculated_total))
         if total_mode == 'amount'
         else calculated_total
@@ -32298,6 +32427,7 @@ def _normalise_finance_line(value):
             r'[^A-Za-z0-9_-]+', '',
             str(value.get('costingPricingBindingId') or ''),
         )[:120],
+        'hiddenFromQuotation': hidden_from_quotation,
         'quantity': round(quantity, 4),
         'uom': uom,
         'unitPrice': round(unit_price, 2),
@@ -32539,7 +32669,7 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
     }
     changed_prices = {}
     for line in lines:
-        if line.get('groupId'):
+        if line.get('groupId') or line.get('hiddenFromQuotation'):
             continue
         previous = previous_by_id.get(str(line.get('id') or ''))
         if previous is None:
@@ -32553,7 +32683,7 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
     if not changed_prices:
         return
     for line in lines:
-        if line.get('groupId'):
+        if line.get('groupId') or line.get('hiddenFromQuotation'):
             continue
         unit_price = changed_prices.get(_finance_line_item_match_key(line))
         if unit_price is None:
@@ -33521,9 +33651,14 @@ def _normalise_costing_line(value):
         4,
     )
     calculated_sale = round(max(0, cost_total * (1 + target_margin / 100)), 2)
-    sale_price = round(
+    requested_sale_price = round(
         max(0, _safe_float(value.get('salePrice'), calculated_sale)), 2
     )
+    hidden_from_quotation = bool(value.get('hiddenFromQuotation'))
+    quotation_sale_price_before_hide = round(max(0, _safe_float(
+        value.get('quotationSalePriceBeforeHide'), requested_sale_price
+    )), 2)
+    sale_price = 0 if hidden_from_quotation else requested_sale_price
     margin_amount = round(sale_price - cost_total, 2)
     margin_percent = round(
         (margin_amount / cost_total * 100) if cost_total else (100 if sale_price else 0),
@@ -33576,6 +33711,10 @@ def _normalise_costing_line(value):
             r'[^A-Za-z0-9_-]+', '',
             str(value.get('pricingBindingId') or value.get('costingPricingBindingId') or ''),
         )[:120],
+        'hiddenFromQuotation': hidden_from_quotation,
+        'quotationSalePriceBeforeHide': (
+            quotation_sale_price_before_hide if hidden_from_quotation else 0
+        ),
         'quantity': quantity,
         'multiplier': multiplier,
         'multiplierLabel': 'Day'
@@ -33651,6 +33790,28 @@ def _normalise_costing_document(value, existing=None):
         for row in line_source
         if isinstance(row, dict)
     ]
+    hidden_group_keys = {
+        (str(line.get('subprojectId') or 'main'), str(line.get('groupId') or ''))
+        for line in lines
+        if line.get('groupId') and line.get('hiddenFromQuotation')
+    }
+    for line in lines:
+        group_key = (
+            str(line.get('subprojectId') or 'main'),
+            str(line.get('groupId') or ''),
+        )
+        if line.get('groupId') and group_key in hidden_group_keys:
+            if not line.get('hiddenFromQuotation'):
+                line['quotationSalePriceBeforeHide'] = round(
+                    max(0, _safe_float(line.get('salePrice'), 0)), 2
+                )
+            line['hiddenFromQuotation'] = True
+            line['salePrice'] = 0
+            line['marginAmount'] = round(-_safe_float(line.get('costTotal'), 0), 2)
+            line['marginPercent'] = -100 if line.get('costTotal') else 0
+            line['saleDifference'] = round(
+                -_safe_float(line.get('calculatedSalePrice'), 0), 2
+            )
     lines = _costing_equalise_group_sale_prices(
         lines, existing.get('lineItems') or []
     )
@@ -33896,6 +34057,7 @@ def _costing_line_from_quotation_line(quote_line):
         'departmentCode': quote_line.get('departmentCode') or '',
         'inventoryNameMode': quote_line.get('costingInventoryNameMode') or 'inventory',
         'pricingBindingId': quote_line.get('costingPricingBindingId') or '',
+        'hiddenFromQuotation': bool(quote_line.get('hiddenFromQuotation')),
         'quantity': (
             quote_line.get('groupItemQuantity', quote_line.get('quantity', 1))
             if quote_line.get('groupId')
@@ -33969,6 +34131,7 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'departmentCode': costing_line.get('departmentCode') or '',
         'costingInventoryNameMode': costing_line.get('inventoryNameMode') or 'inventory',
         'costingPricingBindingId': costing_line.get('pricingBindingId') or '',
+        'hiddenFromQuotation': bool(costing_line.get('hiddenFromQuotation')),
         'systemName': costing_line.get('category') or 'General',
         'subprojectId': costing_line.get('subprojectId') or 'main',
         'days': days,
@@ -34039,6 +34202,11 @@ def _costing_line_quote_identity(line):
             ))
     if pricing_binding_id:
         item_key = f'{item_key}::pricing:{pricing_binding_id}'
+    item_key = (
+        f'{item_key}::quotation-hidden'
+        if line.get('hiddenFromQuotation')
+        else f'{item_key}::quotation-visible'
+    )
     group_id = str(line.get('groupId') or '').strip().casefold()
     if group_id:
         # Identically named children in separate packages remain separate
@@ -34307,6 +34475,7 @@ def _sync_costing_from_quotation(finance_data, quotation):
                 'departmentCode', 'multiplier', 'multiplierLabel', 'isCustom',
                 'inventoryNameMode',
                 'pricingBindingId',
+                'hiddenFromQuotation',
                 'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
                 'groupItemQuantity', 'groupLeader',
                 'groupHeaderQuantity',
@@ -34458,6 +34627,7 @@ def _costing_quote_sync_fingerprint(costing, quotation):
                     'costingMultiplierLabel',
                     'costingInventoryNameMode',
                     'costingPricingBindingId',
+                    'hiddenFromQuotation',
                     'unitPrice', 'discountPercent', 'totalMode', 'total',
                     'isCustom', 'groupId', 'groupTitle',
                     'groupDisplayFields', 'groupCustomText',
@@ -34514,7 +34684,8 @@ def _finance_start_costing_revision(quotation):
 _LINKED_COST_ALLOCATION_KEYS = (
     'id', 'quantity', 'multiplier', 'multiplierLabel', 'vendorName',
     'vendorId', 'vendorType', 'itemCost', 'targetMarginPercent',
-    'salePrice', 'remarks',
+    'salePrice', 'remarks', 'hiddenFromQuotation',
+    'quotationSalePriceBeforeHide',
 )
 
 

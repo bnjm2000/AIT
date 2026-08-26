@@ -1679,12 +1679,12 @@ function financeLinePriceMatchKey(line) {
 }
 
 function financePropagateLineUnitPrice(sourceLine) {
-  if (sourceLine?.groupId) return;
+  if (sourceLine?.groupId || sourceLine?.hiddenFromQuotation) return;
   const matchKey = financeLinePriceMatchKey(sourceLine);
   if (!matchKey) return;
   const unitPrice = financeNumber(sourceLine.unitPrice);
   (financeState.current?.lineItems || []).forEach(line => {
-    if (financeLinePriceMatchKey(line) !== matchKey) return;
+    if (line.hiddenFromQuotation || financeLinePriceMatchKey(line) !== matchKey) return;
     line.unitPrice = unitPrice;
     line.totalMode = 'calculated';
     line.total = financeLineTotal(line);
@@ -2031,6 +2031,7 @@ function financeCurrentSubprojectId(document = financeState.current) {
 function financeActiveDepartments(document = financeState.current, subprojectId = financeCurrentSubprojectId(document)) {
   const departments = [];
   (document?.lineItems || []).forEach(line => {
+    if (line.hiddenFromQuotation) return;
     if (String(line.subprojectId || 'main') !== String(subprojectId || 'main')) return;
     const department = financeLineSystem(line);
     if (!departments.includes(department)) departments.push(department);
@@ -4387,7 +4388,7 @@ function financeRenderLineGroups() {
   let displayIndex = 0;
   return configured.map(department => {
     const rows = (document.lineItems || []).map((line, index) => ({ line, index }))
-      .filter(row => financeLineSystem(row.line) === department && (row.line.subprojectId || 'main') === subprojectId);
+      .filter(row => !row.line.hiddenFromQuotation && financeLineSystem(row.line) === department && (row.line.subprojectId || 'main') === subprojectId);
     const base = rows.reduce((sum, row) => sum + financeLineTotal(row.line), 0);
     const adjustment = (document.adjustments || []).filter(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId)
       .reduce((sum, row) => sum + financeNumber(row.amount), 0);

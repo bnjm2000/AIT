@@ -461,6 +461,54 @@ class EventAssignmentAccessTests(unittest.TestCase):
             )
             self.assertEqual(progress['finance']['status'], 'orange')
 
+    def test_plan_workflow_icon_distinguishes_shortage_and_degraded_capacity(self):
+        event = self.data_manager.events[1]
+        event.prepared_items = [
+            '[MODEL]AX|TestBrand|TestModel|2|Test asset'
+        ]
+        event.actually_prepared = []
+        event.returned_items = []
+
+        with app_module.app.test_request_context('/'):
+            app_module.session['user'] = 'admin'
+            app_module.reset_cache()
+            progress = app_module._event_workflow_progress_payload(
+                event, 2, 0, 0, {}, {}
+            )
+            self.assertEqual(progress['plan']['status'], 'red')
+            self.assertEqual(
+                progress['plan']['label'], 'Plan: shortage of 1 asset unit'
+            )
+
+            self.data_manager.inventory['A#02'] = InventoryItem(
+                asset_id='A#02',
+                brand='TestBrand',
+                model_number='TestModel',
+                serial_number='SN-A02',
+                description='Test asset',
+                is_missing=False,
+                maintenance_logs=[],
+                department_code='AX',
+                default_location='Store',
+                is_degraded=True,
+            )
+            app_module.reset_cache()
+            progress = app_module._event_workflow_progress_payload(
+                event, 2, 0, 0, {}, {}
+            )
+            self.assertEqual(progress['plan']['status'], 'orange')
+            self.assertEqual(
+                progress['plan']['label'],
+                'Plan: 1 degraded asset unit required',
+            )
+
+            self.data_manager.inventory['A#02'].is_degraded = False
+            app_module.reset_cache()
+            progress = app_module._event_workflow_progress_payload(
+                event, 2, 0, 0, {}, {}
+            )
+            self.assertEqual(progress['plan']['status'], 'green')
+
     def test_event_summary_pagination_enriches_only_the_requested_page(self):
         self.login('admin')
 

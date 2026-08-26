@@ -320,6 +320,18 @@
   line-height: 1.2;
 }
 .costing-table .costing-line { height: 26px; transition: background .15s ease, opacity .15s ease, box-shadow .15s ease; }
+.costing-table .costing-line.is-hidden-from-quotation > td,
+.costing-table .costing-line.is-hidden-from-quotation:hover > td {
+  background: #eef1f4;
+  color: #6b7280;
+}
+.costing-table .costing-line.is-hidden-from-quotation input,
+.costing-table .costing-line.is-hidden-from-quotation textarea {
+  color: #6b7280;
+}
+.costing-table .costing-line.is-hidden-from-quotation .costing-sale-difference {
+  color: #7b8490;
+}
 .costing-table .costing-line.dragging,
 .costing-table .costing-line-group-header.dragging { opacity: .45; }
 .costing-table .costing-line.drag-over-before,

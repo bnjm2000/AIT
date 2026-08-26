@@ -104,6 +104,13 @@ function costingFormatMoneyInput(input) {
 }
 
 function costingLineRecalculate(line, mode = 'cost') {
+  const hiddenFromQuotation = line?.hiddenFromQuotation === true;
+  if (
+    hiddenFromQuotation
+    && !Object.prototype.hasOwnProperty.call(line, 'quotationSalePriceBeforeHide')
+  ) {
+    line.quotationSalePriceBeforeHide = Math.max(0, costingNumber(line.salePrice));
+  }
   line.quantity = Math.max(0, costingNumber(line.quantity, 1));
   line.multiplier = Math.max(0, costingNumber(line.multiplier, 1));
   line.itemCost = Math.max(0, costingNumber(line.itemCost));
@@ -121,6 +128,7 @@ function costingLineRecalculate(line, mode = 'cost') {
   } else {
     line.salePrice = Math.max(0, costingNumber(line.salePrice, line.calculatedSalePrice));
   }
+  if (hiddenFromQuotation) line.salePrice = 0;
   line.marginAmount = line.salePrice - line.costTotal;
   line.marginPercent = line.costTotal
     ? (line.marginAmount / line.costTotal) * 100
@@ -234,12 +242,21 @@ function costingLineUnitSale(line, field = 'salePrice') {
   return divisor ? total / divisor : total;
 }
 
+function costingLineStoredUnitSale(line) {
+  const divisor = Math.max(0, costingNumber(line?.quantity))
+    * Math.max(0, costingNumber(line?.multiplier));
+  const total = line?.hiddenFromQuotation
+    ? Math.max(0, costingNumber(line.quotationSalePriceBeforeHide))
+    : Math.max(0, costingNumber(line?.salePrice));
+  return divisor ? total / divisor : total;
+}
+
 function costingSetSaleGroupUnitPrice(index, unitPrice) {
   const source = costingLines()[index];
-  if (!source) return;
+  if (!source || source.hiddenFromQuotation) return;
   const groupKey = costingLineSaleGroupKey(source);
   costingLines().forEach(line => {
-    if (costingLineSaleGroupKey(line) !== groupKey) return;
+    if (line.hiddenFromQuotation || costingLineSaleGroupKey(line) !== groupKey) return;
     const divisor = Math.max(0, costingNumber(line.quantity))
       * Math.max(0, costingNumber(line.multiplier));
     line.salePrice = Math.round(
@@ -252,6 +269,11 @@ function costingSetSaleGroupUnitPrice(index, unitPrice) {
 function costingEqualiseSaleGroups(lines) {
   const groups = new Map();
   (lines || []).forEach(line => {
+    if (line.hiddenFromQuotation) {
+      line.salePrice = 0;
+      costingLineRecalculate(line, 'sale');
+      return;
+    }
     const key = costingLineSaleGroupKey(line);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(line);
@@ -1029,10 +1051,11 @@ function costingOpenLineContextMenu(event, lineId) {
     : self
       ? '<button type="button" role="menuitem" onclick="event.stopPropagation();costingOpenInventoryLinkFromMenu()"><span>Link to inventory</span></button>'
       : '';
+  const visibilityAction = `<button type="button" role="menuitem" onclick="event.stopPropagation();costingToggleQuotationVisibilityFromMenu()"><span>${line.hiddenFromQuotation ? 'Show in quotation' : 'Hide from quotation'}</span></button>`;
   menu.innerHTML = `
     <button type="button" role="menuitem" onclick="event.stopPropagation();costingSplitLineFromMenu()"><span>Split item</span></button>
     <button type="button" role="menuitem" onclick="event.stopPropagation();costingDuplicateLineFromMenu()"><span>Duplicate item</span></button>
-    ${priceAction}${inventoryActions}
+    ${priceAction}${inventoryActions}${visibilityAction}
     <button type="button" class="danger" role="menuitem" onclick="event.stopPropagation();costingDeleteLineFromMenu()"><span>Delete item</span></button>`;
   menu.classList.add('open');
   const width = menu.offsetWidth;
@@ -1064,6 +1087,45 @@ function costingCloneLine(line) {
   };
 }
 
+function costingToggleQuotationVisibilityFromMenu() {
+  const lineId = costingState.contextLineId;
+  const line = costingLines().find(row => String(row.id) === String(lineId));
+  costingCloseLineContextMenu();
+  if (!line) return;
+  const groupId = String(line.groupId || '');
+  const targets = groupId
+    ? costingLines().filter(row => (
+      String(row.groupId || '') === groupId
+      && String(row.subprojectId || 'main') === String(line.subprojectId || 'main')
+    ))
+    : [line];
+  const shouldHide = !line.hiddenFromQuotation;
+  targets.forEach(target => {
+    if (shouldHide) {
+      costingLineRecalculate(target, 'sale');
+      target.quotationSalePriceBeforeHide = Math.max(0, costingNumber(target.salePrice));
+      target.hiddenFromQuotation = true;
+      target.salePrice = 0;
+    } else {
+      const restoredSalePrice = Math.max(
+        0,
+        costingNumber(target.quotationSalePriceBeforeHide, target.calculatedSalePrice)
+      );
+      target.hiddenFromQuotation = false;
+      target.salePrice = restoredSalePrice;
+      delete target.quotationSalePriceBeforeHide;
+    }
+    costingLineRecalculate(target, 'sale');
+  });
+  showNotification(
+    'success',
+    shouldHide ? 'Item hidden from quotation' : 'Item shown in quotation'
+  );
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+}
+
 async function costingSplitLineFromMenu() {
   const lineId = costingState.contextLineId;
   const index = costingLines().findIndex(row => String(row.id) === String(lineId));
@@ -1090,14 +1152,20 @@ async function costingSplitLineFromMenu() {
     showNotification('warning', `Enter a quantity greater than 0 and less than ${currentQuantity}`);
     return;
   }
-  const unitPrice = costingLineUnitSale(line);
+  const unitPrice = costingLineStoredUnitSale(line);
   const clone = costingCloneLine(line);
   line.quantity = Math.round((currentQuantity - splitQuantity) * 10000) / 10000;
   clone.quantity = Math.round(splitQuantity * 10000) / 10000;
   [line, clone].forEach(row => {
     const divisor = Math.max(0, costingNumber(row.quantity))
       * Math.max(0, costingNumber(row.multiplier));
-    row.salePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
+    const splitSalePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
+    if (row.hiddenFromQuotation) {
+      row.quotationSalePriceBeforeHide = splitSalePrice;
+      row.salePrice = 0;
+    } else {
+      row.salePrice = splitSalePrice;
+    }
     costingLineRecalculate(row, 'sale');
   });
   costingLines().splice(index + 1, 0, clone);
@@ -1496,13 +1564,15 @@ function costingGroupedLinesMarkup(lines, readOnly) {
 
 function costingLineMarkup(line, index, readOnly) {
   costingLineRecalculate(line);
+  const hiddenFromQuotation = line.hiddenFromQuotation === true;
+  const commercialDisabled = readOnly || hiddenFromQuotation;
   const unitPrice = costingLineUnitSale(line);
   const unitPriceState = costingUnitPriceState(line);
   const saleState = costingSaleState(line);
   const itemControl = line.groupId
     ? `<div class="costing-group-item-display"><span class="${line.groupCustomText ? 'showbase-group-custom-text' : ''}">${costingEscape(line.groupCustomText ? line.description : financeGroupedLineDisplay(line))}</span>${line.groupCustomText ? '<small>Custom text</small>' : ''}</div>`
     : `<input class="costing-item-name" title="${line.sourceAssetIds?.length ? 'Linked to inventory' : 'Custom item'}" value="${costingAttr(line.description)}" data-original-value="${costingAttr(line.description)}" ${readOnly ? 'disabled' : ''} oninput="costingLineDescriptionDraft(${index},this.value)" onchange="costingLineDescriptionChanged(${index},this.value,this)">`;
-  return `<tr class="costing-line" data-costing-line="${index}" data-costing-line-id="${costingAttr(line.id || '')}" oncontextmenu="costingOpenLineContextMenu(event,'${costingAttr(line.id || '')}')" ondragover="costingDragLineOver(event,${index})" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLine(event,${index},'${costingAttr(encodeURIComponent(line.category || 'General'))}')" ondragend="costingDragEnd()">
+  return `<tr class="costing-line ${hiddenFromQuotation ? 'is-hidden-from-quotation' : ''}" data-costing-line="${index}" data-costing-line-id="${costingAttr(line.id || '')}" ${hiddenFromQuotation ? 'title="Hidden from quotation"' : ''} oncontextmenu="costingOpenLineContextMenu(event,'${costingAttr(line.id || '')}')" ondragover="costingDragLineOver(event,${index})" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLine(event,${index},'${costingAttr(encodeURIComponent(line.category || 'General'))}')" ondragend="costingDragEnd()">
     <td class="costing-item-cell"><div class="costing-item-entry">${readOnly ? '' : `<span class="finance-drag-handle costing-line-drag-handle" draggable="true" title="Drag to reorder" ondragstart="costingDragLineStart(event,${index})" ondragend="costingDragEnd()">&#9776;</span>`}${itemControl}</div></td>
     <td><input class="costing-number costing-stepper-input" aria-label="Quantity" type="number" min="0" step="1" value="${costingAttr(line.quantity)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'quantity',this.value)"></td>
     <td><div class="costing-multiplier"><input class="costing-stepper-input" aria-label="${line.multiplierLabel === 'Day' ? 'Days' : 'Multiplier'}" type="number" min="0" step=".5" value="${costingAttr(line.multiplier)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'multiplier',this.value)"></div></td>
@@ -1510,10 +1580,10 @@ function costingLineMarkup(line, index, readOnly) {
     <td><textarea class="costing-remarks-input" rows="1" placeholder="Add note" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'remarks',this.value)">${costingEscape(line.remarks || '')}</textarea></td>
     <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.itemCost).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.costTotal).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
-    <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="number" step=".01" value="${costingAttr(line.calculatedMarginAmount.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
+    <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="number" step=".01" value="${costingAttr(line.calculatedMarginAmount.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
     <td><strong data-line-calculated>${costingEscape(costingMoney(line.calculatedSalePrice))}</strong></td>
-    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="number" min="0" step=".01" value="${costingAttr(unitPrice.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
-    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="number" min="0" step=".01" value="${costingAttr(line.salePrice.toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="number" min="0" step=".01" value="${costingAttr(unitPrice.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="number" min="0" step=".01" value="${costingAttr(line.salePrice.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
     <td>${readOnly ? '' : `<button type="button" class="costing-remove" aria-label="Remove item" title="Remove item" onclick="costingRemoveLine(${index})">&times;</button>`}</td>
   </tr>`;
 }
@@ -2184,13 +2254,20 @@ function costingLineInput(index, field, value) {
   if (field === 'remarks') {
     line.remarks = value;
   } else {
-    const previousUnitSale = costingLineUnitSale(line);
+    const previousUnitSale = costingLineStoredUnitSale(line);
     const followedCalculation = Math.abs(costingNumber(line.salePrice) - costingNumber(line.calculatedSalePrice)) < 0.005;
     line[field] = costingNumber(value);
     if (field === 'quantity' && line.groupId) {
       line.groupItemQuantity = Math.max(0, costingNumber(value));
     }
     costingLineRecalculate(line, 'cost');
+    if (line.hiddenFromQuotation && (field === 'quantity' || field === 'multiplier')) {
+      const divisor = Math.max(0, costingNumber(line.quantity))
+        * Math.max(0, costingNumber(line.multiplier));
+      line.quotationSalePriceBeforeHide = Math.round(
+        previousUnitSale * (divisor || 1) * 100
+      ) / 100;
+    }
     if (followedCalculation) {
       costingLineRecalculate(line, 'margin-percent');
     } else if (field === 'quantity' || field === 'multiplier') {
