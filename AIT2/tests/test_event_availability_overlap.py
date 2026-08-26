@@ -145,6 +145,79 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(bulk['available'], 2)
         self.assertEqual(bulk['overlappingEvents'][0]['eventId'], 102)
 
+    def test_nonconcurrent_overlaps_reuse_the_same_inventory(self):
+        for index in range(7, 9):
+            asset_id = f'A#{index:02d}'
+            self.data_manager.inventory[asset_id] = self.make_asset(
+                asset_id,
+                brand='TestBrand',
+                model='RegularModel',
+                description='Regular item',
+            )
+        target = self.make_event(
+            174,
+            start='20260510',
+            end='20260520',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|6|Regular item'],
+        )
+        self.make_event(
+            143,
+            start='20260510',
+            end='20260512',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|2|Regular item'],
+        )
+        self.make_event(
+            175,
+            start='20260518',
+            end='20260520',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|2|Regular item'],
+        )
+
+        regular = self.availability_entry(174, 'RegularModel', 'Regular item')
+
+        self.assertEqual(regular['physical'], 8)
+        self.assertEqual(regular['overlappingDemand'], 2)
+        self.assertEqual(regular['capacityForThisEvent'], 6)
+        self.assertEqual(
+            [row['eventId'] for row in regular['overlappingEvents']],
+            [143, 175],
+        )
+        self.assertEqual(app_module._event_plan_asset_health(target)['status'], 'green')
+
+    def test_concurrent_overlaps_are_still_added_at_their_peak(self):
+        for index in range(7, 9):
+            asset_id = f'A#{index:02d}'
+            self.data_manager.inventory[asset_id] = self.make_asset(
+                asset_id,
+                brand='TestBrand',
+                model='RegularModel',
+                description='Regular item',
+            )
+        target = self.make_event(
+            174,
+            start='20260510',
+            end='20260520',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|6|Regular item'],
+        )
+        self.make_event(
+            143,
+            start='20260510',
+            end='20260515',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|2|Regular item'],
+        )
+        self.make_event(
+            175,
+            start='20260514',
+            end='20260520',
+            prepared=['[MODEL]AX|TestBrand|RegularModel|2|Regular item'],
+        )
+
+        regular = self.availability_entry(174, 'RegularModel', 'Regular item')
+
+        self.assertEqual(regular['overlappingDemand'], 4)
+        self.assertEqual(regular['capacityForThisEvent'], 4)
+        self.assertEqual(app_module._event_plan_asset_health(target)['status'], 'red')
+
     def test_event_models_with_different_descriptions_remain_separate(self):
         self.data_manager.inventory['A-ALT#01'] = self.make_asset(
             'A-ALT#01',

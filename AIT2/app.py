@@ -7256,6 +7256,64 @@ def _event_reserved_quantities_by_key(event):
     return reserved
 
 
+def _peak_overlapping_event_demand_by_key(target_event, demand_by_event=None):
+    """Return the highest simultaneous demand from other events.
+
+    Several events can overlap the target event without overlapping one
+    another.  Their inventory can therefore be reused and must not be added
+    together as though all of them happen at the same time.
+    """
+    target_start = _parse_any_date(getattr(target_event, 'start_date', ''))
+    target_end = _parse_any_date(getattr(target_event, 'end_date', ''))
+    if not target_start or not target_end or target_start > target_end:
+        return {}
+
+    if demand_by_event is None:
+        demand_by_event = {
+            int(other.event_id): dict(_event_reserved_quantities_by_key(other))
+            for other in data_manager.events.values()
+            if other
+        }
+
+    changes_by_key = defaultdict(lambda: defaultdict(int))
+    target_event_id = int(target_event.event_id)
+
+    for other in data_manager.events.values():
+        if not other or int(other.event_id) == target_event_id:
+            continue
+
+        other_start = _parse_any_date(getattr(other, 'start_date', ''))
+        other_end = _parse_any_date(getattr(other, 'end_date', ''))
+        if (
+            not other_start
+            or not other_end
+            or other_start > other_end
+            or target_start > other_end
+            or other_start > target_end
+        ):
+            continue
+
+        overlap_start = max(target_start, other_start)
+        overlap_end = min(target_end, other_end)
+        for key, raw_quantity in demand_by_event.get(int(other.event_id), {}).items():
+            quantity = max(0, _safe_int(raw_quantity, 0))
+            if quantity <= 0:
+                continue
+            changes_by_key[key][overlap_start] += quantity
+            changes_by_key[key][overlap_end + timedelta(days=1)] -= quantity
+
+    peak_by_key = {}
+    for key, changes in changes_by_key.items():
+        running = 0
+        peak = 0
+        for change_date in sorted(changes):
+            running += changes[change_date]
+            peak = max(peak, running)
+        peak_by_key[key] = peak
+
+    return peak_by_key
+
+
 def _event_plan_asset_health(event):
     """Summarise whether planned model requirements can be fulfilled healthily."""
     requirements = {
@@ -7316,19 +7374,10 @@ def _event_plan_asset_health(event):
         }
         manager_cache['event_plan_demand_by_event'] = demand_by_event
 
-    overlapping_demand = defaultdict(int)
-    for other in data_manager.events.values():
-        if not other or int(other.event_id) == int(event.event_id):
-            continue
-        if not _ranges_overlap(
-            getattr(event, 'start_date', ''),
-            getattr(event, 'end_date', ''),
-            getattr(other, 'start_date', ''),
-            getattr(other, 'end_date', ''),
-        ):
-            continue
-        for key, quantity in demand_by_event.get(int(other.event_id), {}).items():
-            overlapping_demand[key] += max(0, _safe_int(quantity, 0))
+    overlapping_demand = _peak_overlapping_event_demand_by_key(
+        event,
+        demand_by_event,
+    )
 
     shortage_quantity = 0
     degraded_quantity = 0
@@ -21274,7 +21323,7 @@ def get_event_model_availability(event_id):
     - Keep OOC and Missing assets in the physical total, but do not count them as available.
     - Include Degraded assets as available because they can still be prepared with a warning.
     - Subtract current event's requested quantity.
-    - Subtract overlapping events' requested quantity.
+    - Subtract the peak simultaneous quantity requested by overlapping events.
     - Still return rows with 0 availability so the frontend can show them.
     """
     try:
@@ -21356,8 +21405,18 @@ def get_event_model_availability(event_id):
         # normal model rows plus any specific prepared bulk/individual assets.
         used_here_by_key = _event_reserved_quantities_by_key(event)
 
-        # Demand from overlapping events
-        overlap_by_key = defaultdict(int)
+        # Peak simultaneous demand from overlapping events. Events that each
+        # overlap this event may still run on different dates, allowing the
+        # same inventory to be reused between them.
+        demand_by_event = {
+            int(other.event_id): dict(_event_reserved_quantities_by_key(other))
+            for other in data_manager.events.values()
+            if other
+        }
+        overlap_by_key = _peak_overlapping_event_demand_by_key(
+            event,
+            demand_by_event,
+        )
         overlap_events_by_key = defaultdict(list)
 
         my_start = getattr(event, 'start_date', '')
@@ -21375,10 +21434,9 @@ def get_event_model_availability(event_id):
             ):
                 continue
 
-            for key, quantity in _event_reserved_quantities_by_key(other).items():
+            for key, quantity in demand_by_event.get(int(other.event_id), {}).items():
                 if quantity <= 0:
                     continue
-                overlap_by_key[key] += quantity
                 if _current_user_can_access_event(other):
                     overlap_events_by_key[key].append({
                         'eventId': other.event_id,
