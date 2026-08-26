@@ -208,6 +208,20 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
 
+    def test_plan_search_and_custom_item_name_disable_browser_suggestions(self):
+        script = APP_BUNDLE_SOURCE
+        available_card = script.split('function renderPlanAvailableCard()', 1)[1].split(
+            'function planSetDepartmentFilter(', 1
+        )[0]
+        custom_card = script.split('function renderPlanCustomItemCard()', 1)[1].split(
+            'var planNotesSaveTimer', 1
+        )[0]
+
+        self.assertIn('id="planAssetSearch"', available_card)
+        self.assertIn('autocomplete="off" spellcheck="false"', available_card)
+        self.assertIn('id="planCustomName"', custom_card)
+        self.assertIn('autocomplete="off" spellcheck="false"', custom_card)
+
     def test_event_workspaces_offer_consolidated_room_drag_and_delete_controls(self):
         script = APP_BUNDLE_SOURCE
 

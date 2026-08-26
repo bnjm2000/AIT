@@ -1896,6 +1896,7 @@ function renderPlanAvailableCard() {
         <div class="plan-search-row">
           <input type="search" class="plan-search-input" id="planAssetSearch"
                  value="${escapeHtmlAttr(planPageState.search)}"
+                 autocomplete="off" spellcheck="false"
                  placeholder="Search brand, model, description, or container..."
                  oninput="planPageState.search=this.value;renderPlanAvailableResults();">
           <label class="plan-toggle">
@@ -2824,6 +2825,7 @@ function renderPlanCustomItemCard() {
             <div class="plan-custom-field">
               <label for="planCustomName">Item Name</label>
               <input id="planCustomName" maxlength="160"
+                     autocomplete="off" spellcheck="false"
                      placeholder="e.g. Wireless Handheld" required>
             </div>
             <div class="plan-custom-field">
@@ -2834,7 +2836,7 @@ function renderPlanCustomItemCard() {
           <div class="plan-custom-field-grid plan-custom-field-grid-secondary">
             <div class="plan-custom-field">
               <label for="planCustomDepartment">Department</label>
-              <select id="planCustomDepartment" required>
+              <select id="planCustomDepartment" data-department-select="true" required>
                 ${customDepartmentOptionsHtml('AX')}
               </select>
             </div>

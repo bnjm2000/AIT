@@ -40,6 +40,67 @@
     return option?.textContent?.trim() || select.getAttribute('placeholder') || 'Choose an option';
   }
 
+  function isDepartmentSelect(select) {
+    return select?.dataset?.departmentSelect === 'true';
+  }
+
+  function departmentOptionMeta(option) {
+    const rawValue = String(option?.value || '').trim();
+    if (!rawValue || rawValue.toLowerCase() === 'all') return null;
+    const code = typeof normalizeDepartmentCode === 'function'
+      ? normalizeDepartmentCode(rawValue)
+      : rawValue.toUpperCase();
+    const configured = typeof getDepartmentMeta === 'function'
+      ? getDepartmentMeta(code)
+      : null;
+    const optionLabel = option?.textContent?.trim() || code;
+    const configuredName = String(configured?.name || '').trim();
+    const name = configuredName && configuredName !== code
+      ? configuredName
+      : optionLabel
+          .replace(new RegExp(`^${code}\\s*(?:-|–|—|\\(|:)\\s*`, 'i'), '')
+          .replace(new RegExp(`\\s*\\(${code}\\)\\s*$`, 'i'), '')
+          .trim() || code;
+    return {
+      code,
+      name,
+      color: configured?.color || '#e2e8f0',
+      textColor: configured?.textColor || '#334155'
+    };
+  }
+
+  function departmentBadge(meta) {
+    const badge = document.createElement('span');
+    badge.className = 'sb-department-badge';
+    badge.textContent = meta.code;
+    badge.style.setProperty('--sb-department-color', meta.color);
+    badge.style.setProperty('--sb-department-text', meta.textColor);
+    return badge;
+  }
+
+  function renderSelectedValue(select, valueElement) {
+    const option = select.selectedOptions?.[0];
+    const label = selectedLabel(select);
+    if (!isDepartmentSelect(select)) {
+      if (valueElement.textContent !== label) valueElement.textContent = label;
+      return;
+    }
+    const meta = departmentOptionMeta(option);
+    const signature = meta
+      ? [option?.value, meta.code, meta.name, meta.color, meta.textColor].join('|')
+      : `plain|${option?.value || ''}|${label}`;
+    if (valueElement.dataset.departmentSignature === signature) return;
+    valueElement.dataset.departmentSignature = signature;
+    if (!meta) {
+      valueElement.textContent = label;
+      return;
+    }
+    const name = document.createElement('span');
+    name.className = 'sb-department-name';
+    name.textContent = meta.name;
+    valueElement.replaceChildren(departmentBadge(meta), name);
+  }
+
   function ensureMenu() {
     if (menu) return menu;
     menu = document.createElement('div');
@@ -93,6 +154,7 @@
       }
     });
     menu.replaceChildren(fragment);
+    menu.classList.toggle('sb-select-menu-department', isDepartmentSelect(select));
     menu.setAttribute('aria-label', select.getAttribute('aria-label') || select.name || 'Options');
   }
 
@@ -107,7 +169,15 @@
     if (option.hidden) button.hidden = true;
     if (option.selected) button.classList.add('is-selected');
     const label = document.createElement('span');
-    label.textContent = option.textContent.trim();
+    const department = isDepartmentSelect(select) ? departmentOptionMeta(option) : null;
+    if (department) {
+      button.classList.add('is-department-option');
+      label.className = 'sb-department-name';
+      label.textContent = department.name;
+      button.append(departmentBadge(department));
+    } else {
+      label.textContent = option.textContent.trim();
+    }
     const check = document.createElement('span');
     check.className = 'sb-select-check';
     check.setAttribute('aria-hidden', 'true');
@@ -171,10 +241,8 @@
     const wrapper = select.closest('.sb-select');
     const button = wrapper?.querySelector('.sb-select-button');
     if (!button) return;
-    const label = selectedLabel(select);
-    if (button.querySelector('.sb-select-value')?.textContent !== label) {
-      button.querySelector('.sb-select-value').textContent = label;
-    }
+    const valueElement = button.querySelector('.sb-select-value');
+    if (valueElement) renderSelectedValue(select, valueElement);
     button.disabled = select.disabled;
     wrapper.classList.toggle('is-disabled', select.disabled);
     wrapper.classList.toggle('has-value', Boolean(select.value));
@@ -185,6 +253,7 @@
     if (!eligible(select) || select.closest('.sb-select')) return;
     const wrapper = document.createElement('span');
     wrapper.className = 'sb-select';
+    wrapper.classList.toggle('is-department-select', isDepartmentSelect(select));
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'sb-select-button';

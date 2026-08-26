@@ -773,21 +773,21 @@ function wfScheduleDepartmentFiltersHtml() {
 
 function wfScheduleCustomSelectHtml(id, label, value, options) {
   const selected = options.find(option => option.value === value) || options[0];
-  const selectedSwatch = selected.color
+  const selectedMarker = selected.badge || (selected.color
     ? `<i class="wf-schedule-select-swatch" style="--wf-option-color:${wfAttr(selected.color)}"></i>`
-    : '';
+    : '');
   return `<div class="wf-schedule-select-field"><span>${wfEscape(label)}</span>
     <div class="wf-schedule-select" id="${wfAttr(id)}" data-value="${wfAttr(selected.value)}">
       <button type="button" class="wf-schedule-select-trigger" aria-haspopup="listbox" aria-expanded="false"
         onclick="toggleWorkforceScheduleSelect('${wfAttr(id)}',event)">
-        <span class="wf-schedule-select-value">${selectedSwatch}<b>${wfEscape(selected.label)}</b></span>
+        <span class="wf-schedule-select-value">${selectedMarker}<b>${wfEscape(selected.label)}</b></span>
         ${wfScheduleIcon('chevronDown')}
       </button>
       <div class="wf-schedule-select-menu" role="listbox" aria-label="${wfAttr(label)}">
         ${options.map(option => `<button type="button" class="wf-schedule-select-option ${option.value === selected.value ? 'selected' : ''}"
           role="option" aria-selected="${option.value === selected.value}" data-value="${wfAttr(option.value)}"
           onclick="chooseWorkforceScheduleSelect(this,event)">
-          <span class="wf-schedule-option-label">${option.color ? `<i class="wf-schedule-select-swatch" style="--wf-option-color:${wfAttr(option.color)}"></i>` : ''}<b>${wfEscape(option.label)}</b></span>
+          <span class="wf-schedule-option-label">${option.badge || (option.color ? `<i class="wf-schedule-select-swatch" style="--wf-option-color:${wfAttr(option.color)}"></i>` : '')}<b>${wfEscape(option.label)}</b></span>
           ${wfScheduleIcon('check')}</button>`).join('')}
       </div>
     </div>
@@ -854,7 +854,11 @@ function renderWorkforceSchedulePage(root, data) {
     { value: 'all', label: 'All Departments' },
     ...departments.map(code => {
       const department = wfDepartmentMeta(code);
-      return { value: code, label: department.name, color: department.color };
+      return {
+        value: code,
+        label: department.name,
+        badge: `<i class="wf-schedule-tag-menu-badge" style="${wfDepartmentStyle(code)}">${wfEscape(code)}</i>`
+      };
     })
   ];
   root.innerHTML = `<div class="wf-schedule-page">
@@ -1037,7 +1041,7 @@ function ensureFullTimeStaffModal() {
   document.body.insertAdjacentHTML('beforeend', wfModal('wfFullTimeStaffModal', 'Add Full-time Staff', `<form id="wfFullTimeStaffForm">
     <div class="wf-modal-body"><div class="wf-form-grid">
       <label class="wf-field full"><span>App user *</span><select id="wfFullTimeStaffUser" required></select></label>
-      <label class="wf-field"><span>Department *</span><select id="wfFullTimeStaffDepartment" required></select></label>
+      <label class="wf-field"><span>Department *</span><select id="wfFullTimeStaffDepartment" data-department-select="true" required></select></label>
       <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfFullTimeStaffRoom"></select></label>
       <label class="wf-field"><span>Role / Position</span><input id="wfFullTimeStaffRole" maxlength="100"></label>
       <label class="wf-field"><span>Daily rate ($)</span><input id="wfFullTimeStaffRate" type="number" min="0" step=".01"></label>

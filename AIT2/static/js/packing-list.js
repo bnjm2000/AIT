@@ -50,6 +50,17 @@ function packingListAssetRecord(asset, event, department = 'UN') {
   };
 }
 
+function packingListAssetsById(event) {
+  const assetsById = new Map();
+  Object.entries(event?.assetsByDepartment || {}).forEach(([department, assets]) => {
+    (assets || []).forEach(asset => {
+      const record = packingListAssetRecord(asset, event, department);
+      if (record.id) assetsById.set(record.id, record);
+    });
+  });
+  return assetsById;
+}
+
 function packingListRowState(row) {
   if (row.required > 0 && row.packed >= row.required) return 'packed';
   if (row.packed > 0) return 'partial';
@@ -61,12 +72,11 @@ function packingListRowState(row) {
 function buildPackingListSnapshot(event) {
   const rows = [];
   const extras = new Map();
-  const assetsById = new Map();
+  const assetsById = packingListAssetsById(event);
 
   Object.entries(event?.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
     (departmentAssets || []).forEach(asset => {
       const record = packingListAssetRecord(asset, event, department);
-      if (record.id) assetsById.set(record.id, record);
       if (record.isExtra && record.id) extras.set(record.id, record);
     });
   });
@@ -286,6 +296,139 @@ function buildPackingListSnapshot(event) {
   };
 }
 
+function packingListSubprojectAssetRecord(reference, item, event, assetsById) {
+  const id = String(reference || '');
+  const existing = assetsById.get(id);
+  if (existing) return { ...existing };
+  return packingListAssetRecord({
+    id,
+    brand: item?.brand || '',
+    model: item?.model || '',
+    description: item?.description || '',
+    department: item?.departmentCode || item?.department || 'UN',
+    quantity: 1,
+    status: (event?.returnedItems || []).includes(id)
+      ? 'returned'
+      : ((event?.actuallyPrepared || []).includes(id) ? 'prepared' : 'assigned'),
+    isCollected: (event?.customCollected || []).includes(id),
+    isExtra: (event?.extraAssets || []).includes(id)
+  }, event, item?.departmentCode || item?.department || 'UN');
+}
+
+function buildPackingListSubprojectSnapshot(event, subproject, extraReferences = null) {
+  const rows = [];
+  const assetsById = packingListAssetsById(event);
+  const items = (subproject?.items || []).filter(item => (
+    item && packingListQuantity(item.quantity) > 0
+  ));
+
+  items.forEach(item => {
+    const department = normalizeDepartmentCode(
+      item.departmentCode || item.department || 'UN'
+    );
+    const references = [...new Set((item.assetRefs || []).map(String).filter(Boolean))];
+    const assignedAssets = references.map(reference => (
+      packingListSubprojectAssetRecord(reference, item, event, assetsById)
+    )).filter(asset => !asset.isExtra);
+    const custom = references.map(reference => parseCustomAsset(reference)).find(Boolean);
+    const required = packingListQuantity(item.quantity);
+    const packed = Math.min(required, assignedAssets
+      .filter(asset => asset.status === 'packed')
+      .reduce((sum, asset) => sum + asset.quantity, 0));
+    const returned = Math.min(required, assignedAssets
+      .filter(asset => asset.status === 'returned')
+      .reduce((sum, asset) => sum + asset.quantity, 0));
+    const row = {
+      department,
+      description: custom?.name
+        || [item.brand, item.model].filter(Boolean).join(' ')
+        || String(item.description || 'Unspecified item'),
+      detail: custom
+        ? [
+            custom.type === 'LOAN' ? 'Loan/Rental' : 'Miscellaneous',
+            customAssetDetailText(custom)
+          ].filter(Boolean).join(' - ')
+        : String(item.description || ''),
+      required,
+      packed,
+      returned,
+      pending: Math.max(0, required - packed - returned),
+      assets: assignedAssets
+    };
+    row.state = packingListRowState(row);
+    rows.push(row);
+  });
+
+  rows.sort((a, b) => {
+    const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+      inventoryDepartmentLabel(b.department), undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+    return deptCompare || a.description.localeCompare(
+      b.description, undefined, { numeric: true, sensitivity: 'base' }
+    );
+  });
+
+  const extraRefs = extraReferences === null
+    ? (subproject?.extraRefs || [])
+    : extraReferences;
+  const extras = [...new Set((extraRefs || []).map(String).filter(Boolean))]
+    .map(reference => packingListSubprojectAssetRecord(
+      reference, null, event, assetsById
+    ))
+    .sort((a, b) => {
+      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+        inventoryDepartmentLabel(b.department), undefined,
+        { numeric: true, sensitivity: 'base' }
+      );
+      return deptCompare || a.label.localeCompare(
+        b.label, undefined, { numeric: true, sensitivity: 'base' }
+      );
+    });
+  const totals = rows.reduce((result, row) => ({
+    required: result.required + row.required,
+    packed: result.packed + row.packed,
+    pending: result.pending + row.pending,
+    returned: result.returned + row.returned,
+    extras: result.extras
+  }), { required: 0, packed: 0, pending: 0, returned: 0, extras: 0 });
+  totals.extras = extras.reduce((sum, asset) => sum + asset.quantity, 0);
+
+  return { rows, extras, totals };
+}
+
+function buildPackingListPdfSections(event) {
+  const subprojects = (event?.subprojects || []).filter(row => (
+    row && String(row.id || '').trim()
+  ));
+  if (subprojects.length <= 1) {
+    return [{
+      id: subprojects[0]?.id || '',
+      name: '',
+      snapshot: buildPackingListSnapshot(event)
+    }];
+  }
+
+  const listedExtraRefs = new Set(subprojects.flatMap(
+    subproject => (subproject.extraRefs || []).map(String)
+  ));
+  const unallocatedExtras = (event?.extraAssets || [])
+    .map(String)
+    .filter(reference => reference && !listedExtraRefs.has(reference));
+
+  return subprojects.map((subproject, index) => ({
+    id: String(subproject.id || ''),
+    name: String(subproject.name || `Sub-project ${index + 1}`),
+    snapshot: buildPackingListSubprojectSnapshot(
+      event,
+      subproject,
+      index === 0
+        ? [...(subproject.extraRefs || []), ...unallocatedExtras]
+        : (subproject.extraRefs || [])
+    )
+  }));
+}
+
 function packingListStatusBadge(status) {
   const palette = {
     packed: ['PACKED', '#dcfce7', '#14532d'],
@@ -448,7 +591,7 @@ function packingListRowRecords(snapshot) {
   return records;
 }
 
-function buildPackingListPdfPages(event, snapshot, context) {
+function buildPackingListPdfSectionPages(event, snapshot, context) {
   const safe = value => escapeHtml(String(value ?? ''));
   const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
@@ -460,6 +603,7 @@ function buildPackingListPdfPages(event, snapshot, context) {
         <span class="event-name">#${safe(event.id)} ${safe(event.name)}</span><br>
         ${safe(packingListDateRange(event))}<br>
         Event state: ${safe(event.state || '-')}
+        ${context.subprojectName ? `<br>Sub-project: <span class="subproject-name">${safe(context.subprojectName)}</span>` : ''}
       </div>
       <div class="header-right">
         <div class="report-title">PACKING LIST</div>
@@ -643,16 +787,34 @@ function buildPackingListPdfPages(event, snapshot, context) {
     pages.push(pageRows);
   }
 
+  return pages.map((pageRows, pageIndex) => ({
+    headerHtml,
+    summaryHtml: pageIndex === 0 ? summaryHtml : '',
+    rowsHtml: pageRows.map(record => record.html).join(''),
+    footerHtml
+  }));
+}
+
+function buildPackingListPdfPages(event, sections, context) {
+  const normalisedSections = Array.isArray(sections)
+    ? sections
+    : [{ id: '', name: '', snapshot: sections }];
+  const pages = normalisedSections.flatMap(section => (
+    buildPackingListPdfSectionPages(event, section.snapshot, {
+      ...context,
+      subprojectName: section.name || ''
+    })
+  ));
   const totalPages = pages.length;
-  return pages.map((pageRows, pageIndex) => `
+  return pages.map((page, pageIndex) => `
     <div class="page">
-      ${headerHtml}
-      ${pageIndex === 0 ? summaryHtml : ''}
+      ${page.headerHtml}
+      ${page.summaryHtml}
       <table class="packing-table">
         ${packingListTableHead()}
-        <tbody>${pageRows.map(record => record.html).join('')}</tbody>
+        <tbody>${page.rowsHtml}</tbody>
       </table>
-      <div class="footer">${footerHtml}</div>
+      <div class="footer">${page.footerHtml}</div>
       <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
     </div>
   `).join('');
@@ -692,7 +854,7 @@ async function generatePackingList(eventId, options = {}) {
       loadPdfSettings(true)
     ]);
     const event = response.data;
-    const snapshot = buildPackingListSnapshot(event);
+    const sections = buildPackingListPdfSections(event);
     const now = new Date();
     const context = {
       generatedAt: now.toLocaleString('en-GB', {
@@ -704,7 +866,7 @@ async function generatePackingList(eventId, options = {}) {
       }),
       generatedBy: currentUserPdfDisplayName()
     };
-    const pagesHtml = buildPackingListPdfPages(event, snapshot, context);
+    const pagesHtml = buildPackingListPdfPages(event, sections, context);
     const title = `Packing List - ${escapeHtml(String(event.name || `Event ${event.id}`))}`;
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
       @page { size:A4; margin:0; }
@@ -720,6 +882,7 @@ async function generatePackingList(eventId, options = {}) {
       .header-left { flex:1; }
       .header-right { min-width:190px;text-align:right; }
       .event-name { font-size:10pt; }
+      .subproject-name { color:#0f766e;font-size:9pt; }
       .report-title { font-size:14pt;margin-bottom:4px; }
       .summary-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px; }
       .summary-card { border:1px solid #cbd5e1;padding:6px;text-align:center;background:#f8fafc; }

@@ -1834,7 +1834,7 @@ function ensureWorkforceModals() {
         <button class="wf-button primary" type="submit">Save Worker</button></footer></form>`) +
     wfModal('wfAssignmentModal', 'Event Assignment', `<form id="wfAssignmentForm">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAssignmentFreelancerName"></p><div class="wf-form-grid">
-        <label class="wf-field"><span>Department *</span><select id="wfAssignmentDepartment" required></select></label>
+        <label class="wf-field"><span>Department *</span><select id="wfAssignmentDepartment" data-department-select="true" required></select></label>
         <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfAssignmentSubproject"></select></label>
         <label class="wf-field"><span>Role / Position</span><input id="wfAssignmentRole" maxlength="100"></label>
         <label class="wf-field"><span>Daily rate ($)</span><input id="wfAssignmentRate" type="number" min="0" step=".01"></label>
@@ -1869,7 +1869,7 @@ function ensureWorkforceModals() {
         <button class="wf-button primary" type="submit">Add Personnel</button></footer></form>`) +
     wfModal('wfVendorAssignmentModal', 'Vendor Event Assignment', `<form id="wfVendorAssignmentForm">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfVendorAssignmentName"></p><div class="wf-form-grid">
-        <label class="wf-field"><span>Department *</span><select id="wfVendorAssignmentDepartment" required></select></label>
+        <label class="wf-field"><span>Department *</span><select id="wfVendorAssignmentDepartment" data-department-select="true" required></select></label>
         <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfVendorAssignmentSubproject"></select></label>
         <div class="wf-field"><span>Providing *</span><div class="wf-provider-choice">
           <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Manpower &amp; Vendors</label>
@@ -1888,7 +1888,7 @@ function ensureWorkforceModals() {
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfVendorAssignmentModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Add Assignment</button></footer></form>`, '', true) +
     wfModal('wfDepartmentModal', 'Add Department', `<form id="wfDepartmentForm"><div class="wf-modal-body"><div class="wf-form-grid">
-      <label class="wf-field full"><span>Configured department</span><select id="wfDepartmentPreset" onchange="syncDepartmentPreset()"></select></label>
+      <label class="wf-field full"><span>Configured department</span><select id="wfDepartmentPreset" data-department-select="true" onchange="syncDepartmentPreset()"></select></label>
       <label class="wf-field"><span>Department code *</span><input id="wfDepartmentCode" maxlength="12" required></label>
       <label class="wf-field"><span>Department name</span><input id="wfDepartmentName" maxlength="80"></label>
       </div><div class="wf-error" id="wfDepartmentError"></div></div>

@@ -1662,9 +1662,11 @@ function populateDepartmentSelects() {
       options.innerHTML = list.map(dept => {
         const checked = previouslySelectedAll || selectedCodes.has(dept.code);
         return `
-          <label>
+          <label class="inventory-department-filter-option">
             <input type="checkbox" value="${escapeHtmlAttr(dept.code)}"${checked ? ' checked' : ''} />
-            <span>${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</span>
+            <span class="sb-department-badge" style="--sb-department-color:${escapeHtmlAttr(dept.color || '#e2e8f0')};--sb-department-text:${escapeHtmlAttr(dept.textColor || '#334155')}">${escapeHtml(dept.code)}</span>
+            <span class="sb-department-name">${escapeHtml(dept.name || dept.code)}</span>
+            <span class="inventory-department-filter-check" aria-hidden="true"></span>
           </label>
         `;
       }).join('');
@@ -1679,6 +1681,7 @@ function populateDepartmentSelects() {
       `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</option>`
     )).join('');
     assetDeptSelect.value = list.some(dept => dept.code === current) ? current : (list[0]?.code || 'UN');
+    window.refreshShowbaseSelect?.(assetDeptSelect);
   }
 
   ensureDepartmentDatalist();

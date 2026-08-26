@@ -11714,7 +11714,7 @@ async function openPrepareEventModal(eventId) {
                                     <option value="MISC">Misc Item</option>
                                     <option value="LOAN">Loan/Rental</option>
                                 </select>
-                                <select id="prepareCustomAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="prepareCustomAssetDepartment" data-department-select="true" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;">
                                     ${customDepartmentOptionsHtml('AX')}
                                 </select>
                                 <input type="text" id="prepareCustomAssetCompany" placeholder="Optional description"

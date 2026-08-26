@@ -841,7 +841,7 @@ function renderPrepareNewCustomForm() {
           <div class="plan-custom-field-grid plan-custom-field-grid-secondary">
             <div class="plan-custom-field">
               <label for="prepareNewCustomDepartment">Department</label>
-              <select id="prepareNewCustomDepartment">${customDepartmentOptionsHtml('AX')}</select>
+              <select id="prepareNewCustomDepartment" data-department-select="true">${customDepartmentOptionsHtml('AX')}</select>
             </div>
             <div class="plan-custom-field">
               <label for="prepareNewCustomCompany" id="prepareNewCustomDetailLabel">Description</label>
