@@ -23,6 +23,7 @@ const workforcePageState = {
   historyReturnFreelancerId: null,
   freelancerWorkspaceData: null,
   freelancerWorkspaceSearch: '',
+  freelancerWorkspaceIncludeVendors: false,
   freelancerWorkspaceReturnId: null,
   editingTransportProfileId: null,
   selectedTransportProfileId: null,
@@ -2066,7 +2067,7 @@ function closeWorkforceModal(id) {
   );
   const returnToFreelancerWorkspace = Boolean(
     modal?.classList.contains('open') &&
-    id === 'wfAssignmentModal' &&
+    ['wfAssignmentModal', 'wfVendorAssignmentModal'].includes(id) &&
     workforcePageState.freelancerWorkspaceReturnId
   );
   if (modal) {
@@ -2411,11 +2412,11 @@ function wfHistorySubmissionSummary(rows) {
   return statuses[0];
 }
 
-function wfHistoryStatusControl(event, freelancerId, record) {
+function wfHistoryStatusControl(event, freelancerId, record, returnFreelancerId = freelancerId) {
   const status = wfHistoryDisplayStatus(record);
   if (['Processing', 'Details Required'].includes(status) || !record.verifiedAt) {
     return `<button type="button" class="wf-status-button ${wfStatusClass(status)}"
-      onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}')">
+      onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">
       ${wfEscape(status)}
     </button>`;
   }
@@ -2427,29 +2428,29 @@ function wfHistoryStatusControl(event, freelancerId, record) {
     <div class="wf-status-menu" id="wfStatusMenu-history-${wfAttr(record.id)}">
       ${['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed'].map(nextStatus =>
         `<button class="${wfStatusClass(nextStatus)}" type="button"
-          onclick="chooseFreelancerHistoryStatus(event,${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${nextStatus}')">${nextStatus}</button>`
+          onclick="chooseFreelancerHistoryStatus(event,${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${nextStatus}','${wfAttr(returnFreelancerId)}')">${nextStatus}</button>`
       ).join('')}
     </div>
   </div>`;
 }
 
-function wfHistorySubmissionRows(event, freelancerId, rows, kind) {
+function wfHistorySubmissionRows(event, freelancerId, rows, kind, returnFreelancerId = freelancerId) {
   if (!rows.length) return `<div class="wf-history-empty">No ${kind} submitted.</div>`;
   return rows.map(record => {
     return `<div class="wf-history-file">
       <button type="button" class="wf-history-file-name"
-        onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}')">
+        onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">
         ${wfEscape(record.originalName || `${kind} upload`)}
       </button>
       <span>${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}</span>
-      ${wfHistoryStatusControl(event, freelancerId, record)}
+      ${wfHistoryStatusControl(event, freelancerId, record, returnFreelancerId)}
       <button type="button" class="wf-icon-button danger" title="Delete upload"
-        onclick="deleteFreelancerHistorySubmission('${wfAttr(record.id)}','${wfAttr(freelancerId)}')">&times;</button>
+        onclick="deleteFreelancerHistorySubmission('${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">&times;</button>
     </div>`;
   }).join('');
 }
 
-function wfHistoryRoleRows(event, freelancerId, subjectType = 'worker') {
+function wfHistoryRoleRows(event, freelancerId, subjectType = 'worker', returnFreelancerId = freelancerId) {
   const rows = event.roles || [];
   const roleRows = rows.map(row => `<span class="wf-worker-role-row">
     <span class="wf-department-role" style="${wfDepartmentStyle(row.department)}">
@@ -2457,15 +2458,15 @@ function wfHistoryRoleRows(event, freelancerId, subjectType = 'worker') {
     </span>
     <span>${wfEscape(row.role || 'Worker')} · ${Number(row.days || 0)} day${Number(row.days || 0) === 1 ? '' : 's'}</span>
     <button type="button" title="Edit role"
-      onclick="event.preventDefault();event.stopPropagation();openFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(row.id)}','${wfAttr(subjectType)}')">Edit</button>
+      onclick="event.preventDefault();event.stopPropagation();openFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(row.id)}','${wfAttr(subjectType)}','${wfAttr(returnFreelancerId)}')">Edit</button>
     <button type="button" class="danger" title="Remove role"
-      onclick="event.preventDefault();event.stopPropagation();removeFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(row.id)}')">&times;</button>
+      onclick="event.preventDefault();event.stopPropagation();removeFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(row.id)}','${wfAttr(returnFreelancerId)}')">&times;</button>
   </span>`).join('');
   return `${roleRows}<button class="wf-add-worker-role" type="button"
-    onclick="event.preventDefault();event.stopPropagation();openFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','','${wfAttr(subjectType)}')">+ Add assignment</button>`;
+    onclick="event.preventDefault();event.stopPropagation();openFreelancerWorkspaceAssignment(${Number(event.id)},'${wfAttr(freelancerId)}','','${wfAttr(subjectType)}','${wfAttr(returnFreelancerId)}')">+ Add assignment</button>`;
 }
 
-function wfHistoryEventCard(event, freelancerId, subjectType = 'worker') {
+function wfHistoryEventCard(event, freelancerId, subjectType = 'worker', returnFreelancerId = freelancerId, sourceName = '') {
   const invoiceStatus = wfHistorySubmissionSummary(event.invoices || []);
   const claimStatus = wfHistorySubmissionSummary(event.claims || []);
   const dates = event.startDate === event.endDate
@@ -2473,8 +2474,9 @@ function wfHistoryEventCard(event, freelancerId, subjectType = 'worker') {
     : `${event.startDate} – ${event.endDate}`;
   return `<details class="wf-history-event">
     <summary>
-      <div class="wf-history-event-name"><strong>#${Number(event.id)} ${wfEscape(event.name)}</strong><span>${wfEscape(event.location || 'Location TBC')}</span></div>
-      <div class="wf-history-event-date"><strong>${wfEscape(dates)}</strong><span class="wf-worker-role-list">${wfHistoryRoleRows(event, freelancerId, subjectType)}</span></div>
+      <div class="wf-history-event-name"><strong>#${Number(event.id)} ${wfEscape(event.name)}</strong><span>${wfEscape(event.location || 'Location TBC')}</span>
+        ${subjectType === 'vendor' && sourceName ? `<span class="wf-history-vendor-source">Vendor submission · ${wfEscape(sourceName)}</span>` : ''}</div>
+      <div class="wf-history-event-date"><strong>${wfEscape(dates)}</strong><span class="wf-worker-role-list">${wfHistoryRoleRows(event, freelancerId, subjectType, returnFreelancerId)}</span></div>
       <div><span>Invoice</span><strong>${event.invoices.length}/${event.invoiceLimit}</strong>
         <em class="wf-status-button ${wfStatusClass(invoiceStatus)}">${wfEscape(invoiceStatus)}</em></div>
       <div><span>Claims</span><strong>${event.claims.length}/${event.claimLimit}</strong>
@@ -2486,32 +2488,34 @@ function wfHistoryEventCard(event, freelancerId, subjectType = 'worker') {
       <section><header><strong>Invoices</strong>
         <span class="wf-history-actions">
           <button class="wf-mini-button" type="button" ${event.invoiceSlotsRemaining <= 0 ? 'disabled' : ''}
-            onclick="openFreelancerHistoryUpload(${Number(event.id)},'${wfAttr(freelancerId)}','invoice')">Upload</button>
+            onclick="openFreelancerHistoryUpload(${Number(event.id)},'${wfAttr(freelancerId)}','invoice','${wfAttr(returnFreelancerId)}')">Upload</button>
           <button class="wf-mini-button subtle" type="button"
-            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','invoice',1)">+ Slot</button>
+            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','invoice',1,'${wfAttr(returnFreelancerId)}')">+ Slot</button>
           <button class="wf-mini-button subtle" type="button" ${Number(event.extraInvoices || 0) <= 0 ? 'disabled' : ''}
-            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','invoice',-1)">&minus; Slot</button>
+            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','invoice',-1,'${wfAttr(returnFreelancerId)}')">&minus; Slot</button>
         </span></header>
-        ${wfHistorySubmissionRows(event, freelancerId, event.invoices || [], 'invoice')}
+        ${wfHistorySubmissionRows(event, freelancerId, event.invoices || [], 'invoice', returnFreelancerId)}
       </section>
       <section><header><strong>Claims</strong>
         <span class="wf-history-actions">
           <button class="wf-mini-button" type="button" ${event.claimSlotsRemaining <= 0 ? 'disabled' : ''}
-            onclick="openFreelancerHistoryUpload(${Number(event.id)},'${wfAttr(freelancerId)}','claim')">Upload</button>
+            onclick="openFreelancerHistoryUpload(${Number(event.id)},'${wfAttr(freelancerId)}','claim','${wfAttr(returnFreelancerId)}')">Upload</button>
           <button class="wf-mini-button subtle" type="button"
-            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','claim',1)">+ Slot</button>
+            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','claim',1,'${wfAttr(returnFreelancerId)}')">+ Slot</button>
           <button class="wf-mini-button subtle" type="button" ${Number(event.extraClaims || 0) <= 0 ? 'disabled' : ''}
-            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','claim',-1)">&minus; Slot</button>
+            onclick="changeFreelancerHistoryUploadSlots(${Number(event.id)},'${wfAttr(freelancerId)}','claim',-1,'${wfAttr(returnFreelancerId)}')">&minus; Slot</button>
         </span></header>
-        ${wfHistorySubmissionRows(event, freelancerId, event.claims || [], 'claim')}
+        ${wfHistorySubmissionRows(event, freelancerId, event.claims || [], 'claim', returnFreelancerId)}
       </section>
     </div>
   </details>`;
 }
 
 async function openFreelancerHistory(id) {
+  const changingSubject = String(workforcePageState.historyFreelancerId || '') !== String(id || '');
   workforcePageState.historyFreelancerId = id;
   workforcePageState.freelancerWorkspaceData = null;
+  if (changingSubject) workforcePageState.freelancerWorkspaceIncludeVendors = false;
   closeWorkforceModal('wfFreelancerDirectoryModal');
   showSection('freelancer-workspace');
 }
@@ -2537,6 +2541,43 @@ async function loadFreelancerWorkspace() {
   }
 }
 
+function wfFreelancerWorkspaceVendorMemberships(data = workforcePageState.freelancerWorkspaceData) {
+  return (data?.vendorMemberships || []).filter(vendor => vendor?.id);
+}
+
+function wfFreelancerWorkspaceEvents(data = workforcePageState.freelancerWorkspaceData, includeVendors = workforcePageState.freelancerWorkspaceIncludeVendors) {
+  if (!data) return [];
+  const subject = data.subject || data.freelancer || {};
+  const rows = (data.events || []).map(event => ({
+    ...event,
+    workspaceSubjectId: subject.id,
+    workspaceSubjectType: data.subjectType || subject.subjectType || 'worker',
+    workspaceSubjectName: subject.name || ''
+  }));
+  if (includeVendors && data.subjectType !== 'vendor') {
+    wfFreelancerWorkspaceVendorMemberships(data).forEach(vendor => {
+      (vendor.events || []).forEach(event => rows.push({
+        ...event,
+        workspaceSubjectId: vendor.id,
+        workspaceSubjectType: 'vendor',
+        workspaceSubjectName: vendor.name || 'Vendor'
+      }));
+    });
+  }
+  return rows.sort((left, right) => (
+    String(right.startDate || '').localeCompare(String(left.startDate || '')) ||
+    Number(right.id || 0) - Number(left.id || 0) ||
+    String(left.workspaceSubjectName || '').localeCompare(String(right.workspaceSubjectName || ''))
+  ));
+}
+
+function toggleFreelancerWorkspaceVendors() {
+  const hasVendors = wfFreelancerWorkspaceVendorMemberships().length > 0;
+  workforcePageState.freelancerWorkspaceIncludeVendors = hasVendors &&
+    !workforcePageState.freelancerWorkspaceIncludeVendors;
+  renderFreelancerWorkspace();
+}
+
 function renderFreelancerWorkspace() {
   const root = document.getElementById('freelancer-workspace-root');
   const data = workforcePageState.freelancerWorkspaceData;
@@ -2545,8 +2586,12 @@ function renderFreelancerWorkspace() {
   const freelancer = data.subject || data.freelancer;
   const subjectType = data.subjectType || freelancer.subjectType || 'worker';
   const isVendor = subjectType === 'vendor';
-  const invoiceCount = events.reduce((total, item) => total + item.invoices.length, 0);
-  const claimCount = events.reduce((total, item) => total + item.claims.length, 0);
+  const vendorMemberships = isVendor ? [] : wfFreelancerWorkspaceVendorMemberships(data);
+  const includeVendors = vendorMemberships.length > 0 && workforcePageState.freelancerWorkspaceIncludeVendors;
+  const visibleEvents = wfFreelancerWorkspaceEvents(data, includeVendors);
+  const invoiceCount = visibleEvents.reduce((total, item) => total + item.invoices.length, 0);
+  const claimCount = visibleEvents.reduce((total, item) => total + item.claims.length, 0);
+  const vendorNames = vendorMemberships.map(vendor => vendor.name).filter(Boolean).join(', ');
   root.innerHTML = `<div class="plan-page-heading wf-freelancer-page-heading">
       <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>
         <h2>${isVendor ? 'Vendor' : 'Worker'} Submissions</h2>
@@ -2566,7 +2611,7 @@ function renderFreelancerWorkspace() {
         <span class="plan-event-picker-chevron">&#8964;</span>
       </button>
       <div class="plan-metrics">
-        <div class="plan-metric"><div><strong>${events.length}</strong><span>Events</span></div></div>
+        <div class="plan-metric"><div><strong>${visibleEvents.length}</strong><span>Events</span></div></div>
         <div class="plan-metric"><div><strong>${invoiceCount}</strong><span>Invoices</span></div></div>
         <div class="plan-metric"><div><strong>${claimCount}</strong><span>Claims</span></div></div>
       </div>
@@ -2575,8 +2620,13 @@ function renderFreelancerWorkspace() {
       <header class="wf-panel-header"><div><h3>Events &amp; Submissions</h3>
         <p>Most recent events are shown first. Expand an event to manage its files.</p></div>
         <div class="wf-worker-history-actions">
+          ${vendorMemberships.length ? `<button class="wf-history-vendor-toggle ${includeVendors ? 'is-on' : ''}" type="button"
+            role="switch" aria-checked="${includeVendors}" onclick="toggleFreelancerWorkspaceVendors()"
+            title="${wfAttr(vendorNames)}"><i aria-hidden="true"></i><span><strong>Include vendor submissions</strong>
+              <small>${wfEscape(vendorNames)}</small></span></button>` : ''}
           <input class="wf-search wf-event-history-search" type="search"
             placeholder="Search event name, location, date or role"
+            value="${wfAttr(workforcePageState.freelancerWorkspaceSearch)}"
             oninput="renderFreelancerWorkspaceEvents(this.value)">
         </div>
       </header>
@@ -2584,7 +2634,7 @@ function renderFreelancerWorkspace() {
         <span>Invoice</span><span>Claims</span><span>Total</span><span></span></div>
       <div class="wf-history-list" id="wfFreelancerWorkspaceEvents"></div>
     </section>`;
-  renderFreelancerWorkspaceEvents('');
+  renderFreelancerWorkspaceEvents(workforcePageState.freelancerWorkspaceSearch);
 }
 
 function workforceLocalDateValue(date = new Date()) {
@@ -2608,7 +2658,7 @@ function ensureWorkerScheduleExportModal() {
           <label class="wf-field"><span>To date *</span><input id="wfWorkerScheduleEndDate" type="date" required></label>
           <label class="wf-check full"><input id="wfWorkerScheduleShowRates" type="checkbox"> Include rates</label>
           <label class="wf-check full" id="wfWorkerScheduleVendorOption" hidden>
-            <input id="wfWorkerScheduleIncludeVendor" type="checkbox">
+            <input id="wfWorkerScheduleIncludeVendor" type="checkbox" onchange="updateWorkerScheduleExportDateRange()">
             <span id="wfWorkerScheduleVendorLabel">Include vendor</span>
           </label>
         </div>
@@ -2622,27 +2672,42 @@ function ensureWorkerScheduleExportModal() {
   ));
 }
 
+function wfWorkerScheduleAssignmentDates(includeVendors = false) {
+  return wfFreelancerWorkspaceEvents(
+    workforcePageState.freelancerWorkspaceData,
+    includeVendors
+  ).flatMap(event =>
+    (event.roles || []).flatMap(role => role.workDates || [])
+  ).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))).sort();
+}
+
+function updateWorkerScheduleExportDateRange() {
+  const includeVendors = Boolean(
+    document.getElementById('wfWorkerScheduleIncludeVendor')?.checked
+  );
+  const assignmentDates = wfWorkerScheduleAssignmentDates(includeVendors);
+  const today = workforceLocalDateValue();
+  document.getElementById('wfWorkerScheduleStartDate').value = assignmentDates[0] || today;
+  document.getElementById('wfWorkerScheduleEndDate').value = assignmentDates.at(-1) || today;
+}
+
 function openWorkerScheduleExport() {
   const data = workforcePageState.freelancerWorkspaceData;
   const subject = data?.subject || data?.freelancer;
   if (!subject?.id || data?.subjectType === 'vendor') return;
   ensureWorkerScheduleExportModal();
-  const assignmentDates = (data.events || []).flatMap(event =>
-    (event.roles || []).flatMap(role => role.workDates || [])
-  ).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))).sort();
-  const today = workforceLocalDateValue();
-  document.getElementById('wfWorkerScheduleStartDate').value = assignmentDates[0] || today;
-  document.getElementById('wfWorkerScheduleEndDate').value = assignmentDates.at(-1) || today;
   document.getElementById('wfWorkerScheduleShowRates').checked = false;
-  const vendorMemberships = wfWorkerVendorMemberships(subject.id);
+  const vendorMemberships = wfFreelancerWorkspaceVendorMemberships(data);
   const vendorOption = document.getElementById('wfWorkerScheduleVendorOption');
   const vendorInput = document.getElementById('wfWorkerScheduleIncludeVendor');
   const vendorLabel = document.getElementById('wfWorkerScheduleVendorLabel');
   vendorOption.hidden = vendorMemberships.length === 0;
   vendorOption.title = vendorMemberships.map(vendor => vendor.name).filter(Boolean).join(', ');
-  vendorInput.checked = false;
+  vendorInput.checked = vendorMemberships.length > 0 &&
+    workforcePageState.freelancerWorkspaceIncludeVendors;
   vendorInput.disabled = vendorMemberships.length === 0;
   vendorLabel.textContent = vendorMemberships.length > 1 ? 'Include vendors' : 'Include vendor';
+  updateWorkerScheduleExportDateRange();
   document.getElementById('wfWorkerScheduleExportError').textContent = '';
   openWorkforceModal('wfWorkerScheduleExportModal');
 }
@@ -2677,9 +2742,11 @@ function renderFreelancerWorkspaceEvents(search = '') {
   if (!node || !data) return;
   const query = String(search || '').trim().toLowerCase();
   workforcePageState.freelancerWorkspaceSearch = query;
-  const rows = data.events.filter(event => {
+  const rootSubject = data.subject || data.freelancer || {};
+  const rows = wfFreelancerWorkspaceEvents(data).filter(event => {
     const text = [
       event.name, event.location, event.startDate, event.endDate,
+      event.workspaceSubjectName,
       ...(event.roles || []).flatMap(role => [role.department, role.role])
     ].join(' ').toLowerCase();
     return !query || text.includes(query);
@@ -2687,14 +2754,16 @@ function renderFreelancerWorkspaceEvents(search = '') {
   node.innerHTML = rows.map(event =>
     wfHistoryEventCard(
       event,
-      (data.subject || data.freelancer).id,
-      data.subjectType || 'worker'
+      event.workspaceSubjectId,
+      event.workspaceSubjectType,
+      rootSubject.id,
+      event.workspaceSubjectName
     )
   ).join('') || '<div class="wf-empty">No matching events for this worker or vendor.</div>';
 }
 
-async function openFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId = '', subjectType = 'worker') {
-  workforcePageState.freelancerWorkspaceReturnId = freelancerId;
+async function openFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId = '', subjectType = 'worker', returnFreelancerId = freelancerId) {
+  workforcePageState.freelancerWorkspaceReturnId = returnFreelancerId;
   await loadFreelancerHistoryEvent(eventId);
   if (subjectType === 'vendor') {
     openVendorAssignment(freelancerId, '', assignmentId);
@@ -2703,11 +2772,11 @@ async function openFreelancerWorkspaceAssignment(eventId, freelancerId, assignme
   }
 }
 
-async function removeFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId) {
+async function removeFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId, returnFreelancerId = freelancerId) {
   try {
     await loadFreelancerHistoryEvent(eventId);
     await deleteWorkforceAssignmentRequest(eventId, assignmentId);
-    await openFreelancerHistory(freelancerId);
+    await openFreelancerHistory(returnFreelancerId);
   } catch (error) {
     showNotification('error', error.message);
   }
@@ -2722,42 +2791,42 @@ async function loadFreelancerHistoryEvent(eventId) {
   }
 }
 
-async function openFreelancerHistorySubmission(eventId, freelancerId, submissionId) {
-  workforcePageState.historyReturnFreelancerId = freelancerId;
+async function openFreelancerHistorySubmission(eventId, freelancerId, submissionId, returnFreelancerId = freelancerId) {
+  workforcePageState.historyReturnFreelancerId = returnFreelancerId;
   await loadFreelancerHistoryEvent(eventId);
   closeWorkforceModal('wfFreelancerHistoryModal');
   await openWorkforceReview(submissionId);
 }
 
-async function openFreelancerHistoryUpload(eventId, freelancerId, kind) {
-  workforcePageState.historyReturnFreelancerId = freelancerId;
+async function openFreelancerHistoryUpload(eventId, freelancerId, kind, returnFreelancerId = freelancerId) {
+  workforcePageState.historyReturnFreelancerId = returnFreelancerId;
   await loadFreelancerHistoryEvent(eventId);
   closeWorkforceModal('wfFreelancerHistoryModal');
   openAdminWorkforceUpload(freelancerId, kind);
 }
 
-async function chooseFreelancerHistoryStatus(event, eventId, freelancerId, submissionId, status) {
+async function chooseFreelancerHistoryStatus(event, eventId, freelancerId, submissionId, status, returnFreelancerId = freelancerId) {
   event.stopPropagation();
   closeWorkforceStatusMenus();
   await loadFreelancerHistoryEvent(eventId);
   if (status === 'Denied') {
-    workforcePageState.historyReturnFreelancerId = freelancerId;
+    workforcePageState.historyReturnFreelancerId = returnFreelancerId;
     closeWorkforceModal('wfFreelancerHistoryModal');
     openWorkforceDenialReason(submissionId);
     return;
   }
   const changed = await applyWorkforceStatus(submissionId, status);
-  if (changed) await openFreelancerHistory(freelancerId);
+  if (changed) await openFreelancerHistory(returnFreelancerId);
 }
 
-async function changeFreelancerHistoryUploadSlots(eventId, freelancerId, kind, delta) {
+async function changeFreelancerHistoryUploadSlots(eventId, freelancerId, kind, delta, returnFreelancerId = freelancerId) {
   try {
     await apiCall(
       `/api/events/${Number(eventId)}/workforce/allowances/${encodeURIComponent(freelancerId)}`,
       'POST',
       { kind, delta }
     );
-    await openFreelancerHistory(freelancerId);
+    await openFreelancerHistory(returnFreelancerId);
   } catch (error) {
     showNotification('error', error.message);
   }

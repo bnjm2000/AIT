@@ -2673,6 +2673,15 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertNotIn("Northstar Productions", vendor_hidden_text)
         self.assertNotIn("Backline support", vendor_hidden_text)
         self.assertNotIn("3 pax manpower", vendor_hidden_text)
+        schedule_source = Path(app_module.__file__).with_name(
+            "workforce_schedule.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("left_metadata =", schedule_source)
+        self.assertIn("right_metadata = [", schedule_source)
+        self.assertIn(
+            'right_metadata[index] if index < len(right_metadata)',
+            schedule_source,
+        )
         excluded = self.client.get(
             "/api/workforce/subjects/worker-period/schedule.pdf"
             "?startDate=2026-07-11&endDate=2026-07-14"
@@ -3167,6 +3176,57 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(submitted_event["invoiceLimit"], 1)
         self.assertEqual(submitted_event["claimLimit"], 5)
         self.assertTrue(history["events"][0]["roles"][0]["id"])
+
+    def test_worker_history_includes_submissions_from_vendor_memberships(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={
+                "name": "IVT",
+                "memberIds": [freelancer_id],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        vendor_id = response.get_json()["data"]["id"]
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "AU",
+                "providerType": "service",
+                "workDates": ["2026-07-12"],
+                "serviceName": "Vendor support",
+                "serviceCost": 850,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{vendor_id}",
+            data={
+                "kind": "invoice",
+                "amount": "850.00",
+                "file": (io.BytesIO(PDF_BYTES), "ivt-invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get(
+            f"/api/workforce/subjects/{freelancer_id}/history"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        history = response.get_json()["data"]
+        self.assertEqual(len(history["vendorMemberships"]), 1)
+        membership = history["vendorMemberships"][0]
+        self.assertEqual(membership["id"], vendor_id)
+        self.assertEqual(membership["name"], "IVT")
+        self.assertEqual(membership["events"][0]["id"], 143)
+        self.assertEqual(
+            membership["events"][0]["invoices"][0]["originalName"],
+            "ivt-invoice.pdf",
+        )
+        self.assertEqual(history["events"][0]["roles"][0]["role"], "Audio Engineer")
 
     def test_worker_login_log_is_visible_only_to_super_admins(self):
         freelancer_id = self.create_worker_assignment()
@@ -4255,6 +4315,13 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("wfWorkerVendorMemberships", admin_source)
         self.assertIn("wfWorkerScheduleIncludeVendor", admin_source)
         self.assertIn("params.set('showVendor', '1')", admin_source)
+        self.assertIn("vendorMemberships", admin_source)
+        self.assertIn("toggleFreelancerWorkspaceVendors", admin_source)
+        self.assertIn("wfFreelancerWorkspaceEvents", admin_source)
+        self.assertIn("updateWorkerScheduleExportDateRange", admin_source)
+        self.assertIn("workforcePageState.freelancerWorkspaceIncludeVendors", admin_source)
+        self.assertIn(".wf-history-vendor-toggle", admin_styles)
+        self.assertIn(".wf-history-vendor-source", admin_styles)
         self.assertIn("removeWorkforceScheduleDate", source)
         self.assertIn("wf-schedule-person-remove", source)
         self.assertNotIn("openWorkforceScheduleDayEditor", source)

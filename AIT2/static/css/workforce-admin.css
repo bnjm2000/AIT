@@ -73,12 +73,68 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  width: min(520px, 100%);
+  width: min(720px, 100%);
 }
 
 .wf-worker-history-actions .wf-event-history-search {
   flex: 1 1 320px;
   min-width: 0;
+}
+
+.wf-history-vendor-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 36px;
+  border: 1px solid #d8dee9;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  padding: 6px 9px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.wf-history-vendor-toggle > i {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color .16s ease;
+}
+
+.wf-history-vendor-toggle > i::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 24%);
+  content: '';
+  transition: transform .16s ease;
+}
+
+.wf-history-vendor-toggle.is-on {
+  border-color: color-mix(in srgb, var(--wf-brand) 42%, #d8dee9);
+  background: color-mix(in srgb, var(--wf-brand) 6%, #fff);
+}
+
+.wf-history-vendor-toggle.is-on > i { background: var(--wf-brand); }
+.wf-history-vendor-toggle.is-on > i::after { transform: translateX(13px); }
+.wf-history-vendor-toggle > span { display: grid; min-width: 0; gap: 1px; }
+.wf-history-vendor-toggle strong { font-size: 10px; white-space: nowrap; }
+.wf-history-vendor-toggle small {
+  overflow: hidden;
+  max-width: 150px;
+  color: var(--wf-muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wf-worker-export-help {
@@ -1768,6 +1824,16 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-history-event > summary em { font-style: normal; }
 .wf-history-event-date { border-left: 1px solid var(--wf-border); padding-left: 12px; }
 .wf-history-event-name { padding-left: 0; }
+.wf-history-event-name .wf-history-vendor-source {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--wf-brand-dark);
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: 850;
+}
 .wf-history-chevron { color: var(--wf-brand); transition: transform .2s ease; }
 .wf-history-event[open] .wf-history-chevron { transform: rotate(180deg); }
 

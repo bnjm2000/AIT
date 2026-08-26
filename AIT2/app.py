@@ -12483,95 +12483,121 @@ def workforce_freelancer_history(freelancer_id):
     freelancer, subject_type = _workforce_subject(workforce, freelancer_id)
     if not freelancer:
         return jsonify({'error': 'Worker or vendor not found'}), 404
-    events = []
-    for raw_event_id, assignments in (workforce.get('assignments') or {}).items():
-        matching = [
-            row for row in assignments
-            if (
-                isinstance(row, dict)
-                and str(
-                    row.get('freelancerId') or row.get('vendorId') or ''
-                ) == str(freelancer_id)
+
+    def subject_events(history_subject_id):
+        history_events = []
+        for raw_event_id, assignments in (
+            workforce.get('assignments') or {}
+        ).items():
+            matching = [
+                row for row in assignments
+                if (
+                    isinstance(row, dict)
+                    and str(
+                        row.get('freelancerId') or row.get('vendorId') or ''
+                    ) == str(history_subject_id)
+                )
+            ] if isinstance(assignments, list) else []
+            if not matching:
+                continue
+            try:
+                event_id = int(raw_event_id)
+            except (TypeError, ValueError):
+                continue
+            event = manager.events.get(event_id)
+            if not event:
+                continue
+            rows = worker_submissions(
+                workforce, event_id, history_subject_id
             )
-        ] if isinstance(assignments, list) else []
-        if not matching:
-            continue
-        try:
-            event_id = int(raw_event_id)
-        except (TypeError, ValueError):
-            continue
-        event = data_manager.events.get(event_id)
-        if not event:
-            continue
-        rows = worker_submissions(workforce, event_id, freelancer_id)
-        expectation = _workforce_submission_expectation(
-            workforce, event_id, freelancer_id
+            expectation = _workforce_submission_expectation(
+                workforce, event_id, history_subject_id
+            )
+            invoices = [
+                _admin_file_payload(
+                    row, event_id, history_subject_id, 'invoice', expectation
+                )
+                for row in rows.get('invoices', [])
+                if isinstance(row, dict)
+            ]
+            claims = [
+                _admin_file_payload(
+                    row, event_id, history_subject_id, 'claim', expectation
+                )
+                for row in rows.get('claims', [])
+                if isinstance(row, dict)
+            ]
+            limits = _worker_upload_limits(
+                workforce, event_id, history_subject_id
+            )
+            history_events.append({
+                'id': event_id,
+                'name': event.name,
+                'location': getattr(event, 'location', '') or '',
+                'startDate': _event_date_for_worker(event.start_date),
+                'endDate': _event_date_for_worker(event.end_date),
+                'roles': [
+                    {
+                        'id': str(row.get('id') or ''),
+                        'department': str(row.get('department') or ''),
+                        'role': str(
+                            row.get('serviceName')
+                            or row.get('roleName')
+                            or (
+                                f"{int(row.get('pax') or 0)} pax manpower"
+                                if row.get('providerType') == 'manpower'
+                                else 'Vendor service'
+                            )
+                        ),
+                        'days': int(row.get('days') or 0),
+                        'dailyRate': row.get('dailyRate'),
+                        'workDates': list(row.get('workDates') or []),
+                        'providerType': str(row.get('providerType') or ''),
+                        'pax': int(row.get('pax') or 0),
+                        'ratePerPax': row.get('ratePerPax'),
+                        'serviceName': str(row.get('serviceName') or ''),
+                        'serviceCost': row.get('serviceCost'),
+                    }
+                    for row in matching
+                ],
+                'invoices': invoices,
+                'claims': claims,
+                'invoiceTotal': round(sum(
+                    money(row.get('amount'), 0.0) or 0.0
+                    for row in invoices
+                    if row.get('status') != 'Denied'
+                ), 2),
+                'claimTotal': round(sum(
+                    money(row.get('amount'), 0.0) or 0.0
+                    for row in claims
+                    if row.get('status') != 'Denied'
+                ), 2),
+                **limits,
+            })
+        history_events.sort(
+            key=lambda row: (row['startDate'], row['id']),
+            reverse=True,
         )
-        invoices = [
-            _admin_file_payload(
-                row, event_id, freelancer_id, 'invoice', expectation
-            )
-            for row in rows.get('invoices', [])
-            if isinstance(row, dict)
-        ]
-        claims = [
-            _admin_file_payload(
-                row, event_id, freelancer_id, 'claim', expectation
-            )
-            for row in rows.get('claims', [])
-            if isinstance(row, dict)
-        ]
-        limits = _worker_upload_limits(
-            workforce, event_id, freelancer_id
+        return history_events
+
+    events = subject_events(freelancer_id)
+    vendor_memberships = []
+    if subject_type == 'worker':
+        for vendor in workforce.get('vendors', []):
+            if not isinstance(vendor, dict) or str(freelancer_id) not in {
+                str(member_id) for member_id in vendor.get('memberIds', [])
+            }:
+                continue
+            vendor_id = str(vendor.get('id') or '').strip()
+            if not vendor_id:
+                continue
+            vendor_memberships.append({
+                **_admin_vendor_payload(vendor, workforce),
+                'events': subject_events(vendor_id),
+            })
+        vendor_memberships.sort(
+            key=lambda row: str(row.get('name') or '').casefold()
         )
-        events.append({
-            'id': event_id,
-            'name': event.name,
-            'location': getattr(event, 'location', '') or '',
-            'startDate': _event_date_for_worker(event.start_date),
-            'endDate': _event_date_for_worker(event.end_date),
-            'roles': [
-                {
-                    'id': str(row.get('id') or ''),
-                    'department': str(row.get('department') or ''),
-                    'role': str(
-                        row.get('serviceName')
-                        or row.get('roleName')
-                        or (
-                            f"{int(row.get('pax') or 0)} pax manpower"
-                            if row.get('providerType') == 'manpower'
-                            else 'Vendor service'
-                        )
-                    ),
-                    'days': int(row.get('days') or 0),
-                    'dailyRate': row.get('dailyRate'),
-                    'workDates': list(row.get('workDates') or []),
-                    'providerType': str(row.get('providerType') or ''),
-                    'pax': int(row.get('pax') or 0),
-                    'ratePerPax': row.get('ratePerPax'),
-                    'serviceName': str(row.get('serviceName') or ''),
-                    'serviceCost': row.get('serviceCost'),
-                }
-                for row in matching
-            ],
-            'invoices': invoices,
-            'claims': claims,
-            'invoiceTotal': round(sum(
-                money(row.get('amount'), 0.0) or 0.0
-                for row in invoices
-                if row.get('status') != 'Denied'
-            ), 2),
-            'claimTotal': round(sum(
-                money(row.get('amount'), 0.0) or 0.0
-                for row in claims
-                if row.get('status') != 'Denied'
-            ), 2),
-            **limits,
-        })
-    events.sort(
-        key=lambda row: (row['startDate'], row['id']),
-        reverse=True,
-    )
     return jsonify({
         'success': True,
         'data': {
@@ -12615,6 +12641,7 @@ def workforce_freelancer_history(freelancer_id):
             ),
             'departments': _department_codes_for_manager(manager),
             'events': events,
+            'vendorMemberships': vendor_memberships,
         },
     })
 
@@ -23487,7 +23514,9 @@ def prepare_event_asset(event_id):
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
 @app.route('/api/events/<int:event_id>/custom-assets', methods=['POST'])
-@require_admin
+@require_auth
+@require_event_access
+@with_prepare_action_lock
 def add_custom_asset_to_event(event_id):
     """Add a structured custom asset (LOAN/MISC) to an event without auto-preparing it."""
     try:

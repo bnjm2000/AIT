@@ -34,6 +34,14 @@ class PlanningTemplateTests(unittest.TestCase):
                 True,
                 True,
             ),
+            'manager': User(
+                'manager',
+                hash_password('pw', 'manager-salt'),
+                'manager-salt',
+                True,
+                True,
+                role='manager',
+            ),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -1348,6 +1356,55 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('Printed backdrop (Black fabric with client artwork)', action)
         self.assertIn('Name: Printed backdrop -> Printed stage backdrop', action)
         self.assertIn('Company / source: - -> Backdrop Rental Co', action)
+
+    def test_assigned_user_can_add_custom_item_from_prepare(self):
+        self.event.assigned_users = ['normal']
+        self.data_manager.save_event(self.event)
+        self.login('normal')
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json={
+                'name': 'Cable ramp',
+                'quantity': 2,
+                'type': 'MISC',
+                'department': 'LX',
+                'description': 'Black two-channel ramp',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        marker = response.get_json()['data']['assetId']
+        self.assertIn(marker, self.event.prepared_items)
+
+    def test_unassigned_user_cannot_add_custom_item_to_event(self):
+        self.login('normal')
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json={'name': 'Cable ramp', 'quantity': 1, 'type': 'MISC'},
+        )
+
+        self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['error'], 'You are not assigned to this event')
+
+    def test_manager_can_add_custom_item_without_event_assignment(self):
+        self.login('manager')
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json={
+                'name': 'Rental riser',
+                'quantity': 1,
+                'type': 'LOAN',
+                'department': 'ST',
+                'company': 'Stage Rental Co',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        marker = response.get_json()['data']['assetId']
+        self.assertIn(marker, self.event.prepared_items)
 
     def test_merge_adds_quantities_and_replace_preserves_physical_assets(self):
         self.login('admin')
