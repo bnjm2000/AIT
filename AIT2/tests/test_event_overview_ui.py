@@ -43,6 +43,29 @@ def test_event_quick_actions_pass_the_clicked_event_through_navigation():
         assert 'workflowRememberEvent(id)' in source
 
 
+def test_new_events_are_registered_in_every_workflow_selector_before_navigation():
+    register = function_source('registerCreatedEventInClient', 'formatEventFileSize')
+    reset = function_source('resetWorkflowEventOptionCaches', 'registerCreatedEventInClient')
+    add_event_handler = SCRIPT.split(
+        '.getElementById("addEventForm")', 1
+    )[1].split("const assetIsBulkToggle", 1)[0]
+    finance = (ROOT / 'static' / 'js' / 'finance.js').read_text(encoding='utf-8')
+
+    assert 'workflowRememberEvent(id)' in register
+    assert 'await fetchEventSummary(id)' in register
+    assert 'events = mergeNewestFirst(events)' in register
+    assert 'planPageState.events = mergeNewestFirst' in register
+    assert 'prepareNewPageState.events = mergeNewestFirst' in register
+    assert 'returnPageState.events = mergeNewestFirst' in register
+    assert 'workforcePageState.eventOptions = mergeNewestFirst' in register
+    assert 'financeState.events = mergeNewestFirst' in register
+    assert 'resetWorkflowEventOptionCaches()' in register
+    assert 'workforcePageState.eventOptions = []' in reset
+    assert 'const response = await apiCall("/api/events", "POST", eventData)' in add_event_handler
+    assert 'await registerCreatedEventInClient(response.eventId)' in add_event_handler
+    assert finance.count('await registerCreatedEventInClient(') >= 2
+
+
 def test_grid_and_list_show_progress_icons_and_one_compact_next_action():
     menu = function_source('eventCardMenuHtml', 'createEventsOverviewCard')
     cards = function_source('createEventsOverviewCard', 'renderAllEventsCards')

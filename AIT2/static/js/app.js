@@ -4905,6 +4905,56 @@ async function fetchEventSummary(eventId) {
   return response.data?.[0] || null;
 }
 
+function resetWorkflowEventOptionCaches() {
+  if (typeof planPageState !== 'undefined') planPageState.events = [];
+  if (typeof prepareNewPageState !== 'undefined') prepareNewPageState.events = [];
+  if (typeof returnPageState !== 'undefined') returnPageState.events = [];
+  if (typeof workforcePageState !== 'undefined') workforcePageState.eventOptions = [];
+  if (typeof financeState !== 'undefined') financeState.events = [];
+  transferOptionsCache = null;
+}
+
+async function registerCreatedEventInClient(eventId) {
+  const id = Number(eventId || 0);
+  if (!id) return null;
+
+  workflowRememberEvent(id);
+  clearCalendarCache();
+  transferOptionsCache = null;
+
+  try {
+    const createdEvent = await fetchEventSummary(id);
+    if (!createdEvent) throw new Error(`Event #${id} is not available yet`);
+    const mergeNewestFirst = list => mergeEventsById(list || [], [createdEvent])
+      .sort((left, right) => Number(right.id || 0) - Number(left.id || 0));
+
+    events = mergeNewestFirst(events);
+    if (typeof planPageState !== 'undefined') {
+      planPageState.events = mergeNewestFirst(planPageState.events);
+    }
+    if (typeof prepareNewPageState !== 'undefined') {
+      prepareNewPageState.events = mergeNewestFirst(prepareNewPageState.events);
+    }
+    if (typeof returnPageState !== 'undefined') {
+      returnPageState.events = mergeNewestFirst(returnPageState.events);
+    }
+    if (typeof workforcePageState !== 'undefined') {
+      workforcePageState.eventOptions = mergeNewestFirst(workforcePageState.eventOptions);
+    }
+    if (typeof financeState !== 'undefined') {
+      financeState.events = mergeNewestFirst(financeState.events);
+    }
+    return createdEvent;
+  } catch (error) {
+    // The event is already saved. Empty selector caches so the destination
+    // workspace fetches authoritative options instead of redirecting based on
+    // an old non-empty list.
+    resetWorkflowEventOptionCaches();
+    console.warn(`Unable to pre-register Event #${id}; selectors will reload it`, error);
+    return null;
+  }
+}
+
 function formatEventFileSize(bytes) {
   const size = Number(bytes || 0);
   if (size < 1024) return `${size} B`;
@@ -20955,8 +21005,8 @@ document.addEventListener("DOMContentLoaded", function () {
       };
 
       try {
-        await apiCall("/api/events", "POST", eventData);
-        clearCalendarCache();
+        const response = await apiCall("/api/events", "POST", eventData);
+        await registerCreatedEventInClient(response.eventId);
         closeModal("addEventModal");
         showNotification("success", "Event added successfully!");
 
@@ -24991,6 +25041,16 @@ function connectRealtimeUpdates() {
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
       const topics = realtimeTopicsFromPayload(payload);
+      if (
+        eventIds.length &&
+        (
+          realtimePayloadHasAction(payload, 'created') ||
+          realtimePayloadHasAction(payload, 'event-created-from-quotation')
+        )
+      ) {
+        await Promise.all(eventIds.map(registerCreatedEventInClient));
+        if (['dashboard', 'events'].includes(getActiveSectionId())) queueRealtimeRefresh();
+      }
       if (topics.includes('finance') && await handleFinanceRealtimePayload(payload)) {
         return;
       }

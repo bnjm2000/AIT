@@ -3668,6 +3668,9 @@ async function financeCreateEventFromQuotation() {
       {}
     );
     financeState.current = response.data;
+    if (typeof registerCreatedEventInClient === 'function') {
+      await registerCreatedEventInClient(response.eventId);
+    }
     showNotification('success', `Event #${response.eventId} created and paired`);
     if (typeof openEventPlanning === 'function') {
       openEventPlanning(response.eventId);
@@ -6616,6 +6619,14 @@ async function financeCommitStatus(documentId, status, extras, conflictRetry = 0
       financeRenderEditor();
     } else {
       financeUpdateListRow(response.data);
+    }
+    if (
+      status === 'accepted'
+      && !existingEventId
+      && response.data.eventId
+      && typeof registerCreatedEventInClient === 'function'
+    ) {
+      await registerCreatedEventInClient(response.data.eventId);
     }
     const eventNote = status === 'accepted' && response.data.eventId
       ? (existingEventId ? ` Linked to Event #${response.data.eventId}.` : ` Event #${response.data.eventId} was created.`)
