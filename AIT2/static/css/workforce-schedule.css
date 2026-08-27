@@ -1280,6 +1280,10 @@
     padding-inline: 0;
   }
 
+  .wf-schedule-actions .wf-button {
+    min-height: 44px;
+  }
+
   .wf-schedule-controls > strong {
     width: 100%;
   }
@@ -1297,11 +1301,70 @@
     flex: 1 1 calc(50% - 5px);
   }
 
+  .wf-schedule-controls input[type="time"],
+  .wf-schedule-select-trigger {
+    height: 44px;
+  }
+
   .wf-schedule-filter-row {
     position: sticky;
     top: 0;
     z-index: 3;
     background: #f8fafc;
+  }
+
+  .wf-schedule-day > header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wf-schedule-day > header > div:last-child {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .wf-schedule-day > header .wf-icon-button,
+  .wf-schedule-person-download,
+  .wf-schedule-person-remove {
+    width: 40px;
+    height: 40px;
+  }
+
+  .wf-schedule-role,
+  .wf-schedule-dept-edit,
+  .wf-schedule-room,
+  .wf-schedule-person-meta input,
+  .wf-coverage-toggle button {
+    min-height: 40px;
+  }
+
+  .wf-schedule-role {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: 6px;
+  }
+
+  .wf-schedule-dept-edit {
+    min-width: 40px;
+  }
+
+  .wf-schedule-person-meta {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .wf-schedule-person-meta label {
+    flex: 1 1 112px;
+  }
+
+  .wf-schedule-person-meta input {
+    width: 100%;
+  }
+
+  .wf-schedule-tag-menu > button,
+  .wf-schedule-role-suggestions > button,
+  .wf-schedule-role-actions > button {
+    min-height: 44px;
   }
 
   .wf-schedule-days {

@@ -12445,6 +12445,313 @@
       .event-file-preview-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:54px;padding:9px 14px;border-top:1px solid #dce6e2;background:#fff; }
       @media(max-width:980px){.event-overview-hero,.event-overview-grid{grid-template-columns:1fr}.event-overview-links{grid-template-columns:repeat(3,minmax(0,1fr))}}
       @media(max-width:620px){ #eventDetailsModal .event-overview-shell,#eventFilePreviewModal .event-file-preview-shell{width:100vw;height:100vh;border:0;border-radius:0} #eventDetailsModal .event-overview-body{padding:10px}.event-overview-title-row{gap:8px}.event-overview-identity h1{font-size:19px}.event-overview-links{grid-template-columns:repeat(2,minmax(0,1fr))}.event-overview-metric{min-height:88px;padding:8px}.event-overview-metric strong{font-size:20px}.event-overview-crew,.event-overview-subprojects{grid-template-columns:1fr}.event-overview-asset-row{grid-template-columns:minmax(0,1fr) 46px 46px 46px;gap:4px}}
+
+      /* Mobile workflow hardening for Plan, Manpower, Transport, Prepare and Return. */
+      @media (max-width: 840px) {
+        :is(
+          #plan-section,
+          #workforce-section,
+          #transport-section,
+          #prepare-new-section,
+          #return-section
+        ).active {
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          overflow-x: clip;
+        }
+
+        :is(
+          .plan-page,
+          .workforce-page,
+          .prepare-new-page,
+          .return-page,
+          .plan-layout,
+          .wf-plan-layout,
+          .prepare-new-workspace,
+          .return-layout
+        ) {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        :is(.plan-event-select-wrap, .return-event-select-wrap) {
+          min-width: 0;
+          max-width: 100%;
+          min-height: 76px;
+        }
+
+        :is(.plan-event-title-row, .plan-event-meta, .return-event-title) {
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        :is(.plan-search-input, .return-search-input) {
+          min-height: 44px;
+        }
+
+        .plan-event-chooser-search input,
+        .plan-event-chooser-filter {
+          min-height: 44px;
+        }
+
+        .plan-event-chooser-page {
+          min-width: 40px;
+          min-height: 40px;
+        }
+
+        :is(#planEventChooserModal, #returnEventChooserModal) .close-btn,
+        :is(#planEventChooserModal, #returnEventChooserModal) .close {
+          width: 40px;
+          height: 40px;
+          flex-basis: 40px;
+        }
+
+        :is(.plan-toggle, .return-toggle) {
+          min-height: 44px;
+        }
+
+        :is(.plan-chip, .return-chip) {
+          min-height: 40px;
+          padding-inline: 12px;
+        }
+
+        #plan-section.active .plan-result-row .plan-inline-actions .plan-search-input,
+        #plan-section.active .plan-result-row .plan-inline-actions .plan-button,
+        #plan-section.active .plan-result-row > .plan-button {
+          min-height: 40px !important;
+        }
+
+        #plan-section.active .plan-availability-count {
+          min-height: 40px;
+          padding-block: 8px;
+        }
+
+        #plan-section.active :is(.plan-replace-slot, .plan-row-actions) .plan-button {
+          width: 40px;
+          min-width: 40px;
+          min-height: 40px !important;
+        }
+
+        #plan-section.active .plan-qty-control :is(button, input) {
+          min-width: 40px;
+          min-height: 40px;
+        }
+
+        :is(#plan-section, #prepare-new-section).active .plan-custom-type-toggle button,
+        :is(#plan-section, #prepare-new-section).active .plan-custom-field :is(input, select),
+        :is(#plan-section, #prepare-new-section).active .plan-custom-submit {
+          min-height: 44px !important;
+        }
+
+        :is(#plan-section, #prepare-new-section, #return-section).active .event-detail-icon-button {
+          width: 40px !important;
+          height: 40px !important;
+          min-height: 40px !important;
+        }
+
+        .event-subproject-rename,
+        .event-subproject-delete {
+          width: 40px;
+          height: 40px;
+          margin-inline: 0;
+        }
+
+        .event-subproject-add,
+        .event-subproject-tab {
+          min-height: 40px;
+        }
+
+        .prepare-new-heading {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .prepare-new-heading-actions,
+        .prepare-new-heading-actions .plan-button {
+          width: 100%;
+        }
+
+        .prepare-new-heading-actions .plan-button,
+        .prepare-new-scan-input input,
+        .prepare-new-scan-input .plan-button,
+        .prepare-new-scan-actions .plan-button {
+          min-height: 44px;
+        }
+
+        .prepare-new-card-header {
+          flex-wrap: wrap;
+        }
+
+        .prepare-new-toggle,
+        .prepare-new-department > summary,
+        .prepare-new-model > summary,
+        .prepare-new-custom-group > summary,
+        .prepare-new-action-menu button {
+          min-height: 44px;
+        }
+
+        #prepare-new-section.active .prepare-new-page button:not(.event-detail-icon-button) {
+          min-height: 40px !important;
+        }
+
+        .plan-mobile-actionbar,
+        .prepare-new-mobile-action {
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        .return-quick-row {
+          grid-template-columns: minmax(0, 1fr) 44px;
+        }
+
+        .return-quick-input,
+        .return-quick-row .return-button,
+        .return-quick-submit,
+        .return-department-summary,
+        .return-custom-group > summary,
+        .return-quantity-menu-popover button {
+          min-height: 44px;
+        }
+
+        .return-button {
+          min-height: 40px;
+        }
+
+        .return-more-button {
+          width: 40px;
+        }
+
+        .return-exit-button {
+          bottom: env(safe-area-inset-bottom);
+          min-height: 48px;
+        }
+
+        .wf-button,
+        .wf-view-switch button,
+        .wf-schedule-select-trigger,
+        .wf-schedule-select-option,
+        .wf-schedule-filter-options > button,
+        .wf-schedule-filter-row > .wf-schedule-manage-directory {
+          min-height: 44px;
+        }
+
+        .workforce-page .wf-icon-button {
+          width: 40px;
+          height: 40px;
+          min-height: 40px;
+        }
+
+        .wf-view-switch {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          width: 100%;
+        }
+
+        .wf-manpower-heading-actions .wf-view-switch {
+          align-self: stretch;
+        }
+
+        .wf-transport-footer {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .wf-transport-footer > div {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 7px;
+        }
+
+        .wf-transport-footer .wf-button {
+          width: 100%;
+        }
+
+        .wf-modal-card,
+        .wf-modal-card.wide {
+          max-height: calc(var(--scaled-dvh, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+        }
+
+        .wf-modal-actions,
+        .wf-review-actions {
+          padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+
+        .wf-modal-card button {
+          min-height: 40px;
+        }
+
+        .wf-modal-card .wf-icon-button {
+          width: 40px;
+          height: 40px;
+        }
+
+        .wf-modal-card :is(.wf-book-mode-toggle button, .wf-link-button) {
+          min-height: 44px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        :is(.plan-page, .workforce-page, .prepare-new-page, .return-page) {
+          padding-inline: 10px;
+        }
+
+        .wf-manpower-title-row {
+          align-items: stretch;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .wf-manpower-title-row .wf-button {
+          width: 100%;
+        }
+
+        .wf-trip-card .wf-route > strong {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .wf-route-arrow {
+          justify-self: center;
+          transform: rotate(90deg);
+        }
+
+        .wf-driver-heading {
+          margin-left: 0;
+          text-align: left;
+        }
+
+        .wf-transport-heading,
+        .wf-transport-meta {
+          grid-template-columns: 1fr;
+        }
+
+        .wf-transport-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .wf-schedule-controls > label:not(.wf-rate-toggle),
+        .wf-schedule-select-field,
+        .wf-schedule-controls .wf-button {
+          flex-basis: 100%;
+        }
+
+        .plan-event-chooser-footer {
+          align-items: center;
+          flex-direction: column;
+          justify-content: center;
+          padding-top: 8px;
+          text-align: center;
+        }
+
+        .plan-event-chooser-pages {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .return-row-actions {
+          flex-wrap: wrap;
+        }
+      }
     </style>
 
     <!-- Event Details Modal -->
