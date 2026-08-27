@@ -13655,6 +13655,8 @@ const returnPageState = {
   requestVersion: 0,
   loaded: false,
   activeSubprojectId: '',
+  departmentOpenState: new Map(),
+  customGroupOpenState: new Map(),
 };
 
 function returnPageEncode(value) {
@@ -13871,9 +13873,24 @@ function returnPageMetrics(event = returnPageState.event) {
 }
 
 function returnPageCaptureViewState() {
+  document.querySelectorAll('details.return-department-section[data-return-department]').forEach(details => {
+    returnPageState.departmentOpenState.set(
+      returnPageDecode(details.dataset.returnDepartment || ''),
+      details.open
+    );
+  });
+  document.querySelectorAll('details.return-custom-group[data-return-custom-group]').forEach(details => {
+    returnPageState.customGroupOpenState.set(details.dataset.returnCustomGroup || '', details.open);
+  });
   const scroller = document.getElementById('returnAssetsScroll');
+  const root = document.getElementById('return-page-root');
+  const contentArea = root?.closest('.content-area');
   const active = document.activeElement;
   const snapshot = {
+    contentAreaTop: contentArea?.scrollTop || 0,
+    contentAreaLeft: contentArea?.scrollLeft || 0,
+    pageX: window.scrollX,
+    pageY: window.scrollY,
     scrollTop: scroller?.scrollTop || 0,
     anchorId: '',
     anchorOffset: 0,
@@ -13895,6 +13912,13 @@ function returnPageCaptureViewState() {
 
 function returnPageRestoreViewState(snapshot) {
   if (!snapshot) return;
+  const root = document.getElementById('return-page-root');
+  const contentArea = root?.closest('.content-area');
+  if (contentArea) {
+    contentArea.scrollTop = snapshot.contentAreaTop || 0;
+    contentArea.scrollLeft = snapshot.contentAreaLeft || 0;
+  }
+  window.scrollTo(snapshot.pageX || 0, snapshot.pageY || 0);
   const scroller = document.getElementById('returnAssetsScroll');
   if (scroller) {
     scroller.scrollTop = snapshot.scrollTop || 0;
@@ -13929,6 +13953,16 @@ function returnPageUpdatePickerOptions() {
     planEventChooserState.context === 'return' &&
     document.getElementById('planEventChooserModal')?.classList.contains('active')
   ) renderPlanEventChooser();
+}
+
+function returnPageSetDepartmentOpen(encodedDepartment, open, detailsElement = null) {
+  if (detailsElement && !detailsElement.isConnected) return;
+  returnPageState.departmentOpenState.set(returnPageDecode(encodedDepartment), !!open);
+}
+
+function returnPageSetCustomGroupOpen(type, open, detailsElement = null) {
+  if (detailsElement && !detailsElement.isConnected) return;
+  returnPageState.customGroupOpenState.set(String(type || ''), !!open);
 }
 
 function returnOpenEventChooser() {
@@ -14158,8 +14192,12 @@ function returnPageRenderFilteredAssets(options = {}) {
     .map(([department, departmentAssets]) => {
       const outstanding = departmentAssets
         .reduce((sum, asset) => sum + returnPageOutstandingQuantity(asset), 0);
+      const rememberedOpen = returnPageState.departmentOpenState.get(department);
+      const departmentOpen = typeof rememberedOpen === 'boolean' ? rememberedOpen : true;
       return `
-        <details class="return-department-section" open>
+        <details class="return-department-section" ${departmentOpen ? 'open' : ''}
+                 data-return-department="${escapeHtmlAttr(returnPageEncode(department))}"
+                 ontoggle="returnPageSetDepartmentOpen('${escapeHtmlAttr(returnPageEncode(department))}',this.open,this)">
           <summary class="return-department-summary">
             <span class="return-department-name">
               <i class="return-department-dot"
@@ -14470,7 +14508,11 @@ function returnPageCustomItemsHtml(event = returnPageState.event) {
           const items = rows.filter(asset => normalizeCustomType(
             (asset.parsedCustom || parseCustomAsset(asset.id, asset))?.type
           ) === type);
-          return `<details class="return-custom-group" open>
+          const rememberedOpen = returnPageState.customGroupOpenState.get(type);
+          const groupOpen = typeof rememberedOpen === 'boolean' ? rememberedOpen : true;
+          return `<details class="return-custom-group" ${groupOpen ? 'open' : ''}
+                          data-return-custom-group="${escapeHtmlAttr(type)}"
+                          ontoggle="returnPageSetCustomGroupOpen('${escapeHtmlAttr(type)}',this.open,this)">
             <summary>${escapeHtml(label)} <span>${items.length}</span></summary>
             <div>${items.map(asset => {
               const encodedId = returnPageEncode(asset.id);
@@ -14725,6 +14767,8 @@ async function returnPageSelectEvent(eventId) {
   const version = ++returnPageState.requestVersion;
   returnPageState.department = 'ALL';
   returnPageState.search = '';
+  returnPageState.departmentOpenState.clear();
+  returnPageState.customGroupOpenState.clear();
   try {
     const response = await apiCall(`/api/events/${id}`);
     if (version !== returnPageState.requestVersion) return;

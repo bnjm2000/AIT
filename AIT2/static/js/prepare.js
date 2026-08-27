@@ -1021,7 +1021,10 @@ function renderPrepareNewPage() {
 function prepareNewCaptureViewState() {
   const active = document.activeElement;
   const root = document.getElementById('prepare-new-page-root');
+  const contentArea = root?.closest('.content-area');
   return {
+    contentAreaTop: contentArea?.scrollTop || 0,
+    contentAreaLeft: contentArea?.scrollLeft || 0,
     pageX: window.scrollX,
     pageY: window.scrollY,
     scanTop: root?.querySelector('.prepare-new-left')?.scrollTop || 0,
@@ -1060,12 +1063,17 @@ function prepareNewRestoreViewState(state) {
   setValue('prepareNewCustomDepartment', state.customDepartment);
   prepareNewSetCustomType(state.customType || 'MISC');
   const root = document.getElementById('prepare-new-page-root');
+  const contentArea = root?.closest('.content-area');
   const scan = root?.querySelector('.prepare-new-left');
   const assignment = root?.querySelector('.prepare-new-assignment-scroll');
   const custom = root?.querySelector('.prepare-new-custom-list');
   if (scan) scan.scrollTop = state.scanTop;
   if (assignment) assignment.scrollTop = state.assignmentTop;
   if (custom) custom.scrollTop = state.customTop;
+  if (contentArea) {
+    contentArea.scrollTop = state.contentAreaTop || 0;
+    contentArea.scrollLeft = state.contentAreaLeft || 0;
+  }
   window.scrollTo(state.pageX, state.pageY);
   const active = state.activeId ? document.getElementById(state.activeId) : null;
   if (active) {
@@ -1157,6 +1165,12 @@ async function refreshPrepareNewSelectedEvent(options = {}) {
   }
   prepareNewPageState.refreshing = true;
   const viewState = options.preserve === false ? null : prepareNewCaptureViewState();
+  if (viewState && options.resetCustomForm) {
+    viewState.customName = '';
+    viewState.customQuantity = '1';
+    viewState.customCompany = '';
+    viewState.customType = 'MISC';
+  }
   const requestSequence = ++prepareNewPageState.requestSequence;
   try {
     const [eventResponse, assetsResponse] = await Promise.all([
@@ -1411,7 +1425,7 @@ async function prepareNewAddCustomItem() {
       subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
     });
     showNotification('success', `${name} added`);
-    await refreshPrepareNewSelectedEvent({ preserve: false });
+    await refreshPrepareNewSelectedEvent({ preserve: true, resetCustomForm: true });
   } catch (error) {
     showNotification('error', `Failed to add custom item: ${error.message}`);
   }

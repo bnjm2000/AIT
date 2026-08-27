@@ -1424,6 +1424,9 @@ function costingRenderEditor() {
   const root = costingRoot();
   const current = costingState.current;
   if (!root || !current) return;
+  const viewport = root.querySelector('.costing-workspace-header')
+    ? showbaseLineWorkspace.captureViewport(root)
+    : null;
   const readOnly = current.status === 'converted';
   const hasLinkedQuotation = Boolean(current.convertedQuotationId || current.sourceQuotationId);
   const totals = costingTotals();
@@ -1495,6 +1498,7 @@ function costingRenderEditor() {
       </aside>
     </div>`;
   costingRefreshCalculations();
+  showbaseLineWorkspace.restoreViewport(root, viewport);
 }
 
 function costingCategoryMarkup(category, readOnly) {

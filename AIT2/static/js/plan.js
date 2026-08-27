@@ -13,7 +13,9 @@ var planPageState = {
   loading: false,
   templateDraft: null,
   activeSubprojectId: '',
-  editingCustomAssetId: ''
+  editingCustomAssetId: '',
+  departmentOpenState: new Map(),
+  renderVersion: 0
 };
 
 var EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__';
@@ -173,6 +175,8 @@ function eventSelectSubproject(stateName, subprojectId, renderFunction) {
   state.department = state.department === undefined ? undefined : 'ALL';
   state.expandedDepartments?.clear?.();
   state.expandedModels?.clear?.();
+  state.departmentOpenState?.clear?.();
+  state.customGroupOpenState?.clear?.();
   window[renderFunction]?.();
 }
 
@@ -2532,6 +2536,10 @@ function renderPlanRequirementsCard() {
         )
       ), 0);
       const collapseForMobile = window.matchMedia?.('(max-width: 840px)').matches;
+      const rememberedOpen = planPageState.departmentOpenState.get(code);
+      const departmentOpen = typeof rememberedOpen === 'boolean'
+        ? rememberedOpen
+        : !collapseForMobile;
       const rowHtml = rows.map(row => {
         if (row.type === 'model') {
           const group = row.group;
@@ -2623,7 +2631,10 @@ function renderPlanRequirementsCard() {
       }).join('');
 
       return `
-        <details class="plan-department-section" ${collapseForMobile ? '' : 'open'}>
+        <details class="plan-department-section" ${departmentOpen ? 'open' : ''}
+                 data-plan-department="${escapeHtmlAttr(planEncode(code))}"
+                 data-plan-render-version="${planPageState.renderVersion}"
+                 ontoggle="planSetDepartmentOpen('${planEncode(code)}',this.open,this)">
           <summary class="plan-department-summary">
             <span>
               <i class="plan-department-dot" style="--department-color:${escapeHtmlAttr(planDepartmentColor(code))}"></i>
@@ -2925,6 +2936,62 @@ function renderPlanMetrics() {
   `;
 }
 
+function planSetDepartmentOpen(encodedDepartment, open, detailsElement = null) {
+  if (
+    detailsElement && (
+      !detailsElement.isConnected ||
+      Number(detailsElement.dataset.planRenderVersion || 0) !== planPageState.renderVersion
+    )
+  ) return;
+  planPageState.departmentOpenState.set(planDecode(encodedDepartment), !!open);
+}
+
+function planCaptureViewState() {
+  const root = document.getElementById('plan-page-root');
+  if (!root) return null;
+  root.querySelectorAll('details.plan-department-section[data-plan-department]').forEach(details => {
+    planPageState.departmentOpenState.set(
+      planDecode(details.dataset.planDepartment || ''),
+      details.open
+    );
+  });
+  const active = document.activeElement;
+  const contentArea = root.closest('.content-area');
+  return {
+    contentAreaTop: contentArea?.scrollTop || 0,
+    contentAreaLeft: contentArea?.scrollLeft || 0,
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+    requirementsTop: root.querySelector('.plan-requirements-scroll')?.scrollTop || 0,
+    availableTop: root.querySelector('#planAvailableResults')?.scrollTop || 0,
+    activeId: active && root.contains(active) ? active.id : '',
+    selectionStart: typeof active?.selectionStart === 'number' ? active.selectionStart : null,
+    selectionEnd: typeof active?.selectionEnd === 'number' ? active.selectionEnd : null
+  };
+}
+
+function planRestoreViewState(snapshot) {
+  if (!snapshot) return;
+  const root = document.getElementById('plan-page-root');
+  const contentArea = root?.closest('.content-area');
+  if (contentArea) {
+    contentArea.scrollTop = snapshot.contentAreaTop || 0;
+    contentArea.scrollLeft = snapshot.contentAreaLeft || 0;
+  }
+  window.scrollTo(snapshot.pageX || 0, snapshot.pageY || 0);
+  const requirements = root?.querySelector('.plan-requirements-scroll');
+  const available = root?.querySelector('#planAvailableResults');
+  if (requirements) requirements.scrollTop = snapshot.requirementsTop || 0;
+  if (available) available.scrollTop = snapshot.availableTop || 0;
+  const active = snapshot.activeId ? document.getElementById(snapshot.activeId) : null;
+  if (active) {
+    active.focus({ preventScroll: true });
+    if (snapshot.selectionStart !== null && typeof active.setSelectionRange === 'function') {
+      active.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+    }
+  }
+}
+
 function renderPlanSubprojectTabs() {
   return renderEventSubprojectTabs(
     'planPageState',
@@ -2945,6 +3012,8 @@ function renderPlanSubprojectTabs() {
 function renderPlanPage() {
   const root = document.getElementById('plan-page-root');
   if (!root) return;
+  // Invalidate delayed toggle events from <details> elements replaced below.
+  planPageState.renderVersion += 1;
 
   if (!isAdminUser()) {
     root.innerHTML = '<div class="plan-empty">Admin access is required.</div>';
@@ -3024,16 +3093,14 @@ function renderPlanRealtimeAssets() {
     renderPlanPage();
     return;
   }
-  const requirementsScrollTop = requirements.querySelector(
-    '.plan-requirements-scroll'
-  )?.scrollTop || 0;
+  const viewState = planCaptureViewState();
+  planPageState.renderVersion += 1;
   available.innerHTML = renderPlanAvailableCard();
   requirements.innerHTML = renderPlanRequirementsCard();
   if (metrics) metrics.innerHTML = renderPlanMetrics();
   if (tabs) tabs.innerHTML = renderPlanSubprojectTabs();
   renderPlanAvailableResults();
-  const nextScroll = requirements.querySelector('.plan-requirements-scroll');
-  if (nextScroll) nextScroll.scrollTop = requirementsScrollTop;
+  planRestoreViewState(viewState);
 }
 
 async function loadPlanPage() {
@@ -3087,6 +3154,7 @@ async function selectPlanEvent(eventId, options = {}) {
   const id = Number(eventId);
   if (!id) return;
   planPageState.eventId = id;
+  planPageState.departmentOpenState.clear();
   if (typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
   const root = document.getElementById('plan-page-root');
   if (options.renderLoading !== false && root) {
@@ -3110,22 +3178,17 @@ async function selectPlanEvent(eventId, options = {}) {
 
 async function refreshPlanSelectedEvent(options = {}) {
   if (!planPageState.eventId) return;
-  const pageScrollTop = window.scrollY;
-  const requirementsScrollTop = document.querySelector('.plan-requirements-scroll')?.scrollTop || 0;
   const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
     apiCall(`/api/events/${planPageState.eventId}`),
     apiCall(`/api/events/${planPageState.eventId}/availability`),
     options.templates ? apiCall('/api/planning-templates') : Promise.resolve(null)
   ]);
+  const viewState = planCaptureViewState();
   planPageState.event = eventResponse.data;
   planPageState.availability = availabilityResponse.data || [];
   if (templatesResponse) planPageState.templates = templatesResponse.data || [];
   renderPlanPage();
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: pageScrollTop, behavior: 'auto' });
-    const requirements = document.querySelector('.plan-requirements-scroll');
-    if (requirements) requirements.scrollTop = requirementsScrollTop;
-  });
+  requestAnimationFrame(() => planRestoreViewState(viewState));
   refreshEventOverviewViews().catch(() => {});
 }
 

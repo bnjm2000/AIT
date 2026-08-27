@@ -5352,6 +5352,9 @@ function financeRenderEditor() {
   const root = financeRoot();
   const document = financeState.current;
   if (!root || !document) return;
+  const viewport = root.querySelector('.finance-editor-header')
+    ? showbaseLineWorkspace.captureViewport(root)
+    : null;
   root.classList.remove('finance-snapshot-mode');
   financeSyncDocumentDepartments(document);
   const totals = financeTotals(document);
@@ -5568,6 +5571,7 @@ function financeRenderEditor() {
   `;
   financeResizeQuotationNumberInput(globalThis.document.getElementById('financeDocumentNumber'));
   if (snapshotMode) financeApplySnapshotReadOnly(root);
+  showbaseLineWorkspace.restoreViewport(root, viewport);
 }
 
 async function financeBackToList() {

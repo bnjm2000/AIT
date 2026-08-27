@@ -76,6 +76,27 @@
       return true;
     },
 
+    captureViewport(root) {
+      if (!root || !root.firstElementChild) return null;
+      const contentArea = root.closest('.content-area');
+      return {
+        contentAreaTop: contentArea?.scrollTop || 0,
+        contentAreaLeft: contentArea?.scrollLeft || 0,
+        pageX: global.scrollX || 0,
+        pageY: global.scrollY || 0,
+      };
+    },
+
+    restoreViewport(root, state) {
+      if (!root || !state) return;
+      const contentArea = root.closest('.content-area');
+      if (contentArea) {
+        contentArea.scrollTop = state.contentAreaTop || 0;
+        contentArea.scrollLeft = state.contentAreaLeft || 0;
+      }
+      global.scrollTo(state.pageX || 0, state.pageY || 0);
+    },
+
     suggestionRoot(resultsOrId) {
       if (resultsOrId && typeof resultsOrId !== 'string') return resultsOrId;
       return document.getElementById(String(resultsOrId || ''));

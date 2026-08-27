@@ -511,6 +511,30 @@ function restoreOpenTransferDropdownIds(ids) {
   });
 }
 
+function captureTransferViewport() {
+  const panel = document.getElementById('transfer-candidates-panel');
+  const contentArea = panel?.closest('.content-area');
+  return {
+    contentAreaTop: contentArea?.scrollTop || 0,
+    contentAreaLeft: contentArea?.scrollLeft || 0,
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+    panelTop: panel?.scrollTop || 0,
+  };
+}
+
+function restoreTransferViewport(state) {
+  if (!state) return;
+  const panel = document.getElementById('transfer-candidates-panel');
+  const contentArea = panel?.closest('.content-area');
+  if (contentArea) {
+    contentArea.scrollTop = state.contentAreaTop || 0;
+    contentArea.scrollLeft = state.contentAreaLeft || 0;
+  }
+  if (panel) panel.scrollTop = state.panelTop || 0;
+  window.scrollTo(state.pageX || 0, state.pageY || 0);
+}
+
 function getTransferSelections(kind) {
   if (!window.__transferSelections) {
     window.__transferSelections = {
@@ -661,8 +685,10 @@ function transferAssetDropdownRows(group) {
 
 function renderTransferCandidatesInPlace() {
   const openDropdowns = getOpenTransferDropdownIds();
+  const viewport = captureTransferViewport();
   renderTransferCandidates(window.__lastTransferData || {});
   restoreOpenTransferDropdownIds(openDropdowns);
+  restoreTransferViewport(viewport);
 }
 
 function setTransferCachedItemState(assetId, state) {
@@ -943,6 +969,7 @@ async function loadTransferCandidates(options = {}) {
   const openDropdowns = pairChanged
     ? []
     : (options.openDropdowns || getOpenTransferDropdownIds());
+  const viewport = pairChanged ? null : captureTransferViewport();
 
   if (pairChanged) {
     resetTransferActionState();
@@ -974,8 +1001,10 @@ async function loadTransferCandidates(options = {}) {
     transferReturnToOfficeCache = response.data?.returnToOffice || [];
     transferNeededFromOfficeCache = response.data?.neededFromOffice || [];
     renderTransferCandidates(response.data || {});
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 50);
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 200);
+    [0, 50, 200].forEach(delay => setTimeout(() => {
+      restoreOpenTransferDropdownIds(openDropdowns);
+      restoreTransferViewport(viewport);
+    }, delay));
   } catch (error) {
     panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
   }
