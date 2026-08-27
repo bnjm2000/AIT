@@ -41352,6 +41352,18 @@ def _finance_get_update_delete(document_id, document_type):
                 plan = _normalise_invoice_plan(
                     stored_plan, quotation, stored_plan
                 )
+                # The invoice plan owns the editable invoicing details. Keep a
+                # reference edited from the issued-invoice directory in that
+                # canonical record so the following document sync cannot
+                # replace it with the previous value.
+                if (
+                    'reference' in request_data
+                    and str(updated.get('status') or 'draft').strip().lower()
+                    == 'draft'
+                ):
+                    plan.setdefault('invoiceDetails', {})['reference'] = str(
+                        updated.get('reference') or ''
+                    ).strip()[:300]
                 returning_to_draft = (
                     str(existing.get('status') or 'draft').strip().lower()
                     != 'draft'

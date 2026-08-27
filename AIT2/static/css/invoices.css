@@ -94,6 +94,9 @@
 .invoice-list-shell > .invoice-filter-row { border-bottom: 1px solid var(--invoice-border); }
 .invoice-list-scroll { overflow: auto; }
 .invoice-list-table { width: 100%; min-width: 980px; border-collapse: collapse; }
+.invoice-issued-table { min-width: 1140px; }
+.invoice-reference-cell { max-width: 180px; }
+.invoice-reference-cell strong { overflow-wrap: anywhere; }
 .invoice-list-table th { padding: 10px 13px; text-align: left; color: #667085; background: #f7f9fb; font-size: .7rem; font-weight: 800; text-transform: uppercase; }
 .invoice-list-table td { height: 55px; padding: 8px 13px; border-top: 2px solid #e5eaf0; vertical-align: middle; font-size: .82rem; }
 .invoice-list-table tbody tr { cursor: pointer; transition: background .14s ease; }

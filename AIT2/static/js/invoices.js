@@ -587,7 +587,7 @@ function invoiceListRowMarkup(row) {
 function invoiceIssuedTableMarkup(rows) {
   return `
     <table class="invoice-list-table invoice-issued-table">
-      <thead><tr><th>Invoice / Quotation</th><th>Project / Client</th><th>Label</th><th>Status</th><th>Date</th><th>Invoice amount</th><th>Amount due</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Invoice / Quotation</th><th>Project / Client</th><th>PO / Reference</th><th>Label</th><th>Status</th><th>Date</th><th>Invoice amount</th><th>Amount due</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(invoiceIssuedRowMarkup).join('')}</tbody>
     </table>
   `;
@@ -612,6 +612,7 @@ function invoiceIssuedRowMarkup(invoice) {
     <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
       <td data-label="Invoice / Quotation" class="invoice-number-cell"><strong>${invoiceEscape(invoice.number || '')}</strong><small>Quotation ${invoiceEscape(invoice.sourceQuotationNumber || '')}</small></td>
       <td data-label="Project"><strong>${invoiceEscape(invoice.projectName || 'Untitled project')}</strong><small>${invoiceEscape(invoiceClientLabel(invoice))}</small></td>
+      <td data-label="PO / Reference" class="invoice-reference-cell"><strong>${invoiceEscape(invoice.reference || '—')}</strong></td>
       <td data-label="Label"><strong>${invoiceEscape(invoice.invoiceLabel || '-')}</strong></td>
       <td data-label="Status">${invoiceStatusControlMarkup(status, `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, invoiceDocumentStatusChoices(status))}</td>
       <td data-label="Date"><strong>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</strong></td>
@@ -619,11 +620,44 @@ function invoiceIssuedRowMarkup(invoice) {
       <td data-label="Due"><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong>${countdown ? `<small>${invoiceEscape(countdown)}</small>` : ''}</td>
       <td data-label="Actions"><div class="invoice-directory-actions">
         <button type="button" title="Preview invoice" onclick="event.stopPropagation();invoiceOpenPdf('${invoiceAttr(invoice.id)}')"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></button>
+        ${isDraft ? `<button type="button" title="Edit PO / reference number" onclick="event.stopPropagation();invoiceEditReference('${invoiceAttr(invoice.id)}','directory')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="M4 16v4h4"></path></svg></button>` : ''}
         ${isDraft ? `<button type="button" title="Renumber draft invoice" onclick="event.stopPropagation();invoiceRenumber('${invoiceAttr(invoice.id)}','directory')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>` : ''}
         <button type="button" class="danger" title="Delete invoice" onclick="event.stopPropagation();invoiceDeleteIssued('${invoiceAttr(invoice.id)}','directory')"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"></path></svg></button>
       </div></td>
     </tr>
   `;
+}
+
+async function invoiceEditReference(invoiceId, origin = 'directory') {
+  const invoice = invoiceFindDocument(invoiceId);
+  if (!invoice) return;
+  if (String(invoice.status || 'draft').toLowerCase() !== 'draft') {
+    showNotification('warning', 'PO / reference number can only be edited while the invoice is a draft');
+    return;
+  }
+  const reference = await showAppPrompt({
+    title: 'Edit PO / reference number',
+    message: 'Enter the client purchase order or reference number to show on this invoice.',
+    inputLabel: 'PO / reference number',
+    defaultValue: invoice.reference || '',
+    placeholder: 'e.g. PO-2026-001',
+    confirmText: 'Save reference',
+    cancelText: 'Cancel'
+  });
+  if (reference === null || reference === false) return;
+  const clean = String(reference || '').trim();
+  if (clean === String(invoice.reference || '').trim()) return;
+  try {
+    await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'PUT', {
+      reference: clean,
+      ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
+    });
+    showNotification('success', clean ? 'PO / reference number updated' : 'PO / reference number removed');
+    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    else await invoiceReloadCurrentPlan();
+  } catch (error) {
+    showNotification('error', error.message || 'Unable to update PO / reference number');
+  }
 }
 
 async function invoiceRenumber(invoiceId, origin = 'directory') {
@@ -1527,9 +1561,13 @@ async function invoiceIssueInstallment(index) {
   }
   const saved = await invoiceSavePlan({ silent: true });
   if (!saved) return;
+  const invoiceDetails = invoicePlanDetails(
+    invoiceState.current?.plan,
+    invoiceState.current?.quotation
+  );
   const issueDetails = typeof showAppForm === 'function' ? await showAppForm({
     title: 'Issue invoice',
-    message: `${row.label} will be issued for ${invoiceMoney(row.amount)}. Confirm or change the invoice number below.`,
+    message: `${row.label} will be issued for ${invoiceMoney(row.amount)}. Confirm the invoice and PO / reference numbers below.`,
     confirmText: 'Issue invoice',
     cancelText: 'Cancel',
     fields: [{
@@ -1539,10 +1577,26 @@ async function invoiceIssueInstallment(index) {
       placeholder: 'INV-2026-0001',
       required: true,
       maxLength: 80
+    }, {
+      name: 'reference',
+      label: 'PO / reference number',
+      defaultValue: invoiceDetails.reference || '',
+      placeholder: 'e.g. PO-2026-001',
+      maxLength: 300
     }]
-  }) : (window.confirm('Issue this invoice?') ? { invoiceNumber: current.nextInvoiceNumber || '' } : null);
+  }) : (window.confirm('Issue this invoice?') ? {
+    invoiceNumber: current.nextInvoiceNumber || '',
+    reference: invoiceDetails.reference || ''
+  } : null);
   const invoiceNumber = String(issueDetails?.invoiceNumber || '').trim();
   if (!invoiceNumber) { invoiceRenderEditor(); return; }
+  const reference = String(issueDetails?.reference || '').trim();
+  if (reference !== String(invoiceDetails.reference || '').trim()) {
+    invoiceDetails.reference = reference;
+    invoiceMarkDirty();
+    const referenceSaved = await invoiceSavePlan({ silent: true });
+    if (!referenceSaved) return;
+  }
   try {
     const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(current.quotation.id)}/installments/${encodeURIComponent(row.id)}/issue`, 'POST', {
       invoiceDate: invoiceToday(), dueDate: row.dueDate, status: 'draft', number: invoiceNumber

@@ -7786,6 +7786,7 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         plan = plan_response.get_json()['data']['plan']
         self.assertEqual(plan['invoiceDetails']['client']['name'], 'Original Client')
+        self.assertEqual(plan['invoiceDetails']['reference'], 'PO-OLD')
         plan['invoiceDetails'].update({
             'client': {
                 'salutation': 'Ms.', 'name': 'Invoice Client',
@@ -7827,6 +7828,37 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(invoice['reference'], 'PO-NEW')
         self.assertEqual(invoice['paymentTerms'], '14 Days')
 
+        edited_reference = self.client.put(
+            f"/api/invoices/{invoice['id']}",
+            json={
+                'reference': 'PO-DIRECT-EDIT',
+                'documentVersion': invoice['documentVersion'],
+            },
+        )
+        self.assertEqual(
+            edited_reference.status_code,
+            200,
+            edited_reference.get_data(as_text=True),
+        )
+        self.assertEqual(
+            edited_reference.get_json()['data']['reference'],
+            'PO-DIRECT-EDIT',
+        )
+        refreshed_plan = self.client.get(
+            f"/api/invoice-plans/{accepted['id']}"
+        ).get_json()['data']['plan']
+        self.assertEqual(
+            refreshed_plan['invoiceDetails']['reference'],
+            'PO-DIRECT-EDIT',
+        )
+        directory_invoice = next(
+            row for row in self.client.get(
+                '/api/invoices?view=summary'
+            ).get_json()['data']
+            if row['id'] == invoice['id']
+        )
+        self.assertEqual(directory_invoice['reference'], 'PO-DIRECT-EDIT')
+
         known_clients = self.client.get('/api/clients').get_json()['data']
         self.assertIn('Invoice Client', [row['name'] for row in known_clients])
 
@@ -7834,6 +7866,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Client &amp; invoicing details', invoice_source)
         self.assertIn('function invoiceOpenClientPicker', invoice_source)
         self.assertIn('function invoiceUpdateDetail', invoice_source)
+        self.assertIn('function invoiceEditReference', invoice_source)
+        self.assertIn('<th>PO / Reference</th>', invoice_source)
+        self.assertIn("name: 'reference'", invoice_source)
 
     def test_invoice_workspace_preserves_issued_rows_across_presets(self):
         invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
