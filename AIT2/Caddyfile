@@ -1,0 +1,13 @@
+{
+	admin off
+	auto_https off
+}
+
+https://:5443 {
+	tls C:/ProgramData/AvecInventory/tls/avpl2.asuscomm.com-chain.pem C:/ProgramData/AvecInventory/tls/avpl2.asuscomm.com-key.pem
+
+	reverse_proxy 127.0.0.1:5055 {
+		# Flush streamed responses immediately so realtime browser updates are not buffered.
+		flush_interval -1
+	}
+}

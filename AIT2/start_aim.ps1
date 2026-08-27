@@ -1,27 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
 $appDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-$storageRoot = if ($env:SHOWBASE_STORAGE_ROOT) {
-    $env:SHOWBASE_STORAGE_ROOT
-} else {
-    Join-Path (Split-Path -Parent $appDirectory) 'showbase-storage'
-}
-$env:SHOWBASE_STORAGE_ROOT = $storageRoot
-$logDirectory = Join-Path $storageRoot 'runtime\logs'
-$logFile = Join-Path $logDirectory 'showbase_startup.log'
 $python = Join-Path $appDirectory '.venv\Scripts\python.exe'
+$supervisor = Join-Path $appDirectory 'server_supervisor.py'
 
-New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 if (-not (Test-Path -LiteralPath $python)) {
     throw "Virtual-environment Python was not found at $python"
 }
+if (-not (Test-Path -LiteralPath $supervisor)) {
+    throw "Server supervisor was not found at $supervisor"
+}
 
-$env:APP_ENV = if ($env:APP_ENV) { $env:APP_ENV } else { 'production' }
-$env:ENABLE_HTTPS = if ($env:ENABLE_HTTPS) { $env:ENABLE_HTTPS } else { '0' }
-$env:PORT = if ($env:PORT) { $env:PORT } else { '5055' }
-$env:SERVER_BACKEND = if ($env:SERVER_BACKEND) { $env:SERVER_BACKEND } else { 'waitress' }
-
-Add-Content -LiteralPath $logFile -Value ('=' * 40)
-Add-Content -LiteralPath $logFile -Value "Starting Showbase: $(Get-Date -Format o)"
-
-& $python (Join-Path $appDirectory 'main.py') *>> $logFile
+& $python $supervisor

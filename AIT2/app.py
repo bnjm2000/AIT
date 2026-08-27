@@ -1938,12 +1938,14 @@ def get_ssl_context():
 def run_https_app(flask_app):
     host = os.environ.get('HOST', '0.0.0.0')
     ssl_context = get_ssl_context()
-    scheme = 'https' if ssl_context else 'http'
+    transport_scheme = 'https' if ssl_context else 'http'
+    external_https = _truthy_env('EXTERNAL_HTTPS', bool(ssl_context))
+    scheme = 'https' if external_https else transport_scheme
     default_port = '443' if ssl_context else '80'
     port = int(os.environ.get('PORT', default_port))
 
     flask_app.config['PREFERRED_URL_SCHEME'] = scheme
-    flask_app.config['SESSION_COOKIE_SECURE'] = bool(ssl_context)
+    flask_app.config['SESSION_COOKIE_SECURE'] = external_https
     flask_app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
     logger.info('Starting %s at %s://%s:%s', APP_NAME, scheme, host, port)
 
@@ -1966,20 +1968,35 @@ def run_https_app(flask_app):
                 'Install the project requirements first.'
             ) from exc
 
-        logger.info('Serving with Waitress using %s worker threads', os.environ.get('WAITRESS_THREADS', '32'))
-        serve(
-            flask_app,
-            host=host,
-            port=port,
+        waitress_options = {
+            'host': host,
+            'port': port,
             # Each open server-sent-event stream occupies one Waitress thread.
             # Keep enough headroom for normal requests while browsers stay live.
-            threads=max(16, int(os.environ.get('WAITRESS_THREADS', '32'))),
-            channel_timeout=max(
+            'threads': max(16, int(os.environ.get('WAITRESS_THREADS', '32'))),
+            'channel_timeout': max(
                 30,
                 int(os.environ.get('WAITRESS_CHANNEL_TIMEOUT', '120')),
             ),
-            url_scheme=scheme,
+            'url_scheme': scheme,
+        }
+        trusted_proxy = os.environ.get('WAITRESS_TRUSTED_PROXY', '').strip()
+        if trusted_proxy:
+            waitress_options.update({
+                'trusted_proxy': trusted_proxy,
+                'trusted_proxy_count': 1,
+                'trusted_proxy_headers': (
+                    'x-forwarded-for x-forwarded-host x-forwarded-proto'
+                ),
+                'clear_untrusted_proxy_headers': True,
+            })
+
+        logger.info(
+            'Serving with Waitress using %s worker threads%s',
+            waitress_options['threads'],
+            f' behind trusted proxy {trusted_proxy}' if trusted_proxy else '',
         )
+        serve(flask_app, **waitress_options)
         return
 
     if backend != 'werkzeug':

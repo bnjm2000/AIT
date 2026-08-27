@@ -13,6 +13,7 @@ tmp/browser-audit/
 # Runtime output
 logs/*.log
 *.tmp
+/runtime/
 
 # Operating-system metadata
 .DS_Store
