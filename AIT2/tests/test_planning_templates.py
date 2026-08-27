@@ -190,6 +190,23 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("customDepartmentOptionsHtml('AX')", custom_card)
         self.assertIn('isSelectableCompanyDepartment(customDepartment)', script)
 
+    def test_custom_item_add_preserves_selected_department(self):
+        script = APP_BUNDLE_SOURCE
+        submit = script.split('async function planSubmitCustomAsset(event)', 1)[1].split(
+            'function planEditCustomAsset(', 1
+        )[0]
+        refresh = script.split('async function refreshPlanSelectedEvent(options = {})', 1)[1].split(
+            'async function planAddModel(', 1
+        )[0]
+
+        self.assertIn(
+            'await refreshPlanSelectedEvent({ customDepartment: payload.department });',
+            submit,
+        )
+        self.assertIn('planRestoreCustomDepartment(options.customDepartment);', refresh)
+        self.assertIn('function planRestoreCustomDepartment(department)', script)
+        self.assertIn('window.refreshShowbaseSelect?.(input);', script)
+
     def test_plan_asset_search_includes_each_asset_description(self):
         script = APP_BUNDLE_SOURCE
 

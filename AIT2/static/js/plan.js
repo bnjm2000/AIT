@@ -3188,6 +3188,9 @@ async function refreshPlanSelectedEvent(options = {}) {
   planPageState.availability = availabilityResponse.data || [];
   if (templatesResponse) planPageState.templates = templatesResponse.data || [];
   renderPlanPage();
+  if (options.customDepartment) {
+    planRestoreCustomDepartment(options.customDepartment);
+  }
   requestAnimationFrame(() => planRestoreViewState(viewState));
   refreshEventOverviewViews().catch(() => {});
 }
@@ -3417,7 +3420,7 @@ async function planSubmitCustomAsset(event) {
     }
     planPageState.editingCustomAssetId = '';
     showNotification('success', assetId ? 'Custom asset updated' : 'Custom asset added');
-    await refreshPlanSelectedEvent();
+    await refreshPlanSelectedEvent({ customDepartment: payload.department });
   } catch (error) {}
 }
 
@@ -3507,6 +3510,17 @@ function planReplaceLocalAssetReference(eventId, oldAssetId, newAssetId, quantit
       String(ref) === String(oldAssetId) ? newAssetId : ref
     ));
   });
+}
+
+function planRestoreCustomDepartment(department) {
+  const input = document.getElementById('planCustomDepartment');
+  const normalized = normalizeDepartmentCode(department || '');
+  if (
+    !input ||
+    !Array.from(input.options).some(option => option.value === normalized)
+  ) return;
+  input.value = normalized;
+  window.refreshShowbaseSelect?.(input);
 }
 
 function planAdjustCustomQuantity(encodedAssetId, delta, button) {

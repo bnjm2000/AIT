@@ -349,6 +349,16 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn('const showExactAssetPanel = !isBulk;', source)
         self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', source)
 
+    def test_completed_exact_asset_line_hides_primary_assign_but_keeps_extra_assignment(self):
+        source = APP_BUNDLE_SOURCE
+        section = source.split('function prepareNewModelSection(group)', 1)[1].split(
+            'function prepareNewDirectAssetCard(', 1
+        )[0]
+
+        self.assertIn(": (complete\n      ? ''", section)
+        self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', section)
+        self.assertIn('onclick="event.stopPropagation();prepareNewAssignAsset(', source)
+
     def test_prepare_ui_preserves_container_results_and_open_asset_chooser(self):
         project_root = os.path.dirname(app_module.__file__)
         source = APP_BUNDLE_SOURCE

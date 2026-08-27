@@ -396,11 +396,13 @@ function prepareNewModelSection(group) {
       ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
       : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
                  onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`)
-    : (complete || hasReturnedAnonymousSlots
-      ? `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
-                 onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
-      : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
-                 onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`);
+    : (complete
+      ? ''
+      : (hasReturnedAnonymousSlots
+        ? `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
+                   onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
+        : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
+                   onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`));
   const menu = `
     <span class="prepare-new-action-wrap">
       <button type="button" class="prepare-new-more-button" aria-label="More prepare actions"
