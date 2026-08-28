@@ -307,6 +307,65 @@ class WorkforcePortalTests(unittest.TestCase):
             403,
         )
 
+    def test_submission_queue_hides_full_time_rows_until_requested(self):
+        self.manager.users["normal"].name = "Taylor Fulltime"
+        self.manager.save_users()
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["assignments"] = {
+                "143": [{
+                    "id": "assignment-ft",
+                    "subjectType": "app-user",
+                    "userUsername": "normal",
+                    "department": "FT",
+                    "roleName": "Operations",
+                    "workDates": ["2026-07-10"],
+                }],
+            }
+            workforce["submissions"] = {
+                "143": {
+                    "user:normal": {
+                        "invoices": [{
+                            "id": "invoice-ft",
+                            "originalName": "staff-invoice.pdf",
+                            "submittedAt": "2026-07-10T10:00:00+08:00",
+                            "status": "Pending Review",
+                            "amount": 180,
+                        }],
+                        "claims": [{
+                            "id": "claim-ft",
+                            "originalName": "staff-claim.pdf",
+                            "submittedAt": "2026-07-10T11:00:00+08:00",
+                            "status": "Approved",
+                            "amount": 20,
+                        }],
+                    },
+                },
+            }
+
+        self.login("admin", True)
+        hidden = self.client.get(
+            "/api/workforce/submissions?status=all"
+        ).get_json()["data"]
+        self.assertFalse(hidden["includeFullTime"])
+        self.assertEqual(hidden["rows"], [])
+        self.assertEqual(hidden["totalItems"], 0)
+        self.assertEqual(hidden["totalUploads"], 0)
+
+        included = self.client.get(
+            "/api/workforce/submissions?status=all&includeFullTime=1"
+        ).get_json()["data"]
+        self.assertTrue(included["includeFullTime"])
+        self.assertEqual(
+            [row["id"] for row in included["rows"]],
+            ["claim-ft", "invoice-ft"],
+        )
+        self.assertTrue(all(
+            row["subject"]["type"] == "app-user"
+            for row in included["rows"]
+        ))
+        self.assertEqual(included["kindCounts"], {"invoice": 1, "claim": 1})
+        self.assertEqual(included["totalUploads"], 2)
+
     def test_submission_queue_uses_status_filters_and_delete_confirmation(self):
         source_path = os.path.join(
             os.path.dirname(app_module.__file__),
@@ -360,6 +419,10 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('wfClaimTotalMarkup', source)
         self.assertIn('toggleWorkforceDocumentClaimGroup', source)
         self.assertIn('wfDocumentDepartmentRoles', source)
+        self.assertIn('includeFullTime: false,', source)
+        self.assertIn('id="wfDocumentsFullTimeToggle"', source)
+        self.assertIn('function wfDocumentsToggleFullTime()', source)
+        self.assertIn("params.set('includeFullTime', '1')", source)
         self.assertIn('const subjectPhone = wfFormatPhone(subject.phone);', source)
         self.assertNotIn("subject.company || 'Worker'", source)
         self.assertIn('wfReviewClaimDateCheckHtml', source)

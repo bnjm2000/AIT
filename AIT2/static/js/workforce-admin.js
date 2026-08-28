@@ -57,6 +57,7 @@ const workforceDocumentsState = {
   kindCounts: {},
   statuses: new Set(['to-review', 'to-pay']),
   kind: 'all',
+  includeFullTime: false,
   search: '',
   page: 1,
   pageSize: 50,
@@ -642,12 +643,19 @@ function ensureWorkforceDocumentsLayout() {
     <section class="wf-panel wf-documents-panel">
       <header class="wf-documents-toolbar">
         <div class="wf-document-kind-tabs" id="wfDocumentKindTabs" aria-label="Document type filters"></div>
-        <label class="wf-document-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
-          <input type="search" placeholder="Search event, uploader, file or department"
-            value="${wfAttr(workforceDocumentsState.search)}"
-            oninput="wfDocumentsSearchChanged(this.value)">
-        </label>
+        <div class="wf-documents-toolbar-actions">
+          <button class="wf-history-vendor-toggle wf-documents-fulltime-toggle" id="wfDocumentsFullTimeToggle"
+            type="button" aria-pressed="false" onclick="wfDocumentsToggleFullTime()">
+            <i aria-hidden="true"></i>
+            <span><strong>Show full-time</strong><small>Include staff invoices and claims</small></span>
+          </button>
+          <label class="wf-document-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
+            <input type="search" placeholder="Search event, uploader, file or department"
+              value="${wfAttr(workforceDocumentsState.search)}"
+              oninput="wfDocumentsSearchChanged(this.value)">
+          </label>
+        </div>
       </header>
       <div class="wf-document-status-filters" id="wfDocumentStatusFilters"></div>
       <div class="wf-documents-list" id="wfDocumentsList" aria-live="polite"></div>
@@ -686,6 +694,7 @@ async function loadWorkforceDocumentsPage(options = {}) {
     params.set('status', 'all');
   }
   if (workforceDocumentsState.search) params.set('search', workforceDocumentsState.search);
+  if (workforceDocumentsState.includeFullTime) params.set('includeFullTime', '1');
   try {
     const response = await apiCall(`/api/workforce/submissions?${params.toString()}`);
     if (requestId !== workforceDocumentsState.requestId) return;
@@ -717,7 +726,13 @@ function renderWorkforceDocumentsPage() {
   const statusFilters = document.getElementById('wfDocumentStatusFilters');
   const list = document.getElementById('wfDocumentsList');
   const pagination = document.getElementById('wfDocumentsPagination');
+  const fullTimeToggle = document.getElementById('wfDocumentsFullTimeToggle');
   if (!metrics || !kindTabs || !statusFilters || !list || !pagination) return;
+
+  if (fullTimeToggle) {
+    fullTimeToggle.classList.toggle('is-on', workforceDocumentsState.includeFullTime);
+    fullTimeToggle.setAttribute('aria-pressed', String(workforceDocumentsState.includeFullTime));
+  }
 
   metrics.innerHTML = `
     <div><span class="wf-document-metric-icon is-attention">!</span><span><strong>${Number(workforceDocumentsState.attentionTotal || 0)}</strong><small>Needs attention</small></span></div>
@@ -924,6 +939,17 @@ function renderWorkforceDocumentsPagination(node) {
 function wfDocumentsSetKind(kind) {
   workforceDocumentsState.kind = ['invoice', 'claim'].includes(kind) ? kind : 'all';
   workforceDocumentsState.page = 1;
+  loadWorkforceDocumentsPage();
+}
+
+function wfDocumentsToggleFullTime() {
+  workforceDocumentsState.includeFullTime = !workforceDocumentsState.includeFullTime;
+  workforceDocumentsState.page = 1;
+  const toggle = document.getElementById('wfDocumentsFullTimeToggle');
+  if (toggle) {
+    toggle.classList.toggle('is-on', workforceDocumentsState.includeFullTime);
+    toggle.setAttribute('aria-pressed', String(workforceDocumentsState.includeFullTime));
+  }
   loadWorkforceDocumentsPage();
 }
 

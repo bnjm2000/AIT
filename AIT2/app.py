@@ -14980,9 +14980,18 @@ def list_workforce_submissions():
     """List this company's worker and vendor invoices and claims."""
     rows = _admin_submission_rows()
     event_id = request.args.get('eventId', type=int)
+    include_full_time = str(
+        request.args.get('includeFullTime') or ''
+    ).strip().lower() in {'1', 'true', 'yes', 'on'}
     scoped_rows = [
         row for row in rows
-        if not event_id or int(row['event']['id']) == event_id
+        if (
+            (not event_id or int(row['event']['id']) == event_id)
+            and (
+                include_full_time
+                or str((row.get('subject') or {}).get('type') or '') != 'app-user'
+            )
+        )
     ]
     status_counts = {
         key: 0 for key in (
@@ -15073,6 +15082,7 @@ def list_workforce_submissions():
                 status_counts.get('to-review', 0)
                 + status_counts.get('to-pay', 0)
             ),
+            'includeFullTime': include_full_time,
         },
     })
 
