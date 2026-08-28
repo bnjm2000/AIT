@@ -24,3 +24,17 @@ def test_room_asset_references_drive_each_subproject_snapshot():
     assert "item.assetRefs || []" in PACKING_LIST_SOURCE
     assert "subproject.extraRefs || []" in PACKING_LIST_SOURCE
     assert "packingListSubprojectAssetRecord" in PACKING_LIST_SOURCE
+
+
+def test_packing_list_does_not_include_asset_serial_numbers():
+    record_start = PACKING_LIST_SOURCE.index("function packingListAssetRecord")
+    record_end = PACKING_LIST_SOURCE.index("function packingListAssetsById", record_start)
+    record_source = PACKING_LIST_SOURCE[record_start:record_end]
+    html_start = PACKING_LIST_SOURCE.index("function packingListAssetHtml")
+    html_end = PACKING_LIST_SOURCE.index("function packingListTableHead", html_start)
+    html_source = PACKING_LIST_SOURCE[html_start:html_end]
+
+    assert "serial:" not in record_source
+    assert "asset?.serial" not in record_source
+    assert "asset.serial" not in html_source
+    assert "/ SN " not in html_source

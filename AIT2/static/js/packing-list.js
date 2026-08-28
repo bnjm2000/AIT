@@ -40,7 +40,6 @@ function packingListAssetRecord(asset, event, department = 'UN') {
     label: custom
       ? customAssetDisplayName(custom, false)
       : String(asset?.displayId || asset?.bulkId || asset?.id || asset?.name || 'Asset'),
-    serial: custom ? '' : String(asset?.serial || ''),
     company: custom ? customAssetDetailText(custom) : '',
     quantity,
     status,
@@ -445,12 +444,11 @@ function packingListStatusBadge(status) {
 
 function packingListAssetHtml(asset) {
   const quantity = asset.quantity > 1 ? ` x${asset.quantity}` : '';
-  const serial = asset.serial ? ` / SN ${asset.serial}` : '';
   const company = asset.company ? ` / ${asset.company}` : '';
   return `
     <div class="asset-line">
       ${packingListStatusBadge(asset.status)}
-      <span><strong>${escapeHtml(asset.label || 'Asset')}${escapeHtml(quantity)}</strong>${escapeHtml(serial)}${escapeHtml(company)}</span>
+      <span><strong>${escapeHtml(asset.label || 'Asset')}${escapeHtml(quantity)}</strong>${escapeHtml(company)}</span>
     </div>
   `;
 }
