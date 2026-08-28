@@ -429,9 +429,167 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertGreater(changes, 0)
         item = event.subprojects[0]['items'][0]
         self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(item['assetRefs'], ['A#01'])
         self.assertEqual(
             event.prepared_items,
             ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+
+    def test_integrity_repair_links_pre_audit_description_rename_by_inventory_id(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.description = 'New desc'
+        asset.change_history = []
+        event = self.make_event(
+            114,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Legacy desc'],
+            actual=['A#01'],
+            extra=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'pre-audit-description-line',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Legacy desc',
+                'quantity': 1,
+                'preparedQuantity': 0,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        changes = app_module._repair_prepared_event_asset_group_links(
+            event,
+            self.data_manager.inventory,
+        )
+
+        self.assertGreater(changes, 0)
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(item['assetRefs'], ['A#01'])
+        self.assertEqual(event.extra_assets, [])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+
+    def test_integrity_repair_trusts_owned_asset_id_without_audit_history(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.model_number = 'NewModel'
+        asset.description = 'New desc'
+        asset.change_history = []
+        event = self.make_event(
+            115,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc'],
+            actual=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'pre-audit-owned-line',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'assetRefs': ['A#01'],
+            }],
+            'extraRefs': [],
+        }]
+
+        changes = app_module._repair_prepared_event_asset_group_links(
+            event,
+            self.data_manager.inventory,
+        )
+
+        self.assertGreater(changes, 0)
+        item = event.subprojects[0]['items'][0]
+        self.assertEqual(item['model'], 'NewModel')
+        self.assertEqual(item['description'], 'New desc')
+        self.assertEqual(item['assetRefs'], ['A#01'])
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|NewModel|1|New desc'],
+        )
+
+    def test_integrity_repair_does_not_consume_extra_when_room_is_full(self):
+        event = self.make_event(
+            116,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc', 'A#01'],
+            actual=['A#01', 'A#02'],
+            extra=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'full-room-line',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Old desc',
+                'quantity': 1,
+                'assetRefs': ['A#02'],
+            }],
+            'extraRefs': [],
+        }]
+
+        changes = app_module._repair_prepared_event_asset_group_links(
+            event,
+            self.data_manager.inventory,
+        )
+
+        self.assertEqual(changes, 0)
+        self.assertEqual(
+            event.subprojects[0]['items'][0]['assetRefs'],
+            ['A#02'],
+        )
+        self.assertEqual(event.extra_assets, ['A#01'])
+
+    def test_company_integrity_scan_persists_every_safe_event_link_repair(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.description = 'New desc'
+        asset.change_history = []
+        event = self.make_event(
+            117,
+            prepared=['[MODEL]AX|TestBrand|OldModel|1|Legacy desc'],
+            actual=['A#01'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'persisted-repair-line',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'Legacy desc',
+                'quantity': 1,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        repaired = app_module._repair_all_prepared_event_asset_group_links(
+            self.data_manager,
+        )
+
+        self.assertEqual(repaired, 1)
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        reloaded.load_events()
+        saved = reloaded.events[117]
+        self.assertEqual(
+            saved.prepared_items,
+            ['[MODEL]AX|TestBrand|OldModel|1|New desc'],
+        )
+        self.assertEqual(
+            saved.subprojects[0]['items'][0]['assetRefs'],
+            ['A#01'],
         )
 
     def test_integrity_repair_updates_unassigned_historical_room_group(self):

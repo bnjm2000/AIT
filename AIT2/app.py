@@ -1625,6 +1625,13 @@ def _get_company_data_manager(company_code=None):
         manager.setup_data_folder()
         manager.check_and_initialize_files()
         manager.load_all_data()
+        repaired_events = _repair_all_prepared_event_asset_group_links(manager)
+        if repaired_events:
+            logger.info(
+                "Repaired inventory links in %s event(s) for company %s",
+                repaired_events,
+                code,
+            )
         migrated_locations = manager.migrate_legacy_event_locations()
         if migrated_locations:
             logger.info(
@@ -16518,6 +16525,132 @@ def _event_inventory_asset_references(event, inventory):
     return references
 
 
+def _event_model_group_family_key(group):
+    """Return the stable part of an event inventory group.
+
+    Description is editable display text. Older events can therefore retain a
+    description which no longer exists in inventory even when department,
+    brand, and model still identify one unambiguous live inventory group.
+    """
+    if not isinstance(group, dict):
+        return None
+    return (
+        _normalise_department_code(group.get('department')) or '',
+        str(group.get('brand') or '').strip(),
+        str(group.get('model') or '').strip(),
+    )
+
+
+def _link_unowned_event_asset_refs_to_subprojects(
+    event,
+    inventory,
+    candidate_asset_ids=None,
+):
+    """Attach unowned prepared IDs to matching open room requirements.
+
+    Legacy event files can have a real asset ID at event level but no matching
+    ``assetRefs`` entry in a room. The inventory ID is the durable link, so an
+    active prepared/returned unit should fill an open requirement for its live
+    inventory group before it remains classified as an event-level extra.
+    """
+    rooms = [
+        room for room in (getattr(event, 'subprojects', []) or [])
+        if isinstance(room, dict)
+    ]
+    if not rooms:
+        return 0
+
+    candidates = None
+    if candidate_asset_ids is not None:
+        candidates = {
+            str(asset_id or '').strip()
+            for asset_id in candidate_asset_ids
+            if str(asset_id or '').strip()
+        }
+
+    all_active_ref_values = {
+        value
+        for value in [
+            *(getattr(event, 'actually_prepared', []) or []),
+            *(getattr(event, 'returned_items', []) or []),
+        ]
+        if isinstance(value, str)
+    }
+    active_refs = []
+    seen_refs = set()
+    for value in [
+        *(getattr(event, 'actually_prepared', []) or []),
+        *(getattr(event, 'returned_items', []) or []),
+    ]:
+        if not isinstance(value, str) or value in seen_refs:
+            continue
+        seen_refs.add(value)
+        # Bulk markers carry room and quantity ownership in the marker itself;
+        # their existing reconciliation path remains authoritative.
+        if _parse_bulk_marker(value):
+            continue
+        asset_id = value.strip()
+        if (
+            asset_id not in inventory
+            or (candidates is not None and asset_id not in candidates)
+        ):
+            continue
+        active_refs.append((value, asset_id))
+
+    room_owned_refs = set()
+    for room in rooms:
+        room_owned_refs.update(room.get('extraRefs') or [])
+        for item in room.get('items') or []:
+            if isinstance(item, dict):
+                room_owned_refs.update(item.get('assetRefs') or [])
+
+    changed = 0
+    for asset_ref, asset_id in active_refs:
+        if asset_ref in room_owned_refs:
+            continue
+        asset = inventory.get(asset_id)
+        if not asset:
+            continue
+        current_key = _event_model_group_key(_asset_group_from_item(asset))
+
+        linked = False
+        for room in rooms:
+            for item in room.get('items') or []:
+                group = _event_subproject_item_group(item)
+                if not group or _event_model_group_key(group) != current_key:
+                    continue
+
+                required = max(
+                    0,
+                    _safe_int(round(_safe_float(item.get('quantity'), 0)), 0),
+                )
+                occupied = (
+                    max(0, _safe_int(item.get('preparedQuantity'), 0))
+                    + max(0, _safe_int(
+                        item.get('returnedPreparedQuantity'), 0,
+                    ))
+                )
+                for existing_ref in item.get('assetRefs') or []:
+                    if existing_ref not in all_active_ref_values:
+                        continue
+                    if (
+                        _event_physical_ref_group_key(existing_ref, inventory)
+                        == current_key
+                    ):
+                        occupied += _event_subproject_ref_quantity(existing_ref)
+                if occupied >= required:
+                    continue
+
+                item.setdefault('assetRefs', []).append(asset_ref)
+                room_owned_refs.add(asset_ref)
+                changed += 1
+                linked = True
+                break
+            if linked:
+                break
+    return changed
+
+
 def _repair_prepared_event_asset_group_links(
     event,
     inventory,
@@ -16551,6 +16684,7 @@ def _repair_prepared_event_asset_group_links(
     destination_groups = {}
     historical_groups = {}
     alias_destinations = {}
+    family_destinations = {}
     repair_whole_groups = candidate_asset_ids is None
 
     # A historical audit needs every inventory row so a partial rename cannot
@@ -16577,6 +16711,9 @@ def _repair_prepared_event_asset_group_links(
         current_groups[asset_id] = current_group
         destination_groups[current_key] = current_group
         historical_groups[asset_id] = group_keys
+        family_destinations.setdefault(
+            _event_model_group_family_key(current_group), set()
+        ).add(current_key)
         for group_key in group_keys:
             alias_destinations.setdefault(group_key, set()).add(current_key)
 
@@ -16600,6 +16737,15 @@ def _repair_prepared_event_asset_group_links(
 
         for source_key, source_group in list(event_groups.items()):
             destinations = alias_destinations.get(source_key) or set()
+            if not destinations:
+                # Pre-audit event files have no recorded old description. A
+                # unique live description for the same department/brand/model
+                # is still sufficient evidence to restore the inventory link.
+                destinations = family_destinations.get(
+                    _event_model_group_family_key(source_group), set()
+                )
+                if len(destinations) == 1:
+                    alias_destinations[source_key] = set(destinations)
             if len(destinations) != 1:
                 continue
             destination_key = next(iter(destinations))
@@ -16607,7 +16753,11 @@ def _repair_prepared_event_asset_group_links(
                 continue
             evidence_id = next((
                 asset_id for asset_id in current_groups
-                if source_key in historical_groups.get(asset_id, set())
+                if (
+                    source_key in historical_groups.get(asset_id, set())
+                    or _event_model_group_family_key(source_group)
+                    == _event_model_group_family_key(current_groups[asset_id])
+                )
                 and _event_model_group_key(current_groups[asset_id])
                 == destination_key
             ), None)
@@ -16661,8 +16811,6 @@ def _repair_prepared_event_asset_group_links(
         mismatched_owners = [
             (group, ref) for group, ref in owners
             if _event_model_group_key(group) != current_key
-            and _event_model_group_key(group)
-            in historical_groups.get(asset_id, set())
         ]
         for source_group, ref in mismatched_owners:
             marker = _parse_bulk_marker(ref)
@@ -16681,7 +16829,10 @@ def _repair_prepared_event_asset_group_links(
             if group_changes:
                 repair_group_families.add(frozenset(
                     set(historical_groups.get(asset_id, set()))
-                    | {current_key}
+                    | {
+                        _event_model_group_key(source_group),
+                        current_key,
+                    }
                 ))
 
         if owners:
@@ -16699,7 +16850,14 @@ def _repair_prepared_event_asset_group_links(
                 source_key = _event_model_group_key(source_group)
                 if (
                     source_key != current_key
-                    and source_key in historical_groups.get(asset_id, set())
+                    and (
+                        source_key in historical_groups.get(asset_id, set())
+                        or (
+                            repair_whole_groups
+                            and _event_model_group_family_key(source_group)
+                            == _event_model_group_family_key(current_group)
+                        )
+                    )
                 ):
                     matching_source_groups.append(source_group)
         unique_sources = {
@@ -16728,7 +16886,10 @@ def _repair_prepared_event_asset_group_links(
         if group_changes:
             repair_group_families.add(frozenset(
                 set(historical_groups.get(asset_id, set()))
-                | {current_key}
+                | {
+                    _event_model_group_key(source_group),
+                    current_key,
+                }
             ))
 
     if subprojects and repair_group_families:
@@ -16760,6 +16921,12 @@ def _repair_prepared_event_asset_group_links(
         or candidates.intersection(event_references)
     )
     if subprojects and should_reconcile_rooms:
+        linked_refs = _link_unowned_event_asset_refs_to_subprojects(
+            event,
+            inventory,
+            candidates,
+        )
+        changed += linked_refs
         room_reconciliation = _reconcile_event_subproject_extras(
             event,
             inventory,
@@ -16767,6 +16934,30 @@ def _repair_prepared_event_asset_group_links(
         if room_reconciliation['changed']:
             changed += 1
     return changed
+
+
+def _repair_all_prepared_event_asset_group_links(manager):
+    """Persist every safe event/inventory link repair for one company."""
+    if not manager:
+        return 0
+    repaired_events = 0
+    for event in list((getattr(manager, 'events', {}) or {}).values()):
+        try:
+            changes = _repair_prepared_event_asset_group_links(
+                event,
+                getattr(manager, 'inventory', {}) or {},
+            )
+            if not changes:
+                continue
+            manager.save_event(event)
+            repaired_events += 1
+        except Exception as exc:
+            logger.warning(
+                "Unable to repair inventory links for event %s: %s",
+                getattr(event, 'event_id', ''),
+                exc,
+            )
+    return repaired_events
 
 
 def _event_has_model_group_reference(event, group):
