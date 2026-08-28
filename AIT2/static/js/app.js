@@ -24050,28 +24050,80 @@ function closeMaintenanceLogModal() {
 }
 
 // Utility functions
+let activeNotification = null;
+let notificationShowTimer = null;
+let notificationDismissTimer = null;
+let notificationRemovalTimer = null;
+
+function dismissNotification(notification = activeNotification, immediate = false) {
+  if (!notification) return;
+
+  if (notification === activeNotification) {
+    clearTimeout(notificationShowTimer);
+    clearTimeout(notificationDismissTimer);
+    clearTimeout(notificationRemovalTimer);
+    notificationShowTimer = null;
+    notificationDismissTimer = null;
+    notificationRemovalTimer = null;
+  }
+
+  const removeNotification = () => {
+    notification.remove();
+    if (notification === activeNotification) {
+      activeNotification = null;
+    }
+  };
+
+  notification.classList.remove("show");
+  if (immediate) {
+    removeNotification();
+    return;
+  }
+
+  notificationRemovalTimer = setTimeout(removeNotification, 300);
+}
+
 function showNotification(type, message) {
+  // A new message replaces the current banner so notifications never overlap.
+  if (activeNotification) {
+    dismissNotification(activeNotification, true);
+  }
+  document.querySelectorAll(".notification").forEach(notification => notification.remove());
+
   const notification = document.createElement("div");
   notification.className = `notification ${type}`;
   notification.textContent = message;
   notification.setAttribute("role", type === "error" || type === "warning" ? "alert" : "status");
   notification.setAttribute("aria-live", type === "error" || type === "warning" ? "assertive" : "polite");
   notification.setAttribute("aria-atomic", "true");
+  notification.setAttribute("aria-label", `${message}. Click to dismiss notification.`);
+  notification.setAttribute("title", "Click to dismiss");
+  notification.setAttribute("tabindex", "0");
+  notification.addEventListener("click", () => dismissNotification(notification));
+  notification.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
+      event.preventDefault();
+      dismissNotification(notification);
+    }
+  });
 
   document.body.appendChild(notification);
+  activeNotification = notification;
 
   // Trigger animation
-  setTimeout(() => notification.classList.add("show"), 100);
+  notificationShowTimer = setTimeout(() => {
+    if (notification === activeNotification) {
+      notification.classList.add("show");
+    }
+  }, 100);
 
   // Remove notification after 3 seconds
-  setTimeout(() => {
-    notification.classList.remove("show");
-    setTimeout(() => {
-      if (document.body.contains(notification)) {
-        document.body.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
+  notificationDismissTimer = setTimeout(
+    () => dismissNotification(notification),
+    3000
+  );
+
+  return notification;
 }
 
 

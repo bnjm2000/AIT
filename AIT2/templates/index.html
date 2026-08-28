@@ -2182,10 +2182,21 @@
         z-index: 1001;
         transform: translateX(400px);
         transition: transform 0.3s ease;
+        cursor: pointer;
+        user-select: none;
       }
 
       .notification.show {
         transform: translateX(0);
+      }
+
+      .notification:hover {
+        filter: brightness(0.94);
+      }
+
+      .notification:focus-visible {
+        outline: 3px solid rgba(255, 255, 255, 0.92);
+        outline-offset: 3px;
       }
 
       .notification.success {
