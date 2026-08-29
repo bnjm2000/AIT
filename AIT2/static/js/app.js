@@ -355,6 +355,7 @@ let selectedContainerBulkAssets = new Map();
 let selectedContainerPhotoFile = null;
 let __containersCache = null;
 let __containersCacheTs = 0;
+let __containersCachePromise = null;
 let maintenanceReportSelectedAssetIds = new Set();
 let maintenanceReportSelectedContainerIds = new Set();
 let __maintenanceReportOutsideClickBound = false;
@@ -365,13 +366,22 @@ async function refreshContainersCache(force = false) {
   if (!force && __containersCache && (now - __containersCacheTs) < 15000) {
     return __containersCache;
   }
+  if (!force && __containersCachePromise) return __containersCachePromise;
 
-  const res = await apiCall('/api/containers');
-  const list = (res && res.data) ? res.data : [];
-  __containersCache = {};
-  list.forEach(c => { __containersCache[c.id] = c; });
-  __containersCacheTs = now;
-  return __containersCache;
+  const pending = (async () => {
+    const res = await apiCall('/api/containers');
+    const list = (res && res.data) ? res.data : [];
+    __containersCache = {};
+    list.forEach(c => { __containersCache[c.id] = c; });
+    __containersCacheTs = Date.now();
+    return __containersCache;
+  })();
+  __containersCachePromise = pending;
+  try {
+    return await pending;
+  } finally {
+    if (__containersCachePromise === pending) __containersCachePromise = null;
+  }
 }
 
 function getContainerSerialNumber(container) {
@@ -3337,6 +3347,10 @@ function scanForPrepare(eventId) {
     title: 'Scan To Prepare',
     instructions: 'Scan an asset ID, barcode, serial number, container ID, or container serial number to prepare it for this event.',
     onScan: async identifier => {
+      if (typeof prepareNewEnqueueScan === 'function') {
+        prepareNewEnqueueScan(eventId, identifier);
+        return;
+      }
       const input = document.getElementById('universalAssetInput');
       if (input) input.value = identifier;
       await processUniversalAsset(eventId);
@@ -13145,7 +13159,8 @@ async function prepareAssignedAsset(eventId) {
 async function processUniversalAsset(eventId) {
     const input = document.getElementById('universalAssetInput');
     const feedbackDiv = document.getElementById('universal-asset-feedback');
-    let assetId = normalizeScannedIdentifier(input.value);
+    const queuedScan = window.__activePrepareQueuedScan;
+    let assetId = normalizeScannedIdentifier(queuedScan?.value || input?.value || '');
     const scannedValue = assetId;
     const quickAddEnabled = getPrepareQuickAddEnabled();
     const scanPayload = {
@@ -13165,7 +13180,9 @@ async function processUniversalAsset(eventId) {
     // A completed container result remains visible until this next valid scan.
     prepareNewPageState.scanRevision += 1;
     if (feedbackDiv) feedbackDiv.innerHTML = '';
-    input.value = assetId;
+    // Queue submissions clear the field before any network work begins. Do not
+    // put the active value back while the next scanner input is being captured.
+    if (!queuedScan && input) input.value = assetId;
 
     if (!window.__processingContainerBatch) {
       const container = await getContainerForPrepareScan(assetId);

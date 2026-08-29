@@ -19,6 +19,91 @@ var prepareNewPageState = {
 
 var prepareNewNotesTimer = null;
 var prepareNewPendingNotes = null;
+var prepareScanQueueState = {
+  queue: [],
+  processing: false,
+  activeJob: null,
+  sequence: 0,
+  completed: 0,
+  lastInputAt: 0
+};
+
+function prepareNewRenderScanQueueStatus() {
+  const status = document.getElementById('prepareScanQueueStatus');
+  if (!status) return;
+  const queued = prepareScanQueueState.queue.length;
+  const active = prepareScanQueueState.activeJob;
+  status.classList.toggle('is-processing', !!active);
+  status.classList.toggle('has-queue', queued > 0);
+  status.innerHTML = active
+    ? `<span class="prepare-new-queue-pulse" aria-hidden="true"></span>` +
+      `<span>Processing <strong>${escapeHtml(active.value)}</strong></span>` +
+      `<span class="prepare-new-queue-count">${queued} queued</span>`
+    : `<span class="prepare-new-queue-ready" aria-hidden="true">&#10003;</span>` +
+      `<span>Scanner ready${prepareScanQueueState.completed ? ` &middot; ${prepareScanQueueState.completed} processed` : ''}</span>`;
+}
+
+function prepareNewEnqueueScan(eventId, submittedValue = '') {
+  const input = document.getElementById('universalAssetInput');
+  const feedback = document.getElementById('universal-asset-feedback');
+  const value = normalizeScannedIdentifier(submittedValue || input?.value || '');
+  if (!value) {
+    if (feedback) showFeedback(feedback, 'warning', 'Please enter an asset ID');
+    input?.focus({ preventScroll: true });
+    return false;
+  }
+
+  // Capture and clear synchronously. Scanner keystrokes for the next item must
+  // always land in an empty field, even while this item waits on the network.
+  if (input) input.value = '';
+  prepareScanQueueState.queue.push({
+    id: ++prepareScanQueueState.sequence,
+    eventId: Number(eventId),
+    value
+  });
+  prepareNewRenderScanQueueStatus();
+  input?.focus({ preventScroll: true });
+  void prepareNewDrainScanQueue();
+  return true;
+}
+
+function prepareNewHandleScanKeydown(event, eventId) {
+  prepareScanQueueState.lastInputAt = Date.now();
+  if (!['Enter', 'Tab'].includes(event.key)) return;
+  const input = event.currentTarget;
+  if (!normalizeScannedIdentifier(input?.value || '')) return;
+  event.preventDefault();
+  prepareNewEnqueueScan(eventId, input.value);
+}
+
+async function prepareNewDrainScanQueue() {
+  if (prepareScanQueueState.processing) return;
+  prepareScanQueueState.processing = true;
+  try {
+    while (prepareScanQueueState.queue.length) {
+      const job = prepareScanQueueState.queue.shift();
+      prepareScanQueueState.activeJob = job;
+      window.__activePrepareQueuedScan = job;
+      prepareNewRenderScanQueueStatus();
+      try {
+        await processUniversalAsset(job.eventId);
+      } catch (error) {
+        const feedback = document.getElementById('universal-asset-feedback');
+        if (feedback) showFeedback(feedback, 'error', `Failed to process ${escapeHtml(job.value)}: ${escapeHtml(error?.message || String(error))}`);
+        playWorkflowTone('error');
+      } finally {
+        prepareScanQueueState.completed += 1;
+        prepareScanQueueState.activeJob = null;
+        window.__activePrepareQueuedScan = null;
+        prepareNewRenderScanQueueStatus();
+        document.getElementById('universalAssetInput')?.focus({ preventScroll: true });
+      }
+    }
+  } finally {
+    prepareScanQueueState.processing = false;
+    prepareNewRenderScanQueueStatus();
+  }
+}
 
 function prepareNewModelKey(group) {
   return [
@@ -979,8 +1064,10 @@ function renderPrepareNewPage() {
         <button type="button" class="plan-button" onclick="prepareNewReturnToPlan()">\u2190 Return to Planning</button>
       </div>
     </div>
-    <div class="prepare-new-top">
-      <button type="button" class="plan-event-select-wrap"
+    <div class="prepare-new-layout">
+      <div class="prepare-new-primary">
+        <div class="prepare-new-top">
+          <button type="button" class="plan-event-select-wrap"
               aria-haspopup="dialog" aria-label="Choose an event to prepare"
               onclick="planOpenEventChooser('prepare-new')">
         <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
@@ -997,16 +1084,16 @@ function renderPrepareNewPage() {
           </div>
         </div>
         <span class="plan-event-picker-chevron" aria-hidden="true">\u2304</span>
-      </button>
-      <div class="plan-metrics prepare-new-metrics">
+          </button>
+          <div class="plan-metrics prepare-new-metrics">
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.required}</strong><span>Total Required</span></div></div>
         <div class="plan-metric"><div class="plan-metric-icon" style="color:#15803d;background:#dcfce7;">&#10003;</div><div><strong>${totals.prepared}</strong><span>Prepared</span></div></div>
         <div class="plan-metric"><div class="plan-metric-icon">&#8857;</div><div><strong>${totals.extra}</strong><span>Extra</span></div></div>
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departments}</strong><span>Active Departments</span></div></div>
-      </div>
-    </div>
-    ${renderEventSubprojectTabs(
+          </div>
+        </div>
+        ${renderEventSubprojectTabs(
       'prepareNewPageState',
       event,
       'renderPrepareNewPage',
@@ -1015,9 +1102,9 @@ function renderPrepareNewPage() {
         roomNeedsAttention: prepareNewSubprojectNeedsAttention,
         attentionLabel: 'Has unprepared items'
       }
-    )}
-    ${consolidated ? eventConsolidatedNotice() : ''}
-    <div class="prepare-new-workspace">
+        )}
+        ${consolidated ? eventConsolidatedNotice() : ''}
+        <div class="prepare-new-workspace">
       <div class="prepare-new-column prepare-new-left">
         <section class="prepare-new-card prepare-new-scan-card">
           <div class="prepare-new-card-header">
@@ -1036,15 +1123,19 @@ function renderPrepareNewPage() {
               <input id="universalAssetInput" type="text"
                      placeholder="Enter Asset ID or Serial Number\u2026"
                      autocomplete="off"
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();processUniversalAsset(${Number(event.id)})}">
+                     enterkeyhint="done"
+                     onkeydown="prepareNewHandleScanKeydown(event,${Number(event.id)})">
               <button type="button" class="plan-button" onclick="scanForPrepare(${Number(event.id)})" aria-label="Scan with camera">&#128247;</button>
             </div>
             <div class="prepare-new-scan-actions">
               <button type="button" class="plan-button prepare-new-process"
-                      onclick="processUniversalAsset(${Number(event.id)})">&#10003; Process Asset</button>
+                      onclick="prepareNewEnqueueScan(${Number(event.id)})">&#10003; Queue Asset</button>
               <button type="button" class="plan-button plan-button-primary"
                       onclick="scanForPrepare(${Number(event.id)})">&#128247; Scan with Camera</button>
               <button type="button" class="plan-button" onclick="clearUniversalInput()">Clear</button>
+            </div>
+            <div id="prepareScanQueueStatus" class="prepare-new-queue-status" aria-live="polite">
+              <span class="prepare-new-queue-ready" aria-hidden="true">&#10003;</span><span>Scanner ready</span>
             </div>
             <div id="universal-asset-feedback" class="prepare-new-feedback" aria-live="polite"></div>
           </div>
@@ -1068,15 +1159,19 @@ function renderPrepareNewPage() {
           <div class="prepare-new-assignment-scroll">${renderPrepareNewAssignment()}</div>
         </section>
       </div>
-      <div class="prepare-new-column prepare-new-right">
+        </div>
+      </div>
+      <aside class="prepare-new-aside">
         ${renderPrepareNewEventDetails()}
+        ${renderPrepareNewVendorManagementCard()}
         ${renderPrepareNewCustomForm()}
         ${renderPrepareNewOverallProgressCard()}
         ${renderPrepareNewExitButton()}
-      </div>
+      </aside>
       <div class="prepare-new-mobile-action">${renderPrepareNewExitButton(true)}</div>
     </div>
   `;
+  prepareNewRenderScanQueueStatus();
 }
 
 function prepareNewCaptureViewState() {
@@ -1210,6 +1305,13 @@ async function selectPrepareNewEvent(eventId, options = {}) {
     prepareNewPageState.event = eventResponse.data;
     prepareNewPageState.availableAssets = assetsResponse.data || [];
     renderPrepareNewPage();
+    // Warm the small container index in the background so the first QR/RFID
+    // scan does not need to pause before deciding whether it is a container.
+    if (typeof refreshContainersCache === 'function') {
+      void refreshContainersCache(false).catch(error => {
+        console.warn('Unable to warm Prepare container cache:', error);
+      });
+    }
   } catch (error) {
     if (root) {
       root.innerHTML = `<div class="plan-empty">Failed to load event: ${escapeHtml(error.message || String(error))}</div>`;
@@ -1263,6 +1365,82 @@ async function prepareNewApplyRealtimeEvent(event) {
   }
   if (Date.now() < Number(prepareNewPageState.suppressRealtimeUntil || 0)) return;
   await refreshPrepareNewSelectedEvent({ preserve: true });
+}
+
+function renderPrepareNewVendorManagementCard() {
+  const rows = Array.isArray(prepareNewPageState.event?.vendorManagement)
+    ? prepareNewPageState.event.vendorManagement
+    : [];
+  if (!rows.length) return '';
+  return `
+    <section class="prepare-new-card vendor-management-card prepare-new-vendor-card">
+      <div class="prepare-new-card-header"><h3>Vendor Management</h3><button type="button" class="vendor-management-open" onclick="prepareNewOpenVendorManagement()">Open</button></div>
+      <p class="vendor-management-help">Self pickup items must be collected and prepared. Delivered items go directly to the venue and are excluded from Prepare.</p>
+    </section>
+  `;
+}
+
+function prepareNewVendorManagementDialogMarkup() {
+  const rows = Array.isArray(prepareNewPageState.event?.vendorManagement)
+    ? prepareNewPageState.event.vendorManagement
+    : [];
+  return `<div class="modal-content vendor-management-dialog">
+    <div class="modal-header">
+      <div><h3 class="modal-title">Vendor Management</h3><p>Choose how each vendor fulfils their equipment.</p></div>
+      <button type="button" class="close-btn" aria-label="Close vendor management" onclick="closeModal('prepareNewVendorManagementModal')">&times;</button>
+    </div>
+    <div class="vendor-management-list">
+      ${rows.map(row => {
+        const selfPickup = row.mode !== 'outsourced';
+        return `<div class="vendor-management-row">
+          <div class="vendor-management-details"><strong>${escapeHtml(row.vendorName || 'Vendor')}</strong><small>${Number(row.itemCount || 0)} item line${Number(row.itemCount || 0) === 1 ? '' : 's'} &middot; ${financeMoney(Number(row.amount || 0))}</small></div>
+          <div class="vendor-mode-toggle" role="radiogroup" aria-label="Fulfilment for ${escapeHtmlAttr(row.vendorName || 'vendor')}">
+            <button type="button" role="radio" aria-checked="${selfPickup}" class="${selfPickup ? 'selected' : ''}" onclick="prepareNewSetVendorManagement('${planEncode(row.key)}','dry-hire')">Self Pickup</button>
+            <button type="button" role="radio" aria-checked="${!selfPickup}" class="${!selfPickup ? 'selected' : ''}" onclick="prepareNewSetVendorManagement('${planEncode(row.key)}','outsourced')">Delivered</button>
+          </div>
+        </div>`;
+      }).join('') || '<p class="vendor-management-empty">No external vendors for this event.</p>'}
+    </div>
+    <p class="vendor-management-help">Self pickup items must be collected and prepared. Delivered items go directly to the venue and are excluded from Prepare.</p>
+  </div>`;
+}
+
+function prepareNewOpenVendorManagement() {
+  let modal = document.getElementById('prepareNewVendorManagementModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'prepareNewVendorManagementModal';
+    modal.className = 'modal vendor-management-modal';
+    modal.addEventListener('click', event => {
+      if (event.target === modal) closeModal(modal.id);
+    });
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = prepareNewVendorManagementDialogMarkup();
+  openModal(modal.id);
+}
+
+async function prepareNewSetVendorManagement(encodedKey, mode) {
+  const key = planDecode(encodedKey);
+  if (!prepareNewPageState.eventId || !['dry-hire', 'outsourced'].includes(mode)) return;
+  try {
+    const response = await apiCall(
+      `/api/events/${prepareNewPageState.eventId}/vendor-management`,
+      'PUT',
+      { key, mode }
+    );
+    prepareNewPageState.event.vendorManagement = response.data || [];
+    await refreshPrepareNewSelectedEvent({ preserve: true });
+    const modal = document.getElementById('prepareNewVendorManagementModal');
+    if (modal?.classList.contains('active')) {
+      modal.innerHTML = prepareNewVendorManagementDialogMarkup();
+    }
+    showNotification('success', mode === 'dry-hire'
+      ? 'Vendor items set for self pickup and added to Prepare'
+      : 'Vendor items marked as delivered and removed from Prepare');
+  } catch (error) {
+    // apiCall already displays the server message.
+  }
 }
 
 async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {

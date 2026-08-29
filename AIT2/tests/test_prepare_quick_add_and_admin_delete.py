@@ -170,6 +170,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn("apiCall(`/api/events/${eventId}`)", scan_source)
         self.assertIn('getContainerForPrepareScan(assetId)', scan_source)
         self.assertIn('if (__containersCache)', app_source)
+        self.assertIn('if (!force && __containersCachePromise)', app_source)
         self.assertIn('processUniversalContainer(eventId, container, scannedValue)', scan_source)
         self.assertIn('refreshPrepareUiAfterAssetChange(eventId, delay = 800)', app_source)
 
@@ -464,6 +465,58 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn('.prepare-new-left {', template)
         self.assertIn('overflow-y: auto;', template)
         self.assertIn('overflow-wrap: anywhere;', template)
+
+    def test_prepare_uses_plan_style_event_aside_and_vendor_management(self):
+        source = APP_BUNDLE_SOURCE
+        page = source.split('function renderPrepareNewPage()', 1)[1].split(
+            'function prepareNewCaptureViewState()', 1
+        )[0]
+
+        self.assertIn('class="prepare-new-layout"', page)
+        self.assertIn('class="prepare-new-primary"', page)
+        self.assertIn('class="prepare-new-aside"', page)
+        self.assertLess(
+            page.index('class="prepare-new-top"'),
+            page.index('class="prepare-new-workspace"'),
+        )
+        self.assertIn('${renderPrepareNewEventDetails()}', page)
+        self.assertIn('${renderPrepareNewVendorManagementCard()}', page)
+        self.assertIn('function prepareNewVendorManagementDialogMarkup()', source)
+        self.assertIn('function prepareNewOpenVendorManagement()', source)
+        self.assertIn('function prepareNewSetVendorManagement(encodedKey, mode)', source)
+        self.assertIn(
+            '`/api/events/${prepareNewPageState.eventId}/vendor-management`',
+            source,
+        )
+        self.assertIn('Delivered items go directly to the venue and are excluded from Prepare.', source)
+
+    def test_prepare_scans_are_captured_immediately_and_processed_fifo(self):
+        source = APP_BUNDLE_SOURCE
+        enqueue = source.split('function prepareNewEnqueueScan(', 1)[1].split(
+            'function prepareNewHandleScanKeydown(', 1
+        )[0]
+        drain = source.split('async function prepareNewDrainScanQueue()', 1)[1].split(
+            'function prepareNewModelKey(', 1
+        )[0]
+        scan = source.split('async function processUniversalAsset(eventId)', 1)[1].split(
+            'async function assignAndPrepareAsset', 1
+        )[0]
+
+        self.assertLess(
+            enqueue.index("if (input) input.value = '';"),
+            enqueue.index('prepareScanQueueState.queue.push'),
+        )
+        self.assertIn('if (prepareScanQueueState.processing) return;', drain)
+        self.assertIn('while (prepareScanQueueState.queue.length)', drain)
+        self.assertIn('const job = prepareScanQueueState.queue.shift();', drain)
+        self.assertIn('await processUniversalAsset(job.eventId);', drain)
+        self.assertIn("['Enter', 'Tab'].includes(event.key)", source)
+        self.assertIn('window.__activePrepareQueuedScan = job;', source)
+        self.assertIn("queuedScan?.value || input?.value || ''", scan)
+        self.assertIn('if (!queuedScan && input) input.value = assetId;', scan)
+        self.assertIn('prepareNewEnqueueScan(eventId, identifier);', source)
+        self.assertIn('prepareScanQueueState.processing', source)
+        self.assertIn('schedulePrepareUiSync(eventId, 300);', source)
 
     def test_grouped_misc_prepare_targets_the_next_unprepared_record(self):
         source = APP_BUNDLE_SOURCE

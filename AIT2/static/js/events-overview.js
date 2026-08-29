@@ -1387,6 +1387,16 @@ function schedulePrepareUiSync(eventId, delay = 600) {
   clearTimeout(__prepareUiSyncTimer);
   __prepareUiSyncTimer = setTimeout(async () => {
     if (
+      typeof prepareScanQueueState !== 'undefined' && (
+        prepareScanQueueState.processing
+        || prepareScanQueueState.queue.length > 0
+        || Date.now() - Number(prepareScanQueueState.lastInputAt || 0) < 250
+      )
+    ) {
+      schedulePrepareUiSync(eventId, 300);
+      return;
+    }
+    if (
       document.getElementById('prepare-new-section')?.classList.contains('active') &&
       document.querySelector('.prepare-new-action-menu.open')
     ) {
