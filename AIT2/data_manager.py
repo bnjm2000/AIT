@@ -40,7 +40,7 @@ EVENT_FIELDNAMES = [
     'EventID', 'Name', 'Location', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
     'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
     'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers', 'Subprojects',
-    'DeliveryOrder'
+    'DeliveryOrder', 'VendorManagement'
 ]
 CLIENT_FIELDNAMES = [
     'Name', 'Salutation', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
@@ -1204,6 +1204,9 @@ class DataManager:
                             "Ignoring invalid DeliveryOrder data in event file %s",
                             filename,
                         )
+                vendor_management = self._load_event_json_list(
+                    event_data, 'VendorManagement', filename
+                )
 
                 raw_state = event_data.get('State', 'New')
                 state = normalize_event_state(raw_state)
@@ -1230,6 +1233,7 @@ class DataManager:
                     assigned_users=assigned_users,
                     subprojects=subprojects,
                     delivery_order=delivery_order,
+                    vendor_management=vendor_management,
                 )
 
                 event._legacy_state_migrated = str(raw_state or '').strip() != state
@@ -1258,6 +1262,7 @@ class DataManager:
         assigned_users = list(getattr(event, 'assigned_users', []) or [])
         subprojects = list(getattr(event, 'subprojects', []) or [])
         delivery_order = dict(getattr(event, 'delivery_order', {}) or {})
+        vendor_management = list(getattr(event, 'vendor_management', []) or [])
         
         if not hasattr(event, 'prepared_items'):
             logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
@@ -1281,6 +1286,7 @@ class DataManager:
             assigned_users_json = json.dumps(assigned_users)
             subprojects_json = json.dumps(subprojects)
             delivery_order_json = json.dumps(delivery_order)
+            vendor_management_json = json.dumps(vendor_management)
         except (TypeError, ValueError) as e:
             logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
             logger.error("prepared_items: %s", event.prepared_items)
@@ -1311,6 +1317,7 @@ class DataManager:
                 'AssignedUsers': assigned_users_json,
                 'Subprojects': subprojects_json,
                 'DeliveryOrder': delivery_order_json,
+                'VendorManagement': vendor_management_json,
             }
             
             logger.debug("Row data being written: %s", row_data)

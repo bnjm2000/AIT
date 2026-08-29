@@ -434,6 +434,9 @@ class PostgresDataManager(DataManager):
             'deliveryOrder': copy.deepcopy(
                 dict(getattr(event, 'delivery_order', {}) or {})
             ),
+            'vendorManagement': copy.deepcopy(
+                list(getattr(event, 'vendor_management', []) or [])
+            ),
         }
 
     def _client_data(self, client):
@@ -629,6 +632,7 @@ class PostgresDataManager(DataManager):
                         assigned_users=data.get('assignedUsers') or [],
                         subprojects=data.get('subprojects') or [],
                         delivery_order=data.get('deliveryOrder') or {},
+                        vendor_management=data.get('vendorManagement') or [],
                     )
                     event._legacy_state_migrated = str(raw_state or '').strip() != event.state
                     events[int(event_id)] = event
@@ -1193,6 +1197,9 @@ class PostgresDataManager(DataManager):
         event.subprojects = list(payload.get('subprojects') or [])
         event.delivery_order = copy.deepcopy(
             dict(payload.get('deliveryOrder') or {})
+        )
+        event.vendor_management = copy.deepcopy(
+            list(payload.get('vendorManagement') or [])
         )
         self.events[int(event.event_id)] = event
 

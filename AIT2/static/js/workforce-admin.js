@@ -483,7 +483,7 @@ async function loadWorkforcePage() {
   }
   const requestId = ++workforcePageState.loadRequestId;
   workforcePageState.loading = true;
-  if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading manpower &amp; vendors...</div>';
+  if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading crew &amp; vendors...</div>';
   try {
     if (!workforcePageState.eventOptions.length) {
       const eventOptionsLoad = await startProgressiveEventOptions(
@@ -512,7 +512,7 @@ async function loadWorkforcePage() {
       }
     }
     if (!workforcePageState.eventId) {
-      root.innerHTML = '<div class="wf-panel wf-empty">Create an event before assigning manpower &amp; vendors.</div>';
+      root.innerHTML = '<div class="wf-panel wf-empty">Create an event before assigning crew &amp; vendors.</div>';
       return;
     }
     syncWorkforceRoute({ replace: true });
@@ -633,7 +633,7 @@ function ensureWorkforceDocumentsLayout() {
   root.innerHTML = `<div class="wf-documents-shell">
     <div class="plan-page-heading wf-documents-heading">
       <div>
-        <button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>
+        <button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Crew &amp; Vendors</button>
         <h2>Invoices &amp; Claims</h2>
         <p id="wfDocumentsScope">Review every worker and vendor upload across your company.</p>
       </div>
@@ -1747,10 +1747,10 @@ function renderWorkforcePage() {
   const totals = data.totals || {};
   root.innerHTML = `
     <div class="plan-page-heading wf-manpower-page-heading">
-      <div><div class="wf-manpower-title-row"><h2>Manpower &amp; Vendors</h2>
-        <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
+      <div><div class="wf-manpower-title-row"><h2>Crew &amp; Vendors</h2>
+        ${canCurrentUserViewAllInvoiceClaims() ? `<button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
           View all invoices &amp; claims
-        </button>
+        </button>` : ''}
       </div>
       <p>Assign workers and vendors, then review their invoices and claims.</p></div>
       <div class="wf-manpower-heading-actions">
@@ -1761,7 +1761,7 @@ function renderWorkforcePage() {
     <div class="wf-plan-layout">
       <div class="wf-plan-primary">
         <div class="plan-event-bar">
-          ${wfManpowerEventPickerHtml(data, 'Choose an event for manpower and vendors')}
+          ${wfManpowerEventPickerHtml(data, 'Choose an event for crew and vendors')}
 
           <div class="plan-metrics">
             <div class="plan-metric">
@@ -1788,7 +1788,7 @@ function renderWorkforcePage() {
         <section class="wf-panel wf-manpower-panel">
           <header class="wf-panel-header">
             <div>
-              <h3>Manpower &amp; Vendors</h3>
+              <h3>Crew &amp; Vendors</h3>
               <p>Departments are created automatically from this event’s outgoing assets.</p>
             </div>
             <div class="wf-toolbar">
@@ -1898,7 +1898,7 @@ function ensureWorkforceModals() {
         <label class="wf-field"><span>Department *</span><select id="wfVendorAssignmentDepartment" data-department-select="true" required></select></label>
         <label class="wf-field wf-room-field"><span>Room / Sub-project *</span><select id="wfVendorAssignmentSubproject"></select></label>
         <div class="wf-field"><span>Providing *</span><div class="wf-provider-choice">
-          <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Manpower &amp; Vendors</label>
+          <label><input type="radio" name="wfProviderType" value="manpower" checked onchange="syncVendorAssignmentFields()"> Crew &amp; Vendors</label>
           <label><input type="radio" name="wfProviderType" value="service" onchange="syncVendorAssignmentFields()"> Service</label>
         </div></div>
         <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfVendorAssignmentDates"></div></div>
@@ -2552,8 +2552,8 @@ async function loadFreelancerWorkspace() {
   const id = workforcePageState.historyFreelancerId;
   if (!id) {
     root.innerHTML = `<div class="plan-page-heading"><h2>Worker Submissions</h2>
-      <p>Select a worker from Manpower &amp; Vendors to view their events.</p></div>
-      <button class="wf-button" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>`;
+      <p>Select a worker from Crew &amp; Vendors to view their events.</p></div>
+      <button class="wf-button" type="button" onclick="showSection('workforce')">&larr; Back to Crew &amp; Vendors</button>`;
     return;
   }
   root.innerHTML = '<div class="loading">Loading worker workspace…</div>';
@@ -2619,7 +2619,7 @@ function renderFreelancerWorkspace() {
   const claimCount = visibleEvents.reduce((total, item) => total + item.claims.length, 0);
   const vendorNames = vendorMemberships.map(vendor => vendor.name).filter(Boolean).join(', ');
   root.innerHTML = `<div class="plan-page-heading wf-freelancer-page-heading">
-      <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Vendors</button>
+      <div><button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Crew &amp; Vendors</button>
         <h2>${isVendor ? 'Vendor' : 'Worker'} Submissions</h2>
         <p>Review assignments, invoices and claims for ${wfEscape(company?.name || 'this company')}.</p></div>
       <div class="wf-freelancer-heading-actions">

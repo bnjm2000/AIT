@@ -65,6 +65,7 @@ def register_app_page_routes(
     render_page,
     require_auth,
     can_access_event,
+    can_view_all_invoice_claims,
     can_view_logs,
     is_admin,
     is_owner,
@@ -110,6 +111,8 @@ def register_app_page_routes(
         section = APP_PAGE_SECTIONS.get(request.path)
         if not section:
             abort(404)
+        if section == "invoice-claims" and not can_view_all_invoice_claims():
+            return fallback_event_redirect()
         if section == "logs" and not can_view_logs():
             return fallback_event_redirect()
         if section in APP_ADMIN_PAGE_SECTIONS and not is_admin():

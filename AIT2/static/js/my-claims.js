@@ -226,7 +226,7 @@ function renderMyClaimsPage() {
     : `
       <div class="my-claims-empty">
         <h2>No assigned events</h2>
-        <p>Your events will appear after an admin assigns you in Manpower &amp; Vendors.</p>
+        <p>Your events will appear after an admin assigns you in Crew &amp; Vendors.</p>
       </div>`;
 
   root.innerHTML = `

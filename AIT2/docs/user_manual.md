@@ -1,8 +1,8 @@
 # Showbase User Manual
 
-Last updated: July 6, 2026
+Last updated: August 28, 2026
 
-This manual covers the three main ways people use Showbase: admins, normal internal users, and workers. The screenshots are representative captures of the current app layout and role flows.
+This manual covers the main ways people use Showbase: Admins, Managers, Users, Sales-enabled internal accounts, and workers. The screenshots are representative captures of the current app layout and role flows.
 
 ## Sign In
 
@@ -18,11 +18,13 @@ Open Showbase and choose the correct access type.
 
 | Role | Main Access | Typical Tasks |
 | --- | --- | --- |
-| Admin | Full internal dashboard | Manage inventory, events, planning, manpower, transport, worker submissions, users, reports, and settings. |
-| Normal user | Operational dashboard | View inventory/events, prepare assets, return assets, transfer assets, run asset checks, and record allowed maintenance activity. |
+| Admin | Full company dashboard | Manage company inventory, events, planning, manpower, transport, worker submissions, users, roles, logs, reports, and settings. |
+| Manager | Company operations dashboard | Run event operations and manage Manager/User accounts, but not Admin accounts, system logs, or the company-wide invoice and claims queue. Managers can still review submissions inside any selected event. |
+| User | Assigned-event dashboard | Work on assigned events, prepare/return/transfer assets, run asset checks, record allowed maintenance activity, and submit personal claims. |
+| Sales add-on | Finance workspaces added to an internal role | Create and manage quotations, invoices, costing, and profit-and-loss documents without changing the base role. |
 | Worker | Worker portal | View assigned events, upload invoices/claims, track approval, confirm payment receipt, and update worker profile details. |
 
-Some admin tools may be limited to super admins, especially company-level setup and cross-company user assignment.
+See the [Role Permissions Matrix](role_permissions_matrix.md) for the complete capability and user-administration tables.
 
 ## Admin Guide
 
@@ -116,7 +118,7 @@ Normal users see a simpler internal dashboard. Admin-only menu items and destruc
 
 Normal users can usually:
 
-- View all events and inventory.
+- View assigned events and the company inventory.
 - Search, sort, and filter inventory.
 - Prepare assigned event assets.
 - Return assets after an event.

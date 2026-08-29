@@ -1281,6 +1281,11 @@ def _current_user_can_view_logs():
     return _current_user_can_manage_roles()
 
 
+def _current_user_can_view_all_invoice_claims():
+    """The company-wide submission queue is restricted to company admins."""
+    return _current_user_can_manage_roles()
+
+
 def _current_user_has_sales_access():
     if not has_request_context():
         return False
@@ -5227,7 +5232,19 @@ def _custom_status(event, marker):
     return 'assigned'
 
 
-def _custom_counts_for_event(event):
+def _event_custom_vendor_is_delivered(event, custom):
+    if not custom or custom.get('type') != 'LOAN' or not custom.get('company'):
+        return False
+    company_key = _finance_vendor_company_key(custom.get('company'))
+    return any(
+        str((row or {}).get('mode') or '').strip().lower() == 'outsourced'
+        and _finance_vendor_company_key((row or {}).get('vendorName')) == company_key
+        for row in getattr(event, 'vendor_management', []) or []
+        if isinstance(row, dict)
+    )
+
+
+def _custom_counts_for_event(event, exclude_delivered=False):
     _ensure_event_custom_lists(event)
     required = 0
     prepared_active = 0
@@ -5239,6 +5256,8 @@ def _custom_counts_for_event(event):
     for marker in event.prepared_items:
         custom = _parse_custom_marker(marker)
         if not custom:
+            continue
+        if exclude_delivered and _event_custom_vendor_is_delivered(event, custom):
             continue
 
         qty = max(1, _safe_int(custom.get('quantity'), 1))
@@ -14985,8 +15004,19 @@ def _find_submission_record(workforce, submission_id):
 @require_admin
 def list_workforce_submissions():
     """List this company's worker and vendor invoices and claims."""
-    rows = _admin_submission_rows()
     event_id = request.args.get('eventId', type=int)
+    if not _current_user_can_view_all_invoice_claims():
+        if not event_id:
+            return jsonify({
+                'error': 'Admin privileges are required to view all invoices and claims'
+            }), 403
+        event = data_manager.events.get(event_id) if data_manager else None
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(event):
+            return _event_access_denied_response()
+
+    rows = _admin_submission_rows()
     include_full_time = str(
         request.args.get('includeFullTime') or ''
     ).strip().lower() in {'1', 'true', 'yes', 'on'}
@@ -15766,6 +15796,7 @@ def log_action(
     event_meta=None,
     include_system_log=False,
     system_log_only=False,
+    persist_event=True,
 ):
     """Helper function to log actions."""
     try:
@@ -15813,7 +15844,8 @@ def log_action(
                         'eventId': event_id,
                     }
                 data_manager.append_event_log(event, event_record)
-                data_manager.save_event(event)
+                if persist_event:
+                    data_manager.save_event(event)
             mark_realtime_change('event-log', {'eventIds': event_ids, 'action': action})
         if system_log_only or not event_ids or include_system_log:
             data_manager.logs.append(log_entry)
@@ -15917,7 +15949,12 @@ _EVENT_ASSET_LOG_ACTIONS = {
 }
 
 
-def _log_event_asset_action(event_id, operation, items):
+def _log_event_asset_action(
+    event_id,
+    operation,
+    items,
+    persist_event=True,
+):
     action_label, preposition = _EVENT_ASSET_LOG_ACTIONS.get(
         operation,
         ('Updated', 'for'),
@@ -15932,7 +15969,7 @@ def _log_event_asset_action(event_id, operation, items):
         'groupCount': 1,
     }
     action = data_manager.format_event_asset_log_action(meta)
-    log_action(action, event_meta=meta)
+    log_action(action, event_meta=meta, persist_event=persist_event)
 
 def log_asset_change(event_id, asset_id, action, details=""):
     """Log all asset changes for debugging"""
@@ -17623,7 +17660,7 @@ def update_event_state(event, workforce=None):
             returned_total += specific_counts['returned']
             started_total += specific_counts['preparedEver']
 
-        custom_counts = _custom_counts_for_event(event)
+        custom_counts = _custom_counts_for_event(event, exclude_delivered=True)
         required_total += custom_counts['required']
         prepared_active_total += custom_counts['preparedActive']
         prepared_ever_total += custom_counts['preparedEver']
@@ -18009,6 +18046,7 @@ register_app_page_routes(
     render_page=_render_app_page,
     require_auth=require_auth,
     can_access_event=_current_user_can_access_event,
+    can_view_all_invoice_claims=_current_user_can_view_all_invoice_claims,
     can_view_logs=_current_user_can_view_logs,
     is_admin=_current_user_effective_is_admin,
     is_owner=_current_user_is_owner,
@@ -20390,9 +20428,9 @@ def _event_workflow_progress_payload(
         'manpower': {
             'status': 'green' if assignments else 'neutral',
             'label': (
-                f'Manpower & Vendors: {len(assignments)} assignment'
+                f'Crew & Vendors: {len(assignments)} assignment'
                 f'{"s" if len(assignments) != 1 else ""}'
-                if assignments else 'Manpower & Vendors: no assignments'
+                if assignments else 'Crew & Vendors: no assignments'
             ),
         },
         'transport': {
@@ -21256,6 +21294,7 @@ def get_event(event_id):
             'eventLogs': _event_activity_logs_for_response(event),
             'assignedUsernames': _event_assigned_usernames(event),
             'assignedUsers': _event_assignee_payloads(event),
+            'vendorManagement': _event_vendor_management(event),
         }
         try:
             workflow_workforce = load_workforce(_workforce_folder())
@@ -21295,8 +21334,8 @@ def get_event(event_id):
                 linked_costing = _linked_costing_for_quotation(
                     _load_finance_data(), linked_quotations[0]
                 )
-                event_data['vendorManagement'] = copy.deepcopy(
-                    (linked_costing or {}).get('vendorManagement') or []
+                event_data['vendorManagement'] = _event_vendor_management(
+                    event, linked_costing
                 )
         except Exception as finance_error:
             logger.warning(
@@ -24879,13 +24918,14 @@ def assign_specific_asset_to_model(event_id):
                 _reconcile_event_subproject_extras(event)
 
             update_event_state(event)
-            data_manager.save_event(event)
-            invalidate_cache()
             _log_event_asset_action(
                 event_id,
                 'prepare',
                 [_event_asset_log_item(marker, quantity=quantity)],
+                persist_event=False,
             )
+            data_manager.save_event(event)
+            invalidate_cache()
             is_extra = bool(
                 not add_scanned_assets_to_event
                 and prepared_before + quantity > required_before
@@ -24929,9 +24969,12 @@ def assign_specific_asset_to_model(event_id):
                     _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                     event.extra_assets.remove(asset_id)
                     update_event_state(event)
+                    log_action(
+                        f"Promoted prepared extra asset {asset_id} into event {event_id}",
+                        persist_event=False,
+                    )
                     data_manager.save_event(event)
                     invalidate_cache()
-                    log_action(f"Promoted prepared extra asset {asset_id} into event {event_id}")
                     return jsonify({
                         'success': True,
                         'message': f'Asset {asset_id} added into event requirements',
@@ -25147,17 +25190,19 @@ def assign_specific_asset_to_model(event_id):
         # Update event state
         update_event_state(event)
         
-        # Save changes
-        data_manager.save_event(event)
-        
-        # Invalidate cache
-        invalidate_cache()
-
         _log_event_asset_action(
             event_id,
             'assign',
             [_event_asset_log_item(asset_id)],
+            persist_event=False,
         )
+
+        # Persist the state and its audit entry together. Previously the event
+        # file was written once here and again by the audit logger per scan.
+        data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
 
         response_payload = {
             'success': True,
@@ -31183,7 +31228,7 @@ def _accounting_default_accounts():
         ('4000', 'Sales Revenue', 'revenue', 'Operating Revenue'),
         ('4100', 'Other Income', 'revenue', 'Other Income'),
         ('5000', 'Cost of Sales', 'expense', 'Cost of Sales'),
-        ('6000', 'Manpower & Vendors Expense', 'expense', 'Operating Expenses'),
+        ('6000', 'Crew & Vendors Expense', 'expense', 'Operating Expenses'),
         ('6100', 'Transport Expense', 'expense', 'Operating Expenses'),
         ('6200', 'Equipment Rental', 'expense', 'Operating Expenses'),
         ('6300', 'Repairs and Maintenance', 'expense', 'Operating Expenses'),
@@ -33841,6 +33886,84 @@ def _normalise_costing_vendor_management(lines, value=None, existing=None):
     return entries
 
 
+def _event_manual_vendor_management(event):
+    """Build fulfilment rows for manually added loan/rental items."""
+    supplied = {}
+    supplied_by_name = {}
+    for row in getattr(event, 'vendor_management', []) or []:
+        if not isinstance(row, dict):
+            continue
+        mode = str(row.get('mode') or '').strip().lower()
+        if mode not in {'dry-hire', 'outsourced'}:
+            continue
+        key = str(row.get('key') or '').strip()
+        if key:
+            supplied[key] = mode
+        name_key = _finance_vendor_company_key(row.get('vendorName'))
+        if name_key:
+            supplied_by_name[name_key] = mode
+
+    entries = []
+    by_key = {}
+    for ref in dict.fromkeys(getattr(event, 'prepared_items', []) or []):
+        custom = _parse_custom_marker(ref)
+        if not custom or custom.get('type') != 'LOAN':
+            continue
+        company = str(custom.get('company') or '').strip()
+        uid = str(custom.get('uid') or '').strip().casefold()
+        if not company or uid.startswith(('costing_', 'finance_')):
+            continue
+        key = _costing_vendor_key(company)
+        entry = by_key.get(key)
+        if entry is None:
+            name_key = _finance_vendor_company_key(company)
+            entry = {
+                'key': key,
+                'vendorId': '',
+                'vendorType': 'vendor',
+                'vendorName': company[:200],
+                'mode': supplied.get(
+                    key, supplied_by_name.get(name_key, 'dry-hire')
+                ),
+                'itemCount': 0,
+                'quantity': 0.0,
+                'amount': 0.0,
+            }
+            by_key[key] = entry
+            entries.append(entry)
+        entry['itemCount'] += 1
+        entry['quantity'] = round(
+            entry['quantity'] + max(1, _safe_float(custom.get('quantity'), 1)),
+            4,
+        )
+    return entries
+
+
+def _event_vendor_management(event, costing=None):
+    """Merge costing vendors with manual event loans into one Plan card list."""
+    entries = copy.deepcopy((costing or {}).get('vendorManagement') or [])
+    by_name = {
+        _finance_vendor_company_key(row.get('vendorName')): row
+        for row in entries if isinstance(row, dict)
+    }
+    for manual in _event_manual_vendor_management(event):
+        name_key = _finance_vendor_company_key(manual.get('vendorName'))
+        existing = by_name.get(name_key)
+        if existing is None:
+            entries.append(manual)
+            by_name[name_key] = manual
+            continue
+        existing['itemCount'] = _safe_int(existing.get('itemCount'), 0) + _safe_int(
+            manual.get('itemCount'), 0
+        )
+        existing['quantity'] = round(
+            _safe_float(existing.get('quantity'), 0)
+            + _safe_float(manual.get('quantity'), 0),
+            4,
+        )
+    return entries
+
+
 def _costing_vendor_management_mode(costing, line):
     key = _costing_vendor_key(
         (line or {}).get('vendorName'),
@@ -34826,6 +34949,14 @@ def _sync_quotation_from_costing(finance_data, costing):
             continue
         category = str((row or {}).get('category') or 'General')
         subproject_id = str((row or {}).get('subprojectId') or 'main')
+        category_base = sum(
+            max(0, _safe_float(line.get('total'), 0))
+            for line in quote_lines
+            if str(line.get('subprojectId') or 'main') == subproject_id
+            and _finance_adjustment_system_name(_finance_system_name(
+                line.get('department'), line.get('systemName')
+            )) == _finance_adjustment_system_name(category)
+        )
         adjustment = copy.deepcopy(
             existing_department_adjustments.get((subproject_id, category)) or {}
         )
@@ -34836,6 +34967,10 @@ def _sync_quotation_from_costing(finance_data, costing):
             'subprojectId': subproject_id,
             'label': adjustment.get('label') or 'Costing adjustment',
             'amount': amount,
+            'percent': (
+                round(abs(amount) / category_base * 100, 4)
+                if category_base else 0
+            ),
             'calculationMode': 'amount',
             'kind': 'discount' if amount < 0 else 'adjustment',
         })
@@ -35932,7 +36067,7 @@ def _costing_vendor_discrepancies(costing):
                 'vendorName': snapshot.get('vendorName') or key.removeprefix('name:'),
                 'expectedAmount': expected,
                 'actualAmount': None,
-                'message': 'Vendor is missing from Manpower & Vendors.',
+                'message': 'Vendor is missing from Crew & Vendors.',
             })
             continue
         if event_id:
@@ -36817,8 +36952,7 @@ def _costing_event_prepared_items(costing):
             continue
         finance_line = _costing_finance_line(line)
         if _costing_line_is_external(line):
-            if _costing_vendor_management_mode(costing, line) == 'dry-hire':
-                prepared_items.append(_costing_event_loan_marker(costing, line))
+            prepared_items.append(_costing_event_loan_marker(costing, line))
             continue
         group = _finance_inventory_group_from_line(finance_line)
         if group:
@@ -36830,13 +36964,12 @@ def _costing_event_prepared_items(costing):
     for row in custom_groups.values():
         line = row['line']
         if _costing_line_is_external(line):
-            if _costing_vendor_management_mode(costing, line) == 'dry-hire':
-                marker = _costing_event_loan_marker(costing, {
-                    **line,
-                    'groupHeaderQuantity': row['quantity'],
-                    'groupItemQuantity': 1,
-                })
-                prepared_items.append(marker)
+            marker = _costing_event_loan_marker(costing, {
+                **line,
+                'groupHeaderQuantity': row['quantity'],
+                'groupItemQuantity': 1,
+            })
+            prepared_items.append(marker)
             continue
         custom_marker = _finance_custom_marker_from_line(
             _costing_finance_line(line), row['quantity']
@@ -36868,8 +37001,6 @@ def _costing_event_subprojects(costing, subprojects=None):
                 continue
             finance_line = _costing_finance_line(line)
             if _costing_line_is_external(line):
-                if _costing_vendor_management_mode(costing, line) != 'dry-hire':
-                    continue
                 custom_ref = _costing_event_loan_marker(costing, line)
                 items.append({
                     'lineId': f"costing_vendor_{line.get('id') or secrets.token_hex(5)}",
@@ -37079,6 +37210,112 @@ def _finance_sync_changed_costing_event_vendors(
         'action': 'costing-vendor-updated',
     })
     return updated
+
+
+def _finance_vendor_company_key(value):
+    """Normalise vendor names so legacy short names still match vendor profiles."""
+    key = re.sub(r'[^a-z0-9]+', ' ', str(value or '').casefold()).strip()
+    suffixes = (
+        ' private limited', ' pte limited', ' pte ltd', ' limited', ' ltd',
+    )
+    changed = True
+    while key and changed:
+        changed = False
+        for suffix in suffixes:
+            if key.endswith(suffix):
+                key = key[:-len(suffix)].strip()
+                changed = True
+                break
+    return key
+
+
+def _finance_remove_delivered_vendor_loans(document, costing, vendor_key):
+    """Remove untouched generated loan demand for a delivered vendor.
+
+    Plan can be detached from full quotation syncing after operational edits. A
+    vendor fulfilment change must still remove generated loan rows in that case,
+    without rebuilding or overwriting the rest of the event.
+    """
+    event_id = _safe_int((document or {}).get('eventId'), 0)
+    event = data_manager.events.get(event_id) if event_id else None
+    if not event:
+        return 0
+
+    entry = next((
+        row for row in (costing or {}).get('vendorManagement') or []
+        if str((row or {}).get('key') or '') == str(vendor_key or '')
+    ), None)
+    if not entry or str(entry.get('mode') or '').strip().lower() != 'outsourced':
+        return 0
+
+    vendor_name_key = _finance_vendor_company_key(entry.get('vendorName'))
+    exact_refs = {
+        _costing_event_loan_marker(costing, line)
+        for line in (costing or {}).get('lineItems') or []
+        if _costing_vendor_key(
+            line.get('vendorName'), line.get('vendorType'), line.get('vendorId')
+        ) == str(vendor_key or '')
+    }
+
+    def is_generated_vendor_ref(ref):
+        if ref in exact_refs:
+            return True
+        custom = _parse_custom_marker(ref)
+        uid = str((custom or {}).get('uid') or '').strip().casefold()
+        return bool(
+            custom
+            and custom.get('type') == 'LOAN'
+            and uid.startswith(('costing_', 'finance_'))
+            and vendor_name_key
+            and _finance_vendor_company_key(custom.get('company')) == vendor_name_key
+        )
+
+    operational_refs = set(getattr(event, 'actually_prepared', []) or [])
+    operational_refs.update(getattr(event, 'returned_items', []) or [])
+    operational_refs.update(getattr(event, 'extra_assets', []) or [])
+    operational_refs.update(getattr(event, 'custom_collected', []) or [])
+    removed_refs = set()
+
+    for room in getattr(event, 'subprojects', []) or []:
+        if not isinstance(room, dict):
+            continue
+        next_items = []
+        for item in room.get('items') or []:
+            if not isinstance(item, dict):
+                next_items.append(item)
+                continue
+            refs = [str(ref) for ref in item.get('assetRefs') or []]
+            removable = {
+                ref for ref in refs
+                if ref not in operational_refs and is_generated_vendor_ref(ref)
+            }
+            if not removable:
+                next_items.append(item)
+                continue
+            remaining_refs = [ref for ref in refs if ref not in removable]
+            removed_refs.update(removable)
+            if remaining_refs or not item.get('isCustom'):
+                replacement = copy.deepcopy(item)
+                replacement['assetRefs'] = remaining_refs
+                next_items.append(replacement)
+        room['items'] = next_items
+
+    for ref in list(getattr(event, 'prepared_items', []) or []):
+        if ref in operational_refs or not is_generated_vendor_ref(ref):
+            continue
+        removed_refs.add(ref)
+
+    if not removed_refs:
+        return 0
+    event.prepared_items = [
+        ref for ref in (getattr(event, 'prepared_items', []) or [])
+        if ref not in removed_refs
+    ]
+    _sync_event_model_markers_from_subprojects(event)
+    update_event_state(event)
+    data_manager.save_event(event)
+    invalidate_cache()
+    return len(removed_refs)
 
 
 def _finance_event_asset_fingerprint(event):
@@ -38194,7 +38431,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'description': f'{subject_name} - Invoice'[:300],
                 'category': 'Vendor service' if is_vendor_service else 'Manpower',
                 'categoryKey': 'vendor-service' if is_vendor_service else 'manpower',
-                'categoryLabel': 'Manpower & Vendors',
+                'categoryLabel': 'Crew & Vendors',
                 'department': ', '.join(departments) or 'Unallocated',
                 'vendor': subject_name,
                 'amount': round(amount, 2),
@@ -38487,7 +38724,7 @@ def _finance_profit_loss_payload(event, finance_data):
             'key': f"manpower-{_normalise_department_code(row['department']).lower()}",
             'group': 'manpower',
             'department': row['department'],
-            'label': f"Manpower & Vendors - {row['label']}",
+            'label': f"Crew & Vendors - {row['label']}",
             'amount': row['amount'],
         })
     vendor_service_department_rows = []
@@ -38923,7 +39160,7 @@ def _accounting_source_documents(finance_data):
                 continue
             contact = _finance_profit_loss_subject_name(workforce, subject_id)
             for kind, label, account_code in (
-                ('invoices', 'Manpower & Vendors invoice', '6000'),
+                ('invoices', 'Crew & Vendors invoice', '6000'),
                 ('claims', 'Worker claim', '6800'),
             ):
                 for record in rows.get(kind) if isinstance(rows.get(kind), list) else []:
@@ -43488,7 +43725,7 @@ def duplicate_costing(costing_id):
 @app.route('/api/events/<int:event_id>/vendor-management', methods=['PUT'])
 @require_admin
 def update_event_vendor_management(event_id):
-    """Change Costing vendor fulfilment and immediately rebuild managed Plan demand."""
+    """Change vendor fulfilment for linked costings or manual event loans."""
     event = data_manager.events.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
@@ -43498,6 +43735,9 @@ def update_event_vendor_management(event_id):
     if not key or mode not in {'dry-hire', 'outsourced'}:
         return jsonify({'error': 'Choose Self Pickup or Delivered for a vendor'}), 400
 
+    selected = None
+    updated_costing = None
+    current_costing = None
     with _finance_lock:
         finance_data = _load_finance_data()
         quotation = next((
@@ -43507,25 +43747,64 @@ def update_event_vendor_management(event_id):
             and _safe_int(row.get('eventId'), 0) == int(event_id)
         ), None)
         costing = _linked_costing_for_quotation(finance_data, quotation) if quotation else None
-        if not quotation or not costing:
-            return jsonify({'error': 'This event has no linked costing'}), 404
+        if quotation and costing:
+            current_costing = _normalise_costing_document(costing, costing)
+            entries = copy.deepcopy(current_costing.get('vendorManagement') or [])
+            selected = next((row for row in entries if row.get('key') == key), None)
+            if selected is not None:
+                selected['mode'] = mode
+                costing_payload = copy.deepcopy(current_costing)
+                costing_payload['vendorManagement'] = entries
+                updated_costing = _normalise_costing_document(
+                    costing_payload, costing
+                )
+                for index, row in enumerate(finance_data.get('documents') or []):
+                    if str(row.get('id') or '') == str(updated_costing.get('id') or ''):
+                        finance_data['documents'][index] = updated_costing
+                        break
 
-        current = _normalise_costing_document(costing, costing)
-        entries = copy.deepcopy(current.get('vendorManagement') or [])
-        selected = next((row for row in entries if row.get('key') == key), None)
+                if quotation.get('eventManagedByQuotation'):
+                    _finance_sync_managed_event(quotation, finance_data, force=True)
+                else:
+                    _finance_sync_changed_costing_event_vendors(
+                        quotation, current_costing, updated_costing
+                    )
+                _save_finance_data(finance_data)
+
+    if selected is None:
+        selected = next((
+            row for row in _event_manual_vendor_management(event)
+            if row.get('key') == key
+        ), None)
         if selected is None:
-            return jsonify({'error': 'Vendor is no longer used by this costing'}), 404
+            return jsonify({'error': 'Vendor is no longer used by this event'}), 404
         selected['mode'] = mode
-        costing_payload = copy.deepcopy(current)
-        costing_payload['vendorManagement'] = entries
-        updated_costing = _normalise_costing_document(costing_payload, costing)
-        for index, row in enumerate(finance_data.get('documents') or []):
-            if str(row.get('id') or '') == str(updated_costing.get('id') or ''):
-                finance_data['documents'][index] = updated_costing
-                break
 
-        _finance_sync_managed_event(quotation, finance_data, force=True)
-        _save_finance_data(finance_data)
+    # Persist the fulfilment choice on the event as well as the linked costing.
+    # This lets every Plan/Prepare summary exclude delivered demand without
+    # having to reload or understand the finance document.
+    stored = copy.deepcopy(getattr(event, 'vendor_management', []) or [])
+    stored_row = next((
+        row for row in stored
+        if isinstance(row, dict) and (
+            str(row.get('key') or '') == key
+            or _finance_vendor_company_key(row.get('vendorName'))
+            == _finance_vendor_company_key(selected.get('vendorName'))
+        )
+    ), None)
+    if stored_row is None:
+        stored_row = {
+            'key': key,
+            'vendorId': selected.get('vendorId') or '',
+            'vendorType': selected.get('vendorType') or 'vendor',
+            'vendorName': selected.get('vendorName') or '',
+        }
+        stored.append(stored_row)
+    stored_row['mode'] = mode
+    event.vendor_management = stored
+    update_event_state(event)
+    data_manager.save_event(event)
+    invalidate_cache()
 
     log_action(
         f"Changed {selected.get('vendorName') or 'vendor'} to "
@@ -43534,14 +43813,16 @@ def update_event_vendor_management(event_id):
     mark_realtime_change('finance', {
         'action': 'vendor-management-updated',
         'eventId': event_id,
-        'costingId': updated_costing.get('id'),
+        'costingId': (updated_costing or {}).get('id'),
     })
     mark_realtime_change('event-assets', {
         'action': 'vendor-management-updated', 'eventId': event_id,
     })
     return jsonify({
         'success': True,
-        'data': updated_costing.get('vendorManagement') or [],
+        'data': _event_vendor_management(
+            event, updated_costing or current_costing
+        ),
     })
 
 
@@ -43567,17 +43848,35 @@ def costing_convert_to_quotation(costing_id):
             })
 
         quotation_lines = _costing_grouped_quotation_lines(costing, {})
-        adjustments = [{
-            'id': new_id('costadjustment'),
-            'scope': 'department',
-            'department': row.get('category') or 'General',
-            'subprojectId': row.get('subprojectId') or 'main',
-            'label': 'Costing adjustment',
-            'amount': round(_safe_float(row.get('amount'), 0), 2),
-            'calculationMode': 'amount',
-            'kind': 'discount' if _safe_float(row.get('amount'), 0) < 0 else 'adjustment',
-        } for row in costing.get('categoryAdjustments') or []
-            if abs(_safe_float(row.get('amount'), 0)) >= 0.005]
+        adjustments = []
+        for row in costing.get('categoryAdjustments') or []:
+            amount = round(_safe_float((row or {}).get('amount'), 0), 2)
+            if abs(amount) < 0.005:
+                continue
+            category = str((row or {}).get('category') or 'General')
+            subproject_id = str((row or {}).get('subprojectId') or 'main')
+            category_base = sum(
+                max(0, _safe_float(line.get('total'), 0))
+                for line in quotation_lines
+                if str(line.get('subprojectId') or 'main') == subproject_id
+                and _finance_adjustment_system_name(_finance_system_name(
+                    line.get('department'), line.get('systemName')
+                )) == _finance_adjustment_system_name(category)
+            )
+            adjustments.append({
+                'id': new_id('costadjustment'),
+                'scope': 'department',
+                'department': category,
+                'subprojectId': subproject_id,
+                'label': 'Costing adjustment',
+                'amount': amount,
+                'percent': (
+                    round(abs(amount) / category_base * 100, 4)
+                    if category_base else 0
+                ),
+                'calculationMode': 'amount',
+                'kind': 'discount' if amount < 0 else 'adjustment',
+            })
         quotation = _normalise_finance_document({
             'projectName': costing['projectName'],
             'eventLocation': costing.get('eventLocation') or '',

@@ -168,6 +168,18 @@ def _is_optional_category(value):
     return bool(re.search(r'\boptional\b', str(value or ''), flags=re.IGNORECASE))
 
 
+def _multiplier_column_label(lines):
+    """Match the quotation category header's Days/Mult selection."""
+    labels = {
+        'Mult'
+        if str(line.get('costingMultiplierLabel') or '').strip().lower() == 'mult'
+        else 'Day'
+        for line in (lines or [])
+        if isinstance(line, dict)
+    }
+    return 'MULT' if labels == {'Mult'} else 'DAY(S)'
+
+
 def _ensure_cjk_font(bold=False):
     """Register an embedded CJK font when available, with a CID fallback."""
     weight = 'bold' if bold else 'regular'
@@ -908,16 +920,6 @@ def build_finance_pdf(document, company, logo_path=''):
     ]
     adjustments = document.get('adjustments') or []
     subprojects = document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]
-    multiplier_labels = {
-        'Mult'
-        if str(line.get('costingMultiplierLabel') or '').strip().lower() == 'mult'
-        else 'Day'
-        for line in lines
-    }
-    multiplier_column_label = (
-        'MULT' if multiplier_labels == {'Mult'} else 'DAY(S)'
-    )
-
     story = [
         Table(
             [[_paragraph(title, title_style), _paragraph(document.get('number'), number_style)]],
@@ -1233,6 +1235,7 @@ def build_finance_pdf(document, company, logo_path=''):
     for group_index, (subproject, department, department_lines) in enumerate(export_groups):
         subproject_id = str(subproject.get('id') or 'main')
         optional_category = _is_optional_category(department)
+        multiplier_column_label = _multiplier_column_label(department_lines)
         first_group_for_subproject = subproject_id != current_subproject_id
         if first_group_for_subproject:
             current_subproject_id = subproject_id

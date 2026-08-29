@@ -860,7 +860,7 @@ function eventWorkflowFallbackProgress(event) {
   const quantityStatus = done => !required || !done ? 'neutral' : done >= required ? 'green' : 'orange';
   return {
     plan: { status: required ? 'green' : 'neutral', label: required ? `Plan: ${required} asset requirements added` : 'Plan: no assets added' },
-    manpower: { status: 'neutral', label: 'Manpower & Vendors: no assignments' },
+    manpower: { status: 'neutral', label: 'Crew & Vendors: no assignments' },
     transport: { status: 'neutral', label: 'Transport: no trips scheduled' },
     prepare: { status: quantityStatus(prepared), label: `Prepare: ${Math.min(prepared, required)}/${required} assets prepared` },
     return: { status: quantityStatus(returned), label: `Return: ${Math.min(returned, required)}/${required} assets returned` },
@@ -1394,13 +1394,14 @@ function schedulePrepareUiSync(eventId, delay = 600) {
       return;
     }
     try {
-      const response = await apiCall(`/api/events/${eventId}`);
-      applyPrepareCanonicalProgress(response.data || {});
       if (
         document.getElementById('prepare-new-section')?.classList.contains('active') &&
         Number(prepareNewPageState.eventId) === Number(eventId)
       ) {
         await refreshPrepareNewSelectedEvent({ preserve: true });
+      } else {
+        const response = await apiCall(`/api/events/${eventId}`);
+        applyPrepareCanonicalProgress(response.data || {});
       }
     } catch (error) {
       console.warn('Quiet prepare UI sync failed:', error);
@@ -1482,17 +1483,22 @@ function eventContainerBulkQuantity(event, bulkId, subprojectId = '', returned =
   }, 0);
 }
 
-async function processUniversalContainer(eventId, containerId, scannedValue = '') {
+async function processUniversalContainer(eventId, containerOrId, scannedValue = '') {
   const feedbackDiv = document.getElementById('universal-asset-feedback');
   const input = document.getElementById('universalAssetInput');
   const quickAddEnabled = getPrepareQuickAddEnabled();
-  const container = await getContainerById(containerId, true);
+  const containerLookup = typeof containerOrId === 'object'
+    ? String(containerOrId?.id || '')
+    : String(containerOrId || '');
+  const container = typeof containerOrId === 'object'
+    ? containerOrId
+    : await getContainerById(containerLookup, false);
   if (!container) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
+    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerLookup} not found`);
     return;
   }
 
-  const containerLabel = container.id || containerId;
+  const containerLabel = container.id || containerLookup;
   const assetIds = (container.assetIds || []).map(a => String(a || '').trim()).filter(Boolean);
   const bulkItems = containerBulkItems(container);
   const total = assetIds.length + bulkItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -1512,14 +1518,11 @@ async function processUniversalContainer(eventId, containerId, scannedValue = ''
     );
   }
 
-  let event;
-  try {
-    const eventRes = await apiCall(`/api/events/${eventId}`);
-    event = eventRes.data || {};
-  } catch (e) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Failed to load event: ${escapeHtml(e.message || String(e))}`);
-    return;
-  }
+  const event = (
+    Number(prepareNewPageState.eventId) === Number(eventId)
+      ? prepareNewPageState.event
+      : window.__currentPrepareEventData
+  ) || {};
 
   const preparedSet = new Set(event.actuallyPrepared || []);
   const returnedSet = new Set(event.returnedItems || []);
@@ -1535,6 +1538,7 @@ async function processUniversalContainer(eventId, containerId, scannedValue = ''
   };
 
   window.__processingContainerBatch = true;
+  prepareNewPageState.suppressRealtimeUntil = Date.now() + 5000;
   try {
     for (const aid of assetIds) {
       if (returnedSet.has(aid)) { results.skippedReturned.push(aid); results.skippedReturnedQuantity += 1; continue; }
@@ -1632,7 +1636,7 @@ async function processUniversalContainer(eventId, containerId, scannedValue = ''
     }
   } finally {
     window.__processingContainerBatch = false;
-    clearWorkflowScanInput(input, scannedValue || containerId);
+    clearWorkflowScanInput(input, scannedValue || containerLookup);
   }
 
   const failed = results.failedQuantity;

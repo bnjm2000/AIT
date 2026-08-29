@@ -91,7 +91,8 @@ class PageRoutingTests(unittest.TestCase):
 
         self.login('manager')
         self.assertEqual(self.client.get('/plan').status_code, 200)
-        self.assertEqual(self.client.get('/invoice-claims').status_code, 200)
+        self.assertEqual(self.client.get('/invoice-claims').status_code, 302)
+        self.assertEqual(self.client.get('/manpower/41/by-department').status_code, 200)
         self.assertEqual(self.client.get('/vehicles').status_code, 200)
         self.assertEqual(self.client.get('/users').status_code, 200)
         self.assertEqual(self.client.get('/company-details').status_code, 200)
@@ -106,6 +107,7 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(self.client.get('/plan').status_code, 302)
 
         self.login('owner')
+        self.assertEqual(self.client.get('/invoice-claims').status_code, 200)
         self.assertEqual(self.client.get('/companies').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 200)
         self.assertEqual(self.client.get('/costing').status_code, 200)

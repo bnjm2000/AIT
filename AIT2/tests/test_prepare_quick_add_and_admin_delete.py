@@ -2,6 +2,7 @@ import tempfile
 import unittest
 import os
 from urllib.parse import quote
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager
@@ -132,6 +133,57 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(body['data']['addedRequirementUnits'], 1)
         self.assertNotIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|2|Matching item', event.prepared_items)
+
+    def test_scanned_assignment_persists_event_and_audit_log_in_one_write(self):
+        event = self.make_event(event_id=126, actual=[])
+
+        with patch.object(
+            self.data_manager,
+            'save_event',
+            wraps=self.data_manager.save_event,
+        ) as save_event:
+            response = self.post_assign(event.event_id, asset_id='A#01')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(save_event.call_count, 1)
+        self.assertEqual(len(event.event_logs), 1)
+        self.data_manager.load_events()
+        self.assertEqual(len(self.data_manager.events[event.event_id].event_logs), 1)
+
+    def test_prepare_scan_reuses_loaded_state_and_debounces_reconciliation(self):
+        project_root = os.path.dirname(app_module.__file__)
+        with open(
+            os.path.join(project_root, 'static', 'js', 'app.js'),
+            encoding='utf-8',
+        ) as app_file:
+            app_source = app_file.read()
+        with open(
+            os.path.join(project_root, 'static', 'js', 'events-overview.js'),
+            encoding='utf-8',
+        ) as overview_file:
+            overview_source = overview_file.read()
+
+        scan_source = app_source.split(
+            'async function processUniversalAsset(eventId)', 1
+        )[1].split('async function assignAndPrepareAsset', 1)[0]
+        self.assertNotIn("apiCall('/api/assets/available')", scan_source)
+        self.assertNotIn("apiCall(`/api/events/${eventId}`)", scan_source)
+        self.assertIn('getContainerForPrepareScan(assetId)', scan_source)
+        self.assertIn('if (__containersCache)', app_source)
+        self.assertIn('processUniversalContainer(eventId, container, scannedValue)', scan_source)
+        self.assertIn('refreshPrepareUiAfterAssetChange(eventId, delay = 800)', app_source)
+
+        container_source = overview_source.split(
+            'async function processUniversalContainer(', 1
+        )[1].split('(function initialisePatchedEventViews', 1)[0]
+        self.assertNotIn("apiCall(`/api/events/${eventId}`)", container_source)
+        self.assertIn("typeof containerOrId === 'object'", container_source)
+
+        sync_source = overview_source.split(
+            'function schedulePrepareUiSync(', 1
+        )[1].split('async function prepareSpecificAsset', 1)[0]
+        self.assertIn('await refreshPrepareNewSelectedEvent({ preserve: true })', sync_source)
+        self.assertEqual(sync_source.count("apiCall(`/api/events/${eventId}`)"), 1)
 
     def test_quick_add_creates_room_requirement_without_consuming_matching_extras(self):
         event = self.make_event(
@@ -395,7 +447,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn("const groupKey = section.loan ? `loan:${section.label}` : 'misc';", source)
         self.assertIn('prepareNewPageState.expandedCustomGroups.has(groupKey)', source)
         self.assertIn('function prepareNewRenderCustomMutation()', source)
-        self.assertIn('customList.innerHTML = renderPrepareNewCustomList();', source)
+        self.assertIn('customList.innerHTML = renderPrepareNewCustomList(customAssets);', source)
         self.assertIn('skipUiSync: isCustom', source)
         self.assertIn('if (!skipUiSync) schedulePrepareUiSync(eventId);', source)
         self.assertIn("const panelKey = 'standalone-extra-assets';", source)
@@ -412,6 +464,42 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn('.prepare-new-left {', template)
         self.assertIn('overflow-y: auto;', template)
         self.assertIn('overflow-wrap: anywhere;', template)
+
+    def test_grouped_misc_prepare_targets_the_next_unprepared_record(self):
+        source = APP_BUNDLE_SOURCE
+        custom_list = source.split('function renderPrepareNewCustomList(', 1)[1].split(
+            'function renderPrepareNewEventDetails()', 1
+        )[0]
+
+        self.assertIn('const nextPrepareId = ids.find(assetId => (', custom_list)
+        self.assertIn('!prepared.has(assetId)', custom_list)
+        self.assertIn('!returned.has(assetId)', custom_list)
+        self.assertIn('const encodedPrepareId = planEncode(nextPrepareId);', custom_list)
+        self.assertIn("'${encodedPrepareId}', this)", custom_list)
+        self.assertIn('`${preparedCount} / ${ids.length} prepared`', custom_list)
+
+    def test_misc_loan_card_reports_pending_action_quantities(self):
+        source = APP_BUNDLE_SOURCE
+        custom_list = source.split('function prepareNewCustomMemberQuantity(', 1)[1].split(
+            'function renderPrepareNewEventDetails()', 1
+        )[0]
+        page = source.split('function renderPrepareNewPage()', 1)[1].split(
+            'function prepareNewCaptureViewState()', 1
+        )[0]
+        mutation = source.split('function prepareNewRenderCustomMutation()', 1)[1].split(
+            'async function prepareNewPrepareAsset(', 1
+        )[0]
+
+        self.assertIn('function prepareNewCustomPendingCounts(', source)
+        self.assertIn('if (prepared.has(assetId) || returned.has(assetId)) return;', custom_list)
+        self.assertIn('counts.collection += quantity;', custom_list)
+        self.assertIn('counts.preparation += quantity;', custom_list)
+        self.assertIn("parts.push(`${counts.collection} to collect`)", custom_list)
+        self.assertIn("parts.push(`${counts.preparation} to prepare`)", custom_list)
+        self.assertIn('prepareNewCustomPendingCounts(section.rows, event)', custom_list)
+        self.assertIn('id="prepareNewCustomPendingBadge"', page)
+        self.assertNotIn('${prepareNewCustomAssets().length} items', page)
+        self.assertIn("pendingBadge.textContent = prepareNewCustomPendingLabel(", mutation)
 
     def test_unprepare_quantity_cannot_remove_assigned_specific_asset(self):
         event = self.make_event(

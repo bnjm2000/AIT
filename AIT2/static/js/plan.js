@@ -1386,7 +1386,7 @@ function planOpenEventChooser(context = 'plan') {
       'profit-loss': ['Choose Profit & Loss Event', 'Select an event to review revenue, costs, and net profit'],
       compare: ['Choose Event to Compare', 'Select an event to compare against its quotation'],
       return: ['Choose Event to Return', 'Select an event to receive its returned assets'],
-      workforce: ['Choose Event for Manpower & Vendors', 'Select an event to manage its manpower and vendors'],
+      workforce: ['Choose Event for Crew & Vendors', 'Select an event to manage its crew and vendors'],
       transport: ['Choose Event for Transport', 'Select an event to manage its transport bookings'],
       'quotation-link': ['Pair Existing Event', 'Select the event to link to this quotation'],
       plan: ['Other Events', 'Select any event to update its plan']

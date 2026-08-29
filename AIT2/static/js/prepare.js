@@ -657,12 +657,18 @@ function renderPrepareNewAssignment() {
 }
 
 function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepareNewPageState) {
+  const deliveredVendors = eventDeliveredVendorKeys(event);
   const assets = getCustomAssetsFromEvent(event || {})
     .map(asset => ({
       ...asset,
       parsedCustom: asset.parsedCustom || parseCustomAsset(asset.id, asset)
     }))
-    .filter(asset => !!asset.parsedCustom)
+    .filter(asset => (
+      !!asset.parsedCustom
+      && !eventCustomAssetIsDelivered(
+        event, asset, asset.parsedCustom, deliveredVendors
+      )
+    ))
     .sort((a, b) => customAssetDisplayName(a.parsedCustom, false).localeCompare(
       customAssetDisplayName(b.parsedCustom, false),
       undefined,
@@ -671,8 +677,41 @@ function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepa
   return groupEventCustomAssets(eventScopedCustomAssets(event, state, assets));
 }
 
-function renderPrepareNewCustomList() {
-  const customAssets = prepareNewCustomAssets();
+function prepareNewCustomMemberQuantity(asset, assetId) {
+  const member = (asset?.members || []).find(row => String(row?.id || '') === String(assetId || ''));
+  const custom = member?.parsedCustom || parseCustomAsset(member?.id, member) || asset?.parsedCustom;
+  const quantity = Number(custom?.quantity || 1);
+  return Number.isFinite(quantity) ? Math.max(1, quantity) : 1;
+}
+
+function prepareNewCustomPendingCounts(customAssets, event = prepareNewPageState.event) {
+  const prepared = new Set(event?.actuallyPrepared || []);
+  const collected = new Set(event?.customCollected || []);
+  const returned = new Set(event?.returnedItems || []);
+  return (customAssets || []).reduce((counts, asset) => {
+    const custom = asset?.parsedCustom;
+    const ids = (asset?.assetIds || [asset?.id]).map(String).filter(Boolean);
+    ids.forEach(assetId => {
+      if (prepared.has(assetId) || returned.has(assetId)) return;
+      const quantity = prepareNewCustomMemberQuantity(asset, assetId);
+      if (custom?.type === 'LOAN' && !collected.has(assetId)) {
+        counts.collection += quantity;
+      } else {
+        counts.preparation += quantity;
+      }
+    });
+    return counts;
+  }, { preparation: 0, collection: 0 });
+}
+
+function prepareNewCustomPendingLabel(counts) {
+  const parts = [];
+  if (Number(counts?.collection || 0) > 0) parts.push(`${counts.collection} to collect`);
+  if (Number(counts?.preparation || 0) > 0) parts.push(`${counts.preparation} to prepare`);
+  return parts.join(' · ') || '0 pending';
+}
+
+function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
   if (!customAssets.length) {
     return '<div class="prepare-new-empty">No miscellaneous or loan items.</div>';
   }
@@ -693,12 +732,25 @@ function renderPrepareNewCustomList() {
     const isCollected = collectedCount === ids.length;
     const isReturned = returnedCount === ids.length;
     const collectedIds = ids.filter(assetId => collected.has(assetId) && !prepared.has(assetId));
+    const nextPrepareId = ids.find(assetId => (
+      !prepared.has(assetId)
+      && !returned.has(assetId)
+      && (custom.type !== 'LOAN' || collected.has(assetId))
+    )) || ids.find(assetId => !prepared.has(assetId) && !returned.has(assetId)) || id;
+    const nextCollectId = ids.find(assetId => (
+      !collected.has(assetId) && !prepared.has(assetId) && !returned.has(assetId)
+    )) || id;
+    const encodedPrepareId = planEncode(nextPrepareId);
+    const encodedCollectId = planEncode(nextCollectId);
     const dragPayload = eventSubprojectDragPayload(
       prepareNewPageState,
       prepareNewPageState.event,
       { kind: 'asset', assetRef: id }
     );
     let status = prepareNewStatusBadge('pending', 'Pending');
+    if (preparedCount > 0 && !isPrepared) {
+      status = prepareNewStatusBadge('pending', `${preparedCount} / ${ids.length} prepared`);
+    }
     let action = '';
     if (consolidated) {
       if (isReturned) {
@@ -735,16 +787,16 @@ function renderPrepareNewCustomList() {
                         onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}', '', this)">Unprepare</button>`;
     } else if (custom.type === 'LOAN' && !isCollected) {
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collect</button>`;
+                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedCollectId}')">Collect</button>`;
     } else {
       if (isCollected) status = prepareNewStatusBadge('collected', 'Collected');
       action = custom.type === 'LOAN'
         ? `<button type="button" class="plan-button plan-button-small plan-button-secondary"
                    onclick="prepareNewUncollectCustom(${Number(event.id)}, '${encodedId}')">Uncollect</button>
            <button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}', this)">Prepare</button>`
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedPrepareId}', this)">Prepare</button>`
         : `<button type="button" class="plan-button plan-button-small"
-                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}', this)">Prepare</button>`;
+                   onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedPrepareId}', this)">Prepare</button>`;
     }
     const detail = custom.type === 'LOAN'
       ? (custom.company ? `From ${custom.company}` : '')
@@ -780,6 +832,9 @@ function renderPrepareNewCustomList() {
 
   return sections.map(section => {
     const groupKey = section.loan ? `loan:${section.label}` : 'misc';
+    const pendingLabel = prepareNewCustomPendingLabel(
+      prepareNewCustomPendingCounts(section.rows, event)
+    );
     return `
     <details class="prepare-new-custom-group"
              ${prepareNewPageState.expandedCustomGroups.has(groupKey) ? 'open' : ''}
@@ -787,7 +842,7 @@ function renderPrepareNewCustomList() {
              ontoggle="prepareNewSetCustomGroupExpanded('${planEncode(groupKey)}',this.open,this)">
       <summary>
         <span>${section.loan ? 'Loan from ' : ''}${escapeHtml(section.label)}</span>
-        <span class="plan-badge">${section.rows.length}</span>
+        <span class="plan-badge">${escapeHtml(pendingLabel)}</span>
         <span aria-hidden="true">\u2304</span>
       </summary>
       <div class="prepare-new-custom-group-rows">${section.rows.map(renderRow).join('')}</div>
@@ -909,6 +964,10 @@ function renderPrepareNewPage() {
   root.classList.toggle('event-consolidated-mode', consolidated);
   prepareNewInitialExpansion();
   const totals = prepareNewTotals(event);
+  const customAssets = prepareNewCustomAssets(event);
+  const customPendingLabel = prepareNewCustomPendingLabel(
+    prepareNewCustomPendingCounts(customAssets, event)
+  );
   const quickAddEnabled = getPrepareQuickAddEnabled();
   root.innerHTML = `
     <div class="prepare-new-heading">
@@ -993,9 +1052,9 @@ function renderPrepareNewPage() {
         <section class="prepare-new-card prepare-new-custom-list-card">
           <div class="prepare-new-card-header">
             <h3>&#128230; Misc / Loan Items</h3>
-            <span class="plan-badge">${prepareNewCustomAssets().length} items</span>
+            <span id="prepareNewCustomPendingBadge" class="plan-badge">${escapeHtml(customPendingLabel)}</span>
           </div>
-          <div class="prepare-new-custom-list">${renderPrepareNewCustomList()}</div>
+          <div class="prepare-new-custom-list">${renderPrepareNewCustomList(customAssets)}</div>
         </section>
       </div>
       <div class="prepare-new-column prepare-new-center">
@@ -1255,8 +1314,15 @@ function prepareNewSetLocalCustomPrepared(assetId, prepared) {
 }
 
 function prepareNewRenderCustomMutation() {
+  const customAssets = prepareNewCustomAssets();
   const customList = document.querySelector('.prepare-new-custom-list');
-  if (customList) customList.innerHTML = renderPrepareNewCustomList();
+  if (customList) customList.innerHTML = renderPrepareNewCustomList(customAssets);
+  const pendingBadge = document.getElementById('prepareNewCustomPendingBadge');
+  if (pendingBadge) {
+    pendingBadge.textContent = prepareNewCustomPendingLabel(
+      prepareNewCustomPendingCounts(customAssets)
+    );
+  }
   const progressCard = document.querySelector('.prepare-new-progress-card');
   if (progressCard) progressCard.outerHTML = renderPrepareNewOverallProgressCard();
   const assignmentProgress = document.getElementById('prepareNewAssignmentProgress');

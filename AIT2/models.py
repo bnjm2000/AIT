@@ -335,6 +335,7 @@ class Event:
         assigned_users=None,
         subprojects=None,
         delivery_order=None,
+        vendor_management=None,
     ):
         clean_name, clean_location, legacy_location_extracted = (
             split_legacy_event_name_location(name, location)
@@ -360,6 +361,7 @@ class Event:
         self.assigned_users = list(assigned_users or [])
         self.subprojects = list(subprojects or [])
         self.delivery_order = dict(delivery_order or {})
+        self.vendor_management = list(vendor_management or [])
 
 
 class LogEntry:

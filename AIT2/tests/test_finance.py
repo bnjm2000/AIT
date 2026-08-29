@@ -2579,6 +2579,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('groupTitle: containerId', source)
         self.assertIn("financeLineGroupState.title = selected.containerId", source)
         self.assertIn('function financeContainerMajorityDepartment(', source)
+        self.assertIn('function financeDepartmentIdentity(line)', source)
+        self.assertIn('const key = financeDepartmentIdentity(line);', source)
+        self.assertIn('financeCategoryOperationalDepartment(category)', add_custom)
+        self.assertIn("return `code:${code}`;", source)
+        self.assertIn("return `name:${name || 'general'}`;", source)
         self.assertIn(
             "results?.classList.contains('open') && financeState.catalog.length > 0",
             source,
@@ -3317,6 +3322,50 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertIn('MULT', text)
         self.assertNotIn('DAY(S)', text)
+
+    def test_pdf_uses_multiplier_label_for_each_category(self):
+        quotation = self.create_quote('Category Multiplier Labels')
+        quotation['lineItems'] = [
+            {
+                'id': 'mult-line',
+                'description': 'Audio package',
+                'department': 'Audio Department',
+                'days': 2,
+                'costingMultiplierLabel': 'Mult',
+                'quantity': 1,
+                'uom': 'lot',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+            {
+                'id': 'day-line',
+                'description': 'Lighting package',
+                'department': 'Lighting Department',
+                'days': 2,
+                'costingMultiplierLabel': 'Day',
+                'quantity': 1,
+                'uom': 'lot',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+        ]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        pdf = self.client.get(f"/api/quotations/{saved['id']}/pdf")
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf.data)).pages
+        )
+        audio_index = text.index('Audio')
+        mult_index = text.index('MULT', audio_index)
+        lighting_index = text.index('Lighting', mult_index)
+        day_index = text.index('DAY(S)', lighting_index)
+        self.assertLess(audio_index, mult_index)
+        self.assertLess(mult_index, lighting_index)
+        self.assertLess(lighting_index, day_index)
 
     def test_group_persists_after_adding_line_and_exports_as_one_pdf_row(self):
         from quotation_pdf import _group_pdf_line_units
@@ -4235,7 +4284,7 @@ class FinanceFeatureTests(unittest.TestCase):
         )[0]
         self.assertIn('profitLossOpenClaimReview', claim_actions)
         self.assertIn('aria-label="Review claim"', claim_actions)
-        self.assertIn('aria-label="Open Manpower &amp; Vendors"', claim_actions)
+        self.assertIn('aria-label="Open Crew &amp; Vendors"', claim_actions)
         self.assertNotIn('finance-delete-line', claim_actions)
 
     def test_repeatable_schedule_rows_extend_event_and_pdf(self):
@@ -5091,7 +5140,7 @@ class FinanceFeatureTests(unittest.TestCase):
             if row.get('sourceId') == 'vendor-invoice-profit'
         )
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
-        self.assertEqual(vendor_invoice['categoryLabel'], 'Manpower & Vendors')
+        self.assertEqual(vendor_invoice['categoryLabel'], 'Crew & Vendors')
 
     def test_profit_loss_budgets_and_worker_claims_stay_under_manpower(self):
         self.login('sales-admin')
@@ -6562,6 +6611,25 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertIn('draggedWholeGroup(lines, indexes)', shared_source)
 
+    def test_quotation_days_and_multiplier_controls_are_scoped_to_category(self):
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        header_source = finance_source.split(
+            'function financeCategoryColumnHeader(department) {', 1
+        )[1].split('function financeGroupDisplayBuckets', 1)[0]
+        category_functions = finance_source.split(
+            'function financeCategoryLineItems(category,', 1
+        )[1].split('function financeToggleTotalLock', 1)[0]
+
+        self.assertIn('financeCategoryMultiplierHeaderLabel(department)', header_source)
+        self.assertIn("financeSetCategoryMultiplierLabels('Day',", header_source)
+        self.assertIn("financeSetCategoryMultiplierLabels('Mult',", header_source)
+        self.assertIn('financeApplyCategoryDays(', header_source)
+        self.assertIn('Apply to this category', header_source)
+        self.assertNotIn('Apply to all lines', header_source)
+        self.assertIn('financeLineSystem(line) === String(category', category_functions)
+        self.assertIn("(line.subprojectId || 'main') === subprojectId", category_functions)
+        self.assertIn('financeCategoryLineItems(category).forEach(line => {', category_functions)
+
     def test_group_child_quantities_are_editable_in_both_workspaces(self):
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
         costing_source = Path('static/js/costing.js').read_text(encoding='utf-8')
@@ -6811,7 +6879,8 @@ class FinanceFeatureTests(unittest.TestCase):
             css_source = css_file.read().lower()
         self.assertIn('financepaymenttermsmarkup', source)
         self.assertNotIn('set all days', source)
-        self.assertIn('apply to all lines', source)
+        self.assertNotIn('apply to all lines', source)
+        self.assertIn('apply to this category', source)
         self.assertIn('ondragstart', source)
         self.assertIn('finance-drag-handle\" draggable=\"true', source)
         self.assertNotIn('class=\"finance-line-row\" draggable=\"true', source)
@@ -6916,7 +6985,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('.pnl-budget-variance.is-over', css_source)
         self.assertNotIn('<th>department</th>', source)
         self.assertNotIn('>view in manpower</button>', source)
-        self.assertIn('aria-label="open manpower &amp; vendors"', source)
+        self.assertIn('aria-label="open crew &amp; vendors"', source)
         self.assertNotIn('<h3>expense categories</h3>', source)
         self.assertIn('/api/finance/compare', source)
         self.assertIn('financeopenclientpicker', source)

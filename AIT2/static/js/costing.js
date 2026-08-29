@@ -88,19 +88,34 @@ function costingAttr(value) {
 }
 
 function costingNumber(value, fallback = 0) {
-  const number = Number(value);
+  const number = typeof value === 'string'
+    ? Number(value.replace(/[$,\s]/g, ''))
+    : Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
 function costingMoney(value) {
   return typeof financeMoney === 'function'
     ? financeMoney(value)
-    : `$${costingNumber(value).toFixed(2)}`;
+    : `${costingNumber(value) < 0 ? '-' : ''}$${Math.abs(costingNumber(value)).toLocaleString('en-SG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
 }
 
 function costingFormatMoneyInput(input) {
   if (!input) return;
-  input.value = costingNumber(input.value).toFixed(2);
+  input.value = costingNumber(input.value).toLocaleString('en-SG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function costingMoneyInputValue(value) {
+  return costingNumber(value).toLocaleString('en-SG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 function costingLineRecalculate(line, mode = 'cost') {
@@ -1391,7 +1406,7 @@ function costingDiscrepancyMarkup() {
   const rows = costingState.current?.vendorDiscrepancies || [];
   if (!rows.length) return '';
   return `<div class="costing-warning" role="alert"><strong>Vendor totals need review</strong>
-    <p>These Manpower &amp; Vendors and Transport amounts changed independently. Your costing values were left untouched.</p>
+    <p>These Crew &amp; Vendors and Transport amounts changed independently. Your costing values were left untouched.</p>
     <ul>${rows.map(row => `<li><b>${costingEscape(row.vendorName)}</b>: costing ${costingEscape(costingMoney(row.expectedAmount))}, vendor ${row.actualAmount == null ? 'missing' : costingEscape(costingMoney(row.actualAmount))}</li>`).join('')}</ul></div>`;
 }
 
@@ -1538,8 +1553,8 @@ function costingCategoryMarkup(category, readOnly) {
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
         <span class="costing-subtotal-label"><strong>Category subtotal</strong><small data-category-adjustment>${totals.adjustment ? `Adjustment ${costingMoney(totals.adjustment)}` : 'No category adjustment'}</small></span>
         <label>Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></label>
-        <label>Profit <span class="costing-inline-money">$<input data-category-profit type="number" step=".01" value="${totals.profit.toFixed(2)}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryProfit('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
-        <label>Client Charge <span class="costing-inline-money">$<input data-category-charge type="number" min="0" step=".01" value="${totals.charged.toFixed(2)}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryCharge('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
+        <label>Profit <span class="costing-inline-money">$<input data-category-profit type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.profit))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryProfit('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
+        <label>Client Charge <span class="costing-inline-money">$<input data-category-charge type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.charged))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryCharge('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
       </div></td></tr></tfoot>
     </table></div>
   </section>`;
@@ -1582,12 +1597,12 @@ function costingLineMarkup(line, index, readOnly) {
     <td><div class="costing-multiplier"><input class="costing-stepper-input" aria-label="${line.multiplierLabel === 'Day' ? 'Days' : 'Multiplier'}" type="number" min="0" step=".5" value="${costingAttr(line.multiplier)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'multiplier',this.value)"></div></td>
     <td><div class="finance-inline-combobox costing-vendor-combobox"><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${costingSelfLinkClass(line)} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" ${readOnly ? 'disabled' : ''} onfocus="costingShowVendorSuggestions(this,${index})" oninput="costingVendorColourChanged(this,${index});costingShowVendorSuggestions(this,${index})" onkeydown="costingLineVendorKeydown(event,this,${index})" onblur="costingVendorInputBlur(this,${index})"><div class="finance-inline-suggestions costing-vendor-suggestions" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(this),120)"></div></div></td>
     <td><textarea class="costing-remarks-input" rows="1" placeholder="Add note" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'remarks',this.value)">${costingEscape(line.remarks || '')}</textarea></td>
-    <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.itemCost).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
-    <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="number" min="0" step=".01" value="${costingAttr(costingNumber(line.costTotal).toFixed(2))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
-    <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="number" step=".01" value="${costingAttr(line.calculatedMarginAmount.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
-    <td><strong data-line-calculated>${costingEscape(costingMoney(line.calculatedSalePrice))}</strong></td>
-    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="number" min="0" step=".01" value="${costingAttr(unitPrice.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
-    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="number" min="0" step=".01" value="${costingAttr(line.salePrice.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
+    <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.itemCost))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
+    <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.costTotal))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
+    <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.calculatedMarginAmount))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
+    <td>${commercialDisabled ? `<strong data-line-calculated>${costingEscape(costingMoney(line.calculatedSalePrice))}</strong>` : `<button type="button" class="costing-calculated-price-reset" data-line-calculated title="Use this calculated price" aria-label="Use calculated price ${costingAttr(costingMoney(line.calculatedSalePrice))}" onclick="costingResetSalePrice(${index})">${costingEscape(costingMoney(line.calculatedSalePrice))}</button>`}</td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(unitPrice))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
+    <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.salePrice))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
     <td>${readOnly ? '' : `<button type="button" class="costing-remove" aria-label="Remove item" title="Remove item" onclick="costingRemoveLine(${index})">&times;</button>`}</td>
   </tr>`;
 }
@@ -2307,6 +2322,18 @@ function costingLineUnitPrice(index, value) {
   costingRefreshCalculations();
 }
 
+function costingResetSalePrice(index) {
+  const line = costingLines()[index];
+  if (!line || line.hiddenFromQuotation) return;
+  costingSetSaleGroupUnitPrice(
+    index,
+    costingLineUnitSale(line, 'calculatedSalePrice')
+  );
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRefreshCalculations();
+}
+
 function costingLineCostTotal(index, value) {
   const line = costingLines()[index];
   if (!line) return;
@@ -2516,8 +2543,8 @@ function costingRefreshCalculations() {
     if (!row) return;
     const unitCost = row.querySelector('[data-line-unit-cost]');
     const costTotal = row.querySelector('[data-line-cost-total]');
-    if (unitCost && document.activeElement !== unitCost) unitCost.value = line.itemCost.toFixed(2);
-    if (costTotal && document.activeElement !== costTotal) costTotal.value = line.costTotal.toFixed(2);
+    if (unitCost && document.activeElement !== unitCost) unitCost.value = costingMoneyInputValue(line.itemCost);
+    if (costTotal && document.activeElement !== costTotal) costTotal.value = costingMoneyInputValue(line.costTotal);
     const marginAmount = row.querySelector('[data-line-margin-amount]');
     const marginPercent = row.querySelector('[data-line-margin-percent]');
     const unitPrice = row.querySelector('[data-line-unit-price]');
@@ -2525,13 +2552,13 @@ function costingRefreshCalculations() {
     const sale = row.querySelector('[data-line-sale]');
     const saleWrap = row.querySelector('[data-line-sale-wrap]');
     const calculated = row.querySelector('[data-line-calculated]');
-    if (marginAmount && document.activeElement !== marginAmount) marginAmount.value = line.calculatedMarginAmount.toFixed(2);
+    if (marginAmount && document.activeElement !== marginAmount) marginAmount.value = costingMoneyInputValue(line.calculatedMarginAmount);
     if (marginPercent && document.activeElement !== marginPercent) marginPercent.value = line.targetMarginPercent.toFixed(2);
     const currentUnitPrice = costingLineUnitSale(line);
     const unitPriceState = costingUnitPriceState(line);
     const saleState = costingSaleState(line);
-    if (unitPrice && document.activeElement !== unitPrice) unitPrice.value = currentUnitPrice.toFixed(2);
-    if (sale && document.activeElement !== sale) sale.value = line.salePrice.toFixed(2);
+    if (unitPrice && document.activeElement !== unitPrice) unitPrice.value = costingMoneyInputValue(currentUnitPrice);
+    if (sale && document.activeElement !== sale) sale.value = costingMoneyInputValue(line.salePrice);
     costingApplyPriceState(unitPriceWrap, unitPriceState);
     costingApplyPriceState(saleWrap, saleState);
     if (calculated) calculated.textContent = costingMoney(line.calculatedSalePrice);
@@ -2549,8 +2576,8 @@ function costingRefreshCalculations() {
     const totals = costingCategoryTotals(category);
     const profitInput = row.querySelector('[data-category-profit]');
     const chargeInput = row.querySelector('[data-category-charge]');
-    if (profitInput && document.activeElement !== profitInput) profitInput.value = totals.profit.toFixed(2);
-    if (chargeInput && document.activeElement !== chargeInput) chargeInput.value = totals.charged.toFixed(2);
+    if (profitInput && document.activeElement !== profitInput) profitInput.value = costingMoneyInputValue(totals.profit);
+    if (chargeInput && document.activeElement !== chargeInput) chargeInput.value = costingMoneyInputValue(totals.charged);
     row.querySelectorAll('[data-category-cost]').forEach(node => { node.textContent = costingMoney(totals.cost); });
     const revenue = row.querySelector('[data-category-revenue]');
     const profit = row.querySelector('[data-category-profit-display]');

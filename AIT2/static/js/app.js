@@ -401,6 +401,17 @@ async function getContainerById(containerId, force = false) {
   return findContainerInCacheByLookup(cache, containerId);
 }
 
+async function getContainerForPrepareScan(identifier) {
+  if (!identifier) return null;
+  // Container data is invalidated by realtime updates and container edits. Once
+  // loaded, a Prepare session can therefore check it synchronously instead of
+  // pausing an ordinary asset scan for another /api/containers request.
+  if (__containersCache) {
+    return findContainerInCacheByLookup(__containersCache, identifier);
+  }
+  return getContainerById(identifier, false);
+}
+
 // used to avoid container recursion
 window.__processingContainerBatch = false;
 
@@ -479,6 +490,10 @@ function isSuperAdminUser() {
 
 function canCurrentUserManageRoles() {
   return !!(currentUser && (currentUser.canManageRoles || currentUserRole() === 'admin'));
+}
+
+function canCurrentUserViewAllInvoiceClaims() {
+  return canCurrentUserManageRoles();
 }
 
 function canCurrentUserManageUsers() {
@@ -3772,7 +3787,7 @@ function navLabelForSection(section, fallback = '') {
   return ({
     events: 'All Events',
     plan: 'Plan',
-    workforce: 'Manpower & Vendors',
+    workforce: 'Crew & Vendors',
     'my-claims': 'My Claims',
     transport: 'Transport',
     'prepare-new': 'Prepare',
@@ -4044,6 +4059,9 @@ function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "transport", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies", "accounting"]);
   const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
+  if (sectionName === 'invoice-claims' && !canCurrentUserViewAllInvoiceClaims()) {
+    return showSection("events", { ...options, replaceHistory: true });
+  }
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
@@ -11782,7 +11800,9 @@ async function openPrepareEventModal(eventId) {
         `;
 
         // Process model assignments and custom assets together, grouped by department.
-        const customAssetsByDeptForPrepare = groupCustomAssetsByDepartment(event);
+        const customAssetsByDeptForPrepare = groupCustomAssetsByDepartment(
+            event, { excludeDelivered: true }
+        );
         const renderedCustomDepartments = new Set();
         let renderedAnyRequirementRows = false;
 
@@ -11933,8 +11953,10 @@ async function openPrepareEventModal(eventId) {
                 const assets = event.assetsByDepartment[dept];
 
                 // Add department header if there are non-model assets
+                const deliveredVendors = eventDeliveredVendorKeys(event);
                 const nonModelAssets = assets
                     .filter(asset => !asset.id.startsWith('[MODEL]'))
+                    .filter(asset => !eventAssetShouldBeHiddenAsDelivered(event, asset, deliveredVendors))
                     .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
                 if (nonModelAssets.length > 0) {
                     content += `
@@ -12709,11 +12731,55 @@ function handleAssetActionClick(event) {
     }
 }
 
-function groupCustomAssetsByDepartment(event) {
+function eventVendorCompanyKey(value) {
+    let key = String(value || '').toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    const suffixes = [' private limited', ' pte limited', ' pte ltd', ' limited', ' ltd'];
+    let changed = true;
+    while (key && changed) {
+        changed = false;
+        for (const suffix of suffixes) {
+            if (!key.endsWith(suffix)) continue;
+            key = key.slice(0, -suffix.length).trim();
+            changed = true;
+            break;
+        }
+    }
+    return key;
+}
+
+function eventDeliveredVendorKeys(event) {
+    return new Set((event?.vendorManagement || [])
+        .filter(row => String(row?.mode || '').toLowerCase() === 'outsourced')
+        .map(row => eventVendorCompanyKey(row?.vendorName))
+        .filter(Boolean));
+}
+
+function eventCustomAssetIsDelivered(event, asset, custom, deliveredVendors = eventDeliveredVendorKeys(event)) {
+    if (!custom || custom.type !== 'LOAN') return false;
+    const company = eventVendorCompanyKey(custom.company || asset?.company);
+    return !!company && deliveredVendors.has(company);
+}
+
+function eventAssetShouldBeHiddenAsDelivered(event, asset, deliveredVendors = eventDeliveredVendorKeys(event)) {
+    if (!asset?.id) return false;
+    const custom = parseCustomAsset(asset.id, asset);
+    return eventCustomAssetIsDelivered(event, asset, custom, deliveredVendors);
+}
+
+function groupCustomAssetsByDepartment(event, options = {}) {
     const grouped = {};
+    const deliveredVendors = options.excludeDelivered
+        ? eventDeliveredVendorKeys(event)
+        : new Set();
     getCustomAssetsFromEvent(event).forEach(asset => {
         const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
         if (!custom) return;
+        if (
+            options.excludeDelivered
+            && eventCustomAssetIsDelivered(event, asset, custom, deliveredVendors)
+        ) return;
         const dept = normalizeDepartmentCode(custom.department || asset.department || 'UN');
         if (!grouped[dept]) grouped[dept] = [];
         grouped[dept].push({ ...asset, parsedCustom: custom, department: dept });
@@ -13102,30 +13168,32 @@ async function processUniversalAsset(eventId) {
     input.value = assetId;
 
     if (!window.__processingContainerBatch) {
-      const container = await getContainerById(assetId, true);
+      const container = await getContainerForPrepareScan(assetId);
       if (container) {
-        await processUniversalContainer(eventId, container.id, scannedValue);
+        await processUniversalContainer(eventId, container, scannedValue);
         return;
       }
     }
 
     try {
-        // Get event details and available assets to check asset existence and model matching
-        const [eventResponse, availableAssetsResponse] = await Promise.all([
-            apiCall(`/api/events/${eventId}`),
-            apiCall('/api/assets/available')
-        ]);
-
-        const event = eventResponse.data;
-        const allAssets = availableAssetsResponse.data;
-
-        // Find the asset in available assets or check if it exists in inventory
-        let assetDetails = findAssetByIdentifier(assetId, allAssets);
-
-        if (!assetDetails) {
-            const inventoryAssets = await ensureAssetsLoaded();
-            assetDetails = findAssetByIdentifier(assetId, inventoryAssets);
-        }
+        // The Prepare workspace already loaded the event and its available assets.
+        // Reuse those snapshots so a scan needs only the mutation request instead
+        // of reloading the event and the entire company availability list first.
+        const event = (
+          Number(prepareNewPageState.eventId) === Number(eventId)
+            ? prepareNewPageState.event
+            : window.__currentPrepareEventData
+        ) || {};
+        const cachedEventAssets = [
+          ...Object.values(event.assetsByDepartment || {}).flat(),
+          ...Object.values(event.modelGroups || {}).flatMap(group => group?.assignedAssets || [])
+        ];
+        const cachedAssets = [
+          ...(prepareNewPageState.availableAssets || []),
+          ...(Array.isArray(assets) ? assets : []),
+          ...cachedEventAssets
+        ];
+        let assetDetails = findAssetByIdentifier(assetId, cachedAssets);
 
         if (assetDetails) {
             assetId = getAssetIdentifierForApi(assetDetails);
@@ -13203,6 +13271,7 @@ async function processUniversalAsset(eventId) {
         if (isAssigned) {
             if (isAlreadyPrepared) {
                 if (quickAddEnabled && isExtra) {
+                    prepareNewPageState.suppressRealtimeUntil = Date.now() + 2000;
                     const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                     await showApiWarning(response);
                     showFeedback(feedbackDiv, 'success', `✅ ${assetId} added into the event`);
@@ -13218,6 +13287,7 @@ async function processUniversalAsset(eventId) {
                     clearWorkflowScanInput(input, scannedValue);
                     return;
                 }
+                prepareNewPageState.suppressRealtimeUntil = Date.now() + 2000;
                 const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                 await showApiWarning(response);
                 const responseIsExtra = !!(response?.data?.isExtra);
@@ -13230,16 +13300,13 @@ async function processUniversalAsset(eventId) {
             }
         } else {
             // Asset is not assigned; prepare it immediately as a manual extra.
-            if (!assetDetails) {
-                showFeedback(feedbackDiv, 'error', `${assetId} not found in inventory or not available`);
-                playWorkflowTone('error');
-                return;
-            }
-
-            if (!(await confirmDegradedAssetUse(assetId, assetDetails))) {
+            // If the item is not present in the local snapshot, let the backend
+            // resolve the scanned Asset ID/serial and return the canonical error.
+            if (assetDetails && !(await confirmDegradedAssetUse(assetId, assetDetails))) {
                 clearWorkflowScanInput(input, scannedValue);
                 return;
             }
+            prepareNewPageState.suppressRealtimeUntil = Date.now() + 2000;
             const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
             await showApiWarning(response);
             const responseIsExtra = !!(response?.data?.isExtra);
@@ -13401,8 +13468,10 @@ function updateAllAssetsSection(event, eventId) {
       const deptAssets = event.assetsByDepartment[dept] || [];
 
       // Only show real assets here (ignore [MODEL] rows)
+      const deliveredVendors = eventDeliveredVendorKeys(event);
       const nonModelAssets = deptAssets
         .filter((a) => a && a.id && !a.id.startsWith("[MODEL]"))
+        .filter(asset => !eventAssetShouldBeHiddenAsDelivered(event, asset, deliveredVendors))
         .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
 
       if (nonModelAssets.length > 0) {
@@ -13576,7 +13645,7 @@ function clearUniversalFeedback() {
     feedbackDiv.innerHTML = '';
 }
 
-function refreshPrepareUiAfterAssetChange(eventId, delay = 250) {
+function refreshPrepareUiAfterAssetChange(eventId, delay = 800) {
     schedulePrepareUiSync(eventId, delay);
 }
 
@@ -14318,7 +14387,7 @@ function eventActivityCategoryMeta(category) {
     details: { label: 'Event details', icon: '✎' },
     prepare: { label: 'Preparing', icon: '✓' },
     return: { label: 'Returning', icon: '↩' },
-    manpower: { label: 'Manpower & Vendors', icon: '👤' }
+    manpower: { label: 'Crew & Vendors', icon: '👤' }
   };
   return categories[category] || categories.details;
 }
@@ -15949,7 +16018,7 @@ async function viewEvent(eventId, options = {}) {
     <div class="event-overview-grid"><div class="event-overview-column">
       ${subprojectCount ? eventOverviewSection('rooms', 'Sub-projects', `${subprojectCount} ${subprojectCount === 1 ? 'room' : 'rooms'}`, eventOverviewSubprojects(event)) : ''}
       ${eventOverviewSection('assets', 'Assets', `${prepared} of ${required} prepared`, eventOverviewAssets(event))}
-      ${eventOverviewSection('people', 'Manpower & Vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
+      ${eventOverviewSection('people', 'Crew & Vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
       ${eventOverviewSection('truck', 'Transport', `${operations.transport?.length || 0} booking(s)`, eventOverviewTransport(operations.transport || []))}
     </div><aside class="event-overview-column">
       ${eventOverviewSection('people', 'Internal team', 'Users assigned to this event', eventOverviewInternalUsers(event))}
@@ -18038,7 +18107,7 @@ function eventLogCategoryMeta(category) {
   return ({
     prepare: 'Prepare',
     return: 'Return',
-    manpower: 'Manpower & Vendors',
+    manpower: 'Crew & Vendors',
     details: 'Event details',
   })[category] || 'Event details';
 }

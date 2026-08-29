@@ -344,6 +344,17 @@ function financeMoney(value) {
   })}`;
 }
 
+function financeMoneyInputValue(value) {
+  return Math.abs(financeCurrencyNumber(value)).toLocaleString('en-SG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function financeFormatMoneyInput(input) {
+  if (input) input.value = financeMoneyInputValue(input.value);
+}
+
 function financeCurrencyNumber(value, fallback = 0) {
   if (typeof value === 'number') return financeNumber(value, fallback);
   const cleaned = String(value ?? '').replace(/[$,\s]/g, '');
@@ -1817,6 +1828,13 @@ function financeNormalisedDepartmentName(value) {
     .replace(/\s+(department|system)$/i, '')
     .trim()
     .toLocaleLowerCase();
+}
+
+function financeDepartmentIdentity(line) {
+  const code = String(line?.departmentCode || '').trim().toLocaleLowerCase();
+  if (code && code !== 'un') return `code:${code}`;
+  const name = financeNormalisedDepartmentName(line?.department);
+  return `name:${name || 'general'}`;
 }
 
 function financeSameOperationalDepartment(left, right) {
@@ -3836,7 +3854,7 @@ function financeAdjustmentRows(department) {
         <td></td>
         <td colspan="3"><input class="finance-adjustment-label" value="${financeEscapeAttr(row.label || 'Discount')}" aria-label="Discount name" onchange="financeSetAdjustmentLabel('${financeEscapeAttr(row.id)}',this.value)"></td>
         <td colspan="2"><span class="finance-percent-input finance-adjustment-percent"><input type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(financeNumber(row.percent).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="Discount percentage" onchange="financeSetDepartmentAdjustmentPercent('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"><span>%</span></span></td>
-        <td colspan="2"><div class="finance-money-input finance-adjustment-amount"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(Math.abs(financeNumber(row.amount)).toFixed(2))}" aria-label="Discount amount" onchange="financeSetDepartmentAdjustmentAmount('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"></div></td>
+        <td colspan="2"><div class="finance-money-input finance-adjustment-amount"><span>$</span><input type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(row.amount))}" aria-label="Discount amount" onblur="financeFormatMoneyInput(this)" onchange="financeSetDepartmentAdjustmentAmount('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"></div></td>
         <td></td>
         <td><button type="button" class="finance-delete-line" onclick="financeRemoveAdjustment('${financeEscapeAttr(row.id)}')">×</button></td>
       </tr>
@@ -4334,6 +4352,8 @@ function financeCategoryColumnHeader(department) {
     .replace(/[^A-Za-z0-9_-]+/g, '-');
   const menuId = `finance-days-category-${suffix}`;
   const inputId = `finance-days-value-${suffix}`;
+  const encodedDepartment = encodeURIComponent(department).replace(/'/g, '%27');
+  const defaults = financeCategoryMultiplierDefaults(department);
   return `
     <tr class="finance-category-column-header">
       <td>${document?.showLineNumbers === false ? '' : '#'}</td>
@@ -4341,15 +4361,15 @@ function financeCategoryColumnHeader(department) {
       <td>Category</td>
       <td>
         <div class="finance-custom-control finance-header-control">
-          <button type="button" class="finance-header-button showbase-line-header-action" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeMultiplierHeaderLabel())}</button>
+          <button type="button" class="finance-header-button showbase-line-header-action" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeCategoryMultiplierHeaderLabel(department))}</button>
           <div class="finance-custom-menu finance-days-menu" id="${financeEscapeAttr(menuId)}">
             <span class="finance-menu-caption">Column label</span>
             <div class="finance-label-choice">
-              <button type="button" onclick="financeSetAllMultiplierLabels('Day')">Day(s)</button>
-              <button type="button" onclick="financeSetAllMultiplierLabels('Mult')">Mult</button>
+              <button type="button" onclick="financeSetCategoryMultiplierLabels('Day','${financeEscapeAttr(encodedDepartment)}')">Day(s)</button>
+              <button type="button" onclick="financeSetCategoryMultiplierLabels('Mult','${financeEscapeAttr(encodedDepartment)}')">Mult</button>
             </div>
-            <label>Days value<input id="${financeEscapeAttr(inputId)}" class="finance-input" type="number" min="0" step="0.5" value="${financeEventDays(document)}"></label>
-            <button type="button" class="btn btn-primary" onclick="financeApplyAllDays('${financeEscapeAttr(inputId)}')">Apply to all lines</button>
+            <label>Days value<input id="${financeEscapeAttr(inputId)}" class="finance-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(defaults.days)}"></label>
+            <button type="button" class="btn btn-primary" onclick="financeApplyCategoryDays('${financeEscapeAttr(inputId)}','${financeEscapeAttr(encodedDepartment)}')">Apply to this category</button>
           </div>
         </div>
       </td>
@@ -4429,9 +4449,9 @@ function financeRenderLineGroups() {
             <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(leader.days)}" aria-label="Days" onchange="financeLineChange(${leaderIndex},'days',this.value)"></td>
             <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
             <td>${financeUomControl(leader, leaderIndex)}</td>
-            <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(leader.unitPrice)}" aria-label="Group unit price" onchange="financeLineChange(${leaderIndex},'unitPrice',this.value)"></div></td>
+            <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(leader.unitPrice))}" aria-label="Group unit price" onblur="financeFormatMoneyInput(this)" onchange="financeLineChange(${leaderIndex},'unitPrice',this.value)"></div></td>
             <td><span class="finance-percent-input"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(leader.discountPercent || 0)}" aria-label="Group discount percentage" onchange="financeLineChange(${leaderIndex},'discountPercent',this.value)"><span>%</span></span></td>
-            <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(financeLineTotal(leader).toFixed(2))}" aria-label="Group total" onchange="financeSetLineTotal(${leaderIndex},this.value)"></div></td>
+            <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(financeLineTotal(leader)))}" aria-label="Group total" onblur="financeFormatMoneyInput(this)" onchange="financeSetLineTotal(${leaderIndex},this.value)"></div></td>
             <td><button type="button" class="finance-delete-line" title="Delete group" onclick="financeDeleteLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">&times;</button></td>
           </tr>`;
         const childRows = financeGroupDisplayBuckets(rows, groupId).map(bucket => {
@@ -4483,9 +4503,9 @@ function financeRenderLineGroups() {
           <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(line.days)}" aria-label="Days" onchange="financeLineChange(${index},'days',this.value)"></td>
           <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
           <td>${financeUomControl(line, index)}</td>
-          <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(line.unitPrice)}" aria-label="Unit price" onchange="financeLineChange(${index},'unitPrice',this.value)"></div></td>
+          <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(line.unitPrice))}" aria-label="Unit price" onblur="financeFormatMoneyInput(this)" onchange="financeLineChange(${index},'unitPrice',this.value)"></div></td>
           <td><span class="finance-percent-input"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(line.discountPercent || 0)}" aria-label="Discount percentage" onchange="financeLineChange(${index},'discountPercent',this.value)"><span>%</span></span></td>
-          <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(financeLineTotal(line).toFixed(2))}" aria-label="Line total" onchange="financeSetLineTotal(${index},this.value)"></div></td>
+          <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(financeLineTotal(line)))}" aria-label="Line total" onblur="financeFormatMoneyInput(this)" onchange="financeSetLineTotal(${index},this.value)"></div></td>
           <td><button type="button" class="finance-delete-line" title="Delete line" onclick="financeDeleteLine(${index})">×</button></td>
         </tr>
       `;
@@ -4520,7 +4540,7 @@ function financeRenderLineGroups() {
             ondrop="financeDropLineAtEnd(event,'${financeEscapeAttr(encoded)}')"` : ''}>
           <td></td><td colspan="5">${financeEscape(department)} subtotal</td>
           <td colspan="2">${(document.adjustments || []).some(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId) ? '' : `<button type="button" class="finance-add-discount" onclick="financeAddDepartmentDiscount('${financeEscapeAttr(encoded)}')">+ Discount</button>`}</td>
-          <td><div class="finance-money-input finance-subtotal-input"><span>$</span><input type="number" step="0.01" value="${subtotal.toFixed(2)}" onchange="financeOverrideDepartmentSubtotal(decodeURIComponent('${encoded}'),this.value)"></div></td><td></td>
+          <td><div class="finance-money-input finance-subtotal-input"><span>$</span><input type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(subtotal))}" onblur="financeFormatMoneyInput(this)" onchange="financeOverrideDepartmentSubtotal(decodeURIComponent('${encoded}'),this.value)"></div></td><td></td>
         </tr>
       `}
     `;
@@ -4653,7 +4673,7 @@ function financeRenderRateCard() {
           return `
             <div class="finance-rate-card-row">
               <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
-              <label class="finance-money-input"><span>$</span><input type="number" min="0" step="0.01" value="${financeNumber(row.unitPrice) || ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
+              <label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
               <button type="button" class="btn btn-secondary" onclick="${financeState.rateCardTarget === 'costing' ? 'costingAddRateCardItem' : 'financeAddRateCardItemToQuotation'}(${index})">Add</button>
               ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
             </div>
@@ -4731,14 +4751,15 @@ async function financeUpdateRateCardItem(index, value) {
   const item = financeState.rateCard[index];
   if (!item) return;
   try {
-    if (financeNumber(value) <= 0 && !item.isCustom) {
+    const unitPrice = financeCurrencyNumber(value);
+    if (unitPrice <= 0 && !item.isCustom) {
       const response = await apiCall('/api/finance/rate-card', 'DELETE', item);
       financeState.rateCard = response.data || [];
       financeState.catalogCache = {};
       financeRenderRateCard();
       return;
     }
-    await financeSaveRateCardItem({ ...item, unitPrice: value });
+    await financeSaveRateCardItem({ ...item, unitPrice });
   } catch (error) {
     financeRenderRateCard();
   }
@@ -5527,7 +5548,7 @@ function financeRenderEditor() {
               ${financeEscape(pdfSettings?.taxLabel || 'GST')}
               <input class="finance-tax-rate-input" type="number" min="0" max="100" step="0.01" value="${financeEscapeAttr(financeNumber(document.taxRate).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="GST percentage" onchange="financeSetTaxRate(this.value)">%
             </span>
-            <div class="finance-money-input finance-tax-amount-input"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(totals.tax.toFixed(2))}" aria-label="GST amount" onchange="financeSetTaxAmount(this.value)"></div>
+            <div class="finance-money-input finance-tax-amount-input"><span>$</span><input type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(totals.tax))}" aria-label="GST amount" onblur="financeFormatMoneyInput(this)" onchange="financeSetTaxAmount(this.value)"></div>
           </div>
           <div class="finance-summary-row finance-summary-total"><span>Total</span><strong>${financeEscape(financeMoney(totals.total))}</strong></div>
         </section>
@@ -5741,7 +5762,9 @@ function financeSetClientAddress(value) {
 function financeLineChange(index, field, value) {
   const line = financeState.current?.lineItems?.[index];
   if (!line) return;
-  line[field] = ['days', 'quantity', 'unitPrice', 'discountPercent'].includes(field) ? financeNumber(value) : value;
+  line[field] = field === 'unitPrice'
+    ? financeCurrencyNumber(value)
+    : (['days', 'quantity', 'discountPercent'].includes(field) ? financeNumber(value) : value);
   if (field === 'description' && (line.catalogKey || line.sourceAssetIds?.length)) {
     line.inventoryNameMode = 'custom';
   }
@@ -5860,7 +5883,7 @@ function financeSetDepartmentAdjustmentAmount(id, encodedDepartment, value) {
 }
 
 function financeOverrideDepartmentSubtotal(department, rawTarget) {
-  const target = Math.max(0, financeNumber(rawTarget));
+  const target = Math.max(0, financeCurrencyNumber(rawTarget));
   const subprojectId = financeCurrentSubprojectId();
   const base = financeState.current.lineItems.filter(line => financeLineSystem(line) === department && (line.subprojectId || 'main') === subprojectId).reduce((sum, line) => sum + financeLineTotal(line), 0);
   const difference = target - base;
@@ -5884,11 +5907,24 @@ function financeOverrideDepartmentSubtotal(department, rawTarget) {
   financeRenderEditor();
 }
 
-function financeApplyAllDays(inputId = 'financeAllDaysValue') {
+function financeCategoryLineItems(category, subprojectId = financeCurrentSubprojectId()) {
+  return (financeState.current?.lineItems || []).filter(line => (
+    (line.subprojectId || 'main') === subprojectId
+    && financeLineSystem(line) === String(category || '')
+  ));
+}
+
+function financeCategoryMultiplierDefaults(category) {
+  const firstLine = financeCategoryLineItems(category)[0];
+  return {
+    days: Math.max(0, financeNumber(firstLine?.days, financeEventDays(financeState.current)))
+  };
+}
+
+function financeApplyCategoryDays(inputId, encodedCategory) {
   const value = Math.max(0, financeNumber(document.getElementById(inputId)?.value, 1));
-  const subprojectId = financeCurrentSubprojectId();
-  financeState.current.lineItems.forEach(line => {
-    if ((line.subprojectId || 'main') !== subprojectId) return;
+  const category = decodeURIComponent(encodedCategory);
+  financeCategoryLineItems(category).forEach(line => {
     line.days = value;
     line.totalMode = 'calculated';
     line.total = financeLineTotal(line);
@@ -5897,21 +5933,17 @@ function financeApplyAllDays(inputId = 'financeAllDaysValue') {
   financeRenderEditor();
 }
 
-function financeMultiplierHeaderLabel() {
-  const subprojectId = financeCurrentSubprojectId();
-  const labels = new Set((financeState.current?.lineItems || [])
-    .filter(line => (line.subprojectId || 'main') === subprojectId)
+function financeCategoryMultiplierHeaderLabel(category) {
+  const labels = new Set(financeCategoryLineItems(category)
     .map(line => line.costingMultiplierLabel === 'Mult' ? 'Mult' : 'Day'));
   return labels.size === 1 && labels.has('Mult') ? 'Mult' : 'Day(s)';
 }
 
-function financeSetAllMultiplierLabels(label) {
+function financeSetCategoryMultiplierLabels(label, encodedCategory) {
   const next = label === 'Mult' ? 'Mult' : 'Day';
-  const subprojectId = financeCurrentSubprojectId();
-  (financeState.current?.lineItems || []).forEach(line => {
-    if ((line.subprojectId || 'main') === subprojectId) {
-      line.costingMultiplierLabel = next;
-    }
+  const category = decodeURIComponent(encodedCategory);
+  financeCategoryLineItems(category).forEach(line => {
+    line.costingMultiplierLabel = next;
   });
   financeCloseMenus();
   financeQueueSave();
@@ -6572,7 +6604,7 @@ async function financeRequestStatus(documentId, status, context) {
       title: pairedEventId ? 'Accept paired quotation?' : 'Accept quotation and create event?',
       message: pairedEventId
         ? `This quotation is paired to Event #${pairedEventId}. Accepting it will not create another event.`
-        : 'This will create an event with the quotation project, location and inventory requirements. Manpower & Vendors and transportation lines are not added to Prepare.',
+        : 'This will create an event with the quotation project, location and inventory requirements. Crew & Vendors and transportation lines are not added to Prepare.',
       confirmText: pairedEventId ? 'Accept Quotation' : 'Accept & Create Event',
       cancelText: 'Cancel'
     });
@@ -6935,7 +6967,7 @@ function financeEnsureProfitLossRevenueModal() {
         </div>
         <label class="finance-field pnl-manual-revenue-field">
           <span>Revenue amount</span>
-          <span class="finance-money-input"><span>$</span><input id="profitLossManualRevenue" class="finance-input" inputmode="decimal" placeholder="0.00" required></span>
+          <span class="finance-money-input"><span>$</span><input id="profitLossManualRevenue" class="finance-input" inputmode="decimal" placeholder="0.00" onblur="if(this.value) financeFormatMoneyInput(this)" required></span>
         </label>
         <div id="profitLossRevenueError" class="wf-error"></div>
         <div class="modal-actions finance-picker-actions">
@@ -6984,7 +7016,7 @@ function profitLossOpenRevenueModal() {
   if (search) search.value = '';
   if (amount) {
     const currentAmount = profitLossState.data?.manualRevenue?.amount;
-    amount.value = currentAmount == null ? '' : String(financeNumber(currentAmount));
+    amount.value = currentAmount == null ? '' : financeMoneyInputValue(currentAmount);
   }
   if (error) error.textContent = '';
   profitLossRenderRevenueQuotations('');
@@ -7021,7 +7053,7 @@ async function profitLossSaveManualRevenue(event) {
     const response = await apiCall(
       `/api/finance/profit-loss/${profitLossState.eventId}/revenue`,
       'PUT',
-      { manualAmount: amount }
+      { manualAmount: financeCurrencyNumber(amount) }
     );
     profitLossState.data = response.data;
     closeModal('profitLossRevenueModal');
@@ -7458,7 +7490,7 @@ function profitLossRenderCensored(root, data) {
       </div>
     </section>
     <div class="pnl-kpis pnl-kpis-censored" aria-label="Restricted financial summary">
-      ${['Revenue', 'Manpower & Vendors Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
+      ${['Revenue', 'Crew & Vendors Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
         .map(label => profitLossKpi(label, 'Restricted', ''))
         .join('')}
     </div>
@@ -7608,7 +7640,7 @@ function renderProfitLossPage() {
 
     <div class="pnl-kpis">
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
-      ${profitLossKpi('Manpower & Vendors Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Crew & Vendors Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
@@ -7621,7 +7653,7 @@ function renderProfitLossPage() {
         <h3>Profit Calculation</h3>
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
-        <div class="pnl-calc-row"><span>Manpower &amp; Vendors Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
+        <div class="pnl-calc-row"><span>Crew &amp; Vendors Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
         ${financeNumber(summary.mealCost) > 0 ? `<div class="pnl-calc-row"><span>Meals</span><strong>- ${financeSgd(summary.mealCost)}</strong></div>` : ''}
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
@@ -7674,7 +7706,7 @@ function renderProfitLossPage() {
                       <button type="button" class="pnl-expense-edit" onclick="profitLossOpenClaimReview('${financeEscapeAttr(row.sourceId)}')" aria-label="Review claim" title="Review claim">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
                       </button>
-                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Manpower &amp; Vendors" title="Open Manpower &amp; Vendors">
+                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Crew &amp; Vendors" title="Open Crew &amp; Vendors">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <circle cx="8" cy="8" r="3"></circle>
                           <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
@@ -7684,7 +7716,7 @@ function renderProfitLossPage() {
                       </button>
                     </span>
                   ` : row.readOnly ? `
-                    <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Manpower &amp; Vendors" title="Open Manpower &amp; Vendors">
+                    <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0})" aria-label="Open Crew &amp; Vendors" title="Open Crew &amp; Vendors">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="8" cy="8" r="3"></circle>
                         <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
@@ -7844,7 +7876,7 @@ function profitLossRenderCommissionRows() {
     <div class="pnl-commission-row">
       <label class="finance-field"><span>Recipient</span><input class="finance-input" value="${financeEscapeAttr(row.recipient || '')}" placeholder="Name or company" onchange="profitLossCommissionChange(${index},'recipient',this.value)"></label>
       <label class="finance-field"><span>Percentage</span><span class="finance-percent-input"><input class="finance-input" type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(row.percent || 0)}" onchange="profitLossCommissionChange(${index},'percent',this.value)"><span>%</span></span></label>
-      <label class="finance-field"><span>Amount</span><span class="finance-money-input"><span>$</span><input class="finance-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(row.amount || 0)}" onchange="profitLossCommissionChange(${index},'amount',this.value)"></span></label>
+      <label class="finance-field"><span>Amount</span><span class="finance-money-input"><span>$</span><input class="finance-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(row.amount))}" onblur="financeFormatMoneyInput(this)" onchange="profitLossCommissionChange(${index},'amount',this.value)"></span></label>
       <span class="pnl-commission-mode">Using ${row.calculationMode === 'amount' ? 'amount' : 'percentage'}</span>
       <button type="button" class="finance-delete-line" title="Remove commission" aria-label="Remove commission" onclick="profitLossRemoveCommissionRow(${index})">&times;</button>
     </div>

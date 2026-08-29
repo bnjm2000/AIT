@@ -56,6 +56,10 @@ class WorkforcePortalTests(unittest.TestCase):
             "admin": User(
                 "admin", hash_password("pw", "salt"), "salt", True, True
             ),
+            "manager": User(
+                "manager", hash_password("pw", "salt"), "salt", True, True,
+                role="manager",
+            ),
         }
         self.manager.save_users()
         self.manager.logs = []
@@ -306,6 +310,23 @@ class WorkforcePortalTests(unittest.TestCase):
             self.client.get("/api/workforce/submissions").status_code,
             403,
         )
+
+    def test_manager_can_review_one_event_but_not_the_company_submission_queue(self):
+        self.login("manager", True)
+
+        company_queue = self.client.get("/api/workforce/submissions")
+        event_queue = self.client.get(
+            "/api/workforce/submissions?eventId=143&status=all"
+        )
+        event_workspace = self.client.get("/api/events/143/workforce")
+
+        self.assertEqual(company_queue.status_code, 403)
+        self.assertIn(
+            "view all invoices and claims",
+            company_queue.get_json()["error"],
+        )
+        self.assertEqual(event_queue.status_code, 200)
+        self.assertEqual(event_workspace.status_code, 200)
 
     def test_submission_queue_hides_full_time_rows_until_requested(self):
         self.manager.users["normal"].name = "Taylor Fulltime"
@@ -4364,6 +4385,7 @@ class WorkforcePortalTests(unittest.TestCase):
             1,
         )[1].split('<section class="plan-event-bar', 1)[0]
         self.assertIn('class="wf-manpower-title-row"', schedule_heading)
+        self.assertIn("${canCurrentUserViewAllInvoiceClaims() ?", schedule_heading)
         self.assertIn('View all invoices &amp; claims', schedule_heading)
         self.assertIn("showSection('invoice-claims')", schedule_heading)
         self.assertIn("wfManpowerEventPickerHtml(data", source)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import app as app_module
 from data_manager import DataManager
-from models import InventoryItem, User, hash_password
+from models import Event, InventoryItem, User, hash_password
 from pypdf import PdfReader
 from tests.static_source import APP_BUNDLE_SOURCE
 from workforce import event_assignments, load_workforce, save_workforce
@@ -386,6 +386,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
         adjustment = response.get_json()['data']['adjustments'][0]
         self.assertEqual(adjustment['subprojectId'], 'breakout')
+        self.assertEqual(adjustment['percent'], 10)
 
     def test_large_costing_group_splits_cleanly_across_pdf_pages(self):
         from costing_pdf import build_costing_pdf
@@ -928,9 +929,12 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('function costingSetSummaryGrouping(grouping)', source)
         self.assertIn('data-costing-summary-group="vendor"', source)
         self.assertIn("String(line.vendorName || '').trim() || 'Unassigned'", source)
-        self.assertIn('value="${costingAttr(line.salePrice.toFixed(2))}"', source)
+        self.assertIn('value="${costingAttr(costingMoneyInputValue(line.salePrice))}"', source)
         self.assertIn('divisor ? totalSale / divisor : totalSale', source)
-        self.assertIn('sale.value = line.salePrice.toFixed(2)', source)
+        self.assertIn('sale.value = costingMoneyInputValue(line.salePrice)', source)
+        self.assertIn('function costingResetSalePrice(index)', source)
+        self.assertIn('onclick="costingResetSalePrice(${index})"', source)
+        self.assertIn("toLocaleString('en-SG'", source)
         self.assertIn('function costingVendorManagementMarkup(', source)
         self.assertIn("placeholder=\"Unassigned\"", source)
         self.assertIn("updateAppDetailHistory(`/costing/${encodeURIComponent(id)}`", source)
@@ -1479,6 +1483,23 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertNotIn('vendorName', line)
         self.assertNotIn('itemCost', line)
         self.assertEqual(quotation['adjustments'][0]['amount'], -20)
+        self.assertEqual(quotation['adjustments'][0]['kind'], 'discount')
+        self.assertEqual(quotation['adjustments'][0]['calculationMode'], 'amount')
+        self.assertAlmostEqual(quotation['adjustments'][0]['percent'], 2.7778, places=4)
+
+        linked_costing = self.client.get(
+            f"/api/costings/{costing['id']}"
+        ).get_json()['data']
+        linked_costing['categoryAdjustments'][0]['amount'] = -72
+        synced = self.client.put(
+            f"/api/costings/{costing['id']}", json=linked_costing,
+        )
+        self.assertEqual(synced.status_code, 200, synced.get_data(as_text=True))
+        synced_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(synced_quote['adjustments'][0]['amount'], -72)
+        self.assertEqual(synced_quote['adjustments'][0]['percent'], 10)
 
     def test_linked_quotation_and_costing_reconcile_line_items_both_ways(self):
         self.login('owner')
@@ -2062,7 +2083,7 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(outsourced.status_code, 200, outsourced.get_data(as_text=True))
         self.assertEqual(outsourced.get_json()['data'][0]['mode'], 'outsourced')
         event = self.manager.events[event_id]
-        self.assertFalse(any(
+        self.assertTrue(any(
             (app_module._parse_custom_marker(ref) or {}).get('company') == 'Rental House'
             for ref in event.prepared_items
         ))
@@ -2070,6 +2091,167 @@ class CostingFeatureTests(unittest.TestCase):
             self.client.get(f'/api/events/{event_id}').get_json()['data']['vendorManagement'][0]['mode'],
             'outsourced',
         )
+
+    def test_delivered_vendor_removes_generated_loan_from_detached_plan(self):
+        vendor_key = 'vendor:avery'
+        stale_ref = app_module._make_custom_marker(
+            'LOAN', 'Pixelhue P20 - Presentation Switcher', 1, 'VX',
+            'Avery Events and Exhibitions', uid='finance_legacy_pixelhue',
+        )
+        operational_ref = app_module._make_custom_marker(
+            'LOAN', 'Already collected switcher', 1, 'VX',
+            'Avery Events and Exhibitions', uid='finance_operational_switcher',
+        )
+        manual_ref = app_module._make_custom_marker(
+            'LOAN', 'Manually added loan', 1, 'VX',
+            'Avery Events and Exhibitions', uid='manual_avery_loan',
+        )
+        event = Event(
+            event_id=153,
+            name='Detached vendor event',
+            location='Venue',
+            start_date='20260828',
+            end_date='20260828',
+            asset_models=[],
+            prepared_items=[stale_ref, operational_ref, manual_ref],
+            actually_prepared=[operational_ref],
+            subprojects=[{
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [
+                    {
+                        'lineId': 'legacy-pixelhue',
+                        'department': 'VX',
+                        'departmentCode': 'VX',
+                        'description': 'Pixelhue P20 - Presentation Switcher',
+                        'quantity': 1,
+                        'isCustom': True,
+                        'assetRefs': [stale_ref],
+                    },
+                    {
+                        'lineId': 'operational-switcher',
+                        'department': 'VX',
+                        'departmentCode': 'VX',
+                        'description': 'Already collected switcher',
+                        'quantity': 1,
+                        'isCustom': True,
+                        'assetRefs': [operational_ref],
+                    },
+                    {
+                        'lineId': 'manual-loan',
+                        'department': 'VX',
+                        'departmentCode': 'VX',
+                        'description': 'Manually added loan',
+                        'quantity': 1,
+                        'isCustom': True,
+                        'assetRefs': [manual_ref],
+                    },
+                ],
+            }],
+        )
+        self.manager.events[event.event_id] = event
+        self.manager.save_event(event)
+        costing = {
+            'id': 'costing-detached',
+            'vendorManagement': [{
+                'key': vendor_key,
+                'vendorId': 'avery',
+                'vendorType': 'vendor',
+                'vendorName': 'Avery Events and Exhibitions Pte Ltd',
+                'mode': 'outsourced',
+            }],
+            'lineItems': [{
+                'id': 'current-pixelhue-line',
+                'description': 'PixelHue P20 professional presentation switcher',
+                'vendorName': 'Avery Events and Exhibitions Pte Ltd',
+                'vendorId': 'avery',
+                'vendorType': 'vendor',
+                'departmentCode': 'VX',
+                'category': 'Video',
+                'quantity': 1,
+            }],
+        }
+
+        removed = app_module._finance_remove_delivered_vendor_loans(
+            {'eventId': event.event_id}, costing, vendor_key,
+        )
+
+        self.assertEqual(removed, 1)
+        self.assertNotIn(stale_ref, event.prepared_items)
+        self.assertIn(operational_ref, event.prepared_items)
+        self.assertIn(manual_ref, event.prepared_items)
+        remaining_line_ids = {
+            item['lineId'] for item in event.subprojects[0]['items']
+        }
+        self.assertNotIn('legacy-pixelhue', remaining_line_ids)
+        self.assertIn('operational-switcher', remaining_line_ids)
+        self.assertIn('manual-loan', remaining_line_ids)
+
+    def test_manual_loan_vendor_has_event_management_without_linked_costing(self):
+        self.login('owner')
+        manual_ref = app_module._make_custom_marker(
+            'LOAN', 'Manual rental item', 3, 'VX', 'Manual Rental Co',
+            uid='manual_rental_item',
+        )
+        event = Event(
+            event_id=154,
+            name='Manual rental event',
+            location='Venue',
+            start_date='20260828',
+            end_date='20260828',
+            asset_models=[],
+            prepared_items=[manual_ref],
+        )
+        self.manager.events[event.event_id] = event
+        self.manager.save_event(event)
+
+        event_payload = self.client.get(
+            f'/api/events/{event.event_id}'
+        ).get_json()['data']
+        self.assertEqual(len(event_payload['vendorManagement']), 1)
+        vendor = event_payload['vendorManagement'][0]
+        self.assertEqual(vendor['vendorName'], 'Manual Rental Co')
+        self.assertEqual(vendor['quantity'], 3)
+        self.assertEqual(vendor['mode'], 'dry-hire')
+
+        updated = self.client.put(
+            f'/api/events/{event.event_id}/vendor-management',
+            json={'key': vendor['key'], 'mode': 'outsourced'},
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(updated.get_json()['data'][0]['mode'], 'outsourced')
+        self.assertIn(manual_ref, self.manager.events[event.event_id].prepared_items)
+        self.assertEqual(
+            self.manager.events[event.event_id].vendor_management[0]['mode'],
+            'outsourced',
+        )
+        delivered_event = self.client.get(
+            f'/api/events/{event.event_id}'
+        ).get_json()['data']
+        self.assertEqual(delivered_event['totalAssets'], 3)
+
+        self_pickup = self.client.put(
+            f'/api/events/{event.event_id}/vendor-management',
+            json={'key': vendor['key'], 'mode': 'dry-hire'},
+        )
+        self.assertEqual(
+            self_pickup.status_code, 200, self_pickup.get_data(as_text=True)
+        )
+        self.assertEqual(
+            self.client.get(f'/api/events/{event.event_id}').get_json()['data']['totalAssets'],
+            3,
+        )
+        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        self.assertIn('function eventDeliveredVendorKeys(event)', app_source)
+        self.assertIn('function eventCustomAssetIsDelivered(', app_source)
+        self.assertIn('function eventAssetShouldBeHiddenAsDelivered(', app_source)
+        self.assertIn('options.excludeDelivered', app_source)
+        self.assertIn(
+            '.filter(asset => !eventAssetShouldBeHiddenAsDelivered(', app_source
+        )
+        prepare_source = Path('static/js/prepare.js').read_text(encoding='utf-8')
+        self.assertIn('!eventCustomAssetIsDelivered(', prepare_source)
+        self.assertIn('event, { excludeDelivered: true }', app_source)
 
     def test_subprojects_and_split_sources_stay_segregated_but_quote_combines(self):
         self.login('owner')
