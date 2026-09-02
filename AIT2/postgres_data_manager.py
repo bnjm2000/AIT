@@ -37,6 +37,7 @@ from models import (
     normalize_user_role,
     normalize_event_state,
     normalize_asset_tags,
+    normalize_bulk_purchase_batches,
 )
 
 
@@ -383,6 +384,13 @@ class PostgresDataManager(DataManager):
             'isDisposed': bool(getattr(item, 'is_disposed', False)),
             'isBulk': bool(getattr(item, 'is_bulk', False)),
             'quantity': int(getattr(item, 'quantity', 1) or 1),
+            'purchaseBatches': (
+                normalize_bulk_purchase_batches(
+                    getattr(item, 'purchase_batches', []),
+                    fallback_quantity=getattr(item, 'quantity', 1),
+                    fallback_date=getattr(item, 'date_of_purchase', ''),
+                ) if getattr(item, 'is_bulk', False) else []
+            ),
             'maintenanceLogs': [
                 normalize_maintenance_log(log)
                 for log in (getattr(item, 'maintenance_logs', []) or [])
@@ -544,6 +552,7 @@ class PostgresDataManager(DataManager):
                         is_disposed=bool(data.get('isDisposed', False)),
                         is_bulk=bool(data.get('isBulk', False)),
                         quantity=data.get('quantity', 1),
+                        purchase_batches=data.get('purchaseBatches') or [],
                         maintenance_logs=data.get('maintenanceLogs') or [],
                         department_code=data.get('departmentCode', 'UN'),
                         default_location=data.get('defaultLocation', ''),

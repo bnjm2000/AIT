@@ -822,6 +822,126 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(group['extraPreparedQuantity'], 5)
         self.assertTrue(group['assignedAssets'][0]['isExtra'])
 
+    def test_removing_prepared_bulk_room_model_keeps_deployment_as_extra(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            department='STG',
+            is_bulk=True,
+            quantity=10,
+        )
+        marker = app_module._bulk_marker('BULK-0001', 5, 'main')
+        event = self.make_event(
+            event_id=119,
+            prepared=['[MODEL]STG|TestBrand|TestModel|5|Matching item'],
+            actual=[marker],
+            extra=[],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_bulk',
+                'department': 'STG',
+                'departmentCode': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 5,
+                'preparedQuantity': 0,
+                'isCustom': False,
+                'assetRefs': [marker],
+            }],
+            'extraRefs': [],
+        }]
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'subprojectId': 'main',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.actually_prepared, [marker])
+        self.assertEqual(event.extra_assets, [marker])
+        self.assertEqual(event.subprojects[0]['extraRefs'], [marker])
+        self.assertEqual(event.subprojects[0]['items'][0]['assetRefs'], [])
+        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 0)
+        self.assertEqual(response.get_json()['data']['extraQuantity'], 5)
+
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['requiredQuantity'], 0)
+        self.assertEqual(group['preparedQuantity'], 5)
+        self.assertEqual(group['extraPreparedQuantity'], 5)
+        self.assertTrue(group['assignedAssets'][0]['isExtra'])
+
+    def test_removing_bulk_room_requirement_reclassifies_unowned_prepared_marker(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            department='STG',
+            is_bulk=True,
+            quantity=10,
+        )
+        marker = app_module._bulk_marker('BULK-0001', 5)
+        event = self.make_event(
+            event_id=120,
+            prepared=['[MODEL]STG|TestBrand|TestModel|5|Matching item'],
+            actual=[marker],
+            extra=[],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_bulk_legacy',
+                'department': 'STG',
+                'departmentCode': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 5,
+                'preparedQuantity': 0,
+                'isCustom': False,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'subprojectId': 'main',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.actually_prepared, [marker])
+        self.assertEqual(event.extra_assets, [marker])
+        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 0)
+        self.assertEqual(response.get_json()['data']['extraQuantity'], 5)
+        self.assertEqual(
+            app_module._bulk_deployments_for_asset('BULK-0001')[0]['quantity'],
+            5,
+        )
+
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['requiredQuantity'], 0)
+        self.assertEqual(group['preparedQuantity'], 5)
+        self.assertEqual(group['extraPreparedQuantity'], 5)
+        self.assertTrue(group['assignedAssets'][0]['isExtra'])
+
     def test_removing_prepared_model_keeps_specific_asset_as_extra(self):
         event = self.make_event(
             event_id=110,

@@ -95,6 +95,7 @@ from models import (
     normalize_user_role,
     normalize_event_state,
     normalize_asset_tags,
+    normalize_bulk_purchase_batches,
     user_role_is_adminish,
 )
 from storage_paths import storage_root as configured_storage_root
@@ -104,6 +105,9 @@ from services.company_storage import CompanyStorageUsageService
 from services.company_storage_context import (
     attach_company_storage_contexts,
     build_company_storage_contexts,
+)
+from services.telegram_notifications import (
+    queue_upload_notification as queue_telegram_upload_notification,
 )
 from event_report import build_event_report_pdf
 from utils import sanitize_filename
@@ -3487,6 +3491,43 @@ def _normalise_asset_purchase_date(value):
     raise ValueError('Date of purchase must be YYYY-MM-DD')
 
 
+def _normalise_bulk_purchase_batches(value, fallback_quantity=1, fallback_date=''):
+    if not isinstance(value, list):
+        raise ValueError('Purchase batches must be a list')
+
+    batches = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ValueError('Each purchase batch must include a date and quantity')
+        quantity = _safe_int(entry.get('quantity'), 0)
+        if quantity <= 0:
+            raise ValueError('Purchase batch quantity must be at least 1')
+        batches.append({
+            'date': _normalise_asset_purchase_date(
+                entry.get('date', entry.get('purchaseDate', entry.get('dateOfPurchase', '')))
+            ),
+            'quantity': quantity,
+        })
+
+    if not batches:
+        raise ValueError('At least one purchase batch is required')
+    return normalize_bulk_purchase_batches(
+        batches,
+        fallback_quantity=fallback_quantity,
+        fallback_date=fallback_date,
+    )
+
+
+def _bulk_purchase_batches_for_response(asset):
+    if not _is_bulk_asset(asset):
+        return []
+    return normalize_bulk_purchase_batches(
+        getattr(asset, 'purchase_batches', []),
+        fallback_quantity=getattr(asset, 'quantity', 1),
+        fallback_date=getattr(asset, 'date_of_purchase', ''),
+    )
+
+
 ASSET_IMPORT_MAX_ROWS = 1000
 ASSET_IMPORT_MAX_BYTES = 5 * 1024 * 1024
 ASSET_IMPORT_MAX_RECORDS = max(
@@ -4291,6 +4332,7 @@ ASSET_AUDIT_FIELD_LABELS = {
     'serial': 'Serial Number',
     'secondary_serial': 'Second Serial Number',
     'date_of_purchase': 'Date of Purchase',
+    'purchase_batches': 'Purchase Batches',
     'default_location': 'Default Location',
     'current_location': 'Current Location',
     'status': 'Asset Status',
@@ -4319,6 +4361,13 @@ def _asset_audit_snapshot(asset):
         'serial': getattr(asset, 'serial_number', ''),
         'secondary_serial': getattr(asset, 'secondary_serial_number', ''),
         'date_of_purchase': getattr(asset, 'date_of_purchase', ''),
+        'purchase_batches': (
+            normalize_bulk_purchase_batches(
+                getattr(asset, 'purchase_batches', []),
+                fallback_quantity=getattr(asset, 'quantity', 1),
+                fallback_date=getattr(asset, 'date_of_purchase', ''),
+            ) if _is_bulk_asset(asset) else []
+        ),
         'default_location': getattr(asset, 'default_location', ''),
         'current_location': getattr(asset, 'current_location', ''),
         'status': _asset_condition_status(asset),
@@ -5287,6 +5336,27 @@ def _custom_counts_for_event(event, exclude_delivered=False):
     }
 
 
+def _event_prepare_required_total(event, total_required, custom_counts=None):
+    """Return requirements that must physically pass through preparation.
+
+    Delivered vendor items remain part of the event plan, but the warehouse does
+    not prepare them.  Keep the plan total intact while removing those items from
+    preparation progress and its workflow icon.
+    """
+    all_custom = (
+        custom_counts
+        if isinstance(custom_counts, dict)
+        else _custom_counts_for_event(event)
+    )
+    prepare_custom = _custom_counts_for_event(event, exclude_delivered=True)
+    return max(
+        0,
+        _safe_int(total_required, 0)
+        - _safe_int(all_custom.get('required'), 0)
+        + _safe_int(prepare_custom.get('required'), 0),
+    )
+
+
 PLANNING_TEMPLATES_FILENAME = 'PlanningTemplates.json'
 
 
@@ -5718,6 +5788,11 @@ def _event_department_progress_payload(event, model_groups, has_model_assignment
     for marker in event.prepared_items:
         custom = _parse_custom_marker(marker)
         if not custom:
+            continue
+        # Delivered rental/vendor items remain visible in Plan as show
+        # requirements, but the vendor brings them to the venue. They must not
+        # lower the warehouse preparation percentage or department progress.
+        if _event_custom_vendor_is_delivered(event, custom):
             continue
         quantity = max(1, _safe_int(custom.get('quantity'), 1))
         is_returned = marker in event.returned_items
@@ -7871,6 +7946,7 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'serial': '',
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
         'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+        'purchaseBatches': _bulk_purchase_batches_for_response(asset),
         'dateAdded': getattr(asset, 'date_added', ''),
         'dateModified': getattr(asset, 'date_modified', ''),
         'changeHistory': getattr(asset, 'change_history', []),
@@ -8083,6 +8159,7 @@ def get_available_assets_for_event(event_id):
                 'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+                'purchaseBatches': _bulk_purchase_batches_for_response(asset),
                 'dateAdded': getattr(asset, 'date_added', ''),
                 'dateModified': getattr(asset, 'date_modified', ''),
                 'changeHistory': getattr(asset, 'change_history', []),
@@ -10312,6 +10389,15 @@ def submit_my_claim():
             user=username
         )
         _workforce_changed(event_id, f'{kind}-uploaded')
+        event = manager.events.get(event_id)
+        user = manager.users.get(username)
+        _queue_workforce_upload_notification(
+            worker_name=str(getattr(user, 'name', '') or username),
+            event_id=event_id,
+            event_name=str(getattr(event, 'name', '') or f'Event {event_id}'),
+            kind=kind,
+            file_count=len(record_ids),
+        )
         for record_id in record_ids:
             _queue_worker_submission_processing((
                 manager, data_folder, event_id, subject_id, record_id, kind
@@ -10875,6 +10961,27 @@ def _queue_worker_submission_processing(args):
     return future
 
 
+def _queue_workforce_upload_notification(
+    *, worker_name, event_id, event_name, kind, file_count
+):
+    """Queue a best-effort alert without ever affecting the upload response."""
+    # A developer may have real Telegram credentials in .env. Never use them
+    # implicitly while the Flask app is running its automated test suite.
+    if app.config.get('TESTING'):
+        return False
+    try:
+        return queue_telegram_upload_notification(
+            worker_name=worker_name,
+            event_id=event_id,
+            event_name=event_name,
+            kind=kind,
+            file_count=file_count,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue workforce upload notification: %s', exc)
+        return False
+
+
 def _process_worker_submission_upload(
     manager, data_folder, event_id, freelancer_id, submission_id, kind
 ):
@@ -11193,6 +11300,14 @@ def worker_upload_submission():
             user=freelancer.get('name') or freelancer_id,
         )
         _workforce_changed(event_id, f'{kind}-uploaded')
+        event = manager.events.get(event_id)
+        _queue_workforce_upload_notification(
+            worker_name=str(freelancer.get('name') or freelancer_id),
+            event_id=event_id,
+            event_name=str(getattr(event, 'name', '') or f'Event {event_id}'),
+            kind=kind,
+            file_count=len(saved_records),
+        )
         record_ids = [
             row.get('id') for row in (
                 rows.get('invoices', []) if kind == 'invoice'
@@ -15042,7 +15157,10 @@ def list_workforce_submissions():
         status_key = row.get('statusKey')
         if status_key:
             status_counts[status_key] = status_counts.get(status_key, 0) + 1
-        if str(row.get('status') or '') == 'Paid':
+        if (
+            str(row.get('status') or '') == 'Paid'
+            and not row.get('paymentConfirmedAt')
+        ):
             status_counts['paid'] += 1
         kind = row.get('kind')
         if kind in kind_counts and not row.get('isAwaitingUpload'):
@@ -15065,7 +15183,10 @@ def list_workforce_submissions():
     for row in scoped_rows:
         if not show_all_statuses:
             filter_keys = {str(row.get('statusKey') or '')}
-            if str(row.get('status') or '') == 'Paid':
+            if (
+                str(row.get('status') or '') == 'Paid'
+                and not row.get('paymentConfirmedAt')
+            ):
                 filter_keys.add('paid')
             if filter_keys.isdisjoint(requested_statuses):
                 continue
@@ -16280,6 +16401,21 @@ def _update_event_model_group_references(event, old_group, new_group):
             if _model_marker_matches_group(marker, old_group):
                 event.prepared_items[index] = _make_model_marker(new_group, marker['quantity'])
                 changed += 1
+
+    # Anonymous prepared quantities are mirrored both as room counters and as
+    # [PREPARED] references for consolidated state/return calculations. Keep
+    # those references on the renamed group as well; otherwise Prepare can show
+    # the room as complete while the event state still sees the old model name.
+    for list_name in ('actually_prepared', 'returned_items', 'extra_assets'):
+        values = getattr(event, list_name, None)
+        if not isinstance(values, list):
+            continue
+        for index, value in enumerate(values):
+            marker = _parse_prepared_model_marker(value)
+            if not _model_marker_matches_group(marker, old_group):
+                continue
+            values[index] = _prepared_model_marker(new_group, marker['quantity'])
+            changed += 1
 
     # Older saved events may still use asset_models rows with model_description.
     old_display = _display_model_description(old_group)
@@ -17776,6 +17912,85 @@ def update_event_state(event, workforce=None):
         logger.error(f"Traceback: {traceback.format_exc()}")
 
 
+def _event_vendor_management_state_rows(event, finance_data):
+    """Return the finance-backed vendor choices needed by event state logic.
+
+    Vendor fulfilment is edited on the linked costing, while event state is
+    deliberately calculated from the event record so scans stay fast. Older
+    events may therefore be missing the event-side mirror. Rebuild that small
+    mirror from the effective Plan/Prepare vendor rows before recalculating the
+    state.
+    """
+    if not isinstance(finance_data, dict):
+        return None
+
+    linked_quotations = [
+        document
+        for document in finance_data.get('documents') or []
+        if isinstance(document, dict)
+        and document.get('type') == 'quotation'
+        and _safe_int(document.get('eventId'), 0) == int(event.event_id)
+    ]
+    linked_quotations.sort(
+        key=lambda row: (row.get('updatedAt', ''), row.get('number', '')),
+        reverse=True,
+    )
+    linked_costing = (
+        _linked_costing_for_quotation(finance_data, linked_quotations[0])
+        if linked_quotations
+        else None
+    )
+    effective_rows = _event_vendor_management(event, linked_costing)
+
+    rows = []
+    seen = set()
+    for source in effective_rows:
+        if not isinstance(source, dict):
+            continue
+        vendor_name = str(source.get('vendorName') or '').strip()
+        key = str(source.get('key') or _costing_vendor_key(
+            vendor_name,
+            source.get('vendorType'),
+            source.get('vendorId'),
+        )).strip()
+        mode = str(source.get('mode') or '').strip().lower()
+        identity = key or _finance_vendor_company_key(vendor_name)
+        if not identity or identity in seen or mode not in {'dry-hire', 'outsourced'}:
+            continue
+        seen.add(identity)
+        rows.append({
+            'key': key,
+            'vendorId': str(source.get('vendorId') or '').strip(),
+            'vendorType': str(source.get('vendorType') or 'vendor').strip(),
+            'vendorName': vendor_name,
+            'mode': mode,
+        })
+    return rows
+
+
+def _refresh_event_vendor_management_mirror(event, finance_data):
+    """Synchronise costing vendor fulfilment into the event state mirror."""
+    rows = _event_vendor_management_state_rows(event, finance_data)
+    if rows is None:
+        return False
+
+    current = []
+    for source in getattr(event, 'vendor_management', []) or []:
+        if not isinstance(source, dict):
+            continue
+        current.append({
+            'key': str(source.get('key') or '').strip(),
+            'vendorId': str(source.get('vendorId') or '').strip(),
+            'vendorType': str(source.get('vendorType') or 'vendor').strip(),
+            'vendorName': str(source.get('vendorName') or '').strip(),
+            'mode': str(source.get('mode') or '').strip().lower(),
+        })
+    if current == rows:
+        return False
+    event.vendor_management = rows
+    return True
+
+
 def refresh_event_states_for_read(events_to_check=None):
     """Keep automatically calculated event states current before read responses."""
     if _current_data_manager_object() is None:
@@ -17795,16 +18010,32 @@ def refresh_event_states_for_read(events_to_check=None):
         return []
 
     closure_workforce = load_workforce(_workforce_folder())
+    finance_data = None
+    try:
+        finance_data = _load_finance_data()
+    except Exception as finance_error:
+        logger.warning(
+            "Unable to refresh event vendor fulfilment choices: %s",
+            finance_error,
+        )
 
+    saved_any = False
     for event in source_events:
         old_state = normalize_event_state(getattr(event, 'state', 'New'))
         event.state = old_state
+        vendor_management_changed = _refresh_event_vendor_management_mirror(
+            event, finance_data
+        )
         update_event_state(event, workforce=closure_workforce)
 
-        if getattr(event, 'state', 'New') == old_state:
+        state_changed = getattr(event, 'state', 'New') != old_state
+        if not state_changed and not vendor_management_changed:
             continue
 
         data_manager.save_event(event)
+        saved_any = True
+        if not state_changed:
+            continue
         updated_events.append({
             'eventId': event.event_id,
             'name': event.name,
@@ -17813,9 +18044,10 @@ def refresh_event_states_for_read(events_to_check=None):
         })
         logger.info("Event %s state refreshed for read: %s -> %s", event.event_id, old_state, event.state)
 
-    if updated_events:
+    if saved_any:
         reset_cache()
         mark_data_snapshot_current()
+    if updated_events:
         mark_realtime_change('event-state', {'updatedEvents': updated_events[-20:]})
 
     refreshed_at = _current_manager_cache().setdefault('event_state_refreshes', {})
@@ -20353,12 +20585,17 @@ def _event_workflow_progress_payload(
     total_returned,
     workforce=None,
     finance_data=None,
+    prepare_required=None,
 ):
     """Build the shared progress state used by every event overview."""
     event_id = int(event.event_id)
     required = max(0, _safe_int(total_required, 0))
     prepared = max(0, _safe_int(total_prepared, 0))
     returned = max(0, _safe_int(total_returned, 0))
+    prepare_required = max(
+        0,
+        _safe_int(required if prepare_required is None else prepare_required, 0),
+    )
     returnable_counts = _event_returnable_counts(event)
     return_total = max(0, _safe_int(returnable_counts.get('total'), 0))
     return_remaining = max(0, _safe_int(returnable_counts.get('returnable'), 0))
@@ -20450,8 +20687,11 @@ def _event_workflow_progress_payload(
             ),
         },
         'prepare': {
-            'status': quantity_state(prepared, required),
-            'label': f'Prepare: {min(prepared, required)}/{required} assets prepared',
+            'status': quantity_state(prepared, prepare_required),
+            'label': (
+                f'Prepare: {min(prepared, prepare_required)}/'
+                f'{prepare_required} assets prepared'
+            ),
         },
         'return': {
             'status': (
@@ -20875,6 +21115,11 @@ def get_events():
                     total_returned,
                     workflow_workforce,
                     workflow_finance,
+                    prepare_required=_event_prepare_required_total(
+                        event,
+                        total_required,
+                        custom_counts,
+                    ),
                 ),
             }
             if not summary_view:
@@ -21321,6 +21566,11 @@ def get_event(event_id):
             total_returned,
             workflow_workforce,
             workflow_finance,
+            prepare_required=_event_prepare_required_total(
+                event,
+                total_required,
+                custom_counts,
+            ),
         )
         try:
             linked_quotations = _finance_quotations_for_event(
@@ -22701,6 +22951,17 @@ def manage_event_models(event_id):
                 _event_subproject_ref_quantity(ref)
                 for ref in room_reconciliation['demoted']
             )
+            # Older/legacy room data can have a prepared bulk marker at event
+            # level without the same marker persisted in the room's assetRefs.
+            # The browser can still allocate it to the room for display, so a
+            # requirement deletion must also reclassify global prepared surplus
+            # instead of relying only on room ownership reconciliation.
+            global_surplus = _reclassify_event_model_surplus(
+                event,
+                _event_model_group_key(group),
+                projected_total,
+            )
+            extra_units += global_surplus['extraUnits']
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -26904,6 +27165,7 @@ def get_assets():
                 'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+                'purchaseBatches': _bulk_purchase_batches_for_response(asset),
                 'dateAdded': getattr(asset, 'date_added', ''),
                 'dateModified': getattr(asset, 'date_modified', ''),
                 'department': asset.department_code,
@@ -28499,6 +28761,15 @@ def update_asset(asset_id):
         data = request.get_json() or {}
         apply_to = (data.get('applyTo') or 'single').strip()
         tags_to_apply_to_similar = normalize_asset_tags(data.get('tagsToApplyToSimilar', []))
+        normalized_purchase_batches = None
+        if 'purchaseBatches' in data:
+            if not _is_bulk_asset(asset):
+                return jsonify({'error': 'Purchase batches are only available for bulk assets'}), 400
+            normalized_purchase_batches = _normalise_bulk_purchase_batches(
+                data.get('purchaseBatches'),
+                fallback_quantity=getattr(asset, 'quantity', 1),
+                fallback_date=getattr(asset, 'date_of_purchase', ''),
+            )
 
         if apply_to not in ('single', 'allSimilar'):
             return jsonify({'error': 'Invalid applyTo value'}), 400
@@ -28700,9 +28971,17 @@ def update_asset(asset_id):
             asset.current_location = (data.get('currentLocation') or '').strip()
 
         if 'dateOfPurchase' in data or 'purchaseDate' in data:
-            asset.date_of_purchase = _normalise_asset_purchase_date(
+            requested_purchase_date = _normalise_asset_purchase_date(
                 data.get('dateOfPurchase', data.get('purchaseDate', ''))
             )
+            if _is_bulk_asset(asset) and 'purchaseBatches' not in data:
+                existing_batches = _bulk_purchase_batches_for_response(asset)
+                if len(existing_batches) == 1:
+                    existing_batches[0]['date'] = requested_purchase_date
+                    asset.purchase_batches = existing_batches
+                elif requested_purchase_date != getattr(asset, 'date_of_purchase', ''):
+                    raise ValueError('Edit purchase dates using the bulk purchase batches')
+            asset.date_of_purchase = requested_purchase_date
 
         if 'version' in data:
             asset.version = str(data.get('version') or '').strip()
@@ -28735,8 +29014,24 @@ def update_asset(asset_id):
 
         _normalise_asset_status_flags(asset)
 
-        if _is_bulk_asset(asset) and 'quantity' in data:
-            asset.quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
+        if _is_bulk_asset(asset) and 'purchaseBatches' in data:
+            asset.purchase_batches = normalized_purchase_batches
+            asset.quantity = sum(batch['quantity'] for batch in asset.purchase_batches)
+            asset.date_of_purchase = (
+                asset.purchase_batches[0]['date']
+                if len(asset.purchase_batches) == 1 else ''
+            )
+            asset.serial_number = ''
+            asset.secondary_serial_number = ''
+        elif _is_bulk_asset(asset) and 'quantity' in data:
+            requested_quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
+            existing_batches = _bulk_purchase_batches_for_response(asset)
+            if requested_quantity != getattr(asset, 'quantity', 1):
+                if len(existing_batches) != 1:
+                    raise ValueError('Edit quantity using the bulk purchase batches')
+                existing_batches[0]['quantity'] = requested_quantity
+                asset.purchase_batches = existing_batches
+            asset.quantity = requested_quantity
             asset.serial_number = ''
             asset.secondary_serial_number = ''
 
@@ -28920,6 +29215,8 @@ def update_asset(asset_id):
             }
         })
 
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating asset {asset_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update asset'}), 500
@@ -31168,15 +31465,25 @@ def check_and_update_ongoing_events():
             
         current_date = datetime.now().strftime('%Y%m%d')
         updated_count = 0
+        finance_data = None
+        try:
+            finance_data = _load_finance_data()
+        except Exception as finance_error:
+            logger.warning(
+                "Unable to refresh event vendor fulfilment choices: %s",
+                finance_error,
+            )
         
         logger.info(f"Checking {len(data_manager.events)} events for state updates (current date: {current_date})")
         
         for event in data_manager.events.values():
             old_state = event.state
-            
+            vendor_management_changed = _refresh_event_vendor_management_mirror(
+                event, finance_data
+            )
             update_event_state(event)
             
-            if event.state != old_state:
+            if event.state != old_state or vendor_management_changed:
                 data_manager.save_event(event)
                 updated_count += 1
 

@@ -639,6 +639,110 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
 
+    def test_summary_excludes_delivered_vendor_items_from_prepare_progress(self):
+        event = self.data_manager.events[1]
+        today = datetime.now().date()
+        prepared_model = app_module._prepared_model_marker({
+            'department': 'LX',
+            'brand': 'TestBrand',
+            'model': 'Fixture',
+            'description': 'Lighting fixture',
+        }, 12)
+        delivered_loan = app_module._make_custom_marker(
+            'LOAN',
+            'Lighting console',
+            1,
+            'LX',
+            'Avery Events and Exhibitions Pte Ltd',
+        )
+        event.prepared_items = [
+            '[MODEL]LX|TestBrand|Fixture|12|Lighting fixture',
+            delivered_loan,
+        ]
+        event.actually_prepared = [prepared_model]
+        event.returned_items = []
+        event.extra_assets = []
+        event.vendor_management = [{
+            'key': 'vendor:avery',
+            'vendorId': 'avery',
+            'vendorType': 'vendor',
+            'vendorName': 'Avery Events and Exhibitions Pte Ltd',
+            'mode': 'outsourced',
+        }]
+        event.start_date = (today - timedelta(days=1)).strftime('%Y%m%d')
+        event.end_date = (today + timedelta(days=1)).strftime('%Y%m%d')
+        event.state = 'Preparing'
+        self.data_manager.save_event(event)
+        app_module.reset_cache()
+        self.login('admin')
+
+        response = self.client.get('/api/events?view=summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = next(row for row in response.get_json()['data'] if row['id'] == 1)
+        # The event still has 13 planned requirements; only preparation
+        # progress excludes the vendor-delivered unit.
+        self.assertEqual(payload['assetCount'], 13)
+        self.assertEqual(payload['preparedCount'], 12)
+        self.assertEqual(payload['departmentProgress'], [
+            {'code': 'LX', 'done': 12, 'total': 12},
+        ])
+        self.assertEqual(payload['workflowProgress']['prepare'], {
+            'status': 'green',
+            'label': 'Prepare: 12/12 assets prepared',
+        })
+
+        detail_response = self.client.get('/api/events/1')
+        self.assertEqual(
+            detail_response.status_code,
+            200,
+            detail_response.get_data(as_text=True),
+        )
+        detail = detail_response.get_json()['data']
+        self.assertEqual(detail['totalAssets'], 13)
+        self.assertEqual(detail['workflowProgress']['prepare'], {
+            'status': 'green',
+            'label': 'Prepare: 12/12 assets prepared',
+        })
+
+    def test_summary_keeps_self_pickup_vendor_items_in_prepare_progress(self):
+        event = self.data_manager.events[1]
+        today = datetime.now().date()
+        self_pickup_loan = app_module._make_custom_marker(
+            'LOAN',
+            'Lighting console',
+            1,
+            'LX',
+            'Avery Events and Exhibitions Pte Ltd',
+        )
+        event.prepared_items = [self_pickup_loan]
+        event.actually_prepared = []
+        event.returned_items = []
+        event.extra_assets = []
+        event.vendor_management = [{
+            'key': 'vendor:avery',
+            'vendorId': 'avery',
+            'vendorType': 'vendor',
+            'vendorName': 'Avery Events and Exhibitions Pte Ltd',
+            'mode': 'dry-hire',
+        }]
+        event.start_date = (today - timedelta(days=1)).strftime('%Y%m%d')
+        event.end_date = (today + timedelta(days=1)).strftime('%Y%m%d')
+        event.state = 'Preparing'
+        self.data_manager.save_event(event)
+        app_module.reset_cache()
+        self.login('admin')
+
+        response = self.client.get('/api/events?view=summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = next(row for row in response.get_json()['data'] if row['id'] == 1)
+        self.assertEqual(payload['assetCount'], 1)
+        self.assertEqual(payload['preparedCount'], 0)
+        self.assertEqual(payload['departmentProgress'], [
+            {'code': 'LX', 'done': 0, 'total': 1},
+        ])
+
     def test_user_only_sees_and_modifies_assigned_events(self):
         self.login('alice')
 

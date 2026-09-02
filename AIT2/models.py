@@ -173,6 +173,41 @@ def normalize_asset_tags(value):
     return tags
 
 
+def normalize_bulk_purchase_batches(value, fallback_quantity=1, fallback_date=''):
+    """Return grouped purchase-date quantities for one bulk inventory record."""
+    source = value if isinstance(value, list) else []
+    totals_by_date = {}
+    order = []
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        date_value = str(
+            item.get('date', item.get('purchaseDate', item.get('dateOfPurchase', ''))) or ''
+        ).strip()
+        try:
+            quantity = int(item.get('quantity', 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if quantity <= 0:
+            continue
+        if date_value not in totals_by_date:
+            totals_by_date[date_value] = 0
+            order.append(date_value)
+        totals_by_date[date_value] += quantity
+
+    if not order:
+        try:
+            quantity = max(1, int(fallback_quantity))
+        except (TypeError, ValueError):
+            quantity = 1
+        return [{'date': str(fallback_date or '').strip(), 'quantity': quantity}]
+
+    return [
+        {'date': date_value, 'quantity': totals_by_date[date_value]}
+        for date_value in order
+    ]
+
+
 class InventoryItem:
     def __init__(
         self,
@@ -200,6 +235,7 @@ class InventoryItem:
         tags=None,
         is_untagged=False,
         version='',
+        purchase_batches=None,
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -242,9 +278,19 @@ class InventoryItem:
         self.tags = normalize_asset_tags(tags)
         self.version = str(version or '').strip()
         self.is_bulk = is_bulk
-        try:
-            self.quantity = max(1, int(quantity)) if is_bulk else 1
-        except (TypeError, ValueError):
+        if is_bulk:
+            self.purchase_batches = normalize_bulk_purchase_batches(
+                purchase_batches,
+                fallback_quantity=quantity,
+                fallback_date=self.date_of_purchase,
+            )
+            self.quantity = sum(batch['quantity'] for batch in self.purchase_batches)
+            self.date_of_purchase = (
+                self.purchase_batches[0]['date']
+                if len(self.purchase_batches) == 1 else ''
+            )
+        else:
+            self.purchase_batches = []
             self.quantity = 1
 
 

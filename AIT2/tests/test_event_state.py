@@ -119,6 +119,97 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'Returning')
 
+    def test_delivered_linked_vendor_is_mirrored_before_state_update(self):
+        loan = app_module._make_custom_marker(
+            'LOAN',
+            'Avolites Tiger Touch II',
+            1,
+            'LX',
+            'Avery Events and Exhibitions Pte Ltd',
+        )
+        event = self.make_event(['A', loan], ['A'], [])
+        event.end_date = '20260518'
+        finance_data = {
+            'documents': [
+                {
+                    'id': 'quote-1',
+                    'type': 'quotation',
+                    'eventId': event.event_id,
+                    'sourceCostingId': 'costing-1',
+                },
+                {
+                    'id': 'costing-1',
+                    'type': 'costing',
+                    'vendorManagement': [{
+                        'key': 'vendor:avery',
+                        'vendorId': 'avery',
+                        'vendorType': 'vendor',
+                        'vendorName': 'Avery Events and Exhibitions Pte Ltd',
+                        'mode': 'outsourced',
+                    }],
+                },
+            ],
+        }
+
+        changed = app_module._refresh_event_vendor_management_mirror(
+            event, finance_data
+        )
+        app_module.update_event_state(event)
+
+        self.assertTrue(changed)
+        self.assertEqual(event.vendor_management[0]['mode'], 'outsourced')
+        self.assertEqual(event.state, 'Ongoing')
+        self.assertFalse(app_module._refresh_event_vendor_management_mirror(
+            event, finance_data
+        ))
+
+    def test_model_rename_keeps_anonymous_prepared_quantity_on_requirement(self):
+        old_group = {
+            'department': 'ELEC',
+            'brand': 'Custom',
+            'model': '32A 3-Phase DB',
+            'description': '',
+        }
+        new_group = {
+            'department': 'ELEC',
+            'brand': 'Custom',
+            'model': '32 amperes 3-phase',
+            'description': 'electrical distribution board',
+        }
+        event = self.make_event(
+            [app_module._make_model_marker(new_group, 1)],
+            [app_module._prepared_model_marker(old_group, 1)],
+            [],
+        )
+        event.end_date = '20260518'
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'department': 'ELEC',
+                'departmentCode': 'ELEC',
+                'brand': new_group['brand'],
+                'model': new_group['model'],
+                'description': new_group['description'],
+                'quantity': 1,
+                'preparedQuantity': 1,
+                'isCustom': False,
+                'assetRefs': [],
+            }],
+        }]
+
+        changed = app_module._update_event_model_group_references(
+            event, old_group, new_group
+        )
+        app_module.update_event_state(event)
+
+        self.assertEqual(changed, 1)
+        self.assertEqual(
+            event.actually_prepared,
+            [app_module._prepared_model_marker(new_group, 1)],
+        )
+        self.assertEqual(event.state, 'Ongoing')
+
 
 if __name__ == '__main__':
     unittest.main()

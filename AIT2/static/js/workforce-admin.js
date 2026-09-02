@@ -2428,14 +2428,16 @@ function wfHistoryDisplayStatus(record) {
 function wfHistorySubmissionSummary(rows) {
   if (!rows.length) return 'Not submitted';
   const statuses = rows.map(wfHistoryDisplayStatus);
-  if (statuses.includes('Processing')) return 'Processing';
-  if (statuses.includes('Details Required')) return 'Details Required';
-  if (statuses.every(status => status === 'Payment Confirmed')) return 'Payment Confirmed';
-  if (statuses.includes('Pending Review')) return 'Pending Review';
-  if (statuses.includes('Denied')) return 'Denied';
-  if (statuses.includes('Approved')) return 'Approved';
-  if (statuses.includes('Paid')) return 'Paid';
-  return statuses[0];
+  const summaryPriority = [
+    'Payment Confirmed',
+    'Paid',
+    'Approved',
+    'Processing',
+    'Details Required',
+    'Pending Review',
+    'Denied'
+  ];
+  return summaryPriority.find(status => statuses.includes(status)) || statuses[0];
 }
 
 function wfHistoryStatusControl(event, freelancerId, record, returnFreelancerId = freelancerId) {

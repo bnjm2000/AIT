@@ -6756,6 +6756,116 @@ async function loadAssetUsageDays(assetId) {
   }
 }
 
+function inventoryBulkPurchaseBatches(asset) {
+  const source = Array.isArray(asset?.purchaseBatches) && asset.purchaseBatches.length
+    ? asset.purchaseBatches
+    : [{
+        date: asset?.dateOfPurchase || asset?.purchaseDate || '',
+        quantity: asset?.quantity || 1,
+      }];
+  return source.map(batch => ({
+    date: normalizeAssetPurchaseDateValue(batch?.date || batch?.purchaseDate || ''),
+    quantity: Math.max(1, Number.parseInt(batch?.quantity, 10) || 1),
+  }));
+}
+
+function bulkPurchaseBatchesHtml(asset) {
+  const editable = isAdminUser();
+  const rows = inventoryBulkPurchaseBatches(asset);
+  return `
+    <div class="asset-bulk-purchases">
+      <div class="asset-bulk-purchases-heading">
+        <div><strong>Purchase batches</strong><span>Items remain grouped as one bulk asset.</span></div>
+        ${editable ? '<button type="button" class="btn btn-secondary asset-bulk-purchase-add" onclick="addBulkPurchaseBatchRow()">Add purchase batch</button>' : ''}
+      </div>
+      <div id="assetBulkPurchaseBatchRows" class="asset-bulk-purchase-rows">
+        ${rows.map((batch, index) => `
+          <div class="asset-bulk-purchase-row" data-bulk-purchase-batch>
+            <label><span>Purchase date</span>${editable
+              ? `<input type="date" class="form-input" data-bulk-purchase-date value="${escapeHtmlAttr(batch.date)}" aria-label="Purchase date for batch ${index + 1}">`
+              : `<strong>${escapeHtml(batch.date ? formatAssetPurchaseDate(batch.date) : 'Unknown')}</strong>`}</label>
+            <label><span>Quantity</span>${editable
+              ? `<input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="${batch.quantity}" aria-label="Quantity for purchase batch ${index + 1}">`
+              : `<strong>${batch.quantity}</strong>`}</label>
+            ${editable ? `<button type="button" class="asset-bulk-purchase-remove" onclick="removeBulkPurchaseBatchRow(this)" aria-label="Remove purchase batch ${index + 1}">&times;</button>` : ''}
+          </div>
+        `).join('')}
+      </div>
+      ${editable ? `
+        <div class="asset-bulk-purchase-footer">
+          <small>A blank date means the purchase date is unknown. Rows with the same date are combined when saved.</small>
+          <button type="button" class="btn btn-success" id="saveBulkPurchaseBatchesButton" onclick="saveBulkPurchaseBatches()">Save purchase batches</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function addBulkPurchaseBatchRow() {
+  const rows = document.getElementById('assetBulkPurchaseBatchRows');
+  if (!rows) return;
+  const index = rows.querySelectorAll('[data-bulk-purchase-batch]').length + 1;
+  const row = document.createElement('div');
+  row.className = 'asset-bulk-purchase-row';
+  row.dataset.bulkPurchaseBatch = '';
+  row.innerHTML = `
+    <label><span>Purchase date</span><input type="date" class="form-input" data-bulk-purchase-date aria-label="Purchase date for batch ${index}"></label>
+    <label><span>Quantity</span><input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="1" aria-label="Quantity for purchase batch ${index}"></label>
+    <button type="button" class="asset-bulk-purchase-remove" onclick="removeBulkPurchaseBatchRow(this)" aria-label="Remove purchase batch ${index}">&times;</button>
+  `;
+  rows.appendChild(row);
+  row.querySelector('[data-bulk-purchase-date]')?.focus();
+}
+
+function removeBulkPurchaseBatchRow(button) {
+  const rows = document.getElementById('assetBulkPurchaseBatchRows');
+  if (!rows || rows.querySelectorAll('[data-bulk-purchase-batch]').length <= 1) {
+    showNotification('warning', 'At least one purchase batch is required');
+    return;
+  }
+  button?.closest('[data-bulk-purchase-batch]')?.remove();
+}
+
+async function saveBulkPurchaseBatches() {
+  const content = document.getElementById('assetDetailsContent');
+  const assetId = String(content?.dataset.assetId || '').trim();
+  const button = document.getElementById('saveBulkPurchaseBatchesButton');
+  if (!assetId || !isAdminUser()) return;
+  const purchaseBatches = Array.from(
+    document.querySelectorAll('#assetBulkPurchaseBatchRows [data-bulk-purchase-batch]')
+  ).map(row => ({
+    date: row.querySelector('[data-bulk-purchase-date]')?.value || '',
+    quantity: Number.parseInt(row.querySelector('[data-bulk-purchase-quantity]')?.value || '', 10),
+  }));
+  if (!purchaseBatches.length || purchaseBatches.some(batch => !Number.isInteger(batch.quantity) || batch.quantity < 1)) {
+    showNotification('warning', 'Every purchase batch must have a quantity of at least 1');
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Saving...';
+  }
+  try {
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', {
+      purchaseBatches,
+      applyTo: 'single',
+    });
+    const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
+    if (!updatedAsset) throw new Error('The saved asset could not be refreshed');
+    showNotification('success', 'Bulk purchase batches updated');
+    await openAssetDetailsModal(encodeURIComponent(assetId));
+  } catch (error) {
+    showNotification('error', `Failed to update purchase batches: ${error.message}`);
+  } finally {
+    const currentButton = document.getElementById('saveBulkPurchaseBatchesButton');
+    if (currentButton) {
+      currentButton.disabled = false;
+      currentButton.textContent = 'Save purchase batches';
+    }
+  }
+}
+
 async function openAssetDetailsModal(encodedAssetId) {
   let assetId = String(encodedAssetId || '');
   try {
@@ -6819,6 +6929,7 @@ async function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-field"><span>OOC / missing / degraded</span><strong>${escapeHtml(`${asset.bulkOOCQuantity || 0} / ${asset.bulkMissingQuantity || 0} / ${asset.bulkDegradedQuantity || 0}`)}</strong></div>
       </div>
       ${bulkDeploymentDetailsHtml(asset)}
+      ${bulkPurchaseBatchesHtml(asset)}
     </section>
   ` : '';
 
@@ -6841,7 +6952,7 @@ async function openAssetDetailsModal(encodedAssetId) {
             <div class="asset-details-field"><span>Secondary serial number</span><strong>${escapeHtml(asset.serial2 || '-')}</strong></div>
           `}
           <div class="asset-details-field"><span>Version</span><strong>${escapeHtml(asset.version || '-')}</strong></div>
-          <div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || '-')}</strong></div>
+          ${asset.isBulk ? '' : `<div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || '-')}</strong></div>`}
           <div class="asset-details-field"><span>Date added</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || '') || '-')}</strong></div>
           <div class="asset-details-field"><span>Last modified</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateModified || '') || '-')}</strong></div>
           <div class="asset-details-field"><span>Days used</span><strong id="assetDetailsUsageDays" aria-live="polite">Calculating...</strong></div>
@@ -7604,7 +7715,7 @@ function ensureAssetEditModal() {
           <div class="form-group">
             <label class="form-label">Asset ID</label>
             <input id="editAssetId" class="form-input">
-            <div id="editAssetBulkNote" style="display:none;color:#666;font-size:12px;margin-top:5px;">Bulk quantity assets do not have a visible Asset ID. This internal ID is kept only for system tracking.</div>
+            <div id="editAssetBulkNote" style="display:none;color:#666;font-size:12px;margin-top:5px;">Bulk quantity assets do not have a visible Asset ID. Purchase dates and quantities are managed in View Asset under Purchase batches.</div>
           </div>
 
           <div class="form-group">
@@ -7632,7 +7743,7 @@ function ensureAssetEditModal() {
             <input id="editAssetSerial2" class="form-input">
           </div>
 
-          <div class="form-group">
+          <div class="form-group" id="editAssetDateOfPurchaseGroup">
             <label class="form-label">Date of Purchase</label>
             <input id="editAssetDateOfPurchase" type="date" class="form-input">
           </div>
@@ -7738,7 +7849,8 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetBulkNote').style.display = asset.isBulk ? 'block' : 'none';
   document.getElementById('editAssetSerialGroup').style.display = asset.isBulk ? 'none' : 'block';
   document.getElementById('editAssetSerial2Group').style.display = asset.isBulk ? 'none' : 'block';
-  document.getElementById('editAssetQuantityGroup').style.display = asset.isBulk ? 'block' : 'none';
+  document.getElementById('editAssetDateOfPurchaseGroup').style.display = asset.isBulk ? 'none' : 'block';
+  document.getElementById('editAssetQuantityGroup').style.display = 'none';
   document.getElementById('editAssetQuantity').value = asset.quantity || 1;
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
@@ -7825,6 +7937,8 @@ async function saveAssetEditModal() {
 
   if (original.isBulk) {
     payload.id = original.id;
+    delete payload.dateOfPurchase;
+    delete payload.quantity;
   }
 
   if (!payload.brand) {

@@ -328,6 +328,51 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(event_queue.status_code, 200)
         self.assertEqual(event_workspace.status_code, 200)
 
+    def test_paid_filter_excludes_payment_confirmed_submissions(self):
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["freelancers"] = [{
+                "id": "worker-paid",
+                "name": "Paid Worker",
+                "company": "Crew Co",
+            }]
+            workforce["submissions"] = {
+                "143": {
+                    "worker-paid": {
+                        "invoices": [{
+                            "id": "invoice-paid",
+                            "originalName": "paid.pdf",
+                            "submittedAt": "2026-07-10T10:00:00+08:00",
+                            "status": "Paid",
+                            "amount": 100,
+                        }],
+                        "claims": [{
+                            "id": "claim-confirmed",
+                            "originalName": "confirmed.pdf",
+                            "submittedAt": "2026-07-10T11:00:00+08:00",
+                            "status": "Paid",
+                            "paymentConfirmedAt": "2026-07-11T09:00:00+08:00",
+                            "amount": 25,
+                        }],
+                    },
+                },
+            }
+
+        self.login("admin", True)
+        paid = self.client.get(
+            "/api/workforce/submissions?status=paid"
+        ).get_json()["data"]
+        confirmed = self.client.get(
+            "/api/workforce/submissions?status=payment-confirmed"
+        ).get_json()["data"]
+
+        self.assertEqual([row["id"] for row in paid["rows"]], ["invoice-paid"])
+        self.assertEqual(
+            [row["id"] for row in confirmed["rows"]],
+            ["claim-confirmed"],
+        )
+        self.assertEqual(paid["statusCounts"]["paid"], 1)
+        self.assertEqual(paid["statusCounts"]["payment-confirmed"], 1)
+
     def test_submission_queue_hides_full_time_rows_until_requested(self):
         self.manager.users["normal"].name = "Taylor Fulltime"
         self.manager.save_users()
@@ -456,6 +501,36 @@ class WorkforcePortalTests(unittest.TestCase):
             source,
         )
         self.assertIn('/api/workforce/submissions/bulk-status', source)
+
+    def test_worker_history_group_header_prefers_positive_invoice_status(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        summary_source = source.split(
+            "function wfHistorySubmissionSummary(rows)", 1
+        )[1].split("function wfHistoryStatusControl", 1)[0]
+        priority = [
+            "'Payment Confirmed'",
+            "'Paid'",
+            "'Approved'",
+            "'Processing'",
+            "'Details Required'",
+            "'Pending Review'",
+            "'Denied'",
+        ]
+        positions = [summary_source.index(status) for status in priority]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn(
+            "summaryPriority.find(status => statuses.includes(status))",
+            summary_source,
+        )
+        self.assertNotIn("statuses.every", summary_source)
 
     def test_same_event_claims_are_grouped_and_bulk_status_requires_review(self):
         with mutate_workforce(self.manager.data_folder) as workforce:
@@ -1767,6 +1842,36 @@ class WorkforcePortalTests(unittest.TestCase):
         submitted = public_event["submissions"]["invoices"][0]
         self.assertEqual(submitted["originalName"], "invoice.pdf")
         self.assertTrue(submitted["canEdit"])
+
+    def test_worker_upload_queues_telegram_notification(self):
+        self.create_worker_assignment()
+        token = self.worker_token()
+
+        with patch.object(
+            app_module, "_queue_worker_submission_processing"
+        ), patch.object(
+            app_module, "_queue_workforce_upload_notification"
+        ) as notify:
+            response = self.client.post(
+                "/api/worker/submissions",
+                data={
+                    "token": token,
+                    "eventId": "143",
+                    "kind": "invoice",
+                    "warningAcknowledged": "true",
+                    "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        notify.assert_called_once_with(
+            worker_name="Jordan Dela Cruz",
+            event_id=143,
+            event_name="Test Production",
+            kind="invoice",
+            file_count=1,
+        )
 
     def test_worker_can_view_remove_and_confirm_paid_submissions(self):
         freelancer_id = self.create_worker_assignment()
@@ -4098,6 +4203,45 @@ class WorkforcePortalTests(unittest.TestCase):
         self.login("admin", True)
         self.assertEqual(self.client.get("/my-claims").status_code, 302)
         self.assertEqual(self.client.get("/api/my-claims").status_code, 403)
+
+    def test_standard_user_upload_queues_telegram_notification(self):
+        self.manager.users["normal"].role = "user"
+        self.login("admin", True)
+        assigned = self.client.post(
+            "/api/events/143/workforce/staff-assignments",
+            json={
+                "username": "normal",
+                "department": "AU",
+                "roleName": "Audio Technician",
+                "workDates": ["2026-07-10"],
+            },
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.get_data(as_text=True))
+        self.login("normal", False)
+
+        with patch.object(
+            app_module, "_queue_worker_submission_processing"
+        ), patch.object(
+            app_module, "_queue_workforce_upload_notification"
+        ) as notify:
+            response = self.client.post(
+                "/api/my-claims",
+                data={
+                    "eventId": "143",
+                    "kind": "claim",
+                    "file": (io.BytesIO(PNG_BYTES), "receipt.png"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        notify.assert_called_once_with(
+            worker_name="normal",
+            event_id=143,
+            event_name="Test Production",
+            kind="claim",
+            file_count=1,
+        )
 
     def test_schedule_pdf_only_shows_room_for_multi_room_events(self):
         base_payload = {

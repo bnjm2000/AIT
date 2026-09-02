@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import os
 from urllib.parse import quote
 
 import app as app_module
@@ -1608,6 +1609,91 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
         asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
         self.assertEqual(asset_payload['dateOfPurchase'], '2026-06-02')
+
+    def test_bulk_purchase_batches_persist_grouped_dates_and_quantities(self):
+        self.login_admin()
+        response = self.client.put(
+            '/api/assets/BULK-0001',
+            json={'applyTo': 'single', 'purchaseBatches': [
+                {'date': '2026/01/15', 'quantity': 2},
+                {'date': '2026-01-15', 'quantity': 3},
+                {'date': '', 'quantity': 4},
+            ]},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['BULK-0001']
+        self.assertEqual(asset.quantity, 9)
+        self.assertEqual(asset.date_of_purchase, '')
+        self.assertEqual(asset.purchase_batches, [
+            {'date': '2026-01-15', 'quantity': 5},
+            {'date': '', 'quantity': 4},
+        ])
+
+        assets_response = self.client.get('/api/assets')
+        asset_payload = next(
+            item for item in assets_response.get_json()['data']
+            if item['internalId'] == 'BULK-0001'
+        )
+        self.assertEqual(asset_payload['quantity'], 9)
+        self.assertEqual(asset_payload['purchaseBatches'], asset.purchase_batches)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory['BULK-0001'].purchase_batches, asset.purchase_batches)
+        self.assertEqual(reloaded.inventory['BULK-0001'].quantity, 9)
+        changed_fields = {
+            change['field']
+            for change in asset.change_history[-1]['changes']
+        }
+        self.assertIn('purchase_batches', changed_fields)
+        self.assertIn('quantity', changed_fields)
+
+    def test_legacy_bulk_quantity_defaults_to_one_unknown_purchase_batch(self):
+        asset = self.data_manager.inventory['BULK-0001']
+        self.assertEqual(asset.purchase_batches, [{'date': '', 'quantity': 6}])
+
+        self.login_admin()
+        assets_response = self.client.get('/api/assets')
+        asset_payload = next(
+            item for item in assets_response.get_json()['data']
+            if item['internalId'] == 'BULK-0001'
+        )
+        self.assertEqual(asset_payload['purchaseBatches'], [{'date': '', 'quantity': 6}])
+
+    def test_bulk_purchase_batch_requires_positive_quantity(self):
+        self.login_admin()
+        response = self.client.put(
+            '/api/assets/BULK-0001',
+            json={'applyTo': 'single', 'purchaseBatches': [{'date': '', 'quantity': 0}]},
+        )
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertIn('at least 1', response.get_json()['error'])
+        self.assertEqual(self.data_manager.inventory['BULK-0001'].quantity, 6)
+
+    def test_bulk_purchase_batch_view_supports_inline_editing(self):
+        project_root = os.path.dirname(app_module.__file__)
+        with open(
+            os.path.join(project_root, 'static', 'js', 'app.js'),
+            encoding='utf-8',
+        ) as app_file:
+            source = app_file.read()
+
+        self.assertIn('function bulkPurchaseBatchesHtml(asset)', source)
+        self.assertIn('function addBulkPurchaseBatchRow()', source)
+        self.assertIn('function removeBulkPurchaseBatchRow(button)', source)
+        self.assertIn('async function saveBulkPurchaseBatches()', source)
+        self.assertIn('A blank date means the purchase date is unknown.', source)
+        self.assertIn("purchaseBatches,\n      applyTo: 'single'", source)
+        self.assertIn('${bulkPurchaseBatchesHtml(asset)}', source)
+        save_source = source.split('async function saveBulkPurchaseBatches()', 1)[1].split(
+            'async function openAssetDetailsModal(', 1
+        )[0]
+        self.assertIn('await refreshInventoryAssetsInPlace([assetId])', save_source)
+        self.assertNotIn('await loadInventory()', save_source)
+        self.assertIn('} finally {', save_source)
+        self.assertIn("currentButton.textContent = 'Save purchase batches';", save_source)
 
     def test_asset_update_saves_notes(self):
         notes = 'Keep with show kit A\nLens cap is loose'

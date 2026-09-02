@@ -19,6 +19,7 @@ from models import (
     User,
     hash_password,
     normalize_asset_tags,
+    normalize_bulk_purchase_batches,
     normalize_user_role,
     normalize_event_state,
 )
@@ -33,7 +34,7 @@ UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
     'AssetID', 'Brand', 'ModelNumber', 'Version', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
     'DateAdded', 'DateModified', 'ChangeHistory', 'Notes', 'Tags',
-    'IsMissing', 'IsOOC', 'IsDegraded', 'IsUntagged', 'IsDisposed', 'IsBulk', 'Quantity',
+    'IsMissing', 'IsOOC', 'IsDegraded', 'IsUntagged', 'IsDisposed', 'IsBulk', 'Quantity', 'PurchaseBatches',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
 EVENT_FIELDNAMES = [
@@ -952,6 +953,10 @@ class DataManager:
                     quantity = int(row.get('Quantity', '1') or '1')
                 except ValueError:
                     quantity = 1
+                try:
+                    purchase_batches = json.loads(row.get('PurchaseBatches', '') or '[]')
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    purchase_batches = []
 
                 item = InventoryItem(
                     asset_id=row.get('AssetID', ''),
@@ -973,6 +978,7 @@ class DataManager:
                     current_location=row.get('CurrentLocation', ''),
                     is_bulk=is_bulk,
                     quantity=quantity,
+                    purchase_batches=purchase_batches,
                     date_added=row.get('DateAdded', ''),
                     date_modified=row.get('DateModified', ''),
                     change_history=load_asset_change_history(row.get('ChangeHistory', '')),
@@ -1032,6 +1038,14 @@ class DataManager:
                     'IsDisposed': getattr(item, 'is_disposed', False),
                     'IsBulk': getattr(item, 'is_bulk', False),
                     'Quantity': getattr(item, 'quantity', 1),
+                    'PurchaseBatches': json.dumps(
+                        normalize_bulk_purchase_batches(
+                            getattr(item, 'purchase_batches', []),
+                            fallback_quantity=getattr(item, 'quantity', 1),
+                            fallback_date=getattr(item, 'date_of_purchase', ''),
+                        ) if getattr(item, 'is_bulk', False) else [],
+                        ensure_ascii=False,
+                    ),
                     'MaintenanceLogs': dump_maintenance_logs(item.maintenance_logs),
                     'DepartmentCode': item.department_code,
                     'DefaultLocation': item.default_location,
