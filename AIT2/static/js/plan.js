@@ -130,19 +130,25 @@ function groupEventCustomAssets(assets) {
   (assets || []).forEach(asset => {
     const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
     if (!custom) return;
+    const assetId = String(asset.id || custom.id || '');
     const key = eventCustomAssetIdentity(custom);
     let row = grouped.get(key);
     if (!row) {
       row = {
         ...asset,
-        id: String(asset.id || custom.id || ''),
+        id: assetId,
         assetIds: [],
         members: [],
         parsedCustom: { ...custom, quantity: 0 }
       };
       grouped.set(key, row);
     }
-    row.assetIds.push(String(asset.id || custom.id || ''));
+    // A custom marker is an item identity, not a quantity unit. Older/imported
+    // events can contain the same marker more than once; counting each repeated
+    // reference makes an edit feed back into the displayed total (2 -> 4, then
+    // pressing minus can increase it again). Distinct markers still aggregate.
+    if (row.assetIds.includes(assetId)) return;
+    row.assetIds.push(assetId);
     row.members.push(asset);
     row.parsedCustom.quantity += Math.max(1, Number(custom.quantity || 1));
   });

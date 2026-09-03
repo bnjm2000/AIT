@@ -31891,9 +31891,17 @@ def update_custom_asset_quantity(event_id):
         )
 
         def replace_in_list(values):
-            for i, value in enumerate(list(values)):
-                if value == old_asset_id:
-                    values[i] = new_asset_id
+            """Replace this item and collapse duplicate references to its UID."""
+            replaced_values = []
+            new_asset_added = False
+            for value in list(values):
+                replacement = new_asset_id if value == old_asset_id else value
+                if replacement == new_asset_id:
+                    if new_asset_added:
+                        continue
+                    new_asset_added = True
+                replaced_values.append(replacement)
+            values[:] = replaced_values
 
         replace_in_list(event.prepared_items)
         replace_in_list(event.actually_prepared)
@@ -31908,9 +31916,12 @@ def update_custom_asset_quantity(event_id):
                     continue
                 refs = item.get('assetRefs') or []
                 if old_asset_id in refs:
-                    item['assetRefs'] = [
-                        new_asset_id if ref == old_asset_id else ref for ref in refs
-                    ]
+                    updated_refs = []
+                    for ref in refs:
+                        replacement = new_asset_id if ref == old_asset_id else ref
+                        if replacement not in updated_refs:
+                            updated_refs.append(replacement)
+                    item['assetRefs'] = updated_refs
                     item['quantity'] = new_quantity
                     item['department'] = new_department
                     item['departmentCode'] = new_department
@@ -39713,6 +39724,10 @@ def _finance_profit_loss_payload(event, finance_data):
         for row in expenses
         if _finance_profit_loss_expense_bucket(row.get('category')) in {'other', 'purchase'}
     ), 2)
+    manual_expenses_total = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses
+    ), 2)
     crew_transport_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
@@ -39729,27 +39744,23 @@ def _finance_profit_loss_payload(event, finance_data):
         if row.get('categoryKey') in {'other', 'purchase'}
     ), 2)
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
-    meal_cost = round(worker_meal_claims + manual_meal_expenses, 2)
+    meal_cost = worker_meal_claims
     vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
-    manpower_cost = round(
+    workforce_invoice_cost = round(
         workforce_costs['manpowerCost'] + vendor_service_cost,
         2,
     )
-    transport_cost = round(
-        workforce_costs['transportCost']
-        + crew_transport_claims
-        + manual_transport_expenses,
+    manpower_cost = round(
+        workforce_invoice_cost + meal_cost + crew_transport_claims,
         2,
     )
-    manpower_card_cost = round(
-        manpower_cost
-        + meal_cost
-        + crew_transport_claims
-        + manual_transport_expenses,
-        2,
-    )
-    other_expenses = round(worker_other_claims + manual_other_expenses, 2)
-    direct_costs = round(manpower_cost + meal_cost + transport_cost, 2)
+    manpower_card_cost = manpower_cost
+    # Transport Cost is intentionally sourced only from the Transport page.
+    # Crew transport claims belong to Crew & Vendors, while manually entered
+    # P&L expenses remain Other Expenses regardless of their category label.
+    transport_cost = round(workforce_costs['transportCost'], 2)
+    other_expenses = round(worker_other_claims + manual_expenses_total, 2)
+    direct_costs = round(manpower_cost + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
     commission_base = max(0, before_commission)
     commissions = _finance_profit_loss_event_commissions(
@@ -39780,19 +39791,35 @@ def _finance_profit_loss_payload(event, finance_data):
             add_expense_category(row)
     for row in expenses:
         payload_row = _profit_loss_expense_payload(row)
-        if payload_row.get('categoryKey') in {'other', 'purchase'}:
-            add_expense_category(payload_row)
+        manual_category = str(
+            payload_row.get('categoryLabel')
+            or payload_row.get('category')
+            or 'Other'
+        )
+        add_expense_category({
+            **payload_row,
+            'categoryLabel': f'Added Expense - {manual_category}',
+        })
 
     expense_categories = sorted(
         expense_category_totals.values(),
         key=lambda row: (-_safe_float(row.get('amount'), 0), str(row.get('label') or '')),
     )
     quotation_budgets = _finance_profit_loss_quotation_budgets(quotation)
-    manpower_department_totals = {
-        str(department or 'Unallocated'): round(_safe_float(amount, 0), 2)
-        for department, amount in (workforce_costs.get('manpowerDepartments') or {}).items()
-        if _safe_float(amount, 0) > 0
-    }
+    manpower_department_totals = {}
+    for department_costs in (
+        workforce_costs.get('manpowerDepartments') or {},
+        workforce_costs.get('vendorServiceDepartments') or {},
+    ):
+        for department, amount in department_costs.items():
+            amount = round(_safe_float(amount, 0), 2)
+            if amount <= 0:
+                continue
+            department = str(department or 'Unallocated')
+            manpower_department_totals[department] = round(
+                manpower_department_totals.get(department, 0) + amount,
+                2,
+            )
 
     manpower_department_rows = []
     for department, amount in sorted(
@@ -39837,19 +39864,19 @@ def _finance_profit_loss_payload(event, finance_data):
             'label': f'Vendor - {department}',
             'amount': amount,
         })
-        profit_chart.append({
-            'key': f'vendor-{_normalise_department_code(department).lower()}',
-            'group': 'manpower',
-            'department': department,
-            'label': f'Vendor - {department}',
-            'amount': amount,
-        })
     if meal_cost > 0:
         profit_chart.append({
             'key': 'meals',
             'group': 'meal',
             'label': 'Meals',
             'amount': meal_cost,
+        })
+    if crew_transport_claims > 0:
+        profit_chart.append({
+            'key': 'crew-transport',
+            'group': 'crew-transport',
+            'label': 'Crew Transport',
+            'amount': crew_transport_claims,
         })
     if transport_cost > 0:
         profit_chart.append({
@@ -39887,7 +39914,7 @@ def _finance_profit_loss_payload(event, finance_data):
 
     breakdown = {
         'manpower': manpower_card_cost,
-        'manpowerDirect': manpower_cost,
+        'manpowerDirect': workforce_invoice_cost,
         'meals': meal_cost,
         'manpowerInvoicesOrEstimate': workforce_costs['manpowerCost'],
         'workerTransportClaims': crew_transport_claims,
@@ -39905,6 +39932,7 @@ def _finance_profit_loss_payload(event, finance_data):
         'workerMealClaims': worker_meal_claims,
         'workerOtherClaims': worker_other_claims,
         'manualOtherExpenses': manual_other_expenses,
+        'manualExpensesTotal': manual_expenses_total,
         'commission': commission,
     }
     return {
@@ -39932,6 +39960,7 @@ def _finance_profit_loss_payload(event, finance_data):
             'directCosts': direct_costs,
             'manpowerCost': manpower_cost,
             'manpowerCardCost': manpower_card_cost,
+            'crewVendorInvoiceCost': workforce_invoice_cost,
             'mealCost': meal_cost,
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
@@ -39960,6 +39989,7 @@ def _finance_profit_loss_payload(event, finance_data):
             ),
             'workerOtherClaimsCost': worker_other_claims,
             'manualOtherExpenses': manual_other_expenses,
+            'manualExpensesTotal': manual_expenses_total,
             'otherExpenses': other_expenses,
             'beforeCommission': before_commission,
             'commissionBase': commission_base,

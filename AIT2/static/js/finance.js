@@ -7290,6 +7290,7 @@ function profitLossChartColour(group, index, row = {}) {
     manpower: ['#2563eb', '#0ea5e9', '#06b6d4', '#6366f1', '#0284c7'],
     vendor: ['#0f766e', '#14b8a6', '#0d9488', '#115e59'],
     meal: ['#ec4899'],
+    'crew-transport': ['#14b8a6'],
     transport: ['#f59e0b'],
     other: ['#64748b', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'],
     commission: ['#8b5cf6'],
@@ -7544,20 +7545,17 @@ function renderProfitLossPage() {
   const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
   const activity = data.activity || [];
   const transportNoteParts = [
-    financeNumber(summary.transportBookingCost) > 0 ? `Bookings ${financeSgd(summary.transportBookingCost)}` : '',
-    financeNumber(summary.manualTransportExpenses) > 0 ? `Added ${financeSgd(summary.manualTransportExpenses)}` : ''
+    financeNumber(summary.transportBookingCost) > 0 ? `Bookings ${financeSgd(summary.transportBookingCost)}` : ''
   ].filter(Boolean);
   const manpowerNoteParts = [
     financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`,
     financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
     financeNumber(summary.crewTransportClaimsCost) > 0 ? `Transport claims ${financeSgd(summary.crewTransportClaimsCost)}` : '',
-    financeNumber(summary.workerMealClaimsCost) > 0 ? `Meal claims ${financeSgd(summary.workerMealClaimsCost)}` : '',
-    financeNumber(summary.manualMealExpenses) > 0 ? `Added meals ${financeSgd(summary.manualMealExpenses)}` : '',
-    financeNumber(summary.manualTransportExpenses) > 0 ? `Added transport ${financeSgd(summary.manualTransportExpenses)}` : ''
+    financeNumber(summary.workerMealClaimsCost) > 0 ? `Meal claims ${financeSgd(summary.workerMealClaimsCost)}` : ''
   ].filter(Boolean);
   const otherNoteParts = [
     financeNumber(summary.workerOtherClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerOtherClaimsCost)}` : '',
-    financeNumber(summary.manualOtherExpenses) > 0 ? `Added here ${financeSgd(summary.manualOtherExpenses)}` : ''
+    financeNumber(summary.manualExpensesTotal) > 0 ? `Added here ${financeSgd(summary.manualExpensesTotal)}` : ''
   ].filter(Boolean);
   const revenueSource = data.revenueSource || (quote ? 'quotation' : 'none');
   const revenueTitle = revenueSource === 'manual' ? 'Event Revenue' : 'Revenue from Quotation';
@@ -7654,7 +7652,6 @@ function renderProfitLossPage() {
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
         <div class="pnl-calc-row"><span>Crew &amp; Vendors Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
-        ${financeNumber(summary.mealCost) > 0 ? `<div class="pnl-calc-row"><span>Meals</span><strong>- ${financeSgd(summary.mealCost)}</strong></div>` : ''}
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
         <h4>Less: Other Expenses</h4>

@@ -328,8 +328,19 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('roomWarning: planSubprojectWarning', script)
         self.assertIn('function eventScopedCustomAssets(', script)
         self.assertIn('function groupEventCustomAssets(', script)
+        custom_grouper = script.split('function groupEventCustomAssets(', 1)[1].split(
+            'function eventConsolidatedNotice', 1
+        )[0]
+        self.assertIn('if (row.assetIds.includes(assetId)) return;', custom_grouper)
         self.assertIn('function prepareNewCollectCustomMany(', script)
         self.assertIn('function prepareNewUncollectCustomMany(', script)
+        self.assertIn('function prepareNewSortMiscItems(', script)
+        misc_sorter = script.split('function prepareNewSortMiscItems(', 1)[1].split(
+            'function renderPrepareNewCustomList', 1
+        )[0]
+        self.assertIn('statusOrder(left) - statusOrder(right)', misc_sorter)
+        self.assertIn('normalizeDepartmentCode(leftCustom.department', misc_sorter)
+        self.assertIn('customAssetDisplayName(leftCustom, false).localeCompare(', misc_sorter)
         self.assertIn('prepare-new-consolidated-loan-action', script)
         self.assertIn('>Collect</button>', script)
         self.assertIn('>Uncollect</button>', script)
@@ -1387,6 +1398,54 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('Printed backdrop (Black fabric with client artwork)', action)
         self.assertIn('Name: Printed backdrop -> Printed stage backdrop', action)
         self.assertIn('Company / source: - -> Backdrop Rental Co', action)
+
+    def test_custom_quantity_update_collapses_duplicate_item_references(self):
+        self.login('admin')
+        created = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json={
+                'name': 'XLR cable - 10m',
+                'quantity': 1,
+                'type': 'MISC',
+                'department': 'AX',
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        old_marker = created.get_json()['data']['assetId']
+
+        # Imported/legacy event data could hold the same logical marker twice.
+        self.event.prepared_items.append(old_marker)
+        self.event.actually_prepared.extend([old_marker, old_marker])
+        self.event.subprojects = [{
+            'id': 'room_rotunda',
+            'name': 'AVPL Rotunda Room',
+            'items': [{
+                'isCustom': True,
+                'description': 'XLR cable - 10m',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'quantity': 1,
+                'assetRefs': [old_marker, old_marker],
+            }],
+        }]
+        self.data_manager.save_event(self.event)
+
+        updated = self.client.put(
+            f'/api/events/{self.event.event_id}/custom-assets/update-quantity',
+            json={
+                'assetId': old_marker,
+                'newQuantity': 2,
+                'subprojectId': 'room_rotunda',
+            },
+        )
+
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        new_marker = updated.get_json()['newAssetId']
+        self.assertEqual(self.event.prepared_items.count(new_marker), 1)
+        self.assertEqual(self.event.actually_prepared.count(new_marker), 1)
+        room_item = self.event.subprojects[0]['items'][0]
+        self.assertEqual(room_item['assetRefs'], [new_marker])
+        self.assertEqual(room_item['quantity'], 2)
 
     def test_assigned_user_can_add_custom_item_from_prepare(self):
         self.event.assigned_users = ['normal']

@@ -796,6 +796,34 @@ function prepareNewCustomPendingLabel(counts) {
   return parts.join(' · ') || '0 pending';
 }
 
+function prepareNewSortMiscItems(items, event = prepareNewPageState.event) {
+  const prepared = new Set(event?.actuallyPrepared || []);
+  const returned = new Set(event?.returnedItems || []);
+  const statusOrder = asset => {
+    const ids = (asset?.assetIds || [asset?.id]).map(String).filter(Boolean);
+    if (ids.length && ids.every(assetId => returned.has(assetId))) return 2;
+    if (ids.length && ids.every(assetId => prepared.has(assetId))) return 1;
+    return 0;
+  };
+  return [...(items || [])].sort((left, right) => {
+    const leftCustom = left?.parsedCustom || {};
+    const rightCustom = right?.parsedCustom || {};
+    return (
+      statusOrder(left) - statusOrder(right)
+      || normalizeDepartmentCode(leftCustom.department || 'UN').localeCompare(
+        normalizeDepartmentCode(rightCustom.department || 'UN'),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+      )
+      || customAssetDisplayName(leftCustom, false).localeCompare(
+        customAssetDisplayName(rightCustom, false),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+      )
+    );
+  });
+}
+
 function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
   if (!customAssets.length) {
     return '<div class="prepare-new-empty">No miscellaneous or loan items.</div>';
@@ -902,7 +930,10 @@ function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
     `;
   };
 
-  const misc = customAssets.filter(asset => asset.parsedCustom?.type !== 'LOAN');
+  const misc = prepareNewSortMiscItems(
+    customAssets.filter(asset => asset.parsedCustom?.type !== 'LOAN'),
+    event
+  );
   const loanGroups = new Map();
   customAssets.filter(asset => asset.parsedCustom?.type === 'LOAN').forEach(asset => {
     const company = String(asset.parsedCustom?.company || 'Unspecified company').trim();

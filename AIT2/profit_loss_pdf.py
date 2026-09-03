@@ -80,6 +80,8 @@ def _profit_chart_rows(payload):
     fallback_palettes = {
         'manpower': ['#2563EB', '#0EA5E9', '#06B6D4', '#6366F1', '#0284C7'],
         'vendor': ['#0F766E', '#14B8A6', '#0D9488', '#115E59'],
+        'meal': ['#EC4899'],
+        'crew-transport': ['#14B8A6'],
         'transport': ['#F59E0B'],
         'other': ['#64748B', '#EF4444', '#14B8A6', '#EC4899', '#84CC16'],
         'commission': ['#8B5CF6'],
@@ -488,8 +490,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
 
     calculation_rows = [
         ('Revenue', summary.get('revenue'), False),
-        ('Manpower cost', -_number(summary.get('manpowerCost')), False),
-        ('Vendor services', -_number(summary.get('vendorServiceCost')), False),
+        ('Crew & Vendors cost', -_number(summary.get('manpowerCost')), False),
         ('Transport cost', -_number(summary.get('transportCost')), False),
         ('Other expenses', -_number(summary.get('otherExpenses')), False),
         ('Net profit before commission', summary.get('beforeCommission'), True),
@@ -628,15 +629,15 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         for value in ('COST AREA', 'SOURCE', 'AMOUNT')
     ]]
     source_items = [
-        ('Manpower', 'Invoices or assignment estimate', breakdown.get('manpowerInvoicesOrEstimate')),
-        ('Vendor services', 'Service invoices or assignment estimate', breakdown.get('vendorServices')),
-        ('Manpower', 'Crew transport claims', breakdown.get('crewTransportClaims')),
-        ('Manpower', 'Meal claims', breakdown.get('workerMealClaims')),
-        ('Manpower', 'Additional meal expenses', breakdown.get('manualMealExpenses')),
-        ('Transport', 'Transport bookings', breakdown.get('transportBookings')),
-        ('Transport', 'Additional transport expenses', breakdown.get('manualTransportExpenses')),
-        ('Other', 'Other worker claims', breakdown.get('workerOtherClaims')),
-        ('Other', 'Additional expenses', breakdown.get('manualOtherExpenses')),
+        ('Crew & Vendors', 'Crew invoices or assignment estimate', breakdown.get('manpowerInvoicesOrEstimate')),
+        ('Crew & Vendors', 'Vendor service invoices or assignment estimate', breakdown.get('vendorServices')),
+        ('Crew & Vendors', 'Crew transport claims', breakdown.get('crewTransportClaims')),
+        ('Crew & Vendors', 'Meal claims', breakdown.get('workerMealClaims')),
+        ('Transport', 'Transport-page bookings', breakdown.get('transportBookings')),
+        ('Other', 'Other crew claims', breakdown.get('workerOtherClaims')),
+        ('Other', 'Additional meal expenses', breakdown.get('manualMealExpenses')),
+        ('Other', 'Additional transport expenses', breakdown.get('manualTransportExpenses')),
+        ('Other', 'Additional other expenses', breakdown.get('manualOtherExpenses')),
         ('Commission', 'Commission', breakdown.get('commission')),
     ]
     for area, source, amount in source_items:

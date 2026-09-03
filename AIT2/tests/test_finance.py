@@ -4213,9 +4213,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(payload['summary']['revenue'], 1000)
         self.assertEqual(payload['summary']['manualMealExpenses'], 123.45)
         self.assertEqual(payload['summary']['manpowerCost'], 0)
-        self.assertEqual(payload['summary']['manpowerCardCost'], 123.45)
-        self.assertEqual(payload['summary']['mealCost'], 123.45)
+        self.assertEqual(payload['summary']['manpowerCardCost'], 0)
+        self.assertEqual(payload['summary']['mealCost'], 0)
         self.assertEqual(payload['summary']['manualOtherExpenses'], 0)
+        self.assertEqual(payload['summary']['manualExpensesTotal'], 123.45)
+        self.assertEqual(payload['summary']['otherExpenses'], 123.45)
         expense = payload['expenses'][0]
         self.assertEqual(expense['amount'], 123.45)
         self.assertEqual(expense['expenseDate'], '2026-05-29')
@@ -5143,10 +5145,18 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(payload['vendorServiceDepartments'], [{
             'department': 'AX', 'label': 'Vendor - AX', 'amount': 275.0,
         }])
-        self.assertTrue(any(
+        departmental_chart_rows = [
+            row for row in payload['profitChart']
+            if row.get('group') == 'manpower' and row.get('department') == 'AX'
+        ]
+        self.assertEqual(len(departmental_chart_rows), 1)
+        self.assertEqual(departmental_chart_rows[0]['amount'], 385)
+        self.assertTrue(
+            departmental_chart_rows[0]['label'].startswith('Crew & Vendors - ')
+        )
+        self.assertFalse(any(
             row.get('group') == 'manpower'
-            and row.get('label') == 'Vendor - AX'
-            and row.get('amount') == 275
+            and row.get('label', '').startswith('Vendor - ')
             for row in payload['profitChart']
         ))
         vendor_invoice = next(
@@ -5156,7 +5166,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
         self.assertEqual(vendor_invoice['categoryLabel'], 'Crew & Vendors')
 
-    def test_profit_loss_budgets_and_worker_claims_stay_under_manpower(self):
+    def test_profit_loss_groups_worker_claims_under_crew_and_vendors(self):
         self.login('sales-admin')
         event = Event(
             event_id=136, name='Budgeted Event', location='Studio',
@@ -5313,16 +5323,19 @@ class FinanceFeatureTests(unittest.TestCase):
         payload = self.client.get('/api/finance/profit-loss/136').get_json()['data']
         summary = payload['summary']
         self.assertEqual(payload['quotation']['id'], accepted_quote['id'])
-        self.assertEqual(summary['manpowerCost'], 700)
-        self.assertEqual(summary['manpowerCardCost'], 880)
-        self.assertEqual(summary['mealCost'], 70)
+        self.assertEqual(summary['manpowerCost'], 780)
+        self.assertEqual(summary['manpowerCardCost'], 780)
+        self.assertEqual(summary['crewVendorInvoiceCost'], 700)
+        self.assertEqual(summary['mealCost'], 30)
         self.assertEqual(summary['crewTransportClaimsCost'], 50)
-        self.assertEqual(summary['transportCost'], 210)
-        self.assertEqual(summary['otherExpenses'], 45)
+        self.assertEqual(summary['transportBookingCost'], 100)
+        self.assertEqual(summary['transportCost'], 100)
+        self.assertEqual(summary['manualExpensesTotal'], 125)
+        self.assertEqual(summary['otherExpenses'], 145)
         self.assertEqual(summary['manpowerBudget'], 4860)
-        self.assertEqual(summary['manpowerBudgetVariance'], 3980)
+        self.assertEqual(summary['manpowerBudgetVariance'], 4080)
         self.assertEqual(summary['transportBudget'], 450)
-        self.assertEqual(summary['transportBudgetVariance'], 240)
+        self.assertEqual(summary['transportBudgetVariance'], 350)
 
         descriptions = {row['description'] for row in payload['expenses']}
         self.assertIn('Wesley Tan - Invoice', descriptions)
@@ -5334,26 +5347,34 @@ class FinanceFeatureTests(unittest.TestCase):
         }
         self.assertEqual(department_costs['AX'], 700)
         self.assertNotIn('Unallocated', department_costs)
-        self.assertFalse(any(
-            row['label'] == 'Transport claims'
-            for row in payload['profitChart']
-        ))
         self.assertTrue(any(
             row.get('department') == 'AX'
             and row.get('group') == 'manpower'
+            and row.get('amount') == 700
             for row in payload['profitChart']
         ))
         self.assertIn(
-            {'group': 'transport', 'amount': 210},
+            {'group': 'transport', 'amount': 100},
             [
                 {'group': row['group'], 'amount': row['amount']}
                 for row in payload['profitChart']
             ],
         )
         self.assertIn(
-            {'group': 'meal', 'amount': 70},
+            {'group': 'meal', 'amount': 30},
             [
                 {'group': row['group'], 'amount': row['amount']}
+                for row in payload['profitChart']
+            ],
+        )
+        self.assertIn(
+            {'group': 'crew-transport', 'label': 'Crew Transport', 'amount': 50},
+            [
+                {
+                    'group': row['group'],
+                    'label': row['label'],
+                    'amount': row['amount'],
+                }
                 for row in payload['profitChart']
             ],
         )
