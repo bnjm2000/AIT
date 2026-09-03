@@ -106,8 +106,29 @@ from services.company_storage_context import (
     attach_company_storage_contexts,
     build_company_storage_contexts,
 )
+from services.notification_settings import (
+    admin_telegram_chat_id,
+    connect_admin_telegram,
+    disconnect_admin_telegram,
+    public_admin_telegram_profile,
+    rename_admin_telegram,
+    telegram_recipients_for_status_change,
+    telegram_recipients_for_upload,
+    update_admin_telegram_preferences,
+)
+from services.telegram_link_store import (
+    create_telegram_link,
+    telegram_link_record,
+)
 from services.telegram_notifications import (
+    configure_telegram_webhook,
+    queue_status_change_notification as queue_telegram_status_change_notification,
     queue_upload_notification as queue_telegram_upload_notification,
+    queue_telegram_message,
+    send_telegram_message,
+    start_telegram_update_poller,
+    telegram_bot_username,
+    telegram_notifications_configured,
 )
 from event_report import build_event_report_pdf
 from utils import sanitize_filename
@@ -297,6 +318,7 @@ _upload_processing_executor = ThreadPoolExecutor(
     max_workers=max(1, int(os.environ.get('UPLOAD_PROCESSING_WORKERS', '1'))),
     thread_name_prefix='upload-processing',
 )
+TELEGRAM_LINK_MAX_AGE = 10 * 60
 
 # Server-sent events notify logged-in browsers when shared CSV data changes.
 _realtime_subscribers = {}
@@ -10392,6 +10414,7 @@ def submit_my_claim():
         event = manager.events.get(event_id)
         user = manager.users.get(username)
         _queue_workforce_upload_notification(
+            manager=manager,
             worker_name=str(getattr(user, 'name', '') or username),
             event_id=event_id,
             event_name=str(getattr(event, 'name', '') or f'Event {event_id}'),
@@ -10917,8 +10940,10 @@ def worker_confirm_payment(submission_id):
                 return jsonify({
                     'error': 'Payment can only be confirmed after it is marked paid'
                 }), 409
+            previous_status = _submission_notification_status(found['record'])
             found['record']['paymentConfirmedAt'] = now_iso()
             found['record']['paymentConfirmedByWorker'] = True
+            new_status = _submission_notification_status(found['record'])
             event_id = found['eventId']
             submission_kind = found['kind']
         worker_name = freelancer.get('name') or freelancer.get('id') or 'Worker'
@@ -10928,6 +10953,15 @@ def worker_confirm_payment(submission_id):
             user=worker_name,
         )
         _workforce_changed(event_id, 'worker-payment-confirmed')
+        _queue_workforce_status_change_notification(
+            manager=manager,
+            worker_name=worker_name,
+            event_id=event_id,
+            kind=submission_kind,
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=worker_name,
+        )
         return jsonify({
             'success': True,
             'data': _worker_company_payload_for_context(
@@ -10962,7 +10996,7 @@ def _queue_worker_submission_processing(args):
 
 
 def _queue_workforce_upload_notification(
-    *, worker_name, event_id, event_name, kind, file_count
+    *, manager, worker_name, event_id, event_name, kind, file_count
 ):
     """Queue a best-effort alert without ever affecting the upload response."""
     # A developer may have real Telegram credentials in .env. Never use them
@@ -10970,15 +11004,68 @@ def _queue_workforce_upload_notification(
     if app.config.get('TESTING'):
         return False
     try:
+        chat_ids = telegram_recipients_for_upload(manager, kind)
+        if not chat_ids:
+            return False
         return queue_telegram_upload_notification(
             worker_name=worker_name,
             event_id=event_id,
             event_name=event_name,
             kind=kind,
             file_count=file_count,
+            chat_ids=chat_ids,
         )
     except Exception as exc:
         logger.warning('Could not queue workforce upload notification: %s', exc)
+        return False
+
+
+def _submission_notification_status(record):
+    if isinstance(record, dict) and record.get('paymentConfirmedAt'):
+        return 'Payment Confirmed'
+    return str((record or {}).get('status') or 'Pending Review')
+
+
+def _submission_subject_display_name(manager, workforce, subject_id):
+    subject_key = str(subject_id or '').strip()
+    if subject_key.startswith('user:'):
+        username = subject_key[5:]
+        user = (getattr(manager, 'users', {}) or {}).get(username)
+        return str(getattr(user, 'name', '') or username or 'Unknown worker')
+    subject = find_by_id(workforce.get('freelancers'), subject_key)
+    if not subject:
+        subject = find_by_id(workforce.get('vendors'), subject_key)
+    return str((subject or {}).get('name') or subject_key or 'Unknown worker')
+
+
+def _queue_workforce_status_change_notification(
+    *, manager, worker_name, event_id, kind, previous_status, new_status,
+    changed_by=''
+):
+    """Queue a best-effort business-state alert after the mutation commits."""
+    if (
+        app.config.get('TESTING')
+        or kind not in {'invoice', 'claim'}
+        or previous_status == new_status
+    ):
+        return False
+    try:
+        chat_ids = telegram_recipients_for_status_change(manager, kind)
+        if not chat_ids:
+            return False
+        event = manager.events.get(event_id)
+        return queue_telegram_status_change_notification(
+            worker_name=worker_name,
+            event_id=event_id,
+            event_name=str(getattr(event, 'name', '') or f'Event {event_id}'),
+            kind=kind,
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=changed_by,
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue workforce status notification: %s', exc)
         return False
 
 
@@ -11302,6 +11389,7 @@ def worker_upload_submission():
         _workforce_changed(event_id, f'{kind}-uploaded')
         event = manager.events.get(event_id)
         _queue_workforce_upload_notification(
+            manager=manager,
             worker_name=str(freelancer.get('name') or freelancer_id),
             event_id=event_id,
             event_name=str(getattr(event, 'name', '') or f'Event {event_id}'),
@@ -15301,7 +15389,9 @@ def update_workforce_claim_group_status():
     if requested_status not in allowed_statuses:
         return jsonify({'error': 'Choose a valid group claim status'}), 400
 
-    with mutate_workforce(_workforce_folder()) as workforce:
+    manager = _current_data_manager_object()
+    status_changes = []
+    with mutate_workforce(_workforce_folder(manager)) as workforce:
         found_rows = []
         for submission_id in submission_ids:
             found = _find_submission_record(workforce, submission_id)
@@ -15337,6 +15427,7 @@ def update_workforce_claim_group_status():
         for found in found_rows:
             record = found['record']
             old_status = str(record.get('status') or 'Pending Review')
+            previous_notification_status = _submission_notification_status(record)
             admin_confirming_payment = requested_status == 'Payment Confirmed'
             stored_status = 'Paid' if admin_confirming_payment else requested_status
             already_matching = (
@@ -15367,12 +15458,29 @@ def update_workforce_claim_group_status():
                 'amount': money(record.get('amount')),
                 'groupUpdate': True,
             })
+            status_changes.append((
+                _submission_subject_display_name(
+                    manager, workforce, found['freelancerId']
+                ),
+                previous_notification_status,
+                _submission_notification_status(record),
+            ))
             changed += 1
 
     log_action(
         f"Changed {changed} claims to {requested_status} for event {event_id}"
     )
     _workforce_changed(event_id, 'submission-group-status')
+    for worker_name, previous_status, new_status in status_changes:
+        _queue_workforce_status_change_notification(
+            manager=manager,
+            worker_name=worker_name,
+            event_id=event_id,
+            kind='claim',
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=actor,
+        )
     return jsonify({
         'success': True,
         'data': _admin_workforce_payload(event_id),
@@ -15385,11 +15493,13 @@ def update_workforce_claim_group_status():
 @require_admin
 def review_workforce_submission(submission_id):
     payload = request.get_json(silent=True) or {}
-    with mutate_workforce(_workforce_folder()) as workforce:
+    manager = _current_data_manager_object()
+    with mutate_workforce(_workforce_folder(manager)) as workforce:
         found = _find_submission_record(workforce, submission_id)
         if not found:
             return jsonify({'error': 'Submission not found'}), 404
         record = found['record']
+        previous_notification_status = _submission_notification_status(record)
         status = str(payload.get('status', record.get('status', 'Pending Review')))
         if status not in VALID_STATUSES:
             return jsonify({'error': 'Invalid status'}), 400
@@ -15543,10 +15653,24 @@ def review_workforce_submission(submission_id):
             'amount': amount,
         })
         event_id = found['eventId']
+        submission_kind = found['kind']
+        worker_name = _submission_subject_display_name(
+            manager, workforce, found['freelancerId']
+        )
+        new_notification_status = _submission_notification_status(record)
     log_action(
         f"Changed {found['kind']} {submission_id} from {old_status} to {status} for event {event_id}"
     )
     _workforce_changed(event_id, 'submission-reviewed')
+    _queue_workforce_status_change_notification(
+        manager=manager,
+        worker_name=worker_name,
+        event_id=event_id,
+        kind=submission_kind,
+        previous_status=previous_notification_status,
+        new_status=new_notification_status,
+        changed_by=str(session.get('user') or ''),
+    )
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
@@ -18146,6 +18270,11 @@ def init_data_manager():
                 logger.warning("Background thread failed to start - automatic event updates disabled")
             else:
                 logger.info("Background thread started successfully after data_manager initialization")
+            if not app.config.get('TESTING'):
+                if start_telegram_update_poller(_process_telegram_connection_update):
+                    logger.info('Telegram admin connection listener started')
+                elif telegram_notifications_configured():
+                    logger.warning('Telegram admin connection listener did not start')
                 
         except Exception as e:
             logger.error(f"Failed to initialize data manager: {e}")
@@ -19022,6 +19151,275 @@ def complete_company_branding_setup():
         return jsonify({'error': 'Failed to complete branding setup'}), 500
 
 
+def _telegram_webhook_secret():
+    configured = str(os.environ.get('TELEGRAM_WEBHOOK_SECRET') or '').strip()
+    if re.fullmatch(r'[A-Za-z0-9_-]{1,256}', configured):
+        return configured
+    secret_material = (
+        f"{app.secret_key}:{os.environ.get('TELEGRAM_BOT_TOKEN', '')}"
+    ).encode('utf-8')
+    return hashlib.sha256(secret_material).hexdigest()
+
+
+def _telegram_public_base_url():
+    base_url = str(
+        os.environ.get('TELEGRAM_PUBLIC_BASE_URL') or request.url_root or ''
+    ).strip().rstrip('/')
+    external_https = (
+        str(os.environ.get('EXTERNAL_HTTPS') or '').strip().lower()
+        in {'1', 'true', 'yes', 'on'}
+    )
+    if external_https and base_url.startswith('http://'):
+        base_url = f"https://{base_url[len('http://') :]}"
+    return base_url
+
+
+def _telegram_link_store_path():
+    """Keep pending links durable without touching live config in tests."""
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None:
+        return os.path.join(test_manager.data_folder, 'TelegramConnectionLinks.json')
+    return os.path.join(APP_CONFIG_FOLDER, 'TelegramConnectionLinks.json')
+
+
+def _telegram_link_record(token, consume=False):
+    return telegram_link_record(
+        _telegram_link_store_path(),
+        token,
+        consume=consume,
+    )
+
+
+def _current_admin_notification_payload():
+    username = str(session.get('user') or '').strip()
+    manager = _current_data_manager_object()
+    profile = public_admin_telegram_profile(manager, username)
+    profile.update({
+        'providerConfigured': telegram_notifications_configured(),
+        'username': username,
+        'companyCode': _current_company_code(),
+    })
+    return profile
+
+
+@app.route('/api/notification-settings', methods=['GET'])
+@require_admin
+def get_notification_settings():
+    """Return only the signed-in admin's notification connection."""
+    return jsonify({
+        'success': True,
+        'data': _current_admin_notification_payload(),
+    })
+
+
+@app.route('/api/notification-settings/telegram/connect', methods=['POST'])
+@require_admin
+def begin_telegram_connection():
+    """Create a one-time link for the signed-in admin's private Telegram chat."""
+    if not telegram_notifications_configured():
+        return jsonify({
+            'error': 'Telegram notifications are not configured on this server'
+        }), 503
+
+    bot_username = telegram_bot_username()
+    if not bot_username:
+        return jsonify({'error': 'Could not reach the configured Telegram bot'}), 502
+
+    update_mode = str(
+        os.environ.get('TELEGRAM_UPDATE_MODE') or 'polling'
+    ).strip().lower()
+    if update_mode == 'webhook':
+        base_url = _telegram_public_base_url()
+        if not base_url or (
+            not base_url.startswith('https://')
+            and not app.config.get('TESTING')
+        ):
+            return jsonify({
+                'error': 'Telegram connection requires a public HTTPS application URL'
+            }), 503
+        webhook_url = f'{base_url}/api/integrations/telegram/webhook'
+        if not configure_telegram_webhook(webhook_url, _telegram_webhook_secret()):
+            return jsonify({'error': 'Could not configure the Telegram connection'}), 502
+
+    token, expires_at = create_telegram_link(
+        _telegram_link_store_path(),
+        _current_company_code(),
+        str(session.get('user') or '').strip(),
+        TELEGRAM_LINK_MAX_AGE,
+    )
+    return jsonify({
+        'success': True,
+        'data': {
+            'connectUrl': f'https://t.me/{bot_username}?start={token}',
+            'expiresAt': datetime.fromtimestamp(expires_at).astimezone().isoformat(
+                timespec='seconds'
+            ),
+        },
+    })
+
+
+@app.route('/api/notification-settings/telegram', methods=['PUT'])
+@require_admin
+def update_telegram_notification_settings():
+    data = request.get_json(silent=True) or {}
+    username = str(session.get('user') or '').strip()
+    try:
+        profile = update_admin_telegram_preferences(
+            _current_data_manager_object(),
+            username,
+            enabled=data.get('enabled') if 'enabled' in data else None,
+            invoice_uploads=(
+                data.get('invoiceUploads') if 'invoiceUploads' in data else None
+            ),
+            claim_uploads=(
+                data.get('claimUploads') if 'claimUploads' in data else None
+            ),
+            invoice_status_changes=(
+                data.get('invoiceStatusChanges')
+                if 'invoiceStatusChanges' in data else None
+            ),
+            claim_status_changes=(
+                data.get('claimStatusChanges')
+                if 'claimStatusChanges' in data else None
+            ),
+        )
+        profile.update({
+            'providerConfigured': telegram_notifications_configured(),
+            'username': username,
+            'companyCode': _current_company_code(),
+        })
+        return jsonify({'success': True, 'data': profile})
+    except KeyError as exc:
+        return jsonify({'error': str(exc).strip("'")}), 404
+
+
+@app.route('/api/notification-settings/telegram', methods=['DELETE'])
+@require_admin
+def disconnect_telegram_notification_settings():
+    username = str(session.get('user') or '').strip()
+    disconnect_admin_telegram(_current_data_manager_object(), username)
+    return jsonify({
+        'success': True,
+        'data': _current_admin_notification_payload(),
+    })
+
+
+@app.route('/api/notification-settings/telegram/test', methods=['POST'])
+@require_admin
+def test_telegram_notification_settings():
+    username = str(session.get('user') or '').strip()
+    manager = _current_data_manager_object()
+    chat_id = admin_telegram_chat_id(manager, username)
+    if not chat_id:
+        return jsonify({'error': 'Connect your Telegram account first'}), 409
+    company = _company_payload(_current_company_code())
+    company_name = str(company.get('name') or company.get('code') or 'your company')
+    if not send_telegram_message(
+        f'✅ Showbase notifications are connected for {company_name}.',
+        chat_id=chat_id,
+    ):
+        return jsonify({'error': 'Telegram could not deliver the test message'}), 502
+    return jsonify({'success': True, 'message': 'Test notification sent'})
+
+
+def _process_telegram_connection_update(update):
+    """Consume one Telegram /start update and bind its chat to an admin."""
+    message = update.get('message') if isinstance(update, dict) else None
+    if not isinstance(message, dict):
+        return False
+    text = str(message.get('text') or '').strip()
+    token_match = re.match(
+        r'^/start(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{16,64})$',
+        text,
+    )
+    if not token_match:
+        return False
+
+    chat = message.get('chat') if isinstance(message.get('chat'), dict) else {}
+    chat_id = str(chat.get('id') or '').strip()
+    if str(chat.get('type') or '') != 'private' or not chat_id:
+        if chat_id:
+            queue_telegram_message(
+                'Connect your personal Telegram account in a private chat with this bot.',
+                chat_id,
+            )
+        return False
+
+    token = token_match.group(1)
+    pending = _telegram_link_record(token)
+    if not pending:
+        queue_telegram_message(
+            'This Showbase connection link is invalid or expired. Create a new link in Company Details.',
+            chat_id,
+        )
+        return False
+
+    company_code = str(pending.get('companyCode') or '').strip()
+    username = str(pending.get('username') or '').strip()
+    manager = (
+        app.config.get('TEST_DATA_MANAGER')
+        if app.config.get('TESTING') and app.config.get('TEST_DATA_MANAGER')
+        else _get_company_data_manager(company_code)
+    )
+    user = (getattr(manager, 'users', {}) or {}).get(username)
+    role = normalize_user_role(
+        getattr(user, 'role', None),
+        getattr(user, 'is_admin', False),
+    ) if user else 'user'
+    if (
+        not user
+        or not getattr(user, 'is_active', True)
+        or not user_role_is_adminish(role)
+    ):
+        _telegram_link_record(token, consume=True)
+        queue_telegram_message(
+            'This Showbase account no longer has administrator access.',
+            chat_id,
+        )
+        return False
+
+    telegram_user = (
+        message.get('from') if isinstance(message.get('from'), dict) else {}
+    )
+    display_name = ' '.join(filter(None, [
+        str(telegram_user.get('first_name') or '').strip(),
+        str(telegram_user.get('last_name') or '').strip(),
+    ])).strip()
+    telegram_username = str(telegram_user.get('username') or '').strip()
+    if not display_name:
+        display_name = f'@{telegram_username}' if telegram_username else 'Telegram account'
+
+    connect_admin_telegram(
+        manager,
+        username,
+        chat_id=chat_id,
+        telegram_user_id=str(telegram_user.get('id') or ''),
+        telegram_username=telegram_username,
+        display_name=display_name,
+        linked_at=now_iso(),
+    )
+    _telegram_link_record(token, consume=True)
+    company = _company_payload(company_code)
+    company_name = str(company.get('name') or company_code)
+    queue_telegram_message(
+        f'✅ Connected to Showbase alerts for {company_name}.',
+        chat_id,
+    )
+    return True
+
+
+@app.route('/api/integrations/telegram/webhook', methods=['POST'])
+def telegram_connection_webhook():
+    """Optional webhook receiver for deployments using a supported HTTPS port."""
+    provided_secret = str(
+        request.headers.get('X-Telegram-Bot-Api-Secret-Token') or ''
+    )
+    if not secrets.compare_digest(provided_secret, _telegram_webhook_secret()):
+        return jsonify({'error': 'Invalid webhook secret'}), 403
+    _process_telegram_connection_update(request.get_json(silent=True) or {})
+    return jsonify({'success': True})
+
+
 @app.route('/api/pdf-settings', methods=['GET'])
 @require_auth
 def get_pdf_settings():
@@ -19830,6 +20228,29 @@ def update_user(username):
                         return jsonify({'error': str(error)}), 409
                 _unassign_user_from_company(user.username, source_company)
             _assign_user_to_company(user.username, target_company)
+
+        notification_manager = _current_data_manager_object()
+        if username_changed:
+            rename_admin_telegram(
+                notification_manager,
+                renamed_from,
+                renamed_to,
+            )
+        final_role = normalize_user_role(
+            getattr(user, 'role', None),
+            getattr(user, 'is_admin', False),
+        )
+        moved_company = bool(
+            requested_company
+            and _normalise_company_code(requested_company, DEFAULT_COMPANY_CODE)
+            != _normalise_company_code(history_company_code, DEFAULT_COMPANY_CODE)
+        )
+        if (
+            not user_role_is_adminish(final_role)
+            or not getattr(user, 'is_active', True)
+            or moved_company
+        ):
+            disconnect_admin_telegram(notification_manager, user.username)
 
         _reload_users_for_all_company_managers()
 

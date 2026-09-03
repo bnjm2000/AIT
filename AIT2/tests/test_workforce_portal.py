@@ -1866,6 +1866,7 @@ class WorkforcePortalTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         notify.assert_called_once_with(
+            manager=self.manager,
             worker_name="Jordan Dela Cruz",
             event_id=143,
             event_name="Test Production",
@@ -4236,6 +4237,7 @@ class WorkforcePortalTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         notify.assert_called_once_with(
+            manager=self.manager,
             worker_name="normal",
             event_id=143,
             event_name="Test Production",
@@ -4645,6 +4647,68 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("@container (min-width: 340px)", styles)
         self.assertNotIn("wfScheduleDates().length <=", source)
         self.assertIn("@media (max-width: 720px)", styles)
+
+    def test_business_status_transitions_queue_notifications(self):
+        self.create_worker_assignment()
+        token = self.worker_token()
+        submitted = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice_id = submitted.get_json()["data"]["events"][0][
+            "submissions"
+        ]["invoices"][0]["id"]
+
+        self.login("admin", True)
+        with patch.object(
+            app_module, "_queue_workforce_status_change_notification"
+        ) as queue_status:
+            approved = self.client.put(
+                f"/api/workforce/submissions/{invoice_id}",
+                json={
+                    "amount": 500,
+                    "status": "Approved",
+                    "confirmReview": True,
+                    "allocations": [{"department": "AU", "amount": 500}],
+                },
+            )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(queue_status.call_args.kwargs["kind"], "invoice")
+        self.assertEqual(
+            queue_status.call_args.kwargs["previous_status"], "Pending Review"
+        )
+        self.assertEqual(queue_status.call_args.kwargs["new_status"], "Approved")
+
+        with patch.object(
+            app_module, "_queue_workforce_status_change_notification"
+        ) as queue_status:
+            paid = self.client.put(
+                f"/api/workforce/submissions/{invoice_id}",
+                json={"status": "Paid"},
+            )
+        self.assertEqual(paid.status_code, 200)
+        self.assertEqual(queue_status.call_args.kwargs["previous_status"], "Approved")
+        self.assertEqual(queue_status.call_args.kwargs["new_status"], "Paid")
+
+        with patch.object(
+            app_module, "_queue_workforce_status_change_notification"
+        ) as queue_status:
+            confirmed = self.client.post(
+                f"/api/worker/submissions/{invoice_id}/confirm-payment",
+                json={"token": token},
+            )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(queue_status.call_args.kwargs["previous_status"], "Paid")
+        self.assertEqual(
+            queue_status.call_args.kwargs["new_status"], "Payment Confirmed"
+        )
 
 
 if __name__ == "__main__":

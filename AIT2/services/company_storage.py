@@ -52,7 +52,7 @@ def storage_category(root_kind: str, relative_path: str) -> str:
         return "logs"
     if stem.startswith("pdfsettings"):
         return "branding"
-    if stem in {"users", "company", "companies"}:
+    if stem in {"users", "company", "companies", "notificationsettings"}:
         return "company_data"
     return "other"
 

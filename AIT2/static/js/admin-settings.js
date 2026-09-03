@@ -170,9 +170,15 @@ function ensurePdfSettingsNavItem() {
 
 let companyDetailsActiveTab = 'details';
 let companyStorageUsageLoaded = false;
+let adminNotificationSettings = null;
+let companyNotificationSettingsLoaded = false;
+let telegramConnectionPollTimer = null;
+let telegramConnectionPending = false;
 
 function showCompanyDetailsTab(tabName) {
-  const nextTab = tabName === 'storage' ? 'storage' : 'details';
+  const nextTab = ['details', 'storage', 'notifications'].includes(tabName)
+    ? tabName
+    : 'details';
   companyDetailsActiveTab = nextTab;
   document.querySelectorAll('#pdf-settings-section [data-company-details-tab]').forEach(button => {
     const isActive = button.dataset.companyDetailsTab === nextTab;
@@ -186,6 +192,7 @@ function showCompanyDetailsTab(tabName) {
     panel.classList.toggle('active', isActive);
   });
   if (nextTab === 'storage') loadCompanyStorageUsage(false);
+  if (nextTab === 'notifications') loadAdminNotificationSettings(false);
 }
 
 function ensurePdfSettingsSection() {
@@ -212,6 +219,9 @@ function ensurePdfSettingsSection() {
       </button>
       <button type="button" class="company-details-tab" data-company-details-tab="storage" role="tab" aria-selected="false" tabindex="-1" onclick="showCompanyDetailsTab('storage')">
         ${settingsIcon('storage')}<span>Storage usage</span>
+      </button>
+      <button type="button" class="company-details-tab" data-company-details-tab="notifications" role="tab" aria-selected="false" tabindex="-1" onclick="showCompanyDetailsTab('notifications')">
+        ${settingsIcon('bell')}<span>Notifications</span>
       </button>
     </div>
 
@@ -317,6 +327,20 @@ function ensurePdfSettingsSection() {
           </div>
           <div id="companyStorageUsage" class="company-details-storage-content" aria-live="polite">
             <div class="company-storage-loading">Calculating storage usage...</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="company-details-tab-panel" data-company-details-panel="notifications" role="tabpanel" hidden>
+        <section class="company-notifications" aria-labelledby="companyNotificationsHeading">
+          <div class="company-details-section-heading">
+            <div>
+              <h3 id="companyNotificationsHeading">Personal notifications</h3>
+              <p>Connect your own Telegram account. Connections and preferences are separate for every administrator.</p>
+            </div>
+          </div>
+          <div id="companyNotificationSettings" class="company-notification-content" aria-live="polite">
+            <div class="company-storage-loading">Loading notification settings...</div>
           </div>
         </section>
       </div>
@@ -555,6 +579,223 @@ async function loadCompanyStorageUsage(force = false) {
   }
 }
 
+function notificationLinkedDate(value) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function renderAdminNotificationSettings(settings = adminNotificationSettings) {
+  const container = document.getElementById('companyNotificationSettings');
+  if (!container) return;
+  const data = settings || {};
+  if (!data.providerConfigured) {
+    container.innerHTML = `
+      <div class="company-notification-unavailable">
+        <strong>Telegram is not available yet</strong>
+        <p>The Showbase server administrator must configure the shared Telegram bot before company administrators can connect.</p>
+      </div>`;
+    return;
+  }
+
+  if (!data.connected) {
+    container.innerHTML = `
+      <div class="company-notification-connect-card">
+        <div class="company-notification-provider">
+          <span class="company-notification-provider-icon" aria-hidden="true">✈</span>
+          <div>
+            <strong>Telegram</strong>
+            <p>Choose alerts for invoice and claim uploads or status changes in this company.</p>
+          </div>
+        </div>
+        ${telegramConnectionPending ? `
+          <div class="company-notification-pending">
+            <span class="company-notification-spinner" aria-hidden="true"></span>
+            Waiting for you to press Start in Telegram...
+          </div>` : ''}
+        <div class="company-notification-actions">
+          <button type="button" class="btn btn-primary" onclick="connectAdminTelegram()">
+            ${settingsIcon('bell')}<span>${telegramConnectionPending ? 'Open Telegram again' : 'Connect my Telegram'}</span>
+          </button>
+          ${telegramConnectionPending ? '<button type="button" class="btn btn-secondary" onclick="loadAdminNotificationSettings(true)">Refresh status</button>' : ''}
+        </div>
+        <small>Links are private, expire after 10 minutes, and connect only your signed-in administrator account.</small>
+      </div>`;
+    return;
+  }
+
+  const telegramHandle = data.telegramUsername
+    ? `@${escapeHtml(data.telegramUsername)}`
+    : '';
+  const linked = notificationLinkedDate(data.linkedAt);
+  container.innerHTML = `
+    <div class="company-notification-connected-card">
+      <div class="company-notification-connected-heading">
+        <div class="company-notification-provider">
+          <span class="company-notification-provider-icon" aria-hidden="true">✈</span>
+          <div>
+            <strong>${escapeHtml(data.displayName || 'Telegram account')}</strong>
+            <p>${telegramHandle}${telegramHandle && linked ? ' · ' : ''}${linked ? `Connected ${escapeHtml(linked)}` : 'Connected to Telegram'}</p>
+          </div>
+        </div>
+        <span class="company-notification-status">Connected</span>
+      </div>
+
+      <label class="company-notification-toggle company-notification-master">
+        <span><strong>Telegram alerts</strong><small>Pause or resume all alerts for your account.</small></span>
+        <input id="telegramNotificationsEnabled" type="checkbox" ${data.enabled !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+      </label>
+      <div class="company-notification-preferences ${data.enabled === false ? 'is-disabled' : ''}">
+        <label class="company-notification-toggle">
+          <span><strong>Invoice uploads</strong><small>Notify me when workers submit invoices.</small></span>
+          <input id="telegramInvoiceUploads" type="checkbox" ${data.invoiceUploads !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+        </label>
+        <label class="company-notification-toggle">
+          <span><strong>Claim uploads</strong><small>Notify me when workers submit claims or receipts.</small></span>
+          <input id="telegramClaimUploads" type="checkbox" ${data.claimUploads !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+        </label>
+        <label class="company-notification-toggle">
+          <span><strong>Invoice status changes</strong><small>Notify me when an invoice is approved, denied, paid, or payment is confirmed.</small></span>
+          <input id="telegramInvoiceStatusChanges" type="checkbox" ${data.invoiceStatusChanges !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+        </label>
+        <label class="company-notification-toggle">
+          <span><strong>Claim status changes</strong><small>Notify me when a claim is approved, denied, paid, or payment is confirmed.</small></span>
+          <input id="telegramClaimStatusChanges" type="checkbox" ${data.claimStatusChanges !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+        </label>
+      </div>
+      <div class="company-notification-actions">
+        <button type="button" class="btn btn-secondary" onclick="testAdminTelegram()">Send test</button>
+        <button type="button" class="btn btn-secondary company-notification-disconnect" onclick="disconnectAdminTelegram()">Disconnect</button>
+      </div>
+    </div>`;
+}
+
+async function loadAdminNotificationSettings(force = false, quiet = false) {
+  const container = document.getElementById('companyNotificationSettings');
+  if (!container) return null;
+  const activeCompanyCode = String(
+    currentUser?.company?.code || currentUser?.companyCode || ''
+  ).toUpperCase();
+  const loadedCompanyCode = String(
+    adminNotificationSettings?.companyCode || ''
+  ).toUpperCase();
+  if (
+    !force &&
+    companyNotificationSettingsLoaded &&
+    adminNotificationSettings &&
+    activeCompanyCode === loadedCompanyCode
+  ) {
+    renderAdminNotificationSettings();
+    return adminNotificationSettings;
+  }
+  try {
+    const response = await apiCall('/api/notification-settings');
+    adminNotificationSettings = response.data || {};
+    companyNotificationSettingsLoaded = true;
+    if (adminNotificationSettings.connected) telegramConnectionPending = false;
+    renderAdminNotificationSettings();
+    return adminNotificationSettings;
+  } catch (error) {
+    if (!quiet) {
+      container.innerHTML = `<div class="company-storage-error">Unable to load notification settings: ${escapeHtml(error.message)}</div>`;
+    }
+    return null;
+  }
+}
+
+function startTelegramConnectionPolling() {
+  if (telegramConnectionPollTimer) clearInterval(telegramConnectionPollTimer);
+  let attempts = 0;
+  telegramConnectionPollTimer = setInterval(async () => {
+    attempts += 1;
+    const settings = await loadAdminNotificationSettings(true, true);
+    if (settings?.connected) {
+      clearInterval(telegramConnectionPollTimer);
+      telegramConnectionPollTimer = null;
+      telegramConnectionPending = false;
+      renderAdminNotificationSettings();
+      showNotification('success', 'Telegram account connected');
+    } else if (attempts >= 40) {
+      clearInterval(telegramConnectionPollTimer);
+      telegramConnectionPollTimer = null;
+      telegramConnectionPending = false;
+      renderAdminNotificationSettings();
+    }
+  }, 3000);
+}
+
+async function connectAdminTelegram() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+  const telegramWindow = window.open('', '_blank');
+  try {
+    const response = await apiCall('/api/notification-settings/telegram/connect', 'POST', {});
+    const connectUrl = String(response.data?.connectUrl || '');
+    if (!connectUrl) throw new Error('Telegram connection link was not returned');
+    telegramConnectionPending = true;
+    renderAdminNotificationSettings();
+    if (telegramWindow) {
+      telegramWindow.opener = null;
+      telegramWindow.location.href = connectUrl;
+    } else {
+      window.location.href = connectUrl;
+    }
+    startTelegramConnectionPolling();
+  } catch (error) {
+    if (telegramWindow) telegramWindow.close();
+    showNotification('error', error.message || 'Could not open Telegram');
+  }
+}
+
+async function saveAdminTelegramPreferences() {
+  const payload = {
+    enabled: Boolean(document.getElementById('telegramNotificationsEnabled')?.checked),
+    invoiceUploads: Boolean(document.getElementById('telegramInvoiceUploads')?.checked),
+    claimUploads: Boolean(document.getElementById('telegramClaimUploads')?.checked),
+    invoiceStatusChanges: Boolean(document.getElementById('telegramInvoiceStatusChanges')?.checked),
+    claimStatusChanges: Boolean(document.getElementById('telegramClaimStatusChanges')?.checked)
+  };
+  try {
+    const response = await apiCall('/api/notification-settings/telegram', 'PUT', payload);
+    adminNotificationSettings = response.data || adminNotificationSettings;
+    renderAdminNotificationSettings();
+  } catch (error) {
+    showNotification('error', error.message || 'Could not save notification preferences');
+    await loadAdminNotificationSettings(true, true);
+  }
+}
+
+async function testAdminTelegram() {
+  try {
+    await apiCall('/api/notification-settings/telegram/test', 'POST', {});
+    showNotification('success', 'Test notification sent');
+  } catch (error) {
+    showNotification('error', error.message || 'Test notification failed');
+  }
+}
+
+async function disconnectAdminTelegram() {
+  if (!window.confirm('Disconnect your Telegram account from Showbase alerts?')) return;
+  try {
+    const response = await apiCall('/api/notification-settings/telegram', 'DELETE');
+    adminNotificationSettings = response.data || {};
+    telegramConnectionPending = false;
+    renderAdminNotificationSettings();
+    showNotification('success', 'Telegram account disconnected');
+  } catch (error) {
+    showNotification('error', error.message || 'Could not disconnect Telegram');
+  }
+}
+
 async function uploadPdfSettingsLogo() {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges required');
@@ -719,7 +960,8 @@ function settingsIcon(name) {
     shield: '<path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
     eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
     eyeOff: '<path d="m4 4 16 16M10.7 6.2A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.3 3.1M6.3 7.3A16 16 0 0 0 2.5 12s3.5 6 9.5 6a9.6 9.6 0 0 0 3-.5M10 10a2.8 2.8 0 0 0 4 4"/>',
-    check: '<path d="m5 12 4 4L19 6"/>'
+    check: '<path d="m5 12 4 4L19 6"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.building}</svg>`;
 }
