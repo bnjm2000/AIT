@@ -31,6 +31,7 @@ APP_PAGE_SECTIONS = {
     "/compare": "compare",
     "/users": "users",
     "/company-details": "pdf-settings",
+    "/notifications": "notifications",
     "/companies": "companies",
     "/change-password": "change-password",
     "/delivery-order": "delivery-order",
@@ -103,6 +104,7 @@ def register_app_page_routes(
     @app.route("/compare")
     @app.route("/users")
     @app.route("/company-details")
+    @app.route("/notifications")
     @app.route("/companies")
     @app.route("/change-password")
     @app.route("/delivery-order")

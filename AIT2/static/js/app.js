@@ -3706,6 +3706,7 @@ function sectionFromSidebarLabel(item) {
     'company details': 'pdf-settings',
     'pdf settings': 'pdf-settings',
     'companies': 'companies',
+    'notifications': 'notifications',
     'change password': 'change-password',
     'delivery order': 'delivery-order'
   };
@@ -3737,6 +3738,7 @@ function sectionFromSidebarLabel(item) {
     ['inventory', 'inventory'],
     ['containers', 'containers'],
     ['companies', 'companies'],
+    ['notifications', 'notifications'],
     ['users', 'users'],
     ['activity log', 'logs'],
     ['logs', 'logs'],
@@ -3790,6 +3792,7 @@ function navWireIconSvg(section) {
     accounting: '<path d="M4 7h16M6 3h12l2 4H4zM6 11h3v7H6zM11 11h3v7h-3zM16 11h3v7h-3zM4 21h16"></path>',
     users: '<circle cx="9" cy="8" r="3"></circle><path d="M4 20a5 5 0 0 1 10 0"></path><path d="M17 11h4M19 9v4"></path>',
     'pdf-settings': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6"></path><path d="M9 17h2"></path>',
+    notifications: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path>',
     companies: '<path d="M4 20V7l8-4 8 4v13"></path><path d="M8 20v-4h8v4M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01"></path>',
     'change-password': '<rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"></path>',
     logout: '<path d="M10 4H5v16h5"></path><path d="M14 8l4 4-4 4M18 12H9"></path>'
@@ -3821,6 +3824,7 @@ function navLabelForSection(section, fallback = '') {
     accounting: 'Accounting',
     users: 'User Management',
     'pdf-settings': 'Company Details',
+    notifications: 'Notifications',
     companies: 'Companies',
     'change-password': 'Change Password',
     logout: 'Logout'
@@ -3926,6 +3930,7 @@ const APP_SECTION_PATHS = Object.freeze({
   compare: '/compare',
   users: '/users',
   'pdf-settings': '/company-details',
+  notifications: '/notifications',
   companies: '/companies',
   'change-password': '/change-password',
   'delivery-order': '/delivery-order'
@@ -4235,6 +4240,9 @@ function showSection(sectionName, options = {}) {
       break;
     case "pdf-settings":
       loadPdfSettingsSection();
+      break;
+    case "notifications":
+      if (typeof loadNotificationSettingsSection === "function") loadNotificationSettingsSection();
       break;
     case "quotations":
       const quotationRoute = appDetailRouteFromPath();

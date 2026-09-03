@@ -1,4 +1,4 @@
-"""Company-scoped notification destinations and admin preferences."""
+"""Company-scoped notification destinations and per-user preferences."""
 
 import copy
 import json
@@ -6,7 +6,7 @@ import os
 import secrets
 import threading
 
-from models import normalize_user_role, user_role_is_adminish
+from models import normalize_user_role
 
 
 _SETTINGS_DOCUMENT_KEY = "notification_settings"
@@ -15,7 +15,35 @@ _settings_lock = threading.RLock()
 
 
 def _default_settings():
-    return {"version": 2, "telegramAdmins": {}}
+    return {"version": 4, "telegramAdmins": {}}
+
+
+_STANDARD_PREFERENCES = (
+    "assignedEventCreated",
+    "eventStateChanges",
+)
+_MANAGER_PREFERENCES = (
+    "invoiceUploads",
+    "claimUploads",
+    "invoiceStatusChanges",
+    "claimStatusChanges",
+    "assetStatusChanges",
+)
+_ADMIN_PREFERENCES = (
+    "quotationStatusChanges",
+    "accessControlChanges",
+)
+
+
+def notification_preferences_for_role(role):
+    """Return the preference keys that a company role is allowed to change."""
+    clean_role = normalize_user_role(role)
+    available = list(_STANDARD_PREFERENCES)
+    if clean_role in {"manager", "admin", "owner"}:
+        available.extend(_MANAGER_PREFERENCES)
+    if clean_role in {"admin", "owner"}:
+        available.extend(_ADMIN_PREFERENCES)
+    return available
 
 
 def _normalise_profile(source):
@@ -36,6 +64,11 @@ def _normalise_profile(source):
         # New alert categories are opt-in for profiles created before they existed.
         "invoiceStatusChanges": bool(source.get("invoiceStatusChanges", False)),
         "claimStatusChanges": bool(source.get("claimStatusChanges", False)),
+        "assignedEventCreated": bool(source.get("assignedEventCreated", False)),
+        "eventStateChanges": bool(source.get("eventStateChanges", False)),
+        "quotationStatusChanges": bool(source.get("quotationStatusChanges", False)),
+        "assetStatusChanges": bool(source.get("assetStatusChanges", False)),
+        "accessControlChanges": bool(source.get("accessControlChanges", False)),
     }
 
 
@@ -114,6 +147,11 @@ def public_admin_telegram_profile(manager, username):
             "claimUploads": True,
             "invoiceStatusChanges": True,
             "claimStatusChanges": True,
+            "assignedEventCreated": True,
+            "eventStateChanges": True,
+            "quotationStatusChanges": True,
+            "assetStatusChanges": True,
+            "accessControlChanges": True,
         }
     return {
         "connected": True,
@@ -125,6 +163,11 @@ def public_admin_telegram_profile(manager, username):
         "claimUploads": profile["claimUploads"],
         "invoiceStatusChanges": profile["invoiceStatusChanges"],
         "claimStatusChanges": profile["claimStatusChanges"],
+        "assignedEventCreated": profile["assignedEventCreated"],
+        "eventStateChanges": profile["eventStateChanges"],
+        "quotationStatusChanges": profile["quotationStatusChanges"],
+        "assetStatusChanges": profile["assetStatusChanges"],
+        "accessControlChanges": profile["accessControlChanges"],
     }
 
 
@@ -166,6 +209,11 @@ def connect_admin_telegram(
             "claimUploads": previous.get("claimUploads", True),
             "invoiceStatusChanges": previous.get("invoiceStatusChanges", True),
             "claimStatusChanges": previous.get("claimStatusChanges", True),
+            "assignedEventCreated": previous.get("assignedEventCreated", True),
+            "eventStateChanges": previous.get("eventStateChanges", True),
+            "quotationStatusChanges": previous.get("quotationStatusChanges", True),
+            "assetStatusChanges": previous.get("assetStatusChanges", True),
+            "accessControlChanges": previous.get("accessControlChanges", True),
         })
         saved = _save_unlocked(manager, settings)
         return copy.deepcopy(saved["telegramAdmins"][username])
@@ -180,6 +228,11 @@ def update_admin_telegram_preferences(
     claim_uploads=None,
     invoice_status_changes=None,
     claim_status_changes=None,
+    assigned_event_created=None,
+    event_state_changes=None,
+    quotation_status_changes=None,
+    asset_status_changes=None,
+    access_control_changes=None,
 ):
     username = str(username or "").strip()
     with _settings_lock:
@@ -197,6 +250,16 @@ def update_admin_telegram_preferences(
             profile["invoiceStatusChanges"] = bool(invoice_status_changes)
         if claim_status_changes is not None:
             profile["claimStatusChanges"] = bool(claim_status_changes)
+        if assigned_event_created is not None:
+            profile["assignedEventCreated"] = bool(assigned_event_created)
+        if event_state_changes is not None:
+            profile["eventStateChanges"] = bool(event_state_changes)
+        if quotation_status_changes is not None:
+            profile["quotationStatusChanges"] = bool(quotation_status_changes)
+        if asset_status_changes is not None:
+            profile["assetStatusChanges"] = bool(asset_status_changes)
+        if access_control_changes is not None:
+            profile["accessControlChanges"] = bool(access_control_changes)
         _save_unlocked(manager, settings)
         return public_admin_telegram_profile(manager, username)
 
@@ -234,35 +297,41 @@ def admin_telegram_chat_id(manager, username):
 
 
 def telegram_recipients_for_upload(manager, kind):
-    """Return destinations belonging to active admins in this company only."""
-    settings = load_notification_settings(manager)
     preference = "invoiceUploads" if str(kind).lower() == "invoice" else "claimUploads"
-    recipients = []
-    for username, profile in settings["telegramAdmins"].items():
-        user = (getattr(manager, "users", {}) or {}).get(username)
-        if not user or not getattr(user, "is_active", True):
-            continue
-        role = normalize_user_role(
-            getattr(user, "role", None),
-            getattr(user, "is_admin", False),
-        )
-        if not user_role_is_adminish(role):
-            continue
-        if not profile.get("enabled") or not profile.get(preference):
-            continue
-        chat_id = str(profile.get("chatId") or "").strip()
-        if chat_id and chat_id not in recipients:
-            recipients.append(chat_id)
-    return recipients
+    return _telegram_recipients_for_preference(
+        manager,
+        preference,
+        roles={"owner", "admin", "manager"},
+    )
 
 
 def telegram_recipients_for_status_change(manager, kind):
     """Return active admin destinations subscribed to this document's state."""
-    settings = load_notification_settings(manager)
     preference = (
         "invoiceStatusChanges"
         if str(kind).lower() == "invoice"
         else "claimStatusChanges"
+    )
+    return _telegram_recipients_for_preference(
+        manager,
+        preference,
+        roles={"owner", "admin", "manager"},
+    )
+
+
+def _telegram_recipients_for_preference(
+    manager,
+    preference,
+    *,
+    roles=None,
+    usernames=None,
+):
+    settings = load_notification_settings(manager)
+    allowed_roles = set(roles or {"owner", "admin", "manager", "user"})
+    allowed_usernames = (
+        {str(value or "").strip().casefold() for value in usernames}
+        if usernames is not None
+        else None
     )
     recipients = []
     for username, profile in settings["telegramAdmins"].items():
@@ -273,7 +342,12 @@ def telegram_recipients_for_status_change(manager, kind):
             getattr(user, "role", None),
             getattr(user, "is_admin", False),
         )
-        if not user_role_is_adminish(role):
+        if role not in allowed_roles:
+            continue
+        if (
+            allowed_usernames is not None
+            and str(username or "").strip().casefold() not in allowed_usernames
+        ):
             continue
         if not profile.get("enabled") or not profile.get(preference):
             continue
@@ -281,3 +355,51 @@ def telegram_recipients_for_status_change(manager, kind):
         if chat_id and chat_id not in recipients:
             recipients.append(chat_id)
     return recipients
+
+
+def telegram_recipients_for_assigned_event(manager, assigned_usernames):
+    return _telegram_recipients_for_preference(
+        manager,
+        "assignedEventCreated",
+        usernames=assigned_usernames,
+    )
+
+
+def telegram_recipients_for_event_state_change(manager, assigned_usernames=None):
+    """Notify admins globally and other roles only for their assigned events."""
+    admin_recipients = _telegram_recipients_for_preference(
+        manager,
+        "eventStateChanges",
+        roles={"owner", "admin"},
+    )
+    assigned_recipients = _telegram_recipients_for_preference(
+        manager,
+        "eventStateChanges",
+        roles={"manager", "user"},
+        usernames=assigned_usernames or (),
+    )
+    return list(dict.fromkeys(admin_recipients + assigned_recipients))
+
+
+def telegram_recipients_for_quotation_status_change(manager):
+    return _telegram_recipients_for_preference(
+        manager,
+        "quotationStatusChanges",
+        roles={"owner", "admin"},
+    )
+
+
+def telegram_recipients_for_asset_status_change(manager):
+    return _telegram_recipients_for_preference(
+        manager,
+        "assetStatusChanges",
+        roles={"owner", "admin", "manager"},
+    )
+
+
+def telegram_recipients_for_access_control_change(manager):
+    return _telegram_recipients_for_preference(
+        manager,
+        "accessControlChanges",
+        roles={"owner", "admin"},
+    )

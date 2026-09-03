@@ -531,8 +531,13 @@
   border-radius: 50%;
   background: #229ed9;
   color: #fff;
-  font-size: 19px;
-  transform: rotate(-12deg);
+}
+
+.company-notification-provider-icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  fill: currentColor;
 }
 
 .company-notification-provider strong,

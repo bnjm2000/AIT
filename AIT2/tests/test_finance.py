@@ -685,6 +685,20 @@ class FinanceFeatureTests(unittest.TestCase):
             200,
         )
 
+    def test_quotation_status_transition_queues_notification(self):
+        quotation = self.create_quote('Notification Project')
+        with patch.object(
+            app_module, '_queue_quotation_status_notification'
+        ) as queue_status:
+            response = self.client.put(
+                f"/api/quotations/{quotation['id']}",
+                json={'status': 'sent'},
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(queue_status.call_args.kwargs['previous_status'], 'draft')
+        self.assertEqual(queue_status.call_args.kwargs['new_status'], 'sent')
+
     def test_sent_snapshot_revision_expiry_and_statuses(self):
         quotation = self.create_quote('Revision Project')
         quotation['quotationDate'] = '2025-01-15'

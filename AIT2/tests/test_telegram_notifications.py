@@ -10,6 +10,11 @@ from services.notification_settings import (
     connect_admin_telegram,
     public_admin_telegram_profile,
     rename_admin_telegram,
+    telegram_recipients_for_access_control_change,
+    telegram_recipients_for_asset_status_change,
+    telegram_recipients_for_assigned_event,
+    telegram_recipients_for_event_state_change,
+    telegram_recipients_for_quotation_status_change,
     telegram_recipients_for_status_change,
     telegram_recipients_for_upload,
     update_admin_telegram_preferences,
@@ -48,6 +53,57 @@ class TelegramNotificationTests(unittest.TestCase):
         self.assertIn("Previous: Approved", message)
         self.assertIn("New: Paid", message)
         self.assertIn("Updated by: Avery Admin", message)
+
+    def test_event_and_quotation_messages_contain_the_transition(self):
+        event_message = telegram_notifications.build_event_state_notification(
+            event_id=143,
+            event_name="Test Production",
+            previous_state="Preparing",
+            new_state="Ready",
+            changed_by="Avery Admin",
+        )
+        quotation_message = (
+            telegram_notifications.build_quotation_status_notification(
+                quotation_number="QT-2026-001-01",
+                project_name="Test Production",
+                previous_status="draft",
+                new_status="sent",
+                changed_by="Avery Admin",
+            )
+        )
+
+        self.assertIn("Event state changed", event_message)
+        self.assertIn("Previous: Preparing", event_message)
+        self.assertIn("New: Ready", event_message)
+        self.assertIn("Quotation status changed", quotation_message)
+        self.assertIn("Quotation: QT-2026-001-01", quotation_message)
+        self.assertIn("Previous: Draft", quotation_message)
+        self.assertIn("New: Sent", quotation_message)
+
+    def test_assigned_event_asset_and_access_messages_are_clear(self):
+        assigned = telegram_notifications.build_assigned_event_notification(
+            event_id=143,
+            event_name="Test Production",
+            event_date="18 May 2026",
+        )
+        asset = telegram_notifications.build_asset_status_notification(
+            asset_id="LX-001",
+            asset_name="Lighting console",
+            previous_status="ok",
+            new_status="ooc",
+            changed_by="Avery Admin",
+        )
+        access = telegram_notifications.build_access_control_notification(
+            action="User account updated",
+            target_user="crew-one",
+            detail="Access level: user → manager",
+            changed_by="Avery Admin",
+        )
+        self.assertIn("New event assigned to you", assigned)
+        self.assertIn("Asset status changed", asset)
+        self.assertIn("Previous: ok", asset)
+        self.assertIn("Access control changed", access)
+        self.assertIn("User: crew-one", access)
 
     @patch("services.telegram_notifications.urlopen")
     def test_send_message_uses_configured_chat_and_requests_a_push(self, urlopen):
@@ -138,6 +194,10 @@ class TelegramNotificationTests(unittest.TestCase):
                 "worker": User(
                     "worker", hash_password("pw", "salt"), "salt", False, True
                 ),
+                "manager": User(
+                    "manager", hash_password("pw", "salt"), "salt", True, True,
+                    role="manager",
+                ),
             }
             connect_admin_telegram(
                 manager,
@@ -157,6 +217,12 @@ class TelegramNotificationTests(unittest.TestCase):
                 chat_id="303",
                 display_name="Worker",
             )
+            connect_admin_telegram(
+                manager,
+                "manager",
+                chat_id="404",
+                display_name="Manager",
+            )
             update_admin_telegram_preferences(
                 manager,
                 "admin-two",
@@ -164,20 +230,46 @@ class TelegramNotificationTests(unittest.TestCase):
                 claim_uploads=True,
                 invoice_status_changes=True,
                 claim_status_changes=False,
+                event_state_changes=False,
+                quotation_status_changes=True,
             )
 
-            self.assertEqual(telegram_recipients_for_upload(manager, "invoice"), ["101"])
+            self.assertEqual(telegram_recipients_for_upload(manager, "invoice"), ["101", "404"])
             self.assertEqual(
                 telegram_recipients_for_upload(manager, "claim"),
-                ["101", "202"],
+                ["101", "202", "404"],
             )
             self.assertEqual(
                 telegram_recipients_for_status_change(manager, "invoice"),
-                ["101", "202"],
+                ["101", "202", "404"],
             )
             self.assertEqual(
                 telegram_recipients_for_status_change(manager, "claim"),
+                ["101", "404"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_event_state_change(manager),
                 ["101"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_quotation_status_change(manager),
+                ["101", "202"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_assigned_event(manager, ["worker", "manager"]),
+                ["303", "404"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_event_state_change(manager, ["worker", "manager"]),
+                ["101", "303", "404"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_asset_status_change(manager),
+                ["101", "202", "404"],
+            )
+            self.assertEqual(
+                telegram_recipients_for_access_control_change(manager),
+                ["101", "202"],
             )
 
             reloaded_manager = DataManager(data_folder)
@@ -187,6 +279,8 @@ class TelegramNotificationTests(unittest.TestCase):
             self.assertTrue(reloaded_profile["connected"])
             self.assertFalse(reloaded_profile["invoiceUploads"])
             self.assertFalse(reloaded_profile["claimStatusChanges"])
+            self.assertFalse(reloaded_profile["eventStateChanges"])
+            self.assertTrue(reloaded_profile["quotationStatusChanges"])
 
             self.assertTrue(
                 rename_admin_telegram(manager, "admin-one", "admin-renamed")

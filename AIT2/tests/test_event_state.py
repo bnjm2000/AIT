@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime as real_datetime
+from unittest.mock import patch
 
 import app as app_module
 from models import Event
@@ -42,9 +43,14 @@ class EventStateTests(unittest.TestCase):
     def test_assigned_unprepared_asset_is_planning(self):
         event = self.make_event(['A'], [], [])
 
-        app_module.update_event_state(event)
+        with patch.object(
+            app_module, '_queue_event_state_notification'
+        ) as queue_state:
+            app_module.update_event_state(event)
 
         self.assertEqual(event.state, 'Planning')
+        self.assertEqual(queue_state.call_args.kwargs['previous_state'], 'New')
+        self.assertEqual(queue_state.call_args.kwargs['new_state'], 'Planning')
 
     def test_model_requirement_without_preparation_is_planning(self):
         event = self.make_event(['[MODEL]AX|Brand|Model|2|Description'], [], [])

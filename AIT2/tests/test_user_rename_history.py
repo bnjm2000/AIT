@@ -3,6 +3,7 @@ import unittest
 import json
 import os
 from urllib.parse import quote
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager
@@ -214,11 +215,14 @@ class UserRenameHistoryTests(unittest.TestCase):
 
     def test_display_name_changes_resolve_in_maintenance_and_finance(self):
         self.login_as_admin()
-        response = self.client.put(
-            f'/api/users/{quote("tech-old", safe="")}',
-            json={'name': 'Technician One'},
-        )
+        with patch.object(app_module, '_queue_access_control_notification') as queued:
+            response = self.client.put(
+                f'/api/users/{quote("tech-old", safe="")}',
+                json={'name': 'Technician One'},
+            )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(queued.call_args.kwargs['action'], 'User account updated')
+        self.assertEqual(queued.call_args.kwargs['target_user'], 'tech-old')
 
         maintenance = app_module._maintenance_log_for_response(
             self.data_manager.inventory[self.asset_id].maintenance_logs[0]

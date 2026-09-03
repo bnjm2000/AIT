@@ -49,16 +49,37 @@ class TelegramAdminConnectionTests(unittest.TestCase):
             session["is_admin"] = is_admin
             session["company_code"] = "AVPL"
 
-    def test_standard_user_cannot_access_notification_settings(self):
+    def test_standard_user_can_access_personal_event_notification_settings(self):
         self.login("normal", False)
-        self.assertEqual(self.client.get("/api/notification-settings").status_code, 403)
+        response = self.client.get("/api/notification-settings")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["role"], "user")
         self.assertEqual(
-            self.client.post(
-                "/api/notification-settings/telegram/connect",
-                json={},
-            ).status_code,
-            403,
+            response.get_json()["data"]["availablePreferences"],
+            ["assignedEventCreated", "eventStateChanges"],
         )
+
+    def test_standard_user_cannot_enable_or_disable_manager_preferences(self):
+        connect_admin_telegram(
+            self.manager,
+            "normal",
+            chat_id="334455",
+            display_name="Normal User",
+        )
+        self.login("normal", False)
+        response = self.client.put(
+            "/api/notification-settings/telegram",
+            json={
+                "eventStateChanges": False,
+                "invoiceUploads": False,
+                "accessControlChanges": False,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()["data"]
+        self.assertFalse(data["eventStateChanges"])
+        self.assertTrue(data["invoiceUploads"])
+        self.assertTrue(data["accessControlChanges"])
 
     def test_admin_connects_updates_tests_and_disconnects_own_account(self):
         self.login("admin", True)
@@ -125,11 +146,15 @@ class TelegramAdminConnectionTests(unittest.TestCase):
                 "claimUploads": True,
                 "invoiceStatusChanges": False,
                 "claimStatusChanges": True,
+                "eventStateChanges": False,
+                "quotationStatusChanges": True,
             },
         )
         self.assertEqual(updated.status_code, 200)
         self.assertFalse(updated.get_json()["data"]["invoiceUploads"])
         self.assertFalse(updated.get_json()["data"]["invoiceStatusChanges"])
+        self.assertFalse(updated.get_json()["data"]["eventStateChanges"])
+        self.assertTrue(updated.get_json()["data"]["quotationStatusChanges"])
 
         with patch.object(app_module, "send_telegram_message", return_value=True) as send:
             tested = self.client.post(
@@ -185,12 +210,20 @@ class TelegramAdminConnectionTests(unittest.TestCase):
         ) as source_file:
             source = source_file.read()
         self.assertIn("Connect my Telegram", source)
-        self.assertIn("Connections and preferences are separate for every administrator", source)
+        self.assertIn("Connections and preferences are separate for every user", source)
         self.assertIn("/api/notification-settings/telegram/connect", source)
         self.assertIn("Invoice uploads", source)
         self.assertIn("Claim uploads", source)
         self.assertIn("Invoice status changes", source)
         self.assertIn("Claim status changes", source)
+        self.assertIn("Event state changes", source)
+        self.assertIn("New events assigned to me", source)
+        self.assertIn("Asset status changes", source)
+        self.assertIn("Quotation status changes", source)
+        self.assertIn("Access control and user management", source)
+        self.assertIn("ensurePersonalNotificationsSection", source)
+        self.assertIn("function telegramProviderIcon()", source)
+        self.assertNotIn(">✈</span>", source)
 
     def test_pending_connection_link_survives_an_in_memory_restart(self):
         self.login("admin", True)

@@ -296,3 +296,167 @@ def queue_status_change_notification(
         if queue_telegram_message(message, chat_id):
             queued += 1
     return queued
+
+
+def build_event_state_notification(
+    *, event_id, event_name, previous_state, new_state, changed_by=""
+):
+    event_label = str(event_name or f"Event {event_id}").strip()
+    actor_label = str(changed_by or "").strip()
+    actor_line = f"\nUpdated by: {actor_label}" if actor_label else ""
+    return (
+        "📅 Event state changed\n\n"
+        f"Event: {event_label} (#{event_id})\n"
+        f"Previous: {str(previous_state or 'New').strip()}\n"
+        f"New: {str(new_state or 'New').strip()}"
+        f"{actor_line}"
+    )
+
+
+def build_assigned_event_notification(*, event_id, event_name, event_date=""):
+    event_label = str(event_name or f"Event {event_id}").strip()
+    date_label = str(event_date or "").strip()
+    date_line = f"\nDate: {date_label}" if date_label else ""
+    return (
+        "📅 New event assigned to you\n\n"
+        f"Event: {event_label} (#{event_id})"
+        f"{date_line}"
+    )
+
+
+def build_asset_status_notification(
+    *, asset_id, asset_name, previous_status, new_status, changed_by=""
+):
+    asset_label = str(asset_name or f"Asset {asset_id}").strip()
+    actor_label = str(changed_by or "").strip()
+    actor_line = f"\nUpdated by: {actor_label}" if actor_label else ""
+    return (
+        "🧰 Asset status changed\n\n"
+        f"Asset: {asset_label} (#{asset_id})\n"
+        f"Previous: {str(previous_status or 'Unknown').strip()}\n"
+        f"New: {str(new_status or 'Unknown').strip()}"
+        f"{actor_line}"
+    )
+
+
+def build_access_control_notification(*, action, target_user, changed_by="", detail=""):
+    actor_label = str(changed_by or "").strip()
+    actor_line = f"\nUpdated by: {actor_label}" if actor_label else ""
+    detail_label = str(detail or "").strip()
+    detail_line = f"\nDetails: {detail_label}" if detail_label else ""
+    return (
+        "🔐 Access control changed\n\n"
+        f"Action: {str(action or 'User account updated').strip()}\n"
+        f"User: {str(target_user or 'Unknown user').strip()}"
+        f"{detail_line}"
+        f"{actor_line}"
+    )
+
+
+def build_quotation_status_notification(
+    *, quotation_number, project_name, previous_status, new_status,
+    changed_by=""
+):
+    number_label = str(quotation_number or "Quotation").strip()
+    project_label = str(project_name or "").strip()
+    project_line = f"\nProject: {project_label}" if project_label else ""
+    actor_label = str(changed_by or "").strip()
+    actor_line = f"\nUpdated by: {actor_label}" if actor_label else ""
+    return (
+        "📑 Quotation status changed\n\n"
+        f"Quotation: {number_label}"
+        f"{project_line}\n"
+        f"Previous: {str(previous_status or 'draft').strip().title()}\n"
+        f"New: {str(new_status or 'draft').strip().title()}"
+        f"{actor_line}"
+    )
+
+
+def _queue_message_for_destinations(message, chat_ids):
+    if not telegram_notifications_configured():
+        return False
+    destinations = []
+    for chat_id in chat_ids or []:
+        clean_chat_id = str(chat_id or "").strip()
+        if clean_chat_id and clean_chat_id not in destinations:
+            destinations.append(clean_chat_id)
+    queued = 0
+    for chat_id in destinations:
+        if queue_telegram_message(message, chat_id):
+            queued += 1
+    return queued
+
+
+def queue_event_state_notification(
+    *, event_id, event_name, previous_state, new_state, changed_by="",
+    chat_ids=None
+):
+    return _queue_message_for_destinations(
+        build_event_state_notification(
+            event_id=event_id,
+            event_name=event_name,
+            previous_state=previous_state,
+            new_state=new_state,
+            changed_by=changed_by,
+        ),
+        chat_ids,
+    )
+
+
+def queue_assigned_event_notification(
+    *, event_id, event_name, event_date="", chat_ids=None
+):
+    return _queue_message_for_destinations(
+        build_assigned_event_notification(
+            event_id=event_id,
+            event_name=event_name,
+            event_date=event_date,
+        ),
+        chat_ids,
+    )
+
+
+def queue_asset_status_notification(
+    *, asset_id, asset_name, previous_status, new_status, changed_by="",
+    chat_ids=None
+):
+    return _queue_message_for_destinations(
+        build_asset_status_notification(
+            asset_id=asset_id,
+            asset_name=asset_name,
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=changed_by,
+        ),
+        chat_ids,
+    )
+
+
+def queue_access_control_notification(
+    *, action, target_user, changed_by="", detail="", chat_ids=None
+):
+    return _queue_message_for_destinations(
+        build_access_control_notification(
+            action=action,
+            target_user=target_user,
+            changed_by=changed_by,
+            detail=detail,
+        ),
+        chat_ids,
+    )
+
+
+def queue_quotation_status_notification(
+    *, quotation_number, project_name, previous_status, new_status,
+    changed_by="", chat_ids=None
+):
+    return _queue_message_for_destinations(
+        build_quotation_status_notification(
+            quotation_number=quotation_number,
+            project_name=project_name,
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=changed_by,
+        ),
+        chat_ids,
+    )

@@ -123,6 +123,8 @@ async function loadPdfSettings(force = false) {
 async function setupPdfSettingsTab() {
   if (!isAdminUser()) {
     removePdfSettingsTab();
+    ensurePersonalNotificationsNavItem();
+    ensurePersonalNotificationsSection();
     return;
   }
 
@@ -166,6 +168,51 @@ function ensurePdfSettingsNavItem() {
   } else {
     settingsSection.appendChild(pdfSettingsTab);
   }
+}
+
+function ensurePersonalNotificationsNavItem() {
+  if (document.querySelector(`[data-section="notifications"]`)) return;
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => section.querySelector('h3')?.textContent.trim() === 'Settings');
+  if (!settingsSection) return;
+  const notificationTab = document.createElement('button');
+  notificationTab.type = 'button';
+  notificationTab.className = 'nav-item';
+  notificationTab.dataset.section = 'notifications';
+  notificationTab.textContent = 'Notifications';
+  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
+  settingsSection.insertBefore(notificationTab, logoutButton || null);
+}
+
+function ensurePersonalNotificationsSection() {
+  if (document.getElementById('notifications-section')) return;
+  const firstSection = document.querySelector('.content-section');
+  const sectionParent = firstSection ? firstSection.parentElement : document.body;
+  const section = document.createElement('div');
+  section.id = 'notifications-section';
+  section.className = 'content-section';
+  section.innerHTML = `
+    <div class="content-header settings-page-header">
+      <div>
+        <h2 class="content-title">Notifications</h2>
+        <p class="settings-page-subtitle">Connect your personal Telegram account and choose the alerts relevant to your role.</p>
+      </div>
+    </div>
+    <div class="company-details-form">
+      <section class="company-notifications" aria-labelledby="personalNotificationsHeading">
+        <div class="company-details-section-heading">
+          <div><h3 id="personalNotificationsHeading">Personal notifications</h3><p>Your connection belongs only to your signed-in account.</p></div>
+        </div>
+        <div id="companyNotificationSettings" class="company-notification-content" aria-live="polite">
+          <div class="company-storage-loading">Loading notification settings...</div>
+        </div>
+      </section>
+    </div>`;
+  sectionParent.appendChild(section);
+}
+
+function loadNotificationSettingsSection() {
+  return loadAdminNotificationSettings(false);
 }
 
 let companyDetailsActiveTab = 'details';
@@ -336,7 +383,7 @@ function ensurePdfSettingsSection() {
           <div class="company-details-section-heading">
             <div>
               <h3 id="companyNotificationsHeading">Personal notifications</h3>
-              <p>Connect your own Telegram account. Connections and preferences are separate for every administrator.</p>
+              <p>Connect your own Telegram account. Connections and preferences are separate for every user.</p>
             </div>
           </div>
           <div id="companyNotificationSettings" class="company-notification-content" aria-live="polite">
@@ -592,6 +639,39 @@ function notificationLinkedDate(value) {
   });
 }
 
+function telegramProviderIcon() {
+  return `<span class="company-notification-provider-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" focusable="false">
+      <path d="M23.91 3.79 20.3 20.84c-.27 1.2-.98 1.49-1.99.93l-5.5-4.06-2.66 2.56c-.29.29-.54.54-1.1.54l.39-5.53L19.5 6.19c.44-.39-.1-.61-.68-.22L6.39 13.8l-5.36-1.67c-1.17-.36-1.19-1.17.24-1.73L22.2 2.33c.97-.36 1.82.24 1.71 1.46z"/>
+    </svg>
+  </span>`;
+}
+
+function telegramPreferenceMarkup(data) {
+  const available = new Set(data.availablePreferences || []);
+  const preferences = [
+    ['assignedEventCreated', 'telegramAssignedEventCreated', 'New events assigned to me', 'Notify me when a new or existing event is assigned to me.'],
+    ['eventStateChanges', 'telegramEventStateChanges', 'Event state changes', data.role === 'user' || data.role === 'manager'
+      ? 'Notify me when an event assigned to me changes state.'
+      : 'Notify me when any event changes state.'],
+    ['invoiceUploads', 'telegramInvoiceUploads', 'Invoice uploads', 'Notify me when crew submit invoices.'],
+    ['claimUploads', 'telegramClaimUploads', 'Claim uploads', 'Notify me when crew submit claims or receipts.'],
+    ['invoiceStatusChanges', 'telegramInvoiceStatusChanges', 'Invoice status changes', 'Notify me when an invoice is approved, denied, paid, or payment is confirmed.'],
+    ['claimStatusChanges', 'telegramClaimStatusChanges', 'Claim status changes', 'Notify me when a claim is approved, denied, paid, or payment is confirmed.'],
+    ['assetStatusChanges', 'telegramAssetStatusChanges', 'Asset status changes', 'Notify me when an asset condition changes, including maintenance faults and resolutions.'],
+    ['quotationStatusChanges', 'telegramQuotationStatusChanges', 'Quotation status changes', 'Notify me when a quotation moves between draft, sent, accepted, invoiced, paid, or expired states.'],
+    ['accessControlChanges', 'telegramAccessControlChanges', 'Access control and user management', 'Notify me when users are created, updated, disabled, moved, deleted, or have passwords reset.']
+  ];
+  return preferences
+    .filter(([key]) => available.has(key))
+    .map(([key, id, title, description]) => `
+      <label class="company-notification-toggle">
+        <span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(description)}</small></span>
+        <input id="${id}" type="checkbox" ${data[key] !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
+      </label>`)
+    .join('');
+}
+
 function renderAdminNotificationSettings(settings = adminNotificationSettings) {
   const container = document.getElementById('companyNotificationSettings');
   if (!container) return;
@@ -600,7 +680,7 @@ function renderAdminNotificationSettings(settings = adminNotificationSettings) {
     container.innerHTML = `
       <div class="company-notification-unavailable">
         <strong>Telegram is not available yet</strong>
-        <p>The Showbase server administrator must configure the shared Telegram bot before company administrators can connect.</p>
+        <p>The Showbase server administrator must configure the shared Telegram bot before users can connect.</p>
       </div>`;
     return;
   }
@@ -609,10 +689,10 @@ function renderAdminNotificationSettings(settings = adminNotificationSettings) {
     container.innerHTML = `
       <div class="company-notification-connect-card">
         <div class="company-notification-provider">
-          <span class="company-notification-provider-icon" aria-hidden="true">✈</span>
+          ${telegramProviderIcon()}
           <div>
             <strong>Telegram</strong>
-            <p>Choose alerts for invoice and claim uploads or status changes in this company.</p>
+            <p>Choose the company alerts available for your role.</p>
           </div>
         </div>
         ${telegramConnectionPending ? `
@@ -626,7 +706,7 @@ function renderAdminNotificationSettings(settings = adminNotificationSettings) {
           </button>
           ${telegramConnectionPending ? '<button type="button" class="btn btn-secondary" onclick="loadAdminNotificationSettings(true)">Refresh status</button>' : ''}
         </div>
-        <small>Links are private, expire after 10 minutes, and connect only your signed-in administrator account.</small>
+        <small>Links are private, expire after 10 minutes, and connect only your signed-in Showbase account.</small>
       </div>`;
     return;
   }
@@ -639,7 +719,7 @@ function renderAdminNotificationSettings(settings = adminNotificationSettings) {
     <div class="company-notification-connected-card">
       <div class="company-notification-connected-heading">
         <div class="company-notification-provider">
-          <span class="company-notification-provider-icon" aria-hidden="true">✈</span>
+          ${telegramProviderIcon()}
           <div>
             <strong>${escapeHtml(data.displayName || 'Telegram account')}</strong>
             <p>${telegramHandle}${telegramHandle && linked ? ' · ' : ''}${linked ? `Connected ${escapeHtml(linked)}` : 'Connected to Telegram'}</p>
@@ -653,22 +733,7 @@ function renderAdminNotificationSettings(settings = adminNotificationSettings) {
         <input id="telegramNotificationsEnabled" type="checkbox" ${data.enabled !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
       </label>
       <div class="company-notification-preferences ${data.enabled === false ? 'is-disabled' : ''}">
-        <label class="company-notification-toggle">
-          <span><strong>Invoice uploads</strong><small>Notify me when workers submit invoices.</small></span>
-          <input id="telegramInvoiceUploads" type="checkbox" ${data.invoiceUploads !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
-        </label>
-        <label class="company-notification-toggle">
-          <span><strong>Claim uploads</strong><small>Notify me when workers submit claims or receipts.</small></span>
-          <input id="telegramClaimUploads" type="checkbox" ${data.claimUploads !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
-        </label>
-        <label class="company-notification-toggle">
-          <span><strong>Invoice status changes</strong><small>Notify me when an invoice is approved, denied, paid, or payment is confirmed.</small></span>
-          <input id="telegramInvoiceStatusChanges" type="checkbox" ${data.invoiceStatusChanges !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
-        </label>
-        <label class="company-notification-toggle">
-          <span><strong>Claim status changes</strong><small>Notify me when a claim is approved, denied, paid, or payment is confirmed.</small></span>
-          <input id="telegramClaimStatusChanges" type="checkbox" ${data.claimStatusChanges !== false ? 'checked' : ''} onchange="saveAdminTelegramPreferences()">
-        </label>
+        ${telegramPreferenceMarkup(data)}
       </div>
       <div class="company-notification-actions">
         <button type="button" class="btn btn-secondary" onclick="testAdminTelegram()">Send test</button>
@@ -732,10 +797,6 @@ function startTelegramConnectionPolling() {
 }
 
 async function connectAdminTelegram() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
   const telegramWindow = window.open('', '_blank');
   try {
     const response = await apiCall('/api/notification-settings/telegram/connect', 'POST', {});
@@ -758,12 +819,23 @@ async function connectAdminTelegram() {
 
 async function saveAdminTelegramPreferences() {
   const payload = {
-    enabled: Boolean(document.getElementById('telegramNotificationsEnabled')?.checked),
-    invoiceUploads: Boolean(document.getElementById('telegramInvoiceUploads')?.checked),
-    claimUploads: Boolean(document.getElementById('telegramClaimUploads')?.checked),
-    invoiceStatusChanges: Boolean(document.getElementById('telegramInvoiceStatusChanges')?.checked),
-    claimStatusChanges: Boolean(document.getElementById('telegramClaimStatusChanges')?.checked)
+    enabled: Boolean(document.getElementById('telegramNotificationsEnabled')?.checked)
   };
+  const preferenceInputs = {
+    assignedEventCreated: 'telegramAssignedEventCreated',
+    eventStateChanges: 'telegramEventStateChanges',
+    invoiceUploads: 'telegramInvoiceUploads',
+    claimUploads: 'telegramClaimUploads',
+    invoiceStatusChanges: 'telegramInvoiceStatusChanges',
+    claimStatusChanges: 'telegramClaimStatusChanges',
+    assetStatusChanges: 'telegramAssetStatusChanges',
+    quotationStatusChanges: 'telegramQuotationStatusChanges',
+    accessControlChanges: 'telegramAccessControlChanges'
+  };
+  Object.entries(preferenceInputs).forEach(([preference, inputId]) => {
+    const input = document.getElementById(inputId);
+    if (input) payload[preference] = Boolean(input.checked);
+  });
   try {
     const response = await apiCall('/api/notification-settings/telegram', 'PUT', payload);
     adminNotificationSettings = response.data || adminNotificationSettings;

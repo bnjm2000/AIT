@@ -110,8 +110,14 @@ from services.notification_settings import (
     admin_telegram_chat_id,
     connect_admin_telegram,
     disconnect_admin_telegram,
+    notification_preferences_for_role,
     public_admin_telegram_profile,
     rename_admin_telegram,
+    telegram_recipients_for_access_control_change,
+    telegram_recipients_for_asset_status_change,
+    telegram_recipients_for_assigned_event,
+    telegram_recipients_for_event_state_change,
+    telegram_recipients_for_quotation_status_change,
     telegram_recipients_for_status_change,
     telegram_recipients_for_upload,
     update_admin_telegram_preferences,
@@ -122,6 +128,11 @@ from services.telegram_link_store import (
 )
 from services.telegram_notifications import (
     configure_telegram_webhook,
+    queue_access_control_notification as queue_telegram_access_control_notification,
+    queue_asset_status_notification as queue_telegram_asset_status_notification,
+    queue_assigned_event_notification as queue_telegram_assigned_event_notification,
+    queue_event_state_notification as queue_telegram_event_state_notification,
+    queue_quotation_status_notification as queue_telegram_quotation_status_notification,
     queue_status_change_notification as queue_telegram_status_change_notification,
     queue_upload_notification as queue_telegram_upload_notification,
     queue_telegram_message,
@@ -4668,6 +4679,20 @@ def _bulk_maintenance_quantity_counts(asset):
         'rawMissing': raw_counts['missing'],
         'rawDegraded': raw_counts['degraded'],
     }
+
+
+def _asset_notification_status(asset):
+    """Human-readable persisted condition, including quantity-level bulk faults."""
+    condition = _asset_condition_status(asset)
+    if not _is_bulk_asset(asset):
+        return condition
+    counts = _bulk_maintenance_quantity_counts(asset)
+    parts = [
+        f"{counts[status]} {status.upper()}"
+        for status in ('ooc', 'missing', 'degraded')
+        if counts[status]
+    ]
+    return ', '.join(parts) if parts else condition
 
 
 def _next_bulk_maintenance_log_number(asset):
@@ -9918,6 +9943,19 @@ def _workforce_assignment_subject_id(assignment):
     return subject_id
 
 
+def _workforce_subject_is_full_time(subject_id, assignments):
+    """Return whether a workforce subject is an internal Showbase app user."""
+    clean_subject_id = str(subject_id or '').strip()
+    if clean_subject_id.startswith('user:'):
+        return True
+    return any(
+        isinstance(row, dict)
+        and _workforce_assignment_subject_id(row) == clean_subject_id
+        and str(row.get('subjectType') or '').strip().lower() == 'app-user'
+        for row in (assignments or [])
+    )
+
+
 def _workforce_app_users(manager=None):
     manager = manager or _current_data_manager_object()
     current_username = str(session.get('user') or '').strip()
@@ -10168,7 +10206,11 @@ def _admin_workforce_payload(event_id, manager=None):
 def _workforce_financial_closure_complete(
     event_id, manager=None, event=None, workforce=None
 ):
-    """Return whether every assigned worker/vendor has settled submissions."""
+    """Return whether every external worker/vendor has settled submissions.
+
+    Full-time company users may still upload claims for reimbursement, but
+    their submission activity never blocks the operational event from closing.
+    """
     manager = manager or _current_data_manager_object()
     if manager is None:
         return True
@@ -10182,10 +10224,20 @@ def _workforce_financial_closure_complete(
         if isinstance(workforce, dict)
         else load_workforce(_workforce_folder(manager))
     )
+    assignments = [
+        row for row in event_assignments(workforce, event_id)
+        if isinstance(row, dict)
+    ]
     subject_ids = {
         _workforce_assignment_subject_id(row)
-        for row in event_assignments(workforce, event_id)
-        if isinstance(row, dict) and _workforce_assignment_subject_id(row)
+        for row in assignments
+        if (
+            _workforce_assignment_subject_id(row)
+            and not _workforce_subject_is_full_time(
+                _workforce_assignment_subject_id(row),
+                assignments,
+            )
+        )
     }
     if not subject_ids:
         return True
@@ -11066,6 +11118,130 @@ def _queue_workforce_status_change_notification(
         )
     except Exception as exc:
         logger.warning('Could not queue workforce status notification: %s', exc)
+        return False
+
+
+def _notification_change_actor(automatic_label='Showbase automatic update'):
+    if has_request_context():
+        return str(session.get('user') or automatic_label)
+    return automatic_label
+
+
+def _queue_event_state_notification(
+    *, manager, event, previous_state, new_state, changed_by=''
+):
+    if app.config.get('TESTING') or previous_state == new_state or manager is None:
+        return False
+    try:
+        chat_ids = telegram_recipients_for_event_state_change(
+            manager,
+            _event_assigned_usernames(event),
+        )
+        if not chat_ids:
+            return False
+        return queue_telegram_event_state_notification(
+            event_id=event.event_id,
+            event_name=str(getattr(event, 'name', '') or f'Event {event.event_id}'),
+            previous_state=previous_state,
+            new_state=new_state,
+            changed_by=changed_by or _notification_change_actor(),
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue event state notification: %s', exc)
+        return False
+
+
+def _queue_assigned_event_notification(*, manager, event, assigned_usernames):
+    if app.config.get('TESTING') or manager is None or not assigned_usernames:
+        return False
+    try:
+        chat_ids = telegram_recipients_for_assigned_event(
+            manager,
+            assigned_usernames,
+        )
+        if not chat_ids:
+            return False
+        return queue_telegram_assigned_event_notification(
+            event_id=event.event_id,
+            event_name=str(getattr(event, 'name', '') or f'Event {event.event_id}'),
+            event_date=format_date_output(getattr(event, 'start_date', '') or ''),
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue assigned event notification: %s', exc)
+        return False
+
+
+def _queue_asset_status_notification(
+    *, manager, asset, previous_status, new_status, changed_by=''
+):
+    if app.config.get('TESTING') or previous_status == new_status or manager is None:
+        return False
+    try:
+        chat_ids = telegram_recipients_for_asset_status_change(manager)
+        if not chat_ids:
+            return False
+        return queue_telegram_asset_status_notification(
+            asset_id=str(getattr(asset, 'asset_id', '') or ''),
+            asset_name=str(
+                getattr(asset, 'description', '')
+                or getattr(asset, 'model', '')
+                or getattr(asset, 'asset_id', '')
+                or 'Asset'
+            ),
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=changed_by or _notification_change_actor(),
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue asset status notification: %s', exc)
+        return False
+
+
+def _queue_access_control_notification(
+    *, manager, action, target_user, detail='', changed_by=''
+):
+    if app.config.get('TESTING') or manager is None:
+        return False
+    try:
+        chat_ids = telegram_recipients_for_access_control_change(manager)
+        if not chat_ids:
+            return False
+        return queue_telegram_access_control_notification(
+            action=action,
+            target_user=target_user,
+            detail=detail,
+            changed_by=changed_by or _notification_change_actor(),
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue access control notification: %s', exc)
+        return False
+
+
+def _queue_quotation_status_notification(
+    *, manager, quotation, previous_status, new_status, changed_by=''
+):
+    if app.config.get('TESTING') or previous_status == new_status or manager is None:
+        return False
+    try:
+        chat_ids = telegram_recipients_for_quotation_status_change(manager)
+        if not chat_ids:
+            return False
+        return queue_telegram_quotation_status_notification(
+            quotation_number=str(quotation.get('number') or quotation.get('id') or ''),
+            project_name=str(
+                quotation.get('projectName') or quotation.get('title') or ''
+            ),
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=changed_by or _notification_change_actor(),
+            chat_ids=chat_ids,
+        )
+    except Exception as exc:
+        logger.warning('Could not queue quotation status notification: %s', exc)
         return False
 
 
@@ -17824,6 +18000,8 @@ def get_assigned_assets():
 
 def update_event_state(event, workforce=None):
     """Update the state of an event based on model, bulk, regular, and custom preparation."""
+    previous_state = normalize_event_state(getattr(event, 'state', 'New'))
+    state_update_succeeded = True
     try:
         if getattr(event, 'force_state_override', False):
             logger.debug(f"Event {event.event_id} has forced state override, skipping automatic update")
@@ -18031,9 +18209,19 @@ def update_event_state(event, workforce=None):
             logger.debug(f"Event {event.event_id} fell through state calculation; keeping {event.state}")
 
     except Exception as e:
+        state_update_succeeded = False
         logger.error(f"Error updating event state for event {event.event_id}: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+
+    current_state = normalize_event_state(getattr(event, 'state', 'New'))
+    if state_update_succeeded and current_state != previous_state:
+        _queue_event_state_notification(
+            manager=_current_data_manager_object(),
+            event=event,
+            previous_state=previous_state,
+            new_state=current_state,
+        )
 
 
 def _event_vendor_management_state_rows(event, finance_data):
@@ -19193,19 +19381,26 @@ def _telegram_link_record(token, consume=False):
 def _current_admin_notification_payload():
     username = str(session.get('user') or '').strip()
     manager = _current_data_manager_object()
+    user = (getattr(manager, 'users', {}) or {}).get(username)
+    role = normalize_user_role(
+        getattr(user, 'role', None),
+        getattr(user, 'is_admin', False),
+    ) if user else 'user'
     profile = public_admin_telegram_profile(manager, username)
     profile.update({
         'providerConfigured': telegram_notifications_configured(),
         'username': username,
         'companyCode': _current_company_code(),
+        'role': role,
+        'availablePreferences': notification_preferences_for_role(role),
     })
     return profile
 
 
 @app.route('/api/notification-settings', methods=['GET'])
-@require_admin
+@require_auth
 def get_notification_settings():
-    """Return only the signed-in admin's notification connection."""
+    """Return only the signed-in user's notification connection."""
     return jsonify({
         'success': True,
         'data': _current_admin_notification_payload(),
@@ -19213,9 +19408,9 @@ def get_notification_settings():
 
 
 @app.route('/api/notification-settings/telegram/connect', methods=['POST'])
-@require_admin
+@require_auth
 def begin_telegram_connection():
-    """Create a one-time link for the signed-in admin's private Telegram chat."""
+    """Create a one-time link for the signed-in user's private Telegram chat."""
     if not telegram_notifications_configured():
         return jsonify({
             'error': 'Telegram notifications are not configured on this server'
@@ -19259,34 +19454,45 @@ def begin_telegram_connection():
 
 
 @app.route('/api/notification-settings/telegram', methods=['PUT'])
-@require_admin
+@require_auth
 def update_telegram_notification_settings():
     data = request.get_json(silent=True) or {}
     username = str(session.get('user') or '').strip()
     try:
+        manager = _current_data_manager_object()
+        user = (getattr(manager, 'users', {}) or {}).get(username)
+        role = normalize_user_role(
+            getattr(user, 'role', None),
+            getattr(user, 'is_admin', False),
+        ) if user else 'user'
+        allowed = set(notification_preferences_for_role(role))
+        preference_arguments = {}
+        preference_map = {
+            'invoiceUploads': 'invoice_uploads',
+            'claimUploads': 'claim_uploads',
+            'invoiceStatusChanges': 'invoice_status_changes',
+            'claimStatusChanges': 'claim_status_changes',
+            'assignedEventCreated': 'assigned_event_created',
+            'eventStateChanges': 'event_state_changes',
+            'quotationStatusChanges': 'quotation_status_changes',
+            'assetStatusChanges': 'asset_status_changes',
+            'accessControlChanges': 'access_control_changes',
+        }
+        for preference_key, argument_name in preference_map.items():
+            if preference_key in allowed and preference_key in data:
+                preference_arguments[argument_name] = data.get(preference_key)
         profile = update_admin_telegram_preferences(
-            _current_data_manager_object(),
+            manager,
             username,
             enabled=data.get('enabled') if 'enabled' in data else None,
-            invoice_uploads=(
-                data.get('invoiceUploads') if 'invoiceUploads' in data else None
-            ),
-            claim_uploads=(
-                data.get('claimUploads') if 'claimUploads' in data else None
-            ),
-            invoice_status_changes=(
-                data.get('invoiceStatusChanges')
-                if 'invoiceStatusChanges' in data else None
-            ),
-            claim_status_changes=(
-                data.get('claimStatusChanges')
-                if 'claimStatusChanges' in data else None
-            ),
+            **preference_arguments,
         )
         profile.update({
             'providerConfigured': telegram_notifications_configured(),
             'username': username,
             'companyCode': _current_company_code(),
+            'role': role,
+            'availablePreferences': notification_preferences_for_role(role),
         })
         return jsonify({'success': True, 'data': profile})
     except KeyError as exc:
@@ -19294,7 +19500,7 @@ def update_telegram_notification_settings():
 
 
 @app.route('/api/notification-settings/telegram', methods=['DELETE'])
-@require_admin
+@require_auth
 def disconnect_telegram_notification_settings():
     username = str(session.get('user') or '').strip()
     disconnect_admin_telegram(_current_data_manager_object(), username)
@@ -19305,7 +19511,7 @@ def disconnect_telegram_notification_settings():
 
 
 @app.route('/api/notification-settings/telegram/test', methods=['POST'])
-@require_admin
+@require_auth
 def test_telegram_notification_settings():
     username = str(session.get('user') or '').strip()
     manager = _current_data_manager_object()
@@ -19323,7 +19529,7 @@ def test_telegram_notification_settings():
 
 
 def _process_telegram_connection_update(update):
-    """Consume one Telegram /start update and bind its chat to an admin."""
+    """Consume one Telegram /start update and bind its chat to a company user."""
     message = update.get('message') if isinstance(update, dict) else None
     if not isinstance(message, dict):
         return False
@@ -19369,11 +19575,10 @@ def _process_telegram_connection_update(update):
     if (
         not user
         or not getattr(user, 'is_active', True)
-        or not user_role_is_adminish(role)
     ):
         _telegram_link_record(token, consume=True)
         queue_telegram_message(
-            'This Showbase account no longer has administrator access.',
+            'This Showbase account is no longer active.',
             chat_id,
         )
         return False
@@ -20024,6 +20229,21 @@ def create_user():
         _reload_users_for_all_company_managers()
         _assign_user_to_company(username, requested_company)
         log_action(f"Created user {username}")
+        notification_manager = (
+            data_manager
+            if _normalise_company_code(requested_company, DEFAULT_COMPANY_CODE)
+            == _current_company_code()
+            else _get_company_data_manager(requested_company)
+        )
+        _queue_access_control_notification(
+            manager=notification_manager,
+            action='User account created',
+            target_user=username,
+            detail=(
+                f'Access level: {requested_role}; '
+                f'Active: {"Yes" if is_active else "No"}'
+            ),
+        )
 
         return jsonify({
             'success': True,
@@ -20245,11 +20465,7 @@ def update_user(username):
             and _normalise_company_code(requested_company, DEFAULT_COMPANY_CODE)
             != _normalise_company_code(history_company_code, DEFAULT_COMPANY_CODE)
         )
-        if (
-            not user_role_is_adminish(final_role)
-            or not getattr(user, 'is_active', True)
-            or moved_company
-        ):
+        if not getattr(user, 'is_active', True) or moved_company:
             disconnect_admin_telegram(notification_manager, user.username)
 
         _reload_users_for_all_company_managers()
@@ -20293,6 +20509,29 @@ def update_user(username):
                 ),
             )
             log_action(f"Updated user {user.username}: {user_changes}")
+
+        access_action = 'User account renamed' if username_changed else 'User account updated'
+        access_detail = (
+            f'{renamed_from} → {renamed_to}'
+            if username_changed
+            else user_changes
+        )
+        source_notification_manager = notification_manager
+        _queue_access_control_notification(
+            manager=source_notification_manager,
+            action=access_action,
+            target_user=user.username,
+            detail=access_detail,
+        )
+        if moved_company:
+            target_notification_manager = _get_company_data_manager(requested_company)
+            if target_notification_manager is not source_notification_manager:
+                _queue_access_control_notification(
+                    manager=target_notification_manager,
+                    action='User assigned to company',
+                    target_user=user.username,
+                    detail=f'Access level: {final_role}',
+                )
 
         response_user = _user_payload(
             user,
@@ -20343,6 +20582,11 @@ def reset_user_password(username):
         data_manager.save_users()
         _reload_users_for_all_company_managers()
         log_action(f"Reset password for user {username}")
+        _queue_access_control_notification(
+            manager=_current_data_manager_object(),
+            action='User password reset',
+            target_user=username,
+        )
 
         return jsonify({'success': True, 'message': 'Password reset successfully'})
 
@@ -20400,6 +20644,13 @@ def delete_user(username):
         _unassign_user_from_company(username, company_code)
 
         log_action(f"Deleted user {username}")
+        notification_manager = _current_data_manager_object()
+        disconnect_admin_telegram(notification_manager, username)
+        _queue_access_control_notification(
+            manager=notification_manager,
+            action='User account deleted',
+            target_user=username,
+        )
 
         return jsonify({
             'success': True,
@@ -21158,6 +21409,8 @@ def _event_workflow_progress_payload(
     payable_rows = []
     awaiting_invoice_count = 0
     for subject_id in subject_ids:
+        if _workforce_subject_is_full_time(subject_id, assignments):
+            continue
         rows = worker_submissions(workforce, event_id, subject_id)
         invoices = [
             row for row in rows.get('invoices', [])
@@ -21167,14 +21420,8 @@ def _event_workflow_progress_payload(
             row for row in rows.get('claims', [])
             if isinstance(row, dict) and str(row.get('status') or '') != 'Denied'
         ]
-        is_full_time_subject = any(
-            _workforce_assignment_subject_id(assignment) == subject_id
-            and str(assignment.get('subjectType') or '').lower() == 'app-user'
-            for assignment in assignments
-        )
         if (
-            not is_full_time_subject
-            and _worker_upload_limits(
+            _worker_upload_limits(
                 workforce, event_id, subject_id
             )['invoiceLimit'] > 0
             and not invoices
@@ -22502,6 +22749,11 @@ def create_event():
             f"type={event.tag}; assigned users={len(assigned_users)}",
             include_system_log=True,
         )
+        _queue_assigned_event_notification(
+            manager=data_manager,
+            event=event,
+            assigned_usernames=assigned_users,
+        )
 
         return jsonify({'success': True, 'message': 'Event created successfully', 'eventId': event_id})
     except ValueError as e:
@@ -22528,6 +22780,7 @@ def update_event(event_id):
             return jsonify({'success': False, 'errors': errors}), 400
 
         # Update event properties
+        old_assigned_usernames = _event_assigned_usernames(event)
         old_details = {
             'name': event.name,
             'location': getattr(event, 'location', '') or '',
@@ -22599,6 +22852,17 @@ def update_event(event_id):
         log_action(
             f"Updated event {event_id} details: {change_text}"
         )
+        newly_assigned = [
+            assigned_username
+            for assigned_username in _event_assigned_usernames(event)
+            if assigned_username.casefold()
+            not in {value.casefold() for value in old_assigned_usernames}
+        ]
+        _queue_assigned_event_notification(
+            manager=data_manager,
+            event=event,
+            assigned_usernames=newly_assigned,
+        )
 
         return jsonify({'success': True, 'message': 'Event updated successfully'})
     except ValueError as e:
@@ -22636,6 +22900,7 @@ def delete_maintenance_log(asset_id, log_index):
                 'error': 'Container maintenance logs are retained as historical records and cannot be deleted from an individual asset'
             }), 409
         deleted_description = deleted_log.get('description', '')
+        previous_asset_status = _asset_notification_status(asset)
         
         # Remove the log entry
         asset.maintenance_logs.pop(log_index)
@@ -22657,6 +22922,12 @@ def delete_maintenance_log(asset_id, log_index):
             f"Deleted maintenance log{media_text} for asset {asset_id}: "
             f"'{deleted_description}' (deleted by {session['user']})",
             system_log_only=True,
+        )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_asset_status,
+            new_status=_asset_notification_status(asset),
         )
         
         logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
@@ -28098,6 +28369,12 @@ def asset_check_mark_untagged():
                 f"Asset Check marked asset {asset.asset_id} as Untagged",
                 system_log_only=True,
             )
+            _queue_asset_status_notification(
+                manager=data_manager,
+                asset=asset,
+                previous_status=previous_status,
+                new_status=_asset_notification_status(asset),
+            )
 
         return jsonify({
             'success': True,
@@ -28134,6 +28411,7 @@ def asset_check_mark_missing():
             return jsonify({'success': True, 'message': 'No unchecked assets to mark as missing', 'data': {'marked': [], 'skipped': []}})
 
         marked = []
+        marked_status_changes = []
         skipped = []
         today = datetime.now().strftime("%Y/%m/%d")
         username = session.get('user', 'system')
@@ -28167,7 +28445,8 @@ def asset_check_mark_missing():
                 skipped.append({'assetId': asset_id, 'reason': f'Away from Store: {location}'})
                 continue
 
-            asset.is_missing = True
+            previous_status = _asset_notification_status(asset)
+            _apply_exclusive_asset_status(asset, 'missing')
             asset.maintenance_logs.append(make_maintenance_log(
                 today,
                 username,
@@ -28181,6 +28460,7 @@ def asset_check_mark_missing():
                 }
             ))
             marked.append(asset_id)
+            marked_status_changes.append((asset, previous_status))
 
         if marked:
             data_manager.save_inventory()
@@ -28189,6 +28469,13 @@ def asset_check_mark_missing():
                 f"Asset Check marked {len(marked)} asset(s) as Missing: {', '.join(marked)}",
                 system_log_only=True,
             )
+            for changed_asset, previous_status in marked_status_changes:
+                _queue_asset_status_notification(
+                    manager=data_manager,
+                    asset=changed_asset,
+                    previous_status=previous_status,
+                    new_status=_asset_notification_status(changed_asset),
+                )
 
         return jsonify({
             'success': True,
@@ -29619,6 +29906,13 @@ def update_asset(asset_id):
                 f"Saved asset {new_asset_id} without field changes",
                 system_log_only=True,
             )
+        for target, before_snapshot in audit_before:
+            _queue_asset_status_notification(
+                manager=data_manager,
+                asset=target,
+                previous_status=str(before_snapshot.get('status') or 'ok'),
+                new_status=_asset_notification_status(target),
+            )
 
         return jsonify({
             'success': True,
@@ -29752,6 +30046,7 @@ def _maintain_bulk_asset(asset_id, asset, data):
             'duplicate': True,
             'message': 'This maintenance submission was already saved'
         })
+    previous_notification_status = _asset_notification_status(asset)
     maintenance_user, base_source, attribution_error = _maintenance_log_source_for_request(data)
     if attribution_error:
         return jsonify({'error': attribution_error}), 400
@@ -29829,6 +30124,12 @@ def _maintain_bulk_asset(asset_id, asset, data):
         log_action(
             f"Cleared bulk asset status for asset {asset_id}: {log_entry_text}",
             system_log_only=True,
+        )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_notification_status,
+            new_status=_asset_notification_status(asset),
         )
 
         return jsonify({'success': True, 'message': 'Bulk asset status cleared successfully'})
@@ -29942,6 +30243,12 @@ def _maintain_bulk_asset(asset_id, asset, data):
         f"Logged {affected_quantity} bulk maintenance {target_status.upper()} "
         f"unit{'s' if affected_quantity != 1 else ''} for asset {asset_id}: {log_entry_text}",
         system_log_only=True,
+    )
+    _queue_asset_status_notification(
+        manager=data_manager,
+        asset=asset,
+        previous_status=previous_notification_status,
+        new_status=_asset_notification_status(asset),
     )
 
     return jsonify({
@@ -30068,6 +30375,7 @@ def maintain_assets_batch():
         successes = []
         errors = []
         changed_count = 0
+        status_changes_to_notify = []
 
         for requested_id in asset_ids:
             scanned_asset = _find_inventory_asset_by_identifier(requested_id)
@@ -30083,6 +30391,7 @@ def maintain_assets_batch():
                 })
                 continue
 
+            previous_status = _asset_notification_status(asset)
             result, status_code, changed = _apply_standard_maintenance_request(
                 asset_id,
                 asset,
@@ -30098,6 +30407,7 @@ def maintain_assets_batch():
             })
             if changed:
                 changed_count += 1
+                status_changes_to_notify.append((asset, previous_status))
 
         if changed_count:
             data_manager.save_inventory()
@@ -30110,6 +30420,13 @@ def maintain_assets_batch():
                 f"{'s' if changed_count != 1 else ''}: {str(data.get('logEntry') or '').strip()}",
                 system_log_only=True,
             )
+            for changed_asset, previous_status in status_changes_to_notify:
+                _queue_asset_status_notification(
+                    manager=data_manager,
+                    asset=changed_asset,
+                    previous_status=previous_status,
+                    new_status=_asset_notification_status(changed_asset),
+                )
 
         response = {
             'success': bool(successes),
@@ -30158,6 +30475,7 @@ def maintain_asset(asset_id):
         if _is_bulk_asset(asset):
             return _maintain_bulk_asset(asset_id, asset, data)
 
+        previous_status = _asset_notification_status(asset)
         result, status_code, changed = _apply_standard_maintenance_request(asset_id, asset, data)
         if status_code >= 400 or not changed:
             return jsonify(result), status_code
@@ -30179,6 +30497,12 @@ def maintain_asset(asset_id):
         log_action(
             f"Maintenance logged for asset {asset_id}: {str(data.get('logEntry') or '').strip()}",
             system_log_only=True,
+        )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_status,
+            new_status=_asset_notification_status(asset),
         )
         logger.info("Successfully logged maintenance for asset %s", asset_id)
         return jsonify(result), status_code
@@ -30203,6 +30527,7 @@ def update_bulk_maintenance_fault_log(asset_id, fault_log_id):
             return jsonify({'error': 'Asset not found'}), 404
         if not _is_bulk_asset(asset):
             return jsonify({'error': 'Asset is not a bulk quantity asset'}), 400
+        previous_notification_status = _asset_notification_status(asset)
 
         fault_entry = None
         for entry in _bulk_maintenance_fault_entries(asset):
@@ -30293,6 +30618,12 @@ def update_bulk_maintenance_fault_log(asset_id, fault_log_id):
             f"for asset {asset_id}: {log_entry_text}",
             system_log_only=True,
         )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_notification_status,
+            new_status=_asset_notification_status(asset),
+        )
 
         return jsonify({'success': True, 'message': 'Bulk maintenance log updated successfully'})
 
@@ -30314,6 +30645,7 @@ def resolve_bulk_maintenance_log(asset_id, fault_log_id):
             return jsonify({'error': 'Asset not found'}), 404
         if not _is_bulk_asset(asset):
             return jsonify({'error': 'Asset is not a bulk quantity asset'}), 400
+        previous_notification_status = _asset_notification_status(asset)
 
         fault_entry = None
         for entry in _bulk_maintenance_fault_entries(asset):
@@ -30387,6 +30719,12 @@ def resolve_bulk_maintenance_log(asset_id, fault_log_id):
         log_action(
             f"Resolved bulk maintenance log #{fault_entry.get('logNumber')} for asset {asset_id}: {log_entry_text}",
             system_log_only=True,
+        )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_notification_status,
+            new_status=_asset_notification_status(asset),
         )
 
         return jsonify({'success': True, 'message': 'Bulk maintenance log resolved successfully'})
@@ -30473,6 +30811,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         asset = data_manager.inventory.get(asset_id)
         if not asset:
             return jsonify({'error': 'Asset not found'}), 404
+        previous_notification_status = _asset_notification_status(asset)
 
         data = _maintenance_request_payload()
         if not data:
@@ -30647,6 +30986,12 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             f"'{original_description}' -> '{new_description}'{changes_text} "
             f"(edited by {session['user']})",
             system_log_only=True,
+        )
+        _queue_asset_status_notification(
+            manager=data_manager,
+            asset=asset,
+            previous_status=previous_notification_status,
+            new_status=_asset_notification_status(asset),
         )
         
         logger.info(f"Successfully updated enhanced maintenance log for asset {asset_id}")
@@ -31780,6 +32125,14 @@ def force_event_state(event_id):
         
         # Invalidate cache
         invalidate_cache()
+
+        _queue_event_state_notification(
+            manager=_current_data_manager_object(),
+            event=event,
+            previous_state=normalize_event_state(old_state),
+            new_state=normalize_event_state(event.state),
+            changed_by=str(username),
+        )
         
         return jsonify({
             'success': True,
@@ -37202,10 +37555,11 @@ def _finance_rebase_draft_without_saved_revisions(document):
     return True
 
 
-def _finance_expire_sent_documents(finance_data):
+def _finance_expire_sent_documents(finance_data, notify=True):
     today = datetime.now().date()
     changed = False
     changed_invoice_plan_ids = set()
+    quotation_status_changes = []
     for document in finance_data.get('documents') or []:
         document_type = str(document.get('type') or '')
         if document_type == 'invoice':
@@ -37267,11 +37621,15 @@ def _finance_expire_sent_documents(finance_data):
             if due_date and due_date < today:
                 automatic_status = 'overdue'
         if automatic_status:
+            previous_status = status
             changed_at = datetime.now().isoformat(timespec='seconds')
             document['status'] = automatic_status
             document['statusChangedAt'] = changed_at
             document['updatedAt'] = changed_at
             _finance_update_revision_status(document)
+            quotation_status_changes.append(
+                (document, previous_status, automatic_status)
+            )
             changed = True
     for quotation_id in changed_invoice_plan_ids:
         stored_plan = (finance_data.get('invoicePlans') or {}).get(quotation_id)
@@ -37282,6 +37640,16 @@ def _finance_expire_sent_documents(finance_data):
         ) + 1
         stored_plan['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         stored_plan['updatedBy'] = 'system'
+    if notify:
+        manager = _current_data_manager_object()
+        for document, previous_status, new_status in quotation_status_changes:
+            _queue_quotation_status_notification(
+                manager=manager,
+                quotation=document,
+                previous_status=previous_status,
+                new_status=new_status,
+                changed_by='Showbase automatic update',
+            )
     return changed
 
 
@@ -42600,7 +42968,7 @@ def _finance_get_update_delete(document_id, document_type):
                 _invoice_plan_sync_documents(finance_data, plan, quotation)
         if document_type == 'quotation':
             _sync_costing_from_quotation(finance_data, updated)
-            _finance_expire_sent_documents(finance_data)
+            _finance_expire_sent_documents(finance_data, notify=False)
         if document_type == 'quotation':
             _remember_finance_prices(finance_data, updated, previous_document)
             _remember_invoice_payment_strategy(
@@ -42613,6 +42981,13 @@ def _finance_get_update_delete(document_id, document_type):
         if document_type == 'quotation':
             previous_status = str(existing_normalised.get('status') or 'draft')
             current_status = str(updated.get('status') or 'draft')
+            _queue_quotation_status_notification(
+                manager=_current_data_manager_object(),
+                quotation=updated,
+                previous_status=previous_status,
+                new_status=current_status,
+                changed_by=_finance_current_username(),
+            )
             previous_revision = _safe_int(existing_normalised.get('revision'), 1)
             current_revision = _safe_int(updated.get('revision'), 1)
             significant_changes = []
@@ -44344,6 +44719,14 @@ def costing_item(costing_id):
         costing = _finance_find_document(
             finance_data, costing_id, 'costing'
         ) or costing
+        if linked_quotation:
+            _queue_quotation_status_notification(
+                manager=_current_data_manager_object(),
+                quotation=linked_quotation,
+                previous_status=linked_status,
+                new_status=str(linked_quotation.get('status') or 'draft'),
+                changed_by=_finance_current_username(),
+            )
     mark_realtime_change('finance', {
         'action': 'costing-updated', 'costingId': costing['id'],
     })
@@ -46664,8 +47047,15 @@ def discard_quotation_revision(document_id):
             restored if str(row.get('id')) == str(document_id) else row
             for row in finance_data.get('documents') or []
         ]
-        _finance_expire_sent_documents(finance_data)
+        _finance_expire_sent_documents(finance_data, notify=False)
         _save_finance_data(finance_data)
+        _queue_quotation_status_notification(
+            manager=_current_data_manager_object(),
+            quotation=restored,
+            previous_status=str(current.get('status') or 'draft'),
+            new_status=str(restored.get('status') or 'draft'),
+            changed_by=_finance_current_username(),
+        )
         log_action(
             f"Discarded draft revision {current_revision:02d} of quotation "
             f"{current.get('number')} and restored revision {target_revision:02d}"
@@ -46784,8 +47174,15 @@ def update_or_delete_quotation_revision(document_id, revision):
                 replacement if str(row.get('id')) == str(document_id) else row
                 for row in finance_data.get('documents') or []
             ]
-            _finance_expire_sent_documents(finance_data)
+            _finance_expire_sent_documents(finance_data, notify=False)
             _save_finance_data(finance_data)
+            _queue_quotation_status_notification(
+                manager=_current_data_manager_object(),
+                quotation=replacement,
+                previous_status=str(current.get('status') or 'draft'),
+                new_status=str(replacement.get('status') or 'draft'),
+                changed_by=_finance_current_username(),
+            )
             log_action(f"Deleted revision {revision:02d} from quotation {current.get('number')}")
             return jsonify({'success': True, 'data': replacement})
 

@@ -391,6 +391,13 @@ class EventAssignmentAccessTests(unittest.TestCase):
             'eventId': 91,
             'salespersonUsername': 'admin',
         }]}
+        self.data_manager.events[event.event_id] = event
+        self.assertFalse(app_module._workforce_financial_closure_complete(
+            event.event_id,
+            manager=self.data_manager,
+            event=event,
+            workforce=workforce,
+        ))
 
         with app_module.app.test_request_context('/'):
             app_module.session['user'] = 'admin'
@@ -452,6 +459,15 @@ class EventAssignmentAccessTests(unittest.TestCase):
                 event, 0, 0, 0, full_time_workforce, {'documents': []}
             )
             self.assertEqual(progress['finance']['status'], 'neutral')
+            self.assertTrue(app_module._workforce_financial_closure_complete(
+                event.event_id,
+                manager=self.data_manager,
+                event=event,
+                workforce=full_time_workforce,
+            ))
+            event.state = 'New'
+            app_module.update_event_state(event, workforce=full_time_workforce)
+            self.assertEqual(event.state, 'Closed')
 
             full_time_workforce['submissions']['91']['user:admin']['claims'] = [{
                 'id': 'staff-claim', 'status': 'Pending Review',
@@ -459,7 +475,13 @@ class EventAssignmentAccessTests(unittest.TestCase):
             progress = app_module._event_workflow_progress_payload(
                 event, 0, 0, 0, full_time_workforce, {'documents': []}
             )
-            self.assertEqual(progress['finance']['status'], 'orange')
+            self.assertEqual(progress['finance']['status'], 'neutral')
+            self.assertTrue(app_module._workforce_financial_closure_complete(
+                event.event_id,
+                manager=self.data_manager,
+                event=event,
+                workforce=full_time_workforce,
+            ))
 
     def test_plan_workflow_icon_distinguishes_shortage_and_degraded_capacity(self):
         event = self.data_manager.events[1]
@@ -823,15 +845,20 @@ class EventAssignmentAccessTests(unittest.TestCase):
     def test_event_create_and_update_persist_assigned_users(self):
         self.login('admin')
 
-        response = self.client.post('/api/events', json={
-            'name': 'New assigned event',
-            'location': 'Expo',
-            'startDate': '2026-07-03',
-            'endDate': '2026-07-03',
-            'tag': 'events',
-            'assignedUsers': ['alice', 'bob'],
-        })
+        with patch.object(app_module, '_queue_assigned_event_notification') as queued:
+            response = self.client.post('/api/events', json={
+                'name': 'New assigned event',
+                'location': 'Expo',
+                'startDate': '2026-07-03',
+                'endDate': '2026-07-03',
+                'tag': 'events',
+                'assignedUsers': ['alice', 'bob'],
+            })
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            queued.call_args.kwargs['assigned_usernames'],
+            ['alice', 'bob'],
+        )
         event_id = response.get_json()['eventId']
         self.assertEqual(self.data_manager.events[event_id].assigned_users, ['alice', 'bob'])
         creation_action = next(
@@ -850,15 +877,17 @@ class EventAssignmentAccessTests(unittest.TestCase):
             log.action == creation_action for log in self.data_manager.logs
         ))
 
-        response = self.client.put(f'/api/events/{event_id}', json={
-            'name': 'New assigned event',
-            'location': 'Expo',
-            'startDate': '2026-07-03',
-            'endDate': '2026-07-03',
-            'tag': 'events',
-            'assignedUsers': ['bob'],
-        })
+        with patch.object(app_module, '_queue_assigned_event_notification') as queued:
+            response = self.client.put(f'/api/events/{event_id}', json={
+                'name': 'New assigned event',
+                'location': 'Expo',
+                'startDate': '2026-07-03',
+                'endDate': '2026-07-03',
+                'tag': 'events',
+                'assignedUsers': ['bob'],
+            })
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(queued.call_args.kwargs['assigned_usernames'], [])
         self.assertEqual(self.data_manager.events[event_id].assigned_users, ['bob'])
 
         reloaded = DataManager(self.tempdir.name)
