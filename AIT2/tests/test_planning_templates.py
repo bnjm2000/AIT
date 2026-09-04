@@ -306,6 +306,8 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('renderPlanRealtimeAssets()', model_setter)
         self.assertIn('planScheduleQuantitySave(key, async () => {', custom_setter)
         self.assertIn('planReplaceLocalAssetReference(', custom_setter)
+        self.assertIn('(response.mergedAssetIds || []).length > 1', custom_setter)
+        self.assertIn('await refreshPlanSelectedEvent();', custom_setter)
         self.assertIn("[custom?.uid || assetId]", custom_setter)
         self.assertIn('const currentAssetId = planCustomQuantityAssetIds.get(key) || assetId;', custom_setter)
         local_replacer = script.split('function planReplaceLocalAssetReference(', 1)[1].split(
@@ -346,6 +348,25 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('>Uncollect</button>', script)
         self.assertIn('>Unprepare</button>', script)
         self.assertNotIn('>Prepared</button>', script)
+
+    def test_prepare_incomplete_headers_and_spare_colors(self):
+        script = APP_BUNDLE_SOURCE
+        template = (Path(__file__).resolve().parents[1] / 'templates' / 'index.html').read_text(encoding='utf-8')
+        self.assertIn("assigned < required ? 'prepare-new-pending-count' : ''", script)
+        self.assertIn('prepareNewCustomPendingClass(pendingCounts)', script)
+        self.assertIn('prepareNewCustomPendingClass(customPendingCounts)', script)
+        self.assertIn('pendingBadge.className = `plan-badge ${prepareNewCustomPendingClass(pendingCounts)}`;', script)
+        pending_class = script.split('function prepareNewCustomPendingClass(', 1)[1].split(
+            'function prepareNewSortMiscItems(', 1
+        )[0]
+        self.assertIn('Number(counts?.preparation || 0) > 0', pending_class)
+        self.assertIn('Number(counts?.collection || 0) > 0', pending_class)
+        self.assertIn('class="prepare-new-spare-text"', script)
+        pending_style = template.split('.prepare-new-progress.prepare-new-pending-count,', 1)[1].split('}', 1)[0]
+        self.assertIn('background: #fff7ed;', pending_style)
+        self.assertIn('color: #c2410c;', pending_style)
+        spare_style = template.split('.prepare-new-spare-label,', 1)[1].split('}', 1)[0]
+        self.assertIn('color: #2563eb;', spare_style)
 
     def test_matching_loans_remain_owned_by_their_rooms_and_collect_together(self):
         self.login('admin')
@@ -1446,6 +1467,162 @@ class PlanningTemplateTests(unittest.TestCase):
         room_item = self.event.subprojects[0]['items'][0]
         self.assertEqual(room_item['assetRefs'], [new_marker])
         self.assertEqual(room_item['quantity'], 2)
+
+    def test_custom_quantity_update_merges_distinct_matching_items_in_one_room(self):
+        self.login('admin')
+        first_marker = app_module._make_custom_marker(
+            'MISC', 'XLR cable - 10m', 1, 'AX', description='Black cable'
+        )
+        second_marker = app_module._make_custom_marker(
+            'MISC', 'XLR cable - 10m', 1, 'AX', description='Black cable'
+        )
+        self.event.prepared_items = [first_marker, second_marker]
+        self.event.subprojects = [{
+            'id': 'room_rotunda',
+            'name': 'AVPL Rotunda Room',
+            'items': [
+                {
+                    'lineId': 'line_first',
+                    'isCustom': True,
+                    'description': 'XLR cable - 10m',
+                    'customDescription': 'Black cable',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'quantity': 1,
+                    'assetRefs': [first_marker],
+                },
+                {
+                    'lineId': 'line_second',
+                    'isCustom': True,
+                    'description': 'XLR cable - 10m',
+                    'customDescription': 'Black cable',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'quantity': 1,
+                    'assetRefs': [second_marker],
+                },
+            ],
+        }]
+        self.data_manager.save_event(self.event)
+
+        updated = self.client.put(
+            f'/api/events/{self.event.event_id}/custom-assets/update-quantity',
+            json={
+                'assetId': first_marker,
+                'newQuantity': 2,
+                'subprojectId': 'room_rotunda',
+            },
+        )
+
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        payload = updated.get_json()
+        new_marker = payload['newAssetId']
+        custom_refs = [
+            ref for ref in self.event.prepared_items
+            if app_module._parse_custom_marker(ref)
+        ]
+        self.assertEqual(custom_refs, [new_marker])
+        self.assertCountEqual(payload['mergedAssetIds'], [first_marker, second_marker])
+        room_items = self.event.subprojects[0]['items']
+        self.assertEqual(len(room_items), 1)
+        self.assertEqual(room_items[0]['assetRefs'], [new_marker])
+        self.assertEqual(room_items[0]['quantity'], 2)
+
+    def test_adding_same_custom_item_in_room_increases_one_stored_quantity(self):
+        self.login('admin')
+        self.event.subprojects = [{
+            'id': 'room_rotunda',
+            'name': 'AVPL Rotunda Room',
+            'items': [],
+        }]
+        self.data_manager.save_event(self.event)
+        request_data = {
+            'name': 'XLR cable - 10m',
+            'quantity': 1,
+            'type': 'MISC',
+            'department': 'AX',
+            'description': 'Black cable',
+            'subprojectId': 'room_rotunda',
+        }
+
+        first = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json=request_data,
+        )
+        second = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json=request_data,
+        )
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        self.assertTrue(second.get_json()['data']['merged'])
+        self.assertEqual(second.get_json()['data']['quantity'], 2)
+        custom_refs = [
+            ref for ref in self.event.prepared_items
+            if app_module._parse_custom_marker(ref)
+        ]
+        self.assertEqual(len(custom_refs), 1)
+        self.assertEqual(app_module._parse_custom_marker(custom_refs[0])['quantity'], 2)
+        room_items = self.event.subprojects[0]['items']
+        self.assertEqual(len(room_items), 1)
+        self.assertEqual(room_items[0]['quantity'], 2)
+        self.assertEqual(room_items[0]['assetRefs'], custom_refs)
+
+    def test_same_custom_item_in_another_room_remains_independent(self):
+        self.login('admin')
+        rotunda_marker = app_module._make_custom_marker(
+            'MISC', 'XLR cable - 10m', 1, 'AX'
+        )
+        ballroom_marker = app_module._make_custom_marker(
+            'MISC', 'XLR cable - 10m', 3, 'AX'
+        )
+        self.event.prepared_items = [rotunda_marker, ballroom_marker]
+        self.event.subprojects = [
+            {
+                'id': 'room_rotunda',
+                'name': 'AVPL Rotunda Room',
+                'items': [{
+                    'isCustom': True,
+                    'description': 'XLR cable - 10m',
+                    'department': 'AX',
+                    'quantity': 1,
+                    'assetRefs': [rotunda_marker],
+                }],
+            },
+            {
+                'id': 'room_ballroom',
+                'name': 'Ballroom',
+                'items': [{
+                    'isCustom': True,
+                    'description': 'XLR cable - 10m',
+                    'department': 'AX',
+                    'quantity': 3,
+                    'assetRefs': [ballroom_marker],
+                }],
+            },
+        ]
+        self.data_manager.save_event(self.event)
+
+        updated = self.client.put(
+            f'/api/events/{self.event.event_id}/custom-assets/update-quantity',
+            json={
+                'assetId': rotunda_marker,
+                'newQuantity': 2,
+                'subprojectId': 'room_rotunda',
+            },
+        )
+
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        custom_quantities = sorted(
+            app_module._parse_custom_marker(ref)['quantity']
+            for ref in self.event.prepared_items
+            if app_module._parse_custom_marker(ref)
+        )
+        self.assertEqual(custom_quantities, [2, 3])
+        ballroom_item = self.event.subprojects[1]['items'][0]
+        self.assertEqual(ballroom_item['quantity'], 3)
+        self.assertEqual(ballroom_item['assetRefs'], [ballroom_marker])
 
     def test_assigned_user_can_add_custom_item_from_prepare(self):
         self.event.assigned_users = ['normal']

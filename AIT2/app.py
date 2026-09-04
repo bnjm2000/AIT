@@ -5282,6 +5282,134 @@ def _is_custom_ref(value):
     return _parse_custom_marker(value) is not None
 
 
+def _custom_marker_identity(custom):
+    """Return the fields that make two custom requirements the same item."""
+    return (
+        _normalise_custom_type((custom or {}).get('type')),
+        _normalise_department_code((custom or {}).get('department')) or 'UN',
+        str((custom or {}).get('name') or '').strip().casefold(),
+        str((custom or {}).get('company') or '').strip().casefold(),
+        str((custom or {}).get('description') or '').strip().casefold(),
+    )
+
+
+def _event_custom_refs_matching_identity(event, custom, subproject=None):
+    """Find unique matching custom markers within one room or the unallocated event."""
+    identity = _custom_marker_identity(custom)
+    matching = []
+    for ref in getattr(event, 'prepared_items', []) or []:
+        parsed = _parse_custom_marker(ref)
+        if parsed and _custom_marker_identity(parsed) == identity and ref not in matching:
+            matching.append(ref)
+
+    rooms = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    if subproject:
+        room_refs = set(subproject.get('extraRefs') or [])
+        for item in subproject.get('items') or []:
+            if isinstance(item, dict):
+                room_refs.update(item.get('assetRefs') or [])
+        return [ref for ref in matching if ref in room_refs]
+
+    if not rooms:
+        return matching
+
+    allocated_refs = set()
+    for room in rooms:
+        allocated_refs.update(room.get('extraRefs') or [])
+        for item in room.get('items') or []:
+            if isinstance(item, dict):
+                allocated_refs.update(item.get('assetRefs') or [])
+    return [ref for ref in matching if ref not in allocated_refs]
+
+
+def _merge_event_custom_markers(
+    event,
+    old_asset_ids,
+    new_asset_id,
+    custom,
+    quantity,
+    target_subproject=None,
+    preserve_state=True,
+):
+    """Replace equivalent custom markers with one canonical stored requirement."""
+    old_asset_ids = list(dict.fromkeys(
+        str(ref or '').strip() for ref in old_asset_ids if str(ref or '').strip()
+    ))
+    old_asset_set = set(old_asset_ids)
+    if not old_asset_set:
+        return
+
+    def state_is_complete(values):
+        current = set(values or [])
+        return preserve_state and all(ref in current for ref in old_asset_ids)
+
+    keep_prepared = state_is_complete(getattr(event, 'actually_prepared', []))
+    keep_returned = state_is_complete(getattr(event, 'returned_items', []))
+    keep_extra = state_is_complete(getattr(event, 'extra_assets', []))
+    keep_collected = state_is_complete(getattr(event, 'custom_collected', []))
+
+    def replace_group(values, keep_marker):
+        updated = []
+        inserted = False
+        for value in list(values or []):
+            if value in old_asset_set or value == new_asset_id:
+                if keep_marker and not inserted:
+                    updated.append(new_asset_id)
+                    inserted = True
+                continue
+            updated.append(value)
+        if keep_marker and not inserted:
+            updated.append(new_asset_id)
+        values[:] = updated
+
+    replace_group(event.prepared_items, True)
+    replace_group(event.actually_prepared, keep_prepared)
+    replace_group(event.returned_items, keep_returned)
+    replace_group(event.extra_assets, keep_extra)
+    replace_group(event.custom_collected, keep_collected)
+
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        matching_items = []
+        for item in subproject.get('items') or []:
+            if not isinstance(item, dict):
+                continue
+            refs = list(item.get('assetRefs') or [])
+            if item.get('isCustom') and any(ref in old_asset_set for ref in refs):
+                matching_items.append(item)
+            updated_refs = []
+            for ref in refs:
+                replacement = new_asset_id if ref in old_asset_set else ref
+                if replacement not in updated_refs:
+                    updated_refs.append(replacement)
+            item['assetRefs'] = updated_refs
+        subproject['extraRefs'] = list(dict.fromkeys(
+            new_asset_id if ref in old_asset_set else ref
+            for ref in (subproject.get('extraRefs') or [])
+        ))
+
+        if subproject is not target_subproject or not matching_items:
+            continue
+        primary_item = matching_items[0]
+        primary_item['assetRefs'] = [new_asset_id]
+        primary_item['quantity'] = quantity
+        primary_item['department'] = custom['department']
+        primary_item['departmentCode'] = custom['department']
+        primary_item['description'] = custom['name']
+        primary_item['customDescription'] = custom.get('description', '')
+        primary_item['customType'] = custom['type']
+        primary_item['company'] = custom.get('company', '')
+        duplicate_item_ids = {id(item) for item in matching_items[1:]}
+        subproject['items'] = [
+            item for item in subproject.get('items') or []
+            if id(item) not in duplicate_item_ids
+        ]
+
+
 def _subproject_item_matches_custom_marker(item, marker_id, custom=None):
     """Match a room custom line by its reference or stable quotation UID."""
     if not isinstance(item, dict):
@@ -24935,17 +25063,57 @@ def add_custom_asset_to_event(event_id):
             return jsonify({'error': 'Loan/Rental company is required'}), 400
 
         _ensure_event_custom_lists(event)
-        custom_asset_id = _make_custom_marker(
-            asset_type,
-            name,
-            quantity,
-            department,
-            company,
-            description=description
+        requested_custom = {
+            'type': asset_type,
+            'name': name,
+            'quantity': quantity,
+            'department': department,
+            'company': company,
+            'description': description,
+        }
+        matching_refs = _event_custom_refs_matching_identity(
+            event, requested_custom, subproject
         )
+        merged = bool(matching_refs)
+        if matching_refs:
+            existing_quantity = sum(
+                max(1, _safe_int(_parse_custom_marker(ref).get('quantity'), 1))
+                for ref in matching_refs
+            )
+            quantity += existing_quantity
+            first_custom = _parse_custom_marker(matching_refs[0]) or {}
+            custom_asset_id = _make_custom_marker(
+                asset_type,
+                name,
+                quantity,
+                department,
+                company,
+                uid=first_custom.get('uid') or None,
+                description=description,
+            )
+            requested_custom['quantity'] = quantity
+            _merge_event_custom_markers(
+                event,
+                matching_refs,
+                custom_asset_id,
+                requested_custom,
+                quantity,
+                target_subproject=subproject,
+                # Newly added units have not yet been prepared or collected.
+                preserve_state=False,
+            )
+        else:
+            custom_asset_id = _make_custom_marker(
+                asset_type,
+                name,
+                quantity,
+                department,
+                company,
+                description=description
+            )
+            event.prepared_items.append(custom_asset_id)
 
-        event.prepared_items.append(custom_asset_id)
-        if subproject:
+        if subproject and not merged:
             subproject.setdefault('items', []).append({
                 'lineId': f"plan_{secrets.token_hex(8)}",
                 'department': department,
@@ -24965,15 +25133,23 @@ def add_custom_asset_to_event(event_id):
         invalidate_cache()
 
         log_action(
-            f"Added {_custom_asset_log_label(_parse_custom_marker(custom_asset_id))} "
-            f"to event {event_id}; quantity={quantity}; department={department}"
+            f"{'Merged into' if merged else 'Added'} "
+            f"{_custom_asset_log_label(_parse_custom_marker(custom_asset_id))} "
+            f"for event {event_id}; quantity={quantity}; department={department}"
         )
         mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'custom-asset-added'})
 
         return jsonify({
             'success': True,
-            'message': f'Custom asset "{name}" added to event',
-            'data': {'assetId': custom_asset_id}
+            'message': (
+                f'Custom asset "{name}" quantity increased to {quantity}'
+                if merged else f'Custom asset "{name}" added to event'
+            ),
+            'data': {
+                'assetId': custom_asset_id,
+                'quantity': quantity,
+                'merged': merged,
+            }
         })
 
     except Exception as e:
@@ -31866,6 +32042,13 @@ def update_custom_asset_quantity(event_id):
         if old_asset_id not in event.prepared_items:
             return jsonify({'success': False, 'error': 'Custom asset not found in event'}), 404
 
+        subproject = _event_subproject(event, data.get('subprojectId'))
+        if str(data.get('subprojectId') or '').strip() and not subproject:
+            return jsonify({'success': False, 'error': 'Sub-project not found'}), 404
+        matching_refs = _event_custom_refs_matching_identity(event, custom, subproject)
+        if old_asset_id not in matching_refs:
+            matching_refs.insert(0, old_asset_id)
+
         new_name = str(data.get('name', custom['name'])).strip()
         new_type = _normalise_custom_type(data.get('type', custom['type']))
         new_department = _normalise_department_code(
@@ -31890,44 +32073,22 @@ def update_custom_asset_quantity(event_id):
             description=new_description
         )
 
-        def replace_in_list(values):
-            """Replace this item and collapse duplicate references to its UID."""
-            replaced_values = []
-            new_asset_added = False
-            for value in list(values):
-                replacement = new_asset_id if value == old_asset_id else value
-                if replacement == new_asset_id:
-                    if new_asset_added:
-                        continue
-                    new_asset_added = True
-                replaced_values.append(replacement)
-            values[:] = replaced_values
-
-        replace_in_list(event.prepared_items)
-        replace_in_list(event.actually_prepared)
-        replace_in_list(event.returned_items)
-        replace_in_list(event.extra_assets)
-        replace_in_list(event.custom_collected)
-        for subproject in getattr(event, 'subprojects', []) or []:
-            if not isinstance(subproject, dict):
-                continue
-            for item in subproject.get('items') or []:
-                if not isinstance(item, dict):
-                    continue
-                refs = item.get('assetRefs') or []
-                if old_asset_id in refs:
-                    updated_refs = []
-                    for ref in refs:
-                        replacement = new_asset_id if ref == old_asset_id else ref
-                        if replacement not in updated_refs:
-                            updated_refs.append(replacement)
-                    item['assetRefs'] = updated_refs
-                    item['quantity'] = new_quantity
-                    item['department'] = new_department
-                    item['departmentCode'] = new_department
-                    item['description'] = new_name
-                    item['customDescription'] = new_description
-                    item['company'] = new_company
+        updated_custom = {
+            'type': new_type,
+            'name': new_name,
+            'quantity': new_quantity,
+            'department': new_department,
+            'company': new_company,
+            'description': new_description,
+        }
+        _merge_event_custom_markers(
+            event,
+            matching_refs,
+            new_asset_id,
+            updated_custom,
+            new_quantity,
+            target_subproject=subproject,
+        )
 
         update_event_state(event)
         data_manager.save_event(event)
@@ -31965,7 +32126,8 @@ def update_custom_asset_quantity(event_id):
             'message': 'Custom asset quantity updated',
             'oldAssetId': old_asset_id,
             'newAssetId': new_asset_id,
-            'newQuantity': new_quantity
+            'newQuantity': new_quantity,
+            'mergedAssetIds': matching_refs,
         })
     except Exception as e:
         logger.error(f"Error updating custom asset quantity: {e}", exc_info=True)

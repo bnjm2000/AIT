@@ -3559,6 +3559,10 @@ function planSetCustomQuantity(encodedAssetId, quantity, input = null) {
       );
       const nextAssetId = response.newAssetId || currentAssetId;
       planCustomQuantityAssetIds.set(key, nextAssetId);
+      if ((response.mergedAssetIds || []).length > 1) {
+        await refreshPlanSelectedEvent();
+        return;
+      }
       planReplaceLocalAssetReference(
         eventId,
         response.oldAssetId || currentAssetId,

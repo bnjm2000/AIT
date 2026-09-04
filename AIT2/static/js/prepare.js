@@ -518,7 +518,7 @@ function prepareNewModelSection(group) {
       ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
         <div class="prepare-new-model-assets-head">
           <span>Select exact assets from inventory</span>
-          <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · ${extraPrepared} spare` : ''}</span>
+          <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · <span class="prepare-new-spare-text">${extraPrepared} spare</span>` : ''}</span>
         </div>
         <div class="prepare-new-asset-grid">
           ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
@@ -728,7 +728,7 @@ function renderPrepareNewAssignment() {
             ${escapeHtml(department)} \u00b7 ${escapeHtml(info.name || department)}
             <span class="plan-badge">${departmentGroups.length} line${departmentGroups.length === 1 ? '' : 's'}</span>
           </span>
-          <span class="prepare-new-progress">
+          <span class="prepare-new-progress ${assigned < required ? 'prepare-new-pending-count' : ''}">
             ${assigned} / ${required} prepared
             <span class="prepare-new-progress-track"><span style="width:${percent}%"></span></span>
           </span>
@@ -794,6 +794,12 @@ function prepareNewCustomPendingLabel(counts) {
   if (Number(counts?.collection || 0) > 0) parts.push(`${counts.collection} to collect`);
   if (Number(counts?.preparation || 0) > 0) parts.push(`${counts.preparation} to prepare`);
   return parts.join(' · ') || '0 pending';
+}
+
+function prepareNewCustomPendingClass(counts) {
+  return Number(counts?.preparation || 0) > 0 || Number(counts?.collection || 0) > 0
+    ? 'prepare-new-pending-count'
+    : '';
 }
 
 function prepareNewSortMiscItems(items, event = prepareNewPageState.event) {
@@ -948,9 +954,8 @@ function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
 
   return sections.map(section => {
     const groupKey = section.loan ? `loan:${section.label}` : 'misc';
-    const pendingLabel = prepareNewCustomPendingLabel(
-      prepareNewCustomPendingCounts(section.rows, event)
-    );
+    const pendingCounts = prepareNewCustomPendingCounts(section.rows, event);
+    const pendingLabel = prepareNewCustomPendingLabel(pendingCounts);
     return `
     <details class="prepare-new-custom-group"
              ${prepareNewPageState.expandedCustomGroups.has(groupKey) ? 'open' : ''}
@@ -958,7 +963,7 @@ function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
              ontoggle="prepareNewSetCustomGroupExpanded('${planEncode(groupKey)}',this.open,this)">
       <summary>
         <span>${section.loan ? 'Loan from ' : ''}${escapeHtml(section.label)}</span>
-        <span class="plan-badge">${escapeHtml(pendingLabel)}</span>
+        <span class="plan-badge ${prepareNewCustomPendingClass(pendingCounts)}">${escapeHtml(pendingLabel)}</span>
         <span aria-hidden="true">\u2304</span>
       </summary>
       <div class="prepare-new-custom-group-rows">${section.rows.map(renderRow).join('')}</div>
@@ -1081,9 +1086,8 @@ function renderPrepareNewPage() {
   prepareNewInitialExpansion();
   const totals = prepareNewTotals(event);
   const customAssets = prepareNewCustomAssets(event);
-  const customPendingLabel = prepareNewCustomPendingLabel(
-    prepareNewCustomPendingCounts(customAssets, event)
-  );
+  const customPendingCounts = prepareNewCustomPendingCounts(customAssets, event);
+  const customPendingLabel = prepareNewCustomPendingLabel(customPendingCounts);
   const quickAddEnabled = getPrepareQuickAddEnabled();
   root.innerHTML = `
     <div class="prepare-new-heading">
@@ -1174,7 +1178,7 @@ function renderPrepareNewPage() {
         <section class="prepare-new-card prepare-new-custom-list-card">
           <div class="prepare-new-card-header">
             <h3>&#128230; Misc / Loan Items</h3>
-            <span id="prepareNewCustomPendingBadge" class="plan-badge">${escapeHtml(customPendingLabel)}</span>
+            <span id="prepareNewCustomPendingBadge" class="plan-badge ${prepareNewCustomPendingClass(customPendingCounts)}">${escapeHtml(customPendingLabel)}</span>
           </div>
           <div class="prepare-new-custom-list">${renderPrepareNewCustomList(customAssets)}</div>
         </section>
@@ -1528,9 +1532,9 @@ function prepareNewRenderCustomMutation() {
   if (customList) customList.innerHTML = renderPrepareNewCustomList(customAssets);
   const pendingBadge = document.getElementById('prepareNewCustomPendingBadge');
   if (pendingBadge) {
-    pendingBadge.textContent = prepareNewCustomPendingLabel(
-      prepareNewCustomPendingCounts(customAssets)
-    );
+    const pendingCounts = prepareNewCustomPendingCounts(customAssets);
+    pendingBadge.textContent = prepareNewCustomPendingLabel(pendingCounts);
+    pendingBadge.className = `plan-badge ${prepareNewCustomPendingClass(pendingCounts)}`;
   }
   const progressCard = document.querySelector('.prepare-new-progress-card');
   if (progressCard) progressCard.outerHTML = renderPrepareNewOverallProgressCard();
