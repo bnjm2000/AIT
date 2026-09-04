@@ -22,7 +22,7 @@ from contextvars import ContextVar
 from datetime import datetime, timedelta
 from functools import wraps
 from types import SimpleNamespace
-from urllib.parse import quote, unquote_plus
+from urllib.parse import quote, unquote_plus, urlencode
 
 from flask import (
     Flask,
@@ -10684,6 +10684,41 @@ def update_my_submission(submission_id):
     })
 
 
+def _submission_file_response(path, record):
+    """Use the same authorized file route for local Excel previews and downloads."""
+    if os.path.splitext(path)[1].lower() in {'.xls', '.xlsx'} and request.args.get('download') != '1':
+        from spreadsheet_preview import read_spreadsheet_preview
+
+        error = ''
+        workbook = None
+        try:
+            workbook = read_spreadsheet_preview(path)
+        except ValueError as exc:
+            error = str(exc)
+        download_url = request.path + '?' + urlencode({**request.args.to_dict(), 'download': '1'})
+        response = Response(render_template(
+            'spreadsheet_preview.html',
+            filename=record.get('originalName') or os.path.basename(path),
+            workbook=workbook,
+            error=error,
+            download_url=download_url,
+        ), status=422 if error else 200, mimetype='text/html')
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'self'; sandbox allow-same-origin allow-downloads"
+        )
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        return response
+    return send_file(
+        path,
+        mimetype=record.get('contentType') or None,
+        as_attachment=request.args.get('download') == '1',
+        download_name=record.get('originalName') or os.path.basename(path),
+    )
+
+
 @app.route('/api/my-claims/<submission_id>/file', methods=['GET'])
 @require_auth
 def get_my_submission_file(submission_id):
@@ -10702,12 +10737,7 @@ def get_my_submission_file(submission_id):
     )
     if not path or not os.path.isfile(path):
         return jsonify({'error': 'File not found'}), 404
-    return send_file(
-        path,
-        mimetype=record.get('contentType') or None,
-        as_attachment=request.args.get('download') == '1',
-        download_name=record.get('originalName') or os.path.basename(path),
-    )
+    return _submission_file_response(path, record)
 
 
 @app.route('/worker')
@@ -11049,12 +11079,7 @@ def worker_submission_file(submission_id):
         )
         if not path or not os.path.isfile(path):
             return jsonify({'error': 'File not found'}), 404
-        return send_file(
-            path,
-            mimetype=record.get('contentType') or None,
-            as_attachment=request.args.get('download') == '1',
-            download_name=record.get('originalName') or os.path.basename(path),
-        )
+        return _submission_file_response(path, record)
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 401
 
@@ -11409,12 +11434,13 @@ def _process_worker_submission_upload(
             original_name = record.get('originalName', '')
 
         extraction = (
-            extract_invoice_amount(path)
+            extract_invoice_amount(path, data_folder=data_folder)
             if kind == 'invoice'
             else extract_claim_amount(
                 path,
                 content_type,
                 original_name,
+                data_folder=data_folder,
             )
         )
 
@@ -15448,7 +15474,8 @@ def upload_transport_invoice(event_id, booking_id):
                 'submittedAt': now_iso(),
             }
             extraction = extract_invoice_amount(
-                upload_absolute_path(_workforce_folder(), record['storedPath'])
+                upload_absolute_path(_workforce_folder(), record['storedPath']),
+                data_folder=_workforce_folder(),
             )
             record.update({
                 'amount': extraction.get('amount'),
@@ -15655,7 +15682,7 @@ def reextract_workforce_invoice_amount(submission_id):
         )
         if not path or not os.path.isfile(path):
             return jsonify({'error': 'Invoice file not found'}), 404
-        extraction = extract_invoice_amount(path)
+        extraction = extract_invoice_amount(path, data_folder=_workforce_folder())
         detected_amount = extraction.get('amount')
         if detected_amount is not None:
             record['amount'] = detected_amount
@@ -16007,12 +16034,7 @@ def workforce_submission_file(submission_id):
     path = upload_absolute_path(_workforce_folder(), record.get('storedPath'))
     if not path or not os.path.isfile(path):
         return jsonify({'error': 'File not found'}), 404
-    return send_file(
-        path,
-        mimetype=record.get('contentType') or None,
-        as_attachment=request.args.get('download') == '1',
-        download_name=record.get('originalName') or os.path.basename(path),
-    )
+    return _submission_file_response(path, record)
 
 
 @app.route('/api/events/<int:event_id>/workforce/download/<kind>', methods=['GET'])
@@ -43869,6 +43891,7 @@ def _process_profit_loss_expense_upload(
             absolute_path,
             attachment.get('contentType', ''),
             attachment.get('originalName', ''),
+            data_folder=data_folder,
         )
 
         with _finance_lock:

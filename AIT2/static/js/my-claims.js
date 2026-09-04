@@ -417,6 +417,8 @@ function openMyClaimsDetails(id, kind) {
     preview.innerHTML = `<img src="${myClaimsEscape(url)}" alt="Uploaded file preview">`;
   } else if (type === 'application/pdf' || name.endsWith('.pdf')) {
     preview.innerHTML = `<iframe src="${myClaimsEscape(url)}#toolbar=1" title="Uploaded PDF"></iframe>`;
+  } else if (/\.xlsx?$/.test(name) || type === 'application/vnd.ms-excel' || type.includes('spreadsheetml')) {
+    preview.innerHTML = `<iframe src="${myClaimsEscape(url)}" sandbox="allow-same-origin allow-downloads" title="Uploaded Excel invoice"></iframe>`;
   } else {
     preview.innerHTML = `
       <div>

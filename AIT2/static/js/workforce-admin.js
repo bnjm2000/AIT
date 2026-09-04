@@ -4792,10 +4792,14 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     ? Object.fromEntries(savedAllocations.map(row => [row.department, row.amount]))
     : wfEvenAllocationMap(departments, record.amount);
   const pdf = record.contentType === 'application/pdf';
+  const spreadsheet = /\.xlsx?$/i.test(record.originalName || '')
+    || record.contentType === 'application/vnd.ms-excel'
+    || String(record.contentType || '').includes('spreadsheetml');
   document.getElementById('wfReviewModalTitle').textContent =
     `Review ${kind === 'invoice' ? 'Invoice' : 'Claim'}`;
   document.getElementById('wfReviewContent').innerHTML = `<div class="wf-review-layout">
     <div class="wf-preview">${pdf ? `<iframe src="${wfAttr(record.previewUrl)}#toolbar=1" title="Uploaded PDF"></iframe>`
+      : spreadsheet ? `<iframe src="${wfAttr(record.previewUrl)}" sandbox="allow-same-origin allow-downloads" title="Uploaded Excel invoice"></iframe>`
       : `<img src="${wfAttr(record.previewUrl)}" alt="Uploaded claim">`}</div>
     <form class="wf-review-form" id="wfReviewForm"><p class="wf-form-intro">${wfEscape(freelancer.name || '')} &middot; ${wfEscape(record.originalName || '')}</p>
       ${detailsRequired ? `<div class="wf-details-required-note"><strong>Claim details required</strong>

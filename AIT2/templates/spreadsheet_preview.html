@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ filename }} — Invoice preview</title>
+  <style>
+    body { margin:0; padding:18px; background:#f5f7fa; color:#243044; font:14px/1.5 system-ui,sans-serif; }
+    header { display:flex; align-items:start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+    h1 { font-size:18px; margin:0; overflow-wrap:anywhere; }
+    h2 { font-size:16px; margin:0; padding:12px 16px; background:#edf2f7; }
+    p { color:#526176; margin:8px 0 14px; }
+    a { color:#175cd3; } .download { padding:8px 12px; background:white; border:1px solid #cbd5e1; border-radius:6px; white-space:nowrap; }
+    nav { display:flex; flex-wrap:wrap; gap:14px; margin:16px 0; }
+    section { background:white; border:1px solid #d5dce5; border-radius:8px; overflow:hidden; margin:18px 0; }
+    .grid { overflow:auto; max-height:75vh; }
+    table { border-collapse:collapse; font-size:13px; min-width:100%; }
+    td,th { padding:7px 10px; border:1px solid #e2e8f0; min-width:60px; max-width:500px; white-space:pre-wrap; overflow-wrap:anywhere; vertical-align:top; }
+    th { min-width:24px; color:#64748b; background:#f8fafc; font-weight:400; }
+    .numeric { text-align:right; white-space:nowrap; } .bold { font-weight:700; } .missing,.error { color:#b45309; background:#fff7ed; }
+    .notice { padding:10px 16px; margin:0; } .error { padding:16px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header><h1>{{ filename }}</h1><a class="download" href="{{ download_url }}" download>Download original Excel file</a></header>
+  <p>Read-only worksheet preview. Saved formula results are shown; formulas are not recalculated. Images, charts and exact print layout are not included.</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% else %}
+  <nav aria-label="Worksheets">{% for sheet in workbook.sheets %}<a href="#sheet-{{ loop.index }}">{{ sheet.name }}</a>{% endfor %}</nav>
+  {% if workbook.truncatedSheets %}<p class="notice">Only the first 10 visible worksheets are shown. Download the original for the complete workbook.</p>{% endif %}
+  {% for sheet in workbook.sheets %}
+  <section id="sheet-{{ loop.index }}">
+    <h2>{{ sheet.name }}</h2>
+    {% if sheet.truncated %}<p class="notice">Preview limited to the first 200 rows and 30 columns. Download the original to see all cells.</p>{% endif %}
+    <div class="grid"><table aria-label="{{ sheet.name }}">
+    {% for row in sheet.rows %}<tr><th scope="row">{{ loop.index }}</th>{% for cell in row %}<td class="{% if cell.numeric %}numeric {% endif %}{% if cell.bold %}bold {% endif %}{% if cell.missing %}missing{% endif %}">{{ cell.text }}</td>{% endfor %}</tr>
+    {% else %}<tr><td>No cell values to preview.</td></tr>{% endfor %}
+    </table></div>
+  </section>
+  {% else %}<p>No visible worksheets to preview.</p>{% endfor %}
+  {% endif %}
+</body>
+</html>

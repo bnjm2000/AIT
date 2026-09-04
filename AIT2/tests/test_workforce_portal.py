@@ -750,7 +750,8 @@ class WorkforcePortalTests(unittest.TestCase):
         freelancer_id = self.create_worker_assignment()
         store_was_readable = []
 
-        def extraction_while_checking_store(_path):
+        def extraction_while_checking_store(_path, *, data_folder=None):
+            self.assertEqual(data_folder, app_module._workforce_folder())
             finished = threading.Event()
 
             def read_store():
@@ -1416,6 +1417,68 @@ class WorkforcePortalTests(unittest.TestCase):
             "invoices"
         ]
         self.assertEqual(invoices[-1]["contentType"], "application/vnd.ms-excel")
+
+    def test_excel_invoice_previews_are_authorized_escaped_and_downloadable(self):
+        from tests.test_spreadsheet_preview import invoice_xlsx_bytes
+
+        self.create_worker_assignment()
+        token = self.worker_token()
+        content = invoice_xlsx_bytes()
+        uploaded = self.client.post('/api/worker/submissions', data={
+            'token': token, 'eventId': '143', 'kind': 'invoice',
+            'warningAcknowledged': 'true',
+            'file': (io.BytesIO(content), 'invoice.xlsx'),
+        }, content_type='multipart/form-data')
+        self.assertEqual(uploaded.status_code, 200, uploaded.get_data(as_text=True))
+        record = uploaded.get_json()['data']['events'][0]['submissions']['invoices'][0]
+        worker_url = f"/api/worker/submissions/{record['id']}/file"
+        self.assertEqual(self.client.get(worker_url).status_code, 401)
+        preview = self.client.get(worker_url, query_string={'token': token})
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.mimetype, 'text/html')
+        html = preview.get_data(as_text=True)
+        self.assertIn('$1,200.50', html)
+        self.assertIn('Not calculated', html)
+        self.assertIn('&lt;script&gt;', html)
+        self.assertNotIn('<script>', html)
+        self.assertIn('download=1', html)
+        self.assertIn('token=', html)
+        self.assertIn("default-src 'none'", preview.headers['Content-Security-Policy'])
+        self.assertIn('no-store', preview.headers['Cache-Control'])
+        original = self.client.get(worker_url, query_string={'token': token, 'download': '1'})
+        self.assertEqual(original.data, content)
+        self.assertIn('attachment', original.headers['Content-Disposition'])
+        original.close()
+        self.login('admin', True)
+        admin_preview = self.client.get(f"/api/workforce/submissions/{record['id']}/file")
+        self.assertEqual(admin_preview.status_code, 200)
+        self.assertEqual(admin_preview.mimetype, 'text/html')
+        self.assertIn('$1,200.50', admin_preview.get_data(as_text=True))
+
+    def test_my_claims_excel_preview_uses_same_owned_file_route(self):
+        from tests.test_spreadsheet_preview import invoice_xlsx_bytes
+
+        self.manager.users['normal'].role = 'user'
+        self.login('admin', True)
+        assigned = self.client.post('/api/events/143/workforce/staff-assignments', json={
+            'username': 'normal', 'department': 'AU',
+            'roleName': 'Audio Technician', 'workDates': ['2026-07-10'],
+        })
+        self.assertEqual(assigned.status_code, 200)
+        self.login('normal', False)
+        with patch.object(app_module, '_queue_worker_submission_processing'):
+            uploaded = self.client.post('/api/my-claims', data={
+                'eventId': '143', 'kind': 'invoice',
+                'file': (io.BytesIO(invoice_xlsx_bytes()), 'invoice.xlsx'),
+            }, content_type='multipart/form-data')
+        self.assertEqual(uploaded.status_code, 200, uploaded.get_data(as_text=True))
+        record = uploaded.get_json()['data']['events'][0]['invoices'][0]
+        url = f"/api/my-claims/{record['id']}/file"
+        preview = self.client.get(url)
+        self.assertEqual(preview.mimetype, 'text/html')
+        self.assertIn('$1,200.50', preview.get_data(as_text=True))
+        self.login('manager', True)
+        self.assertIn(self.client.get(url).status_code, {403, 404})
 
     def test_first_invoice_review_defaults_single_department_allocation(self):
         freelancer_id = self.create_worker_assignment()

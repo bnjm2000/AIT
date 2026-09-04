@@ -617,7 +617,18 @@ def _invoice_amount_number(raw_value: str):
     return money(value)
 
 
-def _amount_from_text(text: str) -> dict:
+def _amount_candidate_feature(lines, line_index, match_index):
+    """Hash a value-independent layout cue; never retain document text in a model."""
+    line = lines[line_index].lower()
+    if not re.search(r"[a-z]{3}", line) and line_index:
+        line = lines[line_index - 1].lower() + " | " + line
+    line = re.sub(r"\btota[i1l]\b", "total", line)
+    line = re.sub(r"\d+(?:[.,]\d+)*", "#", line)
+    line = re.sub(r"\s+", " ", line).strip()
+    return hashlib.sha256(f"{line}|candidate:{match_index}".encode()).hexdigest()
+
+
+def _amount_candidates(text: str) -> list:
     candidates = []
     keyword_scores = (
         ("total amount due", 125),
@@ -656,7 +667,7 @@ def _amount_from_text(text: str) -> dict:
                     lines[context_index].lower(),
                 ),
             ))
-        for match in _AMOUNT_RE.finditer(line):
+        for match_index, match in enumerate(_AMOUNT_RE.finditer(line)):
             raw_amount = match.group("amount")
             amount = _invoice_amount_number(raw_amount)
             has_currency = bool(match.group("currency"))
@@ -776,12 +787,15 @@ def _amount_from_text(text: str) -> dict:
                 score -= 80
             if lines:
                 score += int((line_index / len(lines)) * 8)
-            candidates.append((score, line_index, amount, line))
+            candidates.append((
+                score, line_index, amount, line,
+                _amount_candidate_feature(lines, line_index, match_index),
+            ))
 
     if not candidates:
-        return {"amount": None, "confidence": "Low", "matchedText": ""}
+        return []
     occurrence_counts = {}
-    for _score, _line_index, candidate_amount, _line in candidates:
+    for _score, _line_index, candidate_amount, _line, _feature in candidates:
         amount_key = round(candidate_amount, 2)
         occurrence_counts[amount_key] = occurrence_counts.get(amount_key, 0) + 1
     candidates = [
@@ -790,11 +804,30 @@ def _amount_from_text(text: str) -> dict:
             line_index,
             amount,
             line,
+            feature,
         )
-        for score, line_index, amount, line in candidates
+        for score, line_index, amount, line, feature in candidates
     ]
-    candidates.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
-    score, _line_index, amount, line = candidates[0]
+    return [
+        {'score': score, 'lineIndex': index, 'amount': amount,
+         'matchedText': line[:240], 'feature': feature}
+        for score, index, amount, line, feature in candidates
+    ]
+
+
+def _amount_from_text(text: str, learning_profile=None) -> dict:
+    candidates = _amount_candidates(text)
+    if not candidates:
+        return {"amount": None, "confidence": "Low", "matchedText": ""}
+    profile = learning_profile or {}
+    for candidate in candidates:
+        candidate['score'] += profile.get(candidate['feature'], 0)
+    candidates.sort(
+        key=lambda row: (row['score'], row['lineIndex'], row['amount']),
+        reverse=True,
+    )
+    best = candidates[0]
+    score, amount, line = best['score'], best['amount'], best['matchedText']
     confidence = "High" if score >= 90 else "Medium" if score >= 60 else "Low"
     return {"amount": amount, "confidence": confidence, "matchedText": line[:240]}
 
@@ -866,6 +899,17 @@ def _date_from_text(text: str) -> dict:
         for line in str(text or "").splitlines()
         if line.strip()
     ]
+    entry_date_lines = {
+        index for index, line in enumerate(lines)
+        if re.match(r'^(?:in|entry)(?:\s+(?:date|time))*\s*[:\-]', line, re.I)
+        and any(pattern.search(line) for pattern in _DATE_PATTERNS)
+    }
+    exit_date_lines = {
+        index for index, line in enumerate(lines)
+        # Thermal-receipt OCR commonly reads the T in OUT as F ("OUf").
+        if re.match(r'^(?:[o0]u[tf]|exit)(?:\s+(?:date|time))*\s*[:\-]', line, re.I)
+        and any(pattern.search(line) for pattern in _DATE_PATTERNS)
+    }
     for line_index, line in enumerate(lines):
         lowered = line.lower()
         nearby = [
@@ -935,6 +979,13 @@ def _date_from_text(text: str) -> dict:
                         80,
                         120 - (min(negative_distances) * 18),
                     )
+                # Overnight parking receipts can show both dates. The charge is
+                # incurred at exit, not at entry on the previous calendar day.
+                if entry_date_lines and exit_date_lines:
+                    if line_index in exit_date_lines:
+                        score += 140
+                    elif line_index in entry_date_lines:
+                        score -= 60
                 candidates.append(
                     (score, -line_index, value.strftime("%Y-%m-%d"), line)
                 )
@@ -968,7 +1019,10 @@ def _date_from_filename(filename: str) -> dict:
     }
 
 
-def extract_invoice_amount(path: str) -> dict:
+def extract_invoice_amount(path: str, *, data_folder=None) -> dict:
+    from document_learning import load_amount_profile
+
+    profile = load_amount_profile(data_folder, 'invoice')
     if Path(path).suffix.lower() in INVOICE_SPREADSHEET_EXTENSIONS:
         return {
             "amount": None,
@@ -978,14 +1032,15 @@ def extract_invoice_amount(path: str) -> dict:
             "ocrUsed": False,
         }
     text = _pdf_text(path)
-    result = _amount_from_text(text)
+    result = _amount_from_text(text, profile)
     result["source"] = "PDF text"
     result["ocrUsed"] = False
-    if result["amount"] is not None and result["confidence"] != "Low":
+    baseline = _amount_from_text(text)
+    if baseline["amount"] is not None and baseline["confidence"] != "Low":
         return result
 
     ocr_text = _ocr_pdf(path)
-    ocr_result = _amount_from_text(ocr_text)
+    ocr_result = _amount_from_text(ocr_text, profile)
     if ocr_result["amount"] is not None:
         ocr_result["source"] = "Scanned document OCR"
         ocr_result["ocrUsed"] = True
@@ -997,22 +1052,28 @@ def extract_claim_amount(
     path: str,
     content_type: str = "",
     original_name: str = "",
+    *,
+    data_folder=None,
 ) -> dict:
+    from document_learning import load_amount_profile
+
+    profile = load_amount_profile(data_folder, 'claim')
     extension = Path(path).suffix.lower()
     if extension == ".pdf" or content_type == "application/pdf":
         text = _pdf_text(path)
-        result = _amount_from_text(text)
+        result = _amount_from_text(text, profile)
         result.update(_date_from_text(text))
         result["source"] = "PDF text"
         result["ocrUsed"] = False
+        baseline = _amount_from_text(text)
         if (
-            result["amount"] is not None
-            and result["confidence"] != "Low"
+            baseline["amount"] is not None
+            and baseline["confidence"] != "Low"
             and result["date"]
         ):
             return result
         ocr_text = _ocr_pdf(path)
-        ocr_amount = _amount_from_text(ocr_text)
+        ocr_amount = _amount_from_text(ocr_text, profile)
         ocr_date = _date_from_text(ocr_text)
         if ocr_amount["amount"] is not None:
             result.update(ocr_amount)
@@ -1025,7 +1086,7 @@ def extract_claim_amount(
             result.update(_date_from_filename(original_name))
         return result
     ocr_text = _ocr_image(path)
-    result = _amount_from_text(ocr_text)
+    result = _amount_from_text(ocr_text, profile)
     result.update(_date_from_text(ocr_text))
     if not result["date"]:
         result.update(_date_from_filename(original_name))
