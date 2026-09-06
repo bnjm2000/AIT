@@ -710,6 +710,22 @@
   font-weight: 600;
 }
 
+.wf-schedule-rate-edit {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-schedule-rate-edit:hover,
+.wf-schedule-rate-edit:focus-visible {
+  text-decoration: underline;
+}
+
 .wf-schedule-dept {
   display: inline-flex;
   min-width: 28px;
@@ -740,6 +756,7 @@
 .wf-schedule-assignment-tags {
   display: grid;
   flex: 0 0 auto;
+  max-width: 45%;
   justify-items: center;
   gap: 4px;
 }

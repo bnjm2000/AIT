@@ -66,11 +66,6 @@ def read_xlsx(path):
                 xml = archive.read(member).replace(b'\x00', b'')
                 if re.search(br'<!\s*(?:DOCTYPE|ENTITY)\b', xml, re.I):
                     raise PreviewLimitError('This workbook contains XML declarations that cannot be safely previewed.')
-        for member in members:
-            if member.filename.lower().endswith(('.xml', '.rels')):
-                xml = archive.read(member).replace(b'\x00', b'')
-                if re.search(br'<!\s*(?:DOCTYPE|ENTITY)\b', xml, re.I):
-                    raise PreviewLimitError('This workbook contains XML declarations that cannot be safely previewed.')
     formulas = load_workbook(path, read_only=True, data_only=False, keep_links=False)
     cached = None
     try:
@@ -141,12 +136,14 @@ def read_xls(path):
 
 
 def read_spreadsheet_preview(path):
-    if Path(path).stat().st_size > 10 * 1024 * 1024:
+    workbook_path = Path(path)
+    if workbook_path.stat().st_size > 10 * 1024 * 1024:
         raise ValueError('This workbook is too large to preview. Download it to view it in Excel.')
     try:
-        if Path(path).suffix.lower() == '.xlsx':
+        suffix = workbook_path.suffix.lower()
+        if suffix == '.xlsx':
             return read_xlsx(path)
-        if Path(path).suffix.lower() == '.xls':
+        if suffix == '.xls':
             return read_xls(path)
         raise PreviewLimitError('Only .xlsx and .xls workbooks can be previewed.')
     except PreviewLimitError:

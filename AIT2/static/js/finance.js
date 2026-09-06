@@ -2866,8 +2866,11 @@ function setupFinanceNavigation() {
     ? currentUserHasSalesAccess()
     : !!(window.currentUser && (window.currentUser.hasSalesAccess || window.currentUser.isSales || window.currentUser.isSuperAdmin));
   const isOwner = typeof isPlatformAdminUser === 'function' && isPlatformAdminUser();
+  const canUseAccounting = typeof canCurrentUserManageRoles === 'function'
+    ? canCurrentUserManageRoles()
+    : isOwner || (typeof currentUser !== 'undefined' && String(currentUser?.role || '').toLowerCase() === 'admin');
   const sidebar = document.getElementById('appSidebar');
-  if (!sidebar || !canUseFinance) return;
+  if (!sidebar || (!canUseFinance && !canUseAccounting)) return;
   const existing = sidebar.querySelector('[data-finance-navigation="true"]');
   if (existing) return;
   const section = document.createElement('div');
@@ -2875,15 +2878,18 @@ function setupFinanceNavigation() {
   section.dataset.financeNavigation = 'true';
   section.innerHTML = `
     <h3>Finance</h3>
+    ${canUseFinance ? `
     <button type="button" class="nav-item nav-item-inline" data-section="costing">Costing</button>
     <button type="button" class="nav-item nav-item-inline" data-section="quotations">Quotations</button>
     <button type="button" class="nav-item nav-item-inline" data-section="invoices">Invoices</button>
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
-    ${isOwner ? '<button type="button" class="nav-item nav-item-inline platform-admin-only" data-section="accounting">Accounting</button>' : ''}
+    ` : ''}
+    ${canUseAccounting ? '<button type="button" class="nav-item nav-item-inline accounting-access-only" data-section="accounting">Accounting</button>' : ''}
   `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
   const settings = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Settings');
   sidebar.insertBefore(section, reports || settings || null);
+  sidebar.querySelector('.nav-section.accounting-access-only')?.remove();
   if (typeof setupSidebarNavigation === 'function') setupSidebarNavigation();
 }
 
@@ -6592,7 +6598,9 @@ async function financeRequestStatus(documentId, status, context) {
   if (!documentRow) return;
   if (status === 'sent') {
     financeEnsureSentModal();
-    document.getElementById('financeSentDate').value = financeDateOnly(documentRow.sentAt) || financeTodayIso();
+    document.getElementById('financeSentDate').value = documentRow.status === 'expired'
+      ? financeTodayIso()
+      : financeDateOnly(documentRow.sentAt) || financeTodayIso();
     document.getElementById('financeSentValidityAmount').value = financeValidityAmount(documentRow);
     financeSetSentValidityUnit(financeValidityUnit(documentRow));
     openModal('financeSentModal');
@@ -6641,8 +6649,13 @@ async function financeCommitStatus(documentId, status, extras, conflictRetry = 0
     let beforeChange = financeState.current?.id === documentId ? financeState.current : financeState.documents.find(row => row.id === documentId);
     const existingEventId = Number(beforeChange?.eventId || 0);
     if (financeState.current?.id === documentId) {
-      await financeSaveCurrent(false);
-      beforeChange = financeState.current;
+      const saved = await financeFlushPendingSave();
+      if (!saved || saved.id !== documentId) {
+        listRow?.classList.remove('is-updating');
+        listRow?.removeAttribute('aria-busy');
+        return;
+      }
+      beforeChange = saved;
     }
     const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`, 'PUT', {
       status,
@@ -7208,10 +7221,6 @@ function profitLossExpenseProcessingMarkup(expense) {
   }
   if (state === 'processing') {
     return '<span class="pnl-upload-state is-processing"><i></i>Processing</span>';
-  }
-  if (state === 'failed') {
-    const error = expense?.processingError || 'Automatic processing failed';
-    return `<span class="pnl-upload-state is-failed" title="${financeEscapeAttr(error)}">Processing failed</span>`;
   }
   if (!expense?.needsReview) return '';
   const action = expense.source === 'worker-claim'

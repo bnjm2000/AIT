@@ -1,0 +1,14 @@
+...............INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting document action
+INFO:app:Action logged: Completed accounting document action
+INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting document action
+..........INFO:app:Action logged: Completed accounting action
+INFO:app:Action logged: Completed accounting action
+INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting action
+...........
+----------------------------------------------------------------------
+Ran 36 tests in 3.372s
+
+OK

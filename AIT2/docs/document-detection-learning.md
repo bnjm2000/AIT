@@ -20,6 +20,11 @@ For file-backed installations, omit `--from-database`. Omitting `--apply` evalua
 without saving a model or cache. Repeat `--data-folder` to process other companies;
 profiles and training examples never cross company boundaries.
 
+To stage a reviewable model, add `--output-folder tmp/audit-document-detection/AVPL`
+with `--apply` and one company. Only the output folder is written; source records
+and the active profile are untouched. Publish the staged profile only after
+reviewing its report and validating the matching extractor version.
+
 ## What is learned
 
 - Amount-line layout cues, normalized to remove numeric values and then hashed.
@@ -31,14 +36,19 @@ profiles and training examples never cross company boundaries.
   Learning selects among numbers actually read from the new document; it cannot
   invent a missing total, repair unreadable digits, or copy a past payable amount.
 
-Only reviewed Approved/Paid records with a positive amount supply labels. Denied,
+Only reviewed Approved/Paid records with a positive amount supply labels. Reviewed
+Profit & Loss expense attachments also supply labels when `needsReview` is false
+and a user and timestamp identify the saved review. Denied,
 pending, missing, unsupported, conflicting, and unreadable examples are reported
 as exclusions. Byte-identical uploads count once, preventing duplicate files from
 inflating support or leaking into their own evaluation.
 
 Evaluation leaves each document out of its own training and compares exact amount
 agreement with the reviewed value. A new profile is not published if any evaluated
-document regresses. This is an internal validation result, not a guarantee of
+document regresses against baseline or the previous profile, and the complete
+published profile is checked separately. The previous-profile comparison uses the
+current extractor; historical end-to-end comparisons belong in the audit report.
+This is an internal validation result, not a guarantee of
 accuracy on new vendors, layouts or low-quality scans.
 
 ## Saved files
@@ -51,13 +61,27 @@ Files live in the company's durable data folder:
 - `DocumentDetectionTrainingCache.json`: company-private, content-hash-keyed numeric
   candidates and hashed cues, so an explicitly requested rerun need not repeat OCR.
   It contains extracted numeric values, but not raw OCR text or uploaded files.
+- `DocumentDetectionLabelExclusions.json`: content hashes and explicit audit reasons
+  for records whose reviewed amount is not the full document total (such as a
+  partial event allocation or an amount before GST). Exclusions affect training
+  only and do not edit accounting records.
+
+Caches carry `extractorVersion` and are invalidated when extraction changes. One
+unreadable document is reported without aborting the entire training run. No
+profile is replaced when validation fails or there are no usable labels.
 
 Deleting or setting `enabled` to `false` in the learning profile restores baseline
 amount detection. A missing or malformed profile also falls back safely.
 
 ## Date handling
 
-Dates still use the existing local date parser, not an automatically trained model.
-The current-document audit identified overnight parking receipts with labelled IN
-and OUT dates. A targeted rule prefers OUT/exit when both entry and exit dates are
-present. Other formats and the existing due-date/expiry penalties are unchanged.
+Dates use the local parser rather than a trained model. It prefers OUT/exit over
+entry on overnight parking receipts, handles dates joined to OCR timestamps, and
+accepts month/day order only when day/month order is impossible. Ambiguous dates
+remain day-first; due dates and expiry dates retain their penalties.
+
+The live extractor and trainer share PDF/OCR routing. Character-spaced text and
+unlabelled invoice layouts receive OCR fallback; date-only fallback preserves a
+stronger native amount. Currency OCR repairs are limited to specific patterns
+such as `$O.65` and `SS11.30`. Explicit foreign-currency totals require the actual
+SGD charge instead of treating the foreign number as SGD.

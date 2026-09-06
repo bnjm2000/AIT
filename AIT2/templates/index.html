@@ -5349,14 +5349,14 @@
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="gap: 15px"] {
           gap: 12px !important;
         }
 
         :is(
-          .content-section:not(#events-section):not(#events-section-legacy),
+          .content-section:not(#events-section),
           .modal:not(#addEventModal)
         ) [style*="gap: 10px"] {
           gap: 8px !important;
@@ -11166,6 +11166,9 @@
       </nav>
       <main class="main-content" id="mainContent" tabindex="-1">
         <div class="content-area">
+        <section id="accounting-section" class="content-section{{ ' active' if initial_section == 'accounting' else '' }}" aria-label="Accounting workspace">
+          <div id="accounting-page-root" class="accounting-page"></div>
+        </section>
         <div id="dashboard-section" class="content-section{{ ' active' if initial_section == 'dashboard' else '' }}">
           <div class="content-header">
             <h2 class="content-title">Dashboard</h2>
@@ -13270,6 +13273,8 @@
     <script src="{{ url_for('static', filename='js/invoices.js', v=invoices_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/costing.js', v=costing_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/accounting.js', v=accounting_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/accounting-workspace.js', v=accounting_workspace_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/accounting-close.js', v=accounting_close_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-schedule.js', v=workforce_schedule_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/my-claims.js', v=my_claims_js_version) }}"></script>

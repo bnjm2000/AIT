@@ -1,0 +1,1228 @@
+........INFO:app:Action logged: Completed accounting action
+INFO:app:Action logged: Completed accounting action
+INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting action
+..........................INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting document action
+INFO:app:Action logged: Completed accounting document action
+INFO:app:Action logged: Completed accounting document create
+INFO:app:Action logged: Completed accounting document action
+..INFO:app:Action logged: Created 2 assets P1#03 to P1#04: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=2/2
+..INFO:app:Action logged: Created asset P1#02: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+.INFO:app:Action logged: Created asset BULK-0001: Behringher P1; department=AX; description=Wired IEM beltpack; quantity=6
+.INFO:app:Action logged: Created asset P1#02: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+..INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+.INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+.INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+.INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=0/1
+.INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=1/1
+.INFO:app:Action logged: Created 2 assets P1#01 to P1#02: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=2/2
+.INFO:app:Action logged: Created asset P1#01: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=1/1
+.INFO:app:Action logged: Created asset P1#02: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=1/1
+...INFO:app:Action logged: Created 3 assets P1#01 to P1#03: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=2/3
+.INFO:app:Action logged: Created 2 assets LAV#01 to LAV#02: DPA 6061; department=AX; description=Lavalier microphone; serial numbers recorded=0/2
+.INFO:app:Action logged: Created 2 assets P1#08 to P1#09: L-Acoustics P1; department=AX; description=Processor; serial numbers recorded=0/2
+.INFO:app:Action logged: Created asset LAP1#01: L-Acoustics P1; department=AX; description=Processor; serial numbers recorded=0/1
+..INFO:app:Action logged: Created asset P1#02: Behringher P1; department=AX; description=Wired IEM beltpack; serial numbers recorded=1/1
+..INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 3 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 1 inventory record(s), 25 bulk unit(s)
+.INFO:app:Action logged: Completed plan asset import
+.C:\Users\AVECp\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\unittest\case.py:589: ResourceWarning: unclosed file <_io.BufferedReader name='C:\\Users\\AVECp\\Documents\\AIT\\AIT2\\outputs\\asset-import\\asset-import-template.csv'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 1 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 1000 asset row(s) from a template file: 1000 inventory record(s), 0 bulk unit(s)
+..INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 2 asset row(s) from a template file: 2 inventory record(s), 0 bulk unit(s)
+..INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 2 asset row(s) from a template file: 3 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Completed preview asset import
+.INFO:app:Action logged: Completed plan asset import
+.INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 1 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 3 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed preview asset import
+INFO:app:Action logged: Completed preview asset import
+.INFO:app:Action logged: Completed plan asset import
+INFO:app:Action logged: Imported 1 asset row(s) from a template file: 1 inventory record(s), 0 bulk unit(s)
+.INFO:app:Action logged: Completed preview asset import
+.INFO:app:Action logged: Asset Check marked asset TEST#01 as Untagged
+INFO:app:Action logged: Completed asset check mark untagged
+..INFO:app:Action logged: Maintenance logged for 1 asset: ID label was not present
+INFO:app:Action logged: Maintenance logged for 1 asset: Replacement ID tag fitted
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc | A#02: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Description: Old desc -> New desc | A#02: Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Description: Old desc -> Canonical description
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> Updated description
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> Updated description; Notes: - -> Keep with receiver rack
+.INFO:app:Action logged: Edited asset inventory: A#02: Serial Number: SN-A#02 -> sn-a#01
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> DestinationModel; Description: Old desc -> Destination description | A#02: Model: OldModel -> DestinationModel; Description: Old desc -> Destination description
+..INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc | A#02: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc | A#02: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Tags: ['selected-only'] -> ['selected-only', 'Wireless'] | A#02: Tags: ['keep-me'] -> ['keep-me', 'Wireless']
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Serial Number: SN-A#01 -> SN-NEW; Date of Purchase: - -> 2026-06-02
+.INFO:app:Action logged: Edited asset inventory: A#01: Second Serial Number: - -> SN-SECONDARY
+.INFO:app:Action logged: Edited asset inventory: A#01: Tags: [] -> ['RF', 'spare']
+.INFO:app:Action logged: Edited asset inventory: A#01: Date of Purchase: - -> 2026-06-02
+.INFO:app:Action logged: Edited asset inventory: A#01: Notes: - -> Keep with show kit A
+Lens cap is loose
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: BULK-0001: Model: BulkModel -> NewBulkModel; Description: Bulk item -> New bulk item
+.INFO:app:Action logged: Edited asset inventory: BULK-0001 -> BULK-0099: Asset ID: BULK-0001 -> BULK-0099
+...INFO:app:Action logged: Edited asset inventory: BULK-0001: Purchase Batches: [{'date': '', 'quantity': 6}] -> [{'date': '2026-01-15', 'quantity': 5}, {'date': '', 'quantity': 4}]; Quantity: 6 -> 9
+.INFO:app:Action logged: Enumerated 2 selected asset IDs starting at A#02; eventsUpdated=1; containersUpdated=1
+...INFO:app:Action logged: Edited asset inventory: A#01: Description: Old desc -> Updated description
+.INFO:app:Action logged: Edited asset inventory: A#10 -> A#11: Asset ID: A#10 -> A#11
+.INFO:app:Action logged: Edited asset inventory: A#01: Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.........INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'logEntry': 'Swap during maintenance', 'maintenanceDate': '2026-06-05', 'newLocation': 'Workshop', 'newSerial': 'SN-MAINT'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Swap during maintenance
+INFO:app:Successfully logged maintenance for asset A#01
+.INFO:app:Action logged: Edited asset inventory: A#01 -> A#99: Asset ID: A#01 -> A#99
+..INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Model: OldModel -> NewModel; Description: Old desc -> New desc
+.INFO:app:Action logged: Edited asset inventory: A#01: Notes: - -> Keep with receiver rack
+...INFO:app:Action logged: Updated user normal: Access level: user -> manager; Sales access: No -> Yes
+.INFO:app:Action logged: Updated user normal: Name: - -> Normal User; Phone: - -> +65 9123 4567
+.INFO:app:Action logged: Changed own password
+.INFO:app:Action logged: Failed login attempt for username: normal
+..INFO:app:Action logged: Updated user admin: Access level: admin -> manager
+.INFO:app:Action logged: Created user managed-user
+INFO:app:Action logged: Updated user normal: Name: - -> Managed Team Member; Access level: user -> manager; Sales access: No -> Yes
+INFO:app:Action logged: Reset password for user normal
+INFO:app:Action logged: Deleted user managed-user
+...INFO:app:Action logged: User normal logged in via web interface
+...........INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:app:Reloaded shared data after an external change for SYSTEM
+INFO:app:Action logged: Failed login attempt for username: unknown-user
+INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:app:Reloaded shared data after an external change for TSC
+INFO:app:Action logged: Failed login attempt for username: tech
+........INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+..INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+..INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:app:Reloaded shared data after an external change for TSC
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+.INFO:app:Reloaded shared data after an external change for C:\Users\AVECp\AppData\Local\Temp\tmpvw19vm9v\companies\TSC\data
+.......INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+...INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:app:Reloaded shared data after an external change for SYSTEM
+INFO:app:Action logged: Failed login attempt for username: unknown-user
+INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+INFO:app:Reloaded shared data after an external change for SYSTEM
+INFO:app:Action logged: Failed login attempt for username: tech
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Containers.csv, Clients.csv
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+....INFO:app:Action logged: Created container CABLE-CASE (5 asset units)
+.INFO:app:Action logged: Created container CASE-A (7 asset units)
+INFO:app:Action logged: Updated container CASE-A (5 asset units)
+INFO:app:Action logged: Created container CASE-B (5 asset units)
+.INFO:app:Action logged: Created container PLAN-CASE (4 asset units)
+INFO:app:Action logged: Added model contents of container PLAN-CASE to event 501
+..INFO:app:Action logged: Created container LEGACY-CASE (1 asset units)
+.INFO:app:Action logged: Prepared for event 502: 4x Showbase - Bulk Cable - Cable stock
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+INFO:app:Action logged: Removed maintenance media case photo.png from 3 record(s) (deleted by admin)
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+INFO:app:Action logged: Updated container CASE-1 (1 asset units)
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+INFO:app:Received enhanced maintenance log update request for asset: 'A#01', log index: 0
+INFO:app:Enhanced update data: {'date': '2026-09-04', 'description': 'Changed only here', 'user': 'normal'}
+INFO:app:Received maintenance log delete request for asset: 'A#01', log index: 0
+.INFO:app:Action logged: Maintenance logged through container CASE-1 for 2 assets: Cleaned case and tested all contents
+INFO:app:Action logged: Completed maintain container
+..INFO:app:Action logged: Updated photo for container CASE-OLD
+C:\Users\AVECp\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\unittest\case.py:589: ResourceWarning: unclosed file <_io.BufferedReader name='C:\\Users\\AVECp\\AppData\\Local\\Temp\\tmp9m7ji59u\\ContainerMedia\\container_7f227c30f91cfb9bf3e01e53.png'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.INFO:app:Action logged: Created container CASE-NO-SN (1 asset units)
+INFO:app:Action logged: Created container CASE-WITH-SN (1 asset units)
+.INFO:app:Action logged: Updated container CASE-OLD (1 asset units)
+INFO:app:Action logged: Updated container CASE-OLD (1 asset units)
+.C:\Users\AVECp\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\copy.py:220: ResourceWarning: unclosed file <_io.FileIO name='C:\\Users\\AVECp\\AppData\\Local\\Temp\\tmpxry3e1cm' mode='rb+' closefd=True>
+  for key, value in x.items():
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.............................INFO:app:Action logged: Created costing for Manager Project
+.INFO:app:Event 154 state refreshed for read: New -> Planning
+{"companyFolder": "C:\\Users\\AVECp\\AppData\\Local\\Temp\\tmpgi52kga6", "processedRecords": 1, "totalRecords": 5}
+.........................INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'affectedQuantity': 3, 'assetStatus': 'missing', 'logEntry': 'Three units are missing from the return', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 3 bulk maintenance MISSING units for asset BULK-0001: Three units are missing from the return
+INFO:app:Action logged: Updated bulk maintenance log #1 for asset BULK-0001: Unit found, grille is damaged
+.INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'ooc', 'logEntry': 'One unit has a failed connector', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance OOC unit for asset BULK-0001: One unit has a failed connector
+INFO:app:Action logged: Resolved bulk maintenance log #1 for asset BULK-0001: Connector replaced and tested
+.INFO:app:Action logged: Prepared for event 100: 2x TestBrand - BulkModel - Bulk item
+.INFO:app:Action logged: Prepared for event 100: 2x TestBrand - BulkModel - Bulk item
+.INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 1 has cosmetic grille damage', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 1 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 2 has cosmetic grille damage', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 2 has cosmetic grille damage
+INFO:app:Action logged: Prepared for event 100: 4x TestBrand - BulkModel - Bulk item
+..INFO:app:Action logged: Prepared for event 100: 1x TestBrand - RegularModel - Regular item
+INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: RegularModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 100: A#01
+..INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 1 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 1 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 2 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 2 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 3 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 3 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 4 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 4 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 5 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 5 has cosmetic grille damage
+INFO:app:Received maintenance request for asset: 'BULK-0001'
+INFO:app:Decoded asset ID: 'BULK-0001'
+INFO:app:Received data: {'assetStatus': 'degraded', 'logEntry': 'Unit 6 has cosmetic grille damage', 'logType': 'Fault', 'maintenanceDate': '2026-05-20'}
+INFO:app:Action logged: Logged 1 bulk maintenance DEGRADED unit for asset BULK-0001: Unit 6 has cosmetic grille damage
+INFO:app:Action logged: Prepared for event 100: 6x TestBrand - BulkModel - Bulk item
+..INFO:app:Event 100 state refreshed for read: New -> Planning
+....INFO:app:Action logged: Returned from event 100: 2x TestBrand - BulkModel - Bulk item
+..INFO:app:Final description for TestBrand RegularModel: 'Regular item' (length: 12)
+INFO:app:Current prepared_items: []
+INFO:app:Creating new model assignment
+INFO:app:Creating model assignment: '[MODEL]AX|TestBrand|RegularModel|8|Regular item'
+INFO:app:Updated prepared_items: ['[MODEL]AX|TestBrand|RegularModel|8|Regular item']
+INFO:app:Action logged: Added 8x TestBrand RegularModel model to event 100 (total: 8)
+INFO:app:Action logged: Updated TestBrand RegularModel model quantity for event 100: 8 -> 10
+.INFO:app:Final description for TestBrand RegularModel: 'Regular item' (length: 12)
+INFO:app:Current prepared_items: []
+INFO:app:Creating new model assignment
+INFO:app:Creating model assignment: '[MODEL]AX|TestBrand|RegularModel|6|Regular item'
+INFO:app:Updated prepared_items: ['[MODEL]AX|TestBrand|RegularModel|6|Regular item']
+INFO:app:Action logged: Added 6x TestBrand RegularModel model to event 100 (total: 6)
+.....INFO:app:Action logged: Replaced 2x TestBrand RegularModel with OtherBrand ReplacementModel for event 100
+.INFO:app:Action logged: Converted 2x TestBrand RegularModel to loan from Rental Source Pte Ltd for event 100
+..INFO:app:Action logged: Updated TestBrand RegularModel in Main Room for event 100: 1 -> 8
+......INFO:app:Action logged: Updated notes for event 1: Test Event
+...INFO:app:Action logged: Updated event 1 details: Name: Test Event \u2192 Updated Event; Location: � \u2192 Hall A; End date: 2026/05/17 \u2192 2026/05/18
+.INFO:app:Action logged: Uploaded 2 file(s) to event 1: Test Event
+C:\Users\AVECp\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\unittest\case.py:589: ResourceWarning: unclosed file <_io.BufferedReader name='C:\\Users\\AVECp\\AppData\\Local\\Temp\\tmpqhlwtddx\\events\\1. [20260517] Test Event\\Run Sheet.pdf'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...INFO:app:Action logged: Uploaded 1 file(s) to event 1: Test Event
+.INFO:data_manager:Migrated 1 event-related log entries into 1 event file(s).
+....INFO:app:Action logged: Maintenance logged for asset A-01: Fault found after event 1
+.INFO:app:Action logged: Uploaded 1 file(s) to event 1: Test Event
+INFO:app:Action logged: Deleted file 'Spec Sheet.txt' from event 1: Test Event
+.....INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Action logged: Created event 3: New assigned event; location=Expo; dates=2026/07/03 to 2026/07/03; type=events; assigned users=2
+INFO:data_manager:Migrated 1 event-related log entries into 1 event file(s).
+INFO:app:Action logged: Updated event 3 details: Assigned users: alice, bob \u2192 bob
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Action logged: Created event 3: Fill the gap; location=Studio; dates=2026/07/03 to 2026/07/03; type=events; assigned users=0
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+INFO:app:Event 1 state refreshed for read: Preparing -> Ongoing
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+INFO:app:Event 1 state refreshed for read: Preparing -> Planning
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+INFO:app:Event 2 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+INFO:app:Getting stats - Events: 1, Inventory: 2
+INFO:app:Successfully got deployed physical asset quantity: 2
+INFO:app:Returning stats: {'totalEvents': 1, 'activeEvents': 1, 'overdueEvents': 1, 'totalAssets': 6, 'deployedAssets': 2, 'missingAssets': 0, 'oocAssets': 0, 'degradedAssets': 0, 'decommissionedAssets': 0, 'disposedAssets': 0}
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+INFO:app:Action logged: Updated notes for event 1: Assigned
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Overdue
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+..INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+......INFO:app:Action logged: Returned from event 1: TestBrand - TestModel - Return test item
+INFO:app:Action logged: Restored to event 1: TestBrand - TestModel - Return test item
+.INFO:app:Action logged: Completed asset return for event 1; state is now Closed
+..INFO:app:Action logged: Returned from event 1: Black Drape 18' (W) by 4' (H) (misc item)
+.INFO:app:Action logged: Returned from event 1: TestBrand - TestModel - Return test item
+INFO:app:Assigning asset A-001 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A-001: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Action logged: Assigned to event 1: A-001
+..INFO:app:Action logged: Restored to event 1: A-001
+.INFO:app:Action logged: Restored to event 1: 3x TestBrand - TestModel - Return test item
+INFO:app:Action logged: Restored to event 1: Cable ties (misc item)
+..............INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.....INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Deleted rate card item Speclal Operator Typo
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Cancelled
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+....INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added 1 quotation item to event 204 from compare
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added 2 event items to quotation QT-2026-001-01 from compare for event 206
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added 1 quotation item to event 206 from compare
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added 1 quotation item to event 203 from compare
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added 1 quotation item to event 200 from compare
+INFO:app:Action logged: Removed 1 extra event item from event 200 via compare
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation CLIENT-PROPOSAL-01: number changed from QT-2026-001-01 to CLIENT-PROPOSAL-01
+INFO:app:Action logged: Updated quotation CLIENT-PROPOSAL-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation CLIENT-PROPOSAL-02: number changed from CLIENT-PROPOSAL-01 to CLIENT-PROPOSAL-02; created version 02 from version 01; status changed from Sent to Draft
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Deleted rate card item Revised scenic backdrop
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Added Profit and Loss expense Test expense to event 1
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0002 from quotation QT-2026-002-01
+INFO:app:Action logged: Deleted invoice INV-2026-0001
+INFO:app:Action logged: Created quotation QT-2026-003-01
+INFO:app:Action logged: Updated quotation QT-2026-003-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-003-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation TC-2027-002-01: number changed from QT-2026-001-01 to TC-2027-002-01
+INFO:app:Action logged: Updated quotation TC-2027-002-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation TC-2027-002-01: status changed from Sent to Draft
+INFO:app:Action logged: Updated quotation TC-2027-002-02: number changed from TC-2027-002-01 to TC-2027-002-02; created version 02 from version 01
+INFO:app:Action logged: Deleted revision 01 from quotation TC-2027-002-02
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Expired to Draft
+INFO:app:Action logged: Discarded draft revision 02 of quotation QT-2026-001-02 and restored revision 01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Sent to Draft
+INFO:app:Action logged: Discarded draft revision 02 of quotation QT-2026-001-02 and restored revision 01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created event 1 early from quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Edited sent revision 01 of quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Sent to Draft
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Draft to Sent
+INFO:app:Action logged: Edited sent revision 01 of quotation QT-2026-001-01
+INFO:app:Action logged: Deleted revision 01 from quotation QT-2026-001-02
+INFO:app:Action logged: Deleted revision 02 from quotation QT-2026-001-02
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated costing item
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Edited sent revision 01 of quotation QT-2026-001-01
+.....INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Expired
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Expired to Accepted
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Expired
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Expired to Cancelled
+INFO:app:Action logged: Created quotation QT-2026-003-01
+INFO:app:Action logged: Updated quotation QT-2026-003-01: status changed from Draft to Expired
+INFO:app:Action logged: Updated quotation QT-2026-003-01: status changed from Expired to Sent
+INFO:app:Action logged: Created quotation QT-2026-004-01
+INFO:app:Action logged: Updated quotation QT-2026-004-01: status changed from Draft to Expired
+INFO:app:Action logged: Updated quotation QT-2026-004-01: status changed from Expired to Draft
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Converted quotation QT-2026-001-01 to invoice INV-2026-0001
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Accepted to Draft
+INFO:app:Action logged: Completed convert quotation to invoice
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Draft to Cancelled
+INFO:app:Action logged: Completed convert quotation to invoice
+.....INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+...INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice SPECIAL-INV-42
+INFO:app:Action logged: Deleted invoice SPECIAL-INV-42
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated invoice INV-2026-0001
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Accepted to Draft
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Cancelled
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Cancelled to Sent
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice CLIENT-INV-900 from quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Issued invoice INV-2026-0002 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Marked invoice INV-2026-0001 paid on 2026-08-16
+INFO:app:Action logged: Updated invoice INV-2026-0002
+INFO:app:Action logged: Marked invoice INV-2026-0002 paid on 2026-08-16
+.....INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Sent to Accepted
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Accepted to Invoiced
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice plan item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created event 1 early from quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Accepted
+INFO:app:Action logged: Created quotation QT-2026-003-01
+INFO:app:Action logged: Updated quotation QT-2026-003-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Marked invoice INV-2026-0001 paid on 2026-08-12
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Marked invoice INV-2026-0001 paid on 2026-08-12
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Deleted invoice INV-2026-0001
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Marked invoice INV-2026-0001 paid on 2026-08-21
+INFO:app:Action logged: Issued invoice INV-2026-0002 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0002
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Set manual revenue to $1,275.50 for event 134
+INFO:app:Action logged: Paired quotation QT-2026-001-01 to event 134 for Profit and Loss
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Paired quotation QT-2026-002-01 to event 135 for Profit and Loss
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added Profit and Loss expense Crew meal to event 131
+C:\Users\AVECp\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\unittest\case.py:589: ResourceWarning: unclosed file <_io.BufferedReader name='C:\\Users\\AVECp\\AppData\\Local\\Temp\\tmpz87pin2k\\workforce_uploads\\131\\profit-loss\\claim-ea397e60e156533d5dd65034.png'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.INFO:app:Action logged: Added Profit and Loss expense queued-expense.pdf to event 139
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Added Profit and Loss expense Crew dinner to event 136
+INFO:app:Action logged: Added Profit and Loss expense External van to event 136
+INFO:app:Action logged: Added Profit and Loss expense Tape to event 136
+.INFO:app:Action logged: Added Profit and Loss expense Purchased tape to event 141
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Added Profit and Loss expense Additional consumables to event 138
+INFO:app:Action logged: Updated 1 commission row(s) for event 138
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated 1 commission row(s) for event 139
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated 2 commission row(s) for event 132
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Duplicated quotation QT-2026-001-01 as QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+...INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation CLIENT-PROPOSAL-01: number changed from QT-2026-002-01 to CLIENT-PROPOSAL-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Cancelled
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Created quotation QT-2026-003-01
+..INFO:app:Action logged: Updated rate card item Freelance media server programmer
+INFO:app:Action logged: Updated rate card item Freelance media server programmer
+INFO:app:Action logged: Deleted rate card item Freelance media server programmer
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated rate card item Subwoofer
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated rate card item Subwoofer
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation CLIENT-RENAMED-02: number changed from QT-2026-001-01 to CLIENT-RENAMED-02; created version 02 from version 01; status changed from Sent to Draft
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Accepted to Draft
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Saved client Clear Address Client
+INFO:app:Action logged: Updated client Clear Address Client
+.INFO:app:Action logged: Saved client Jane Tan
+.INFO:app:Action logged: Completed invoice plan templates collection
+INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan template item
+INFO:app:Action logged: Deleted invoice plan template item
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Sent to Draft
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Draft to Accepted
+INFO:app:Action logged: Updated quotation QT-2026-001-03: number changed from QT-2026-001-02 to QT-2026-001-03; created version 03 from version 02; status changed from Accepted to Draft
+INFO:app:Action logged: Discarded draft revision 03 of quotation QT-2026-001-03 and restored revision 02
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Accepted to Draft
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Marked invoice INV-2026-0001 paid on 2026-08-12
+.INFO:app:Action logged: Updated company details: Default payment terms: 30 Days -> 21 Days
+INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0002 from quotation QT-2026-002-01
+INFO:app:Action logged: Updated invoice INV-2026-0002
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice INV-2026-0001 from quotation QT-2026-001-01
+INFO:app:Action logged: Updated invoice INV-2026-0001
+INFO:app:Action logged: Deleted invoice INV-2026-0001
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+INFO:app:Action logged: Updated quotation QT-2026-001-02: number changed from QT-2026-001-01 to QT-2026-001-02; created version 02 from version 01; status changed from Sent to Draft
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Draft to Accepted
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Accepted to Invoiced
+INFO:app:Action logged: Updated quotation QT-2026-001-02: status changed from Invoiced to Paid
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice ACME-INV-01 from quotation QT-2026-001-01
+INFO:app:Action logged: Created quotation QT-2026-002-01
+INFO:app:Action logged: Updated quotation QT-2026-002-01: status changed from Draft to Accepted
+INFO:app:Action logged: Updated invoice plan item
+INFO:app:Action logged: Issued invoice ACME-INV-02 from quotation QT-2026-002-01
+INFO:app:Action logged: Marked invoice ACME-INV-01 paid on 2026-08-15
+..INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Sent
+.INFO:app:Action logged: Created quotation QT-2026-001-01
+INFO:app:Action logged: Updated quotation QT-2026-001-01: status changed from Draft to Accepted
+...INFO:app:Action logged: Created quotation QT-2026-001-01
+.....INFO:app:Action logged: Maintenance logged for 2 assets: Cleaned and function tested
+.INFO:app:Action logged: Maintenance logged for 1 asset: Cleaned and function tested
+.INFO:app:Action logged: Maintenance logged for 1 asset: Updated to v2
+.INFO:app:Action logged: Maintenance logged for 2 assets: Cleaned and function tested
+INFO:app:Action logged: Completed maintain assets batch
+.INFO:app:Action logged: Maintenance logged for 1 asset: Updated firmware from v3.6.0 to v3.7.2
+.INFO:app:Action logged: Maintenance logged for 1 asset: Updated to v1.4.1
+..INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'assetStatus': 'nochange', 'logEntry': 'Initial inspection', 'logType': 'General', 'maintenanceDate': '2026-09-04'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Initial inspection
+INFO:app:Successfully logged maintenance for asset A#01
+INFO:app:Received enhanced maintenance log update request for asset: 'A#01', log index: 0
+INFO:app:Enhanced update data: {'assetStatus': 'ooc', 'date': '2026-09-04', 'description': 'Inspection found a fault', 'logType': 'General', 'user': 'normal'}
+INFO:app:Requested target status: ooc; status before edited log: ok
+INFO:app:Final changes made: ['Marked OOC']
+INFO:app:Final asset status: OOC=False, Missing=False
+INFO:app:Updated log entry: {'id': '7182fb0b2984d9bea990869c', 'date': '2026/09/04', 'createdAt': '2026-09-04T23:43:37.634827', 'user': 'normal', 'description': 'Inspection found a fault', 'type': 'General', 'cost': '', 'changes': [{'kind': 'ooc', 'action': 'marked'}], 'source': {}, 'media': []}
+INFO:app:Final status for A#01: OOC=True, Missing=False, Untagged=False, Degraded=False, Decommissioned=False, Location=''
+INFO:app:Action logged: Updated maintenance log for asset A#01: 'Initial inspection' -> 'Inspection found a fault' (also: Marked OOC) (edited by normal)
+INFO:app:Successfully updated enhanced maintenance log for asset A#01
+.INFO:app:Received maintenance request for asset: 'BULK-01'
+INFO:app:Decoded asset ID: 'BULK-01'
+INFO:app:Received data: {'affectedQuantity': 2, 'assetStatus': 'ooc', 'logEntry': 'Two units require repair', 'logType': 'Fault', 'maintenanceDate': '2026-09-04', 'maintenanceUser': 'technician'}
+INFO:app:Action logged: Logged 2 bulk maintenance OOC units for asset BULK-01: Two units require repair
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'assetStatus': 'nochange', 'logEntry': 'Initial inspection', 'logType': 'General', 'maintenanceDate': '2026-09-04'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Initial inspection
+INFO:app:Successfully logged maintenance for asset A#01
+INFO:app:Received enhanced maintenance log update request for asset: 'A#01', log index: 0
+INFO:app:Enhanced update data: {'assetStatus': 'nochange', 'confirmVersionUpdate': True, 'date': '2026-09-04', 'description': 'Updated from v1.0 to v1.2', 'logType': 'Update', 'user': 'normal'}
+INFO:app:Requested target status: None; status before edited log: ok
+INFO:app:Final changes made: ['Version: v1.2']
+INFO:app:Final asset status: OOC=False, Missing=False
+INFO:app:Updated log entry: {'id': '8c06e7fdfc8411e492fc02ec', 'date': '2026/09/04', 'createdAt': '2026-09-04T23:43:37.654344', 'user': 'normal', 'description': 'Updated from v1.0 to v1.2', 'type': 'Update', 'cost': '', 'changes': [{'kind': 'version', 'value': 'v1.2'}], 'source': {}, 'media': []}
+INFO:app:Final status for A#01: OOC=False, Missing=False, Untagged=False, Degraded=False, Decommissioned=False, Location=''
+INFO:app:Action logged: Updated maintenance log for asset A#01: 'Initial inspection' -> 'Updated from v1.0 to v1.2' (also: Version: v1.2) (edited by normal)
+INFO:app:Successfully updated enhanced maintenance log for asset A#01
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'logEntry': 'Captured the fault from two angles', 'maintenanceDate': '2026-09-04', 'logType': 'Fault', 'assetStatus': 'nochange'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Captured the fault from two angles
+INFO:app:Successfully logged maintenance for asset A#01
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'logEntry': 'Replaced cracked lens', 'maintenanceDate': '2026-09-04', 'logType': 'Repair', 'assetStatus': 'nochange'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Replaced cracked lens
+INFO:app:Successfully logged maintenance for asset A#01
+INFO:app:Received enhanced maintenance log update request for asset: 'A#01', log index: 0
+INFO:app:Enhanced update data: {'assetStatus': 'nochange', 'date': '2026-09-04', 'description': 'Replaced cracked lens and retested', 'logType': 'Repair', 'user': 'normal'}
+INFO:app:Requested target status: None; status before edited log: ok
+INFO:app:Final changes made: []
+INFO:app:Final asset status: OOC=False, Missing=False
+INFO:app:Updated log entry: {'id': 'a4bef0874ca8bc21b85e6305', 'date': '2026/09/04', 'createdAt': '2026-09-04T23:43:37.677346', 'user': 'normal', 'description': 'Replaced cracked lens and retested', 'type': 'Repair', 'cost': '', 'changes': [], 'source': {}, 'media': [{'id': '0a9eebd2d7f4bf3d09e5', 'name': 'lens photo.png', 'path': 'maintenance_media/a4bef0874ca8bc21b85e6305/0a9eebd2d7f4bf3d09e5.png', 'kind': 'image', 'mimeType': 'image/png', 'size': 9}]}
+INFO:app:Final status for A#01: OOC=False, Missing=False, Untagged=False, Degraded=False, Decommissioned=False, Location=''
+INFO:app:Action logged: Updated maintenance log for asset A#01: 'Replaced cracked lens' -> 'Replaced cracked lens and retested' (edited by normal)
+INFO:app:Successfully updated enhanced maintenance log for asset A#01
+INFO:app:Received maintenance log delete request for asset: 'A#01', log index: 0
+INFO:app:Final status for A#01: OOC=False, Missing=False, Untagged=False, Degraded=False, Decommissioned=False, Location=''
+INFO:app:Action logged: Deleted maintenance log and 1 media file(s) for asset A#01: 'Replaced cracked lens and retested' (deleted by admin)
+INFO:app:Successfully deleted maintenance log for asset A#01
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'assetStatus': 'nochange', 'logEntry': 'Invalid attribution attempt', 'logType': 'General', 'maintenanceDate': '2026-09-04', 'maintenanceUser': 'unknown'}
+INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'assetStatus': 'nochange', 'logEntry': 'Invalid attribution attempt', 'logType': 'General', 'maintenanceDate': '2026-09-04', 'maintenanceUser': 'inactive'}
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'logEntry': 'Attached diagnostic photo', 'maintenanceDate': '2026-09-04', 'logType': 'Repair', 'assetStatus': 'nochange'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Attached diagnostic photo
+INFO:app:Successfully logged maintenance for asset A#01
+INFO:app:Action logged: Removed maintenance media diagnostic photo.png from 1 record(s) (deleted by admin)
+.INFO:app:Received maintenance request for asset: 'A#01'
+INFO:app:Decoded asset ID: 'A#01'
+INFO:app:Received data: {'assetStatus': 'nochange', 'logEntry': 'Inspected on behalf of technician', 'logType': 'General', 'maintenanceDate': '2026-09-04', 'maintenanceUser': 'technician'}
+INFO:app:Action logged: Maintenance logged for asset A#01: Inspected on behalf of technician
+INFO:app:Successfully logged maintenance for asset A#01
+INFO:app:Received enhanced maintenance log update request for asset: 'A#01', log index: 0
+INFO:app:Enhanced update data: {'assetStatus': 'nochange', 'date': '2026-09-04', 'description': 'Inspection completed on behalf of technician', 'logType': 'General', 'user': 'normal'}
+INFO:app:Requested target status: None; status before edited log: ok
+INFO:app:Final changes made: []
+INFO:app:Final asset status: OOC=False, Missing=False
+INFO:app:Updated log entry: {'id': '47994aa0db4152c6bc54d96f', 'date': '2026/09/04', 'createdAt': '2026-09-04T23:43:37.726344', 'user': 'technician', 'description': 'Inspection completed on behalf of technician', 'type': 'General', 'cost': '', 'changes': [], 'source': {'recordedBy': 'normal'}, 'media': []}
+INFO:app:Final status for A#01: OOC=False, Missing=False, Untagged=False, Degraded=False, Decommissioned=False, Location=''
+INFO:app:Action logged: Updated maintenance log for asset A#01: 'Inspected on behalf of technician' -> 'Inspection completed on behalf of technician' (edited by normal)
+INFO:app:Successfully updated enhanced maintenance log for asset A#01
+..............INFO:app:Action logged: Added XLR cable - 10m (Black cable) for event 10; quantity=1; department=AX
+INFO:app:Action logged: Merged into XLR cable - 10m (Black cable) for event 10; quantity=2; department=AX
+.INFO:app:Action logged: Created planning template 'Standard'
+INFO:app:Action logged: Merged planning template 'Standard' for event 10
+.INFO:app:Action logged: Added Cable ramp (Black two-channel ramp) for event 10; quantity=2; department=LX
+.INFO:app:Action logged: Added model contents of container CASE #01 to event 10
+...INFO:app:Action logged: Added Printed backdrop (Black fabric with client artwork) for event 10; quantity=2; department=LX
+INFO:app:Action logged: Edited custom item Printed backdrop (Black fabric with client artwork) for event 10: Name: Printed backdrop -> Printed stage backdrop; Type: MISC -> LOAN; Quantity: 2 -> 3; Department: LX -> AX; Company / source: - -> Backdrop Rental Co; Description: Black fabric with client artwork -> -
+.INFO:app:Action logged: Added XLR cable - 10m (misc item) for event 10; quantity=1; department=AX
+INFO:app:Action logged: Edited custom item XLR cable - 10m (misc item) for event 10: Quantity: 1 -> 2
+.INFO:app:Action logged: Edited custom item XLR cable - 10m (Black cable) for event 10: Quantity: 1 -> 2
+..INFO:app:Action logged: Updated event delivery order for event 10
+INFO:app:Action logged: Deleted event delivery order for event 10
+......INFO:app:Action logged: Collected for event 10: Rental Receiver (loan from Rental Co)
+INFO:app:Action logged: Prepared for event 10: 1x Rental Receiver (loan from Rental Co)
+INFO:app:Action logged: Unprepared from event 10: 1x Rental Receiver (loan from Rental Co)
+INFO:app:Action logged: Uncollected from event 10: Rental Receiver (loan from Rental Co)
+.INFO:app:Action logged: Added Rental riser (loan from Stage Rental Co) for event 10; quantity=1; department=ST
+.INFO:app:Action logged: Converted 1x TestBrand ModelA to loan from Rental Co in Main Room for event 10
+INFO:app:Action logged: Converted 1x TestBrand ModelA to loan from Rental Co in Breakout for event 10
+INFO:app:Action logged: Collected for event 10: TestBrand ModelA (loan from Rental Co); TestBrand ModelA (loan from Rental Co)
+.INFO:app:Action logged: Created planning template 'Standard'
+INFO:app:Action logged: Merged planning template 'Standard' for event 10
+INFO:app:Action logged: Replaced planning template 'Standard' for event 10
+....INFO:app:Action logged: Added sub-project Breakout Room to event 10
+....INFO:app:Action logged: Renamed sub-project Breakout to Ballroom for event 10
+.INFO:app:Action logged: Added sub-project Breakout Room to event 10
+..INFO:app:Action logged: Reordered sub-projects for event 10: Stage, Main Room, Breakout
+......INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: ModelA, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added A#01 to prepared_items
+INFO:app:Added individual extra asset A#01. Extra assets: ['A#01']
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 10: A#01
+INFO:app:Assigning asset A#02 - Brand: TestBrand, Model: ModelA, Dept: AX
+INFO:app:Asset A#02: fromContainer=False; addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added A#02 to prepared_items
+INFO:app:Added individual extra asset A#02. Extra assets: ['A#01', 'A#02']
+INFO:app:Added A#02 to actually_prepared. List now: ['A#01', 'A#02']
+INFO:app:Action logged: Assigned to event 10: A#02
+INFO:app:Action logged: Added TestBrand ModelA in Room 2 for event 10: 0 -> 1
+INFO:app:Action logged: Updated TestBrand ModelA in Room 2 for event 10: 1 -> 2
+INFO:app:Action logged: Updated TestBrand ModelA in Room 2 for event 10: 2 -> 1
+.INFO:app:Action logged: Edited custom item XLR cable - 10m (misc item) for event 10: Quantity: 1 -> 2
+...INFO:app:Action logged: Moved TestBrand - ModelA - ModelA description from Main Room to Breakout for event 10
+INFO:app:Action logged: Moved TestBrand ModelA from Main Room to Breakout for event 10
+.INFO:app:Action logged: Merged sub-project Breakout into Main Room for event 10
+.INFO:app:Action logged: Deleted sub-project Breakout and removed its assets from event 10
+.INFO:app:Action logged: Prepared for event 10: 1x TestBrand - ModelA - ModelA description
+INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: ModelA, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 10: A#01
+.INFO:app:Action logged: Updated TestBrand ModelA in Breakout for event 10: 1 -> 3
+.INFO:app:Action logged: Prepared for event 10: 2x TestBrand - ModelA - ModelA description
+.INFO:app:Action logged: Created planning template 'Standard'
+INFO:app:Action logged: Merged planning template 'Standard' for event 10
+.INFO:app:Action logged: Created planning template 'Standard'
+INFO:app:Action logged: Updated planning template 'Updated Standard'
+INFO:app:Action logged: Deleted planning template 'Updated Standard'
+..s.INFO:app:Action logged: Deleted asset A#01 (TestBrand - TestModel - Matching item). Removed 4 event reference(s), 0 container reference(s), and 0 maintenance media file(s)
+.INFO:app:Action logged: Deleted asset B#01 (TestBrand - TestModel - Matching item). Removed 0 event reference(s), 1 container reference(s), and 0 maintenance media file(s)
+.INFO:app:Action logged: Deleted 1 assets: BULK-0001 (TestBrand - TestModel - Matching item). Removed 3 event reference(s), 0 container reference(s), and 0 maintenance media file(s)
+.INFO:app:Action logged: Deleted 2 assets: A#01 (TestBrand - TestModel - Matching item); B#01 (TestBrand - TestModel - Matching item). Removed 5 event reference(s), 1 container reference(s), and 0 maintenance media file(s)
+.INFO:app:Action logged: Returned from event 126: 3x TestBrand - TestModel - Matching item
+.INFO:app:Action logged: Unprepared from event 123: 3x TestBrand - TestModel - Matching item
+..INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 115: A#01
+INFO:app:Assigning asset A#02 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#02: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#02 to actually_prepared. List now: ['A#01', 'A#02']
+INFO:app:Action logged: Assigned to event 115: A#02
+..INFO:app:Action logged: Deleted department ZZ (Empty)
+.INFO:app:Event 111 state refreshed for read: New -> Overdue
+.INFO:app:Remove asset request: Event 107, Asset: 'A#02'
+INFO:app:Removed 'A#02' from actually_prepared
+INFO:app:Removed 'A#02' from extra_assets
+INFO:app:Reset location for asset 'A#02'
+INFO:app:Action logged: Removed from event 107: A#02
+.....INFO:app:Action logged: Prepared for event 103: 1x TestBrand - TestModel - Matching item
+INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 103: A#01
+........INFO:app:Assigning asset A#03 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Added 1 model requirement unit(s) for scanned asset A#03: [AX] TestBrand TestModel Matching item
+INFO:app:Asset A#03: fromContainer=False; addToEvent=True; fillsExistingRequirement=True; addedUnits=1
+INFO:app:Added A#03 to actually_prepared. List now: ['A#01', 'A#02', 'A#03']
+INFO:app:Action logged: Assigned to event 124: A#03
+.INFO:app:Action logged: Prepared for event 100: 1x TestBrand - TestModel - Matching item
+INFO:app:Assigning asset A#02 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#02: fromContainer=False; addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added A#02 to prepared_items
+INFO:app:Added individual extra asset A#02. Extra assets: ['A#02']
+INFO:app:Added A#02 to actually_prepared. List now: ['A#01', 'A#02']
+INFO:app:Action logged: Assigned to event 100: A#02
+.INFO:app:Assigning asset A#02 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Added 1 model requirement unit(s) for scanned asset A#02: [AX] TestBrand TestModel Matching item
+INFO:app:Asset A#02: fromContainer=False; addToEvent=True; fillsExistingRequirement=True; addedUnits=1
+INFO:app:Added A#02 to actually_prepared. List now: ['A#01', 'A#02']
+INFO:app:Action logged: Assigned to event 101: A#02
+.INFO:app:Action logged: Prepared for event 104: 1x TestBrand - TestModel - Matching item
+INFO:app:Assigning asset A#02 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#02: fromContainer=True; addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added A#02 to prepared_items
+INFO:app:Added individual extra asset A#02. Extra assets: ['A#02']
+INFO:app:Added A#02 to actually_prepared. List now: ['A#01', 'A#02']
+INFO:app:Action logged: Assigned to event 104: A#02
+.INFO:app:Action logged: Promoted prepared extra asset A#02 into event 102
+.INFO:app:Action logged: Updated TestBrand TestModel model quantity for event 113: 5 -> 3
+.INFO:app:Action logged: Updated TestBrand TestModel model quantity for event 112: 2 -> 1
+.INFO:app:Action logged: Updated TestBrand TestModel model quantity for event 116: 2 -> 1
+.INFO:app:Removing custom asset '[CUSTOM]{"company":"","department":"VX","description":"","name":"Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens","quantity":1,"type":"MISC","uid":"finance_line_1784015304143_337c4de8ec12e8","version":3}' from event 160
+INFO:app:Removed [CUSTOM]{"company":"","department":"VX","description":"","name":"Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens","quantity":1,"type":"MISC","uid":"finance_line_1784015304143_337c4de8ec12e8","version":3} from prepared_items
+INFO:app:Removed [CUSTOM]{"company":"","department":"VX","description":"","name":"Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens","quantity":1,"type":"MISC","uid":"finance_line_1784015304143_337c4de8ec12e8","version":3} from actually_prepared
+INFO:app:Action logged: Removed Panasonic PT-DZ13K 3-chip FHD DLP projector 12000 ANSI lumens (misc item) from event 160
+.INFO:app:Action logged: Removed TestBrand TestModel in Main Room for event 120: 5 -> 0
+.INFO:app:Action logged: Removed TestBrand TestModel requirement from event 109; kept 5 prepared unit(s) as extra
+.INFO:app:Action logged: Removed TestBrand TestModel in Main Room for event 119: 5 -> 0
+.INFO:app:Action logged: Removed TestBrand TestModel requirement from event 110; kept 1 prepared unit(s) as extra
+.INFO:app:Action logged: Removed TestBrand TestModel in Main Room for event 114: 1 -> 0
+..INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 126: A#01
+.INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 123: A#01
+INFO:app:Assigning asset B#01 - Brand: TestBrand, Model: TestModel, Dept: LX
+INFO:app:Asset B#01: fromContainer=True; addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added B#01 to prepared_items
+INFO:app:Added individual extra asset B#01. Extra assets: ['B#01']
+INFO:app:Added B#01 to actually_prepared. List now: ['B#01']
+INFO:app:Action logged: Assigned to event 123: B#01
+.INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 120: A#01
+.INFO:app:Manual prepare A#01: addToEvent=False; fillsExistingRequirement=False; addedUnits=0
+INFO:app:Added manual extra asset A#01 to event 124. Extra assets: ['A#01']
+INFO:app:Action logged: Prepared for event 124: A#01
+.INFO:app:Action logged: Returned from event 125: A#01
+.INFO:app:Promoted extra asset(s) after unassigning A#01 from event 123: ['A#02']
+INFO:app:Action logged: Unassigned and unprepared from event 123: A#01
+.INFO:app:Action logged: Prepared for event 122: 1x TestBrand - TestModel - Matching item
+INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 122: A#01
+INFO:app:Action logged: Unassigned and unprepared from event 122: A#01
+.WARNING:app:[ASSET_CHANGE] 2026-09-04 23:43:38 - Event 105: UNPREPARING asset A#01 completely removing asset from event [unprepare_event_asset]
+INFO:app:Action logged: Unprepared from event 105: A#01
+.INFO:app:Action logged: Prepared for event 121: 1x TestBrand - TestModel - Matching item
+INFO:app:Assigning asset A#01 - Brand: TestBrand, Model: TestModel, Dept: AX
+INFO:app:Asset A#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Added A#01 to actually_prepared. List now: ['A#01']
+INFO:app:Action logged: Assigned to event 121: A#01
+.........INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+.INFO:data_manager:The following required files are missing and will be created: Inventory.csv, Logs.csv, Users.csv, Containers.csv, Clients.csv
+INFO:data_manager:Default admin user created.
+INFO:data_manager:Required files have been initialized.
+INFO:app:Event 1 state refreshed for read: New -> Planning
+.INFO:app:Starting Showbase at https://127.0.0.1:5055
+INFO:app:Serving with Waitress using 32 worker threads behind trusted proxy 127.0.0.1
+.........INFO:app:Action logged: Completed begin telegram connection
+INFO:app:Action logged: Completed telegram connection webhook
+INFO:app:Action logged: Updated update telegram notification settings
+INFO:app:Action logged: Completed test telegram notification settings
+INFO:app:Action logged: Deleted disconnect telegram notification settings
+..INFO:app:Action logged: Completed begin telegram connection
+..INFO:app:Action logged: Updated update telegram notification settings
+.....WARNING:services.telegram_notifications:Telegram sendMessage request failed: offline
+.......INFO:app:Action logged: Transferred 1 asset(s) from event 1 to event 2: TEST#02
+..INFO:app:Manual prepare TEST#03: addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:app:Action logged: Prepared for event 2: TEST#03
+.INFO:app:Action logged: Transferred 1 asset(s) from event 1 to event 2: TEST#01
+INFO:app:Action logged: Transferred 1 asset(s) from event 1 to event 2: TEST#02
+.INFO:app:Event 1 state refreshed for read: Ongoing -> Overdue
+.INFO:app:Event 1 state refreshed for read: Ongoing -> Overdue
+INFO:app:Action logged: Transferred 1 asset(s) from event 1 to event 2: TEST#01
+INFO:app:Action logged: Undid 1 transfer(s) from event 2 back to event 1: TEST#01
+.INFO:app:Action logged: Updated user tech-old: Name: - -> Technician One
+.INFO:app:Action logged: Renamed user tech-old -> tech-new; updated 2 system log(s), 1 event log(s), 3 maintenance record(s), 1 quotation(s)
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Deleted invoice upload from event 143
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed invoice upload allowance by 1 for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+..INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Changed claim claim-details-required from Pending Review to Pending Review for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Changed invoice sub_11f9701060d00aa3 from Pending Review to Paid for event 143
+INFO:app:Action logged: Changed invoice sub_11f9701060d00aa3 from Paid to Paid for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Re-ran invoice OCR for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Reset worker login for Jordan Dela Cruz
+INFO:app:Action logged: Set up worker portal credentials
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed invoice upload allowance by 1 for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Admin uploaded 1 claim file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed claim upload allowance by 1 for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed claim upload allowance by -1 for Jordan Dela Cruz on event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 2 claim file(s) for Jordan Dela Cruz on event 143
+...INFO:app:Action logged: Created worker Lighting Crew
+INFO:app:Action logged: Assigned worker Lighting Crew to event 143 as Lighting Technician
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Updated workforce assignment for event 143
+INFO:app:Action logged: Updated workforce assignment for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Changed invoice sub_2d8e0264f256dc8b from Pending Review to Approved for event 143
+INFO:app:Action logged: Changed invoice sub_2d8e0264f256dc8b from Approved to Paid for event 143
+INFO:app:Action logged: Worker Jordan Dela Cruz marked invoice sub_2d8e0264f256dc8b as received for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+..INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 2 claim file(s) for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 claim file(s) for event 143
+..INFO:app:Action logged: Removed department AU from event 143
+INFO:app:Action logged: Added manual department AU to event 143
+.INFO:app:Action logged: Added manual department LI to event 143
+.......INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+.INFO:app:Action logged: Created transport profile GBB 1234X
+INFO:app:Action logged: Added return external transport GBB 1234X to event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed invoice sub_2778c4a09bfe0b6a from Pending Review to Paid for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Added manual department LI to event 143
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Lighting Technician
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed invoice sub_eb0538d6455cc340 from Pending Review to Approved for event 143
+.INFO:app:Action logged: Added fleet vehicle GBD 1001A
+INFO:app:Action logged: Added fleet vehicle GBD 1002B
+INFO:app:Action logged: Added depart fleet transport GBD 1001A to event 143 in Main Room
+INFO:app:Action logged: Added depart fleet transport GBD 1002B to event 143 in Breakout Room
+.INFO:app:Action logged: Added fleet vehicle GBD 7788K
+INFO:app:Action logged: Booked fleet vehicle GBD 7788K for Warehouse collection
+INFO:app:Action logged: Added depart fleet transport GBD 7788K to event 143
+INFO:app:Action logged: Added return fleet transport GBD 7788K to event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 144 as Audio Engineer
+.INFO:app:Action logged: Assigned full-time staff Taylor Fulltime to event 143 as Operations
+INFO:app:Action logged: Set manpower call time to 09:15 on 2026-07-11 for event 143
+INFO:app:Action logged: Changed invoice upload allowance by 1 for Taylor Fulltime on event 143
+INFO:app:Action logged: Admin uploaded 1 claim file(s) for Taylor Fulltime on event 143
+.....INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+.INFO:app:Action logged: Assigned full-time staff normal to event 143 as Audio Technician
+INFO:app:Action logged: User normal submitted 1 invoice file(s) for event 143
+.....INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 claim file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed claim sub_54b7598c3d15f1ff from Pending Review to Approved for event 143
+INFO:app:Action logged: Changed claim sub_54b7598c3d15f1ff from Approved to Pending Review for event 143
+INFO:app:Action logged: Changed claim sub_54b7598c3d15f1ff from Pending Review to Pending Review for event 143
+.INFO:app:Action logged: Changed 2 claims to Payment Confirmed for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+INFO:app:Action logged: Changed invoice sub_dc3fb371d308f2cc from Pending Review to Pending Review for event 143
+INFO:app:Action logged: Changed invoice sub_dc3fb371d308f2cc from Pending Review to Approved for event 143
+.INFO:app:Action logged: Created a saved transport location
+INFO:app:Action logged: Created a saved transport location
+INFO:app:Action logged: Updated saved transport location New Bahru School Block
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Added manual department LI to event 143
+INFO:app:Action logged: Set manpower call time to 09:15 on 2026-07-11 for event 143
+INFO:app:Action logged: Updated Jordan Dela Cruz's schedule on 2026-07-11 for event 143: department from AU to LI; role from Audio Engineer to Lighting Operator
+INFO:app:Action logged: Updated Jordan Dela Cruz's schedule on 2026-07-11 for event 143: department from LI to AU; role from Lighting Operator to Audio Engineer
+.INFO:app:Action logged: Created worker Clashing Crew
+INFO:app:Action logged: Assigned worker Clashing Crew to event 143 as Audio Engineer
+INFO:app:Action logged: Assigned worker Clashing Crew to event 144 as Audio Engineer
+INFO:app:Action logged: Removed Clashing Crew from the manpower schedule for event 143 on 2026-07-10
+...INFO:app:Action logged: Assigned full-time staff normal to event 143 as Audio Technician
+INFO:app:Action logged: User normal submitted 1 claim file(s) for event 143
+INFO:app:Action logged: User normal submitted 2 claim file(s) for event 143
+INFO:app:Action logged: User normal submitted 1 invoice file(s) for event 143
+INFO:app:Action logged: User normal invoice details updated for event 143
+INFO:app:Action logged: User normal invoice deleted for event 143
+.INFO:app:Action logged: Assigned full-time staff normal to event 143 as Audio Technician
+INFO:app:Action logged: User normal submitted 1 claim file(s) for event 143
+...INFO:app:Action logged: Created a workforce role
+.INFO:app:Action logged: Added depart external transport GBF 1234Z to event 143
+INFO:app:Action logged: Updated depart external transport GBF 1234Z for event 143
+..INFO:app:Action logged: Created transport profile 
+INFO:app:Action logged: Created transport profile GBD 4321A
+INFO:app:Action logged: Created a saved transport location
+INFO:app:Action logged: Added depart external transport GBD 4321A to event 143
+.INFO:app:Action logged: Created worker Flexible Crew
+INFO:app:Action logged: Assigned worker Flexible Crew to event 143
+INFO:app:Action logged: Assigned worker Flexible Crew to event 143
+...INFO:app:Action logged: Created workforce vendor Month Span Crew
+INFO:app:Action logged: Assigned vendor Month Span Crew to event 143 as manpower
+.INFO:app:Action logged: Created worker Morgan Lee
+INFO:app:Action logged: Created worker Sam Tan
+INFO:app:Action logged: Created workforce vendor HighCrew Resources
+INFO:app:Action logged: Added manual department LI to event 143
+INFO:app:Action logged: Assigned vendor HighCrew Resources to event 143 as manpower
+INFO:app:Action logged: Assigned vendor HighCrew Resources to event 143 as service
+INFO:app:Action logged: Updated HighCrew Resources's schedule on 2026-07-10 for event 143: role from 5 pax manpower to Vendor Crew Lead
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for HighCrew Resources on event 143
+INFO:app:Action logged: Admin uploaded 1 claim file(s) for HighCrew Resources on event 143
+.INFO:app:Action logged: Created workforce vendor History Backline Vendor
+INFO:app:Action logged: Assigned vendor History Backline Vendor to event 143 as service
+..INFO:app:Action logged: Added vendor personnel Vendor Accounts
+INFO:app:Action logged: Created workforce vendor Backline Vendor
+INFO:app:Action logged: Assigned vendor Backline Vendor to event 143 as service
+INFO:app:Action logged: Created worker Vendor Accounts
+.INFO:app:Action logged: Created workforce vendor Durable Backline Vendor
+INFO:app:Action logged: Updated workforce vendor Durable Backline Vendor Updated: Name: Durable Backline Vendor -> Durable Backline Vendor Updated
+.INFO:app:Action logged: Created worker Unrated Worker
+INFO:app:Action logged: Assigned worker Unrated Worker to event 143
+INFO:app:Action logged: Updated workforce assignment for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Changed invoice sub_00188962e8b5a036 from Pending Review to Approved for event 143
+INFO:app:Action logged: Changed invoice sub_00188962e8b5a036 from Approved to Paid for event 143
+INFO:app:Action logged: Worker Jordan Dela Cruz marked invoice sub_00188962e8b5a036 as received for event 143
+INFO:app:Action logged: Changed invoice sub_00188962e8b5a036 from Paid to Paid for event 143
+INFO:app:Action logged: Worker Jordan Dela Cruz marked invoice sub_00188962e8b5a036 as received for event 143
+INFO:app:Action logged: Changed invoice sub_00188962e8b5a036 from Paid to Denied for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for Jordan Dela Cruz on event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+..INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Created workforce vendor IVT
+INFO:app:Action logged: Assigned vendor IVT to event 143 as service
+INFO:app:Action logged: Admin uploaded 1 invoice file(s) for IVT on event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:data_manager:All required files are present.
+...INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+.INFO:app:Action logged: Created worker Jordan Dela Cruz
+INFO:app:Action logged: Assigned worker Jordan Dela Cruz to event 143 as Audio Engineer
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+INFO:app:Action logged: Changed invoice sub_379766b721bdada3 from Pending Review to Denied for event 143
+INFO:app:Action logged: Worker Jordan Dela Cruz uploaded 1 invoice file(s) for event 143
+.INFO:app:Action logged: Created worker Alex Multiroom
+INFO:app:Action logged: Assigned worker Alex Multiroom to event 143 as Audio Engineer in Main Room
+INFO:app:Action logged: Assigned worker Alex Multiroom to event 143 as Breakout Technician in Breakout Room
+INFO:app:Action logged: Updated Alex Multiroom's schedule on 2026-07-11 for event 143: venue from Main Room to Breakout Room
+......INFO:app:Action logged: Created department AU (Audio)
+INFO:app:Action logged: Updated department AU -> AU; name='Audio' -> 'Audio'; assetsUpdated=0; eventsUpdated=0
+.
+----------------------------------------------------------------------
+Ran 784 tests in 27.208s
+
+OK (skipped=1)

@@ -38,7 +38,8 @@ def _event_ref_key(value: Any) -> str:
         return '[PREPARED]' + '|'.join(parts[:3] + ['|'.join(parts[4:])])
     if value.startswith('[BULK]'):
         parts = value[6:].split('|')
-        return '[BULK]' + '|'.join((parts + ['', '', ''])[:1] + [(parts + ['', '', ''])[2]])
+        padded_parts = parts + ['', '', '']
+        return '[BULK]' + '|'.join((padded_parts[0], padded_parts[2]))
     if value.startswith('[CUSTOM]'):
         return _custom_ref_key(value)
     return value
@@ -68,6 +69,17 @@ def _list_key(value: Any, path: tuple[str, ...]) -> str:
     if isinstance(value, str):
         return _event_ref_key(value)
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _index_list(values: list[Any], path: tuple[str, ...]) -> tuple[dict[str, Any], list[str]]:
+    """Build the merge lookup and order while computing each logical key once."""
+    mapping = {}
+    order = []
+    for value in values:
+        key = _list_key(value, path)
+        mapping[key] = value
+        order.append(key)
+    return mapping, order
 
 
 def _merge_value(base: Any, current: Any, desired: Any, path: tuple[str, ...]) -> Any:
@@ -107,9 +119,9 @@ def _merge_value(base: Any, current: Any, desired: Any, path: tuple[str, ...]) -
 
 
 def _merge_list(base: list[Any], current: list[Any], desired: list[Any], path: tuple[str, ...]) -> list[Any]:
-    base_map = {_list_key(value, path): value for value in base}
-    current_map = {_list_key(value, path): value for value in current}
-    desired_map = {_list_key(value, path): value for value in desired}
+    base_map, base_order = _index_list(base, path)
+    current_map, current_order = _index_list(current, path)
+    desired_map, desired_order = _index_list(desired, path)
     merged_map = {}
     for key in base_map.keys() | current_map.keys() | desired_map.keys():
         merged = _merge_value(
@@ -120,10 +132,6 @@ def _merge_list(base: list[Any], current: list[Any], desired: list[Any], path: t
         )
         if merged is not _MISSING:
             merged_map[key] = merged
-
-    base_order = [_list_key(value, path) for value in base]
-    current_order = [_list_key(value, path) for value in current]
-    desired_order = [_list_key(value, path) for value in desired]
 
     base_keys = set(base_order)
     desired_keys = set(desired_order)

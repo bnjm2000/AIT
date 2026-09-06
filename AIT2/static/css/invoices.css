@@ -313,6 +313,8 @@
 .invoice-payment { display: grid; grid-template-columns: 145px minmax(180px, 1fr) 150px 118px 32px; gap: 9px; align-items: end; padding: 9px; border-bottom: 2px solid #e5eaf0; }
 .invoice-payment:last-child { border-bottom: 0; }
 .invoice-payment label { display: grid; gap: 4px; }
+.invoice-payment-details { display: grid; gap: 8px; min-width: 0; }
+.invoice-payment-details select { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid #d8dee7; border-radius: 6px; background: #fff; color: var(--invoice-ink); font: inherit; font-size: .72rem; }
 .invoice-receipt-button { height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--invoice-green); border-radius: 6px; background: #fff; color: var(--invoice-green); font-size: .7rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .invoice-receipt-button svg { width: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .invoice-receipt-button:hover { background: var(--invoice-green-soft); }
@@ -445,7 +447,11 @@
   .invoice-mode-field { grid-column: 3; grid-row: 1; }
   .invoice-payment { grid-template-columns: 1fr 34px; }
   .invoice-payment label { grid-column: 1; }
+  .invoice-payment-details { grid-column: 1; }
   .invoice-payment .invoice-receipt-button { grid-column: 1; width: max-content; }
   .invoice-payment .invoice-remove-button { grid-column: 2; grid-row: 1; }
   .invoice-panel { padding: 12px; }
+  .invoice-details-panel .finance-client-heading { flex-direction: column; }
+  .invoice-client-actions { width: 100%; min-width: 0; }
+  .invoice-client-actions .finance-picker-button { min-width: 0; }
 }

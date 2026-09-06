@@ -17,6 +17,8 @@ const invoiceState = {
   changeVersion: 0,
   basePlan: null,
   remoteUpdatePending: false,
+  pendingRealtime: null,
+  editorRenderPending: false,
   listMeta: { total: 0, hasMore: false, nextOffset: null, statusTotal: 0, statusCounts: {} },
   listLoading: false,
   listRequestVersion: 0,
@@ -36,6 +38,11 @@ function invoiceClone(value) {
 
 function invoiceValuesEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function invoiceLatestKnownVersion() {
+  return Math.max(Number(invoiceState.current?.plan?.documentVersion || 0),
+    Number(invoiceState.pendingRealtime?.plan?.documentVersion || 0));
 }
 
 function invoiceHasPendingChanges() {
@@ -65,7 +72,13 @@ async function invoiceHandleRealtimeChanges(changes) {
         `/api/invoice-plans/${encodeURIComponent(currentQuotationId)}`
       );
     } catch (error) {
+      if (String(invoiceState.current?.quotation?.id || '') !== currentQuotationId) return true;
       if (error.payload?.code !== 'quotation_not_invoice_ready') throw error;
+      if (invoiceHasPendingChanges()) {
+        invoiceState.remoteUpdatePending = true;
+        invoiceUpdateSaveState();
+        return true;
+      }
       invoiceState.current = null;
       invoiceState.basePlan = null;
       invoiceState.dirty = false;
@@ -74,24 +87,21 @@ async function invoiceHandleRealtimeChanges(changes) {
       await loadInvoices(invoiceState.query);
       return true;
     }
-    if (!invoiceState.dirty) {
-      invoiceState.current = response.data;
-      invoiceState.basePlan = invoiceClone(response.data.plan);
-      invoiceState.remoteUpdatePending = false;
-    } else {
-      const base = invoiceState.basePlan || invoiceState.current.plan;
-      invoiceState.current.plan = invoiceMergePlan(
-        base, invoiceState.current.plan, response.data.plan
-      );
-      invoiceState.current.plan.documentVersion = base.documentVersion;
-      invoiceState.current.quotation = response.data.quotation;
+    if (String(invoiceState.current?.quotation?.id || '') !== currentQuotationId) return true;
+    if (Number(response.data.plan.documentVersion) < invoiceLatestKnownVersion()) return true;
+    if (invoiceHasPendingChanges() || invoiceEditorHasFocus()) {
+      // Keep the original base so the server can detect same-field conflicts.
+      invoiceState.pendingRealtime = response.data;
       invoiceState.remoteUpdatePending = true;
+      invoiceUpdateSaveState();
+      return true;
     }
+    invoiceAdoptPlan(response.data);
     invoiceRenderEditor();
     return true;
   }
   if (quotationIds.length) {
-    await loadInvoices(invoiceState.query);
+    if (!invoiceState.current) await loadInvoices(invoiceState.query, { preservePosition: true });
     return true;
   }
   return false;
@@ -99,6 +109,93 @@ async function invoiceHandleRealtimeChanges(changes) {
 
 function invoiceRoot() {
   return document.getElementById('invoices-page-root');
+}
+
+function invoiceEditorHasFocus() {
+  const active = document.activeElement;
+  return Boolean(invoiceState.current && (invoiceDropdownIsOpen()
+    || (active && invoiceRoot()?.contains(active)
+      && active.matches('input, textarea, select, .sb-select-button'))));
+}
+
+function invoiceDropdownIsOpen() {
+  return Boolean(invoiceRoot()?.querySelector('.sb-select.is-open, [data-invoice-menu-trigger][aria-expanded="true"]'));
+}
+
+function invoiceEditorFields(plan) {
+  const pick = (value, keys) => keys.map(key => value?.[key] ?? '');
+  const details = plan?.invoiceDetails;
+  return [
+    pick(plan, ['strategy', 'strategyLabel', 'invoiceDiscountMode', 'invoiceDiscountValue']),
+    pick(details, ['clientRecordName', 'projectName', 'eventLocation', 'salesperson', 'salespersonUsername', 'reference', 'paymentTerms']),
+    pick(details?.client, ['salutation', 'name', 'company', 'phone', 'email', 'address1', 'address2', 'address3', 'postalCode']),
+    (plan?.installments || []).map(row => pick(row, ['id', 'label', 'mode', 'value', 'amount', 'dueDate', 'status', 'invoiceId', 'invoiceNumber', 'invoiceFrozen'])),
+    (plan?.payments || []).map(row => pick(row, ['id', 'date', 'label', 'amount', 'invoiceId']))
+  ];
+}
+
+function invoiceRefreshEditorFields(previousFields) {
+  if (invoiceValuesEqual(previousFields, invoiceEditorFields(invoiceState.current?.plan))) return;
+  // An open dropdown owns references to its controls; finish that interaction first.
+  if (invoiceDropdownIsOpen()) invoiceState.editorRenderPending = true;
+  else invoiceRenderEditor();
+}
+
+function invoiceAdoptPlan(data) {
+  invoiceState.current = data;
+  invoiceState.basePlan = invoiceClone(data.plan);
+  invoiceState.dirty = false;
+  invoiceState.remoteUpdatePending = false;
+  invoiceState.pendingRealtime = null;
+}
+
+function invoiceUpdateSaveState() {
+  const state = document.getElementById('invoiceSaveState');
+  if (state) state.textContent = invoiceState.saving ? 'Saving…'
+    : invoiceState.remoteUpdatePending ? 'Newer changes received · review before saving'
+    : invoiceState.dirty ? 'Unsaved changes' : 'All changes saved';
+  const button = invoiceRoot()?.querySelector('.invoice-save');
+  if (button) {
+    button.disabled = invoiceState.saving;
+    button.textContent = invoiceState.saving ? 'Saving…' : 'Save plan';
+  }
+}
+
+function invoiceReplaceContent(markup) {
+  const root = invoiceRoot();
+  if (!root) return;
+  const controls = [...root.querySelectorAll('input, textarea, select, button')];
+  const activeIndex = controls.indexOf(document.activeElement);
+  const active = controls[activeIndex];
+  const row = active?.closest('[data-payment-id], [data-installment-id]');
+  const rowKey = row?.dataset.paymentId || row?.dataset.installmentId;
+  const handler = active?.getAttribute('oninput') || active?.getAttribute('onchange') || active?.getAttribute('onclick');
+  const selection = active && typeof active.selectionStart === 'number'
+    ? [active.selectionStart, active.selectionEnd] : null;
+  const ancestors = [];
+  for (let node = root; node; node = node.parentElement) ancestors.push(node);
+  const scrolling = [...new Set([document.scrollingElement, ...ancestors, ...root.querySelectorAll('*')])]
+    .filter(node => node && (node.scrollTop || node.scrollLeft))
+    .map(node => ({ node, id: node.id, className: node.className, top: node.scrollTop, left: node.scrollLeft }));
+  root.innerHTML = markup;
+  const candidates = [...root.querySelectorAll('input, textarea, select, button')];
+  const replacement = active?.id ? document.getElementById(active.id) : candidates.find(item => {
+    if (!active || item.tagName !== active.tagName || item.type !== active.type) return false;
+    const itemRow = item.closest('[data-payment-id], [data-installment-id]');
+    if ((itemRow?.dataset.paymentId || itemRow?.dataset.installmentId) !== rowKey) return false;
+    const itemHandler = item.getAttribute('oninput') || item.getAttribute('onchange') || item.getAttribute('onclick');
+    // Row indices can change when another editor inserts a payment.
+    return handler && itemHandler && handler.replace(/\(\d+,/, '(') === itemHandler.replace(/\(\d+,/, '(');
+  });
+  if (replacement && replacement.tagName === active?.tagName) {
+    replacement.focus({ preventScroll: true });
+    if (selection && typeof replacement.setSelectionRange === 'function') replacement.setSelectionRange(...selection);
+  }
+  scrolling.forEach(({ node, id, className, top, left }) => {
+    const target = node.isConnected ? node : id ? document.getElementById(id)
+      : [...root.querySelectorAll('*')].find(item => item.className === className);
+    if (target) { target.scrollTop = top; target.scrollLeft = left; }
+  });
 }
 
 function invoiceEscape(value) {
@@ -276,6 +373,7 @@ function invoiceLocalSummary(plan, quotation) {
     adjustedTotal,
     planned,
     unplanned: Math.max(0, adjustedTotal - planned),
+    overplanned: Math.max(0, planned - adjustedTotal),
     invoiced,
     notInvoiced: Math.max(0, adjustedTotal - invoiced),
     paid,
@@ -295,13 +393,19 @@ async function loadInvoices(query = '', options = {}) {
   if (!root) return;
   const append = options.append === true;
   if (invoiceState.listLoading && append) return;
-  if (!append) invoiceState.current = null;
+  if (!append && invoiceState.current) {
+    if (!await invoiceFlushPendingSave()) return;
+    invoiceState.current = null;
+    invoiceState.basePlan = null;
+  }
   invoiceState.query = String(query || '').trim();
   const requestVersion = ++invoiceState.listRequestVersion;
   const requestedView = invoiceState.view;
   const requestedQuery = invoiceState.query;
   const requestedMineOnly = invoiceState.mineOnly;
   const requestedStatuses = [...invoiceState.statuses];
+  const listKey = requestedView === 'issued' ? 'issuedInvoices' : 'rows';
+  const visibleCount = options.preservePosition ? Math.max(40, invoiceState[listKey].length) : 40;
   const requestIsCurrent = () => (
     requestVersion === invoiceState.listRequestVersion
     && requestedView === invoiceState.view
@@ -312,37 +416,41 @@ async function loadInvoices(query = '', options = {}) {
   );
   invoiceState.listLoading = true;
   await invoiceLoadPlanTemplates();
-  if (!append) root.innerHTML = `<div class="invoice-loading"><span></span>${requestedView === 'issued' ? 'Loading issued invoices...' : 'Loading invoice-ready quotations...'}</div>`;
+  if (!requestIsCurrent()) return;
+  if (!append && !root.querySelector('.invoice-list-header')) root.innerHTML = `<div class="invoice-loading"><span></span>${requestedView === 'issued' ? 'Loading issued invoices...' : 'Loading invoice-ready quotations...'}</div>`;
   try {
     const params = new URLSearchParams();
     if (requestedQuery) params.set('query', requestedQuery);
     if (invoiceListCanToggleMine() && requestedMineOnly) params.set('mine', '1');
     requestedStatuses.forEach(status => params.append('status', status));
-    params.set('limit', '40');
-    if (append && invoiceState.listMeta.nextOffset != null) params.set('offset', String(invoiceState.listMeta.nextOffset));
     if (requestedView === 'issued') {
       params.set('view', 'summary');
       params.set('sort', 'number');
-      const response = await apiCall(`/api/invoices?${params}`);
-      if (!requestIsCurrent()) return;
-      const incoming = response.data || [];
-      invoiceState.issuedInvoices = append
-        ? [...invoiceState.issuedInvoices, ...incoming.filter(row => !invoiceState.issuedInvoices.some(existing => existing.id === row.id))]
-        : incoming;
-      invoiceState.listMeta = { ...invoiceState.listMeta, ...(response.meta || {}) };
-    } else {
-      const response = await apiCall(`/api/invoice-plans${params.size ? `?${params}` : ''}`);
-      if (!requestIsCurrent()) return;
-      const incoming = response.data || [];
-      invoiceState.rows = append
-        ? [...invoiceState.rows, ...incoming.filter(row => !invoiceState.rows.some(existing => existing.quotation?.id === row.quotation?.id))]
-        : incoming;
-      invoiceState.listMeta = { ...invoiceState.listMeta, ...(response.meta || {}) };
     }
+    const incoming = [];
+    let meta = {};
+    let offset = append ? invoiceState.listMeta.nextOffset || 0 : 0;
+    do {
+      params.set('limit', String(Math.min(100, (append ? 40 : visibleCount) - incoming.length)));
+      params.set('offset', String(offset));
+      const response = await apiCall(`${requestedView === 'issued' ? '/api/invoices' : '/api/invoice-plans'}?${params}`);
+      if (!requestIsCurrent()) return;
+      incoming.push(...(response.data || []));
+      meta = response.meta || {};
+      if (!meta.hasMore || meta.nextOffset == null || Number(meta.nextOffset) <= offset) break;
+      offset = Number(meta.nextOffset);
+    } while (!append && incoming.length < visibleCount);
+    const rowId = row => requestedView === 'issued' ? row.id : row.quotation?.id;
+    const existingIds = new Set(invoiceState[listKey].map(rowId));
+    invoiceState[listKey] = append
+      ? [...invoiceState[listKey], ...incoming.filter(row => !existingIds.has(rowId(row)))]
+      : incoming;
+    invoiceState.listMeta = { ...invoiceState.listMeta, ...meta };
     invoiceRenderList();
   } catch (error) {
     if (requestIsCurrent()) {
-      root.innerHTML = `<div class="invoice-empty"><strong>Invoices could not be loaded</strong><span>${invoiceEscape(error.message)}</span></div>`;
+      if (root.querySelector('.invoice-list-header')) showNotification('error', error.message || 'Invoices could not be refreshed');
+      else root.innerHTML = `<div class="invoice-empty"><strong>Invoices could not be loaded</strong><span>${invoiceEscape(error.message)}</span></div>`;
     }
   } finally {
     if (requestVersion === invoiceState.listRequestVersion) {
@@ -364,7 +472,11 @@ function invoiceSetView(view) {
 
 function invoiceQueueSearch(value) {
   clearTimeout(invoiceState.searchTimer);
-  invoiceState.searchTimer = setTimeout(() => loadInvoices(value), 320);
+  invoiceState.query = String(value || '').trim();
+  invoiceState.searchTimer = setTimeout(() => {
+    invoiceState.searchTimer = null;
+    loadInvoices(invoiceState.query);
+  }, 320);
 }
 
 function invoiceListCanToggleMine() {
@@ -507,7 +619,7 @@ function invoiceRenderList() {
         invoiceState.view === 'issued' ? row.status : row.plan?.status || 'draft'
       ))
     : source;
-  root.innerHTML = `
+  invoiceReplaceContent(`
     <header class="invoice-list-header">
       <div>
         <div class="finance-toolbar-title-line">
@@ -527,7 +639,7 @@ function invoiceRenderList() {
         </button>
         <label class="invoice-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-          <input value="${invoiceAttr(invoiceState.query)}" placeholder="Search invoice, project or client" oninput="invoiceQueueSearch(this.value)">
+          <input id="invoiceSearch" aria-label="Search invoice, project or client" value="${invoiceAttr(invoiceState.query)}" placeholder="Search invoice, project or client" oninput="invoiceQueueSearch(this.value)">
         </label>
       </div>
     </header>
@@ -550,7 +662,7 @@ function invoiceRenderList() {
       `}
     </section>
     ${(visible.length || invoiceState.listMeta.total) ? `<div class="finance-list-pagination invoice-list-pagination"><span>Showing ${source.length} of ${Number(invoiceState.listMeta.total || source.length)}</span>${invoiceState.listMeta.hasMore ? '<button type="button" class="btn btn-secondary" onclick="invoiceLoadMore()">Load more</button>' : ''}</div>` : ''}
-  `;
+  `);
 }
 
 function invoiceLoadMore() {
@@ -594,10 +706,11 @@ function invoiceIssuedTableMarkup(rows) {
 }
 
 function invoiceIssuedAmountDue(invoice) {
+  if (['void', 'cancelled'].includes(String(invoice.status || '').toLowerCase())) return 0;
   const paid = (invoice.invoicePlanPayments || [])
     .filter(row => String(row.invoiceId || '') === String(invoice.id || ''))
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  return Math.max(0, Number(invoice.invoiceAmount || invoice.totals?.total || 0) - paid);
+  return Math.max(0, Number(invoice.invoiceAmount ?? invoice.totals?.total ?? 0) - paid);
 }
 
 function invoiceIssuedRowMarkup(invoice) {
@@ -606,7 +719,7 @@ function invoiceIssuedRowMarkup(invoice) {
   const isDraft = status === 'draft';
   const isCancelled = ['cancelled', 'void'].includes(status);
   const countdown = ['sent', 'partially-paid', 'overdue'].includes(status)
-    ? invoiceDueCountdown(invoice.paymentDueDate || invoice.dueDate)
+    ? invoiceDueCountdown(invoice.dueDate || invoice.paymentDueDate)
     : '';
   return `
     <tr class="${isCancelled ? 'is-cancelled' : ''}" onclick="invoiceOpenPdf('${invoiceAttr(invoice.id)}')">
@@ -616,7 +729,7 @@ function invoiceIssuedRowMarkup(invoice) {
       <td data-label="Label"><strong>${invoiceEscape(invoice.invoiceLabel || '-')}</strong></td>
       <td data-label="Status">${invoiceStatusControlMarkup(status, `issued-status-${invoice.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(invoice.id)}',-1,STATUS_VALUE,'directory')`, invoiceDocumentStatusChoices(status))}</td>
       <td data-label="Date"><strong>${invoiceDateLabel(invoice.invoiceDate || invoice.createdAt)}</strong></td>
-      <td data-label="Amount"><strong>${invoiceMoney(invoice.invoiceAmount || invoice.totals?.total)}</strong></td>
+      <td data-label="Amount"><strong>${invoiceMoney(invoice.invoiceAmount ?? invoice.totals?.total)}</strong></td>
       <td data-label="Due"><strong class="${due > 0 ? 'invoice-due' : 'invoice-positive'}">${invoiceMoney(due)}</strong>${countdown ? `<small>${invoiceEscape(countdown)}</small>` : ''}</td>
       <td data-label="Actions"><div class="invoice-directory-actions">
         <button type="button" title="Preview invoice" onclick="event.stopPropagation();invoiceOpenPdf('${invoiceAttr(invoice.id)}')"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></button>
@@ -653,7 +766,7 @@ async function invoiceEditReference(invoiceId, origin = 'directory') {
       ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
     });
     showNotification('success', clean ? 'PO / reference number updated' : 'PO / reference number removed');
-    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    if (origin === 'directory') await loadInvoices(invoiceState.query, { preservePosition: true });
     else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to update PO / reference number');
@@ -661,6 +774,7 @@ async function invoiceEditReference(invoiceId, origin = 'directory') {
 }
 
 async function invoiceRenumber(invoiceId, origin = 'directory') {
+  if (origin === 'editor' && !await invoiceFlushPendingSave()) return;
   const invoice = invoiceFindDocument(invoiceId);
   if (!invoice) return;
   const number = await showAppPrompt({
@@ -681,7 +795,7 @@ async function invoiceRenumber(invoiceId, origin = 'directory') {
       ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
     });
     showNotification('success', `Invoice ID changed to ${clean}`);
-    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    if (origin === 'directory') await loadInvoices(invoiceState.query, { preservePosition: true });
     else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to renumber invoice');
@@ -689,20 +803,23 @@ async function invoiceRenumber(invoiceId, origin = 'directory') {
 }
 
 async function invoiceDeleteIssued(invoiceId, origin = 'directory') {
+  if (origin === 'editor' && !await invoiceFlushPendingSave()) return;
   const invoice = invoiceFindDocument(invoiceId);
   if (!invoice) return;
   const confirmed = await showAppConfirm({
     title: 'Delete invoice?',
-    message: `${invoice.number || 'This invoice'} will be removed. Its installment will return to a planned state and the invoice number will become available again.`,
+    message: `${invoice.number || 'This invoice'} and its linked payment records will be removed. Its installment will return to a planned state and the invoice number will become available again.`,
     confirmText: 'Delete invoice',
     cancelText: 'Keep invoice',
     variant: 'danger'
   });
   if (!confirmed) return;
   try {
-    await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'DELETE');
+    await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'DELETE', {
+      ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
+    });
     showNotification('success', `${invoice.number || 'Invoice'} deleted`);
-    if (origin === 'directory') await loadInvoices(invoiceState.query);
+    if (origin === 'directory') await loadInvoices(invoiceState.query, { preservePosition: true });
     else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to delete invoice');
@@ -713,7 +830,7 @@ function invoiceStatusControlMarkup(status, id, actionTemplate, statuses = INVOI
   const action = statusValue => actionTemplate.replace('STATUS_VALUE', `'${statusValue}'`);
   return `
     <div class="invoice-status-control" onclick="event.stopPropagation()">
-      <button type="button" class="invoice-status" data-status="${invoiceAttr(status)}" onclick="invoiceToggleStatusMenu('${invoiceAttr(id)}',event)">
+      <button type="button" class="invoice-status" data-status="${invoiceAttr(status)}" data-invoice-menu-trigger="${invoiceAttr(id)}" aria-expanded="false" aria-controls="${invoiceAttr(id)}" onclick="invoiceToggleStatusMenu('${invoiceAttr(id)}',event)">
         ${invoiceStatusLabel(status)}<svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg>
       </button>
       <div id="${invoiceAttr(id)}" class="invoice-status-menu">
@@ -728,7 +845,7 @@ function invoiceToggleStatusMenu(id, event) {
   const existingPortal = Array.from(document.querySelectorAll('[data-invoice-status-portal]'))
     .find(menu => menu.dataset.invoiceStatusPortal === id);
   if (existingPortal) {
-    existingPortal.remove();
+    invoiceCloseStatusMenus();
     return;
   }
   const menu = document.getElementById(id);
@@ -738,6 +855,8 @@ function invoiceToggleStatusMenu(id, event) {
     invoiceCloseStatusMenus();
     if (!shouldOpen) return;
     menu.classList.toggle('open');
+    menu.previousElementSibling?.setAttribute('aria-expanded', 'true');
+    if (event?.detail === 0) menu.querySelector('button')?.focus();
     return;
   }
   invoiceCloseStatusMenus();
@@ -749,13 +868,27 @@ function invoiceToggleStatusMenu(id, event) {
   portal.dataset.invoiceStatusPortal = id;
   portal.classList.add('open', 'viewport-menu');
   document.body.appendChild(portal);
+  trigger.setAttribute('aria-expanded', 'true');
+  trigger.setAttribute('aria-controls', portal.id);
   const menuWidth = Math.max(165, portal.offsetWidth || 0);
   portal.style.left = `${Math.max(8, Math.min(rect.left, showbaseViewport.width() - menuWidth - 8))}px`;
-  portal.style.top = `${rect.bottom + 5}px`;
-  portal.style.maxHeight = `${Math.max(96, showbaseViewport.height() - rect.bottom - 17)}px`;
+  const availableBelow = showbaseViewport.height() - rect.bottom - 17;
+  const availableAbove = rect.top - 13;
+  const openAbove = availableBelow < portal.offsetHeight && availableAbove > availableBelow;
+  const menuHeight = Math.min(portal.offsetHeight, Math.max(96, openAbove ? availableAbove : availableBelow));
+  portal.style.top = `${openAbove ? Math.max(8, rect.top - menuHeight - 5) : rect.bottom + 5}px`;
+  portal.style.maxHeight = `${menuHeight}px`;
+  if (event?.detail === 0) portal.querySelector('button')?.focus();
 }
 
 function invoiceCloseStatusMenus(exceptId = '') {
+  document.querySelectorAll('[data-invoice-menu-trigger]').forEach(trigger => {
+    const id = trigger.dataset.invoiceMenuTrigger;
+    if (id !== exceptId) {
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-controls', id);
+    }
+  });
   document.querySelectorAll('.invoice-status-menu.open:not([data-invoice-status-portal])').forEach(menu => {
     if (menu.id !== exceptId) menu.classList.remove('open');
   });
@@ -767,21 +900,25 @@ function invoiceCloseStatusMenus(exceptId = '') {
 async function invoiceOpenPlan(quotationId, options = {}) {
   const root = invoiceRoot();
   if (!root) return;
+  if (invoiceHasPendingChanges() && !await invoiceFlushPendingSave()) return;
+  clearTimeout(invoiceState.searchTimer);
+  invoiceState.searchTimer = null;
+  const requestVersion = ++invoiceState.listRequestVersion;
+  invoiceState.listLoading = false;
   root.innerHTML = '<div class="invoice-loading"><span></span>Opening billing plan...</div>';
   try {
     await invoiceLoadPlanTemplates();
     const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(quotationId)}`);
-    invoiceState.current = response.data;
+    if (requestVersion !== invoiceState.listRequestVersion) return;
+    invoiceAdoptPlan(response.data);
     const plan = invoiceState.current.plan;
     if (!(plan.installments || []).length) invoiceApplyPreset('full', false);
-    invoiceState.dirty = false;
-    invoiceState.basePlan = invoiceClone(invoiceState.current.plan);
-    invoiceState.remoteUpdatePending = false;
     invoiceRenderEditor();
     if (options.updateHistory !== false && typeof updateAppDetailHistory === 'function') {
       updateAppDetailHistory(`/invoices/${encodeURIComponent(quotationId)}`);
     }
   } catch (error) {
+    if (requestVersion !== invoiceState.listRequestVersion) return;
     root.innerHTML = `<div class="invoice-empty"><strong>Billing plan unavailable</strong><span>${invoiceEscape(error.message)}</span><button class="btn btn-secondary" onclick="loadInvoices()">Back to invoices</button></div>`;
   }
 }
@@ -805,7 +942,8 @@ function invoiceApplyPreset(preset, rerender = true) {
   });
   const existingRows = current.plan.installments || [];
   const issuedRows = existingRows.filter(item => item.invoiceId);
-  const issuedAmount = issuedRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const issuedAmount = issuedRows.filter(item => !['void', 'cancelled'].includes(item.status))
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const remaining = Math.max(0, Math.round((total - issuedAmount) * 100) / 100);
   if (preset === 'full') {
     current.plan.strategy = 'full';
@@ -866,16 +1004,20 @@ function invoiceApplySavedPlan(templateId) {
 }
 
 async function invoiceEditDueDays(index) {
+  const quotationId = invoiceState.current?.quotation?.id;
   const row = invoiceState.current?.plan?.installments?.[index];
   if (!row || invoiceInstallmentIsFrozen(row)) return;
+  const installmentId = row.id;
+  const originalDueDate = row.dueDate || '';
+  const originalInvoiceId = row.invoiceId || '';
   const due = new Date(`${row.dueDate || invoiceToday()}T00:00:00`);
   const today = new Date(`${invoiceToday()}T00:00:00`);
   const currentDays = Math.max(0, Math.round((due.getTime() - today.getTime()) / 86400000) || 0);
   const result = await showAppPrompt({
     title: 'Set due date',
     message: 'Enter the number of days from today. The due date will be calculated automatically.',
-    label: 'Days from today',
-    value: String(currentDays),
+    inputLabel: 'Days from today',
+    defaultValue: String(currentDays),
     inputType: 'number',
     confirmText: 'Calculate date',
     cancelText: 'Cancel'
@@ -886,7 +1028,17 @@ async function invoiceEditDueDays(index) {
     showNotification('error', 'Enter a whole number from 0 to 3650');
     return;
   }
-  invoiceUpdateInstallment(index, 'dueDate', invoiceDateFromToday(days));
+  if (invoiceState.current?.quotation?.id !== quotationId) return;
+  const installments = invoiceState.current.plan.installments || [];
+  const currentIndex = installments.findIndex(item => item.id === installmentId);
+  const currentRow = installments[currentIndex];
+  if (!currentRow || invoiceInstallmentIsFrozen(currentRow)
+      || (currentRow.dueDate || '') !== originalDueDate
+      || (currentRow.invoiceId || '') !== originalInvoiceId) {
+    showNotification('warning', 'This installment changed while the dialog was open. Review it and set the due date again.');
+    return;
+  }
+  invoiceUpdateInstallment(currentIndex, 'dueDate', invoiceDateFromToday(days));
   invoiceRenderEditor();
 }
 
@@ -1025,6 +1177,7 @@ function invoiceRenderEditor() {
   const root = invoiceRoot();
   const current = invoiceState.current;
   if (!root || !current) return;
+  invoiceState.editorRenderPending = false;
   const quotation = current.quotation || {};
   const plan = current.plan || {};
   const details = invoicePlanDetails(plan, quotation);
@@ -1032,7 +1185,7 @@ function invoiceRenderEditor() {
   const summary = invoiceLocalSummary(plan, quotation);
   const discountLocked = (plan.installments || []).some(invoiceInstallmentIsFrozen);
   plan.summary = summary;
-  root.innerHTML = `
+  invoiceReplaceContent(`
     <header class="invoice-editor-header">
       <div class="invoice-editor-title">
         <button type="button" class="invoice-back" onclick="invoiceBackToList()"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>Invoices</button>
@@ -1040,7 +1193,7 @@ function invoiceRenderEditor() {
       </div>
       <div class="invoice-editor-actions">
         ${invoiceStatusBadgeMarkup(plan.status || 'draft')}
-        <span id="invoiceSaveState" class="invoice-save-state">${invoiceState.remoteUpdatePending ? 'Review concurrent changes' : invoiceState.dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+        <span id="invoiceSaveState" class="invoice-save-state" role="status" aria-live="polite">${invoiceState.remoteUpdatePending ? 'Review concurrent changes' : invoiceState.dirty ? 'Unsaved changes' : 'All changes saved'}</span>
         <button type="button" class="btn invoice-save" onclick="invoiceSavePlan()" ${invoiceState.saving ? 'disabled' : ''}>
           ${invoiceState.saving ? '<span class="invoice-button-spinner"></span>Saving' : 'Save plan'}
         </button>
@@ -1053,7 +1206,7 @@ function invoiceRenderEditor() {
       ${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}
     </div>
     <div class="invoice-editor-grid">
-      <main class="invoice-editor-main">
+      <div class="invoice-editor-main">
         <section class="invoice-panel invoice-details-panel">
           <div class="invoice-panel-heading finance-client-heading">
             <div><h3>Client &amp; invoicing details</h3></div>
@@ -1066,7 +1219,7 @@ function invoiceRenderEditor() {
             </div>
           </div>
           <div class="finance-form-grid finance-quote-details-grid invoice-details-grid">
-            <label class="finance-field"><span>Name</span><div class="finance-client-name-control">${invoiceSalutationControl(client.salutation || '')}<input id="invoiceClientName" class="finance-input" value="${invoiceAttr(client.name || '')}" oninput="invoiceUpdateClientField('name',this.value)"></div></label>
+            <label class="finance-field"><span>Name</span><div class="finance-client-name-control">${invoiceSalutationControl(client.salutation || '')}<input id="invoiceClientName" aria-label="Client name" class="finance-input" value="${invoiceAttr(client.name || '')}" oninput="invoiceUpdateClientField('name',this.value)"></div></label>
             <label class="finance-field"><span>Company</span><input class="finance-input" value="${invoiceAttr(client.company || '')}" oninput="invoiceUpdateClientField('company',this.value)"></label>
             <label class="finance-field"><span>Phone</span><input class="finance-input" value="${invoiceAttr(client.phone || '')}" oninput="invoiceUpdateClientField('phone',this.value)"></label>
             <label class="finance-field"><span>Email</span><input class="finance-input" type="email" value="${invoiceAttr(client.email || '')}" oninput="invoiceUpdateClientField('email',this.value)"></label>
@@ -1100,13 +1253,13 @@ function invoiceRenderEditor() {
         <section class="invoice-panel invoice-installments-panel">
           <div class="invoice-panel-heading"><div><h3>Installments</h3><p>${invoiceMoney(summary.planned)} planned of ${invoiceMoney(summary.adjustedTotal)}</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddInstallment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add installment</button></div>
           <div class="invoice-installment-list">${(plan.installments || []).map((row, index) => invoiceInstallmentMarkup(row, index)).join('')}</div>
-          <div class="invoice-plan-balance ${Math.abs(summary.unplanned) < 0.01 ? 'balanced' : ''}"><span>${Math.abs(summary.unplanned) < 0.01 ? 'Plan covers the quotation total' : 'Still to allocate'}</span><strong>${invoiceMoney(summary.unplanned)}</strong></div>
+          ${invoicePlanBalanceMarkup(summary)}
         </section>
         <section class="invoice-panel">
           <div class="invoice-panel-heading"><div><h3>Payments received</h3><p>Track receipts without changing sent invoices.</p></div><button type="button" class="invoice-icon-text" onclick="invoiceAddPayment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add payment</button></div>
           <div class="invoice-payment-list">${(plan.payments || []).length ? plan.payments.map((row, index) => invoicePaymentMarkup(row, index)).join('') : '<div class="invoice-inline-empty">No payments recorded yet.</div>'}</div>
         </section>
-      </main>
+      </div>
       <aside class="invoice-editor-side">
         <section class="invoice-panel invoice-quote-card">
           <h3>Accepted quotation</h3>
@@ -1115,15 +1268,22 @@ function invoiceRenderEditor() {
         </section>
         <section class="invoice-panel invoice-history-card">
           <div class="invoice-panel-heading"><div><h3>Billing history</h3><p>Invoices, payments and status changes.</p></div></div>
-          <div class="invoice-history">${invoiceHistoryMarkup(plan)}</div>
+          <div id="invoiceBillingHistory" class="invoice-history">${invoiceHistoryMarkup(plan)}</div>
         </section>
       </aside>
     </div>
-  `;
+  `);
+  invoiceUpdateSaveState();
 }
 
 function invoiceMetric(label, amount, detail, tone = '') {
   return `<div class="invoice-metric ${tone}"><span>${invoiceEscape(label)}</span><strong>${invoiceMoney(amount)}</strong><small>${invoiceEscape(detail || '\u00a0')}</small></div>`;
+}
+
+function invoicePlanBalanceMarkup(summary) {
+  const overplanned = Number(summary.overplanned || 0);
+  const balanced = summary.unplanned < 0.005 && overplanned < 0.005;
+  return `<div class="invoice-plan-balance ${balanced ? 'balanced' : ''}"><span>${balanced ? 'Plan covers the quotation total' : overplanned > 0.005 ? 'Over-allocated' : 'Still to allocate'}</span><strong>${invoiceMoney(overplanned || summary.unplanned)}</strong></div>`;
 }
 
 function invoiceInstallmentMarkup(row, index) {
@@ -1133,7 +1293,7 @@ function invoiceInstallmentMarkup(row, index) {
     status === 'draft' && !row.invoiceFrozen
   );
   return `
-    <article class="invoice-installment ${issued ? 'issued' : ''}">
+    <article class="invoice-installment ${issued ? 'issued' : ''}" data-installment-id="${invoiceAttr(row.id)}">
       <div class="invoice-installment-index">${String(index + 1).padStart(2, '0')}</div>
       <label><span>Label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdateInstallment(${index},'label',this.value)" ${detailsEditable ? '' : 'disabled'}></label>
       <div class="invoice-mode-field"><span>Calculate by</span><div><button type="button" class="${row.mode === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','percentage')" ${issued ? 'disabled' : ''}>%</button><button type="button" class="${row.mode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','amount')" ${issued ? 'disabled' : ''}>$</button></div></div>
@@ -1155,10 +1315,13 @@ function invoiceInstallmentMarkup(row, index) {
 }
 
 function invoicePaymentMarkup(row, index) {
+  const invoices = (invoiceState.current?.plan?.installments || []).filter(item => item.invoiceId
+    && (!['void', 'cancelled'].includes(item.status) || item.invoiceId === row.invoiceId));
   return `
-    <article class="invoice-payment">
+    <article class="invoice-payment" data-payment-id="${invoiceAttr(row.id)}">
       <label><span>Date received</span><input type="date" value="${invoiceAttr(row.date || '')}" oninput="invoiceUpdatePayment(${index},'date',this.value)"></label>
-      <label class="invoice-payment-label"><span>Payment label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdatePayment(${index},'label',this.value)" placeholder="Deposit received"></label>
+      <div class="invoice-payment-details"><label class="invoice-payment-label"><span>Payment label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdatePayment(${index},'label',this.value)" placeholder="Deposit received"></label>
+      <label><span>Apply to invoice</span><select aria-label="Apply payment ${index + 1} to invoice" onchange="invoiceUpdatePayment(${index},'invoiceId',this.value)"><option value="">Unallocated / advance payment</option>${invoices.map(item => `<option value="${invoiceAttr(item.invoiceId)}" ${item.invoiceId === row.invoiceId ? 'selected' : ''}>${invoiceEscape(item.invoiceNumber || item.label || 'Invoice')}</option>`).join('')}</select></label></div>
       <label><span>Amount</span><div class="invoice-value-input"><b>$</b><input type="number" min="0" step="0.01" value="${Number(row.amount || 0)}" oninput="invoiceUpdatePayment(${index},'amount',this.value)"></div></label>
       <button type="button" class="invoice-receipt-button" title="Export payment receipt PDF" onclick="invoiceExportPaymentReceipt(${index})" ${Number(row.amount || 0) > 0 ? '' : 'disabled'}><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>Receipt PDF</button>
       <button type="button" class="invoice-remove-button" title="Remove payment" onclick="invoiceRemovePayment(${index})"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></button>
@@ -1189,10 +1352,7 @@ function invoiceMarkDirty() {
   invoiceState.saveTimer = setTimeout(
     () => invoiceSavePlan({ silent: true }), 700
   );
-  const state = document.getElementById('invoiceSaveState');
-  if (state) state.textContent = invoiceState.remoteUpdatePending
-    ? 'Unsaved changes · newer changes received'
-    : 'Unsaved changes';
+  invoiceUpdateSaveState();
 }
 
 function invoiceUpdatePlanField(key, value) {
@@ -1328,14 +1488,15 @@ function invoiceUpdateInstallment(index, key, value) {
     || row.invoiceId && ['mode', 'value'].includes(key)
     || issuedDetailsLocked && ['label', 'dueDate'].includes(key)
   ) return;
+  const previousAmount = Number(row.amount || 0);
   row[key] = key === 'value' ? Number(value || 0) : value;
   if (key === 'dueDate') {
     const countdown = document.getElementById(`invoiceDueCountdown-${row.id}`);
     if (countdown) countdown.textContent = invoiceDueCountdown(value);
   }
   if (key === 'mode' && row.mode === 'percentage') {
-    const total = Number(invoiceState.current.quotation?.totals?.total || 0);
-    row.value = total ? Math.round(Number(row.amount || 0) / total * 10000) / 100 : 0;
+    const total = invoiceLocalSummary(invoiceState.current.plan, invoiceState.current.quotation).adjustedTotal;
+    row.value = total ? Math.round(previousAmount / total * 10000) / 100 : 0;
   } else if (key === 'mode') {
     row.value = Number(row.amount || 0);
   }
@@ -1353,15 +1514,38 @@ function invoiceRefreshCalculatedValues() {
     node.textContent = invoiceMoney(current.plan.installments[index]?.amount || 0);
   });
   const balance = document.querySelector('.invoice-plan-balance');
-  if (balance) {
-    balance.classList.toggle('balanced', Math.abs(summary.unplanned) < 0.01);
-    balance.querySelector('span').textContent = Math.abs(summary.unplanned) < 0.01 ? 'Plan covers the quotation total' : 'Still to allocate';
-    balance.querySelector('strong').textContent = invoiceMoney(summary.unplanned);
-  }
+  if (balance) balance.outerHTML = invoicePlanBalanceMarkup(summary);
   const metrics = document.querySelector('.invoice-metrics');
   if (metrics) metrics.outerHTML = `<div class="invoice-metrics">${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}</div>`;
   const discountAmount = document.getElementById('invoiceDiscountAmount');
   if (discountAmount) discountAmount.textContent = `-${invoiceMoney(summary.invoiceDiscountAmount)}`;
+  document.querySelectorAll('.invoice-payment .invoice-receipt-button').forEach((button, index) => {
+    button.disabled = Number(current.plan.payments[index]?.amount || 0) <= 0;
+  });
+  const plannedCaption = document.querySelector('.invoice-installments-panel .invoice-panel-heading p');
+  if (plannedCaption) plannedCaption.textContent = `${invoiceMoney(summary.planned)} planned of ${invoiceMoney(summary.adjustedTotal)}`;
+  const history = document.getElementById('invoiceBillingHistory');
+  if (history) {
+    const markup = invoiceHistoryMarkup(current.plan);
+    if (history.innerHTML !== markup) history.innerHTML = markup;
+  }
+}
+
+function invoiceRefreshDocumentStatuses() {
+  const current = invoiceState.current;
+  if (!current) return;
+  const badge = document.querySelector('.invoice-editor-actions > .invoice-status');
+  if (badge) badge.outerHTML = invoiceStatusBadgeMarkup(current.plan.status);
+  document.querySelectorAll('.invoice-installment[data-installment-id]').forEach(article => {
+    const index = current.plan.installments.findIndex(row => row.id === article.dataset.installmentId);
+    const row = current.plan.installments[index];
+    const control = article.querySelector('.invoice-status-control');
+    if (!row?.invoiceId || !control || control.contains(document.activeElement)) return;
+    const status = String(row.status || 'draft').toLowerCase();
+    if (control.querySelector('.invoice-status')?.dataset.status === status) return;
+    control.outerHTML = invoiceStatusControlMarkup(status, `installment-status-${row.id}`,
+      `invoiceRequestDocumentStatus('${invoiceAttr(row.invoiceId)}',${index},STATUS_VALUE,'editor')`, invoiceDocumentStatusChoices(status));
+  });
 }
 
 function invoiceAddInstallment() {
@@ -1395,7 +1579,11 @@ async function invoiceRemoveInstallment(index) {
 function invoiceAddPayment() {
   const rows = invoiceState.current?.plan?.payments;
   if (!rows) return;
-  rows.unshift({ id: invoiceUid('payment'), date: invoiceToday(), label: 'Payment received', amount: 0, createdAt: new Date().toISOString() });
+  const outstanding = (invoiceState.current.plan.installments || []).filter(row => row.invoiceId
+    && !['void', 'cancelled'].includes(row.status)
+    && invoiceIssuedAmountDue(invoiceFindDocument(row.invoiceId)) > 0);
+  rows.unshift({ id: invoiceUid('payment'), date: invoiceToday(), label: 'Payment received', amount: 0,
+    invoiceId: outstanding.length === 1 ? outstanding[0].invoiceId : '', createdAt: new Date().toISOString() });
   invoiceMarkDirty();
   invoiceRenderEditor();
 }
@@ -1419,7 +1607,7 @@ async function invoiceExportPaymentReceipt(index) {
   const receiptWindow = window.open('', '_blank');
   const quotationId = current.quotation.id;
   const paymentId = payment.id;
-  const saved = await invoiceSavePlan({ silent: true });
+  const saved = await invoiceFlushPendingSave();
   if (!saved) {
     receiptWindow?.close();
     return;
@@ -1430,14 +1618,26 @@ async function invoiceExportPaymentReceipt(index) {
 }
 
 async function invoiceRemovePayment(index) {
+  const quotationId = invoiceState.current?.quotation?.id;
   const row = invoiceState.current?.plan?.payments?.[index];
   if (!row) return;
+  const paymentId = row.id;
+  const paymentDetails = item => [item.label || '', Number(item.amount || 0), item.date || '', item.invoiceId || ''];
+  const originalDetails = paymentDetails(row);
   const confirmed = typeof showAppConfirm === 'function' ? await showAppConfirm({
     title: 'Remove payment record?', message: `${row.label || 'This payment'} for ${invoiceMoney(row.amount)} will be removed from the invoice history.`,
     confirmText: 'Remove payment', cancelText: 'Keep payment', variant: 'danger'
   }) : window.confirm('Remove this payment record?');
   if (!confirmed) return;
-  invoiceState.current.plan.payments.splice(index, 1);
+  if (invoiceState.current?.quotation?.id !== quotationId) return;
+  const payments = invoiceState.current.plan.payments || [];
+  const currentIndex = payments.findIndex(item => item.id === paymentId);
+  const currentRow = payments[currentIndex];
+  if (!currentRow || !invoiceValuesEqual(paymentDetails(currentRow), originalDetails)) {
+    showNotification('warning', 'This payment changed while confirmation was open. Review it before removing it.');
+    return;
+  }
+  payments.splice(currentIndex, 1);
   invoiceMarkDirty();
   invoiceRenderEditor();
 }
@@ -1445,32 +1645,45 @@ async function invoiceRemovePayment(index) {
 async function invoiceSavePlan(options = {}) {
   const current = invoiceState.current;
   if (!current) return null;
-  if (invoiceState.activeSave) {
+  while (invoiceState.activeSave) {
     await Promise.allSettled([invoiceState.activeSave]);
     if (!invoiceState.current || invoiceState.current.quotation.id !== current.quotation.id) return null;
     if (!invoiceState.dirty) return invoiceState.current;
   }
+  invoiceState.saving = true;
+  invoiceUpdateSaveState();
+  const task = invoicePerformSave(options);
+  invoiceState.activeSave = task;
+  try {
+    return await task;
+  } finally {
+    if (invoiceState.activeSave === task) {
+      invoiceState.activeSave = null;
+      invoiceState.saving = false;
+      invoiceUpdateSaveState();
+    }
+  }
+}
+
+async function invoicePerformSave(options) {
+  const current = invoiceState.current;
+  if (!current) return null;
   clearTimeout(invoiceState.saveTimer);
   invoiceState.saveTimer = null;
-  invoiceState.saving = true;
   const version = invoiceState.changeVersion;
   const localPlan = invoiceClone(current.plan);
   const basePlan = invoiceClone(invoiceState.basePlan || current.plan);
-  if (!options.silent) invoiceRenderEditor();
   try {
     const requestPromise = apiCall(
       `/api/invoice-plans/${encodeURIComponent(current.quotation.id)}`,
       'PUT',
       { ...localPlan, _baseDocument: basePlan }
     );
-    invoiceState.activeSave = requestPromise;
     const response = await requestPromise;
     if (invoiceState.current?.quotation?.id === current.quotation.id) {
+      const previousFields = invoiceEditorFields(invoiceState.current.plan);
       if (invoiceState.changeVersion === version) {
-        invoiceState.current = response.data;
-        invoiceState.basePlan = invoiceClone(response.data.plan);
-        invoiceState.dirty = false;
-        invoiceState.remoteUpdatePending = false;
+        invoiceAdoptPlan(response.data);
       } else {
         invoiceState.current.plan = invoiceMergePlan(
           localPlan, invoiceState.current.plan, response.data.plan
@@ -1481,14 +1694,19 @@ async function invoiceSavePlan(options = {}) {
           () => invoiceSavePlan({ silent: true }), 250
         );
       }
+      invoiceRefreshEditorFields(previousFields);
     }
     if (!options.silent) {
       showNotification('success', 'Invoice plan saved');
-      invoiceRenderEditor();
     }
+    invoiceRefreshCalculatedValues();
+    invoiceRefreshDocumentStatuses();
     return response.data;
   } catch (error) {
+    if (invoiceState.current?.quotation?.id !== current.quotation.id) return null;
     if (error.payload?.code === 'document_version_conflict' && error.payload?.data) {
+      clearTimeout(invoiceState.saveTimer);
+      invoiceState.saveTimer = null;
       const latest = error.payload.data;
       const newestLocal = invoiceState.changeVersion === version
         ? localPlan
@@ -1509,34 +1727,31 @@ async function invoiceSavePlan(options = {}) {
         invoiceState.basePlan = invoiceClone(latest.plan);
         invoiceState.dirty = true;
         invoiceState.changeVersion += 1;
-        return invoiceSavePlan(options);
+        invoiceRenderEditor();
+        return invoicePerformSave(options);
       }
       if (decision === 'use-latest') {
-        invoiceState.current = latest;
-        invoiceState.basePlan = invoiceClone(latest.plan);
-        invoiceState.dirty = false;
-        invoiceState.remoteUpdatePending = false;
+        invoiceAdoptPlan(latest);
         invoiceRenderEditor();
         return latest;
       }
-      invoiceState.current = { ...latest, plan: merged };
-      invoiceState.basePlan = invoiceClone(latest.plan);
+      // Review is not permission to overwrite the other user's conflicting edit.
+      // Retain the original base so the next save still requires a decision.
+      invoiceState.pendingRealtime = latest;
       invoiceState.dirty = true;
       invoiceState.remoteUpdatePending = true;
-      invoiceRenderEditor();
+      invoiceUpdateSaveState();
       return null;
     }
     showNotification('error', error.message || 'Unable to save invoice plan');
     return null;
-  } finally {
-    invoiceState.activeSave = null;
-    invoiceState.saving = false;
   }
 }
 
 async function invoiceFlushPendingSave() {
   clearTimeout(invoiceState.saveTimer);
   invoiceState.saveTimer = null;
+  if (invoiceState.activeSave && !await invoiceState.activeSave) return false;
   if (!invoiceState.current || !invoiceState.dirty) return true;
   const saved = await invoiceSavePlan({ silent: true });
   return Boolean(saved) && !invoiceState.dirty;
@@ -1559,21 +1774,25 @@ async function invoiceIssueInstallment(index) {
     showNotification('error', 'This invoice would exceed the remaining quotation amount.');
     return;
   }
-  const saved = await invoiceSavePlan({ silent: true });
+  const saved = await invoiceFlushPendingSave();
   if (!saved) return;
+  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
+  const savedRow = invoiceState.current.plan.installments.find(item => item.id === row.id);
+  if (!savedRow || savedRow.invoiceId) return;
+  const confirmedAmount = Number(savedRow.amount || 0);
   const invoiceDetails = invoicePlanDetails(
     invoiceState.current?.plan,
     invoiceState.current?.quotation
   );
   const issueDetails = typeof showAppForm === 'function' ? await showAppForm({
     title: 'Issue invoice',
-    message: `${row.label} will be issued for ${invoiceMoney(row.amount)}. Confirm the invoice and PO / reference numbers below.`,
+    message: `${savedRow.label} will be issued for ${invoiceMoney(savedRow.amount)}. Confirm the invoice and PO / reference numbers below.`,
     confirmText: 'Issue invoice',
     cancelText: 'Cancel',
     fields: [{
       name: 'invoiceNumber',
       label: 'Invoice number',
-      defaultValue: current.nextInvoiceNumber || '',
+      defaultValue: invoiceState.current.nextInvoiceNumber || '',
       placeholder: 'INV-2026-0001',
       required: true,
       maxLength: 80
@@ -1585,25 +1804,39 @@ async function invoiceIssueInstallment(index) {
       maxLength: 300
     }]
   }) : (window.confirm('Issue this invoice?') ? {
-    invoiceNumber: current.nextInvoiceNumber || '',
+    invoiceNumber: invoiceState.current.nextInvoiceNumber || '',
     reference: invoiceDetails.reference || ''
   } : null);
   const invoiceNumber = String(issueDetails?.invoiceNumber || '').trim();
   if (!invoiceNumber) { invoiceRenderEditor(); return; }
+  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
   const reference = String(issueDetails?.reference || '').trim();
-  if (reference !== String(invoiceDetails.reference || '').trim()) {
-    invoiceDetails.reference = reference;
+  const currentDetails = invoicePlanDetails();
+  if (reference !== String(currentDetails.reference || '').trim()) {
+    currentDetails.reference = reference;
     invoiceMarkDirty();
-    const referenceSaved = await invoiceSavePlan({ silent: true });
+    const referenceSaved = await invoiceFlushPendingSave();
     if (!referenceSaved) return;
   }
+  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
+  const currentRow = invoiceState.current.plan.installments.find(item => item.id === row.id);
+  if (!currentRow) return;
   try {
     const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(current.quotation.id)}/installments/${encodeURIComponent(row.id)}/issue`, 'POST', {
-      invoiceDate: invoiceToday(), dueDate: row.dueDate, status: 'draft', number: invoiceNumber
+      invoiceDate: invoiceToday(), dueDate: currentRow.dueDate, status: 'draft', number: invoiceNumber,
+      expectedAmount: confirmedAmount
     });
-    invoiceState.current = response.plan;
+    if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
     showNotification('success', `${response.data.number} created`);
-    invoiceRenderEditor();
+    if (Number(response.plan.plan.documentVersion) < invoiceLatestKnownVersion()) return;
+    if (invoiceHasPendingChanges() || invoiceEditorHasFocus()) {
+      invoiceState.pendingRealtime = response.plan;
+      invoiceState.remoteUpdatePending = true;
+      invoiceUpdateSaveState();
+    } else {
+      invoiceAdoptPlan(response.plan);
+      invoiceRenderEditor();
+    }
   } catch (error) {
     showNotification('error', error.message || 'Unable to issue invoice');
   }
@@ -1688,10 +1921,8 @@ async function invoiceOpenSentModal(invoiceId, index, origin) {
 }
 
 function invoiceFindDocument(invoiceId) {
-  const directoryInvoice = invoiceState.issuedInvoices.find(row => row.id === invoiceId);
-  if (directoryInvoice) return directoryInvoice;
   const installment = invoiceState.current?.plan?.installments?.find(row => row.invoiceId === invoiceId);
-  if (!installment) return null;
+  if (!installment) return invoiceState.issuedInvoices.find(row => row.id === invoiceId) || null;
   return {
     id: invoiceId,
     number: installment.invoiceNumber,
@@ -1701,6 +1932,7 @@ function invoiceFindDocument(invoiceId) {
     paymentTermDays: installment.paymentTermDays,
     paymentDueDate: installment.paymentDueDate,
     dueDate: installment.dueDate,
+    reference: invoiceState.current?.plan?.invoiceDetails?.reference || '',
     invoicePlanPayments: invoiceState.current?.plan?.payments || []
   };
 }
@@ -1711,10 +1943,15 @@ async function invoiceReloadCurrentPlan() {
   const response = await apiCall(
     `/api/invoice-plans/${encodeURIComponent(quotationId)}`
   );
-  invoiceState.current = response.data;
-  invoiceState.basePlan = invoiceClone(response.data.plan);
-  invoiceState.dirty = false;
-  invoiceState.remoteUpdatePending = false;
+  if (invoiceState.current?.quotation?.id !== quotationId) return;
+  if (Number(response.data.plan.documentVersion) < invoiceLatestKnownVersion()) return;
+  if (invoiceHasPendingChanges() || invoiceEditorHasFocus()) {
+    invoiceState.pendingRealtime = response.data;
+    invoiceState.remoteUpdatePending = true;
+    invoiceUpdateSaveState();
+    return;
+  }
+  invoiceAdoptPlan(response.data);
   invoiceRenderEditor();
 }
 
@@ -1732,7 +1969,8 @@ async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = '
   if (String(currentInvoice?.status || '').toLowerCase() === String(status || '').toLowerCase()) return;
   if (status === 'paid') {
     const invoice = currentInvoice;
-    invoiceState.paidTarget = { invoiceId, index, origin };
+    invoiceState.paidTarget = { invoiceId, index, origin, documentVersion: invoice?.documentVersion,
+      quotationId: invoiceState.current?.quotation?.id, expectedAmountDue: invoiceIssuedAmountDue(invoice || {}) };
     invoiceEnsurePaidModal();
     const receivedDate = document.getElementById('invoicePaidReceivedDate');
     const amount = document.getElementById('invoicePaidAmount');
@@ -1751,7 +1989,7 @@ async function invoiceRequestDocumentStatus(invoiceId, index, status, origin = '
       ...(currentInvoice?.documentVersion ? { documentVersion: currentInvoice.documentVersion } : {})
     });
     if (origin === 'directory') {
-      await loadInvoices(invoiceState.query);
+      await loadInvoices(invoiceState.query, { preservePosition: true });
     } else {
       await invoiceReloadCurrentPlan();
     }
@@ -1764,52 +2002,54 @@ async function invoiceConfirmSent() {
   const target = invoiceState.sentTarget;
   const invoiceSentDate = document.getElementById('invoiceSentDate')?.value;
   const paymentTermDays = Number(document.getElementById('invoiceSentDueDays')?.value);
-  if (!target?.invoiceId) return;
+  if (!target?.invoiceId || target.submitting) return;
   if (!invoiceSentDate || !Number.isInteger(paymentTermDays) || paymentTermDays < 0 || paymentTermDays > 3650) {
     showNotification('error', 'Enter a valid sent date and due-in-days value');
     return;
   }
-  closeModal('invoiceSentModal');
+  target.submitting = true;
   try {
     await apiCall(`/api/invoices/${encodeURIComponent(target.invoiceId)}`, 'PUT', {
       status: 'sent', invoiceSentDate, paymentTermDays,
       ...(target.documentVersion ? { documentVersion: target.documentVersion } : {})
     });
+    closeModal('invoiceSentModal');
     showNotification('success', 'Invoice marked as sent');
-    if (target.origin === 'directory') await loadInvoices(invoiceState.query);
+    if (target.origin === 'directory') await loadInvoices(invoiceState.query, { preservePosition: true });
     else await invoiceReloadCurrentPlan();
   } catch (error) {
     showNotification('error', error.message || 'Unable to mark invoice as sent');
   } finally {
-    invoiceState.sentTarget = null;
+    target.submitting = false;
   }
 }
 
 async function invoiceConfirmPaid() {
   const target = invoiceState.paidTarget;
   const receivedDate = document.getElementById('invoicePaidReceivedDate')?.value || invoiceToday();
-  if (!target?.invoiceId) return;
-  closeModal('invoicePaidModal');
+  if (!target?.invoiceId || target.submitting) return;
+  target.submitting = true;
   try {
     const response = await apiCall(
       `/api/invoices/${encodeURIComponent(target.invoiceId)}/mark-paid`,
       'POST',
-      { receivedDate }
+      { receivedDate, expectedAmountDue: target.expectedAmountDue,
+        ...(target.documentVersion ? { documentVersion: target.documentVersion } : {}) }
     );
+    closeModal('invoicePaidModal');
     showNotification(
       'success',
       `Invoice marked paid and ${invoiceMoney(response.paymentAmount || 0)} recorded`
     );
     if (target.origin === 'directory') {
-      await loadInvoices(invoiceState.query);
-    } else {
-      invoiceState.current = response.plan;
-      invoiceRenderEditor();
+      await loadInvoices(invoiceState.query, { preservePosition: true });
+    } else if (invoiceState.current?.quotation?.id === target.quotationId) {
+      await invoiceReloadCurrentPlan();
     }
   } catch (error) {
     showNotification('error', error.message || 'Unable to mark invoice as paid');
   } finally {
-    invoiceState.paidTarget = null;
+    target.submitting = false;
   }
 }
 
@@ -1820,10 +2060,10 @@ async function invoiceOpenPdf(invoiceId, installmentIndex = -1) {
   if (
     row?.invoiceId === invoiceId
     && String(row.status || 'draft').toLowerCase() === 'draft'
-    && invoiceState.dirty
+    && invoiceHasPendingChanges()
   ) {
     previewWindow = window.open('', '_blank');
-    const saved = await invoiceSavePlan({ silent: true });
+    const saved = await invoiceFlushPendingSave();
     if (!saved) {
       previewWindow?.close();
       return;
@@ -1834,7 +2074,8 @@ async function invoiceOpenPdf(invoiceId, installmentIndex = -1) {
   else window.open(pdfUrl, '_blank', 'noopener');
 }
 
-function invoiceOpenQuotation(quotationId) {
+async function invoiceOpenQuotation(quotationId) {
+  if (!await invoiceFlushPendingSave()) return;
   showSection('quotations', { loadDetail: false });
   financeOpenDocument(quotationId);
 }
@@ -1842,4 +2083,46 @@ function invoiceOpenQuotation(quotationId) {
 document.addEventListener('click', event => {
   if (event.target.closest('.invoice-status-control')) return;
   invoiceCloseStatusMenus();
+});
+
+document.addEventListener('keydown', event => {
+  const menu = event.target.closest('.invoice-status-menu.open');
+  const trigger = event.target.closest('[data-invoice-menu-trigger]');
+  if (event.key === 'Escape') {
+    const openMenu = menu || document.querySelector('.invoice-status-menu.open');
+    if (!openMenu) return;
+    const id = openMenu.dataset.invoiceStatusPortal || openMenu.id;
+    const owner = [...document.querySelectorAll('[data-invoice-menu-trigger]')]
+      .find(item => item.dataset.invoiceMenuTrigger === id);
+    event.preventDefault();
+    invoiceCloseStatusMenus();
+    owner?.focus({ preventScroll: true });
+  } else if (trigger && event.key === 'ArrowDown') {
+    event.preventDefault();
+    invoiceToggleStatusMenu(trigger.dataset.invoiceMenuTrigger, { currentTarget: trigger, detail: 0 });
+  } else if (menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    event.preventDefault();
+    const buttons = [...menu.querySelectorAll('button:not(:disabled)')];
+    const index = buttons.indexOf(document.activeElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+      : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next]?.focus();
+  }
+});
+
+document.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (invoiceState.editorRenderPending && !invoiceDropdownIsOpen()) invoiceRenderEditor();
+    if (!invoiceState.pendingRealtime || invoiceHasPendingChanges() || invoiceEditorHasFocus()) return;
+    const pending = invoiceState.pendingRealtime;
+    if (pending.quotation?.id !== invoiceState.current?.quotation?.id) return;
+    if (Number(pending.plan.documentVersion) < Number(invoiceState.current.plan.documentVersion)) {
+      invoiceState.pendingRealtime = null;
+      invoiceState.remoteUpdatePending = false;
+      invoiceUpdateSaveState();
+      return;
+    }
+    invoiceAdoptPlan(pending);
+    invoiceRenderEditor();
+  }, 0);
 });

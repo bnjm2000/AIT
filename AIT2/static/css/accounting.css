@@ -9,6 +9,52 @@
   color: var(--accounting-ink);
 }
 
+/* Workflow and report workspace */
+.ac-wide-field { display:flex;flex-direction:column;gap:6px;grid-column:1/-1;margin:12px 0; }
+.ac-wide-field textarea { box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #cbd7dc;border-radius:6px;font:inherit;resize:vertical;min-height:80px; }
+.ac-filing-review { border:1px solid #d6e2dc;border-radius:7px;padding:15px;margin:18px 0; }
+.ac-filing-review legend { color:#234b3e;font-weight:700;padding:0 6px; }
+.ac-filing-review label { display:flex;align-items:flex-start;gap:10px;margin:11px 0;line-height:1.5; }
+.ac-filing-review input[type=checkbox] { flex:0 0 17px;width:17px;height:17px;margin-top:3px;accent-color:var(--brand-main,#138a72); }
+#acFilingWorksheet { margin-top:18px; }
+#acFilingWorksheet input { box-sizing:border-box;max-width:100%;min-width:100px;padding:8px;border:1px solid #cbd7dc;border-radius:4px;font:inherit; }
+#acFilingWorksheet input[type=number] { width:150px;text-align:right; }
+.ac-tax-worksheet { padding:16px;background:#f7faf9;border:1px solid #d6e2dc;border-radius:7px; }
+.ac-tax-worksheet > label { display:flex;flex-direction:column;gap:6px;margin:14px 0; }
+.ac-tax-worksheet h4 { margin:0 0 10px; }
+.ac-overdue { color:#aa452d!important;font-weight:600; }
+.accounting-table td.ac-wrap { white-space:normal;min-width:190px;max-width:520px; }
+#acCloseContent .accounting-table td small { display:block;margin-top:5px; }
+.ac-base-currency { display:inline-block;margin-left:7px;padding:2px 7px;border:1px solid #cbddd5;border-radius:4px;color:#386854;font-size:10px;letter-spacing:.08em;vertical-align:middle; }
+.ac-eyebrow { color:#517668;font-size:10px;letter-spacing:.1em;font-weight:750; }
+.ac-workflow-strip { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 23px;margin-bottom:16px;background:#edf5f1;border:1px solid #d6e6dc;border-radius:9px; }
+.ac-workflow-strip h3 { margin:7px 0;color:#203d32;font-size:20px; }
+.ac-workflow-strip p,.ac-page-intro p { margin:5px 0 0;color:#63796f;line-height:1.55; }
+.ac-role { background:white;border:1px solid #c4d9cd;padding:7px 12px;border-radius:6px;color:#325744;text-transform:capitalize; }
+.ac-attention-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px; }
+.ac-attention-grid button { display:grid;grid-template-columns:1fr auto;gap:6px;padding:15px;text-align:left;border:1px solid #dce4df;border-radius:7px;background:white;color:#253c32;cursor:pointer; }
+.ac-attention-grid strong {font-size:25px;line-height:1.1;}.ac-attention-grid span {grid-row:2;font-size:12px;color:#66786f}.ac-attention-grid b {grid-column:2;grid-row:1/3;align-self:center;color:#729181}
+.ac-attention-grid button:hover {border-color:#769f87;background:#f8fcfa}
+.ac-page-intro { display:flex;align-items:center;justify-content:space-between;gap:18px;margin:3px 0 18px; }
+.ac-page-intro h3 {font-size:20px;margin:4px 0}.ac-page-intro .accounting-tools {flex-wrap:wrap;justify-content:flex-end}
+.ac-subtabs { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:17px; }
+.ac-subtabs button { border:1px solid #d6e1da;border-radius:6px;background:#fff;color:#53685d;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer; }
+.ac-subtabs button.active { background:#e8f3ed;color:#205d41;border-color:#83ae94;font-weight:750; }
+.ac-footer-actions { display:flex;gap:8px;margin-top:12px;flex-wrap:wrap; }
+.ac-checklist {display:flex;flex-wrap:wrap;gap:14px;list-style:none;margin:0;padding:18px}.ac-checklist li{display:flex;gap:9px;align-items:center;flex:1 1 170px}.ac-checklist li>span{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#eaf3ed;color:#3e6a4f;flex-shrink:0}
+.ac-action-grid {display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:20px}.ac-action-grid button {text-align:left;padding:18px;border:1px solid #d6e2da;border-radius:7px;background:#f8fbf9;color:#284833;cursor:pointer}.ac-action-grid strong{display:block;font-size:15px}.ac-action-grid small{display:block;margin-top:8px;line-height:1.6;color:#718177}.ac-action-grid button:hover{background:#eaf5ee;border-color:#7eac8f}
+.ac-form{padding:0 15px}.ac-form .accounting-form-grid{margin:0;padding:16px 0}.ac-form input[type=checkbox],.ac-checkbox input[type=checkbox]{width:17px;min-height:17px;height:17px;accent-color:#297a58}
+.ac-form-error{color:#b22d37;line-height:1.5;margin:12px 0;white-space:pre-wrap}.ac-document-meta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 0;color:#758578}.ac-document-meta strong{margin-left:auto;color:#29583e}
+.ac-line-editor{min-width:790px}.ac-line-editor input,.ac-line-editor select{min-width:85px}.ac-line-editor td:first-child{width:27%}.ac-line-editor th:nth-child(2),.ac-line-editor th:nth-child(3){width:11%}.ac-line-editor td:nth-child(4){width:25%}.ac-line-editor td:nth-child(5){width:11%}
+.ac-document-total{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:20px;padding:15px;background:#f3f8f4;margin:12px 0;color:#607266}.ac-document-total strong{color:#204a32;font-size:17px}.ac-document-total small{flex:0 0 100%;text-align:right;color:#75887b}
+.ac-attachments{padding:14px 16px;margin:14px 0;border:1px dashed #bccfc2;border-radius:7px;background:#fbfdfb}.ac-attachments h4{margin:0 0 9px}.ac-attachments p{color:#7a897e;margin:6px 0}.ac-attachments a{display:flex;align-items:center;gap:7px;color:#266b48;overflow-wrap:anywhere;margin:7px 0}.ac-attachments svg{width:17px;height:17px;stroke:currentColor;fill:none}.ac-attachments small{color:#7c8b80;display:block}.ac-upload-label{display:block;margin:12px 0;font-size:12px;font-weight:700}.ac-upload-label input{display:block;margin-top:7px;max-width:440px}
+.ac-reports-layout{display:grid;grid-template-columns:225px minmax(0,1fr);gap:22px;align-items:start}.ac-report-nav{background:#f6f9f7;border:1px solid #dfe7e0;border-radius:8px;padding:15px 10px;position:sticky;top:12px}.ac-report-nav-heading{padding:0 10px;font-size:10px;font-weight:800;color:#6e8376;letter-spacing:.1em;display:flex;justify-content:space-between}.ac-report-nav h4{padding:0 10px;margin:21px 0 7px;font-size:11px;color:#86958b}.ac-report-nav button{display:block;border:0;border-radius:5px;background:transparent;color:#4a6254;text-align:left;width:100%;padding:10px;font:inherit;font-size:12px;cursor:pointer;line-height:1.4}.ac-report-nav button.active{background:#dfede4;color:#245c3b;font-weight:750}.ac-report-nav button:hover{background:#eaf2ed}.ac-report-workspace{min-width:0}.ac-report-filters{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin-bottom:17px}.ac-report-filters label{display:grid;gap:5px;min-width:145px}.ac-report-filters label>span{font-size:11px;color:#7b8b80;font-weight:700}.ac-report-paper{background:white;border:1px solid #dce5de;border-radius:8px;overflow:hidden}.ac-report-heading{padding:25px 24px 19px;border-bottom:1px solid #e3eae4}.ac-report-heading>strong{color:#789082;font-size:11px;letter-spacing:.04em}.ac-report-heading h3{font-size:22px;color:#294b37;margin:7px 0}.ac-report-heading p{font-size:12px;color:#73887b;margin:0}.ac-report-table th,.ac-report-table td{padding:11px 14px}.ac-report-table th:first-child,.ac-report-table td:first-child{min-width:210px}.ac-report-table .ac-report-section th{background:#f0f6f2;color:#52715c;font-size:11px;letter-spacing:.04em}.ac-report-table .ac-report-total td{font-weight:750;border-top:1px solid #bbd0c1;background:#f9fcfa;color:#214c32}.ac-drill{border:0;background:none;color:#2c7350;text-decoration:underline;text-decoration-color:#bed5c5;text-underline-offset:4px;cursor:pointer;font:inherit;text-align:inherit;padding:0;line-height:1.5}.ac-drill:hover{color:#134329;text-decoration-color:#134329}.ac-report-hint{font-size:11px;color:#819386;padding:10px 17px;margin:0;border-top:1px solid #e3ece5}.ac-report-workspace>.accounting-notice{margin-top:13px;font-size:12px;line-height:1.65}
+.ac-overdue{color:#a84136;font-weight:700}.ac-wrap{overflow-wrap:anywhere;max-width:280px}.ac-audit-detail{padding:20px}.ac-audit-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f5;padding:15px;font-size:12px;max-height:350px;overflow:auto}.ac-controls-form>.accounting-panel{margin-bottom:17px}.ac-checkbox{display:flex!important;flex-direction:row;align-items:center;gap:8px!important;font-size:12px;color:#53685a;line-height:1.5}.ac-checkbox span{text-transform:none!important;font-size:12px!important}.ac-cash-accounts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:18px}.ac-mappings{margin:0 18px 18px}.ac-mappings summary{cursor:pointer;font-size:13px;color:#3d7151;padding:10px 0}.ac-invoicenow{padding:22px;max-width:850px;line-height:1.8;color:#597062}.ac-invoicenow h3{font-size:23px;color:#284d36}.ac-invoicenow li{margin:8px 0}.ac-invoicenow a{color:#287948}.ac-connection-badge{padding:5px 10px;background:#faf1da;color:#84641e;font-size:11px;border-radius:5px}.ac-form .accounting-panel{margin-top:12px}
+.accounting-page button:focus-visible,.accounting-modal button:focus-visible{outline:3px solid #76b993;outline-offset:3px}.accounting-page .money{font-variant-numeric:tabular-nums}.accounting-tools{flex-wrap:wrap}.accounting-modal .modal-actions{flex-wrap:wrap}
+@media(max-width:1100px){.ac-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ac-reports-layout{grid-template-columns:190px minmax(0,1fr);gap:14px}.ac-page-intro{align-items:flex-start;flex-direction:column}.ac-page-intro .accounting-tools{justify-content:flex-start}.ac-cash-accounts{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.ac-reports-layout{grid-template-columns:1fr}.ac-report-nav{position:static;display:flex;flex-wrap:wrap;gap:4px;max-height:230px;overflow:auto}.ac-report-nav-heading{width:100%;padding:8px}.ac-report-nav h4{width:100%;margin:8px 4px 0}.ac-report-nav button{width:auto;font-size:11px;padding:7px 9px}.ac-workflow-strip{padding:16px;align-items:flex-start}.ac-workflow-strip h3{font-size:17px}.ac-workflow-strip p{font-size:12px}.ac-action-grid{grid-template-columns:repeat(2,1fr)}.ac-cash-accounts{grid-template-columns:1fr}.ac-report-heading{padding:18px}.ac-report-heading h3{font-size:19px}.ac-form{padding:0 6px}.ac-workflow-strip .ac-role{display:none}.ac-report-filters label{flex:1 1 140px}.ac-reports-layout .accounting-notice{line-height:1.6}}
+@media(max-width:440px){.ac-action-grid{grid-template-columns:1fr}.ac-attention-grid{gap:7px}.ac-attention-grid button{padding:12px}.ac-attention-grid span{font-size:11px}.ac-document-total{gap:12px}}
+
 .accounting-page *,
 .accounting-modal * { box-sizing: border-box; }
 
@@ -119,6 +165,7 @@
   display: flex;
   gap: 2px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 2px solid var(--accounting-line);
   scrollbar-width: thin;
 }
@@ -139,7 +186,7 @@
   content: '';
   position: absolute;
   right: 10px;
-  bottom: -2px;
+  bottom: 0;
   left: 10px;
   height: 3px;
   background: transparent;
@@ -374,3 +421,12 @@
   .accounting-notice { align-items: flex-start; flex-direction: column; }
   .accounting-journal-balance { align-items: flex-end; flex-direction: column; gap: 5px; }
 }
+
+.ac-document-preview { background:#fff; color:#17312b; padding:28px; border:1px solid var(--accounting-line); border-radius:10px; }
+.ac-document-preview table {width:100%;border-collapse:collapse;margin:18px 0;}
+.ac-document-preview th,.ac-document-preview td {padding:9px;border-bottom:1px solid var(--accounting-line);text-align:left;vertical-align:top;overflow-wrap:anywhere;}
+.ac-document-preview .money {text-align:right;white-space:nowrap;}
+.ac-document-preview header strong {font-size:20px;}
+.ac-document-preview p {margin:10px 0;line-height:1.5;}
+.ac-document-preview .ac-document-warning {background:#fff5dd;padding:12px;border-radius:6px;color:#785414;}
+@media(max-width:700px){.ac-document-preview{padding:14px;overflow-x:auto}.ac-document-preview table{min-width:560px;}}

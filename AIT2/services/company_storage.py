@@ -120,7 +120,8 @@ class CompanyStorageUsageService:
                     if normalized_path in seen_paths or os.path.islink(absolute_path):
                         continue
                     try:
-                        file_size = max(0, int(os.path.getsize(absolute_path)))
+                        file_stat = os.stat(absolute_path, follow_symlinks=False)
+                        file_size = max(0, int(file_stat.st_size))
                     except OSError:
                         continue
                     seen_paths.add(normalized_path)
@@ -130,7 +131,7 @@ class CompanyStorageUsageService:
                     totals[category]["fileCount"] += 1
                     try:
                         modified_at = datetime.fromtimestamp(
-                            os.path.getmtime(absolute_path)
+                            file_stat.st_mtime
                         ).astimezone().isoformat(timespec="seconds")
                     except OSError:
                         modified_at = None

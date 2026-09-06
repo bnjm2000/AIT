@@ -640,6 +640,9 @@ function refreshSidebarUserMenu() {
 }
 
 function applyPermissionUi() {
+  document.querySelectorAll('.accounting-access-only').forEach(el => {
+    el.style.display = canCurrentUserManageRoles() ? 'block' : 'none';
+  });
   const adminOnlySelectors = [
     ".admin-only",
     "[data-admin-only='true']"
@@ -4076,7 +4079,10 @@ function showSection(sectionName, options = {}) {
     }
   }
   const adminOnlySections = new Set(["plan", "compare", "workforce", "transport", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
-  const platformAdminOnlySections = new Set(["companies", "accounting"]);
+  const platformAdminOnlySections = new Set(["companies"]);
+  if (sectionName === 'accounting' && !canCurrentUserManageRoles()) {
+    return showSection('events', { ...options, replaceHistory: true });
+  }
   const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
   if (sectionName === 'invoice-claims' && !canCurrentUserViewAllInvoiceClaims()) {
     return showSection("events", { ...options, replaceHistory: true });
@@ -5522,26 +5528,6 @@ function createEventCard(event) {
     card.className = `event-card ${getEventStateClass(event.state)}`;
     card.dataset.eventId = String(event.id);
 
-    // Helper function to escape HTML
-    const escapeHtml = (str) => {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    };
-
-    // Helper function to get tag styling
-    const getTagStyle = (tag) => {
-        if (tag === 'dry hire') {
-            return 'background: #17a2b8; color: white;';
-        }
-        return 'background: #28a745; color: white;';
-    };
-
-    const getTagDisplay = (tag) => {
-        return tag === 'dry hire' ? 'DRY HIRE' : 'EVENT';
-    };
-
     const dateRange = event.startDate === event.endDate
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
@@ -5574,8 +5560,6 @@ function createEventCard(event) {
     return card;
 }
 
-// Update all event states manually
-
 // Force event state
 async function forceEventState(eventId, newState) {
     if (!isAdminUser()) {
@@ -5584,7 +5568,7 @@ async function forceEventState(eventId, newState) {
     }
 
     try {
-        const response = await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
+        await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
 
         showNotification('success', `Event ${eventId} state forced to ${newState}`);
 
@@ -5615,7 +5599,7 @@ async function removeForcedState(eventId) {
     }
 
     try {
-        const response = await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
+        await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
 
         showNotification('success', `Event ${eventId} returned to automatic state management`);
 
@@ -5638,9 +5622,7 @@ async function removeForcedState(eventId) {
     }
 }
 
-// Show force state modal
-
-// Show force state modal - Updated to show current force status
+// Show the force-state controls and current override status.
 function showForceStateModal(eventId, currentState) {
     if (!isAdminUser()) {
         showNotification('error', 'Admin privileges required');
@@ -5777,10 +5759,6 @@ function handleRemoveForcedState() {
     // Remove forced state
     removeForcedState(eventId);
 }
-
-// Handle modal backdrop clicks
-
-// Close force state modal specifically
 
 // Confirm force state change
 function confirmForceState() {
@@ -18409,24 +18387,6 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
       return match ? match[1] : null;
     };
 
-    function generateActionButton(eventId, asset, isPrepared) {
-    const safeAssetId = encodeURIComponent(asset.id);
-
-    if (isPrepared) {
-        return `<button class="btn btn-warning asset-action-btn"
-                        data-event-id="${eventId}"
-                        data-asset-id="${safeAssetId}"
-                        data-action="unprepare"
-                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Unprepare</button>`;
-    } else {
-        return `<button class="btn btn-success asset-action-btn"
-                        data-event-id="${eventId}"
-                        data-asset-id="${safeAssetId}"
-                        data-action="prepare"
-                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Prepare</button>`;
-    }
-}
-
     // Generate unique ID for this event's log section
     const logSectionId = `event-log-${eventId}`;
 
@@ -18454,7 +18414,7 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
     } else {
       logHTML += `<div style="max-height: 400px; overflow-y: auto;">`;
 
-      relevantLogs.forEach((log, index) => {
+      relevantLogs.forEach(log => {
         const actionType = getActionType(log.action);
         const assetId = extractAssetId(log.action);
 
@@ -18530,14 +18490,6 @@ async function editEvent(eventId) {
     document.getElementById(
       "eventDetailsTitle"
     ).textContent = `Edit Event ${event.id}: ${event.name}`;
-
-    // Helper function to escape HTML
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    };
 
     let content = `
                 <form id="editEventDetailsForm">
@@ -23434,8 +23386,6 @@ window.openBulkMaintenanceFaultEditModal = openBulkMaintenanceFaultEditModal;
 window.closeBulkMaintenanceFaultEditModal = closeBulkMaintenanceFaultEditModal;
 window.openBulkMaintenanceResolutionModal = openBulkMaintenanceResolutionModal;
 window.closeBulkMaintenanceResolutionModal = closeBulkMaintenanceResolutionModal;
-
-// Helper function to close the maintenance log modal
 
 // Function to handle adding new log entry from the maintenance log modal
 function addNewLogEntryFromModal(assetId) {

@@ -49,13 +49,12 @@ APP_ADMIN_PAGE_SECTIONS = {
     "users",
     "pdf-settings",
 }
-APP_OWNER_PAGE_SECTIONS = {"companies", "accounting"}
+APP_OWNER_PAGE_SECTIONS = {"companies"}
 APP_SALES_PAGE_SECTIONS = {
     "quotations",
     "invoices",
     "costing",
     "profit-loss",
-    "accounting",
 }
 
 
@@ -71,6 +70,7 @@ def register_app_page_routes(
     is_admin,
     is_owner,
     has_sales_access,
+    can_access_accounting=None,
 ):
     """Register named workspace and document deep-link routes."""
 
@@ -122,6 +122,8 @@ def register_app_page_routes(
         if section == "my-claims" and is_admin():
             return fallback_event_redirect()
         if section in APP_OWNER_PAGE_SECTIONS and not is_owner():
+            return fallback_event_redirect()
+        if section == "accounting" and not (can_access_accounting() if can_access_accounting else is_owner()):
             return fallback_event_redirect()
         if section in APP_SALES_PAGE_SECTIONS and not has_sales_access():
             return fallback_event_redirect()

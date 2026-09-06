@@ -16,6 +16,7 @@ import tempfile
 
 MODEL_FILENAME = 'DocumentDetectionLearning.json'
 CACHE_FILENAME = 'DocumentDetectionTrainingCache.json'
+EXCLUSIONS_FILENAME = 'DocumentDetectionLabelExclusions.json'
 VERSION = 1
 
 
@@ -36,7 +37,7 @@ def load_amount_profile(data_folder, kind):
         return {}
 
 
-def submission_records(workforce):
+def submission_records(workforce, finance=None):
     for people in workforce.get('submissions', {}).values():
         if not isinstance(people, dict):
             continue
@@ -52,6 +53,22 @@ def submission_records(workforce):
             record = booking.get('invoice') if isinstance(booking, dict) else None
             if isinstance(record, dict):
                 yield 'invoice', record
+    expenses = (finance or {}).get('profitLoss', {}).get('expenses', {})
+    for rows in expenses.values():
+        for expense in rows or []:
+            if not isinstance(expense, dict) or not isinstance(expense.get('attachment'), dict):
+                continue
+            # Normalize explicitly reviewed expense attachments into labels;
+            # never change the source finance document or infer review from OCR.
+            reviewed = (expense.get('needsReview') is False
+                        and bool(expense.get('updatedAt') and expense.get('updatedBy')))
+            yield 'claim', {
+                **expense['attachment'], 'id': expense.get('id'),
+                'amount': expense.get('amount'), 'claimDate': expense.get('expenseDate'),
+                'status': 'Approved' if reviewed else 'Pending Review',
+                'reviewedAt': expense.get('updatedAt') if reviewed else '',
+                'labelSource': 'profitLossExpense',
+            }
 
 
 def trusted_record(record):
@@ -66,23 +83,9 @@ def trusted_record(record):
 
 def training_candidates(path, kind):
     """Use exactly the same native-text/OCR routing as uncalibrated extraction."""
-    from workforce import (
-        _amount_candidates, _amount_from_text, _date_from_text,
-        _ocr_image, _ocr_pdf, _pdf_text,
-    )
+    from workforce import _amount_candidates, _document_extraction_text
 
-    if Path(path).suffix.lower() == '.pdf':
-        text = _pdf_text(path)
-        baseline = _amount_from_text(text)
-        use_native = baseline['amount'] is not None and baseline['confidence'] != 'Low'
-        if kind == 'claim':
-            use_native = use_native and bool(_date_from_text(text)['date'])
-        if not use_native:
-            ocr_text = _ocr_pdf(path)
-            if _amount_from_text(ocr_text)['amount'] is not None:
-                text = ocr_text
-    else:
-        text = _ocr_image(path)
+    text = _document_extraction_text(path, kind)['text']
     return [
         {key: row[key] for key in ('score', 'lineIndex', 'amount', 'feature')}
         for row in _amount_candidates(text)
@@ -127,11 +130,13 @@ def predicted_amount(candidates, rules=None):
     ))['amount']
 
 
-def calibrate(samples):
+def calibrate(samples, previous_profiles=None):
     totals = build_profiles(samples)
     profiles = {kind: rules_from_votes(*votes) for kind, votes in totals.items()}
     evaluation = {'documents': len(samples), 'baselineCorrect': 0,
-                  'learnedCorrect': 0, 'improved': 0, 'regressed': 0}
+                  'learnedCorrect': 0, 'improved': 0, 'regressed': 0,
+                  'previousCorrect': 0, 'regressedAgainstPrevious': 0,
+                  'publishedCorrect': 0, 'publicationRegressions': 0}
     # Leave each document (including all of its cues) out of its own evaluation.
     for sample in samples:
         positive, negative = totals[sample['kind']]
@@ -141,12 +146,21 @@ def calibrate(samples):
         )
         baseline_ok = predicted_amount(sample['candidates']) == sample['expected']
         learned_ok = predicted_amount(sample['candidates'], rules) == sample['expected']
+        previous_ok = predicted_amount(sample['candidates'], (previous_profiles or {}).get(sample['kind'])) == sample['expected']
+        published_ok = predicted_amount(sample['candidates'], profiles[sample['kind']]) == sample['expected']
         evaluation['baselineCorrect'] += int(baseline_ok)
         evaluation['learnedCorrect'] += int(learned_ok)
         evaluation['improved'] += int(learned_ok and not baseline_ok)
         evaluation['regressed'] += int(baseline_ok and not learned_ok)
+        evaluation['previousCorrect'] += int(previous_ok)
+        evaluation['regressedAgainstPrevious'] += int(previous_ok and not learned_ok)
+        evaluation['publishedCorrect'] += int(published_ok)
+        evaluation['publicationRegressions'] += int((baseline_ok or previous_ok) and not published_ok)
     # Fail closed if independently evaluated documents became less accurate.
-    enabled = bool(samples and any(profiles.values()) and evaluation['regressed'] == 0)
+    enabled = bool(samples and any(profiles.values())
+                   and evaluation['regressed'] == 0
+                   and evaluation['regressedAgainstPrevious'] == 0
+                   and evaluation['publicationRegressions'] == 0)
     return profiles, evaluation, enabled
 
 
@@ -167,7 +181,7 @@ def atomic_json(path, value):
             os.unlink(temporary)
 
 
-def database_snapshot(company_code):
+def database_snapshot(company_code, document_key='workforce'):
     """Read an authoritative snapshot without migrations, writes or app startup."""
     import psycopg
     from dotenv import load_dotenv
@@ -180,33 +194,52 @@ def database_snapshot(company_code):
                          options='-c default_transaction_read_only=on') as connection:
         row = connection.execute(
             'SELECT data FROM aim_company_documents WHERE company_code = %s AND document_key = %s',
-            (company_code, 'workforce'),
+            (company_code, document_key),
         ).fetchone()
+    if not row and document_key == 'finance':
+        return {}
     if not row:
         raise ValueError(f'No workforce document found for {company_code}')
     return row[0]
 
 
-def train_snapshot(data_folder, *, apply=False, inventory_only=False, workforce_snapshot=None):
-    from workforce import load_workforce, money, now_iso, upload_absolute_path
+def train_snapshot(data_folder, *, apply=False, inventory_only=False, workforce_snapshot=None,
+                   label_exclusions=None, output_folder=None, finance_snapshot=None):
+    from workforce import DOCUMENT_EXTRACTOR_VERSION, load_workforce, money, now_iso, upload_absolute_path
 
     folder = Path(data_folder).resolve()
     if workforce_snapshot is None and not (folder / 'Workforce.json').is_file():
         raise ValueError(f'No Workforce.json snapshot in {folder}')
     workforce = workforce_snapshot if workforce_snapshot is not None else load_workforce(str(folder))
-    records = list(submission_records(workforce))
+    if finance_snapshot is None and (folder / 'Finance.json').is_file():
+        finance_snapshot = json.loads((folder / 'Finance.json').read_text(encoding='utf-8'))
+    records = list(submission_records(workforce, finance_snapshot))
     report = {'dataFolder': str(folder), 'records': len(records),
               'reviewedRecords': sum(trusted_record(row) for _, row in records)}
     if inventory_only:
         return report
-    cache_path = folder / CACHE_FILENAME
+    # A separate output folder makes calibration reviewable before publication.
+    destination = Path(output_folder).resolve() if output_folder else folder
+    cache_path = destination / CACHE_FILENAME
+    if label_exclusions is None:
+        try:
+            label_exclusions = json.loads((folder / EXCLUSIONS_FILENAME).read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            label_exclusions = {}
+    if not isinstance(label_exclusions, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in label_exclusions.items()
+    ):
+        raise ValueError('Label exclusions must map document hashes to review reasons')
     try:
         cache = json.loads(cache_path.read_text(encoding='utf-8'))
-        if cache.get('version') != VERSION:
+        if not isinstance(cache, dict) or cache.get('version') != VERSION or cache.get('extractorVersion') != DOCUMENT_EXTRACTOR_VERSION:
             cache = {}
     except (OSError, ValueError):
         cache = {}
     cached_documents = cache.setdefault('documents', {})
+    if not isinstance(cached_documents, dict):
+        cached_documents = cache['documents'] = {}
     exclusions = Counter()
     samples_by_digest = {}
     conflicted = set()
@@ -225,6 +258,9 @@ def train_snapshot(data_folder, *, apply=False, inventory_only=False, workforce_
             continue
         digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
         key = kind + ':' + digest
+        if key in label_exclusions:
+            exclusions['auditedNonTotalLabel'] += 1
+            continue
         expected = money(record.get('amount'))
         if key in samples_by_digest:
             if samples_by_digest[key]['expected'] != expected:
@@ -233,10 +269,15 @@ def train_snapshot(data_folder, *, apply=False, inventory_only=False, workforce_
             continue
         candidates = cached_documents.get(key)
         if candidates is None:
-            candidates = training_candidates(path, kind)
+            try:
+                candidates = training_candidates(path, kind)
+            except Exception:
+                exclusions['extractionError'] += 1
+                continue
             cached_documents[key] = candidates
             if apply:
-                atomic_json(cache_path, {'version': VERSION, 'documents': cached_documents})
+                atomic_json(cache_path, {'version': VERSION, 'extractorVersion': DOCUMENT_EXTRACTOR_VERSION,
+                                         'documents': cached_documents})
         samples_by_digest[key] = {
             'kind': kind, 'expected': expected, 'candidates': candidates,
         }
@@ -259,18 +300,24 @@ def train_snapshot(data_folder, *, apply=False, inventory_only=False, workforce_
             exclusions['verifiedAmountNotInDocumentText'] += 1
         else:
             samples.append(sample)
-    profiles, evaluation, enabled = calibrate(samples)
+    previous_profiles = {kind: load_amount_profile(folder, kind) for kind in ('invoice', 'claim')}
+    profiles, evaluation, enabled = calibrate(samples, previous_profiles)
     report.update({'exclusions': dict(exclusions), 'baselineAudit': baseline_audit,
                    'evaluation': evaluation, 'enabled': enabled,
                    'rules': {kind: len(rules) for kind, rules in profiles.items()}})
-    model = {'version': VERSION, 'trainedAt': now_iso(), 'enabled': enabled,
+    report['extractorVersion'] = DOCUMENT_EXTRACTOR_VERSION
+    report['trainedAt'] = now_iso()
+    report['snapshotDigest'] = snapshot.hexdigest()
+    model = {'version': VERSION, 'extractorVersion': DOCUMENT_EXTRACTOR_VERSION,
+             'trainedAt': report['trainedAt'], 'enabled': enabled,
              'automaticTraining': False, 'snapshotDigest': snapshot.hexdigest(),
              'profiles': profiles, 'report': report}
     if apply:
         # Preserve an existing working model if the new snapshot fails evaluation.
         if enabled:
-            atomic_json(folder / MODEL_FILENAME, model)
-        atomic_json(folder / 'DocumentDetectionTrainingReport.json', report)
+            atomic_json(destination / MODEL_FILENAME, model)
+            atomic_json(destination / EXCLUSIONS_FILENAME, label_exclusions)
+        atomic_json(destination / 'DocumentDetectionTrainingReport.json', report)
     return report
 
 
@@ -279,14 +326,20 @@ def main():
     parser.add_argument('--data-folder', required=True, action='append')
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--inventory-only', action='store_true')
+    parser.add_argument('--output-folder', help='Stage model/cache/report separately for review')
     parser.add_argument('--from-database', action='store_true',
                         help='Read the configured database, not an older JSON export')
     args = parser.parse_args()
+    if args.output_folder and len(args.data_folder) != 1:
+        parser.error('--output-folder requires exactly one --data-folder')
     for folder in args.data_folder:
         snapshot = database_snapshot(Path(folder).resolve().parent.name) if args.from_database else None
+        finance = database_snapshot(Path(folder).resolve().parent.name, 'finance') if args.from_database else None
         print(json.dumps(train_snapshot(folder, apply=args.apply,
                                         inventory_only=args.inventory_only,
-                                        workforce_snapshot=snapshot)), flush=True)
+                                        workforce_snapshot=snapshot,
+                                        finance_snapshot=finance,
+                                        output_folder=args.output_folder)), flush=True)
 
 
 if __name__ == '__main__':

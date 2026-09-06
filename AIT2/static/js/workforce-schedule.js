@@ -440,12 +440,13 @@ function wfScheduleStaffCard(row, date) {
         <button type="button" class="wf-schedule-role" title="Rename role for ${wfAttr(wfScheduleDateLabel(date))}"
           aria-haspopup="dialog" aria-expanded="false"
           onclick="openWorkforceScheduleRoleEditor(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(role)}</button>
-        ${wfScheduleRate(row) ? `<small class="wf-schedule-rate">${wfEscape(wfScheduleRate(row))}</small>` : ''}</div>
+        ${wfScheduleRate(row) ? `<button type="button" class="wf-schedule-rate wf-schedule-rate-edit" title="Change rate for ${wfAttr(wfScheduleDateLabel(date))}"
+          onclick="openWorkforceScheduleRateEditor(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(wfScheduleRate(row))}</button>` : ''}</div>
       <span class="wf-schedule-assignment-tags">
         ${wfScheduleRoomSelectHtml(row, date)}
         <button type="button" class="wf-schedule-dept wf-schedule-dept-edit" title="Change department for ${wfAttr(wfScheduleDateLabel(date))}"
           aria-haspopup="listbox" aria-expanded="false"
-          onclick="toggleWorkforceScheduleDepartmentMenu(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(department.code)}</button>
+          onclick="toggleWorkforceScheduleDepartmentMenu(event,'${wfAttr(row.id)}','${wfAttr(date)}')">${wfEscape(department.name)}</button>
       </span>
     </div>
     <div class="wf-schedule-person-meta">
@@ -629,6 +630,53 @@ function openWorkforceScheduleRoleEditor(event, assignmentId, date) {
   });
 }
 
+function openWorkforceScheduleRateEditor(event, assignmentId, date) {
+  event.preventDefault();
+  event.stopPropagation();
+  closeWorkforceScheduleTagMenu();
+  closeWorkforceScheduleSelects();
+  const assignment = wfScheduleRows().find(row => String(row.id) === String(assignmentId));
+  if (!assignment) return;
+  const rate = assignment.subjectType === 'vendor' ? assignment.ratePerPax : assignment.dailyRate;
+  document.body.insertAdjacentHTML('beforeend', `<div class="wf-schedule-tag-menu wf-schedule-role-popover" id="wfScheduleTagMenu"
+    data-kind="rate" data-assignment-id="${wfAttr(assignmentId)}" data-date="${wfAttr(date)}" role="dialog" aria-label="Change daily rate">
+    <form class="wf-schedule-role-editor" onsubmit="saveWorkforceScheduleRate(event)">
+      <div class="wf-schedule-role-context"><strong>Change rate for this day</strong><span>${wfEscape(wfScheduleSubject(assignment).name)} · ${wfEscape(wfScheduleDateLabel(date))}</span></div>
+      <label><span>${assignment.subjectType === 'vendor' ? 'Rate per pax / day ($)' : 'Daily rate ($)'}</span>
+        <input id="wfScheduleRateInput" type="number" min="0" step="0.01" required value="${wfAttr(rate ?? '')}"></label>
+      <div class="wf-schedule-role-actions"><button type="button" onclick="closeWorkforceScheduleTagMenu(true)">Cancel</button><button type="submit" class="primary">Save</button></div>
+    </form></div>`);
+  positionWorkforceScheduleTagMenu(event.currentTarget);
+  document.getElementById('wfScheduleRateInput')?.focus();
+}
+
+async function saveWorkforceScheduleRate(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const menu = document.getElementById('wfScheduleTagMenu');
+  const assignmentId = menu?.dataset.assignmentId;
+  const date = menu?.dataset.date;
+  const assignment = wfScheduleRows().find(row => String(row.id) === assignmentId);
+  const input = document.getElementById('wfScheduleRateInput');
+  if (!assignment || !input?.reportValidity()) return;
+  const rate = Number(input.value);
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const role = wfScheduleRole(assignment, date);
+    const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce/assignments/${encodeURIComponent(assignmentId)}/schedule-day`, 'PATCH', {
+      date, rate, department: wfScheduleDepartment(assignment, date), roleName: role === 'Role not set' ? '' : role
+    });
+    closeWorkforceScheduleTagMenu();
+    workforcePageState.data = response.data.workforce;
+    renderWorkforcePage();
+    showNotification('success', `Rate updated for ${wfScheduleDateLabel(date)}`);
+  } catch (error) {
+    button.disabled = false;
+    showNotification('error', error.message);
+  }
+}
+
 function renderWorkforceScheduleRoleSuggestions(search = '') {
   const menu = document.getElementById('wfScheduleTagMenu');
   const root = document.getElementById('wfScheduleRoleSuggestions');
@@ -753,7 +801,7 @@ function wfScheduleCoverageHtml() {
               : wfScheduleCrewCount(dateRows(date), date)
           ), 0);
           const totalLabel = workforceScheduleState.coverageMode === 'cost' ? wfMoney(total) : String(total);
-          return `<tr><th><span class="wf-schedule-dept" style="${wfDepartmentStyle(code)}">${wfEscape(code)}</span></th>${dates.map(date => `<td>${wfEscape(wfScheduleCoverageValue(dateRows(date), date))}</td>`).join('')}<td class="event-total">${wfEscape(totalLabel)}</td></tr>`;
+          return `<tr><th><span class="wf-schedule-dept" style="${wfDepartmentStyle(code)}">${wfEscape(wfDepartmentMeta(code).name)}</span></th>${dates.map(date => `<td>${wfEscape(wfScheduleCoverageValue(dateRows(date), date))}</td>`).join('')}<td class="event-total">${wfEscape(totalLabel)}</td></tr>`;
         }).join('')}
           <tr class="total"><th>${workforceScheduleState.coverageMode === 'cost' ? 'Total Cost' : 'Total Crew'}</th>${dates.map(date => `<td>${wfEscape(wfScheduleCoverageValue(rows, date))}</td>`).join('')}<td class="event-total">${wfEscape(wfScheduleCoverageTotal(rows, dates))}</td></tr></tbody></table></div>
     </section>
@@ -765,7 +813,7 @@ function wfScheduleDepartmentFiltersHtml() {
   return `<div class="wf-schedule-filter-row">
     <div class="wf-schedule-filter-options"><span>Department</span>
       <button type="button" class="${workforceScheduleState.department === 'all' ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('all')">All</button>
-      ${departments.map(code => `<button type="button" style="${wfDepartmentStyle(code)}" class="dept ${workforceScheduleState.department === code ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('${wfAttr(code)}')">${wfEscape(code)}</button>`).join('')}
+      ${departments.map(code => `<button type="button" style="${wfDepartmentStyle(code)}" class="dept ${workforceScheduleState.department === code ? 'active' : ''}" onclick="setWorkforceScheduleDepartment('${wfAttr(code)}')">${wfEscape(wfDepartmentMeta(code).name)}</button>`).join('')}
     </div>
     <button type="button" class="wf-button primary wf-schedule-manage-directory" onclick="openFreelancerDirectory('manage')">Manage Workers/Vendors</button>
   </div>`;
@@ -892,6 +940,7 @@ function renderWorkforceSchedulePage(root, data) {
     ${wfScheduleDepartmentFiltersHtml()}
     <section id="wfScheduleBoard">${wfScheduleDayBoardHtml()}</section>
     ${wfScheduleCoverageHtml()}
+    ${wfCrewTransportCategoryHtml()}
   </div>`;
   requestAnimationFrame(() => {
     const board = document.getElementById('wfScheduleDays');

@@ -36,7 +36,7 @@ class FinanceFeatureTests(unittest.TestCase):
                 username: 'SHOWBASE'
                 for username in (
                     'bnjm2000', 'alice', 'bob', 'sales-admin',
-                    'sales-manager', 'no-sales', 'manager-no-sales',
+                    'review-admin', 'sales-manager', 'no-sales', 'manager-no-sales',
                 )
             },
             'superAdmins': ['bnjm2000'],
@@ -49,6 +49,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'alice': self.make_user('alice', 'user', True, name='Alice Lim'),
             'bob': self.make_user('bob', 'user', True),
             'sales-admin': self.make_user('sales-admin', 'admin', True),
+            'review-admin': self.make_user('review-admin', 'admin', False),
             'sales-manager': self.make_user('sales-manager', 'manager', True),
             'no-sales': self.make_user('no-sales', 'user', False),
             'manager-no-sales': self.make_user('manager-no-sales', 'manager', False),
@@ -930,6 +931,41 @@ class FinanceFeatureTests(unittest.TestCase):
                 json={'status': status},
             )
             self.assertEqual(response.status_code, 400)
+
+    def test_expired_quotation_status_changes_preserve_revision(self):
+        for status in ('accepted', 'cancelled', 'sent', 'draft'):
+            with self.subTest(status=status):
+                quotation = self.create_quote(f'Expired to {status}')
+                endpoint = f"/api/quotations/{quotation['id']}"
+                response = self.client.put(endpoint, json={
+                    'status': 'sent',
+                    'sentDate': (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d'),
+                    'validityDays': 1,
+                    'documentVersion': quotation['documentVersion'],
+                })
+                self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+                expired = self.client.get(endpoint).get_json()['data']
+                self.assertEqual(expired['status'], 'expired')
+                payload = {
+                    'status': status,
+                    'documentVersion': expired['documentVersion'],
+                }
+                if status == 'sent':
+                    payload.update({
+                        'sentDate': datetime.now().strftime('%Y-%m-%d'),
+                        'validityAmount': 30,
+                        'validityUnit': 'days',
+                        'validityDays': 30,
+                    })
+                response = self.client.put(endpoint, json=payload)
+                self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+                for result in (response.get_json()['data'], self.client.get(endpoint).get_json()['data']):
+                    self.assertEqual(result['status'], status)
+                    self.assertEqual(result['revision'], expired['revision'])
+                    self.assertEqual(result['number'], expired['number'])
+                    self.assertEqual(len(result['revisions']), len(expired['revisions']))
+                    if status == 'accepted':
+                        self.assertTrue(result['eventId'])
 
     def test_discard_draft_revision_restores_previous_sent_revision(self):
         quotation = self.create_quote('Discard Revision Project')
@@ -5453,6 +5489,40 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(payload['summary']['mealCost'], 0)
         self.assertEqual(payload['summary']['otherExpenses'], 12)
 
+        for state in ('Failed', 'Manual Required'):
+            with self.subTest(processing_state=state):
+                rows = workforce['submissions']['141']['worker-pending']
+                rows['invoices'] = [{
+                    'id': 'invoice-manual', 'amount': 900, 'status': 'Pending Review',
+                    'processingState': state,
+                }]
+                rows['claims'].append({
+                    'id': 'claim-manual', 'amount': 80, 'category': 'Meal',
+                    'status': 'Pending Review', 'processingState': state,
+                    'detailsComplete': False, 'submissionStage': 'Details Required',
+                })
+                save_workforce(app_module._workforce_folder(), workforce)
+                payload = self.client.get('/api/finance/profit-loss/141').get_json()['data']
+                ids = {row.get('sourceId') for row in payload['expenses']}
+                self.assertNotIn('invoice-manual', ids)
+                self.assertNotIn('claim-manual', ids)
+                self.assertEqual(payload['summary']['manpowerInvoiceCost'], 0)
+                self.assertEqual(payload['summary']['mealCost'], 0)
+
+                rows['invoices'][0]['verifiedAt'] = '2026-09-06T12:00:00'
+                rows['claims'][-1].update({
+                    'detailsCompletedAt': '2026-09-06T12:00:00',
+                    'detailsComplete': True, 'submissionStage': 'Submitted',
+                })
+                save_workforce(app_module._workforce_folder(), workforce)
+                payload = self.client.get('/api/finance/profit-loss/141').get_json()['data']
+                ids = {row.get('sourceId') for row in payload['expenses']}
+                self.assertIn('invoice-manual', ids)
+                self.assertIn('claim-manual', ids)
+                self.assertEqual(payload['summary']['manpowerInvoiceCost'], 900)
+                self.assertEqual(payload['summary']['mealCost'], 80)
+                rows['claims'].pop()
+
     def test_profit_loss_pdf_exports_project_summary_and_expense_details(self):
         self.login('sales-admin')
         event = Event(
@@ -7736,7 +7806,8 @@ class FinanceFeatureTests(unittest.TestCase):
         invoice_css = Path('static/css/invoices.css').read_text(encoding='utf-8')
         self.assertIn('portal.dataset.invoiceStatusPortal = id', invoice_source)
         self.assertIn('document.body.appendChild(portal)', invoice_source)
-        self.assertIn('portal.style.top = `${rect.bottom + 5}px`', invoice_source)
+        self.assertIn('portal.style.top =', invoice_source)
+        self.assertIn('portal.style.maxHeight =', invoice_source)
         self.assertIn('function invoiceCloseStatusMenus', invoice_source)
         self.assertIn('overscroll-behavior: contain', invoice_css)
 
@@ -7871,6 +7942,10 @@ class FinanceFeatureTests(unittest.TestCase):
 
     def test_invoice_plan_has_independent_client_and_invoicing_details(self):
         quotation = self.create_quote('Quotation Project')
+        quotation['lineItems'] = [{
+            'id': 'invoice-details-line', 'description': 'Production services',
+            'department': 'Audio', 'days': 1, 'quantity': 1, 'unitPrice': 100,
+        }]
         quotation['client'] = {
             'salutation': 'Mr.', 'name': 'Original Client',
             'company': 'Original Co', 'phone': '+65 6000 0000',

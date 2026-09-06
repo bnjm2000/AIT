@@ -621,22 +621,10 @@ class DataManager:
                 if row[0].strip().lower() == 'username':
                     continue
 
-                # Old format:
-                # username,password_hash,salt,is_admin
-                #
-                # New format:
-                # username,password_hash,salt,is_admin,is_active
-                #
-                # Previous format:
-                # username,password_hash,salt,is_admin,is_active,last_online
-                #
-                # Previous format:
-                # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access
-                #
-                # Previous format:
-                # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access,name
-                #
-                # Current format adds phone as the tenth column.
+                # Historical rows contain progressively more columns, from the
+                # original four-field schema through the current ten fields:
+                # username, credentials, flags, activity, role, access, name,
+                # and phone. Missing trailing fields are migrated on load.
                 if len(row) < 4:
                     continue
 
@@ -880,7 +868,7 @@ class DataManager:
                 with open(finance_path, 'r', encoding='utf-8') as finance_file:
                     finance_data = json.load(finance_file)
             except (OSError, ValueError, TypeError) as exc:
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     'Unable to load quotation salesperson references in %s: %s',
                     finance_path,
                     exc,
@@ -916,7 +904,7 @@ class DataManager:
                             json.dump(finance_data, finance_file, ensure_ascii=False, indent=2)
                         os.replace(temp_path, finance_path)
             except (OSError, ValueError, TypeError) as exc:
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     'Unable to rename quotation salesperson references in %s: %s',
                     finance_path,
                     exc,

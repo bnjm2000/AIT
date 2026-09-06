@@ -101,6 +101,8 @@ from models import (
 from storage_paths import storage_root as configured_storage_root
 from routes.delivery_orders import register_delivery_order_routes
 from routes.pages import register_app_page_routes
+from routes.accounting import register_accounting_routes
+from services import accounting_workspace as accounting_books
 from services.company_storage import CompanyStorageUsageService
 from services.company_storage_context import (
     attach_company_storage_contexts,
@@ -163,6 +165,7 @@ from workforce import (
     now_iso,
     save_upload,
     submission_totals,
+    transport_company_groups,
     upload_absolute_path,
     worker_submissions,
 )
@@ -1388,6 +1391,7 @@ def _user_payload(user, reveal_owner=False):
         'companyName': company.get('name'),
         'company': company,
         'assignedCompanyCode': company.get('code'),
+        'accountingRole': _accounting_user_role(user.username),
     }
 
 
@@ -8379,6 +8383,85 @@ def require_admin(f):
     return decorated_function
 
 
+def _accounting_user_role(username=None):
+    username = username or (session.get('user') if has_request_context() else '')
+    if not username:
+        return ''
+    # Accounting contains the company's complete financial books. Access follows
+    # the application role so every company admin (and platform owner) receives
+    # the same full workspace, while managers and users cannot bypass the gate
+    # through a legacy accounting-specific assignment.
+    return 'manager' if _effective_user_role(username) in {'owner', 'admin'} else ''
+
+
+def _accounting_company_users():
+    return {username: {
+                'name': getattr(user, 'name', '') or username,
+                'appRole': _effective_user_role(user),
+                'hasAccountingAccess': _effective_user_role(user) in {'owner', 'admin'},
+            }
+            for username, user in data_manager.users.items()
+            if getattr(user, 'is_active', True)
+            and (_current_company_code() in _user_company_codes(username) or _is_owner_username(username))}
+
+
+def require_accounting(f):
+    """Enforce company accounting roles, including legacy journal endpoints."""
+    @wraps(f)
+    @require_auth
+    def decorated_function(*args, **kwargs):
+        with _finance_lock:
+            role = _accounting_user_role()
+            permission = 'read' if request.method == 'GET' else 'write'
+            if request.path.endswith('/settings') or '/accounts' in request.path:
+                permission = 'settings' if request.method != 'GET' else 'read'
+            try:
+                accounting_books.allow(role, permission)
+                value = request.get_json(silent=True) or {}
+                if not isinstance(value, dict):
+                    return jsonify({'error': 'Accounting requests must be JSON objects'}), 400
+                posting = request.path.endswith(('/post', '/reverse', '/match')) or value.get('status') == 'posted'
+                if posting and '/documents/' not in request.path:
+                    accounting_books.allow(role, 'post')
+                before_snapshot = None
+                if request.method != 'GET' and f.__name__ in {
+                    'accounting_settings_update', 'accounting_account_update',
+                    'accounting_journal_item', 'accounting_journal_post', 'accounting_journal_reverse',
+                    'accounting_bank_transaction_delete', 'accounting_bank_transaction_match',
+                }:
+                    previous_store = _accounting_store(_load_finance_data())
+                    if f.__name__ == 'accounting_settings_update':
+                        before_snapshot = copy.deepcopy(previous_store['settings'])
+                    else:
+                        collection, identifier = ('journals', kwargs.get('journal_id')) if 'journal' in f.__name__ else (
+                            ('accounts', kwargs.get('account_code')) if 'account_' in f.__name__ else ('bankTransactions', kwargs.get('transaction_id')))
+                        before_snapshot = copy.deepcopy(next((row for row in previous_store[collection] if row.get('id', row.get('code')) == identifier), None))
+                response = f(*args, **kwargs)
+                status = response[1] if isinstance(response, tuple) else getattr(response, 'status_code', 200)
+                # New routes audit their own records. Preserve an audit record for legacy actions too.
+                if request.method != 'GET' and status < 400 and f.__name__ in {
+                    'accounting_settings_update', 'accounting_account_create', 'accounting_account_update',
+                    'accounting_journal_create', 'accounting_journal_item', 'accounting_journal_post',
+                    'accounting_journal_reverse', 'accounting_source_post', 'accounting_bank_transactions_import',
+                    'accounting_bank_transaction_create', 'accounting_bank_transaction_delete', 'accounting_bank_transaction_match',
+                }:
+                    data = _load_finance_data()
+                    response_object = response[0] if isinstance(response, tuple) else response
+                    response_payload = response_object.get_json(silent=True) or {}
+                    after_snapshot = next((response_payload[key] for key in ('journal', 'account', 'transaction') if key in response_payload), value)
+                    if f.__name__ == 'accounting_settings_update':
+                        after_snapshot = _accounting_store(data)['settings']
+                    if request.method == 'DELETE':
+                        after_snapshot = None
+                    accounting_books.audit(_accounting_store(data), _finance_current_username(),
+                                            f.__name__, request.path, before_snapshot, after_snapshot)
+                    _save_finance_data(data)
+                return response
+            except PermissionError as exc:
+                return jsonify({'error': str(exc)}), 403
+    return decorated_function
+
+
 def require_super_admin(f):
     """Decorator for global company-management actions."""
     @wraps(f)
@@ -9852,7 +9935,7 @@ def _workforce_assignment_base_role(assignment):
 
 def _workforce_assignment_matches_schedule_group(
     candidate, source, subject_id, department, role_name,
-    subproject_id=None, event=None,
+    subproject_id=None, event=None, rate_source=None,
 ):
     """Return whether two rows represent the same department-view role entry."""
     source_subproject_id = str(source.get('subprojectId') or '')
@@ -9879,12 +9962,14 @@ def _workforce_assignment_matches_schedule_group(
         and str(candidate.get('providerType') or '') == str(
             source.get('providerType') or ''
         )
+        and all(candidate.get(key) == (rate_source or source).get(key)
+                for key in ('dailyRate', 'ratePerPax', 'pax', 'total'))
     )
 
 
 def _merge_undefined_workforce_role(rows, source, event):
-    """Merge duplicate undefined-role rows into one multi-date assignment."""
-    if not isinstance(source, dict) or _workforce_assignment_base_role(source):
+    """Combine matching roles and rates into one multi-date assignment."""
+    if not isinstance(source, dict):
         return source
     source_id = _workforce_assignment_subject_id(source)
     source_department = _normalise_department_code(source.get('department'))
@@ -9895,7 +9980,10 @@ def _merge_undefined_workforce_role(rows, source, event):
         if (
             isinstance(row, dict)
             and row is not source
-            and not _workforce_assignment_base_role(row)
+            and _workforce_assignment_base_role(row).casefold()
+            == _workforce_assignment_base_role(source).casefold()
+            and all(row.get(key) == source.get(key)
+                    for key in ('dailyRate', 'ratePerPax', 'pax', 'total'))
             and _workforce_assignment_subject_id(row) == source_id
             and _normalise_department_code(row.get('department')) == source_department
             and str(row.get('subprojectId') or '') == source_room
@@ -10256,13 +10344,14 @@ def _admin_workforce_payload(event_id, manager=None):
         row = _workforce_row_with_subproject(
             booking, event, subprojects
         )
-        invoice = row.get('invoice')
-        if isinstance(invoice, dict) and invoice.get('id'):
-            submission_id = quote(str(invoice['id']))
-            invoice = dict(invoice)
-            invoice['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
-            invoice['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
-            row['invoice'] = invoice
+        for invoice_field in ('invoice', 'companyInvoice'):
+            invoice = row.get(invoice_field)
+            if isinstance(invoice, dict) and invoice.get('id'):
+                submission_id = quote(str(invoice['id']))
+                invoice = dict(invoice)
+                invoice['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
+                invoice['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
+                row[invoice_field] = invoice
         bookings.append(row)
 
     upload_allowances = {}
@@ -10322,6 +10411,7 @@ def _admin_workforce_payload(event_id, manager=None):
         'transportLocations': workforce.get('transportLocations', []),
         'vehicles': workforce.get('vehicles', []),
         'transportBookings': bookings,
+        'transportCompanies': transport_company_groups(bookings, workforce.get('transportVendors', [])),
         'submissions': submissions,
         'uploadAllowances': upload_allowances,
         'departments': departments,
@@ -10668,6 +10758,8 @@ def update_my_submission(submission_id):
             record.update({
                 **updates,
                 'submissionStage': 'Submitted',
+                'processingState': 'Complete',
+                'processingError': '',
                 'detailsCompletedAt': now_iso(),
                 'updatedAt': now_iso(),
             })
@@ -11492,8 +11584,8 @@ def _process_worker_submission_upload(
                 if found:
                     record = found['record']
                     record.update({
-                        'processingState': 'Failed',
-                        'processingError': 'Automatic document analysis failed',
+                        'processingState': 'Manual Required',
+                        'processingError': '',
                         'submissionStage': (
                             'Details Required'
                             if kind == 'claim'
@@ -11569,6 +11661,8 @@ def worker_submission_details(submission_id):
                 'department': departments[0] if departments else 'Unassigned',
                 'detailsComplete': True,
                 'submissionStage': 'Submitted',
+                'processingState': 'Complete',
+                'processingError': '',
                 'detailsCompletedAt': now_iso(),
             })
             event_id = found['eventId']
@@ -11943,6 +12037,21 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             or str(assignment.get('subjectType') or '').strip().lower()
             == 'vendor'
         )
+        rate_field = 'ratePerPax' if is_vendor_assignment else 'dailyRate'
+        rate_source = dict(assignment)
+        previous_rate = assignment.get(rate_field)
+        if 'rate' in payload:
+            if is_vendor_assignment and assignment.get('providerType') != 'manpower':
+                return jsonify({'error': 'Daily rates apply to crew and manpower assignments'}), 400
+            try:
+                rate = float(payload['rate'])
+                if not 0 <= rate < float('inf'):
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Enter a valid non-negative rate'}), 400
+            rate_source[rate_field] = round(rate, 2)
+            if is_vendor_assignment:
+                rate_source['dailyRate'] = rate_source[rate_field]
         matching_role = next((
             row for row in workforce.get('roles', [])
             if isinstance(row, dict)
@@ -11967,7 +12076,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             row for row in assignments
             if _workforce_assignment_matches_schedule_group(
                 row, assignment, subject_id, department, role_name,
-                subproject_id, event,
+                subproject_id, event, rate_source,
             )
         ), None)
         source_call_time = normalize_call_times(
@@ -11981,6 +12090,7 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             and _workforce_assignment_base_role(assignment).casefold()
             == role_name.casefold()
             and previous_subproject_id == subproject_id
+            and assignment.get(rate_field) == rate_source.get(rate_field)
         )
 
         if target:
@@ -12055,6 +12165,11 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
             result_assignment = assignment
             structure_changed = not source_matches_target
 
+        result_assignment[rate_field] = rate_source.get(rate_field)
+        if is_vendor_assignment and 'rate' in payload:
+            result_assignment['dailyRate'] = rate_source[rate_field]
+        rate_changed = previous_rate != result_assignment.get(rate_field)
+        structure_changed = structure_changed or rate_changed
         if (
             matching_role
             and str(result_assignment.get('subjectType') or '') != 'vendor'
@@ -12074,6 +12189,8 @@ def update_workforce_schedule_day_assignment(event_id, assignment_id):
         )
 
     changes = []
+    if rate_changed:
+        changes.append(f'rate from {previous_rate} to {result_assignment.get(rate_field)}')
     if previous_department != department:
         old_name = _department_payload(previous_department).get(
             'name', previous_department
@@ -15361,6 +15478,17 @@ def update_transport_booking(event_id, booking_id):
             _company_payload(_current_company_code()).get('name', '')
             if vehicle else str((vendor or {}).get('company') or '')
         )
+        if booking.get('companyInvoice') and (
+            ' '.join(company_name.casefold().split())
+            != ' '.join(str(booking.get('company') or '').casefold().split())
+            or booking_data['sourceType'] != booking.get('sourceType', 'external')
+        ):
+            original_group = next(group for group in transport_company_groups(event_bookings(workforce, event_id), workforce.get('transportVendors', []))
+                                  if booking in group['bookings'])
+            remaining = [row for row in original_group['bookings'] if row is not booking]
+            if not remaining:
+                return jsonify({'error': 'Remove the company invoice before moving its last booking to another company'}), 409
+            remaining[0]['companyInvoice'] = booking.pop('companyInvoice')
         booking.update({
             **booking_data,
             'vehicleType': str(
@@ -15416,6 +15544,14 @@ def delete_transport_booking(event_id, booking_id):
         booking = find_by_id(rows, booking_id)
         if not booking:
             return jsonify({'error': 'Transport booking not found'}), 404
+        if isinstance(booking.get('companyInvoice'), dict):
+            group = next(group for group in transport_company_groups(rows, workforce.get('transportVendors', []))
+                         if booking in group['bookings'])
+            remaining = [row for row in group['bookings'] if row is not booking]
+            if remaining:
+                remaining[0]['companyInvoice'] = booking.pop('companyInvoice')
+            else:
+                delete_upload(_workforce_folder(), booking['companyInvoice'])
         if isinstance(booking.get('invoice'), dict):
             delete_upload(_workforce_folder(), booking['invoice'])
         fleet_vehicle_id = (
@@ -15500,6 +15636,67 @@ def upload_transport_invoice(event_id, booking_id):
         return jsonify({'error': 'Transport invoice upload failed'}), 500
 
 
+@app.route(
+    '/api/events/<int:event_id>/workforce/transport/<booking_id>/company-invoice',
+    methods=['POST', 'PUT'],
+)
+@require_admin
+def update_transport_company_invoice(event_id, booking_id):
+    if event_id not in data_manager.events:
+        return jsonify({'error': 'Event not found'}), 404
+    saved = None
+    old_invoice = None
+    try:
+        with mutate_workforce(_workforce_folder()) as workforce:
+            groups = transport_company_groups(event_bookings(workforce, event_id), workforce.get('transportVendors', []))
+            group = next((group for group in groups if any(
+                str(row.get('id')) == str(booking_id) for row in group['bookings']
+            )), None)
+            if not group:
+                return jsonify({'error': 'Transport booking not found'}), 404
+            if group['isFleet']:
+                return jsonify({'error': 'Company invoices apply to external transport'}), 400
+            owner = next((row for row in group['bookings'] if row.get('companyInvoice')), group['bookings'][0])
+            if request.method == 'PUT':
+                record = owner.get('companyInvoice')
+                if not record:
+                    return jsonify({'error': 'Upload the company invoice first'}), 400
+                amount = money((request.get_json(silent=True) or {}).get('amount'))
+                if amount is None or amount < 0:
+                    return jsonify({'error': 'Enter a valid invoice amount'}), 400
+                record.update({'amount': amount, 'updatedAt': now_iso()})
+            else:
+                uploaded = request.files.get('file')
+                if not uploaded or not uploaded.filename:
+                    return jsonify({'error': 'Choose an invoice file'}), 400
+                saved = save_upload(_workforce_folder(), uploaded, event_id,
+                                    f'transport-company-{owner["id"]}', 'transport', allow_spreadsheets=True)
+                try:
+                    extraction = extract_invoice_amount(
+                        upload_absolute_path(_workforce_folder(), saved['storedPath']),
+                        data_folder=_workforce_folder(),
+                    )
+                except Exception:
+                    logger.exception('Could not detect transport company invoice amount')
+                    extraction = {}
+                old_invoice = owner.get('companyInvoice')
+                owner['companyInvoice'] = {
+                    **saved, 'id': new_id('transport_invoice'),
+                    'submittedAt': now_iso(), 'amount': money(extraction.get('amount')),
+                    'company': group['company'], 'scope': 'company',
+                }
+            owner['updatedAt'] = now_iso()
+        if old_invoice:
+            delete_upload(_workforce_folder(), old_invoice)
+        log_action(f'Updated transport company invoice for {group["company"]} in event {event_id}')
+        _workforce_changed(event_id, 'transport-company-invoice-updated')
+        return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+    except ValueError as exc:
+        if saved:
+            delete_upload(_workforce_folder(), saved)
+        return jsonify({'error': str(exc)}), 400
+
+
 def _find_submission_record(workforce, submission_id):
     for event_id, event_rows in (workforce.get('submissions') or {}).items():
         if not isinstance(event_rows, dict):
@@ -15522,15 +15719,17 @@ def _find_submission_record(workforce, submission_id):
                         }
     for event_id, bookings in (workforce.get('transportBookings') or {}).items():
         for booking in bookings if isinstance(bookings, list) else []:
-            invoice = booking.get('invoice') if isinstance(booking, dict) else None
-            if isinstance(invoice, dict) and str(invoice.get('id')) == str(submission_id):
-                return {
-                    'eventId': int(event_id),
-                    'freelancerId': '',
-                    'kind': 'transport',
-                    'record': invoice,
-                    'container': booking,
-                }
+            for invoice_field in ('invoice', 'companyInvoice'):
+                invoice = booking.get(invoice_field) if isinstance(booking, dict) else None
+                if isinstance(invoice, dict) and str(invoice.get('id')) == str(submission_id):
+                    return {
+                        'eventId': int(event_id),
+                        'freelancerId': '',
+                        'kind': 'transport',
+                        'record': invoice,
+                        'container': booking,
+                        'invoiceField': invoice_field,
+                    }
     return None
 
 
@@ -15965,6 +16164,8 @@ def review_workforce_submission(submission_id):
         if confirming_review:
             record['verifiedAt'] = now_iso()
             record['verifiedBy'] = session.get('user', '')
+            record['processingState'] = 'Complete'
+            record['processingError'] = ''
         if admin_confirming_payment:
             record['paymentConfirmedAt'] = now_iso()
             record['paymentConfirmedByAdmin'] = session.get('user', '')
@@ -16014,7 +16215,7 @@ def delete_workforce_submission(submission_id):
             return jsonify({'error': 'Submission not found'}), 404
         delete_upload(_workforce_folder(), found['record'])
         if found['kind'] == 'transport':
-            found['container']['invoice'] = None
+            found['container'][found.get('invoiceField', 'invoice')] = None
         else:
             found['container'].remove(found['record'])
         event_id = found['eventId']
@@ -18734,6 +18935,8 @@ def _render_app_page(section):
         vehicles_js_version=_static_asset_version('js/vehicles.js'),
         vehicles_css_version=_static_asset_version('css/vehicles.css'),
         accounting_js_version=_static_asset_version('js/accounting.js'),
+        accounting_workspace_js_version=_static_asset_version('js/accounting-workspace.js'),
+        accounting_close_js_version=_static_asset_version('js/accounting-close.js'),
         accounting_css_version=_static_asset_version('css/accounting.css'),
         costing_js_version=_static_asset_version('js/costing.js'),
     )
@@ -18750,6 +18953,7 @@ register_app_page_routes(
     is_admin=_current_user_effective_is_admin,
     is_owner=_current_user_is_owner,
     has_sales_access=_current_user_has_sales_access,
+    can_access_accounting=lambda: bool(_accounting_user_role()),
 )
 
 
@@ -23245,10 +23449,11 @@ def delete_event(event_id):
                     fleet_vehicle_ids_removed.append(
                         str(booking.get('vehicleId'))
                     )
-                invoice = booking.get('invoice') if isinstance(booking, dict) else None
-                if isinstance(invoice, dict):
-                    delete_upload(workforce_folder, invoice)
-                    workforce_files_removed += 1
+                for invoice_field in ('invoice', 'companyInvoice'):
+                    invoice = booking.get(invoice_field) if isinstance(booking, dict) else None
+                    if isinstance(invoice, dict):
+                        delete_upload(workforce_folder, invoice)
+                        workforce_files_removed += 1
 
         finance_cleanup = _finance_remove_deleted_event_references(event_id)
 
@@ -33404,6 +33609,13 @@ def _finance_runtime_from_storage(payload):
 
 def _finance_merge_storage_payloads(base_payload, local_payload, latest_payload):
     """Merge separate finance edits made by different server workers."""
+    # Accounting commands validate a shared ledger/subledger snapshot. Merging
+    # separate payment lists could overpay an invoice or issue the same stock twice.
+    base_books = base_payload.get('accounting')
+    local_books = local_payload.get('accounting')
+    latest_books = latest_payload.get('accounting')
+    if local_books != base_books and latest_books != base_books and local_books != latest_books:
+        raise FinanceMergeConflict(('accounting', 'reload-before-retry'))
     merged = three_way_merge(base_payload, local_payload, latest_payload)
     local_changed = changed_document_ids(base_payload, local_payload)
     remote_changed = changed_document_ids(base_payload, latest_payload)
@@ -39490,6 +39702,16 @@ def _finance_profit_loss_assignment_estimate(assignment):
     return round(rate * days, 2)
 
 
+def _workforce_submission_awaits_manual_entry(record):
+    """Exclude failed detection until someone supplies or verifies the details."""
+    return (
+        str(record.get('processingState') or '').strip().lower()
+        in {'failed', 'manual required'}
+        and not record.get('detailsCompletedAt')
+        and not record.get('verifiedAt')
+    )
+
+
 def _finance_profit_loss_submission_invoices(
     workforce, event_id, included_subject_ids, subject_departments=None
 ):
@@ -39517,6 +39739,8 @@ def _finance_profit_loss_submission_invoices(
         )
         for invoice in submissions.get('invoices', []) or []:
             if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
+                continue
+            if _workforce_submission_awaits_manual_entry(invoice):
                 continue
             amount = round(money(invoice.get('amount'), 0.0) or 0.0, 2)
             total = round(total + amount, 2)
@@ -39687,6 +39911,8 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         for invoice in invoices:
             if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
                 continue
+            if _workforce_submission_awaits_manual_entry(invoice):
+                continue
             amount = money(invoice.get('amount'), 0.0) or 0.0
             if amount <= 0:
                 continue
@@ -39745,6 +39971,8 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         claims = rows.get('claims') if isinstance(rows.get('claims'), list) else []
         for claim in claims:
             if not isinstance(claim, dict) or claim.get('status') == 'Denied':
+                continue
+            if _workforce_submission_awaits_manual_entry(claim):
                 continue
             amount = money(claim.get('amount'), 0.0) or 0.0
             details_complete = bool(claim.get('detailsComplete', True))
@@ -40201,8 +40429,9 @@ ACCOUNTING_TAX_CODES = {
     'ZR': {'name': 'Zero-rated supply', 'kind': 'sale', 'rate': 0.0},
     'ES': {'name': 'Exempt supply', 'kind': 'sale', 'rate': 0.0},
     'TX9': {'name': 'Taxable purchase 9%', 'kind': 'purchase', 'rate': 9.0},
+    'BL9': {'name': 'GST incurred 9% · not claimable', 'kind': 'purchase', 'rate': 9.0},
     'TX0': {'name': 'Zero-rated taxable purchase', 'kind': 'purchase', 'rate': 0.0},
-    'BL': {'name': 'Blocked input tax', 'kind': 'purchase', 'rate': 0.0},
+    'BL': {'name': 'Blocked input tax · enter gross cost', 'kind': 'purchase', 'rate': 0.0},
     'OP': {'name': 'Out of scope', 'kind': 'other', 'rate': 0.0},
 }
 ACCOUNTING_ACCOUNT_TYPES = {'asset', 'liability', 'equity', 'revenue', 'expense'}
@@ -40243,11 +40472,11 @@ def _accounting_store(finance_data):
         store['journals'] = []
     if not isinstance(store.get('bankTransactions'), list):
         store['bankTransactions'] = []
-    return store
+    return accounting_books.initialise(store)
 
 
 def _accounting_money(value, default=0.0):
-    return round(_safe_float(value, default), 2)
+    return accounting_books.money(default if value in (None, '') else value)
 
 
 def _accounting_date(value, fallback=None):
@@ -40282,6 +40511,10 @@ def _accounting_normalise_line(value, account_map):
     account_code = str(value.get('accountCode') or '').strip()[:30]
     if account_code not in account_map:
         raise ValueError(f'Unknown account code: {account_code or "blank"}')
+    if account_map[account_code].get('active') is False:
+        raise ValueError(f'Account {account_code} is inactive')
+    if accounting_books.dec(value.get('debit')) < 0 or accounting_books.dec(value.get('credit')) < 0:
+        raise ValueError('Debit and credit amounts must not be negative')
     debit = max(0.0, _accounting_money(value.get('debit')))
     credit = max(0.0, _accounting_money(value.get('credit')))
     if debit and credit:
@@ -40324,7 +40557,12 @@ def _accounting_normalise_journal(value, store, existing=None):
         status = 'draft'
     if status == 'posted' and abs(debit_total - credit_total) >= 0.005:
         raise ValueError('Posted journals must balance: total debits must equal total credits')
-    entry_date = _accounting_date(value.get('date') or existing.get('date'))
+    entry_date = accounting_books.day(value.get('date') or existing.get('date') or datetime.now().strftime('%Y-%m-%d'))
+    if status == 'posted' and store['settings'].get('approvalRequired') and existing and existing.get('sourceType', 'manual') == 'manual':
+        if _finance_current_username() in {existing.get('createdBy'), existing.get('updatedBy')}:
+            raise ValueError('A different accountant must post this draft journal')
+    elif status == 'posted' and store['settings'].get('approvalRequired') and not existing and not value.get('sourceType'):
+        raise ValueError('Save a draft journal for another accountant to review and post')
     lock_date = _accounting_date(
         store.get('settings', {}).get('periodLockDate'),
         '',
@@ -40341,6 +40579,8 @@ def _accounting_normalise_journal(value, store, existing=None):
             'previousStatus': existing.get('status'),
             'previousDebit': existing.get('debitTotal'),
             'previousCredit': existing.get('creditTotal'),
+            'previousLines': copy.deepcopy(existing.get('lines', [])),
+            'previousDescription': existing.get('description', ''),
         })
     return {
         'id': str(existing.get('id') or value.get('id') or secrets.token_hex(12))[:80],
@@ -40364,7 +40604,7 @@ def _accounting_normalise_journal(value, store, existing=None):
         ),
         'reversedJournalId': str(existing.get('reversedJournalId') or '')[:80],
         'reversalOf': str(existing.get('reversalOf') or value.get('reversalOf') or '')[:80],
-        'history': history[-100:],
+        'history': history,
     }
 
 
@@ -40514,6 +40754,14 @@ def _accounting_source_documents(finance_data):
 def _accounting_post_source(finance_data, source_key, options=None):
     options = options if isinstance(options, dict) else {}
     store = _accounting_store(finance_data)
+    if source_key.startswith('sales-payment:'):
+        accounting_books.adopt_legacy_sources(store, _accounting_source_documents(finance_data), _finance_current_username())
+        invoice_key = source_key.replace('sales-payment:', 'sales-invoice:', 1)
+        invoice_record = next((doc for doc in store['documents'] if doc.get('legacySourceKey') == invoice_key), None)
+        if not invoice_record:
+            raise ValueError('Post and link the invoice before recording its payment')
+        if accounting_books.outstanding(store, invoice_record) != invoice_record['total']:
+            raise ValueError('This invoice already has payments. Allocate only the remaining balance in Sales.')
     if any(
         row.get('sourceKey') == source_key and row.get('status') == 'posted'
         for row in store.get('journals') or []
@@ -40573,6 +40821,7 @@ def _accounting_post_source(finance_data, source_key, options=None):
         'lines': lines,
     }, store)
     store['journals'].append(journal)
+    accounting_books.adopt_legacy_sources(store, _accounting_source_documents(finance_data), _finance_current_username())
     return journal
 
 
@@ -40613,8 +40862,8 @@ def _accounting_normalise_bank_transaction(value, store):
         'reference': str(value.get('reference') or '').strip()[:200],
         'amount': _accounting_money(value.get('amount')),
         'bankAccount': bank_account,
-        'status': 'matched' if value.get('status') == 'matched' else 'unmatched',
-        'journalId': str(value.get('journalId') or '')[:80],
+        'status': 'unmatched',
+        'journalId': '',
         'importedAt': str(value.get('importedAt') or now_iso()),
         'importedBy': str(value.get('importedBy') or _finance_current_username()),
     }
@@ -40765,15 +41014,17 @@ def _accounting_reports(store, start, end):
     balance_sheet = {'assets': [], 'liabilities': [], 'equity': []}
     for code, account in sorted(account_map.items()):
         account_type = account.get('type')
-        if account_type not in balance_sheet:
+        section = {'asset': 'assets', 'liability': 'liabilities', 'equity': 'equity'}.get(account_type)
+        if not section:
             continue
         raw = _accounting_money(balances.get(code))
         amount = raw if account_type == 'asset' else -raw
         if amount:
-            balance_sheet[account_type].append({'code': code, 'name': account.get('name'), 'amount': amount})
+            balance_sheet[section].append({'code': code, 'name': account.get('name'), 'amount': amount})
     current_earnings = _accounting_money(revenue_total - expense_total)
-    if current_earnings:
-        balance_sheet['equity'].append({'code': 'CURRENT', 'name': 'Current period earnings', 'amount': current_earnings})
+    unclosed_earnings = _accounting_money(-sum(balances.get(code, 0) for code, account in account_map.items() if account.get('type') in {'revenue', 'expense'}))
+    if unclosed_earnings:
+        balance_sheet['equity'].append({'code': 'CURRENT', 'name': 'Accumulated unclosed earnings', 'amount': unclosed_earnings})
     gst = {f'box{number}': 0.0 for number in range(1, 18)}
     for journal in period_journals:
         for line in journal.get('lines') or []:
@@ -40806,9 +41057,9 @@ def _accounting_reports(store, start, end):
         'balanceSheet': balance_sheet,
         'gst': gst,
         'summary': {
-            'cash': _accounting_money(balances.get('1000')),
-            'receivables': _accounting_money(balances.get('1100')),
-            'payables': _accounting_money(-balances.get('2000', 0)),
+            'cash': _accounting_money(sum(balances.get(code, 0) for code in store['settings'].get('cashAccounts', ['1000']))),
+            'receivables': _accounting_money(balances.get(store['settings']['defaultReceivableAccount'])),
+            'payables': _accounting_money(-balances.get(store['settings']['defaultPayableAccount'], 0)),
             'revenue': revenue_total,
             'expenses': expense_total,
             'netProfit': current_earnings,
@@ -40865,11 +41116,13 @@ def _accounting_payload(finance_data, request_args):
             'unmatchedCount': sum(1 for row in bank_transactions if row.get('status') != 'matched'),
         },
         **reports,
+        'workspace': accounting_books.workspace_payload(store, _finance_current_username(), _current_user_effective_is_admin()),
+        'accountingUsers': _accounting_company_users(),
     }
 
 
 @app.route('/api/finance/accounting', methods=['GET'])
-@require_super_admin
+@require_accounting
 def accounting_workspace():
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -40877,13 +41130,25 @@ def accounting_workspace():
 
 
 @app.route('/api/finance/accounting/settings', methods=['PUT'])
-@require_super_admin
+@require_accounting
 def accounting_settings_update():
     value = request.get_json(silent=True) or {}
+    if value.get('accountingBasis', 'accrual') != 'accrual':
+        return jsonify({'error': 'These books use accrual accounting; cash-basis reporting is not implemented'}), 400
+    try:
+        if accounting_books.dec(value.get('gstRate', 9)) != 9:
+            return jsonify({'error': 'SR9 and TX9 use 9% GST. Use separate tax codes for historic rates.'}), 400
+        if value.get('periodLockDate'):
+            accounting_books.day(value['periodLockDate'])
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     with _finance_lock:
         finance_data = _load_finance_data()
         store = _accounting_store(finance_data)
         settings = store['settings']
+        for key in ('defaultReceivableAccount', 'defaultPayableAccount'):
+            if value.get(key) and value[key] != settings[key] and store['journals']:
+                return jsonify({'error': 'Control accounts cannot change after journal activity. Create a reviewed migration first.'}), 409
         settings['gstRegistered'] = bool(value.get('gstRegistered'))
         settings['gstRegistrationNumber'] = str(value.get('gstRegistrationNumber') or '').strip()[:80]
         settings['gstRate'] = round(max(0, min(100, _safe_float(value.get('gstRate'), ACCOUNTING_GST_RATE))), 2)
@@ -40911,7 +41176,7 @@ def accounting_settings_update():
 
 
 @app.route('/api/finance/accounting/accounts', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_account_create():
     value = request.get_json(silent=True) or {}
     code = re.sub(r'[^A-Za-z0-9._-]+', '', str(value.get('code') or '').strip())[:30]
@@ -40940,7 +41205,7 @@ def accounting_account_create():
 
 
 @app.route('/api/finance/accounting/accounts/<account_code>', methods=['PUT'])
-@require_super_admin
+@require_accounting
 def accounting_account_update(account_code):
     value = request.get_json(silent=True) or {}
     with _finance_lock:
@@ -40953,6 +41218,8 @@ def accounting_account_update(account_code):
         account_type = str(value.get('type') if 'type' in value else account.get('type') or '').strip().lower()
         if not name or account_type not in ACCOUNTING_ACCOUNT_TYPES:
             return jsonify({'error': 'Account name and a valid type are required'}), 400
+        if account_type != account.get('type') and any(line.get('accountCode') == account_code for journal in store['journals'] for line in journal.get('lines', [])):
+            return jsonify({'error': 'The type of an account with journal history cannot be changed'}), 409
         account.update({
             'name': name,
             'type': account_type,
@@ -40966,9 +41233,10 @@ def accounting_account_update(account_code):
 
 
 @app.route('/api/finance/accounting/journals', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_journal_create():
     value = request.get_json(silent=True) or {}
+    value = {key: val for key, val in value.items() if key not in {'id', 'sourceKey', 'sourceType', '_allowLocked', 'reversalOf'}}
     try:
         with _finance_lock:
             finance_data = _load_finance_data()
@@ -40984,7 +41252,7 @@ def accounting_journal_create():
 
 
 @app.route('/api/finance/accounting/journals/<journal_id>', methods=['PUT', 'DELETE'])
-@require_super_admin
+@require_accounting
 def accounting_journal_item(journal_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -40994,6 +41262,8 @@ def accounting_journal_item(journal_id):
         if index is None:
             return jsonify({'error': 'Journal not found'}), 404
         existing = journals[index]
+        if store['settings'].get('periodLockDate') and existing['date'] <= store['settings']['periodLockDate']:
+            return jsonify({'error': 'The original journal period is locked'}), 409
         if existing.get('status') == 'posted':
             return jsonify({'error': 'Posted journals cannot be edited or deleted; reverse the entry instead'}), 409
         if request.method == 'DELETE':
@@ -41003,7 +41273,9 @@ def accounting_journal_item(journal_id):
             mark_realtime_change('finance', {'action': 'accounting-journal-deleted', 'journalId': journal_id})
             return jsonify({'success': True, 'data': payload})
         try:
-            journal = _accounting_normalise_journal(request.get_json(silent=True) or {}, store, existing)
+            value = request.get_json(silent=True) or {}
+            value = {key: val for key, val in value.items() if key not in {'id', 'sourceKey', 'sourceType', '_allowLocked', 'reversalOf'}}
+            journal = _accounting_normalise_journal(value, store, existing)
         except ValueError as exc:
             return jsonify({'error': str(exc)}), 400
         journals[index] = journal
@@ -41014,7 +41286,7 @@ def accounting_journal_item(journal_id):
 
 
 @app.route('/api/finance/accounting/journals/<journal_id>/post', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_journal_post(journal_id):
     try:
         with _finance_lock:
@@ -41038,7 +41310,7 @@ def accounting_journal_post(journal_id):
 
 
 @app.route('/api/finance/accounting/journals/<journal_id>/reverse', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_journal_reverse(journal_id):
     value = request.get_json(silent=True) or {}
     try:
@@ -41052,6 +41324,10 @@ def accounting_journal_reverse(journal_id):
                 return jsonify({'error': 'Only posted journals can be reversed'}), 409
             if original.get('reversedJournalId'):
                 return jsonify({'error': 'This journal has already been reversed'}), 409
+            if any(asset.get('acquisitionJournalId') == original.get('id') for asset in store.get('fixedAssets', [])):
+                return jsonify({'error': 'This acquisition is linked to the fixed asset register. Review the asset record before correcting its acquisition.'}), 409
+            if original.get('sourceType') == 'accounting' or original.get('documentId'):
+                return jsonify({'error': 'This journal belongs to a subledger. Use a credit note for documents; generated payment, depreciation and stock entries cannot be reversed independently.'}), 409
             reversal = _accounting_normalise_journal({
                 'date': value.get('date') or datetime.now().strftime('%Y-%m-%d'),
                 'description': str(value.get('description') or f"Reversal of {original.get('number')}")[:500],
@@ -41075,6 +41351,8 @@ def accounting_journal_reverse(journal_id):
             original['updatedAt'] = now_iso()
             original['updatedBy'] = _finance_current_username()
             store['journals'].append(reversal)
+            from services.accounting_workspace import unmatch_journal_bank_lines
+            unmatch_journal_bank_lines(store, journal_id)
             _save_finance_data(finance_data)
             payload = _accounting_payload(finance_data, request.args)
     except ValueError as exc:
@@ -41084,7 +41362,7 @@ def accounting_journal_reverse(journal_id):
 
 
 @app.route('/api/finance/accounting/sources/post', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_source_post():
     value = request.get_json(silent=True) or {}
     source_key = str(value.get('sourceKey') or '').strip()
@@ -41103,7 +41381,7 @@ def accounting_source_post():
 
 
 @app.route('/api/finance/accounting/bank-transactions', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_bank_transaction_create():
     try:
         with _finance_lock:
@@ -41125,7 +41403,7 @@ def accounting_bank_transaction_create():
 
 
 @app.route('/api/finance/accounting/bank-transactions/import', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_bank_transactions_import():
     from io import StringIO
 
@@ -41196,7 +41474,7 @@ def accounting_bank_transactions_import():
 
 
 @app.route('/api/finance/accounting/bank-transactions/<transaction_id>', methods=['DELETE'])
-@require_super_admin
+@require_accounting
 def accounting_bank_transaction_delete(transaction_id):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -41215,7 +41493,7 @@ def accounting_bank_transaction_delete(transaction_id):
 
 
 @app.route('/api/finance/accounting/bank-transactions/<transaction_id>/match', methods=['POST'])
-@require_super_admin
+@require_accounting
 def accounting_bank_transaction_match(transaction_id):
     try:
         with _finance_lock:
@@ -41234,7 +41512,7 @@ def accounting_bank_transaction_match(transaction_id):
 
 
 @app.route('/api/finance/accounting/export.csv', methods=['GET'])
-@require_super_admin
+@require_accounting
 def accounting_export_csv():
     from io import StringIO
 
@@ -41273,6 +41551,28 @@ def accounting_export_csv():
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+@app.route('/api/finance/accounting/sources/link', methods=['POST'])
+@require_accounting
+def accounting_sources_link():
+    try:
+        with _finance_lock:
+            data = _load_finance_data()
+            count = accounting_books.adopt_legacy_sources(_accounting_store(data), _accounting_source_documents(data), _finance_current_username())
+            _save_finance_data(data)
+            mark_realtime_change('finance', {'action': 'accounting-sources-linked'})
+            return jsonify(success=True, linked=count, data=_accounting_payload(data, request.args))
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+
+
+register_accounting_routes(
+    app, auth=require_accounting, lock=_finance_lock, load=_load_finance_data,
+    save=_save_finance_data, store_for=_accounting_store, payload=_accounting_payload,
+    actor=_finance_current_username, owner=_current_user_effective_is_admin,
+    users=_accounting_company_users, finance_path=_finance_path, changed=mark_realtime_change,
+)
 
 
 def _finance_compare_identity_key(identity):
@@ -42754,6 +43054,15 @@ def _finance_get_update_delete(document_id, document_type):
         if request.method == 'GET':
             return jsonify({'success': True, 'data': _normalise_finance_document(existing, document_type, existing)})
         if request.method == 'DELETE':
+            if document_type == 'invoice':
+                delete_data = request.get_json(silent=True) or {}
+                if 'documentVersion' in delete_data and _safe_int(
+                    delete_data.get('documentVersion'), 0
+                ) != max(1, _safe_int(existing.get('documentVersion'), 1)):
+                    return jsonify({
+                        'error': 'This invoice changed while deletion was being confirmed. Review it before deleting it.',
+                        'code': 'document_version_conflict',
+                    }), 409
             finance_data['documents'] = [
                 row for row in finance_data.get('documents') or []
                 if str(row.get('id')) != str(document_id)
@@ -42916,7 +43225,9 @@ def _finance_get_update_delete(document_id, document_type):
         ):
             return jsonify({'error': f'{document_type.title()} number is already in use'}), 409
         if document_type == 'quotation':
-            status_workflow_fields = {'status'}
+            # Optimistic concurrency metadata does not turn a status change
+            # into a content edit requiring a new draft revision.
+            status_workflow_fields = {'status', 'documentVersion'}
             if raw_requested_status == 'sent':
                 status_workflow_fields.update({
                     'sentDate', 'validityAmount', 'validityUnit', 'validityDays',
@@ -43944,9 +44255,9 @@ def _process_profit_loss_expense_upload(
                 ), None)
                 if expense:
                     expense.update({
-                        'processingState': 'Failed',
+                        'processingState': 'Complete',
                         'submissionStage': 'Details Required',
-                        'processingError': 'Automatic document analysis failed',
+                        'processingError': '',
                         'needsReview': True,
                         'updatedAt': now_iso(),
                     })
@@ -46214,7 +46525,11 @@ def _invoice_plan_sync_documents(finance_data, plan, quotation):
     invoice_details = plan.get('invoiceDetails') or {}
     for index, document in enumerate(finance_data.get('documents') or []):
         installment = installments.get(str(document.get('id') or ''))
-        if not installment or document.get('type') != 'invoice':
+        if (
+            not installment
+            or document.get('type') != 'invoice'
+            or str(document.get('sourceQuotationId') or '') != str(quotation.get('id') or '')
+        ):
             continue
         _ensure_invoice_sent_snapshot(document)
         update = {
@@ -46233,6 +46548,32 @@ def _invoice_plan_sync_documents(finance_data, plan, quotation):
             'amountOutstanding': summary.get('due'),
             'invoicePlanPayments': plan.get('payments') or [],
         }
+        # Reconcile receipts for issued documents, while keeping drafts and
+        # void invoices under explicit user control.
+        if document.get('status') in {'sent', 'overdue', 'partially-paid', 'paid'}:
+            paid = round(sum(
+                _safe_float(payment.get('amount'), 0)
+                for payment in plan.get('payments') or []
+                if str(payment.get('invoiceId') or '') == str(document.get('id') or '')
+            ), 2)
+            amount = round(_safe_float(installment.get('amount'), 0), 2)
+            due_date = _finance_invoice_due_date(document)
+            if amount > 0 and paid >= amount - 0.005:
+                status = 'paid'
+            elif paid > 0:
+                status = 'partially-paid'
+            else:
+                status = 'overdue' if due_date and due_date < datetime.now().strftime('%Y-%m-%d') else 'sent'
+            update['status'] = status
+            if status != 'paid':
+                update['paidAt'] = ''
+            elif not document.get('paidAt'):
+                update['paidAt'] = max((
+                    str(payment.get('date') or '')
+                    for payment in plan.get('payments') or []
+                    if str(payment.get('invoiceId') or '') == str(document.get('id') or '')
+                ), default=datetime.now().strftime('%Y-%m-%d'))
+            installment['status'] = status
         if (
             str(document.get('status') or 'draft').strip().lower() == 'draft'
             and not isinstance(document.get('invoiceSentSnapshot'), dict)
@@ -46249,9 +46590,48 @@ def _invoice_plan_sync_documents(finance_data, plan, quotation):
                 'reference': invoice_details.get('reference') or '',
                 'paymentTerms': invoice_details.get('paymentTerms') or '',
             })
-        finance_data['documents'][index] = _normalise_finance_document(
+        normalized = _normalise_finance_document(
             update, 'invoice', document
         )
+        if update.get('paidAt') == '':
+            # The shared normalizer retains optional timestamps on empty input.
+            # Reopening an invoice after receipt removal must clear settlement.
+            normalized['paidAt'] = ''
+        if any(normalized.get(key) != document.get(key) for key in update):
+            normalized['documentVersion'] = max(1, _safe_int(document.get('documentVersion'), 1)) + 1
+        finance_data['documents'][index] = normalized
+    plan['status'] = _invoice_plan_summary_status(plan)
+
+
+def _invoice_plan_link_error(plan, existing, finance_data):
+    """Validate invoice ownership and receipt allocation before synchronization."""
+    invoices = {
+        str(row.get('id') or ''): row
+        for row in finance_data.get('documents') or []
+        if row.get('type') == 'invoice'
+        and str(row.get('sourceQuotationId') or '') == str(plan.get('quotationId') or '')
+    }
+    linked_invoice_ids = set()
+    for installment in plan.get('installments') or []:
+        invoice_id = str(installment.get('invoiceId') or '')
+        if not invoice_id:
+            continue
+        if invoice_id not in invoices:
+            return 'Each issued installment must belong to this billing plan.'
+        if invoice_id in linked_invoice_ids:
+            return 'An invoice cannot be linked to more than one installment.'
+        linked_invoice_ids.add(invoice_id)
+    previous = {str(row.get('id') or ''): row for row in (existing or {}).get('payments') or []}
+    for payment in plan.get('payments') or []:
+        invoice_id = str(payment.get('invoiceId') or '')
+        if not invoice_id:
+            continue
+        invoice = invoices.get(invoice_id)
+        if not invoice:
+            return 'Select an invoice belonging to this billing plan.'
+        if invoice.get('status') == 'void' and payment != previous.get(str(payment.get('id') or '')):
+            return 'Payments cannot be allocated to a void invoice.'
+    return None
 
 
 def _invoice_plan_response(finance_data, quotation, plan, include_quotation=False):
@@ -46572,6 +46952,9 @@ def invoice_plan_item(quotation_id):
                         ),
                     }), 409
         plan = _normalise_invoice_plan(requested, quotation, existing or {})
+        link_error = _invoice_plan_link_error(plan, existing, finance_data)
+        if link_error:
+            return jsonify({'error': link_error}), 400
         previous_details = (
             existing.get('invoiceDetails')
             if isinstance(existing, dict)
@@ -46652,7 +47035,23 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
                         existing_invoice, 'invoice', existing_invoice
                     ),
                     'unchanged': True,
+                    'plan': _invoice_plan_response(
+                        finance_data, quotation, plan, include_quotation=True
+                    ),
                 })
+
+        if _safe_float(installment.get('amount'), 0) <= 0:
+            return jsonify({'error': 'Enter an installment amount before issuing the invoice.'}), 400
+
+        request_data = request.get_json() or {}
+        if 'expectedAmount' in request_data and abs(
+            _safe_float(request_data.get('expectedAmount'), -1)
+            - _safe_float(installment.get('amount'), 0)
+        ) > 0.005:
+            return jsonify({
+                'error': 'This installment amount changed. Review the billing plan and issue it again.',
+                'code': 'installment_amount_conflict',
+            }), 409
 
         quotation_status = str(quotation.get('status') or '').strip().lower()
         if quotation_status == 'accepted':
@@ -46787,7 +47186,7 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
     })
     return jsonify({
         'success': True,
-        'data': invoice,
+        'data': _finance_find_document(finance_data, invoice['id'], 'invoice'),
         'plan': _invoice_plan_response(
             finance_data, quotation, plan, include_quotation=True
         ),
@@ -46803,6 +47202,15 @@ def mark_invoice_paid(document_id):
         if not stored_invoice or not _finance_user_can_access(stored_invoice):
             return jsonify({'error': 'Invoice not found'}), 404
         request_data = request.get_json() or {}
+        if str(stored_invoice.get('status') or '').lower() == 'void':
+            return jsonify({'error': 'A void invoice cannot receive payment. Restore it to draft first.'}), 409
+        if 'documentVersion' in request_data and _safe_int(
+            request_data.get('documentVersion'), 0
+        ) != max(1, _safe_int(stored_invoice.get('documentVersion'), 1)):
+            return jsonify({
+                'error': 'This invoice changed after the payment dialog was opened. Reopen it to review the current balance.',
+                'code': 'document_version_conflict',
+            }), 409
         received_date = str(
             request_data.get('receivedDate') or datetime.now().strftime('%Y-%m-%d')
         )[:10]
@@ -46837,6 +47245,21 @@ def mark_invoice_paid(document_id):
             0,
             _safe_float(installment.get('amount'), 0) - paid_for_invoice,
         ), 2)
+        if 'expectedAmountDue' in request_data and abs(
+            _safe_float(request_data.get('expectedAmountDue'), -1) - amount_due
+        ) > 0.005:
+            return jsonify({
+                'error': 'The invoice balance changed. Reopen the payment dialog to review the current amount.',
+                'code': 'invoice_balance_conflict',
+            }), 409
+        if amount_due > 0 and any(
+            not row.get('invoiceId') and _safe_float(row.get('amount'), 0) > 0
+            for row in plan.get('payments') or []
+        ):
+            return jsonify({
+                'error': 'This billing plan has unallocated payments. Open the billing plan and apply those receipts to their invoices before marking this invoice paid.',
+                'code': 'unallocated_payments',
+            }), 409
         if amount_due > 0:
             plan['payments'].append(_normalise_invoice_plan_payment({
                 'date': received_date,
@@ -46858,6 +47281,9 @@ def mark_invoice_paid(document_id):
             'paidAt': paid_at,
             'statusChangedAt': paid_at,
         }, 'invoice', stored_invoice)
+        updated_invoice['documentVersion'] = max(
+            1, _safe_int(stored_invoice.get('documentVersion'), 1)
+        ) + 1
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id') or '') == str(document_id):
                 finance_data['documents'][index] = updated_invoice

@@ -43,18 +43,28 @@ def _row_identity(row, list_path):
 
 
 def _is_keyed_row_list(values, path):
-    rows = [row for value in values for row in value]
-    return bool(rows) and all(_row_identity(row, path) for row in rows)
+    return any(values) and all(
+        _row_identity(row, path)
+        for rows in values
+        for row in rows
+    )
 
 
-def _changed(value, base):
-    return value != base
+def _index_rows(rows, path):
+    """Build a row lookup and stable order without resolving IDs twice."""
+    indexed = {}
+    order = []
+    for row in rows:
+        row_id = _row_identity(row, path)
+        indexed[row_id] = row
+        order.append(row_id)
+    return indexed, order
 
 
 def _merge_keyed_rows(base, local, remote, path):
-    base_by_id = {_row_identity(row, path): row for row in base}
-    local_by_id = {_row_identity(row, path): row for row in local}
-    remote_by_id = {_row_identity(row, path): row for row in remote}
+    base_by_id, base_ids = _index_rows(base, path)
+    local_by_id, local_ids = _index_rows(local, path)
+    remote_by_id, remote_ids = _index_rows(remote, path)
     all_ids = set(base_by_id) | set(local_by_id) | set(remote_by_id)
     merged_by_id = {}
 
@@ -91,9 +101,6 @@ def _merge_keyed_rows(base, local, remote, path):
             (*path, row_id),
         )
 
-    base_ids = [_row_identity(row, path) for row in base]
-    local_ids = [_row_identity(row, path) for row in local]
-    remote_ids = [_row_identity(row, path) for row in remote]
     common_ids = set(base_ids) & set(local_ids) & set(remote_ids)
     base_common = [row_id for row_id in base_ids if row_id in common_ids]
     local_common = [row_id for row_id in local_ids if row_id in common_ids]

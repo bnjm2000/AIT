@@ -811,6 +811,37 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return freelancer_id
 
+    def test_failed_processing_falls_back_to_manual_review(self):
+        worker_id = self.create_worker_assignment()
+        for kind in ('claim', 'invoice'):
+            with self.subTest(kind=kind):
+                submission_id = f'manual-{kind}'
+                with mutate_workforce(self.manager.data_folder) as workforce:
+                    rows = workforce.setdefault('submissions', {}).setdefault('143', {}).setdefault(worker_id, {})
+                    rows.setdefault(f'{kind}s', []).append({
+                        'id': submission_id, 'status': 'Pending Review',
+                        'amount': None, 'detailsComplete': False,
+                        'processingState': 'Queued', 'submissionStage': 'Queued',
+                        'storedPath': 'uploads/missing-file.pdf',
+                    })
+                with patch.object(app_module.logger, 'error'):
+                    app_module._process_worker_submission_upload(
+                        self.manager, self.manager.data_folder, 143, worker_id, submission_id, kind,
+                    )
+                workforce = load_workforce(self.manager.data_folder)
+                record = workforce['submissions']['143'][worker_id][f'{kind}s'][-1]
+                self.assertEqual(record['processingState'], 'Manual Required')
+                self.assertEqual(record['processingError'], '')
+                self.assertTrue(app_module._workforce_submission_awaits_manual_entry(record))
+                response = self.client.put(f'/api/workforce/submissions/{submission_id}', json={
+                    'amount': 25, 'claimDate': '2026-07-10', 'category': 'Meal',
+                    'status': 'Pending Review', 'confirmReview': True,
+                })
+                self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+                record = load_workforce(self.manager.data_folder)['submissions']['143'][worker_id][f'{kind}s'][-1]
+                self.assertEqual(record['processingState'], 'Complete')
+                self.assertFalse(app_module._workforce_submission_awaits_manual_entry(record))
+
     def worker_access(self, password="1234"):
         with self.client.session_transaction() as session:
             session.clear()
@@ -2532,6 +2563,59 @@ class WorkforcePortalTests(unittest.TestCase):
         approved = response.get_json()["data"]["transportBookings"][0]
         self.assertEqual(approved["status"], "Approved")
 
+    def test_transport_company_invoice_groups_bookings_and_counts_once(self):
+        self.login('admin', True)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['transportBookings']['143'] = [
+                {'id': 'trip-a', 'company': 'Example Logistics', 'sourceType': 'external', 'cost': 100, 'vendorId': 'vehicle-a'},
+                {'id': 'trip-b', 'company': ' example  logistics ', 'sourceType': 'external', 'cost': 200, 'vendorId': 'vehicle-b'},
+                {'id': 'trip-c', 'company': 'Other Logistics', 'sourceType': 'external', 'cost': 90},
+            ]
+        response = self.client.get('/api/events/143/workforce')
+        self.assertEqual(len(response.get_json()['data']['transportCompanies']), 2)
+        with patch.object(app_module, 'extract_invoice_amount', return_value={'amount': 450}):
+            response = self.client.post('/api/events/143/workforce/transport/trip-b/company-invoice',
+                data={'file': (io.BytesIO(PDF_BYTES), 'company-invoice.pdf')}, content_type='multipart/form-data')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['totals']['transport'], 540)
+        self.assertEqual(payload['totals']['invoice'], 0)
+        self.assertEqual(payload['totals']['claims'], 0)
+        group = next(row for row in payload['transportCompanies'] if len(row['bookings']) == 2)
+        self.assertEqual(group['cost'], 450)
+        self.assertEqual(group['estimatedCost'], 300)
+        self.assertEqual(sum(bool(row.get('companyInvoice')) for row in payload['transportBookings']), 1)
+        invoice = group['invoice']
+        self.assertEqual(self.client.get(invoice['previewUrl']).status_code, 200)
+        self.assertEqual(app_module._finance_profit_loss_workforce_costs(143)['transportCost'], 540)
+        response = self.client.put('/api/events/143/workforce/transport/trip-b/company-invoice', json={'amount': 475})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['data']['totals']['transport'], 565)
+        response = self.client.delete(f"/api/events/143/workforce/transport/{group['invoiceBookingId']}")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['totals']['transport'], 565)
+        self.assertEqual(self.client.get(invoice['previewUrl']).status_code, 200)
+        response = self.client.delete(f"/api/workforce/submissions/{invoice['id']}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['data']['totals']['transport'], 290)
+
+    def test_transport_group_uses_profile_company_for_legacy_blank_bookings(self):
+        self.login('admin', True)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['transportVendors'] = [
+                {'id': 'v18', 'company': 'Ang Guo Cai', 'vehicleType': '18ft Lorry'},
+                {'id': 'v24', 'company': 'Ang Guo Cai', 'vehicleType': '24ft Lorry'},
+            ]
+            workforce['transportBookings']['143'] = [
+                {'id': 'b18', 'company': '', 'vendorId': 'v18', 'cost': 100},
+                {'id': 'b24', 'company': '', 'vendorId': 'v24', 'cost': 200},
+            ]
+        payload = self.client.get('/api/events/143/workforce').get_json()['data']
+        self.assertEqual(len(payload['transportCompanies']), 1)
+        self.assertEqual(payload['transportCompanies'][0]['company'], 'Ang Guo Cai')
+        self.assertEqual(len(payload['transportCompanies'][0]['bookings']), 2)
+        self.assertEqual(payload['totals']['transport'], 300)
+
     def test_return_transport_defaults_reverse_departure_and_use_event_end_date(self):
         static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
         with open(
@@ -2733,6 +2817,80 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(current["workDates"], ["2026-07-11"])
         self.assertEqual(current["days"], 1)
+
+    def test_schedule_daily_rate_splits_and_recombines_matching_roles(self):
+        worker_id = self.create_worker_assignment()
+        rows = self.client.get('/api/events/143/workforce').get_json()['data']['assignments']
+        assignment = next(row for row in rows if row.get('freelancerId') == worker_id)
+        endpoint = f"/api/events/143/workforce/assignments/{assignment['id']}/schedule-day"
+        payload = {'date': '2026-07-11', 'department': 'AU', 'roleName': 'Audio Engineer'}
+        for invalid in (-1, 'abc', 'NaN', 'Infinity', None):
+            response = self.client.patch(endpoint, json={**payload, 'rate': invalid})
+            self.assertEqual(response.status_code, 400)
+        response = self.client.patch(endpoint, json={**payload, 'rate': 350})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = response.get_json()['data']['workforce']['assignments']
+        worker_rows = [row for row in rows if row.get('freelancerId') == worker_id]
+        self.assertEqual(len(worker_rows), 2)
+        self.assertEqual(
+            {date: row['dailyRate'] for row in worker_rows for date in row['workDates']},
+            {'2026-07-10': 280, '2026-07-11': 350},
+        )
+        changed = next(row for row in worker_rows if row['dailyRate'] == 350)
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{changed['id']}/schedule-day",
+            json={**payload, 'rate': 280},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = self.client.get('/api/events/143/workforce').get_json()['data']['assignments']
+        worker_rows = [row for row in rows if row.get('freelancerId') == worker_id]
+        self.assertEqual(len(worker_rows), 1)
+        self.assertEqual(worker_rows[0]['dailyRate'], 280)
+        self.assertEqual(worker_rows[0]['workDates'], ['2026-07-10', '2026-07-11'])
+        response = self.client.post('/api/events/143/workforce/assignments', json={
+            'freelancerId': worker_id, 'department': 'AU', 'customRole': 'Audio Engineer',
+            'dailyRate': 280, 'workDates': ['2026-07-12'],
+        })
+        self.assertEqual(response.status_code, 200)
+        rows = response.get_json()['data']['assignments']
+        worker_rows = [row for row in rows if row.get('freelancerId') == worker_id]
+        self.assertEqual(len(worker_rows), 1)
+        self.assertEqual(worker_rows[0]['days'], 3)
+
+    def test_schedule_vendor_daily_rate_preserves_other_days_and_merges_back(self):
+        member_id = self.create_worker_assignment()
+        vendor = self.client.post('/api/workforce/vendors', json={
+            'name': 'Schedule Vendor', 'memberIds': [member_id],
+        }).get_json()['data']
+        response = self.client.post('/api/events/143/workforce/assignments', json={
+            'vendorId': vendor['id'], 'department': 'AU', 'providerType': 'manpower',
+            'pax': 3, 'ratePerPax': 180, 'workDates': ['2026-07-10', '2026-07-11'],
+        })
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        original = next(row for row in response.get_json()['data']['assignments']
+                        if row.get('vendorId') == vendor['id'])
+        payload = {'date': '2026-07-11', 'department': 'AU', 'roleName': original['roleName']}
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{original['id']}/schedule-day",
+            json={**payload, 'rate': 220},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = [row for row in response.get_json()['data']['workforce']['assignments']
+                if row.get('vendorId') == vendor['id']]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(sum(row['days'] * row['pax'] * row['ratePerPax'] for row in rows), 1200)
+        changed = next(row for row in rows if row['ratePerPax'] == 220)
+        self.assertEqual(changed['dailyRate'], 220)
+        response = self.client.patch(
+            f"/api/events/143/workforce/assignments/{changed['id']}/schedule-day",
+            json={**payload, 'rate': 180},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = [row for row in response.get_json()['data']['workforce']['assignments']
+                if row.get('vendorId') == vendor['id']]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['days'], 2)
+        self.assertEqual(rows[0]['dailyRate'], 180)
 
     def test_schedule_can_change_department_and_role_for_one_day(self):
         freelancer_id = self.create_worker_assignment()

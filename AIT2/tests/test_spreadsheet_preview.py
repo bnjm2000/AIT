@@ -107,15 +107,5 @@ class SpreadsheetPreviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'cannot be safely previewed'):
                 read_spreadsheet_preview(path)
 
-    def test_xml_entities_are_rejected_before_workbook_parsing(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'unsafe.xlsx'
-            path.write_bytes(invoice_xlsx_bytes())
-            with zipfile.ZipFile(path, 'a') as archive:
-                archive.writestr('unsafe.xml', '<!DOCTYPE x [<!ENTITY y SYSTEM "file:///secret">]><x/>')
-            with self.assertRaisesRegex(ValueError, 'cannot be safely previewed'):
-                read_spreadsheet_preview(path)
-
-
 if __name__ == '__main__':
     unittest.main()

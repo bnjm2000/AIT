@@ -15,7 +15,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from storage_paths import documents_root_for_data_folder
 
@@ -34,6 +34,7 @@ _STORE_LOCKS_GUARD = threading.RLock()
 _DOCUMENT_STORES = {}
 _OCR_ENGINE = None
 _OCR_ENGINE_LOCK = threading.RLock()
+DOCUMENT_EXTRACTOR_VERSION = 2
 
 
 def now_iso() -> str:
@@ -49,11 +50,11 @@ def money(value, default=None):
         return default
     try:
         amount = Decimal(str(value).replace(",", "").strip())
-    except (InvalidOperation, ValueError):
+        if not amount.is_finite() or amount < 0:
+            return default
+        return float(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError, OverflowError):
         return default
-    if amount < 0:
-        return default
-    return float(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def normalize_phone(value: str) -> str:
@@ -446,6 +447,7 @@ def delete_upload(data_folder: str, record: dict) -> None:
 
 
 def _pdf_text(path: str) -> str:
+    text = ""
     try:
         from pypdf import PdfReader
 
@@ -453,7 +455,7 @@ def _pdf_text(path: str) -> str:
         text = "\n".join(
             (page.extract_text() or "") for page in reader.pages[:8]
         )
-        if text.strip():
+        if text.strip() and not (len(text) > 400 and len(text.splitlines()) < 3):
             return text
     except Exception:
         pass
@@ -462,11 +464,11 @@ def _pdf_text(path: str) -> str:
 
         document = fitz.open(path)
         try:
-            return "\n".join(page.get_text("text") for page in list(document)[:8])
+            return "\n".join(page.get_text("text") for page in list(document)[:8]) or text
         finally:
             document.close()
     except Exception:
-        return ""
+        return text
 
 
 def _rapid_ocr_engine():
@@ -583,17 +585,17 @@ def _ocr_image(path: str) -> str:
     try:
         engine = _rapid_ocr_engine()
         with Image.open(path) as image:
-            lines = _ocr_image_regions(engine, image.convert("RGB"))
+            lines = _ocr_image_regions(engine, ImageOps.exif_transpose(image).convert("RGB"))
         return "\n".join(lines)
     except Exception:
         return ""
 
 
 _AMOUNT_RE = re.compile(
-    r"(?<![A-Za-z0-9])"
+    r"(?<![A-Za-z0-9.,])"
     r"(?P<currency>SGD|S\$|\$)?\s*"
     r"(?P<amount>(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[\.,]\d{1,2})?)"
-    r"(?![A-Za-z0-9])",
+    r"(?![.,]\d)(?=SGD\b|[^A-Za-z0-9]|$)",
     re.IGNORECASE,
 )
 
@@ -631,6 +633,8 @@ def _amount_candidate_feature(lines, line_index, match_index):
 def _amount_candidates(text: str) -> list:
     candidates = []
     keyword_scores = (
+        ("实付款", 125),
+        ("实付金额", 125),
         ("total amount due", 125),
         ("total amount", 118),
         ("total payable", 110),
@@ -645,15 +649,29 @@ def _amount_candidates(text: str) -> list:
         ("total incl", 88),
         ("total including", 88),
         ("invoice total", 86),
+        ("paid amount", 100),
+        ("parking fee", 100),
         ("total", 65),
     )
     lines = [
-        re.sub(r"\s+", " ", raw_line).strip()
+        re.sub(r'(?<=\$)[Oo](?=\.\d{2}\b)', '0',
+               re.sub(r'\bS[S5](?=\s*\d[\d,]*\.\d{2}\b)', 'S$',
+                      re.sub(r"\s+", " ", raw_line).strip()))
         for raw_line in str(text or "").splitlines()
         if raw_line.strip()
     ]
     for line_index, line in enumerate(lines):
         lowered = re.sub(r"\btota[i1l]\b", "total", line.lower())
+        # Dates, times and segmented account/reference numbers are not money.
+        # They can otherwise inherit a neighbouring total's score, or overflow
+        # Decimal when OCR reads a barcode as a long run of digits.
+        non_amount_spans = [
+            match.span()
+            for pattern in (*_DATE_PATTERNS,
+                            re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\b"),
+                            re.compile(r"(?<!\w)\d+(?:[-/]\d+)+(?!\w)"))
+            for match in pattern.finditer(line)
+        ]
         nearby = []
         for context_index in range(
             max(0, line_index - 2),
@@ -673,6 +691,11 @@ def _amount_candidates(text: str) -> list:
             has_currency = bool(match.group("currency"))
             has_decimal = bool(re.search(r"[\.,]\d{1,2}$", raw_amount))
             if amount is None or amount <= 0:
+                continue
+            if any(start < match.end('amount') and end > match.start('amount')
+                   for start, end in non_amount_spans):
+                continue
+            if len(re.sub(r'\D', '', raw_amount.split('.')[0])) > 12:
                 continue
             if re.match(
                 r"\s*[)\]]?\s*(?:%|percent\b)",
@@ -774,10 +797,37 @@ def _amount_candidates(text: str) -> list:
                 )
             ):
                 score -= 120
+            if re.search(r'\b(?:card\s+balance|remaining\s+balance|stored\s+value)\b', lowered):
+                score -= 140
             if has_currency or "sgd" in lowered or "s$" in lowered:
                 score += 5
             if has_decimal:
                 score += 3
+            if re.search(
+                r'\b(?:total(?:\s+(?:amount(?:\s+due)?|due|payable|fee|price))?'
+                r'|amount\s+(?:due|payable)|balance\s+due)'
+                r'\s*[:=\-]?\s*(?:\([^\d)]*\))?\s*(?:SGD|S\$|\$)?\s*$',
+                lowered[:match.start('amount')], re.I,
+            ) and not re.search(r'\bsub[ -]?total\b', lowered[:match.start('amount')], re.I):
+                score += 45
+            if any(label in lowered for label in ('实付款', '实付金额')) and has_currency:
+                score += 45
+            if not has_currency and not has_decimal:
+                if amount >= 1000000:
+                    score -= 140
+                elif re.search(r'(?:\$\s*\d|\d[.,]\d{2}(?!\d))', line):
+                    # A quantity beside a price must not beat that price just
+                    # because the quantity repeats in every item row.
+                    score -= 90
+            if re.fullmatch(r'(?:SGD|S\$|\$)\s*[\d, .]+|[\d, .]+\s*(?:SGD|S\$|\$)', line, re.I):
+                score = max(score, 75)
+            if line_index and re.fullmatch(r'(?:SGD|S\$|\$)?\s*[\d, .]+\s*\$?', line, re.I):
+                if re.fullmatch(r'(?:total(?:\s+(?:amount(?:\s+due)?|due|payable|fee))?'
+                                r'|amount\s+(?:due|payable)|balance\s+due)\s*[:=\-]?',
+                                lines[line_index - 1], re.I):
+                    score += 45
+            if re.search(r'\b(?:give|save|refer(?:ral)?|promo|voucher|cashback)\b', lowered):
+                score -= 120
             if (
                 not has_decimal
                 and not has_currency
@@ -794,6 +844,26 @@ def _amount_candidates(text: str) -> list:
 
     if not candidates:
         return []
+    # Some invoices finish with "Subtotal" and have no tax or grand-total
+    # section. Penalising that sole summary below item prices loses the total.
+    final_total = re.compile(r'\b(?:total|amount\s+(?:due|payable)|balance\s+due)\b', re.I)
+    has_final_total = any(
+        final_total.search(line)
+        and not re.search(r'\bsub[ -]?total\b|\btotal\s+includes?\s+(?:gst|tax)\s+of\b', line, re.I)
+        for score, index, amount, line, feature in candidates
+    )
+    if not has_final_total:
+        subtotal_values = {}
+        for _score, index, _amount, line, _feature in candidates:
+            label = re.search(r'\bsub[ -]?total\b', line, re.I)
+            value = _AMOUNT_RE.search(line, label.end()) if label else None
+            if value:
+                subtotal_values[index] = _invoice_amount_number(value.group('amount'))
+        candidates = [
+            (max(score, 100) if subtotal_values.get(index) == amount
+             else score, index, amount, line, feature)
+            for score, index, amount, line, feature in candidates
+        ]
     occurrence_counts = {}
     for _score, _line_index, candidate_amount, _line, _feature in candidates:
         amount_key = round(candidate_amount, 2)
@@ -864,12 +934,12 @@ _MONTH_PATTERN = "|".join(
 _DATE_PATTERNS = (
     re.compile(
         r"(?<!\d)(?P<year>20\d{2})\s*[./-]\s*"
-        r"(?P<month>\d{1,2})\s*[./-]\s*(?P<day>\d{1,2})(?!\d)"
+        r"(?P<month>0?[1-9]|1[0-2])\s*[./-]\s*(?P<day>0?[1-9]|[12]\d|3[01])(?=$|[^\d]|\d{1,2}:)"
     ),
     re.compile(
-        r"(?<!\d)(?P<day>\d{1,2})\s*[./-]\s*"
-        r"(?P<month>\d{1,2})\s*[./-]\s*"
-        r"(?P<year>\d{4}|\d{2})(?=$|[^\d]|\d{1,2}:)"
+        r"(?<!\d)(?P<day>0?[1-9]|[12]\d|3[01])\s*[./-]\s*"
+        r"(?P<month>0?[1-9]|[12]\d|3[01])\s*[./-]\s*"
+        r"(?P<year>(?:19|20)\d{2}|\d{2})(?=$|[^\d]|\d{1,2}:)"
     ),
     re.compile(
         rf"(?<!\w)(?P<day>\d{{1,2}})(?:st|nd|rd|th)?"
@@ -894,6 +964,8 @@ _DATE_PATTERNS = (
 
 def _date_from_text(text: str) -> dict:
     candidates = []
+    # Scanners often join a time's minutes to the following receipt date.
+    text = re.sub(r'(\b\d{1,2}:\d{2})(?=\d{2}[-/]\d{2}[-/]\d{4}\b)', r'\1 ', str(text or ''))
     lines = [
         re.sub(r"\s+", " ", line).strip()
         for line in str(text or "").splitlines()
@@ -907,7 +979,7 @@ def _date_from_text(text: str) -> dict:
     exit_date_lines = {
         index for index, line in enumerate(lines)
         # Thermal-receipt OCR commonly reads the T in OUT as F ("OUf").
-        if re.match(r'^(?:[o0]u[tf]|exit)(?:\s+(?:date|time))*\s*[:\-]', line, re.I)
+        if re.match(r'^(?:[o0]u[tf]|exi[tl])(?:\s+(?:date|time))*\s*[:\-]', line, re.I)
         and any(pattern.search(line) for pattern in _DATE_PATTERNS)
     }
     for line_index, line in enumerate(lines):
@@ -931,8 +1003,13 @@ def _date_from_text(text: str) -> dict:
                         if month_name
                         else int(match.group("month"))
                     )
+                    day = int(match.group('day'))
+                    # Only use month/day order when day/month is impossible;
+                    # ambiguous local receipts remain day-first.
+                    if not month_name and month > 12 and day <= 12:
+                        day, month = month, day
                     value = datetime(
-                        year, int(month), int(match.group("day"))
+                        year, int(month), day
                     )
                 except (TypeError, ValueError):
                     continue
@@ -1019,6 +1096,42 @@ def _date_from_filename(filename: str) -> dict:
     }
 
 
+def _document_extraction_text(path: str, kind: str, content_type: str = "") -> dict:
+    """Shared routing for live extraction and offline calibration.
+
+    Missing receipt dates can justify OCR without discarding a better native
+    amount. Routing is independent of learned scores to avoid training drift.
+    """
+    is_pdf = Path(path).suffix.lower() == '.pdf' or content_type == 'application/pdf'
+    if not is_pdf:
+        text = _ocr_image(path)
+        return {'text': text, 'dateText': text, 'source': 'Receipt image OCR', 'ocrUsed': True}
+    native = _pdf_text(path)
+    baseline = _amount_from_text(native)
+    date = _date_from_text(native) if kind == 'claim' else {}
+    single_letters = len(re.findall(r'\b[A-Za-z]\b', native))
+    fragmented = single_letters > 30 and single_letters > len(re.findall(r'\b[A-Za-z]{2,}\b', native))
+    unlabelled_invoice = (kind == 'invoice' and baseline['confidence'] != 'High'
+                          and not re.search(r'\b(?:total|subtotal|payable|amount\s+due)\b', native, re.I))
+    result = {'text': native, 'dateText': native, 'source': 'PDF text', 'ocrUsed': False}
+    if not fragmented and not unlabelled_invoice and baseline['amount'] is not None and baseline['confidence'] != 'Low' and (kind != 'claim' or date.get('date')):
+        return result
+    scanned = _ocr_pdf(path)
+    ocr_amount = _amount_from_text(scanned)
+    ranks = {'Low': 0, 'Medium': 1, 'High': 2}
+    if ocr_amount['amount'] is not None and (
+        baseline['amount'] is None
+        or fragmented
+        or ranks[ocr_amount['confidence']] > ranks[baseline['confidence']]
+        or baseline['confidence'] == ocr_amount['confidence'] == 'Low'
+        or (unlabelled_invoice and ranks[ocr_amount['confidence']] >= ranks[baseline['confidence']])
+    ):
+        result.update(text=scanned, source='Scanned document OCR', ocrUsed=True)
+    if kind == 'claim' and not date.get('date') and _date_from_text(scanned)['date']:
+        result.update(dateText=scanned, ocrUsed=True)
+    return result
+
+
 def extract_invoice_amount(path: str, *, data_folder=None) -> dict:
     from document_learning import load_amount_profile
 
@@ -1031,21 +1144,10 @@ def extract_invoice_amount(path: str, *, data_folder=None) -> dict:
             "matchedText": "",
             "ocrUsed": False,
         }
-    text = _pdf_text(path)
-    result = _amount_from_text(text, profile)
-    result["source"] = "PDF text"
-    result["ocrUsed"] = False
-    baseline = _amount_from_text(text)
-    if baseline["amount"] is not None and baseline["confidence"] != "Low":
-        return result
-
-    ocr_text = _ocr_pdf(path)
-    ocr_result = _amount_from_text(ocr_text, profile)
-    if ocr_result["amount"] is not None:
-        ocr_result["source"] = "Scanned document OCR"
-        ocr_result["ocrUsed"] = True
-        return ocr_result
-    return result
+    document = _document_extraction_text(path, 'invoice')
+    result = _amount_from_text(document['text'], profile)
+    result.update(source=document['source'], ocrUsed=document['ocrUsed'])
+    return _local_submission_amount(result)
 
 
 def extract_claim_amount(
@@ -1058,41 +1160,59 @@ def extract_claim_amount(
     from document_learning import load_amount_profile
 
     profile = load_amount_profile(data_folder, 'claim')
-    extension = Path(path).suffix.lower()
-    if extension == ".pdf" or content_type == "application/pdf":
-        text = _pdf_text(path)
-        result = _amount_from_text(text, profile)
-        result.update(_date_from_text(text))
-        result["source"] = "PDF text"
-        result["ocrUsed"] = False
-        baseline = _amount_from_text(text)
-        if (
-            baseline["amount"] is not None
-            and baseline["confidence"] != "Low"
-            and result["date"]
-        ):
-            return result
-        ocr_text = _ocr_pdf(path)
-        ocr_amount = _amount_from_text(ocr_text, profile)
-        ocr_date = _date_from_text(ocr_text)
-        if ocr_amount["amount"] is not None:
-            result.update(ocr_amount)
-        if ocr_date["date"]:
-            result.update(ocr_date)
-        if ocr_text:
-            result["source"] = "Scanned document OCR"
-            result["ocrUsed"] = True
-        if not result["date"]:
-            result.update(_date_from_filename(original_name))
-        return result
-    ocr_text = _ocr_image(path)
-    result = _amount_from_text(ocr_text, profile)
-    result.update(_date_from_text(ocr_text))
+    document = _document_extraction_text(path, 'claim', content_type)
+    result = _amount_from_text(document['text'], profile)
+    result.update(_date_from_text(document['dateText']))
     if not result["date"]:
         result.update(_date_from_filename(original_name))
-    result["source"] = "Receipt image OCR"
-    result["ocrUsed"] = True
+    result.update(source=document['source'], ocrUsed=document['ocrUsed'])
+    return _local_submission_amount(result)
+
+
+def _local_submission_amount(result: dict) -> dict:
+    """Foreign totals need the actual SGD charge, which OCR cannot infer."""
+    line = result.get('matchedText', '')
+    if (re.search(r'\b(?:EUR|USD|GBP|CNY|RMB|MYR)\b|[€£¥￥]|US\$', line, re.I)
+            and not re.search(r'SGD|(?<![A-Za-z])S\$', line, re.I)):
+        return {**result, 'amount': None, 'confidence': 'Low',
+                'source': 'Foreign currency - enter SGD amount'}
     return result
+
+
+def transport_company_groups(bookings, profiles=()):
+    """Group event bookings by company and count a company invoice once."""
+    profiles_by_id = {str(row.get('id')): row for row in profiles if isinstance(row, dict)}
+    grouped = {}
+    for booking in bookings:
+        if not isinstance(booking, dict):
+            continue
+        fleet = str(booking.get('sourceType') or '').lower() == 'fleet'
+        profile = profiles_by_id.get(str(booking.get('vendorId') or ''), {})
+        company = 'Own fleet' if fleet else (
+            str(booking.get('company') or '').strip() or str(profile.get('company') or '').strip()
+        )
+        key = 'fleet' if fleet else (
+            'company:' + ' '.join(company.casefold().split()) if company
+            else 'vendor:' + str(booking.get('vendorId') or booking.get('id') or '')
+        )
+        group = grouped.setdefault(key, {
+            'key': key, 'company': company or 'External transport',
+            'isFleet': fleet, 'bookings': [], 'invoice': None,
+            'invoiceBookingId': '', 'estimatedCost': 0.0,
+        })
+        group['bookings'].append(booking)
+        if booking.get('status') != 'Denied':
+            group['estimatedCost'] += (money(booking.get('cost'), 0) or 0) * (2 if booking.get('twoWay') else 1)
+        invoice = booking.get('companyInvoice')
+        if isinstance(invoice, dict):
+            group['invoice'] = invoice
+            group['invoiceBookingId'] = str(booking.get('id') or '')
+    for group in grouped.values():
+        group['estimatedCost'] = round(group['estimatedCost'], 2)
+        invoice = group['invoice'] or {}
+        amount = money(invoice.get('amount')) if invoice.get('status') != 'Denied' else None
+        group['cost'] = amount if amount is not None else group['estimatedCost']
+    return sorted(grouped.values(), key=lambda group: group['company'].casefold())
 
 
 def submission_totals(data: dict, event_id) -> dict:
@@ -1178,13 +1298,7 @@ def submission_totals(data: dict, event_id) -> dict:
                 str(claim.get("department") or "Unassigned"), "claims", amount
             )
 
-    for booking in event_bookings(data, event_id):
-        if not isinstance(booking, dict) or booking.get("status") == "Denied":
-            continue
-        trip_cost = money(booking.get("cost"), 0.0) or 0.0
-        totals["transport"] += trip_cost * (
-            2 if booking.get("twoWay") else 1
-        )
+    totals['transport'] = sum(group['cost'] for group in transport_company_groups(event_bookings(data, event_id), data.get('transportVendors', [])))
 
     totals["combined"] = totals["invoice"] + totals["claims"]
     for key in ("invoice", "claims", "transport", "combined"):

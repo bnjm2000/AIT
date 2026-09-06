@@ -49,12 +49,9 @@ def _maintenance_context(owner_label: str, record: dict, display_name: str = "")
     }
 
 
-def _add_context(index: dict, path: str, context: dict, *, overwrite: bool = False) -> None:
+def _add_context(index: dict, path: str, context: dict) -> None:
     for key in _context_keys(path):
-        if overwrite:
-            index[key] = context
-        else:
-            index.setdefault(key, context)
+        index.setdefault(key, context)
 
 
 def build_company_storage_contexts(manager) -> dict:

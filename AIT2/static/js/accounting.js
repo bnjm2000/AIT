@@ -58,8 +58,8 @@ function accountingSvg(name) {
 async function loadAccounting(options = {}) {
   const root = accountingRoot();
   if (!root) return;
-  if (typeof isPlatformAdminUser === 'function' && !isPlatformAdminUser()) {
-    root.innerHTML = '<div class="accounting-empty">Administrative access is required.</div>';
+  if (typeof canCurrentUserManageRoles === 'function' && !canCurrentUserManageRoles()) {
+    root.innerHTML = '<div class="accounting-empty">Accounting is available to company admins and platform owners.</div>';
     return;
   }
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading accounting...</div>';
@@ -79,12 +79,15 @@ async function loadAccounting(options = {}) {
 async function accountingSetPeriod() {
   const from = document.getElementById('accountingPeriodFrom')?.value || '';
   const to = document.getElementById('accountingPeriodTo')?.value || '';
+  if (!from || !to || from > to) { showNotification('error', 'Choose a valid start and end date.'); return; }
   accountingState.data = { ...(accountingState.data || {}), period: { from, to } };
   await loadAccounting({ preserve: true });
 }
 
 function accountingSetTab(tab) {
+  if (accountingState.tab !== tab && ['sales','purchases'].includes(tab)) acState.documentFilter='all';
   accountingState.tab = tab;
+  accountingState.search = '';
   renderAccounting();
 }
 
@@ -99,32 +102,36 @@ function accountingHeader() {
     <header class="accounting-header">
       <div>
         <h2>Accounting</h2>
-        <p>Company books and GST working records</p>
+        <p>Singapore company books <span class="ac-base-currency">SGD</span></p>
       </div>
       <div class="accounting-header-actions">
+        <label><span>Period</span><select aria-label="Quick reporting period" onchange="acPeriodPreset(this.value)"><option value="">Custom dates</option><option value="month">This month</option><option value="last-month">Last month</option><option value="year">Financial year to date</option><option value="last-year">Last financial year</option></select></label>
         <label><span>From</span><input id="accountingPeriodFrom" type="date" value="${accountingAttr(period.from)}"></label>
         <label><span>To</span><input id="accountingPeriodTo" type="date" value="${accountingAttr(period.to)}"></label>
         <button type="button" class="accounting-icon-button" title="Apply period" onclick="accountingSetPeriod()">${accountingSvg('check')}</button>
-        <button type="button" class="btn btn-secondary accounting-action" onclick="accountingOpenJournal()">${accountingSvg('plus')} Journal</button>
+        ${acCan('write') ? `<button type="button" class="btn btn-primary accounting-action" onclick="acNewMenu()">${accountingSvg('plus')} New transaction</button>` : ''}
       </div>
     </header>
   `;
 }
 
 function accountingTabs() {
+  const activeTab=({sources:'sales',journals:'ledger',transactions:'ledger',accounts:'ledger',gst:'reports'})[accountingState.tab]||accountingState.tab;
   const tabs = [
     ['overview', 'Overview'],
-    ['sources', 'Sales & Purchases'],
+    ['sales', 'Sales'],
+    ['purchases', 'Purchases'],
     ['banking', 'Banking'],
-    ['transactions', 'Transactions'],
-    ['journals', 'Journals'],
-    ['accounts', 'Chart of Accounts'],
-    ['gst', 'GST'],
+    ['ledger', 'Ledger'],
+    ['assets', 'Fixed assets'],
+    ['inventory', 'Inventory'],
     ['reports', 'Reports'],
+    ['close', 'Close & filing'],
+    ['tasks', 'Tasks & approvals'],
     ['settings', 'Settings']
   ];
   return `<nav class="accounting-tabs" aria-label="Accounting views">${tabs.map(([key, label]) => `
-    <button type="button" class="${accountingState.tab === key ? 'active' : ''}" onclick="accountingSetTab('${key}')">${accountingEscape(label)}${key === 'sources' && accountingState.data?.unpostedCount ? `<span>${accountingState.data.unpostedCount}</span>` : ''}</button>
+    <button type="button" class="${activeTab === key ? 'active' : ''}" onclick="accountingSetTab('${key}')">${accountingEscape(label)}${key === 'sources' && accountingState.data?.unpostedCount ? `<span>${accountingState.data.unpostedCount}</span>` : ''}</button>
   `).join('')}</nav>`;
 }
 
@@ -198,6 +205,7 @@ function accountingFilteredSources() {
 function accountingRenderSources() {
   const rows = accountingFilteredSources();
   return `
+    <div class="ac-page-intro"><div><h3>Existing app documents</h3><p>Post new sources, or link earlier postings to the receivables and payables lists.</p></div>${acButton('Link earlier posted documents',"acMutate('sources/link',{})",'write')}</div>
     <section class="accounting-panel accounting-table-panel">
       <div class="accounting-panel-heading responsive"><div><h3>Sales and purchase documents</h3><p>Posting creates balanced ledger entries once</p></div><div class="accounting-tools">${accountingSearchControl('Search documents...')}<div class="accounting-segments">${['unposted', 'posted', 'all'].map(value => `<button type="button" class="${accountingState.sourceFilter === value ? 'active' : ''}" onclick="accountingState.sourceFilter='${value}';renderAccountingBody()">${value[0].toUpperCase() + value.slice(1)}</button>`).join('')}</div></div></div>
       <div class="accounting-table-scroll"><table class="accounting-table"><thead><tr><th>Date</th><th>Document</th><th>Contact</th><th>Event</th><th>Status</th><th class="money">Amount</th><th></th></tr></thead><tbody>
@@ -222,9 +230,13 @@ function accountingRenderTransactions() {
 
 function accountingRenderBanking() {
   const data = accountingState.data || {};
-  const summary = data.bankSummary || {};
+  const bankAccount = acState.bankAccount || data.settings?.defaultBankAccount || '1000';
+  const bankRows = (data.bankTransactions || []).filter(row => row.bankAccount === bankAccount && row.date >= data.period.from && row.date <= data.period.to);
+  const statementMovement = bankRows.reduce((sum, row) => sum + Number(row.amount), 0);
+  const ledgerMovement = (data.transactions || []).filter(row => row.accountCode === bankAccount).reduce((sum, row) => sum + Number(row.debit) - Number(row.credit), 0);
+  const summary = { statementMovement, ledgerMovement, difference: statementMovement - ledgerMovement, unmatchedCount: bankRows.filter(row => row.status !== 'matched').length };
   const query = accountingState.search.trim().toLowerCase();
-  const rows = (data.bankTransactions || []).filter(row => !query || [row.description, row.reference, row.amount, row.date].some(value => String(value || '').toLowerCase().includes(query)));
+  const rows = bankRows.filter(row => !query || [row.description, row.reference, row.amount, row.date].some(value => String(value || '').toLowerCase().includes(query)));
   return `
     <section class="accounting-kpi-grid banking" aria-label="Bank reconciliation summary">
       ${accountingKpi('Statement movement', summary.statementMovement, 'cash')}
@@ -247,7 +259,7 @@ function accountingRenderJournals() {
     <section class="accounting-panel accounting-table-panel">
       <div class="accounting-panel-heading responsive"><div><h3>Journal entries</h3><p>Posted entries are corrected by reversal</p></div><div class="accounting-tools">${accountingSearchControl('Search journals...')}<button type="button" class="btn btn-primary accounting-action" onclick="accountingOpenJournal()">${accountingSvg('plus')} New journal</button></div></div>
       <div class="accounting-table-scroll"><table class="accounting-table"><thead><tr><th>Date</th><th>Journal</th><th>Description</th><th>Status</th><th class="money">Total</th><th></th></tr></thead><tbody>
-        ${rows.map(row => `<tr><td>${accountingDate(row.date)}</td><td><strong>${accountingEscape(row.number)}</strong><small>${accountingEscape(row.reference || '-')}</small></td><td>${accountingEscape(row.description || '-')}<small>${accountingEscape(row.createdBy || '')}</small></td><td><span class="accounting-status ${row.status}">${accountingEscape(row.status)}</span>${row.reversedJournalId ? '<small>Reversed</small>' : ''}</td><td class="money"><strong>${accountingMoney(row.debitTotal)}</strong></td><td class="actions"><button type="button" class="accounting-row-action" onclick="accountingOpenJournal('${accountingAttr(row.id)}')">View</button>${row.status === 'draft' ? `<button type="button" class="accounting-row-action primary" onclick="accountingPostJournal('${accountingAttr(row.id)}')">Post</button>` : !row.reversedJournalId ? `<button type="button" class="accounting-row-action" onclick="accountingReverseJournal('${accountingAttr(row.id)}')">Reverse</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="accounting-empty">No journal entries.</td></tr>'}
+        ${rows.map(row => `<tr><td>${accountingDate(row.date)}</td><td><strong>${accountingEscape(row.number)}</strong><small>${accountingEscape(row.reference || '-')}</small></td><td>${accountingEscape(row.description || '-')}<small>${accountingEscape(row.createdBy || '')}</small></td><td><span class="accounting-status ${row.status}">${accountingEscape(row.status)}</span>${row.reversedJournalId ? '<small>Reversed</small>' : ''}</td><td class="money"><strong>${accountingMoney(row.debitTotal)}</strong></td><td class="actions"><button type="button" class="accounting-row-action" onclick="accountingOpenJournal('${accountingAttr(row.id)}')">View</button>${row.status === 'draft' ? `<button type="button" class="accounting-row-action primary" onclick="accountingPostJournal('${accountingAttr(row.id)}')">Post</button>` : acJournalCanReverse(row) ? `<button type="button" class="accounting-row-action" onclick="accountingReverseJournal('${accountingAttr(row.id)}')">Reverse</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="accounting-empty">No journal entries.</td></tr>'}
       </tbody></table></div>
     </section>
   `;
@@ -316,7 +328,7 @@ function accountingRenderReports() {
 }
 
 function accountingAccountOptions(selected = '', types = []) {
-  return (accountingState.data?.accounts || []).filter(row => row.active !== false && (!types.length || types.includes(row.type))).map(row => `<option value="${accountingAttr(row.code)}" ${String(row.code) === String(selected) ? 'selected' : ''}>${accountingEscape(row.code)} · ${accountingEscape(row.name)}</option>`).join('');
+  return (accountingState.data?.accounts || []).filter(row => (row.active !== false || row.code === selected) && (!types.length || types.includes(row.type))).map(row => `<option value="${accountingAttr(row.code)}" ${String(row.code) === String(selected) ? 'selected' : ''}>${accountingEscape(row.code)} · ${accountingEscape(row.name)}</option>`).join('');
 }
 
 function accountingRenderSettings() {
@@ -324,7 +336,7 @@ function accountingRenderSettings() {
   return `
     <form class="accounting-settings" onsubmit="accountingSaveSettings(event)">
       <section class="accounting-panel"><div class="accounting-panel-heading"><div><h3>GST configuration</h3><p>Singapore GST working defaults</p></div><label class="accounting-switch"><input id="accountingGstRegistered" type="checkbox" ${settings.gstRegistered ? 'checked' : ''}><span></span><b>GST registered</b></label></div><div class="accounting-form-grid three"><label><span>GST registration number</span><input id="accountingGstNumber" value="${accountingAttr(settings.gstRegistrationNumber)}"></label><label><span>GST rate (%)</span><input id="accountingGstRate" type="number" min="0" max="100" step="0.01" value="${Number(settings.gstRate ?? 9)}"></label><label><span>Filing frequency</span><select id="accountingFilingFrequency"><option value="quarterly" ${settings.filingFrequency === 'quarterly' ? 'selected' : ''}>Quarterly</option><option value="monthly" ${settings.filingFrequency === 'monthly' ? 'selected' : ''}>Monthly</option></select></label></div></section>
-      <section class="accounting-panel"><div class="accounting-panel-heading"><div><h3>Books controls</h3><p>Financial year, retention and posting defaults</p></div></div><div class="accounting-form-grid three"><label><span>Financial year starts</span><select id="accountingYearStart">${Array.from({ length: 12 }, (_, index) => `<option value="${index + 1}" ${Number(settings.financialYearStartMonth) === index + 1 ? 'selected' : ''}>${new Date(2026, index, 1).toLocaleString('en-SG', { month: 'long' })}</option>`).join('')}</select></label><label><span>Accounting basis</span><select id="accountingBasis"><option value="accrual" ${settings.accountingBasis !== 'cash' ? 'selected' : ''}>Accrual</option><option value="cash" ${settings.accountingBasis === 'cash' ? 'selected' : ''}>Cash</option></select></label><label><span>Record retention (years)</span><input id="accountingRetention" type="number" min="5" max="20" value="${Number(settings.recordRetentionYears || 5)}"></label><label><span>Lock entries through</span><input id="accountingLockDate" type="date" value="${accountingAttr(settings.periodLockDate)}"></label><label><span>Default bank account</span><select id="accountingBankAccount">${accountingAccountOptions(settings.defaultBankAccount, ['asset'])}</select></label><label><span>Default receivable account</span><select id="accountingReceivableAccount">${accountingAccountOptions(settings.defaultReceivableAccount, ['asset'])}</select></label><label><span>Default payable account</span><select id="accountingPayableAccount">${accountingAccountOptions(settings.defaultPayableAccount, ['liability'])}</select></label></div></section>
+      <section class="accounting-panel"><div class="accounting-panel-heading"><div><h3>Books controls</h3><p>Financial year, retention and posting defaults</p></div></div><div class="accounting-form-grid three"><label><span>Financial year starts</span><select id="accountingYearStart">${Array.from({ length: 12 }, (_, index) => `<option value="${index + 1}" ${Number(settings.financialYearStartMonth) === index + 1 ? 'selected' : ''}>${new Date(2026, index, 1).toLocaleString('en-SG', { month: 'long' })}</option>`).join('')}</select></label><label><span>Accounting basis</span><select id="accountingBasis"><option value="accrual" ${settings.accountingBasis !== 'cash' ? 'selected' : ''}>Accrual</option></select></label><label><span>Record retention (years)</span><input id="accountingRetention" type="number" min="5" max="20" value="${Number(settings.recordRetentionYears || 5)}"></label><label><span>Lock entries through</span><input id="accountingLockDate" type="date" value="${accountingAttr(settings.periodLockDate)}"></label><label><span>Default bank account</span><select id="accountingBankAccount">${accountingAccountOptions(settings.defaultBankAccount, ['asset'])}</select></label><label><span>Default receivable account</span><select id="accountingReceivableAccount">${accountingAccountOptions(settings.defaultReceivableAccount, ['asset'])}</select></label><label><span>Default payable account</span><select id="accountingPayableAccount">${accountingAccountOptions(settings.defaultPayableAccount, ['liability'])}</select></label></div></section>
       <div class="accounting-form-actions"><button type="submit" class="btn btn-primary">Save accounting settings</button></div>
     </form>
   `;
@@ -334,17 +346,25 @@ function renderAccountingBody() {
   const body = document.getElementById('accountingBody');
   if (!body) return;
   const renderers = {
-    overview: accountingRenderOverview,
+    overview: acOverview,
+    sales: acDocuments,
+    purchases: acDocuments,
     sources: accountingRenderSources,
-    banking: accountingRenderBanking,
+    banking: acBanking,
+    ledger: acLedger,
+    assets: acAssets,
+    inventory: acInventory,
+    tasks: acTasks,
     transactions: accountingRenderTransactions,
     journals: accountingRenderJournals,
     accounts: accountingRenderAccounts,
-    gst: accountingRenderGst,
-    reports: accountingRenderReports,
-    settings: accountingRenderSettings
+    gst: acReports,
+    reports: acReports,
+    close: acClose,
+    settings: acSettings
   };
   body.innerHTML = (renderers[accountingState.tab] || accountingRenderOverview)();
+  acAfterRender();
 }
 
 function renderAccounting() {
@@ -422,7 +442,7 @@ function accountingRemoveJournalLine(index) {
   accountingRenderJournalLines();
 }
 
-function accountingOpenJournal(journalId = '') {
+function accountingOpenJournalBase(journalId = '') {
   accountingEnsureModal();
   const journal = (accountingState.data?.journals || []).find(row => row.id === journalId);
   const readonly = journal?.status === 'posted';
@@ -452,19 +472,19 @@ async function accountingDeleteJournal() {
   if (!accountingState.editingJournalId) return;
   const confirmed = await showAppConfirm({ title: 'Delete draft journal?', message: 'This draft has not affected the ledger yet.', confirmText: 'Delete', cancelText: 'Keep draft', danger: true });
   if (!confirmed) return;
-  try { const response = await apiCall(`/api/finance/accounting/journals/${encodeURIComponent(accountingState.editingJournalId)}`, 'DELETE'); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/journals/${encodeURIComponent(accountingState.editingJournalId)}`), 'DELETE'); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); } catch (error) { showNotification('error', error.message); }
 }
 
 async function accountingPostJournal(journalId) {
   const confirmed = await showAppConfirm({ title: 'Post journal?', message: 'Posted entries affect the books and can only be corrected by reversal.', confirmText: 'Post', cancelText: 'Cancel' });
   if (!confirmed) return;
-  try { const response = await apiCall(`/api/finance/accounting/journals/${encodeURIComponent(journalId)}/post`, 'POST', {}); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Journal posted'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/journals/${encodeURIComponent(journalId)}/post`), 'POST', {}); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Journal posted'); } catch (error) { showNotification('error', error.message); }
 }
 
 async function accountingReverseJournal(journalId) {
   const confirmed = await showAppConfirm({ title: 'Reverse posted journal?', message: 'A new equal and opposite entry will be posted today.', confirmText: 'Reverse', cancelText: 'Cancel', danger: true });
   if (!confirmed) return;
-  try { const response = await apiCall(`/api/finance/accounting/journals/${encodeURIComponent(journalId)}/reverse`, 'POST', {}); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Reversal posted'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/journals/${encodeURIComponent(journalId)}/reverse`), 'POST', {}); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Reversal posted'); } catch (error) { showNotification('error', error.message); }
 }
 
 function accountingOpenSource(encodedKey) {
@@ -484,13 +504,13 @@ async function accountingPostSource(event) {
   const source = accountingState.sourceTarget;
   if (!source) return;
   const payload = { sourceKey: source.key, date: document.getElementById('accountingSourceDate')?.value, accountCode: document.getElementById('accountingSourceAccount')?.value, taxCode: document.getElementById('accountingSourceTax')?.value, counterAccount: document.getElementById('accountingSourceCounter')?.value };
-  try { const response = await apiCall('/api/finance/accounting/sources/post', 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Document posted'); } catch (error) { showNotification('error', error.message || 'Could not post document'); }
+  try { const response = await apiCall(acUrl('/api/finance/accounting/sources/post'), 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Document posted'); } catch (error) { showNotification('error', error.message || 'Could not post document'); }
 }
 
 function accountingOpenBankImport() {
   accountingEnsureModal();
   document.getElementById('accountingModalTitle').textContent = 'Import bank statement';
-  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingImportBankCsv(event)"><div class="accounting-form-grid two"><label><span>Bank account</span><select id="accountingImportBankAccount">${accountingAccountOptions(accountingState.data?.settings?.defaultBankAccount || '1000', ['asset'])}</select></label><label><span>Statement CSV</span><input id="accountingBankCsv" type="file" accept=".csv,text/csv" required></label></div><div class="accounting-notice neutral"><strong>Accepted columns</strong><span>Date plus Amount, or separate Debit and Credit columns. Description and Reference are optional. Duplicate rows are skipped.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Import statement</button></div></form>`;
+  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingImportBankCsv(event)"><div class="accounting-form-grid two"><label><span>Bank account</span><select id="accountingImportBankAccount">${acBankAccountOptions(acState.bankAccount || accountingState.data?.settings?.defaultBankAccount || '1000')}</select></label><label><span>Statement CSV</span><input id="accountingBankCsv" type="file" accept=".csv,text/csv" required></label></div><div class="accounting-notice neutral"><strong>Accepted columns</strong><span>Date plus Amount, or separate Debit and Credit columns. Description and Reference are optional. Duplicate rows are skipped.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Import statement</button></div></form>`;
   openModal('accountingModal');
 }
 
@@ -502,7 +522,7 @@ async function accountingImportBankCsv(event) {
   form.append('file', file);
   form.append('bankAccount', document.getElementById('accountingImportBankAccount').value);
   try {
-    const response = await apiCall('/api/finance/accounting/bank-transactions/import', 'POST', form);
+    const response = await apiCall(acUrl('/api/finance/accounting/bank-transactions/import'), 'POST', form);
     accountingState.data = response.data;
     closeModal('accountingModal');
     renderAccounting();
@@ -514,17 +534,17 @@ async function accountingImportBankCsv(event) {
 function accountingOpenBankTransaction() {
   accountingEnsureModal();
   document.getElementById('accountingModalTitle').textContent = 'Add bank transaction';
-  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingSaveBankTransaction(event)"><div class="accounting-form-grid two"><label><span>Date</span><input id="accountingBankDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label><label><span>Bank account</span><select id="accountingBankAccountInput">${accountingAccountOptions(accountingState.data?.settings?.defaultBankAccount || '1000', ['asset'])}</select></label><label class="span-all"><span>Description</span><input id="accountingBankDescription" required></label><label><span>Reference</span><input id="accountingBankReference"></label><label><span>Amount</span><input id="accountingBankAmount" type="number" step="0.01" required></label></div><div class="accounting-notice neutral"><strong>Amount direction</strong><span>Use a positive amount for money in and a negative amount for money out.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Add transaction</button></div></form>`;
+  document.getElementById('accountingModalBody').innerHTML = `<form class="accounting-source-form" onsubmit="accountingSaveBankTransaction(event)"><div class="accounting-form-grid two"><label><span>Date</span><input id="accountingBankDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required></label><label><span>Bank account</span><select id="accountingBankAccountInput">${acBankAccountOptions(acState.bankAccount || accountingState.data?.settings?.defaultBankAccount || '1000')}</select></label><label class="span-all"><span>Description</span><input id="accountingBankDescription" required></label><label><span>Reference</span><input id="accountingBankReference"></label><label><span>Amount</span><input id="accountingBankAmount" type="number" step="0.01" required></label></div><div class="accounting-notice neutral"><strong>Amount direction</strong><span>Use a positive amount for money in and a negative amount for money out.</span></div><div class="modal-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('accountingModal')">Cancel</button><button type="submit" class="btn btn-primary">Add transaction</button></div></form>`;
   openModal('accountingModal');
 }
 
 async function accountingSaveBankTransaction(event) {
   event.preventDefault();
   const payload = { date: document.getElementById('accountingBankDate').value, bankAccount: document.getElementById('accountingBankAccountInput').value, description: document.getElementById('accountingBankDescription').value, reference: document.getElementById('accountingBankReference').value, amount: document.getElementById('accountingBankAmount').value };
-  try { const response = await apiCall('/api/finance/accounting/bank-transactions', 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Bank transaction added'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl('/api/finance/accounting/bank-transactions'), 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Bank transaction added'); } catch (error) { showNotification('error', error.message); }
 }
 
-function accountingOpenBankMatch(transactionId) {
+function accountingOpenBankMatchBase(transactionId) {
   accountingEnsureModal();
   const transaction = (accountingState.data?.bankTransactions || []).find(row => row.id === transactionId);
   if (!transaction) return;
@@ -538,13 +558,13 @@ function accountingOpenBankMatch(transactionId) {
 async function accountingMatchBankTransaction(event, transactionId) {
   event.preventDefault();
   const payload = { accountCode: document.getElementById('accountingBankMatchAccount').value, taxCode: document.getElementById('accountingBankMatchTax').value, description: document.getElementById('accountingBankMatchDescription').value };
-  try { const response = await apiCall(`/api/finance/accounting/bank-transactions/${encodeURIComponent(transactionId)}/match`, 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Bank transaction matched'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/bank-transactions/${encodeURIComponent(transactionId)}/match`), 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Bank transaction matched'); } catch (error) { showNotification('error', error.message); }
 }
 
 async function accountingDeleteBankTransaction(transactionId) {
   const confirmed = await showAppConfirm({ title: 'Delete bank transaction?', message: 'Only the imported statement row will be removed.', confirmText: 'Delete', cancelText: 'Cancel', danger: true });
   if (!confirmed) return;
-  try { const response = await apiCall(`/api/finance/accounting/bank-transactions/${encodeURIComponent(transactionId)}`, 'DELETE'); accountingState.data = response.data; renderAccounting(); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/bank-transactions/${encodeURIComponent(transactionId)}`), 'DELETE'); accountingState.data = response.data; renderAccounting(); } catch (error) { showNotification('error', error.message); }
 }
 
 function accountingOpenAccount() {
@@ -557,17 +577,17 @@ function accountingOpenAccount() {
 async function accountingSaveAccount(event) {
   event.preventDefault();
   const payload = { code: document.getElementById('accountingAccountCode').value, name: document.getElementById('accountingAccountName').value, type: document.getElementById('accountingAccountType').value, group: document.getElementById('accountingAccountGroup').value };
-  try { const response = await apiCall('/api/finance/accounting/accounts', 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Account added'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl('/api/finance/accounting/accounts'), 'POST', payload); accountingState.data = response.data; closeModal('accountingModal'); renderAccounting(); showNotification('success', 'Account added'); } catch (error) { showNotification('error', error.message); }
 }
 
 async function accountingToggleAccount(code, active) {
   const account = (accountingState.data?.accounts || []).find(row => row.code === code);
   if (!account) return;
-  try { const response = await apiCall(`/api/finance/accounting/accounts/${encodeURIComponent(code)}`, 'PUT', { ...account, active }); accountingState.data = response.data; renderAccounting(); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl(`/api/finance/accounting/accounts/${encodeURIComponent(code)}`), 'PUT', { ...account, active }); accountingState.data = response.data; renderAccounting(); } catch (error) { showNotification('error', error.message); }
 }
 
 async function accountingSaveSettings(event) {
   event.preventDefault();
   const payload = { gstRegistered: document.getElementById('accountingGstRegistered').checked, gstRegistrationNumber: document.getElementById('accountingGstNumber').value, gstRate: document.getElementById('accountingGstRate').value, filingFrequency: document.getElementById('accountingFilingFrequency').value, financialYearStartMonth: document.getElementById('accountingYearStart').value, accountingBasis: document.getElementById('accountingBasis').value, recordRetentionYears: document.getElementById('accountingRetention').value, periodLockDate: document.getElementById('accountingLockDate').value, defaultBankAccount: document.getElementById('accountingBankAccount').value, defaultReceivableAccount: document.getElementById('accountingReceivableAccount').value, defaultPayableAccount: document.getElementById('accountingPayableAccount').value };
-  try { const response = await apiCall('/api/finance/accounting/settings', 'PUT', payload); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Accounting settings saved'); } catch (error) { showNotification('error', error.message); }
+  try { const response = await apiCall(acUrl('/api/finance/accounting/settings'), 'PUT', payload); accountingState.data = response.data; renderAccounting(); showNotification('success', 'Accounting settings saved'); } catch (error) { showNotification('error', error.message); }
 }

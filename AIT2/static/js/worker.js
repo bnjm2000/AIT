@@ -326,7 +326,6 @@ function renderCompanies() {
   };
   const selectedCompany = byId('companyFilter').value || 'all';
   const desiredPast = workerEventTab === 'past';
-  let opened = false;
   const html = workerPortalData.companies.map(company => {
     if (selectedCompany !== 'all' && selectedCompany !== company.code) return '';
     const events = company.events.filter(event => Boolean(event.isPast) === desiredPast);
@@ -339,7 +338,6 @@ function renderCompanies() {
           ? previousState.openEvents.has(eventKey)
           : false;
         const result = renderEvent(company, event, shouldOpen);
-        opened = true;
         return result;
       }).join('')}</section>`;
   }).join('');

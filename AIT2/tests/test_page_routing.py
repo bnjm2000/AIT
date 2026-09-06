@@ -24,7 +24,7 @@ class PageRoutingTests(unittest.TestCase):
             'defaultCompany': 'TEST',
             'companies': {'TEST': company},
             'userCompanies': {
-                'owner': 'TEST', 'manager': 'TEST', 'sales': 'TEST', 'user': 'TEST',
+                'owner': 'TEST', 'admin': 'TEST', 'manager': 'TEST', 'sales': 'TEST', 'user': 'TEST',
             },
             'superAdmins': ['owner'],
         })
@@ -33,6 +33,7 @@ class PageRoutingTests(unittest.TestCase):
         self.manager.setup_data_folder()
         self.manager.users = {
             'owner': self.make_user('owner', 'owner', True),
+            'admin': self.make_user('admin', 'admin', False),
             'manager': self.make_user('manager', 'manager', False),
             'sales': self.make_user('sales', 'user', True),
             'user': self.make_user('user', 'user', False),
@@ -98,6 +99,10 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(self.client.get('/company-details').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 302)
         self.assertEqual(self.client.get('/profit-loss').status_code, 302)
+        self.assertEqual(self.client.get('/accounting').status_code, 302)
+
+        self.login('admin')
+        self.assertEqual(self.client.get('/accounting').status_code, 200)
 
         self.login('sales')
         self.assertEqual(self.client.get('/quotations').status_code, 200)

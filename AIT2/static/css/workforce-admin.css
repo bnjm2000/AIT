@@ -750,9 +750,9 @@
 
 .wf-document-event-title .plan-badge {
   flex: 0 0 auto;
-  padding: 2px 5px;
+  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 7px;
+  font-size: 10px;
 }
 
 .wf-document-uploader .wf-avatar {
@@ -1056,6 +1056,38 @@
 
 .wf-worker:first-child {
   border-top: 0;
+}
+
+.wf-transport-company-invoice {
+  grid-column: 3 / -1;
+}
+
+.wf-transport-company-invoice .wf-file-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.wf-transport-invoice-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  font-size: 12px;
+}
+
+.wf-transport-invoice-amount input {
+  min-width: 0;
+  width: 120px;
+}
+
+.wf-trip-card:focus {
+  outline: 2px solid var(--wf-brand);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1340px) {
+  .wf-transport-company-invoice {
+    grid-column: 1 / -1;
+  }
 }
 
 .wf-worker-open {
@@ -1420,6 +1452,42 @@
 
 .wf-file-row:first-of-type {
   border-top: 0;
+}
+
+.wf-file-details {
+  min-width: 0;
+}
+
+.wf-file-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wf-file-title > strong,
+.wf-file-title > .wf-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.wf-file-amount .wf-claim-date {
+  margin-left: 8px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.wf-file-details .wf-file-name {
+  display: block;
+  max-width: 100%;
+}
+
+.wf-file-details .wf-document-claim-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  margin-top: 4px;
+  color: #64748b;
 }
 
 .wf-file-name {
@@ -3278,6 +3346,213 @@ button.wf-calendar-day.selected.has-conflict:hover {
   margin-bottom: 18px;
 }
 
+/* Transport schedule: daily capacity, time groups, then one section per booking. */
+.wf-transport-overview {
+  margin-bottom: 30px;
+}
+
+.wf-transport-overview-heading h3,
+.wf-transport-schedule-heading h3,
+.wf-transport-day-heading h3 {
+  margin: 0;
+  color: var(--wf-ink);
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.wf-transport-overview-heading p,
+.wf-transport-schedule-heading p {
+  margin: 6px 0 14px;
+  color: var(--wf-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wf-transport-day-links {
+  display: grid;
+  border: 1px solid var(--wf-border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.wf-transport-day-links > a {
+  display: grid;
+  grid-template-columns: minmax(190px, .8fr) minmax(0, 2fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: 16px;
+  padding: 13px 18px;
+  background: var(--wf-surface);
+  color: var(--wf-ink);
+  text-decoration: none;
+  transition: background .15s;
+}
+.wf-transport-day-links > a + a { border-top: 1px solid var(--wf-border); }
+
+.wf-transport-day-links > a:hover {
+  border-color: var(--wf-brand);
+  background: var(--wf-surface-muted);
+}
+
+.wf-transport-overview-date { font-size: 14px; font-weight: 650; }
+.wf-transport-overview-context { display: block; margin-top: 4px; color: var(--wf-muted); font-size: 11px; font-weight: 400; }
+.wf-transport-day-links .wf-transport-type-list { margin: 0; }
+
+.wf-transport-overview-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--wf-muted);
+  font-size: 12px;
+}
+
+.wf-transport-type-list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.wf-transport-type-chip {
+  display: inline-block;
+  padding: 5px 8px;
+  border: 1px solid #dce7e3;
+  border-radius: 5px;
+  background: #f0f7f4;
+  color: #315749;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.wf-transport-type-chip b { margin-right: 3px; font-weight: 700; }
+.wf-transport-schedule { display: grid; gap: 24px; }
+.wf-transport-schedule-heading { margin-bottom: 20px; }
+.wf-transport-day { min-width: 0; scroll-margin-top: 20px; }
+.wf-transport-day-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #cfdcd6;
+}
+.wf-transport-day-heading p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 7px 0 0;
+  color: var(--wf-muted);
+  font-size: 12px;
+}
+.wf-transport-event-day { color: var(--wf-brand-dark); font-weight: 600; }
+.wf-transport-day-total { flex-shrink: 0; text-align: right; }
+.wf-transport-day-total span { display: block; margin-bottom: 4px; color: var(--wf-muted); font-size: 11px; }
+.wf-transport-day-total strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.wf-transport-day > .wf-transport-type-list { margin: 12px 0 4px; }
+.wf-transport-times { display: grid; gap: 6px; }
+.wf-transport-time-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 0 10px; }
+.wf-transport-time-heading h4 { margin: 0; color: var(--wf-brand-dark); font-size: 18px; font-variant-numeric: tabular-nums; }
+.wf-transport-time-heading > span { color: var(--wf-muted); font-size: 12px; }
+.wf-transport-time-heading .wf-transport-type-list { margin-left: auto; }
+.wf-transport-booking-list { display: grid; gap: 7px; }
+
+.wf-transport-page .wf-booking-card {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dbe4df;
+  border-radius: 7px;
+  background: var(--wf-surface);
+}
+.wf-transport-page .wf-booking-card:has(> summary:focus-visible),
+.wf-transport-day-links > a:focus-visible {
+  outline: 3px solid var(--wf-brand);
+  outline-offset: 3px;
+}
+.wf-booking-heading { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 1.4fr) auto 22px; align-items: center; gap: 16px; padding: 14px 18px; cursor: pointer; list-style: none; }
+.wf-booking-heading::-webkit-details-marker { display: none; }
+.wf-booking-heading:hover { background: #f8fbf9; }
+.wf-booking-card[open] > .wf-booking-heading { background: #f5faf7; border-bottom: 1px solid #e4ece7; }
+.wf-booking-glance { display: grid; min-width: 0; gap: 5px; }
+.wf-booking-glance > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #475569; font-size: 12px; }
+.wf-booking-glance small { color: var(--wf-brand-dark); font-size: 11px; overflow-wrap: anywhere; }
+.wf-booking-expand { display: flex; color: var(--wf-muted); }
+.wf-booking-expand svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; transition: transform .15s; }
+.wf-booking-card[open] .wf-booking-expand svg { transform: rotate(180deg); }
+.wf-booking-vehicle { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.wf-booking-icon { display: inline-flex; flex: 0 0 40px; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 8px; background: #eaf4ef; color: var(--wf-brand-dark); }
+.wf-booking-icon svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.wf-booking-vehicle h4 { margin: 0 0 5px; font-size: 14px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.wf-booking-provider { display: flex; flex-wrap: wrap; gap: 7px; color: var(--wf-muted); font-size: 12px; overflow-wrap: anywhere; }
+.wf-booking-provider strong { color: #475569; font-weight: 600; }
+.wf-booking-heading .wf-trip-cost { flex-shrink: 0; text-align: right; }
+.wf-booking-heading .wf-trip-cost > span,
+.wf-booking-heading .wf-trip-cost small { display: block; color: var(--wf-muted); font-size: 11px; }
+.wf-booking-heading .wf-trip-cost strong { display: block; margin: 3px 0; color: var(--wf-ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+.wf-booking-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(185px, 1fr); gap: 24px; padding: 16px 20px; }
+.wf-booking-legs { display: grid; align-content: start; gap: 14px; min-width: 0; }
+.wf-booking-leg-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 12px; color: #475569; }
+.wf-booking-leg-heading b { margin-left: 6px; color: var(--wf-ink); font-size: 14px; }
+.wf-booking-leg .wf-trip-direction { margin: 0; padding: 4px 7px; font-size: 10px; }
+.wf-booking-leg.is-return .wf-trip-direction,
+.wf-transport-return-reference .wf-trip-direction { background: #e4edff; color: #2755a4; }
+.wf-booking-route { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); align-items: center; gap: 10px; }
+.wf-booking-route .wf-location-badge { border: 0; border-radius: 6px; background: var(--wf-surface-muted); padding: 12px; }
+.wf-booking-route .wf-location-heading { flex-direction: column; align-items: start; gap: 6px; }
+.wf-booking-route .wf-location-direction { padding: 0; background: none; color: var(--wf-muted); font-size: 10px; }
+.wf-booking-route .wf-location-badge b { overflow: visible; font-size: 13px; line-height: 1.45; font-weight: 600; overflow-wrap: anywhere; }
+.wf-booking-route .wf-location-badge em { margin: 0; padding: 0; border: 0; font-size: 12px; line-height: 1.5; }
+.wf-booking-use { margin: 0; color: var(--wf-muted); font-size: 11px; line-height: 1.5; }
+.wf-booking-use strong { font-weight: 500; }
+.wf-booking-details { display: grid; align-content: start; gap: 13px; margin: 0; padding-left: 22px; border-left: 1px solid #edf1ee; }
+.wf-booking-details dt { margin-bottom: 4px; color: var(--wf-muted); font-size: 11px; }
+.wf-booking-details dd { margin: 0; color: var(--wf-ink); font-size: 13px; font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
+.wf-booking-details a { color: var(--wf-brand-dark); text-decoration: none; }
+.wf-booking-details a:hover { text-decoration: underline; }
+.wf-booking-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid #edf1ee; padding: 10px 20px; background: #fcfdfc; }
+.wf-booking-invoice { display: flex; flex: 1 1 240px; align-items: center; flex-wrap: wrap; gap: 8px 14px; min-width: 0; color: var(--wf-muted); font-size: 11px; }
+.wf-booking-invoice > a { color: var(--wf-brand-dark); overflow-wrap: anywhere; }
+.wf-booking-invoice .wf-link-button { font-size: 11px; }
+.wf-booking-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.wf-booking-actions .wf-button { min-height: 32px; font-size: 11px; }
+.wf-transport-return-reference { display: flex; align-items: center; gap: 12px; border: 1px solid #dbe5f2; border-radius: 8px; padding: 14px 20px; background: #f6f9ff; color: #475569; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.wf-transport-return-reference > span:nth-child(2) { flex: 1; min-width: 0; }
+.wf-transport-return-reference .wf-trip-direction { margin: 0; }
+.wf-transport-empty { padding: 48px 20px; text-align: center; }
+.wf-transport-empty h3 { margin: 15px 0 8px; }
+.wf-transport-empty p { margin-bottom: 20px; color: var(--wf-muted); }
+
+@media (max-width: 900px) {
+  .wf-transport-day-links > a { grid-template-columns: minmax(155px, .8fr) minmax(0, 1.5fr) auto; gap: 12px; }
+  .wf-transport-overview-total { font-size: 11px; }
+  .wf-booking-heading { grid-template-columns: minmax(140px, 1fr) minmax(0, 1.2fr) auto 20px; gap: 10px; }
+  .wf-booking-vehicle .wf-booking-icon { display: none; }
+  .wf-booking-body { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .wf-booking-details { grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; border-top: 1px solid #edf1ee; padding: 14px 0 0; }
+}
+
+@media (max-width: 620px) {
+  .wf-transport-page .wf-manpower-heading-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .wf-transport-page .wf-manpower-heading-actions .primary { grid-column: 1 / -1; }
+  .wf-transport-day-links > a { grid-template-columns: minmax(0, 1fr) auto; padding: 13px; gap: 10px; }
+  .wf-transport-day-links .wf-transport-type-list { grid-row: 2; grid-column: 1 / -1; }
+  .wf-transport-overview-total { grid-column: 2; grid-row: 1; }
+  .wf-booking-heading, .wf-booking-body { padding: 14px; }
+  .wf-booking-heading { grid-template-columns: minmax(0, 1fr) auto 18px; gap: 10px; }
+  .wf-booking-heading .wf-trip-cost { grid-column: 2; grid-row: 1; }
+  .wf-booking-expand { grid-column: 3; grid-row: 1; }
+  .wf-booking-glance { grid-column: 1 / -1; }
+  .wf-booking-vehicle { gap: 8px; }
+  .wf-booking-vehicle h4 { font-size: 15px; }
+  .wf-booking-vehicle .wf-booking-icon { display: none; }
+  .wf-booking-heading .wf-trip-cost strong { font-size: 14px; }
+  .wf-booking-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wf-booking-route { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .wf-booking-route .wf-route-arrow { justify-self: center; transform: rotate(90deg); }
+  .wf-booking-footer { padding: 10px 14px; }
+  .wf-booking-actions { margin-left: auto; }
+  .wf-transport-time-heading .wf-transport-type-list { flex-basis: 100%; margin-left: 0; }
+  .wf-transport-day-heading h3 { font-size: 16px; }
+  .wf-transport-day-total strong { font-size: 14px; }
+  .wf-transport-return-reference { flex-wrap: wrap; padding: 12px; }
+  .wf-transport-return-reference .wf-button { margin-left: auto; }
+}
+
 .wf-transport-list {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -4053,6 +4328,7 @@ button.wf-directory-row {
 .wf-document-claim-meta {
   display: flex !important;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
 }
@@ -4073,10 +4349,12 @@ button.wf-directory-row {
   border-radius: 4px;
   background: #fff7ed;
   color: #9a3412;
-  padding: 1px 4px;
-  font-size: 7px;
-  font-weight: 800;
-  line-height: 1.2;
+  min-height: 20px;
+  box-sizing: border-box;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
 }
 
 .wf-document-claim-item > .wf-document-file { grid-column: 3; }

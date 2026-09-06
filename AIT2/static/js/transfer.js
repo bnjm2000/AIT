@@ -2,7 +2,6 @@
 
 // Event list view controls and transfer state
 let transferReturnToOfficeCache = [];
-let transferPanelMode = 'common';
 
 // Transfer grouping, actions, and grouped PDFs
 window.__transferActionState = window.__transferActionState || {};
@@ -53,93 +52,9 @@ function transferAssetTypeName(group) {
 }
 
 
-function transferProgressHtml(done, total) {
-  const safeDone = Math.max(0, Number(done || 0));
-  const safeTotal = Math.max(0, Number(total || 0));
-  const pct = safeTotal > 0 ? Math.min(100, Math.round((safeDone / safeTotal) * 100)) : 0;
-  return `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-      <small style="color:#666;">Progress</small>
-      <small style="color:#666;">${safeDone}/${safeTotal}</small>
-    </div>
-    <div style="background:#e9ecef;border-radius:10px;height:6px;overflow:hidden;">
-      <div style="background:#28a745;height:100%;width:${pct}%;transition:width .25s ease;"></div>
-    </div>
-  `;
-}
 
 
 
-function renderLegacyTransferWorkspace() {
-  const container = document.getElementById('transfer-history');
-  if (!container) return;
-
-  const sourceEvents = transferOptionsCache?.sourceEvents || [];
-  const targetEvents = transferOptionsCache?.targetEvents || [];
-
-  const sourceOptions = sourceEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))} · ${event.unreturnedCount || 0} out</option>`;
-  }).join('');
-
-  const targetOptions = targetEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))}</option>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="transfer-page">
-      <div class="transfer-page-header">
-        <div>
-          <h2>Transfer Assets</h2>
-          <p>Move selected physical assets from one event directly into another event workflow.</p>
-        </div>
-        <div class="transfer-page-tools">
-          <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">↻ Refresh</button>
-          <button type="button" class="transfer-tool-button" onclick="generateTransferPdf()">▣ Export PDF</button>
-        </div>
-      </div>
-
-      <div class="transfer-event-bar">
-        <div class="transfer-event-card">
-          <div class="transfer-event-icon" aria-hidden="true">□</div>
-          <div class="transfer-event-copy">
-            <label class="transfer-event-kicker" for="transferSourceSelect">From event</label>
-            <select id="transferSourceSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
-              <option value="">Choose source event…</option>
-              ${sourceOptions}
-            </select>
-          </div>
-          <div class="transfer-event-count">
-            <strong>${sourceEvents.length}</strong>
-            <span>eligible<br>events</span>
-          </div>
-        </div>
-        <div class="transfer-direction" aria-label="Transfer direction">
-          <span>→</span>
-        </div>
-        <div class="transfer-event-card">
-          <div class="transfer-event-icon" aria-hidden="true">◇</div>
-          <div class="transfer-event-copy">
-            <label class="transfer-event-kicker" for="transferTargetSelect">To event</label>
-            <select id="transferTargetSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
-              <option value="">Choose destination event…</option>
-              ${targetOptions}
-            </select>
-          </div>
-          <div class="transfer-event-count">
-            <strong>${targetEvents.length}</strong>
-            <span>planning /<br>preparing</span>
-          </div>
-        </div>
-      </div>
-
-      <div id="transfer-candidates-panel">
-        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
-      </div>
-    </div>
-  `;
-}
 
 
 
@@ -622,65 +537,6 @@ function toggleTransferGroupSelection(encodedKey, kind) {
 
 
 
-function transferAssetDropdownRows(group) {
-  const transferLimitReached = group.mode === 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
-  const returnLimitReached = group.mode !== 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
-
-  return group.items.map(item => {
-    const encodedAssetId = encodeURIComponent(item.assetId || '');
-    const state = getTransferItemState(item);
-    const pendingAction = getTransferPendingAction(item.assetId);
-    const isTransferred = state === 'transferred';
-    const isReturnedOffice = state === 'returnedOffice';
-
-    let actionHtml = '';
-    let statusHtml = '<span class="asset-badge status-available">Ready</span>';
-
-    if (pendingAction) {
-      const pendingLabels = {
-        transfer: 'Transferring...',
-        undoTransfer: 'Undoing...',
-        returnOffice: 'Returning...',
-        undoReturnOffice: 'Undoing...'
-      };
-      statusHtml = `<span class="asset-badge status-deployed">${pendingLabels[pendingAction] || 'Updating...'}</span>`;
-      actionHtml = '<button class="btn btn-secondary btn-sm" disabled>Working...</button>';
-    } else if (group.mode === 'common') {
-      if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else if (isReturnedOffice) {
-        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
-        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been returned to office">Transfer</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-success btn-sm" ${transferLimitReached ? 'disabled title="Required transfer quantity reached"' : ''} onclick="transferDropdownAsset('${encodedAssetId}')">Transfer</button>`;
-      }
-    } else {
-      if (isReturnedOffice) {
-        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been transferred">Return</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-primary btn-sm" ${returnLimitReached ? 'disabled title="Required return quantity reached"' : ''} onclick="returnOfficeDropdownAsset('${encodedAssetId}')">Return</button>`;
-      }
-    }
-
-    return `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 10px;border-bottom:1px solid #f1f1f1;background:white;">
-        <div style="min-width:0;">
-          <div style="font-weight:700;color:#333;">${escapeHtml(item.assetId || '')}</div>
-          <div style="font-size:12px;color:#666;">${item.serial ? `SN: ${escapeHtml(item.serial)}` : 'No serial'}${item.currentLocation ? ` • ${escapeHtml(item.currentLocation)}` : ''}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;white-space:nowrap;">
-          ${statusHtml}
-          ${actionHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
 
 
 function renderTransferCandidatesInPlace() {
@@ -950,10 +806,6 @@ function transferModeMeta(mode) {
   };
 }
 
-function setTransferPanelMode(mode) {
-  transferPanelMode = transferModeMeta(mode).mode;
-  renderTransferCandidates(window.__lastTransferData || {});
-}
 
 async function loadTransferCandidates(options = {}) {
   const sourceSelect = document.getElementById('transferSourceSelect');
@@ -1105,25 +957,6 @@ function buildTransferGroups(items, mode) {
   ));
 }
 
-function renderTransferModeButtons(data) {
-  const commonGroups = buildTransferGroups(getTransferListForMode('common', data), 'common');
-  const returnGroups = buildTransferGroups(getTransferListForMode('return-office', data), 'return-office');
-  const officeGroups = buildTransferGroups(getTransferListForMode('office-needed', data), 'office-needed');
-  const active = transferModeMeta(transferPanelMode).mode;
-
-  const button = (mode, label, count) => `
-    <button class="btn btn-${active === mode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('${mode}')">
-      ${label} (${count})
-    </button>`;
-
-  return `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      ${button('common', 'Common / Transferable', commonGroups.length)}
-      ${button('return-office', 'Not Common / Return to Office', returnGroups.length)}
-      ${button('office-needed', 'Needed from Office', officeGroups.length)}
-    </div>
-  `;
-}
 
 function transferEventDateLabel(event) {
   if (!event?.startDate) return '';
@@ -1290,29 +1123,6 @@ function renderTransferDecisionSection(title, stepClass, groups, kind, emptyText
   `;
 }
 
-function renderTransferOfficeNeededSection(groups) {
-  const rows = groups.length ? groups.map(group => `
-    <div class="transfer-decision-summary">
-      <span class="transfer-decision-model">
-        <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
-        <small>${escapeHtml(group.department)}</small>
-      </span>
-      <span class="transfer-number">${group.sourceQuantity || 0}</span>
-      <span class="transfer-number">${group.targetRemaining || 0}</span>
-      <span class="transfer-number"><span class="transfer-selection-pill">${group.actionQty}</span></span>
-      <span class="transfer-choose-label">Prepare</span>
-    </div>
-  `).join('') : '<div class="transfer-empty-section">Nothing additional is needed from office.</div>';
-  return `
-    <div class="transfer-decision-section">
-      <div class="transfer-decision-title">
-        <span class="transfer-step office">3</span>
-        Needed From Office
-      </div>
-      ${rows}
-    </div>
-  `;
-}
 
 function renderTransferTargetPanel(data, commonGroups) {
   const requirements = data.destinationRequirements || [];
@@ -1561,13 +1371,6 @@ async function exportSelectedTransferPdf() {
   await generateTransferPdf(modes);
 }
 
-function groupedTransferPdfRows(groups) {
-  if (!groups.length) {
-    return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
-  }
-
-  return groups.map((group, index) => transferPdfRowHtml(group, index + 1)).join('');
-}
 
 const TRANSFER_PDF_COLGROUP = `
   <col style="width:8mm;">
@@ -1604,174 +1407,6 @@ function transferPdfRowHtml(group, rowNumber) {
   `;
 }
 
-function buildLegacyTransferPdfPages(groups, context) {
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const logoRowHtml = renderPdfLogoRowHtml();
-  const footerHtml = renderPdfFooterHtml();
-
-  const fromDate = context.fromDateRange ? ` | ${safe(context.fromDateRange)}` : '';
-  const toDate = context.toDateRange ? ` | ${safe(context.toDateRange)}` : '';
-
-  const headerHtml = `
-    ${logoRowHtml}
-    <div class="header">
-      <div class="header-left">
-        FROM EVENT:<br>
-        ${safe(context.fromEvent.id || context.fromEventId)} - ${safe(context.fromEvent.name || '')}<br>
-        ${safe(context.fromEvent.state || '')}${fromDate}<br><br>
-        TO EVENT:<br>
-        ${safe(context.toEvent.id || context.toEventId)} - ${safe(context.toEvent.name || '')}<br>
-        ${safe(context.toEvent.state || '')}${toDate}
-      </div>
-      <div class="header-right">
-        <div class="transfer-title">${safe(context.title)}</div>
-        No. : ${safe(context.transferNumber)}<br>
-        Date : ${safe(context.formattedDate)}
-      </div>
-    </div>
-  `;
-
-  const summaryHtml = `
-    <table class="summary-table">
-      <tr>
-        <td><strong>Source unreturned assets:</strong><br>${safe(context.fromEvent.unreturnedCount || 0)}</td>
-        <td><strong>Asset type count:</strong><br>${safe(groups.length)}</td>
-        <td><strong>Total quantity:</strong><br>${safe(context.totalQty)}</td>
-      </tr>
-    </table>
-  `;
-
-  const emptyRow = '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
-  const rowRecords = groups.length
-    ? groups.map((group, index) => ({ html: transferPdfRowHtml(group, index + 1), height: 0 }))
-    : [{ html: emptyRow, height: 0 }];
-
-  const measureBox = document.createElement('div');
-  measureBox.id = '__transferMeasureBox';
-  measureBox.style.cssText = `
-    position:absolute;
-    left:-10000px;
-    top:0;
-    visibility:hidden;
-    width:196mm;
-    font-family:${PDF_EXPORT_FONT_FAMILY};
-    font-size:8.5pt;
-    line-height:1.25;
-    background:white;
-    z-index:-1;
-  `;
-
-  measureBox.innerHTML = `
-    <style>
-      #__transferMeasureBox * { box-sizing: border-box; }
-      #__transferMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
-      #__transferMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
-      #__transferMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-      #__transferMeasureBox .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
-      #__transferMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-      #__transferMeasureBox .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-      #__transferMeasureBox .summary-table,
-      #__transferMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; }
-      #__transferMeasureBox .summary-table { margin-bottom:16px; }
-      #__transferMeasureBox .items-table { margin-bottom:0; }
-      #__transferMeasureBox .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
-      #__transferMeasureBox .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-      #__transferMeasureBox .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
-      #__transferMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
-    </style>
-    <div id="__transferFirstBase">
-      ${headerHtml}
-      ${summaryHtml}
-      <table class="items-table">${transferPdfTableHead()}</table>
-    </div>
-    <div id="__transferNextBase">
-      ${headerHtml}
-      <table class="items-table">${transferPdfTableHead()}</table>
-    </div>
-    <table class="items-table">
-      ${TRANSFER_PDF_COLGROUP}
-      <tbody id="__transferMeasureBody"></tbody>
-    </table>
-    <div id="__transferFooterMeasure" class="footer-measure">${footerHtml}</div>
-  `;
-
-  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
-
-  const measureBody = measureBox.querySelector('#__transferMeasureBody');
-  const firstBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferFirstBase').getBoundingClientRect().height
-  );
-  const nextBaseHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferNextBase').getBoundingClientRect().height
-  );
-  const footerHeight = normaliseMeasuredHeight(
-    measureBox.querySelector('#__transferFooterMeasure')?.getBoundingClientRect().height || 0
-  );
-  const pageFlowHeightMm = 276;
-  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
-  const firstPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - firstBaseHeight);
-  const nextPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - nextBaseHeight);
-
-  function measureRow(rowHtml) {
-    measureBody.innerHTML = rowHtml;
-    const row = measureBody.querySelector('tr');
-    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
-  }
-
-  rowRecords.forEach(record => {
-    record.height = measureRow(record.html);
-  });
-
-  measureBox.remove();
-
-  const pages = [];
-  let index = 0;
-
-  while (index < rowRecords.length) {
-    const isFirstPage = pages.length === 0;
-    const budget = isFirstPage ? firstPageBudget : nextPageBudget;
-    const pageRows = [];
-    let pageHeight = 0;
-
-    while (index < rowRecords.length) {
-      const record = rowRecords[index];
-
-      if (pageRows.length > 0 && pageHeight + record.height > budget) {
-        break;
-      }
-
-      pageRows.push(record);
-      pageHeight += record.height;
-      index++;
-
-      if (pageRows.length === 1 && record.height > budget) {
-        break;
-      }
-    }
-
-    pages.push({
-      includeSummary: isFirstPage,
-      rows: pageRows
-    });
-  }
-
-  const totalPages = pages.length;
-
-  return pages.map((page, pageIndex) => `
-    <div class="page">
-      ${headerHtml}
-      ${page.includeSummary ? summaryHtml : ''}
-      <table class="items-table">
-        ${transferPdfTableHead()}
-        <tbody>
-          ${page.rows.map(row => row.html).join('')}
-        </tbody>
-      </table>
-      <div class="footer">${footerHtml}</div>
-      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
-    </div>
-  `).join('');
-}
 
 function transferPdfTextColor(background) {
   const match = String(background || '').match(/^#([0-9a-f]{6})$/i);

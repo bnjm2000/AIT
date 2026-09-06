@@ -9,7 +9,6 @@ import os
 
 from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
 from workforce_schedule import (
-    SHOWBASE_BORDER,
     SHOWBASE_GREEN,
     SHOWBASE_INK,
     SHOWBASE_MUTED,

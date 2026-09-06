@@ -151,6 +151,23 @@ DECOMMISSIONED_CLEARED = {
     'unmark disposed',
 }
 
+_LEGACY_STATUS_CHANGE_LOOKUP = {
+    phrase: (kind, action)
+    for phrases, kind, action in (
+        (OOC_MARKED, 'ooc', 'marked'),
+        (OOC_CLEARED, 'ooc', 'cleared'),
+        (MISSING_MARKED, 'missing', 'marked'),
+        (MISSING_CLEARED, 'missing', 'cleared'),
+        (DEGRADED_MARKED, 'degraded', 'marked'),
+        (DEGRADED_CLEARED, 'degraded', 'cleared'),
+        (UNTAGGED_MARKED, 'untagged', 'marked'),
+        (UNTAGGED_CLEARED, 'untagged', 'cleared'),
+        (DECOMMISSIONED_MARKED, 'decommissioned', 'marked'),
+        (DECOMMISSIONED_CLEARED, 'decommissioned', 'cleared'),
+    )
+    for phrase in phrases
+}
+
 
 def _text(value):
     return '' if value is None else str(value)
@@ -322,26 +339,10 @@ def _legacy_change_from_part(part):
         return make_change('serial', value=part.split(':', 1)[1].strip())
     if part_lower.startswith('version:'):
         return make_change('version', value=part.split(':', 1)[1].strip())
-    if part_lower in OOC_MARKED:
-        return make_change('ooc', action='marked')
-    if part_lower in OOC_CLEARED:
-        return make_change('ooc', action='cleared')
-    if part_lower in MISSING_MARKED:
-        return make_change('missing', action='marked')
-    if part_lower in MISSING_CLEARED:
-        return make_change('missing', action='cleared')
-    if part_lower in DEGRADED_MARKED:
-        return make_change('degraded', action='marked')
-    if part_lower in DEGRADED_CLEARED:
-        return make_change('degraded', action='cleared')
-    if part_lower in UNTAGGED_MARKED:
-        return make_change('untagged', action='marked')
-    if part_lower in UNTAGGED_CLEARED:
-        return make_change('untagged', action='cleared')
-    if part_lower in DECOMMISSIONED_MARKED:
-        return make_change('decommissioned', action='marked')
-    if part_lower in DECOMMISSIONED_CLEARED:
-        return make_change('decommissioned', action='cleared')
+    status_change = _LEGACY_STATUS_CHANGE_LOOKUP.get(part_lower)
+    if status_change:
+        kind, action = status_change
+        return make_change(kind, action=action)
 
     return None
 
