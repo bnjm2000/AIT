@@ -918,7 +918,7 @@ class WorkforcePortalTests(unittest.TestCase):
                 self.assertEqual(record['processingState'], 'Complete')
                 self.assertFalse(app_module._workforce_submission_awaits_manual_entry(record))
 
-    def worker_access(self, password="1234"):
+    def worker_access(self, password="1234", preferred_name=None):
         with self.client.session_transaction() as session:
             session.clear()
         response = self.client.post(
@@ -928,14 +928,17 @@ class WorkforcePortalTests(unittest.TestCase):
         discovery = response.get_json()["data"]
         self.assertNotIn("companies", discovery)
         if discovery["requiresSetup"]:
+            setup_payload = {
+                "phone": "+65 9123 4567",
+                "password": password,
+                "confirmation": password,
+                "credentialType": "pin",
+            }
+            if preferred_name is not None:
+                setup_payload["preferredName"] = preferred_name
             response = self.client.post(
                 "/api/worker/setup-credentials",
-                json={
-                    "phone": "+65 9123 4567",
-                    "password": password,
-                    "confirmation": password,
-                    "credentialType": "pin",
-                },
+                json=setup_payload,
             )
         else:
             response = self.client.post(
@@ -967,11 +970,31 @@ class WorkforcePortalTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             session.clear()
 
+        root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(root, "templates", "login.html"),
+            encoding="utf-8",
+        ) as source_file:
+            login_source = source_file.read()
+        self.assertLess(
+            login_source.index('id="workerPreferredName"'),
+            login_source.index('id="workerCredential"'),
+        )
+        self.assertLess(
+            login_source.index('id="workerCredential"'),
+            login_source.index('id="workerCredentialConfirmation"'),
+        )
+        self.assertNotIn('id="credentialTypeChoice"', login_source)
+
         discovery = self.client.post(
             "/api/worker/lookup", json={"phone": "9123 4567"}
         )
         self.assertEqual(discovery.status_code, 200)
         self.assertTrue(discovery.get_json()["data"]["requiresSetup"])
+        self.assertEqual(
+            discovery.get_json()["data"]["preferredName"],
+            "Jordan Dela Cruz",
+        )
         self.assertNotIn("companies", discovery.get_json()["data"])
 
         weak_pin = self.client.post(
@@ -985,7 +1008,9 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(weak_pin.status_code, 400)
 
-        portal = self.worker_access()
+        portal = self.worker_access(preferred_name="Jordan Crew")
+        self.assertEqual(portal["worker"]["preferredName"], "Jordan Crew")
+        self.assertTrue(portal["worker"]["id"].startswith("worker-account_"))
         self.assertEqual(portal["companies"][0]["freelancer"]["name"], "Jordan Dela Cruz")
         assignment = portal["companies"][0]["events"][0]["assignments"][0]
         self.assertEqual(assignment["departmentColor"], "#CDEBFF")
@@ -999,6 +1024,9 @@ class WorkforcePortalTests(unittest.TestCase):
             row for row in workforce["freelancers"]
             if row["name"] == "Jordan Dela Cruz"
         )
+        self.assertEqual(saved_worker["name"], "Jordan Dela Cruz")
+        self.assertEqual(saved_worker["workerPreferredName"], "Jordan Crew")
+        self.assertEqual(saved_worker["workerAccountId"], portal["worker"]["id"])
         self.assertTrue(saved_worker["workerLastLoginAt"])
 
         denied = self.client.post(
@@ -1032,6 +1060,7 @@ class WorkforcePortalTests(unittest.TestCase):
             "/api/worker/profile",
             json={
                 "phone": "9123 4567",
+                "preferredName": "Jay Crew",
                 "newPhone": "9888 7766",
                 "currentPassword": "1234",
                 "newPassword": "new-worker-password",
@@ -1040,9 +1069,16 @@ class WorkforcePortalTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        worker = response.get_json()["data"]["companies"][0]["freelancer"]
+        portal = response.get_json()["data"]
+        worker = portal["worker"]
+        company_worker = portal["companies"][0]["freelancer"]
+        self.assertEqual(worker["preferredName"], "Jay Crew")
         self.assertEqual(worker["phone"], "+6598887766")
         self.assertEqual(worker["credentialType"], "password")
+        self.assertEqual(company_worker["name"], "Jordan Dela Cruz")
+        saved_worker = load_workforce(self.manager.data_folder)["freelancers"][0]
+        self.assertEqual(saved_worker["name"], "Jordan Dela Cruz")
+        self.assertEqual(saved_worker["workerPreferredName"], "Jay Crew")
 
         old_access = self.client.post(
             "/api/worker/access",

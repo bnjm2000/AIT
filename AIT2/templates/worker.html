@@ -87,9 +87,10 @@
         </section>
 
         <section class="worker-view" id="profileView">
-          <header class="view-heading"><div><h1>Profile</h1><p>Update your phone number or worker portal credentials.</p></div></header>
+          <header class="view-heading"><div><h1>Profile</h1><p>Update your preferred name, phone number, or worker portal credentials.</p></div></header>
           <form class="profile-card" id="workerProfileForm">
             <div class="profile-grid">
+              <label><span>Preferred name</span><input id="profilePreferredName" type="text" maxlength="160" required /></label>
               <label><span>Phone number</span><input id="profilePhone" type="tel" required /></label>
               <label><span>Current PIN or password *</span><input id="profileCurrentPassword" type="password" required /></label>
               <label><span>New PIN or password</span><input id="profileNewPassword" type="password" /></label>

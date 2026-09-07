@@ -85,7 +85,11 @@ function configureCredentialForm(discovery) {
   loginById('workerLookupForm').hidden = true;
   loginById('workerCredentialForm').hidden = false;
   loginById('credentialPhone').value = discovery.phone;
-  loginById('credentialTypeChoice').hidden = !discovery.requiresSetup;
+  loginById('workerPreferredNameField').hidden = !discovery.requiresSetup;
+  loginById('workerPreferredName').required = discovery.requiresSetup;
+  loginById('workerPreferredName').value = discovery.requiresSetup
+    ? (discovery.preferredName || discovery.name || '')
+    : '';
   loginById('confirmationField').hidden = !discovery.requiresSetup;
   loginById('workerCredentialConfirmation').required = discovery.requiresSetup;
   loginById('workerInstruction').textContent = discovery.requiresSetup
@@ -98,7 +102,9 @@ function configureCredentialForm(discovery) {
   loginById('workerAccessButton').textContent = discovery.requiresSetup
     ? 'Create PIN & Continue'
     : 'Continue to My Events';
-  loginById('workerCredential').focus();
+  (discovery.requiresSetup
+    ? loginById('workerPreferredName')
+    : loginById('workerCredential')).focus();
 }
 
 function enterWorkerPortal(data) {
@@ -129,22 +135,12 @@ loginById('workerLookupForm').addEventListener('submit', async event => {
   }
 });
 
-loginById('credentialTypeChoice').addEventListener('change', () => {
-  const type = document.querySelector('[name="credentialType"]:checked').value;
-  const pin = type === 'pin';
-  loginById('credentialLabel').textContent = pin ? 'Create a 4-8 digit PIN' : 'Create a password (minimum 8 characters)';
-  loginById('confirmationField').querySelector('span').textContent = pin ? 'Confirm PIN' : 'Confirm password';
-  loginById('workerCredential').inputMode = pin ? 'numeric' : 'text';
-  loginById('workerCredentialConfirmation').inputMode = pin ? 'numeric' : 'text';
-  loginById('workerAccessButton').textContent = pin ? 'Create PIN & Continue' : 'Create Password & Continue';
-});
-
 loginById('workerCredentialForm').addEventListener('submit', async event => {
   event.preventDefault();
   const button = loginById('workerAccessButton');
   button.disabled = true;
   loginMessage('workerMessage', '');
-  const credentialType = document.querySelector('[name="credentialType"]:checked')?.value || 'password';
+  const credentialType = workerAccessMode === 'setup' ? 'pin' : 'password';
   try {
     const response = await loginFetch(
       workerAccessMode === 'setup' ? '/api/worker/setup-credentials' : '/api/worker/access',
@@ -153,6 +149,9 @@ loginById('workerCredentialForm').addEventListener('submit', async event => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: loginById('credentialPhone').value,
+          preferredName: workerAccessMode === 'setup'
+            ? loginById('workerPreferredName').value
+            : undefined,
           password: loginById('workerCredential').value,
           confirmation: loginById('workerCredentialConfirmation').value,
           credentialType

@@ -478,13 +478,17 @@ function renderPortal() {
     window.location.href = '/login?worker=1';
     return;
   }
-  const worker = companies[0].freelancer;
-  byId('workerName').textContent = worker.name;
-  byId('workerPhone').textContent = worker.phone;
-  byId('workerAvatar').textContent = initials(worker.name);
+  const companyWorker = companies[0].freelancer;
+  const worker = workerPortalData.worker || {};
+  const preferredName = worker.preferredName || companyWorker.name;
+  const phone = worker.phone || companyWorker.phone;
+  byId('workerName').textContent = preferredName;
+  byId('workerPhone').textContent = phone;
+  byId('workerAvatar').textContent = initials(preferredName);
   if (!byId('workerProfileForm').contains(document.activeElement)) {
-    byId('profilePhone').value = worker.phone;
-    byId('profileCredentialType').value = worker.credentialType || 'password';
+    byId('profilePreferredName').value = preferredName;
+    byId('profilePhone').value = phone;
+    byId('profileCredentialType').value = worker.credentialType || companyWorker.credentialType || 'password';
   }
   const activeCount = allEvents().filter(row => !row.event.isPast).length;
   const pastCount = allEvents().filter(row => row.event.isPast).length;
@@ -1000,8 +1004,9 @@ byId('claimDetailsForm').addEventListener('submit', async event => {
 });
 byId('workerProfileForm').addEventListener('submit', async event => {
   event.preventDefault();
-  const worker = workerPortalData.companies[0]?.freelancer;
-  if (!worker) return;
+  const companyWorker = workerPortalData.companies[0]?.freelancer;
+  const worker = workerPortalData.worker || companyWorker;
+  if (!worker || !companyWorker) return;
   const button = event.currentTarget.querySelector('[type="submit"]');
   button.disabled = true;
   showMessage(byId('profileMessage'), '');
@@ -1010,7 +1015,8 @@ byId('workerProfileForm').addEventListener('submit', async event => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phone: worker.phone,
+        phone: worker.phone || companyWorker.phone,
+        preferredName: byId('profilePreferredName').value,
         newPhone: byId('profilePhone').value,
         currentPassword: byId('profileCurrentPassword').value,
         newPassword: byId('profileNewPassword').value,

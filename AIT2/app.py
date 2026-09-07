@@ -8767,6 +8767,48 @@ def _set_worker_secret(freelancer, secret, credential_type):
     freelancer.pop('workerLoginResetAt', None)
 
 
+def _normalise_worker_preferred_name(value):
+    return re.sub(r'\s+', ' ', str(value or '')).strip()
+
+
+def _worker_profile_payload(matches):
+    """Return the worker-owned identity shared by company-local records."""
+    if not matches:
+        return {}
+    first = matches[0][3]
+    profile_source = next(
+        (
+            freelancer
+            for _code, _manager, _workforce, freelancer in matches
+            if _normalise_worker_preferred_name(
+                freelancer.get('workerPreferredName')
+            )
+        ),
+        first,
+    )
+    preferred_name = _normalise_worker_preferred_name(
+        profile_source.get('workerPreferredName')
+    ) or _normalise_worker_preferred_name(first.get('name'))
+    account_id = next(
+        (
+            str(freelancer.get('workerAccountId') or '').strip()
+            for _code, _manager, _workforce, freelancer in matches
+            if str(freelancer.get('workerAccountId') or '').strip()
+        ),
+        '',
+    )
+    return {
+        'id': account_id,
+        'preferredName': preferred_name,
+        'phone': normalize_phone(first.get('phone')),
+        'credentialType': str(
+            profile_source.get('workerCredentialType')
+            or first.get('workerCredentialType')
+            or 'password'
+        ),
+    }
+
+
 def _worker_matches_for_phone(phone):
     normalized = normalize_phone(phone)
     test_manager = app.config.get('TEST_DATA_MANAGER')
@@ -8840,7 +8882,10 @@ def _worker_portal_payload(matches):
         )
         if payload['events']:
             companies.append(payload)
-    return {'companies': companies}
+    return {
+        'worker': _worker_profile_payload(matches),
+        'companies': companies,
+    }
 
 
 def _worker_token_data(token):
@@ -11063,11 +11108,13 @@ def worker_lookup():
         for _code, _manager, _workforce, freelancer in matches
     )
     first = matches[0][3]
+    profile = _worker_profile_payload(matches)
     return jsonify({
         'success': True,
         'data': {
             'phone': phone,
             'name': str(first.get('name') or ''),
+            'preferredName': profile.get('preferredName') or '',
             'requiresSetup': not has_credentials,
             'requiresPassword': has_credentials,
             'credentialType': str(
@@ -11102,30 +11149,61 @@ def _authenticated_worker_matches(phone, secret):
             or _worker_secret_matches(match[3], secret)
         )
     ]
+    account_id = next(
+        (
+            str(freelancer.get('workerAccountId') or '').strip()
+            for _code, _manager, _workforce, freelancer in authorized
+            if str(freelancer.get('workerAccountId') or '').strip()
+        ),
+        new_id('worker-account'),
+    )
+    preferred_name = next(
+        (
+            _normalise_worker_preferred_name(
+                freelancer.get('workerPreferredName')
+            )
+            for _code, _manager, _workforce, freelancer in authorized
+            if _normalise_worker_preferred_name(
+                freelancer.get('workerPreferredName')
+            )
+        ),
+        _normalise_worker_preferred_name(source_freelancer.get('name')),
+    )
     for _code, manager, _workforce, freelancer in authorized:
-        if freelancer.get('workerPasswordHash'):
+        updates = {
+            'workerAccountId': account_id,
+            'workerPreferredName': preferred_name,
+        }
+        if not freelancer.get('workerPasswordHash'):
+            updates.update({
+                'workerPasswordSalt': source_freelancer.get(
+                    'workerPasswordSalt'
+                ),
+                'workerPasswordHash': source_freelancer.get(
+                    'workerPasswordHash'
+                ),
+                'workerCredentialType': source_freelancer.get(
+                    'workerCredentialType', 'password'
+                ),
+                'workerAuthVersion': int(
+                    source_freelancer.get('workerAuthVersion') or 0
+                ),
+                'workerCredentialsSetAt': now_iso(),
+            })
+        changed = any(
+            freelancer.get(field) != value
+            for field, value in updates.items()
+        )
+        if not changed:
             continue
         with mutate_workforce(_workforce_folder(manager)) as workforce:
             current = find_by_id(
                 workforce.get('freelancers'), freelancer.get('id')
             )
             if current:
-                current.update({
-                    'workerPasswordSalt': source_freelancer.get(
-                        'workerPasswordSalt'
-                    ),
-                    'workerPasswordHash': source_freelancer.get(
-                        'workerPasswordHash'
-                    ),
-                    'workerCredentialType': source_freelancer.get(
-                        'workerCredentialType', 'password'
-                    ),
-                    'workerAuthVersion': int(
-                        source_freelancer.get('workerAuthVersion') or 0
-                    ),
-                    'workerCredentialsSetAt': now_iso(),
-                    'updatedAt': now_iso(),
-                })
+                current.update(updates)
+                current['updatedAt'] = now_iso()
+        freelancer.update(updates)
     return authorized, source
 
 
@@ -11219,6 +11297,26 @@ def worker_setup_credentials():
         return jsonify({
             'error': 'Credentials already exist. Sign in with your PIN or password.'
         }), 409
+    requested_name = payload.get('preferredName')
+    preferred_name = _normalise_worker_preferred_name(
+        matches[0][3].get('name')
+        if requested_name is None
+        else requested_name
+    )
+    if not preferred_name:
+        return jsonify({'error': 'Enter your preferred name'}), 400
+    if len(preferred_name) > 160:
+        return jsonify({
+            'error': 'Preferred name must contain 160 characters or fewer'
+        }), 400
+    account_id = next(
+        (
+            str(freelancer.get('workerAccountId') or '').strip()
+            for _code, _manager, _workforce, freelancer in matches
+            if str(freelancer.get('workerAccountId') or '').strip()
+        ),
+        new_id('worker-account'),
+    )
     for _code, manager, _workforce, freelancer in matches:
         with mutate_workforce(_workforce_folder(manager)) as workforce:
             current = find_by_id(
@@ -11226,6 +11324,13 @@ def worker_setup_credentials():
             )
             if current:
                 _set_worker_secret(current, secret, credential_type)
+                current['workerAccountId'] = account_id
+                current['workerPreferredName'] = preferred_name
+        freelancer.update({
+            'workerAccountId': account_id,
+            'workerPreferredName': preferred_name,
+        })
+    matches = _worker_matches_for_phone(phone)
     _record_worker_login(matches, phone)
     return jsonify({
         'success': True,
@@ -11281,6 +11386,19 @@ def update_worker_profile():
             else 'Password must contain 8 to 128 characters'
         )
         return jsonify({'error': message}), 400
+    requested_name = payload.get('preferredName')
+    current_profile = _worker_profile_payload(matches)
+    preferred_name = _normalise_worker_preferred_name(
+        current_profile.get('preferredName')
+        if requested_name is None
+        else requested_name
+    )
+    if not preferred_name:
+        return jsonify({'error': 'Enter your preferred name'}), 400
+    if len(preferred_name) > 160:
+        return jsonify({
+            'error': 'Preferred name must contain 160 characters or fewer'
+        }), 400
 
     for _code, _manager, workforce, freelancer in matches:
         duplicate = any(
@@ -11302,6 +11420,7 @@ def update_worker_profile():
             if not current:
                 continue
             current['phone'] = new_phone
+            current['workerPreferredName'] = preferred_name
             current['updatedAt'] = now_iso()
             if new_secret:
                 _set_worker_secret(
