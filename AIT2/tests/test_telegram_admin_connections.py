@@ -7,8 +7,12 @@ from unittest.mock import patch
 import app as app_module
 from data_manager import DataManager
 from models import User, hash_password
-from services.notification_settings import connect_admin_telegram
+from services.notification_settings import (
+    connect_admin_telegram,
+    public_worker_telegram_profile,
+)
 from services.telegram_link_store import clear_telegram_links
+from workforce import mutate_workforce
 
 
 class TelegramAdminConnectionTests(unittest.TestCase):
@@ -18,6 +22,7 @@ class TelegramAdminConnectionTests(unittest.TestCase):
         self.original_secret = app_module.app.secret_key
         self.tempdir = tempfile.TemporaryDirectory()
         self.manager = DataManager(self.tempdir.name)
+        self.manager.company_code = "AVPL"
         self.manager.setup_data_folder()
         self.manager.users = {
             "admin": User(
@@ -225,6 +230,27 @@ class TelegramAdminConnectionTests(unittest.TestCase):
         self.assertIn("function telegramProviderIcon()", source)
         self.assertNotIn(">✈</span>", source)
 
+        with open(
+            os.path.join(root, "static", "js", "worker.js"),
+            encoding="utf-8",
+        ) as source_file:
+            worker_source = source_file.read()
+        self.assertIn("Connect Telegram", worker_source)
+        self.assertIn(
+            "Receive invoice and claim updates across all your companies.",
+            worker_source,
+        )
+        self.assertNotIn(
+            "The link expires after 10 minutes and applies to every company",
+            worker_source,
+        )
+        self.assertIn("Invoice updates", worker_source)
+        self.assertIn("Claim updates", worker_source)
+        self.assertIn("tokens: workerPortalTokens()", worker_source)
+        with open(os.path.join(root, "app.py"), encoding="utf-8") as source_file:
+            app_source = source_file.read()
+        self.assertIn("Confirm payment received", app_source)
+
     def test_pending_connection_link_survives_an_in_memory_restart(self):
         self.login("admin", True)
         environment = {
@@ -247,6 +273,154 @@ class TelegramAdminConnectionTests(unittest.TestCase):
         self.assertEqual(
             app_module._telegram_link_record(token)["username"],
             "admin",
+        )
+
+    def test_worker_links_once_and_manages_invoice_and_claim_choices(self):
+        worker = {
+            "id": "crew-one",
+            "name": "Jordan Crew",
+            "phone": "+6591234567",
+            "active": True,
+            "workerAuthVersion": 0,
+        }
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["freelancers"] = [worker]
+        token = app_module._make_worker_token("AVPL", worker)
+        environment = {
+            "TELEGRAM_NOTIFICATIONS_ENABLED": "1",
+            "TELEGRAM_BOT_TOKEN": "12345:test-token",
+            "TELEGRAM_UPDATE_MODE": "polling",
+        }
+        with patch.dict(os.environ, environment, clear=False), patch.object(
+            app_module, "telegram_bot_username", return_value="ShowbaseAlertsBot"
+        ):
+            started = self.client.post(
+                "/api/worker/notification-settings/telegram/connect",
+                json={"tokens": [token]},
+            )
+        self.assertEqual(started.status_code, 200, started.get_data(as_text=True))
+        connect_token = parse_qs(
+            urlparse(started.get_json()["data"]["connectUrl"]).query
+        )["start"][0]
+        pending = app_module._telegram_link_record(connect_token)
+        self.assertEqual(pending["principalType"], "worker")
+        self.assertEqual(
+            pending["workerTargets"],
+            [{"companyCode": "AVPL", "workerId": "crew-one"}],
+        )
+
+        update = {
+            "message": {
+                "text": f"/start {connect_token}",
+                "chat": {"id": 445566, "type": "private"},
+                "from": {
+                    "id": 445566,
+                    "first_name": "Jordan",
+                    "username": "jordan_crew",
+                },
+            }
+        }
+        with patch.object(app_module, "queue_telegram_message"):
+            self.assertTrue(app_module._process_telegram_connection_update(update))
+
+        profile = public_worker_telegram_profile(self.manager, "crew-one")
+        self.assertTrue(profile["connected"])
+        self.assertEqual(profile["telegramUsername"], "jordan_crew")
+        self.assertNotIn("chatId", profile)
+
+        company = self.client.post(
+            "/api/worker/company", json={"token": token}
+        ).get_json()["data"]
+        self.assertTrue(company["telegram"]["connected"])
+        self.assertNotIn("chatId", company["telegram"])
+
+        updated = self.client.put(
+            "/api/worker/notification-settings/telegram",
+            json={
+                "tokens": [token],
+                "invoiceStatusChanges": False,
+                "claimStatusChanges": True,
+            },
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertFalse(updated.get_json()["data"]["invoiceStatusChanges"])
+        self.assertTrue(updated.get_json()["data"]["claimStatusChanges"])
+
+        self.login("admin", True)
+        admin_worker = app_module._admin_freelancer_with_summary(
+            worker,
+            {
+                "freelancers": [worker],
+                "assignments": {},
+                "submissions": {},
+            },
+        )
+        self.assertTrue(admin_worker["telegram"]["connected"])
+        self.assertEqual(
+            admin_worker["telegram"]["telegramUsername"], "jordan_crew"
+        )
+
+        disconnected = self.client.delete(
+            "/api/worker/notification-settings/telegram",
+            json={"tokens": [token]},
+        )
+        self.assertEqual(disconnected.status_code, 200)
+        self.assertFalse(
+            public_worker_telegram_profile(self.manager, "crew-one")[
+                "connected"
+            ]
+        )
+
+    def test_one_worker_link_can_connect_multiple_company_records(self):
+        second_tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(second_tempdir.cleanup)
+        second_manager = DataManager(second_tempdir.name)
+        second_manager.setup_data_folder()
+        second_manager.company_code = "SECOND"
+        for manager, worker_id in (
+            (self.manager, "crew-one"),
+            (second_manager, "crew-two"),
+        ):
+            with mutate_workforce(manager.data_folder) as workforce:
+                workforce["freelancers"] = [{
+                    "id": worker_id,
+                    "name": "Jordan Crew",
+                    "phone": "+6591234567",
+                    "active": True,
+                }]
+        link, _expires = app_module.create_telegram_link(
+            app_module._telegram_link_store_path(),
+            "AVPL",
+            "crew-one",
+            600,
+            principal_type="worker",
+            worker_targets=[
+                {"companyCode": "AVPL", "workerId": "crew-one"},
+                {"companyCode": "SECOND", "workerId": "crew-two"},
+            ],
+        )
+        managers = {"AVPL": self.manager, "SECOND": second_manager}
+        update = {
+            "message": {
+                "text": f"/start {link}",
+                "chat": {"id": 778800, "type": "private"},
+                "from": {"id": 778800, "first_name": "Jordan"},
+            }
+        }
+        with patch.object(
+            app_module,
+            "_telegram_manager_for_company",
+            side_effect=lambda code: managers[code],
+        ), patch.object(app_module, "queue_telegram_message"):
+            self.assertTrue(app_module._process_telegram_connection_update(update))
+
+        self.assertTrue(
+            public_worker_telegram_profile(self.manager, "crew-one")["connected"]
+        )
+        self.assertTrue(
+            public_worker_telegram_profile(second_manager, "crew-two")[
+                "connected"
+            ]
         )
 
 

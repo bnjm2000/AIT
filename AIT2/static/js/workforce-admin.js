@@ -2468,11 +2468,21 @@ function renderFreelancerDirectory(search) {
       const lastLogin = row.workerLastLoginAt
         ? `Last login: ${wfEscape(wfDateTime(row.workerLastLoginAt))} by ${wfEscape(row.workerLastLoginBy || 'Unknown member')}`
         : 'Last login: Never';
+      const telegramAccounts = row.telegramAccounts || [];
+      const telegramLabel = telegramAccounts.length
+        ? `Telegram: ${telegramAccounts.map(account => {
+            const identity = account.telegramUsername
+              ? `@${account.telegramUsername}`
+              : (account.displayName || 'Linked');
+            return `${account.memberName || 'Member'} (${identity})`;
+          }).join(', ')}`
+        : 'Telegram: Not linked';
       return `<article class="wf-directory-row wf-directory-card wf-vendor-directory-card"
         onclick="openFreelancerHistory('${wfAttr(row.id)}')">
         <span class="wf-avatar vendor">${wfEscape(wfInitials(row.name))}</span>
         <span><strong>${wfEscape(row.name)}</strong>
           <small>${Number(row.members?.length || 0)} member${Number(row.members?.length || 0) === 1 ? '' : 's'} with portal access</small>
+          <small class="wf-telegram-status ${telegramAccounts.length ? 'connected' : ''}">${wfEscape(telegramLabel)}</small>
           <span class="wf-worker-summary">
             ${wfDirectorySummaryBadges(summary)}
           </span>
@@ -2487,11 +2497,21 @@ function renderFreelancerDirectory(search) {
           ${row.workerLoginConfigured ? 'Login set' : 'Setup required'}
         </span>`
       : '';
+    const telegram = row.telegram || {};
+    const telegramIdentity = telegram.telegramUsername
+      ? `@${telegram.telegramUsername}`
+      : (telegram.displayName || 'Linked');
+    const telegramLabel = telegram.connected
+      ? `Telegram: ${telegramIdentity}`
+      : 'Telegram: Not linked';
     return `<article class="wf-directory-row wf-directory-card" onclick="${workforcePageState.directoryMode === 'assign'
       ? `openFreelancerAssignment('${wfAttr(row.id)}','${wfAttr(workforcePageState.directoryDepartment)}')`
       : `openFreelancerHistory('${wfAttr(row.id)}')`}">
       <span class="wf-avatar">${wfEscape(wfInitials(row.name))}</span><span><strong>${wfEscape(row.name)}</strong>
       <small class="wf-directory-phone">${wfEscape(wfFormatPhone(row.phone) || 'No phone')} ${loginBadge}</small>
+      ${workforcePageState.directoryMode === 'manage'
+        ? `<small class="wf-telegram-status ${telegram.connected ? 'connected' : ''}">${wfEscape(telegramLabel)}</small>`
+        : ''}
       ${workforcePageState.directoryMode === 'manage' ? `<span class="wf-worker-summary">
         ${wfDirectorySummaryBadges(summary)}
       </span>` : ''}</span>

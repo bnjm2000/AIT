@@ -15,7 +15,7 @@ _settings_lock = threading.RLock()
 
 
 def _default_settings():
-    return {"version": 4, "telegramAdmins": {}}
+    return {"version": 5, "telegramAdmins": {}, "telegramWorkers": {}}
 
 
 _STANDARD_PREFERENCES = (
@@ -77,13 +77,19 @@ def _normalise_settings(source):
     if not isinstance(source, dict):
         return result
     profiles = source.get("telegramAdmins")
-    if not isinstance(profiles, dict):
-        return result
-    for username, raw_profile in profiles.items():
-        clean_username = str(username or "").strip()
-        profile = _normalise_profile(raw_profile)
-        if clean_username and profile:
-            result["telegramAdmins"][clean_username] = profile
+    if isinstance(profiles, dict):
+        for username, raw_profile in profiles.items():
+            clean_username = str(username or "").strip()
+            profile = _normalise_profile(raw_profile)
+            if clean_username and profile:
+                result["telegramAdmins"][clean_username] = profile
+    worker_profiles = source.get("telegramWorkers")
+    if isinstance(worker_profiles, dict):
+        for worker_id, raw_profile in worker_profiles.items():
+            clean_worker_id = str(worker_id or "").strip()
+            profile = _normalise_profile(raw_profile)
+            if clean_worker_id and profile:
+                result["telegramWorkers"][clean_worker_id] = profile
     return result
 
 
@@ -294,6 +300,134 @@ def admin_telegram_chat_id(manager, username):
     settings = load_notification_settings(manager)
     profile = settings["telegramAdmins"].get(str(username or "").strip())
     return str((profile or {}).get("chatId") or "").strip()
+
+
+def public_worker_telegram_profile(manager, worker_id):
+    """Return a worker connection without exposing Telegram routing IDs."""
+    settings = load_notification_settings(manager)
+    profile = settings["telegramWorkers"].get(str(worker_id or "").strip())
+    if not profile:
+        return {
+            "connected": False,
+            "enabled": True,
+            "invoiceStatusChanges": True,
+            "claimStatusChanges": True,
+        }
+    return {
+        "connected": True,
+        "displayName": profile["displayName"],
+        "telegramUsername": profile["telegramUsername"],
+        "linkedAt": profile["linkedAt"],
+        "enabled": profile["enabled"],
+        "invoiceStatusChanges": profile["invoiceStatusChanges"],
+        "claimStatusChanges": profile["claimStatusChanges"],
+    }
+
+
+def connect_worker_telegram(
+    manager,
+    worker_id,
+    *,
+    chat_id,
+    telegram_user_id="",
+    telegram_username="",
+    display_name="",
+    linked_at="",
+):
+    """Bind one worker identity to one private Telegram account."""
+    worker_id = str(worker_id or "").strip()
+    clean_chat_id = str(chat_id or "").strip()
+    if not worker_id:
+        raise ValueError("A worker ID is required")
+    if not clean_chat_id:
+        raise ValueError("A Telegram chat ID is required")
+    with _settings_lock:
+        settings = _load_unlocked(manager)
+        # Keep a private chat unique among crew profiles in this company. App
+        # users are a separate identity class and may legitimately be crew too.
+        for other_worker_id, profile in list(settings["telegramWorkers"].items()):
+            if (
+                other_worker_id != worker_id
+                and str(profile.get("chatId") or "").strip() == clean_chat_id
+            ):
+                settings["telegramWorkers"].pop(other_worker_id, None)
+        previous = settings["telegramWorkers"].get(worker_id, {})
+        settings["telegramWorkers"][worker_id] = _normalise_profile({
+            "chatId": clean_chat_id,
+            "telegramUserId": telegram_user_id,
+            "telegramUsername": telegram_username,
+            "displayName": display_name,
+            "linkedAt": linked_at,
+            "enabled": previous.get("enabled", True),
+            "invoiceStatusChanges": previous.get(
+                "invoiceStatusChanges", True
+            ),
+            "claimStatusChanges": previous.get("claimStatusChanges", True),
+        })
+        saved = _save_unlocked(manager, settings)
+        return copy.deepcopy(saved["telegramWorkers"][worker_id])
+
+
+def disconnect_worker_telegram(manager, worker_id):
+    worker_id = str(worker_id or "").strip()
+    with _settings_lock:
+        settings = _load_unlocked(manager)
+        removed = settings["telegramWorkers"].pop(worker_id, None) is not None
+        if removed:
+            _save_unlocked(manager, settings)
+        return removed
+
+
+def update_worker_telegram_preferences(
+    manager,
+    worker_id,
+    *,
+    invoice_status_changes=None,
+    claim_status_changes=None,
+):
+    worker_id = str(worker_id or "").strip()
+    with _settings_lock:
+        settings = _load_unlocked(manager)
+        profile = settings["telegramWorkers"].get(worker_id)
+        if not profile:
+            raise KeyError("Telegram account is not connected")
+        if invoice_status_changes is not None:
+            profile["invoiceStatusChanges"] = bool(invoice_status_changes)
+        if claim_status_changes is not None:
+            profile["claimStatusChanges"] = bool(claim_status_changes)
+        _save_unlocked(manager, settings)
+        return public_worker_telegram_profile(manager, worker_id)
+
+
+def worker_telegram_destinations(manager, worker_ids, kind=None):
+    """Return private routing metadata for linked, enabled worker accounts."""
+    settings = load_notification_settings(manager)
+    destinations = []
+    seen_chat_ids = set()
+    for worker_id in worker_ids or ():
+        clean_worker_id = str(worker_id or "").strip()
+        profile = settings["telegramWorkers"].get(clean_worker_id)
+        chat_id = str((profile or {}).get("chatId") or "").strip()
+        if not profile or not profile.get("enabled") or not chat_id:
+            continue
+        preference = (
+            "invoiceStatusChanges"
+            if str(kind or "").strip().lower() == "invoice"
+            else "claimStatusChanges"
+            if str(kind or "").strip().lower() == "claim"
+            else ""
+        )
+        if preference and not profile.get(preference):
+            continue
+        if chat_id in seen_chat_ids:
+            continue
+        seen_chat_ids.add(chat_id)
+        destinations.append({
+            "workerId": clean_worker_id,
+            "chatId": chat_id,
+            "telegramUserId": str(profile.get("telegramUserId") or "").strip(),
+        })
+    return destinations
 
 
 def telegram_recipients_for_upload(manager, kind):

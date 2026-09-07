@@ -102,7 +102,7 @@ def configure_telegram_webhook(webhook_url, secret_token):
     result = _bot_api_request("setWebhook", {
         "url": str(webhook_url or "").strip(),
         "secret_token": str(secret_token or "").strip(),
-        "allowed_updates": ["message"],
+        "allowed_updates": ["message", "callback_query"],
         "drop_pending_updates": False,
     })
     return result is True
@@ -125,7 +125,10 @@ def _telegram_update_poll_loop(update_handler):
                 time.sleep(5)
                 continue
 
-        payload = {"timeout": 20, "allowed_updates": ["message"]}
+        payload = {
+            "timeout": 20,
+            "allowed_updates": ["message", "callback_query"],
+        }
         if offset is not None:
             payload["offset"] = offset
         updates = _bot_api_request(
@@ -167,30 +170,64 @@ def start_telegram_update_poller(update_handler):
         return True
 
 
-def send_telegram_message(message, chat_id=None):
+def send_telegram_message(message, chat_id=None, reply_markup=None):
     """Send one message without allowing Telegram failures to reach the caller."""
     enabled, _token, default_chat_id = _configuration()
     destination = str(chat_id if chat_id is not None else default_chat_id).strip()
     if not (enabled and destination):
         return False
-    result = _bot_api_request("sendMessage", {
+    payload = {
         "chat_id": destination,
         "text": str(message or "")[:4000],
         "disable_notification": False,
-    })
+    }
+    if isinstance(reply_markup, dict):
+        payload["reply_markup"] = reply_markup
+    result = _bot_api_request("sendMessage", payload)
     return result is not None
 
 
-def queue_telegram_message(message, chat_id):
+def queue_telegram_message(message, chat_id, reply_markup=None):
     """Queue one arbitrary bot message to an explicit destination."""
     if not telegram_notifications_configured() or not str(chat_id or "").strip():
         return False
     try:
-        _notification_executor.submit(send_telegram_message, message, str(chat_id))
+        _notification_executor.submit(
+            send_telegram_message,
+            message,
+            str(chat_id),
+            reply_markup,
+        )
         return True
     except RuntimeError as exc:
         logger.warning("Could not queue Telegram message: %s", exc)
         return False
+
+
+def answer_telegram_callback(callback_query_id, text, show_alert=False):
+    """Acknowledge a Telegram inline-button press."""
+    callback_query_id = str(callback_query_id or "").strip()
+    if not callback_query_id:
+        return False
+    result = _bot_api_request("answerCallbackQuery", {
+        "callback_query_id": callback_query_id,
+        "text": str(text or "")[:200],
+        "show_alert": bool(show_alert),
+    })
+    return result is not None
+
+
+def edit_telegram_message(message, chat_id, message_id, reply_markup=None):
+    """Replace a bot message after a successful inline action."""
+    payload = {
+        "chat_id": str(chat_id or "").strip(),
+        "message_id": message_id,
+        "text": str(message or "")[:4000],
+    }
+    if isinstance(reply_markup, dict):
+        payload["reply_markup"] = reply_markup
+    result = _bot_api_request("editMessageText", payload)
+    return result is not None
 
 
 def build_upload_notification(

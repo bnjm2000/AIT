@@ -779,6 +779,96 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-bottom: 16px;
 }
 
+.worker-telegram-card {
+  display: grid;
+  gap: 18px;
+}
+
+.worker-telegram-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.worker-telegram-heading > div { min-width: 0; flex: 1; }
+.worker-telegram-heading > .primary-button { flex: 0 0 auto; }
+.worker-telegram-heading h2 { margin: 0; font-size: 18px; }
+.worker-telegram-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.worker-telegram-logo {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+}
+
+.worker-telegram-logo svg { width: 42px; height: 42px; }
+.worker-telegram-logo circle { fill: #229ed9; }
+.worker-telegram-logo path { fill: #fff; }
+
+.worker-telegram-connected {
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.worker-telegram-pending {
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.worker-telegram-options {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-card .worker-telegram-options label {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.worker-telegram-options strong,
+.worker-telegram-options small { display: block; }
+.worker-telegram-options small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.worker-telegram-options input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  accent-color: var(--brand, #0f766e);
+}
+
+.worker-telegram-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.worker-telegram-actions .danger { color: #b91c1c; }
+
 .profile-card label,
 #claimDetailsForm label {
   display: grid;

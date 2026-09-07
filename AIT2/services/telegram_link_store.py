@@ -12,25 +12,56 @@ _store_lock = threading.RLock()
 
 
 def _empty_store():
-    return {"version": 1, "links": {}}
+    return {"version": 2, "links": {}}
 
 
 def _normalise_record(source):
     if not isinstance(source, dict):
         return None
     company_code = str(source.get("companyCode") or "").strip()
-    username = str(source.get("username") or "").strip()
+    principal_type = str(source.get("principalType") or "user").strip().lower()
+    if principal_type not in {"user", "worker"}:
+        return None
+    principal_id = str(
+        source.get("principalId")
+        or source.get("workerId")
+        or source.get("username")
+        or ""
+    ).strip()
     try:
         expires_at = float(source.get("expiresAt") or 0)
     except (TypeError, ValueError):
         return None
-    if not company_code or not username or expires_at <= 0:
+    if not company_code or not principal_id or expires_at <= 0:
         return None
-    return {
+    record = {
         "companyCode": company_code,
-        "username": username,
+        "principalType": principal_type,
+        "principalId": principal_id,
         "expiresAt": expires_at,
     }
+    if principal_type == "worker":
+        record["workerId"] = principal_id
+        targets = []
+        for raw_target in source.get("workerTargets") or []:
+            if not isinstance(raw_target, dict):
+                continue
+            target_company = str(raw_target.get("companyCode") or "").strip()
+            target_worker = str(raw_target.get("workerId") or "").strip()
+            if target_company and target_worker:
+                target = {
+                    "companyCode": target_company,
+                    "workerId": target_worker,
+                }
+                if target not in targets:
+                    targets.append(target)
+        record["workerTargets"] = targets or [{
+            "companyCode": company_code,
+            "workerId": principal_id,
+        }]
+    else:
+        record["username"] = principal_id
+    return record
 
 
 def _load_unlocked(path):
@@ -79,14 +110,26 @@ def _prune(store, now=None):
     return bool(expired)
 
 
-def create_telegram_link(path, company_code, username, max_age_seconds, now=None):
-    """Create a one-time link and replace any pending link for the same admin."""
+def create_telegram_link(
+    path,
+    company_code,
+    principal_id,
+    max_age_seconds,
+    now=None,
+    *,
+    principal_type="user",
+    worker_targets=None,
+):
+    """Create a one-time link for an app user or worker identity."""
     created_at = float(time.time() if now is None else now)
     expires_at = created_at + max(1, int(max_age_seconds))
     company_code = str(company_code or "").strip()
-    username = str(username or "").strip()
-    if not company_code or not username:
-        raise ValueError("A company and admin username are required")
+    principal_id = str(principal_id or "").strip()
+    principal_type = str(principal_type or "user").strip().lower()
+    if principal_type not in {"user", "worker"}:
+        raise ValueError("Unsupported Telegram connection identity")
+    if not company_code or not principal_id:
+        raise ValueError("A company and account identity are required")
     token = secrets.token_urlsafe(24)
     with _store_lock:
         store = _load_unlocked(path)
@@ -94,14 +137,29 @@ def create_telegram_link(path, company_code, username, max_age_seconds, now=None
         for existing_token, record in list(store["links"].items()):
             if (
                 record.get("companyCode") == company_code
-                and record.get("username") == username
+                and record.get("principalType", "user") == principal_type
+                and (
+                    record.get("principalId")
+                    or record.get("workerId")
+                    or record.get("username")
+                ) == principal_id
             ):
                 store["links"].pop(existing_token, None)
-        store["links"][token] = {
+        record = {
             "companyCode": company_code,
-            "username": username,
+            "principalType": principal_type,
+            "principalId": principal_id,
             "expiresAt": expires_at,
         }
+        if principal_type == "worker":
+            record["workerId"] = principal_id
+            record["workerTargets"] = list(worker_targets or [{
+                "companyCode": company_code,
+                "workerId": principal_id,
+            }])
+        else:
+            record["username"] = principal_id
+        store["links"][token] = record
         _save_unlocked(path, store)
     return token, expires_at
 

@@ -1,6 +1,8 @@
 let workerPortalData = { companies: [] };
 let workerEventTab = 'active';
 let workerPollTimer = null;
+let workerTelegramPollTimer = null;
+let workerTelegramConnectionPending = false;
 let pendingClaimContext = null;
 const workerUploadState = {
   rows: new Map(),
@@ -51,6 +53,88 @@ function formatDate(value, withTime = false) {
     year: 'numeric',
     ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {})
   });
+}
+
+function workerTelegramIcon() {
+  return `<span class="worker-telegram-logo" aria-hidden="true">
+    <svg viewBox="0 0 24 24" focusable="false">
+      <circle cx="12" cy="12" r="12"></circle>
+      <path d="M18.9 5.6 16.7 18c-.16.88-.66 1.1-1.34.68l-3.4-2.5-1.64 1.58c-.18.18-.34.34-.68.34l.24-3.42 6.22-5.62c.27-.24-.06-.38-.42-.14l-7.68 4.84-3.3-1.03c-.72-.22-.73-.72.15-1.07L17.78 4.7c.6-.22 1.13.15 1.12.9z"></path>
+    </svg>
+  </span>`;
+}
+
+function workerPortalTokens() {
+  return [...new Set((workerPortalData.companies || [])
+    .map(company => company.token)
+    .filter(Boolean))];
+}
+
+function workerTelegramState() {
+  const companies = workerPortalData.companies || [];
+  const connected = companies.filter(company => company.telegram?.connected);
+  const profile = connected[0]?.telegram || {};
+  return {
+    companyCount: companies.length,
+    connectedCount: connected.length,
+    providerConfigured: companies.some(company => company.telegram?.providerConfigured),
+    profile,
+    invoiceStatusChanges: connected.length
+      ? connected.every(company => company.telegram?.invoiceStatusChanges !== false)
+      : true,
+    claimStatusChanges: connected.length
+      ? connected.every(company => company.telegram?.claimStatusChanges !== false)
+      : true
+  };
+}
+
+function renderWorkerTelegramSettings() {
+  const root = byId('workerTelegramSettings');
+  if (!root) return;
+  const state = workerTelegramState();
+  if (!state.providerConfigured) {
+    root.innerHTML = `<div class="worker-telegram-heading">${workerTelegramIcon()}<div>
+      <h2 id="workerTelegramTitle">Telegram notifications</h2>
+      <p>Telegram is not configured by the application administrator.</p>
+    </div></div>`;
+    return;
+  }
+  if (!state.connectedCount) {
+    root.innerHTML = `<div class="worker-telegram-heading">${workerTelegramIcon()}<div>
+      <h2 id="workerTelegramTitle">Telegram notifications</h2>
+      <p>Receive invoice and claim updates across all your companies.</p>
+    </div>
+      <button class="primary-button" id="workerTelegramConnect" type="button">${workerTelegramConnectionPending ? 'Open Telegram again' : 'Connect Telegram'}</button>
+    </div>
+    ${workerTelegramConnectionPending ? '<div class="worker-telegram-pending">Waiting for you to press Start in Telegram…</div>' : ''}`;
+  } else {
+    const account = state.profile.telegramUsername
+      ? `@${escapeHtml(state.profile.telegramUsername)}`
+      : escapeHtml(state.profile.displayName || 'Telegram account');
+    const scope = state.connectedCount === state.companyCount
+      ? `${state.companyCount === 1 ? '1 company' : `${state.companyCount} companies`}`
+      : `${state.connectedCount} of ${state.companyCount} companies`;
+    root.innerHTML = `<div class="worker-telegram-heading">${workerTelegramIcon()}<div>
+      <h2 id="workerTelegramTitle">${escapeHtml(state.profile.displayName || 'Telegram notifications')}</h2>
+      <p>${account} · Connected for ${scope}</p>
+    </div><span class="worker-telegram-connected">Connected</span></div>
+    <div class="worker-telegram-options">
+      <label><span><strong>Invoice updates</strong><small>Submission, review, payment, and receipt status.</small></span>
+        <input id="workerTelegramInvoices" type="checkbox" ${state.invoiceStatusChanges ? 'checked' : ''}></label>
+      <label><span><strong>Claim updates</strong><small>Submission, review, payment, and receipt status.</small></span>
+        <input id="workerTelegramClaims" type="checkbox" ${state.claimStatusChanges ? 'checked' : ''}></label>
+    </div>
+    <div class="worker-telegram-actions">
+      ${state.connectedCount < state.companyCount ? '<button class="primary-button" id="workerTelegramConnect" type="button">Link all companies</button>' : ''}
+      <button class="secondary-button" id="workerTelegramTest" type="button">Send test</button>
+      <button class="secondary-button danger" id="workerTelegramDisconnect" type="button">Disconnect</button>
+    </div>`;
+  }
+  byId('workerTelegramConnect')?.addEventListener('click', connectWorkerTelegram);
+  byId('workerTelegramTest')?.addEventListener('click', testWorkerTelegram);
+  byId('workerTelegramDisconnect')?.addEventListener('click', disconnectWorkerTelegram);
+  byId('workerTelegramInvoices')?.addEventListener('change', saveWorkerTelegramPreferences);
+  byId('workerTelegramClaims')?.addEventListener('change', saveWorkerTelegramPreferences);
 }
 
 function displayStatus(rowOrStatus) {
@@ -416,6 +500,7 @@ function renderPortal() {
   }
   renderCompanies();
   renderStatistics();
+  renderWorkerTelegramSettings();
 }
 
 function findContext(companyCode, eventId, subjectId = '') {
@@ -744,6 +829,114 @@ function startStatusPolling() {
     savePortalSession();
     if (previousSignature !== nextSignature) renderPortal();
   }, 5000);
+}
+
+async function refreshWorkerCompanies() {
+  workerPortalData.companies = await Promise.all(
+    (workerPortalData.companies || []).map(refreshCompany)
+  );
+  savePortalSession();
+  renderPortal();
+  return workerTelegramState();
+}
+
+function startWorkerTelegramConnectionPolling() {
+  clearInterval(workerTelegramPollTimer);
+  let attempts = 0;
+  workerTelegramPollTimer = setInterval(async () => {
+    attempts += 1;
+    const state = await refreshWorkerCompanies();
+    if (state.companyCount && state.connectedCount === state.companyCount) {
+      clearInterval(workerTelegramPollTimer);
+      workerTelegramPollTimer = null;
+      workerTelegramConnectionPending = false;
+      renderWorkerTelegramSettings();
+      showMessage(byId('workerTelegramMessage'), 'Telegram connected for all companies.', 'success');
+    } else if (attempts >= 40) {
+      clearInterval(workerTelegramPollTimer);
+      workerTelegramPollTimer = null;
+      workerTelegramConnectionPending = false;
+      renderWorkerTelegramSettings();
+    }
+  }, 3000);
+}
+
+async function connectWorkerTelegram() {
+  const telegramWindow = window.open('', '_blank');
+  showMessage(byId('workerTelegramMessage'), '');
+  try {
+    const response = await fetchJson('/api/worker/notification-settings/telegram/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens: workerPortalTokens() })
+    });
+    const connectUrl = String(response.data?.connectUrl || '');
+    if (!connectUrl) throw new Error('Telegram connection link was not returned');
+    workerTelegramConnectionPending = true;
+    renderWorkerTelegramSettings();
+    if (telegramWindow) {
+      telegramWindow.opener = null;
+      telegramWindow.location.href = connectUrl;
+    } else {
+      window.location.href = connectUrl;
+    }
+    startWorkerTelegramConnectionPolling();
+  } catch (error) {
+    if (telegramWindow) telegramWindow.close();
+    showMessage(byId('workerTelegramMessage'), error.message || 'Could not open Telegram');
+  }
+}
+
+async function saveWorkerTelegramPreferences() {
+  const invoices = byId('workerTelegramInvoices');
+  const claims = byId('workerTelegramClaims');
+  if (!invoices || !claims) return;
+  invoices.disabled = true;
+  claims.disabled = true;
+  try {
+    await fetchJson('/api/worker/notification-settings/telegram', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tokens: workerPortalTokens(),
+        invoiceStatusChanges: invoices.checked,
+        claimStatusChanges: claims.checked
+      })
+    });
+    await refreshWorkerCompanies();
+    showMessage(byId('workerTelegramMessage'), 'Notification choices saved.', 'success');
+  } catch (error) {
+    await refreshWorkerCompanies();
+    showMessage(byId('workerTelegramMessage'), error.message || 'Could not save notification choices');
+  }
+}
+
+async function testWorkerTelegram() {
+  try {
+    await fetchJson('/api/worker/notification-settings/telegram/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens: workerPortalTokens() })
+    });
+    showMessage(byId('workerTelegramMessage'), 'Test notification sent.', 'success');
+  } catch (error) {
+    showMessage(byId('workerTelegramMessage'), error.message || 'Test notification failed');
+  }
+}
+
+async function disconnectWorkerTelegram() {
+  if (!window.confirm('Disconnect Telegram notifications for all companies?')) return;
+  try {
+    await fetchJson('/api/worker/notification-settings/telegram', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens: workerPortalTokens() })
+    });
+    await refreshWorkerCompanies();
+    showMessage(byId('workerTelegramMessage'), 'Telegram disconnected.', 'success');
+  } catch (error) {
+    showMessage(byId('workerTelegramMessage'), error.message || 'Could not disconnect Telegram');
+  }
 }
 
 document.querySelectorAll('[data-worker-view]').forEach(button =>

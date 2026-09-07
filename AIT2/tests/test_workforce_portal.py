@@ -13,6 +13,7 @@ from pypdf import PdfReader
 import app as app_module
 from data_manager import DataManager
 from models import Event, InventoryItem, User, hash_password
+from services.notification_settings import connect_worker_telegram
 from workforce import (
     _amount_from_text,
     _date_from_text,
@@ -2013,7 +2014,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertTrue(submitted["canEdit"])
 
     def test_worker_upload_queues_telegram_notification(self):
-        self.create_worker_assignment()
+        freelancer_id = self.create_worker_assignment()
         token = self.worker_token()
 
         with patch.object(
@@ -2041,6 +2042,8 @@ class WorkforcePortalTests(unittest.TestCase):
             event_name="Test Production",
             kind="invoice",
             file_count=1,
+            worker_recipient_ids=[freelancer_id],
+            company_code="AVPL",
         )
 
     def test_worker_can_view_remove_and_confirm_paid_submissions(self):
@@ -2175,6 +2178,126 @@ class WorkforcePortalTests(unittest.TestCase):
             denied["denialReason"],
             "The invoice is addressed to the wrong company",
         )
+
+    def test_paid_submission_can_be_confirmed_by_its_linked_telegram_account(self):
+        freelancer_id = self.create_worker_assignment()
+        token = self.worker_token()
+        submitted = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice_id = submitted.get_json()["data"]["events"][0][
+            "submissions"
+        ]["invoices"][0]["id"]
+        self.login("admin", True)
+        approved = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "amount": 500,
+                "status": "Approved",
+                "confirmReview": True,
+                "allocations": [{"department": "AU", "amount": 500}],
+            },
+        )
+        self.assertEqual(approved.status_code, 200)
+        paid = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={"status": "Paid"},
+        )
+        self.assertEqual(paid.status_code, 200)
+
+        connect_worker_telegram(
+            self.manager,
+            freelancer_id,
+            chat_id="445566",
+            telegram_user_id="998877",
+            telegram_username="jordan_crew",
+            display_name="Jordan Crew",
+        )
+        self.manager.company_code = "AVPL"
+        action_path = os.path.join(self.tempdir.name, "TelegramActions.json")
+        with patch.object(
+            app_module, "queue_telegram_message", return_value=True
+        ) as queue_message, patch.object(
+            app_module, "_telegram_action_store_path", return_value=action_path
+        ):
+            app_module.app.config["TESTING"] = False
+            try:
+                queued = app_module._queue_workforce_status_change_notification(
+                    manager=self.manager,
+                    worker_name="Jordan Dela Cruz",
+                    event_id=143,
+                    kind="invoice",
+                    previous_status="Approved",
+                    new_status="Paid",
+                    changed_by="admin",
+                    subject_id=freelancer_id,
+                    submission_id=invoice_id,
+                    worker_recipient_ids=[freelancer_id],
+                )
+            finally:
+                app_module.app.config["TESTING"] = True
+        self.assertEqual(queued, 1)
+        reply_markup = queue_message.call_args.kwargs["reply_markup"]
+        callback_data = reply_markup["inline_keyboard"][0][0]["callback_data"]
+        self.assertTrue(callback_data.startswith("payment_received:"))
+        self.assertLessEqual(len(callback_data.encode("utf-8")), 64)
+        self.assertTrue(os.path.isfile(action_path))
+
+        callback = {
+            "id": "callback-one",
+            "data": callback_data,
+            "from": {"id": 111111},
+            "message": {
+                "message_id": 42,
+                "text": "Invoice status changed",
+                "chat": {"id": 445566, "type": "private"},
+            },
+        }
+        with patch.object(
+            app_module, "answer_telegram_callback"
+        ) as answer, patch.object(
+            app_module, "_telegram_action_store_path", return_value=action_path
+        ):
+            self.assertFalse(
+                app_module._process_telegram_connection_update({
+                    "callback_query": callback
+                })
+            )
+        self.assertTrue(answer.call_args.kwargs["show_alert"])
+        stored = load_workforce(self.manager.data_folder)["submissions"]["143"][
+            freelancer_id
+        ]["invoices"][0]
+        self.assertNotIn("paymentConfirmedAt", stored)
+
+        callback["from"]["id"] = 998877
+        with patch.object(
+            app_module, "answer_telegram_callback"
+        ) as answer, patch.object(
+            app_module, "edit_telegram_message"
+        ) as edit, patch.object(
+            app_module, "_telegram_action_store_path", return_value=action_path
+        ):
+            self.assertTrue(
+                app_module._process_telegram_connection_update({
+                    "callback_query": callback
+                })
+            )
+        self.assertEqual(answer.call_args.args[1], "Payment receipt confirmed.")
+        self.assertIn("Payment receipt confirmed", edit.call_args.args[0])
+        stored = load_workforce(self.manager.data_folder)["submissions"]["143"][
+            freelancer_id
+        ]["invoices"][0]
+        self.assertTrue(stored["paymentConfirmedByWorker"])
+        self.assertTrue(stored["paymentConfirmedViaTelegram"])
+        self.assertTrue(stored["paymentConfirmedAt"])
 
     def test_claim_validation_totals_and_realtime_notice(self):
         self.create_worker_assignment()
@@ -4166,6 +4289,13 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('Last login:', vendor_branch)
 
     def test_vendor_payload_reports_latest_member_login(self):
+        connect_worker_telegram(
+            self.manager,
+            "member_latest",
+            chat_id="223344",
+            telegram_username="latest_member",
+            display_name="Latest Member",
+        )
         payload = app_module._admin_vendor_payload(
             {
                 "id": "vendor_latest_login",
@@ -4196,6 +4326,13 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(payload["workerLastLoginBy"], "Latest Member")
         self.assertEqual(payload["workerLastLoginById"], "member_latest")
+        self.assertTrue(payload["telegramConnected"])
+        self.assertEqual(len(payload["telegramAccounts"]), 1)
+        self.assertEqual(
+            payload["telegramAccounts"][0]["telegramUsername"],
+            "latest_member",
+        )
+        self.assertNotIn("chatId", payload["telegramAccounts"][0])
 
     def test_manage_directory_badges_have_stable_status_colours_and_full_labels(self):
         static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
