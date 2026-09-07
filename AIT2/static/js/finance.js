@@ -67,6 +67,7 @@ const financeState = {
   eventPairTargetId: '',
   eventOptionsRequestSeq: 0,
   contextDocumentId: '',
+  contextSubprojectId: '',
   salespersonReassignmentTarget: null,
   addDepartment: '',
   collapsedDepartments: {},
@@ -2605,6 +2606,7 @@ function financeCloseMenus() {
     menu.classList.remove('open', 'open-up');
   });
   financeCloseQuotationContextMenu();
+  financeCloseSubprojectContextMenu();
 }
 
 function financeEnsureQuotationContextMenu() {
@@ -5288,6 +5290,7 @@ function financeRenderSubprojectTabs() {
     rows: financeSubprojects(),
     activeId: financeCurrentSubprojectId(),
     readOnly: financeState.snapshotMode,
+    allowItemDrop: true,
     handlerPrefix: 'finance',
     ariaLabel: 'Quotation sub-projects'
   });
@@ -5550,6 +5553,182 @@ function financeSelectSubproject(subprojectId) {
   financeRenderEditor();
 }
 
+function financeEnsureSubprojectContextMenu() {
+  let menu = document.getElementById('financeSubprojectContextMenu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'financeSubprojectContextMenu';
+  menu.className = 'finance-quotation-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = `
+    <button type="button" role="menuitem" onclick="event.stopPropagation();financeDuplicateSubprojectFromMenu()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"></rect><path d="M16 8V4H4v12h4"></path></svg>
+      <span>Duplicate sub-project</span>
+    </button>`;
+  document.body.appendChild(menu);
+  return menu;
+}
+
+function financeCloseSubprojectContextMenu() {
+  document.getElementById('financeSubprojectContextMenu')?.classList.remove('open');
+  document.querySelectorAll('.finance-subproject-tab.context-open').forEach(tab => {
+    tab.classList.remove('context-open');
+  });
+  financeState.contextSubprojectId = '';
+}
+
+function financeOpenSubprojectContextMenu(event, subprojectId) {
+  if (financeState.snapshotMode || !financeSubprojects().some(
+    row => String(row.id) === String(subprojectId)
+  )) return;
+  event.preventDefault();
+  event.stopPropagation();
+  financeCloseMenus();
+  const menu = financeEnsureSubprojectContextMenu();
+  financeState.contextSubprojectId = String(subprojectId);
+  document.querySelector(
+    `.finance-subproject-tab[data-subproject-id="${CSS.escape(String(subprojectId))}"]`
+  )?.classList.add('context-open');
+  menu.classList.add('open');
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  const x = showbaseViewport.toLayout(event.clientX);
+  const y = showbaseViewport.toLayout(event.clientY);
+  menu.style.left = `${Math.max(8, Math.min(x, showbaseViewport.width() - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, showbaseViewport.height() - height - 8))}px`;
+  menu.querySelector('button')?.focus();
+}
+
+function financeSubprojectCopyName(sourceName) {
+  const base = String(sourceName || 'Sub-project').trim() || 'Sub-project';
+  const names = new Set(financeSubprojects().map(
+    row => String(row.name || '').trim().toLowerCase()
+  ));
+  let name = `${base} Copy`;
+  let number = 2;
+  while (names.has(name.toLowerCase())) name = `${base} Copy ${number++}`;
+  return name;
+}
+
+function financeDuplicateSubproject(subprojectId) {
+  const document = financeState.current;
+  const rows = financeSubprojects(document);
+  const sourceIndex = rows.findIndex(
+    row => String(row.id) === String(subprojectId)
+  );
+  if (!document || financeState.snapshotMode || sourceIndex < 0) return '';
+  const source = rows[sourceIndex];
+  const newSubprojectId = `room_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const lineIdMap = new Map();
+  const groupIdMap = new Map();
+  const sourceLines = (document.lineItems || []).filter(
+    line => String(line.subprojectId || 'main') === String(subprojectId)
+  );
+  const clonedLines = sourceLines.map((line, index) => {
+    const clone = JSON.parse(JSON.stringify(line));
+    clone.id = `line_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`;
+    clone.subprojectId = newSubprojectId;
+    lineIdMap.set(String(line.id || ''), clone.id);
+    if (line.groupId) {
+      const groupId = String(line.groupId);
+      if (!groupIdMap.has(groupId)) {
+        groupIdMap.set(
+          groupId,
+          `group_${Date.now()}_${groupIdMap.size}_${Math.random().toString(16).slice(2)}`
+        );
+      }
+      clone.groupId = groupIdMap.get(groupId);
+    }
+    return clone;
+  });
+  const clonedHeaders = financeHeaderRows().filter(
+    row => String(row.subprojectId || 'main') === String(subprojectId)
+  ).map((row, index) => ({
+    ...JSON.parse(JSON.stringify(row)),
+    id: `header_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`,
+    subprojectId: newSubprojectId,
+    beforeLineId: lineIdMap.get(String(row.beforeLineId || '')) || ''
+  }));
+  const clonedAdjustments = (document.adjustments || []).filter(row => (
+    row.scope !== 'total'
+    && String(row.subprojectId || 'main') === String(subprojectId)
+  )).map((row, index) => ({
+    ...JSON.parse(JSON.stringify(row)),
+    id: `adjustment_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`,
+    subprojectId: newSubprojectId
+  }));
+  const clone = {
+    ...JSON.parse(JSON.stringify(source)),
+    id: newSubprojectId,
+    name: financeSubprojectCopyName(source.name)
+  };
+  document.subprojects = [...rows];
+  document.subprojects.splice(sourceIndex + 1, 0, clone);
+  document.lineItems = [...(document.lineItems || []), ...clonedLines];
+  document.headerRows = [...financeHeaderRows(), ...clonedHeaders];
+  document.adjustments = [...(document.adjustments || []), ...clonedAdjustments];
+  financeState.activeSubprojectId = newSubprojectId;
+  financeState.addDepartment = '';
+  financeSyncDocumentDepartments(document);
+  financeQueueSave();
+  financeRenderEditor();
+  showNotification('success', `${clone.name} created`);
+  return newSubprojectId;
+}
+
+function financeDuplicateSubprojectFromMenu() {
+  const subprojectId = financeState.contextSubprojectId;
+  financeCloseSubprojectContextMenu();
+  if (subprojectId) financeDuplicateSubproject(subprojectId);
+}
+
+function financeMoveLinesToSubproject(sourceIndexes, targetSubprojectId) {
+  const document = financeState.current;
+  const lines = document?.lineItems || [];
+  const targetId = String(targetSubprojectId || '');
+  const selectedIndexes = [...new Set((sourceIndexes || []).map(
+    value => financeNumber(value, -1)
+  ))].filter(index => index >= 0 && !!lines[index]);
+  const movedItems = selectedIndexes.map(index => lines[index]);
+  if (
+    !document
+    || financeState.snapshotMode
+    || !movedItems.length
+    || !financeSubprojects(document).some(row => String(row.id) === targetId)
+    || movedItems.every(line => String(line.subprojectId || 'main') === targetId)
+  ) {
+    financeDragLineEnd();
+    return 0;
+  }
+  const wholeGroup = !!financeState.dragWholeLineGroup
+    || showbaseLineWorkspace.draggedWholeGroup(lines, selectedIndexes);
+  if (!wholeGroup) {
+    movedItems.forEach(line => {
+      if (line.groupId) financeDetachLineFromGroup(line);
+    });
+  }
+  [...selectedIndexes].sort((left, right) => right - left).forEach(
+    index => lines.splice(index, 1)
+  );
+  movedItems.forEach(line => { line.subprojectId = targetId; });
+  let insertionIndex = lines.reduce((last, line, index) => (
+    String(line.subprojectId || 'main') === targetId ? index + 1 : last
+  ), -1);
+  if (insertionIndex < 0) insertionIndex = lines.length;
+  lines.splice(insertionIndex, 0, ...movedItems);
+  financeState.activeSubprojectId = targetId;
+  financeState.addDepartment = '';
+  financeSyncDocumentDepartments(document);
+  financeQueueSave();
+  financeDragLineEnd();
+  financeRenderEditor();
+  showNotification(
+    'success',
+    `${movedItems.length} item${movedItems.length === 1 ? '' : 's'} moved`
+  );
+  return movedItems.length;
+}
+
 const financeSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
   state: financeState,
   getRows: financeSubprojects,
@@ -5566,6 +5745,9 @@ const financeSubprojectWorkspace = showbaseLineWorkspace.createSubprojectControl
 
 function financeClearSubprojectDropTargets() {
   financeSubprojectWorkspace.clearDropTargets();
+  document.querySelectorAll('.finance-subproject-tab.is-item-drop-target').forEach(tab => {
+    tab.classList.remove('is-item-drop-target');
+  });
 }
 
 function financeSubprojectDragStart(event, subprojectId) {
@@ -5573,10 +5755,24 @@ function financeSubprojectDragStart(event, subprojectId) {
 }
 
 function financeSubprojectDragOver(event, targetId) {
+  if ((financeState.dragLineIndexes || []).length) {
+    const sourceRooms = new Set(financeState.dragLineIndexes.map(index => (
+      String(financeState.current?.lineItems?.[index]?.subprojectId || 'main')
+    )));
+    if (sourceRooms.size && !sourceRooms.has(String(targetId))) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      financeClearSubprojectDropTargets();
+      event.currentTarget.classList.add('is-item-drop-target');
+    }
+    return;
+  }
   financeSubprojectWorkspace.dragOver(event, targetId);
 }
 
 function financeSubprojectDragLeave(event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return;
+  event.currentTarget.classList.remove('is-item-drop-target');
   financeSubprojectWorkspace.dragLeave(event);
 }
 
@@ -5609,6 +5805,14 @@ function financeReorderSubproject(sourceId, targetId, position = 'before') {
 }
 
 function financeSubprojectDrop(event, targetId) {
+  if ((financeState.dragLineIndexes || []).length) {
+    event.preventDefault();
+    event.stopPropagation();
+    const indexes = financeDraggedLineIndexes(event);
+    financeClearSubprojectDropTargets();
+    financeMoveLinesToSubproject(indexes, targetId);
+    return;
+  }
   financeSubprojectWorkspace.drop(event, targetId);
 }
 
@@ -6062,6 +6266,7 @@ function financeDragLineEnd() {
     row.classList.remove('dragging');
   });
   financeClearLineDropTargets();
+  financeClearSubprojectDropTargets();
 }
 
 function financeDragDepartmentStart(event, encodedDepartment) {

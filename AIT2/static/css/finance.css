@@ -2760,6 +2760,17 @@
   border-bottom-color: var(--brand-main, #0f766e);
 }
 
+.finance-subproject-tab.is-item-drop-target {
+  border-radius: 7px 7px 0 0;
+  border-bottom-color: var(--brand-main, #0f766e);
+  background: color-mix(in srgb, var(--brand-main, #0f766e) 10%, #fff);
+  box-shadow: inset 0 0 0 2px var(--brand-main, #0f766e);
+}
+
+.finance-subproject-tab.context-open {
+  background: color-mix(in srgb, var(--brand-main, #0f766e) 7%, #fff);
+}
+
 .finance-subproject-tab button,
 .finance-subproject-add {
   min-height: 34px;

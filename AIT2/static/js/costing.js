@@ -30,6 +30,7 @@ const costingState = {
   activeSubprojectId: '',
   quotationSyncMode: '',
   contextDocumentId: '',
+  contextSubprojectId: '',
   contextLineId: '',
   inventoryLinkLineId: '',
   inventoryLinkCatalog: [],
@@ -1429,6 +1430,7 @@ function costingSubprojectTabsMarkup(readOnly) {
     rows: costingSubprojects(),
     activeId: costingActiveSubprojectId(),
     readOnly,
+    allowItemDrop: true,
     handlerPrefix: 'costing',
     className: 'costing-subproject-tabs',
     ariaLabel: 'Costing sub-projects'
@@ -2017,6 +2019,7 @@ function costingDragEnd() {
   document.querySelectorAll('.costing-line.dragging,.costing-line-group-header.dragging,.costing-category-card.dragging,.costing-category-card.drag-over')
     .forEach(node => node.classList.remove('dragging', 'drag-over'));
   costingClearLineDropTargets();
+  costingClearSubprojectDropTargets();
 }
 
 function costingProjectChanged(value) {
@@ -2083,6 +2086,185 @@ function costingSelectSubproject(subprojectId) {
   costingRenderEditor();
 }
 
+function costingEnsureSubprojectContextMenu() {
+  let menu = document.getElementById('costingSubprojectContextMenu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'costingSubprojectContextMenu';
+  menu.className = 'finance-quotation-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = `
+    <button type="button" role="menuitem" onclick="event.stopPropagation();costingDuplicateSubprojectFromMenu()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"></rect><path d="M16 8V4H4v12h4"></path></svg>
+      <span>Duplicate sub-project</span>
+    </button>`;
+  document.body.appendChild(menu);
+  return menu;
+}
+
+function costingCloseSubprojectContextMenu() {
+  document.getElementById('costingSubprojectContextMenu')?.classList.remove('open');
+  document.querySelectorAll('.costing-subproject-tabs .finance-subproject-tab.context-open')
+    .forEach(tab => tab.classList.remove('context-open'));
+  costingState.contextSubprojectId = '';
+}
+
+function costingOpenSubprojectContextMenu(event, subprojectId) {
+  if (
+    costingState.current?.status === 'converted'
+    || !costingSubprojects().some(row => String(row.id) === String(subprojectId))
+  ) return;
+  event.preventDefault();
+  event.stopPropagation();
+  costingCloseContextMenu();
+  costingCloseLineContextMenu();
+  costingCloseSubprojectContextMenu();
+  if (typeof financeCloseMenus === 'function') financeCloseMenus();
+  const menu = costingEnsureSubprojectContextMenu();
+  costingState.contextSubprojectId = String(subprojectId);
+  document.querySelector(
+    `.costing-subproject-tabs .finance-subproject-tab[data-subproject-id="${CSS.escape(String(subprojectId))}"]`
+  )?.classList.add('context-open');
+  menu.classList.add('open');
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  const x = showbaseViewport.toLayout(event.clientX);
+  const y = showbaseViewport.toLayout(event.clientY);
+  menu.style.left = `${Math.max(8, Math.min(x, showbaseViewport.width() - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, showbaseViewport.height() - height - 8))}px`;
+  menu.querySelector('button')?.focus();
+}
+
+function costingSubprojectCopyName(sourceName) {
+  const base = String(sourceName || 'Sub-project').trim() || 'Sub-project';
+  const names = new Set(costingSubprojects().map(
+    row => String(row.name || '').trim().toLowerCase()
+  ));
+  let name = `${base} Copy`;
+  let number = 2;
+  while (names.has(name.toLowerCase())) name = `${base} Copy ${number++}`;
+  return name;
+}
+
+function costingDuplicateSubproject(subprojectId) {
+  const document = costingState.current;
+  const rows = costingSubprojects(document);
+  const sourceIndex = rows.findIndex(
+    row => String(row.id) === String(subprojectId)
+  );
+  if (!document || document.status === 'converted' || sourceIndex < 0) return '';
+  const source = rows[sourceIndex];
+  const newSubprojectId = `room_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const groupIdMap = new Map();
+  const clonedLines = costingLines().filter(
+    line => String(line.subprojectId || 'main') === String(subprojectId)
+  ).map((line, index) => {
+    const clone = JSON.parse(JSON.stringify(line));
+    clone.id = `costline_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`;
+    clone.quotationLineId = '';
+    clone.subprojectId = newSubprojectId;
+    if (line.groupId) {
+      const groupId = String(line.groupId);
+      if (!groupIdMap.has(groupId)) {
+        groupIdMap.set(
+          groupId,
+          `group_${Date.now()}_${groupIdMap.size}_${Math.random().toString(16).slice(2)}`
+        );
+      }
+      clone.groupId = groupIdMap.get(groupId);
+    }
+    return clone;
+  });
+  const clonedAdjustments = (document.categoryAdjustments || []).filter(
+    row => String(row.subprojectId || 'main') === String(subprojectId)
+  ).map(row => ({
+    ...JSON.parse(JSON.stringify(row)),
+    subprojectId: newSubprojectId
+  }));
+  const clone = {
+    ...JSON.parse(JSON.stringify(source)),
+    id: newSubprojectId,
+    name: costingSubprojectCopyName(source.name)
+  };
+  document.subprojects = [...rows];
+  document.subprojects.splice(sourceIndex + 1, 0, clone);
+  document.lineItems = [...costingLines(), ...clonedLines];
+  document.categoryAdjustments = [
+    ...(document.categoryAdjustments || []),
+    ...clonedAdjustments
+  ];
+  costingState.activeSubprojectId = newSubprojectId;
+  costingState.addCategory = '';
+  costingEqualiseSaleGroups(costingLines());
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRenderEditor();
+  showNotification('success', `${clone.name} created`);
+  return newSubprojectId;
+}
+
+function costingDuplicateSubprojectFromMenu() {
+  const subprojectId = costingState.contextSubprojectId;
+  costingCloseSubprojectContextMenu();
+  if (subprojectId) costingDuplicateSubproject(subprojectId);
+}
+
+function costingMoveLinesToSubproject(sourceIndexes, targetSubprojectId) {
+  const document = costingState.current;
+  const lines = costingLines();
+  const targetId = String(targetSubprojectId || '');
+  const selectedIndexes = [...new Set((sourceIndexes || []).map(
+    value => costingNumber(value, -1)
+  ))].filter(index => index >= 0 && !!lines[index]);
+  const movedItems = selectedIndexes.map(index => lines[index]);
+  if (
+    !document
+    || document.status === 'converted'
+    || !movedItems.length
+    || !costingSubprojects(document).some(row => String(row.id) === targetId)
+    || movedItems.every(line => String(line.subprojectId || 'main') === targetId)
+  ) {
+    costingDragEnd();
+    return 0;
+  }
+  const wholeGroup = !!costingState.dragWholeLineGroup
+    || showbaseLineWorkspace.draggedWholeGroup(lines, selectedIndexes);
+  if (!wholeGroup) {
+    movedItems.forEach(line => {
+      if (line.groupId) costingDetachLineFromGroup(line);
+    });
+  }
+  [...selectedIndexes].sort((left, right) => right - left).forEach(
+    index => lines.splice(index, 1)
+  );
+  movedItems.forEach(line => { line.subprojectId = targetId; });
+  let insertionIndex = lines.reduce((last, line, index) => (
+    String(line.subprojectId || 'main') === targetId ? index + 1 : last
+  ), -1);
+  if (insertionIndex < 0) insertionIndex = lines.length;
+  lines.splice(insertionIndex, 0, ...movedItems);
+  const activeCategoryKeys = new Set(lines.map(line => (
+    `${String(line.subprojectId || 'main')}::${String(line.category || 'General').toLowerCase()}`
+  )));
+  document.categoryAdjustments = (document.categoryAdjustments || []).filter(row => (
+    activeCategoryKeys.has(
+      `${String(row.subprojectId || 'main')}::${String(row.category || 'General').toLowerCase()}`
+    )
+  ));
+  costingState.activeSubprojectId = targetId;
+  costingState.addCategory = '';
+  costingEqualiseSaleGroups(lines);
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingDragEnd();
+  costingRenderEditor();
+  showNotification(
+    'success',
+    `${movedItems.length} item${movedItems.length === 1 ? '' : 's'} moved`
+  );
+  return movedItems.length;
+}
+
 const costingSubprojectWorkspace = showbaseLineWorkspace.createSubprojectController({
   state: costingState,
   getRows: costingSubprojects,
@@ -2100,6 +2282,9 @@ const costingSubprojectWorkspace = showbaseLineWorkspace.createSubprojectControl
 
 function costingClearSubprojectDropTargets() {
   costingSubprojectWorkspace.clearDropTargets();
+  document.querySelectorAll(
+    '.costing-subproject-tabs .finance-subproject-tab.is-item-drop-target'
+  ).forEach(tab => tab.classList.remove('is-item-drop-target'));
 }
 
 function costingSubprojectDragStart(event, subprojectId) {
@@ -2107,10 +2292,24 @@ function costingSubprojectDragStart(event, subprojectId) {
 }
 
 function costingSubprojectDragOver(event, targetId) {
+  if ((costingState.dragLineIndexes || []).length) {
+    const sourceRooms = new Set(costingState.dragLineIndexes.map(index => (
+      String(costingLines()[index]?.subprojectId || 'main')
+    )));
+    if (sourceRooms.size && !sourceRooms.has(String(targetId))) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      costingClearSubprojectDropTargets();
+      event.currentTarget.classList.add('is-item-drop-target');
+    }
+    return;
+  }
   costingSubprojectWorkspace.dragOver(event, targetId);
 }
 
 function costingSubprojectDragLeave(event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return;
+  event.currentTarget.classList.remove('is-item-drop-target');
   costingSubprojectWorkspace.dragLeave(event);
 }
 
@@ -2143,6 +2342,14 @@ function costingReorderSubproject(sourceId, targetId, position = 'before') {
 }
 
 function costingSubprojectDrop(event, targetId) {
+  if ((costingState.dragLineIndexes || []).length) {
+    event.preventDefault();
+    event.stopPropagation();
+    const indexes = costingDraggedLineIndexes(event);
+    costingClearSubprojectDropTargets();
+    costingMoveLinesToSubproject(indexes, targetId);
+    return;
+  }
   costingSubprojectWorkspace.drop(event, targetId);
 }
 
@@ -3064,4 +3271,7 @@ async function costingOpenQuotation() {
 document.addEventListener('click', event => {
   if (!event.target.closest('#costingContextMenu')) costingCloseContextMenu();
   if (!event.target.closest('#costingLineContextMenu')) costingCloseLineContextMenu();
+  if (!event.target.closest('#costingSubprojectContextMenu')) {
+    costingCloseSubprojectContextMenu();
+  }
 });

@@ -259,6 +259,7 @@
       const prefix = String(options.handlerPrefix || '').replace(/[^a-zA-Z0-9_$]/g, '');
       const canManage = !options.readOnly && options.allowManage !== false;
       const canReorder = !options.readOnly && options.allowReorder !== false && rows.length > 1;
+      const canDropItems = !options.readOnly && options.allowItemDrop === true;
       return `<div class="finance-subproject-tabs showbase-subproject-tabs ${escapeAttribute(options.className || '')}" role="tablist" aria-label="${escapeAttribute(options.ariaLabel || 'Sub-projects')}">
         ${rows.map((row, index) => {
           const id = escapeAttribute(row.id || '');
@@ -275,13 +276,18 @@
                 ${canReorder ? `draggable="true"
                   ondragstart="${prefix}SubprojectDragStart(event,'${id}')"
                   ondragend="${prefix}SubprojectDragEnd()"` : ''}
+                ${canManage ? `oncontextmenu="${prefix}OpenSubprojectContextMenu(event,'${id}')"` : ''}
                 ondragover="${prefix}SubprojectDragOver(event,'${id}')"
                 ondragleave="${prefix}SubprojectDragLeave(event)"
                 ondrop="${prefix}SubprojectDrop(event,'${id}')">
             ${canReorder ? `<span class="finance-subproject-drag-handle" role="button" tabindex="0"
                   title="Drag to reorder room" aria-label="Reorder ${name}"
                   onkeydown="${prefix}SubprojectDragKeydown(event,'${id}')">&#9776;</span>` : ''}
-            <button type="button" role="tab" aria-selected="${String(row.id || '') === activeId}" onclick="${prefix}SelectSubproject('${id}')">${name}</button>
+            <button type="button" role="tab" aria-selected="${String(row.id || '') === activeId}"
+                    title="${canDropItems
+                      ? 'Drop items here or right-click for sub-project actions'
+                      : canManage ? 'Right-click for sub-project actions' : 'Select sub-project'}"
+                    onclick="${prefix}SelectSubproject('${id}')">${name}</button>
             ${canManage ? `<button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="${prefix}RenameSubproject('${id}')">&#9998;</button>` : ''}
             ${canManage && rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="${prefix}DeleteSubproject('${id}')">&times;</button>` : ''}
           </span>`;
