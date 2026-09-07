@@ -1582,17 +1582,6 @@
   gap: 5px;
 }
 
-.wf-directory-row .wf-telegram-status {
-  overflow: visible;
-  color: #64748b;
-  white-space: normal;
-}
-
-.wf-directory-row .wf-telegram-status.connected {
-  color: #087a92;
-  font-weight: 700;
-}
-
 .wf-worker-summary {
   display: flex;
   flex-wrap: wrap;
@@ -4190,6 +4179,11 @@ button.wf-directory-row {
 .wf-directory-row .wf-login-indicator.configured {
   background: #ecfdf3;
   color: #15803d;
+}
+
+.wf-directory-row .wf-login-indicator.telegram {
+  background: #eaf3ff;
+  color: #1d4ed8;
 }
 
 .wf-directory-action {

@@ -978,13 +978,18 @@ class WorkforcePortalTests(unittest.TestCase):
             login_source = source_file.read()
         self.assertLess(
             login_source.index('id="workerPreferredName"'),
+            login_source.index('id="credentialTypeChoice"'),
+        )
+        self.assertLess(
+            login_source.index('id="credentialTypeChoice"'),
             login_source.index('id="workerCredential"'),
         )
         self.assertLess(
             login_source.index('id="workerCredential"'),
             login_source.index('id="workerCredentialConfirmation"'),
         )
-        self.assertNotIn('id="credentialTypeChoice"', login_source)
+        self.assertIn('name="credentialType" value="pin"', login_source)
+        self.assertIn('name="credentialType" value="password"', login_source)
 
         discovery = self.client.post(
             "/api/worker/lookup", json={"phone": "9123 4567"}
@@ -4323,6 +4328,33 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('row.workerLastLoginAt', vendor_branch)
         self.assertIn('row.workerLastLoginBy', vendor_branch)
         self.assertIn('Last login:', vendor_branch)
+
+    def test_manage_directory_uses_linked_telegram_username_as_login_badge(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            styles = source_file.read()
+        directory = source.split("function renderFreelancerDirectory", 1)[1].split(
+            "function openVendorProfile",
+            1,
+        )[0]
+
+        self.assertNotIn("Telegram: Not linked", directory)
+        self.assertNotIn("wf-telegram-status", directory)
+        self.assertIn('`@${telegram.telegramUsername}`', directory)
+        self.assertIn('class="wf-login-indicator telegram"', directory)
+        self.assertIn("const telegramBadge = telegram.connected", directory)
+        self.assertIn("? (telegramBadge ||", directory)
+        self.assertIn("telegramAccounts.map(account =>", directory)
+        self.assertIn(".wf-login-indicator.telegram", styles)
+        self.assertIn("color: #1d4ed8;", styles)
 
     def test_vendor_payload_reports_latest_member_login(self):
         connect_worker_telegram(
