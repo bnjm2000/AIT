@@ -1,0 +1,176 @@
+{
+  "companyCode": "AVPL",
+  "documentKey": "workforce",
+  "versionBefore": 11153,
+  "backedUpAt": "2026-09-07T18:37:44+08:00",
+  "transportLocationsBefore": [
+    {
+      "id": "location_458d45cf8df401f2",
+      "name": "Office",
+      "address": "601 Sims Drive, Pan-I Complex, Singapore 387382",
+      "createdAt": "2026-07-04T20:59:30+08:00"
+    },
+    {
+      "id": "location_e999e56b48ffb842",
+      "name": "*SCAPE Loading Bay",
+      "address": "2 Orchard Link, Singapore 237978",
+      "createdAt": "2026-07-04T21:09:01+08:00"
+    },
+    {
+      "id": "location_f5e8ddd605db16d3",
+      "name": "Capella Loading Bay",
+      "address": "1 The Knolls, Sentosa Island, Singapore 098297",
+      "createdAt": "2026-07-05T17:40:55+08:00"
+    },
+    {
+      "id": "location_745e4b97b4f40ae9",
+      "name": "Esplanade Loading Bay",
+      "address": "1 Esplanade Dr, Singapore 038981",
+      "createdAt": "2026-07-05T17:41:58+08:00"
+    },
+    {
+      "id": "location_d65b9f62ad3e0b8e",
+      "name": "New Bahru (46 Kim Yam Road New Bahru (School Block), Singapore 239351)",
+      "address": "",
+      "createdAt": "2026-07-05T17:44:46+08:00"
+    },
+    {
+      "id": "location_a7c389976b6a8aa5",
+      "name": "Office",
+      "address": "601 Sims Drive, Pan-I Complex, Singapore 387382",
+      "createdAt": "2026-07-09T13:21:56+08:00"
+    },
+    {
+      "id": "location_4a5698679e5ec64a",
+      "name": "Capella Loading Bay",
+      "address": "1 The Knolls, Sentosa Island, Singapore 098297",
+      "createdAt": "2026-07-09T13:21:56+08:00"
+    },
+    {
+      "id": "location_f1d03477bcccb5a6",
+      "name": "*SCAPE Loading Bay",
+      "address": "2 Orchard Link, Singapore 237978",
+      "createdAt": "2026-07-10T15:54:46+08:00"
+    },
+    {
+      "id": "location_f5a6f941471e2f75",
+      "name": "National Library",
+      "address": "00 Victoria St, #03-01 National Library, 100 Victoria St, Building, Singapore 188064",
+      "createdAt": "2026-07-25T21:27:57+08:00"
+    },
+    {
+      "id": "location_075ea3a423efa5ab",
+      "name": "Ion Orchard Loading Bay",
+      "address": "2 Orchard Turn, Singapore 238801",
+      "createdAt": "2026-07-26T23:04:10+08:00"
+    },
+    {
+      "id": "location_41060ae039731854",
+      "name": "National Library",
+      "address": "100 Victoria St, #03-01 National Library, 100 Victoria St, Building, Singapore 188064",
+      "createdAt": "2026-08-07T23:42:46+08:00"
+    },
+    {
+      "id": "location_865a00aaea7b8afa",
+      "name": "STPI",
+      "address": "41 Robertson Quay, Singapore 238236",
+      "createdAt": "2026-08-12T21:44:01+08:00"
+    },
+    {
+      "id": "location_f55b63aa832def6e",
+      "name": "National Museum",
+      "address": "93 Stamford Rd, Singapore 178897",
+      "createdAt": "2026-08-27T12:56:17+08:00"
+    },
+    {
+      "id": "location_bd8f8c7b9622739e",
+      "name": "Raffles City Convention Centre",
+      "address": "80 Bras Basah Rd, Level 4, Singapore 189560",
+      "createdAt": "2026-08-27T13:52:25+08:00"
+    }
+  ],
+  "transportLocationsAfter": [
+    {
+      "id": "location_458d45cf8df401f2",
+      "name": "Office",
+      "address": "601 Sims Drive, Pan-I Complex, Singapore 387382",
+      "createdAt": "2026-07-04T20:59:30+08:00"
+    },
+    {
+      "id": "location_e999e56b48ffb842",
+      "name": "*SCAPE Loading Bay",
+      "address": "2 Orchard Link, Singapore 237978",
+      "createdAt": "2026-07-04T21:09:01+08:00"
+    },
+    {
+      "id": "location_f5e8ddd605db16d3",
+      "name": "Capella Loading Bay",
+      "address": "1 The Knolls, Sentosa Island, Singapore 098297",
+      "createdAt": "2026-07-05T17:40:55+08:00"
+    },
+    {
+      "id": "location_745e4b97b4f40ae9",
+      "name": "Esplanade Loading Bay",
+      "address": "1 Esplanade Dr, Singapore 038981",
+      "createdAt": "2026-07-05T17:41:58+08:00"
+    },
+    {
+      "id": "location_d65b9f62ad3e0b8e",
+      "name": "New Bahru (46 Kim Yam Road New Bahru (School Block), Singapore 239351)",
+      "address": "",
+      "createdAt": "2026-07-05T17:44:46+08:00"
+    },
+    {
+      "id": "location_075ea3a423efa5ab",
+      "name": "Ion Orchard Loading Bay",
+      "address": "2 Orchard Turn, Singapore 238801",
+      "createdAt": "2026-07-26T23:04:10+08:00"
+    },
+    {
+      "id": "location_41060ae039731854",
+      "name": "National Library",
+      "address": "100 Victoria St, #03-01 National Library, 100 Victoria St, Building, Singapore 188064",
+      "createdAt": "2026-08-07T23:42:46+08:00"
+    },
+    {
+      "id": "location_865a00aaea7b8afa",
+      "name": "STPI",
+      "address": "41 Robertson Quay, Singapore 238236",
+      "createdAt": "2026-08-12T21:44:01+08:00"
+    },
+    {
+      "id": "location_f55b63aa832def6e",
+      "name": "National Museum",
+      "address": "93 Stamford Rd, Singapore 178897",
+      "createdAt": "2026-08-27T12:56:17+08:00"
+    },
+    {
+      "id": "location_bd8f8c7b9622739e",
+      "name": "Raffles City Convention Centre",
+      "address": "80 Bras Basah Rd, Level 4, Singapore 189560",
+      "createdAt": "2026-08-27T13:52:25+08:00"
+    }
+  ],
+  "changes": [
+    {
+      "name": "Office",
+      "keepId": "location_458d45cf8df401f2",
+      "removeId": "location_a7c389976b6a8aa5"
+    },
+    {
+      "name": "*SCAPE Loading Bay",
+      "keepId": "location_e999e56b48ffb842",
+      "removeId": "location_f1d03477bcccb5a6"
+    },
+    {
+      "name": "Capella Loading Bay",
+      "keepId": "location_f5e8ddd605db16d3",
+      "removeId": "location_4a5698679e5ec64a"
+    },
+    {
+      "name": "National Library",
+      "keepId": "location_41060ae039731854",
+      "removeId": "location_f5a6f941471e2f75"
+    }
+  ]
+}

@@ -2920,7 +2920,7 @@ function financeRoot() {
 const productCatalogState = {
   rows: [],
   query: '',
-  category: 'all',
+  category: '',
   sourceFilters: { inventory: true, additional: true },
   formOpen: false,
   loading: false,
@@ -2935,13 +2935,16 @@ function productCatalogCategory(row) {
   return String(row?.productCategory || row?.department || 'General').trim() || 'General';
 }
 
+function productCatalogPageRows() {
+  return (productCatalogState.rows || []).filter(row => !row.isContainer);
+}
+
 function productCatalogFilteredRows() {
   const query = String(productCatalogState.query || '').trim().toLowerCase();
-  return (productCatalogState.rows || []).filter(row => {
+  return productCatalogPageRows().filter(row => {
     const source = row.isCustom ? 'additional' : 'inventory';
     const matchesSource = productCatalogState.sourceFilters[source];
-    const matchesCategory = productCatalogState.category === 'all'
-      || productCatalogCategory(row) === productCatalogState.category;
+    const matchesCategory = productCatalogCategory(row) === productCatalogState.category;
     return matchesSource && matchesCategory && (!query || [
       productCatalogCategory(row), row.department, row.brand, row.model,
       row.description, row.productLabel, row.containerId, row.containerSerial,
@@ -2955,7 +2958,7 @@ function productCatalogFilteredRows() {
 }
 
 function productCatalogCategories() {
-  return [...new Set((productCatalogState.rows || [])
+  return [...new Set(productCatalogPageRows()
     .filter(row => productCatalogState.sourceFilters[row.isCustom ? 'additional' : 'inventory'])
     .map(row => productCatalogCategory(row))
     .filter(Boolean))]
@@ -3007,19 +3010,20 @@ function productCatalogFormMarkup() {
 function productCatalogRender() {
   const root = productsRoot();
   if (!root) return;
-  const inventoryCount = productCatalogState.rows.filter(row => !row.isCustom).length;
-  const additionalCount = productCatalogState.rows.filter(row => row.isCustom).length;
+  const pageRows = productCatalogPageRows();
+  const inventoryCount = pageRows.filter(row => !row.isCustom).length;
+  const additionalCount = pageRows.filter(row => row.isCustom).length;
   const visibleSourceCount = Number(productCatalogState.sourceFilters.inventory)
     + Number(productCatalogState.sourceFilters.additional);
   const categories = productCatalogCategories();
   const categoryOptions = [...new Set([
     ...(financeState.departments || []),
-    ...(productCatalogState.rows || []).map(productCatalogCategory)
+    ...pageRows.map(productCatalogCategory)
   ].map(value => String(value || '').trim()).filter(Boolean))].sort((left, right) => (
     left.localeCompare(right, undefined, { sensitivity: 'base' })
   ));
-  if (productCatalogState.category !== 'all' && !categories.includes(productCatalogState.category)) {
-    productCatalogState.category = 'all';
+  if (!categories.includes(productCatalogState.category)) {
+    productCatalogState.category = categories[0] || '';
   }
   root.innerHTML = `
     <datalist id="financeProductCategoryOptions">${categoryOptions.map(value => `<option value="${financeEscapeAttr(value)}"></option>`).join('')}</datalist>
@@ -3037,7 +3041,6 @@ function productCatalogRender() {
         <small>${visibleSourceCount === 2 ? 'Both sources selected' : 'One source selected'}</small>
       </div>
       <div class="finance-products-tabs" role="tablist" aria-label="Product categories">
-        <button type="button" role="tab" aria-selected="${productCatalogState.category === 'all'}" class="${productCatalogState.category === 'all' ? 'active' : ''}" onclick="productCatalogSetCategory('all')">All products</button>
         ${categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" title="Right-click to manage category" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')" oncontextmenu="productCatalogOpenCategoryMenu(event,'${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('')}
       </div>
       <div id="productCatalogResults">${productCatalogRowsMarkup()}</div>
@@ -3063,8 +3066,7 @@ function productCatalogToggleSource(source) {
 }
 
 function productCatalogSetCategory(encodedCategory) {
-  const category = encodedCategory === 'all' ? 'all' : decodeURIComponent(encodedCategory);
-  productCatalogState.category = category;
+  productCatalogState.category = decodeURIComponent(encodedCategory || '');
   productCatalogRender();
 }
 
@@ -3230,7 +3232,7 @@ async function productCatalogDeleteCategory() {
   try {
     const response = await apiCall('/api/finance/products/category', 'DELETE', { category });
     financeApplyProductRows(response.data || []);
-    productCatalogState.category = 'all';
+    productCatalogState.category = '';
     productCatalogRender();
     showNotification('success', `${category} category deleted`);
   } catch (error) {}
@@ -8571,9 +8573,14 @@ function renderProfitLossPage() {
     financeNumber(summary.manualExpensesTotal) > 0 ? `Added here ${financeSgd(summary.manualExpensesTotal)}` : ''
   ].filter(Boolean);
   const revenueSource = data.revenueSource || (quote ? 'quotation' : 'none');
-  const revenueTitle = revenueSource === 'manual' ? 'Event Revenue' : 'Revenue from Quotation';
+  const invoiceDiscount = financeNumber(summary.invoiceDiscount);
+  const revenueTitle = revenueSource === 'manual'
+    ? 'Event Revenue'
+    : invoiceDiscount > 0
+      ? 'Revenue after Invoice Discount'
+      : 'Revenue from Quotation';
   const revenueNote = quote
-    ? `Quotation: ${quote.number}`
+    ? `Quotation: ${quote.number}${invoiceDiscount > 0 ? ` · Invoice discount -${financeSgd(invoiceDiscount)}` : ''}`
     : revenueSource === 'manual'
       ? 'Manual amount - Click to edit'
       : 'Select quotation or enter amount';

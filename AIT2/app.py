@@ -39858,6 +39858,28 @@ def _finance_profit_loss_manual_revenue(data, event_id):
     }
 
 
+def _finance_profit_loss_invoice_discount(data, quotation, quotation_revenue):
+    """Return the invoice-page discount against quotation pre-tax revenue."""
+    if not isinstance(quotation, dict):
+        return 0.0
+    quotation_id = str(quotation.get('id') or '')
+    plans = data.get('invoicePlans') if isinstance(data, dict) else {}
+    plan = (plans or {}).get(quotation_id) if isinstance(plans, dict) else None
+    if not isinstance(plan, dict):
+        return 0.0
+
+    quotation_revenue = round(max(0, _safe_float(quotation_revenue, 0)), 2)
+    mode = str(
+        plan.get('invoiceDiscountMode') or 'percentage'
+    ).strip().lower()
+    value = max(0, _safe_float(plan.get('invoiceDiscountValue'), 0))
+    if mode == 'amount':
+        discount = value
+    else:
+        discount = quotation_revenue * min(100, value) / 100
+    return round(min(quotation_revenue, discount), 2)
+
+
 def _normalise_profit_loss_commission(value, commission_base=0):
     value = value if isinstance(value, dict) else {}
     mode = str(value.get('calculationMode') or value.get('mode') or 'percent').strip().lower()
@@ -40562,13 +40584,19 @@ def _finance_profit_loss_payload(event, finance_data):
         else (quotations[0] if quotations else None)
     )
     manual_revenue = _finance_profit_loss_manual_revenue(finance_data, event_id)
+    quotation_revenue = round(_safe_float(
+        (quotation or {}).get('totals', {}).get('netSubtotal'),
+        0,
+    ), 2) if quotation else 0.0
+    invoice_discount = _finance_profit_loss_invoice_discount(
+        finance_data,
+        quotation,
+        quotation_revenue,
+    )
     revenue = round(
-        _safe_float(
-            (quotation or {}).get('totals', {}).get('netSubtotal')
-            if quotation
-            else (manual_revenue or {}).get('amount'),
-            0,
-        ),
+        max(0, quotation_revenue - invoice_discount)
+        if quotation
+        else _safe_float((manual_revenue or {}).get('amount'), 0),
         2,
     )
     available_quotations = []
@@ -40862,6 +40890,8 @@ def _finance_profit_loss_payload(event, finance_data):
         'revenueSource': 'quotation' if quotation else 'manual' if manual_revenue else 'none',
         'summary': {
             'revenue': revenue,
+            'quotationRevenue': quotation_revenue,
+            'invoiceDiscount': invoice_discount,
             'directCosts': direct_costs,
             'manpowerCost': manpower_cost,
             'manpowerCardCost': manpower_card_cost,

@@ -30,6 +30,17 @@ def test_laptop_desktop_view_uses_eighty_percent_ui_scale():
     assert "--ui-scale: 0.8" in SPLIT_CSS
 
 
+def test_safari_laptop_scale_uses_clipped_transform_without_compact_sidebar():
+    assert "browser-safari" in INDEX
+    assert "navigator.vendor === 'Apple Computer, Inc.'" in INDEX
+    assert "html.browser-safari body" in SPLIT_CSS
+    assert "zoom: 1" in SPLIT_CSS
+    assert "transform: scale(var(--ui-scale))" in SPLIT_CSS
+    assert "html.browser-safari" in SPLIT_CSS
+    assert "overflow: hidden" in SPLIT_CSS
+    assert 'const COMPACT_NAVIGATION_MEDIA = "(max-width: 1300px)"' in APP_JS
+
+
 def test_wide_content_scrolls_inside_its_panel():
     assert '[class*="table-wrap"]' in SPLIT_CSS
     assert '[class*="table-container"]' in SPLIT_CSS

@@ -545,15 +545,24 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         Spacer(1, 4 * mm),
     ])
 
-    calculation_rows = [
-        ('Revenue', summary.get('revenue'), False),
+    invoice_discount = _number(summary.get('invoiceDiscount'))
+    calculation_rows = []
+    if invoice_discount > 0:
+        calculation_rows.extend([
+            ('Quotation revenue', summary.get('quotationRevenue'), False),
+            ('Invoice discount', -invoice_discount, False),
+            ('Revenue after invoice discount', summary.get('revenue'), True),
+        ])
+    else:
+        calculation_rows.append(('Revenue', summary.get('revenue'), False))
+    calculation_rows.extend([
         ('Crew & Vendors cost', -_number(summary.get('manpowerCost')), False),
         ('Transport cost', -_number(summary.get('transportCost')), False),
         ('Other expenses', -_number(summary.get('otherExpenses')), False),
         ('Net profit before commission', summary.get('beforeCommission'), True),
         ('Commission', -_number(summary.get('commission')), False),
         ('Net profit after commission', summary.get('netProfit'), True),
-    ]
+    ])
     calculation_data = [[
         _paragraph('PROFIT CALCULATION', table_header),
         _paragraph('AMOUNT', table_header),

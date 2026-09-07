@@ -588,12 +588,11 @@ def build_workforce_schedule_pdf(
         if subject_record and not rows:
             continue
         rows.sort(key=lambda row: (
-            0 if _department_code(row, date_value) == "FT" else 1,
-            str(row.get("callTimes", {}).get(date_value) or "99:99"),
+            _room(row).casefold(),
             _department(
                 department_maps, _department_code(row, date_value)
-            ).lower(),
-            _subject(subject_maps, row)["name"].lower(),
+            ).casefold(),
+            _subject(subject_maps, row)["name"].casefold(),
         ))
         if subject_record:
             headers = []

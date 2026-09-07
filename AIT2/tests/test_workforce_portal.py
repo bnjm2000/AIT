@@ -4611,6 +4611,70 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertLess(multi_text.index("Department"), multi_text.index("Role / Assignment"))
         self.assertLess(multi_text.index("Role / Assignment"), multi_text.index("Call time"))
 
+    def test_daily_schedule_pdf_sorts_by_project_department_then_name(self):
+        payload = {
+            "event": {
+                "id": 143,
+                "name": "Sorted daily schedule",
+                "location": "Showbase",
+                "startDateValue": "2026-07-10",
+                "endDateValue": "2026-07-10",
+            },
+            "subprojects": [
+                {"id": "project-b", "name": "Project B"},
+                {"id": "project-a", "name": "Project A"},
+            ],
+            "allDepartments": [
+                {"code": "AU", "name": "Audio"},
+                {"code": "LX", "name": "Lighting"},
+            ],
+            "departments": [],
+            "freelancers": [
+                {"id": "zoe", "name": "Zoe Crew"},
+                {"id": "aaron", "name": "Aaron Crew"},
+                {"id": "morgan", "name": "Morgan Crew"},
+                {"id": "alex", "name": "Alex Crew"},
+            ],
+            "vendors": [],
+            "appUsers": [],
+            "assignments": [
+                {
+                    "freelancerId": "alex", "subprojectName": "Project B",
+                    "department": "AU", "workDates": ["2026-07-10"],
+                    "callTimes": {"2026-07-10": "06:00"},
+                },
+                {
+                    "freelancerId": "morgan", "subprojectName": "Project A",
+                    "department": "LX", "workDates": ["2026-07-10"],
+                    "callTimes": {"2026-07-10": "07:00"},
+                },
+                {
+                    "freelancerId": "zoe", "subprojectName": "Project A",
+                    "department": "AU", "workDates": ["2026-07-10"],
+                    "callTimes": {"2026-07-10": "05:00"},
+                },
+                {
+                    "freelancerId": "aaron", "subprojectName": "Project A",
+                    "department": "AU", "workDates": ["2026-07-10"],
+                    "callTimes": {"2026-07-10": "09:00"},
+                },
+            ],
+        }
+
+        pdf_bytes = build_workforce_schedule_pdf(
+            payload, date_filter="2026-07-10"
+        )
+        pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(pdf_bytes)).pages
+        )
+
+        expected_names = ["Aaron Crew", "Zoe Crew", "Morgan Crew", "Alex Crew"]
+        self.assertEqual(
+            sorted(expected_names, key=pdf_text.index),
+            expected_names,
+        )
+
     def test_workforce_schedule_pdf_keeps_phone_number_on_one_line(self):
         payload = {
             "event": {

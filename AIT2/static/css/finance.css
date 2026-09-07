@@ -910,8 +910,8 @@
 
 .finance-products-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
   padding: 0 14px;
   border-bottom: 1px solid var(--finance-border);
   background: #fff;

@@ -915,6 +915,21 @@ class PlanningTemplateTests(unittest.TestCase):
             script.count('${eventDetailsActionsHtml(event.id)}'),
             3,
         )
+        actions = script.split('function eventDetailsActionsHtml(eventId)', 1)[1].split(
+            'function eventActivityCategory(',
+            1,
+        )[0]
+        self.assertIn("eventDetailsActionIconSvg('view')", actions)
+        self.assertIn('onclick="viewEvent(${id})"', actions)
+        self.assertLess(
+            actions.index('event-detail-icon-edit'),
+            actions.index('event-detail-icon-view'),
+        )
+        self.assertLess(
+            actions.index('event-detail-icon-view'),
+            actions.index('event-detail-icon-logs'),
+        )
+        self.assertIn('.event-detail-icon-view {', template)
         self.assertIn('async function openEventActivityLog(eventId)', script)
         for category in ('details', 'prepare', 'return', 'manpower'):
             self.assertIn(f'.event-activity-{category}', template)

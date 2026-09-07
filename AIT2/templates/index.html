@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Showbase</title>
+    <script>
+      (() => {
+        const userAgent = navigator.userAgent || '';
+        const isSafari = navigator.vendor === 'Apple Computer, Inc.'
+          && /Safari/i.test(userAgent)
+          && !/(Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS)/i.test(userAgent);
+        if (isSafari) document.documentElement.classList.add('browser-safari');
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom-select.css', v=custom_select_css_version) }}" />
     <link
@@ -5414,6 +5423,17 @@
       .event-detail-icon-edit:hover {
         border-color: #a78bfa;
         background: #ede9fe;
+      }
+
+      .event-detail-icon-view {
+        color: #0f766e;
+        border-color: #99d5ca;
+        background: #ecfdf8;
+      }
+
+      .event-detail-icon-view:hover {
+        border-color: #45aa98;
+        background: #dff8f1;
       }
 
       .event-detail-icon-logs {
@@ -11554,6 +11574,9 @@
               .asset-bulk-purchases-heading strong,.asset-bulk-purchases-heading span { display:block; }
               .asset-bulk-purchases-heading strong { color:#263d36;font-size:11px; }
               .asset-bulk-purchases-heading span { margin-top:2px;color:#70817c;font-size:9px; }
+              .asset-bulk-purchase-tally { margin-top:5px;color:#51635d;font-size:10px; }
+              .asset-bulk-purchase-tally.is-mismatched { color:#a33a2b; }
+              .asset-bulk-purchase-tally.is-matched { color:#137a51; }
               .asset-bulk-purchase-add { min-height:30px;padding:5px 9px;font-size:9px;white-space:nowrap; }
               .asset-bulk-purchase-rows { display:grid; }
               .asset-bulk-purchase-row { display:grid;grid-template-columns:minmax(150px,1fr) minmax(100px,.45fr) 30px;align-items:end;gap:9px;padding:9px 12px;border-bottom:1px solid #e2ebe8; }

@@ -2033,8 +2033,39 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName=font_bold, fontSize=10.5)),
                 _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent_on_white)),
             ])
+    notes = _text(document.get('notes')).strip()
+    terms = _text(document.get('terms') or company.get('defaultTerms')).strip()
+    terms_details = []
+    if terms:
+        terms_style = ParagraphStyle(
+            'FinanceTermsCustom',
+            parent=small,
+            fontName=terms_typography['fontName'],
+            fontSize=terms_typography['fontSize'],
+            leading=terms_typography['fontSize'] * 1.25,
+        )
+        default_terms_html = sanitise_pdf_rich_text(
+            company.get('defaultTermsHtml')
+        )
+        terms_html = (
+            default_terms_html
+            if terms == _text(company.get('defaultTerms')).strip()
+            and default_terms_html
+            else plain_text_to_rich_html(terms)
+        )
+        terms_markup = rich_text_to_reportlab_markup(
+            terms_html, default_family=default_font_family
+        )
+        if terms_typography['underline']:
+            terms_markup = f'<u>{terms_markup}</u>'
+        terms_details = [
+            _paragraph('TERMS AND CONDITIONS', section_title),
+            Paragraph(_cjk_markup(terms_markup), terms_style),
+        ]
+
     bottom_column_width = doc.width / 2
-    summary_table_width = bottom_column_width if payment_lines else 96 * mm
+    has_bottom_left_column = bool(payment_lines)
+    summary_table_width = bottom_column_width if has_bottom_left_column else 96 * mm
     summary_amount_width = 40 * mm
     summary = Table(
         summary_rows,
@@ -2054,6 +2085,7 @@ def build_finance_pdf(document, company, logo_path=''):
             ),
         ]),
     )
+    bottom_left_details = []
     if payment_lines:
         payment_heading = ParagraphStyle(
             'FinancePaymentHeading',
@@ -2071,12 +2103,13 @@ def build_finance_pdf(document, company, logo_path=''):
         payment_markup = payment_rich_markup or '<br/>'.join(payment_lines)
         if payment_typography['underline']:
             payment_markup = f'<u>{payment_markup}</u>'
-        payment_details = [
+        bottom_left_details.extend([
             _paragraph('PAYMENT DETAILS', payment_heading),
             Paragraph(_cjk_markup(payment_markup), payment_style),
-        ]
+        ])
+    if bottom_left_details:
         payment_and_total = Table(
-            [[payment_details, summary]],
+            [[bottom_left_details, summary]],
             colWidths=[bottom_column_width, bottom_column_width],
             style=TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -2093,36 +2126,23 @@ def build_finance_pdf(document, company, logo_path=''):
 
     final_page_story.append(Spacer(1, 5 * mm))
 
-    notes = _text(document.get('notes')).strip()
-    terms = _text(document.get('terms') or company.get('defaultTerms')).strip()
+    if terms_details:
+        final_page_story.append(Table(
+            [[terms_details]],
+            colWidths=[doc.width],
+            style=TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]),
+        ))
     if notes:
         final_page_story.extend([
             _paragraph('NOTES', section_title),
             _paragraph(notes, body),
         ])
-    if terms:
-        terms_style = ParagraphStyle(
-            'FinanceTermsCustom',
-            parent=small,
-            fontName=terms_typography['fontName'],
-            fontSize=terms_typography['fontSize'],
-            leading=terms_typography['fontSize'] * 1.25,
-        )
-        terms_html = (
-            sanitise_pdf_rich_text(company.get('defaultTermsHtml'))
-            if terms == _text(company.get('defaultTerms')).strip()
-            else plain_text_to_rich_html(terms)
-        )
-        terms_markup = rich_text_to_reportlab_markup(
-            terms_html, default_family=default_font_family
-        )
-        if terms_typography['underline']:
-            terms_markup = f'<u>{terms_markup}</u>'
-        final_page_story.extend([
-            _paragraph('TERMS AND CONDITIONS', section_title),
-            Paragraph(_cjk_markup(terms_markup), terms_style),
-        ])
-
     if document_type != 'invoice' and document.get('showSignOff'):
         signoff_heading = ParagraphStyle(
             'FinanceSignOffHeading',

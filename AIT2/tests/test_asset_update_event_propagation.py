@@ -1680,13 +1680,18 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         ) as app_file:
             source = app_file.read()
 
-        self.assertIn('function bulkPurchaseBatchesHtml(asset)', source)
+        self.assertIn('function bulkPurchaseBatchesHtml(asset, requestedTotal = null)', source)
         self.assertIn('function addBulkPurchaseBatchRow()', source)
         self.assertIn('function removeBulkPurchaseBatchRow(button)', source)
+        self.assertIn('function updateBulkPurchaseBatchTally()', source)
         self.assertIn('async function saveBulkPurchaseBatches()', source)
         self.assertIn('A blank date means the purchase date is unknown.', source)
         self.assertIn("purchaseBatches,\n      applyTo: 'single'", source)
-        self.assertIn('${bulkPurchaseBatchesHtml(asset)}', source)
+        self.assertIn('${bulkPurchaseBatchesHtml(asset, hasRequestedTotal ? requestedTotal : null)}', source)
+        self.assertIn('purchaseBatchTotal !== requestedTotal', source)
+        self.assertIn("document.getElementById('editAssetQuantityGroup').style.display = asset.isBulk ? 'block' : 'none';", source)
+        self.assertIn('const bulkQuantityChanged = original.isBulk', source)
+        self.assertIn('await openAssetDetailsModal(', source)
         save_source = source.split('async function saveBulkPurchaseBatches()', 1)[1].split(
             'async function openAssetDetailsModal(', 1
         )[0]

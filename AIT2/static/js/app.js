@@ -6891,11 +6891,15 @@ function inventoryBulkPurchaseBatches(asset) {
   }));
 }
 
-function bulkPurchaseBatchesHtml(asset) {
+function bulkPurchaseBatchesHtml(asset, requestedTotal = null) {
   const editable = isAdminUser();
   const rows = inventoryBulkPurchaseBatches(asset);
+  const currentTotal = rows.reduce((total, batch) => total + batch.quantity, 0);
+  const targetTotal = Number.isInteger(requestedTotal) && requestedTotal > 0
+    ? requestedTotal
+    : null;
   return `
-    <div class="asset-bulk-purchases">
+    <div class="asset-bulk-purchases" id="assetBulkPurchases">
       <div class="asset-bulk-purchases-heading">
         <div><strong>Purchase batches</strong><span>Items remain grouped as one bulk asset.</span></div>
         ${editable ? '<button type="button" class="btn btn-secondary asset-bulk-purchase-add" onclick="addBulkPurchaseBatchRow()">Add purchase batch</button>' : ''}
@@ -6907,7 +6911,7 @@ function bulkPurchaseBatchesHtml(asset) {
               ? `<input type="date" class="form-input" data-bulk-purchase-date value="${escapeHtmlAttr(batch.date)}" aria-label="Purchase date for batch ${index + 1}">`
               : `<strong>${escapeHtml(batch.date ? formatAssetPurchaseDate(batch.date) : 'Unknown')}</strong>`}</label>
             <label><span>Quantity</span>${editable
-              ? `<input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="${batch.quantity}" aria-label="Quantity for purchase batch ${index + 1}">`
+              ? `<input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="${batch.quantity}" aria-label="Quantity for purchase batch ${index + 1}" oninput="updateBulkPurchaseBatchTally()">`
               : `<strong>${batch.quantity}</strong>`}</label>
             ${editable ? `<button type="button" class="asset-bulk-purchase-remove" onclick="removeBulkPurchaseBatchRow(this)" aria-label="Remove purchase batch ${index + 1}">&times;</button>` : ''}
           </div>
@@ -6915,7 +6919,12 @@ function bulkPurchaseBatchesHtml(asset) {
       </div>
       ${editable ? `
         <div class="asset-bulk-purchase-footer">
-          <small>A blank date means the purchase date is unknown. Rows with the same date are combined when saved.</small>
+          <div>
+            <small>A blank date means the purchase date is unknown. Rows with the same date are combined when saved.</small>
+            <div class="asset-bulk-purchase-tally" id="assetBulkPurchaseTally" aria-live="polite" data-requested-total="${targetTotal || ''}">
+              Purchase batch total: <strong>${currentTotal}${targetTotal ? ` / ${targetTotal} requested` : ''}</strong>
+            </div>
+          </div>
           <button type="button" class="btn btn-success" id="saveBulkPurchaseBatchesButton" onclick="saveBulkPurchaseBatches()">Save purchase batches</button>
         </div>
       ` : ''}
@@ -6932,10 +6941,11 @@ function addBulkPurchaseBatchRow() {
   row.dataset.bulkPurchaseBatch = '';
   row.innerHTML = `
     <label><span>Purchase date</span><input type="date" class="form-input" data-bulk-purchase-date aria-label="Purchase date for batch ${index}"></label>
-    <label><span>Quantity</span><input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="1" aria-label="Quantity for purchase batch ${index}"></label>
+    <label><span>Quantity</span><input type="number" min="1" step="1" class="form-input" data-bulk-purchase-quantity value="1" aria-label="Quantity for purchase batch ${index}" oninput="updateBulkPurchaseBatchTally()"></label>
     <button type="button" class="asset-bulk-purchase-remove" onclick="removeBulkPurchaseBatchRow(this)" aria-label="Remove purchase batch ${index}">&times;</button>
   `;
   rows.appendChild(row);
+  updateBulkPurchaseBatchTally();
   row.querySelector('[data-bulk-purchase-date]')?.focus();
 }
 
@@ -6946,6 +6956,25 @@ function removeBulkPurchaseBatchRow(button) {
     return;
   }
   button?.closest('[data-bulk-purchase-batch]')?.remove();
+  updateBulkPurchaseBatchTally();
+}
+
+function updateBulkPurchaseBatchTally() {
+  const tally = document.getElementById('assetBulkPurchaseTally');
+  if (!tally) return;
+  const quantities = Array.from(
+    document.querySelectorAll('#assetBulkPurchaseBatchRows [data-bulk-purchase-quantity]')
+  );
+  const total = quantities.reduce((sum, input) => {
+    const quantity = Number.parseInt(input.value || '', 10);
+    return sum + (Number.isInteger(quantity) && quantity > 0 ? quantity : 0);
+  }, 0);
+  const requestedTotal = Number.parseInt(tally.dataset.requestedTotal || '', 10);
+  const hasRequestedTotal = Number.isInteger(requestedTotal) && requestedTotal > 0;
+  const matches = !hasRequestedTotal || total === requestedTotal;
+  tally.classList.toggle('is-mismatched', !matches);
+  tally.classList.toggle('is-matched', hasRequestedTotal && matches);
+  tally.innerHTML = `Purchase batch total: <strong>${total}${hasRequestedTotal ? ` / ${requestedTotal} requested` : ''}</strong>`;
 }
 
 async function saveBulkPurchaseBatches() {
@@ -6961,6 +6990,15 @@ async function saveBulkPurchaseBatches() {
   }));
   if (!purchaseBatches.length || purchaseBatches.some(batch => !Number.isInteger(batch.quantity) || batch.quantity < 1)) {
     showNotification('warning', 'Every purchase batch must have a quantity of at least 1');
+    return;
+  }
+  const requestedTotal = Number.parseInt(
+    document.getElementById('assetBulkPurchaseTally')?.dataset.requestedTotal || '',
+    10
+  );
+  const purchaseBatchTotal = purchaseBatches.reduce((total, batch) => total + batch.quantity, 0);
+  if (Number.isInteger(requestedTotal) && requestedTotal > 0 && purchaseBatchTotal !== requestedTotal) {
+    showNotification('warning', `Purchase batches must total ${requestedTotal}. The current total is ${purchaseBatchTotal}.`);
     return;
   }
 
@@ -6988,7 +7026,7 @@ async function saveBulkPurchaseBatches() {
   }
 }
 
-async function openAssetDetailsModal(encodedAssetId) {
+async function openAssetDetailsModal(encodedAssetId, requestedBulkQuantity = null) {
   let assetId = String(encodedAssetId || '');
   try {
     assetId = decodeURIComponent(assetId);
@@ -7033,6 +7071,9 @@ async function openAssetDetailsModal(encodedAssetId) {
   const encodedApiId = encodeURIComponent(apiId);
   const displayId = asset.isBulk ? 'Bulk Item' : (asset.id || apiId);
   content.dataset.assetId = apiId;
+  const requestedTotal = Number.parseInt(requestedBulkQuantity, 10);
+  const hasRequestedTotal = asset.isBulk && Number.isInteger(requestedTotal) && requestedTotal > 0;
+  content.dataset.purchaseQuantityTarget = hasRequestedTotal ? String(requestedTotal) : '';
   const notes = String(asset.notes || '').trim();
   const degradedReasons = [
     ...(Array.isArray(asset.degradedReasons) ? asset.degradedReasons : []),
@@ -7051,7 +7092,7 @@ async function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-field"><span>OOC / missing / degraded</span><strong>${escapeHtml(`${asset.bulkOOCQuantity || 0} / ${asset.bulkMissingQuantity || 0} / ${asset.bulkDegradedQuantity || 0}`)}</strong></div>
       </div>
       ${bulkDeploymentDetailsHtml(asset)}
-      ${bulkPurchaseBatchesHtml(asset)}
+      ${bulkPurchaseBatchesHtml(asset, hasRequestedTotal ? requestedTotal : null)}
     </section>
   ` : '';
 
@@ -7117,6 +7158,14 @@ async function openAssetDetailsModal(encodedAssetId) {
   `;
 
   openModal('assetDetailsModal');
+  if (hasRequestedTotal) {
+    requestAnimationFrame(() => {
+      const purchases = document.getElementById('assetBulkPurchases');
+      purchases?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      purchases?.querySelector('[data-bulk-purchase-quantity]')?.focus({ preventScroll: true });
+      updateBulkPurchaseBatchTally();
+    });
+  }
   loadAssetUsageDays(apiId);
 }
 
@@ -7837,7 +7886,7 @@ function ensureAssetEditModal() {
           <div class="form-group">
             <label class="form-label">Asset ID</label>
             <input id="editAssetId" class="form-input">
-            <div id="editAssetBulkNote" style="display:none;color:#666;font-size:12px;margin-top:5px;">Bulk quantity assets do not have a visible Asset ID. Purchase dates and quantities are managed in View Asset under Purchase batches.</div>
+            <div id="editAssetBulkNote" style="display:none;color:#666;font-size:12px;margin-top:5px;">Bulk quantity assets do not have a visible Asset ID. Purchase dates are managed in View Asset under Purchase batches.</div>
           </div>
 
           <div class="form-group">
@@ -7871,8 +7920,8 @@ function ensureAssetEditModal() {
           </div>
 
           <div class="form-group" id="editAssetQuantityGroup" style="display:none;">
-            <label class="form-label">Bulk Quantity</label>
-            <input id="editAssetQuantity" type="number" min="1" class="form-input">
+            <label class="form-label">Total Quantity</label>
+            <input id="editAssetQuantity" type="number" min="1" step="1" class="form-input" required>
           </div>
 
           <div class="form-group">
@@ -7962,6 +8011,7 @@ function openEditAssetModal(encodedAssetId) {
     version: asset.version || '',
     description: asset.description || '',
     dateOfPurchase: asset.dateOfPurchase || asset.purchaseDate || '',
+    quantity: Math.max(1, Number.parseInt(asset.quantity, 10) || 1),
     department: asset.department || '',
     tags: normalizeAssetTags(asset.tags)
   });
@@ -7972,7 +8022,7 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetSerialGroup').style.display = asset.isBulk ? 'none' : 'block';
   document.getElementById('editAssetSerial2Group').style.display = asset.isBulk ? 'none' : 'block';
   document.getElementById('editAssetDateOfPurchaseGroup').style.display = asset.isBulk ? 'none' : 'block';
-  document.getElementById('editAssetQuantityGroup').style.display = 'none';
+  document.getElementById('editAssetQuantityGroup').style.display = asset.isBulk ? 'block' : 'none';
   document.getElementById('editAssetQuantity').value = asset.quantity || 1;
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
@@ -8052,6 +8102,19 @@ async function saveAssetEditModal() {
     applyTo: 'single'
   };
 
+  const requestedBulkQuantity = payload.quantity;
+  const bulkQuantityChanged = original.isBulk && requestedBulkQuantity !== original.quantity;
+
+  if (original.isBulk) {
+    const quantityInput = document.getElementById('editAssetQuantity');
+    const rawQuantity = Number(quantityInput?.value);
+    if (!Number.isInteger(rawQuantity) || rawQuantity < 1) {
+      showNotification('warning', 'Total quantity must be a whole number of at least 1');
+      quantityInput?.focus();
+      return;
+    }
+  }
+
   if (!payload.id && !original.isBulk) {
     showNotification('warning', 'Asset ID cannot be empty');
     return;
@@ -8060,6 +8123,8 @@ async function saveAssetEditModal() {
   if (original.isBulk) {
     payload.id = original.id;
     delete payload.dateOfPurchase;
+    // Purchase batches are the source of truth for bulk stock. A changed total
+    // is staged in the batch editor after the remaining asset fields save.
     delete payload.quantity;
   }
 
@@ -8224,6 +8289,14 @@ After saving, they will appear together as one inventory model group.`,
 
     if (document.getElementById('events-section')?.classList.contains('active')) {
       await loadAllEvents();
+    }
+
+    if (bulkQuantityChanged) {
+      showNotification('info', `Update the purchase batches so they total ${requestedBulkQuantity}.`);
+      await openAssetDetailsModal(
+        encodeURIComponent(data.assetId || original.id),
+        requestedBulkQuantity
+      );
     }
 
   } catch (error) {
@@ -14593,12 +14666,17 @@ function eventDetailsActionIconSvg(kind) {
       <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
       <path d="m15 5 4 4"></path>
     `
-    : `
+    : kind === 'view'
+      ? `
+        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+        <circle cx="12" cy="12" r="2.5"></circle>
+      `
+      : `
       <path d="M6 3h12v4H6z"></path>
       <path d="M5 5H3v16h18V5h-2"></path>
       <path d="M8 12h8"></path>
       <path d="M8 16h6"></path>
-    `;
+      `;
   return `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       ${paths}
@@ -14620,6 +14698,13 @@ function eventDetailsActionsHtml(eventId) {
           ${eventDetailsActionIconSvg('edit')}
         </button>
       ` : ''}
+      <button type="button"
+              class="event-detail-icon-button event-detail-icon-view"
+              title="View event"
+              aria-label="View event"
+              onclick="viewEvent(${id})">
+        ${eventDetailsActionIconSvg('view')}
+      </button>
       ${canCurrentUserManageRoles() ? `<button type="button"
               class="event-detail-icon-button event-detail-icon-logs"
               title="View event activity"

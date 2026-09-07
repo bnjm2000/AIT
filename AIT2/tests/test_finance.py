@@ -2861,6 +2861,11 @@ class FinanceFeatureTests(unittest.TestCase):
             encoding='utf-8',
         ) as source_file:
             source = source_file.read()
+        with open(
+            os.path.join(project_root, 'static', 'css', 'finance.css'),
+            encoding='utf-8',
+        ) as source_file:
+            stylesheet = source_file.read()
 
         self.assertNotIn('financeToggleSubprojectView', source)
         self.assertNotIn('financeState.showSubprojects', source)
@@ -2868,6 +2873,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('function loadProducts(', source)
         self.assertIn('function productCatalogToggleSource(', source)
         self.assertIn('function productCatalogSetCategory(', source)
+        self.assertIn('function productCatalogPageRows(', source)
+        self.assertIn("filter(row => !row.isContainer)", source)
+        self.assertNotIn('>All products</button>', source)
+        products_tabs_css = stylesheet.split('.finance-products-tabs {', 1)[1].split('}', 1)[0]
+        self.assertIn('flex-wrap: wrap', products_tabs_css)
+        self.assertNotIn('overflow-x', products_tabs_css)
         self.assertIn("productCatalogUpdateField(${index},'productLabel'", source)
         self.assertIn("productCatalogUpdateField(${index},'productCategory'", source)
         self.assertIn("productCatalogUpdateField(${index},'uom'", source)
@@ -4560,6 +4571,83 @@ class FinanceFeatureTests(unittest.TestCase):
         app_source = APP_BUNDLE_SOURCE
         self.assertIn('function defaultCompanyPaymentDetailsText', app_source)
         self.assertIn('populateDefaultCompanyPaymentDetails()', app_source)
+
+    def test_invoice_and_quotation_terms_are_full_width_and_left_aligned(self):
+        from quotation_pdf import build_finance_pdf
+
+        company = {
+            'companyName': 'Terms Layout Company',
+            'themeColor': '#0F766E',
+            'paymentDetailsEnabled': True,
+            'paymentDetailsText': 'Pay by bank transfer.',
+            'defaultTerms': 'Standard terms apply.',
+        }
+        base = {
+            'projectName': 'Terms layout check',
+            'client': {'name': 'Layout Client'},
+            'paymentTerms': '30 Days',
+            'taxRate': 9,
+            'lineItems': [{
+                'id': 'terms-layout-line', 'description': 'Production services',
+                'department': 'Production', 'days': 1, 'quantity': 1,
+                'unitPrice': 100, 'total': 100,
+            }],
+            'showUnitPrices': True,
+            'showDepartmentSubtotals': True,
+            'totals': {
+                'subtotal': 100, 'netSubtotal': 100, 'tax': 9, 'total': 109,
+            },
+        }
+
+        def text_positions(pdf, labels):
+            positions = {}
+
+            def capture(text, current_matrix, text_matrix, *_args):
+                content = text.strip()
+                if content in labels:
+                    positions.setdefault(
+                        content, current_matrix[4] + text_matrix[4]
+                    )
+
+            PdfReader(io.BytesIO(pdf)).pages[-1].extract_text(
+                visitor_text=capture
+            )
+            return positions
+
+        invoice_positions = text_positions(build_finance_pdf({
+            **base,
+            'type': 'invoice', 'number': 'INV-TERMS-LAYOUT',
+            'invoiceDate': '2026-09-07', 'dueDate': '2026-10-07',
+            'invoiceAmount': 109, 'quotationTotal': 109,
+            'quotationPreTax': 100, 'invoiceAdjustedPreTax': 100,
+            'invoiceAdjustedTax': 9,
+        }, company), {
+            'PAYMENT DETAILS', 'TERMS AND CONDITIONS',
+            'Total (as per quotation)',
+        })
+        self.assertAlmostEqual(
+            invoice_positions['PAYMENT DETAILS'],
+            invoice_positions['TERMS AND CONDITIONS'],
+            places=2,
+        )
+        self.assertLess(
+            invoice_positions['TERMS AND CONDITIONS'],
+            invoice_positions['Total (as per quotation)'],
+        )
+
+        quotation_positions = text_positions(build_finance_pdf({
+            **base,
+            'type': 'quotation', 'number': 'QT-TERMS-LAYOUT',
+            'quotationDate': '2026-09-07',
+        }, company), {'TERMS AND CONDITIONS', 'Total before GST'})
+        self.assertLess(
+            quotation_positions['TERMS AND CONDITIONS'],
+            quotation_positions['Total before GST'],
+        )
+        pdf_source = Path('quotation_pdf.py').read_text(encoding='utf-8')
+        self.assertIn('[[terms_details]]', pdf_source)
+        self.assertIn('colWidths=[doc.width]', pdf_source)
+        self.assertNotIn('bottom_left_details.extend(terms_details)', pdf_source)
 
     def test_incomplete_draft_default_departments_and_permissions(self):
         blank = self.create_quote(project='')
@@ -6493,6 +6581,75 @@ class FinanceFeatureTests(unittest.TestCase):
             403,
         )
 
+    def test_profit_loss_applies_additional_invoice_discount_to_revenue(self):
+        self.login('sales-admin')
+        event = Event(
+            event_id=142, name='Invoice Discount P&L Event', location='Studio',
+            start_date='20260824', end_date='20260824', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        self.data_manager.events[142] = event
+        quotation = self.create_quote('Invoice Discount P&L Event')
+        quotation['eventId'] = 142
+        quotation['lineItems'] = [{
+            'id': 'package', 'catalogKey': '', 'description': 'Production package',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 2400,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+
+        without_discount = self.client.get(
+            '/api/finance/profit-loss/142'
+        ).get_json()['data']
+        self.assertEqual(without_discount['summary']['revenue'], 2400)
+        self.assertEqual(without_discount['summary']['invoiceDiscount'], 0)
+
+        plan_response = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'full',
+                'invoiceDiscountMode': 'percentage',
+                'invoiceDiscountValue': 10,
+                'installments': [{
+                    'id': 'discounted-full', 'label': 'Discounted invoice',
+                    'mode': 'percentage', 'value': 100,
+                }],
+            },
+        )
+        self.assertEqual(
+            plan_response.status_code,
+            200,
+            plan_response.get_data(as_text=True),
+        )
+
+        payload = self.client.get(
+            '/api/finance/profit-loss/142'
+        ).get_json()['data']
+        self.assertEqual(payload['summary']['quotationRevenue'], 2400)
+        self.assertEqual(payload['summary']['invoiceDiscount'], 240)
+        self.assertEqual(payload['summary']['revenue'], 2160)
+        self.assertEqual(payload['summary']['netProfit'], 2160)
+
+        report = self.client.get('/api/finance/profit-loss/142/pdf')
+        self.assertEqual(report.status_code, 200)
+        report_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(report.data)).pages
+        )
+        self.assertIn('Quotation revenue', report_text)
+        self.assertIn('Invoice discount', report_text)
+        self.assertIn('Revenue after invoice discount', report_text)
+        self.assertIn('-$240.00', report_text)
+
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn("'Revenue after Invoice Discount'", finance_source)
+        self.assertIn('Invoice discount -${financeSgd(invoiceDiscount)}', finance_source)
+
     def test_inventory_rename_cascades_to_events_and_quotations(self):
         quotation = self.create_quote('Inventory Rename')
         catalog = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
@@ -7982,6 +8139,9 @@ class FinanceFeatureTests(unittest.TestCase):
             compact_styles,
         )
         self.assertIn('--ui-scale: 0.8;', compact_styles)
+        self.assertIn('html.browser-safari body', compact_styles)
+        self.assertIn('zoom: 1;', compact_styles)
+        self.assertIn('transform: scale(var(--ui-scale));', compact_styles)
         self.assertIn('max-height: calc(var(--scaled-dvh) - 8px);', compact_styles)
         self.assertIn('.finance-quotation-summary-card', compact_styles)
         self.assertIn('.finance-event-pairing-card .finance-picker-button', compact_styles)
