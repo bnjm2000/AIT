@@ -417,7 +417,7 @@ async function loadInvoices(query = '', options = {}) {
   invoiceState.listLoading = true;
   await invoiceLoadPlanTemplates();
   if (!requestIsCurrent()) return;
-  if (!append && !root.querySelector('.invoice-list-header')) root.innerHTML = `<div class="invoice-loading"><span></span>${requestedView === 'issued' ? 'Loading issued invoices...' : 'Loading invoice-ready quotations...'}</div>`;
+  if (!append && !root.querySelector('.invoice-list-header')) root.innerHTML = `<div class="invoice-loading"><span></span>${requestedView === 'issued' ? 'Loading invoices...' : 'Loading invoice-ready quotations...'}</div>`;
   try {
     const params = new URLSearchParams();
     if (requestedQuery) params.set('query', requestedQuery);
@@ -626,7 +626,7 @@ function invoiceRenderList() {
           <h2>Invoices</h2>
           ${showMineToggle ? `<button type="button" class="finance-switch finance-list-mine-toggle invoice-list-mine-toggle ${invoiceState.mineOnly ? 'on' : ''}" role="switch" aria-checked="${invoiceState.mineOnly ? 'true' : 'false'}" onclick="invoiceToggleMineOnly()"><span aria-hidden="true"></span>My projects</button>` : ''}
         </div>
-        <p>${invoiceState.view === 'issued' ? 'Review every issued invoice by invoice number and project.' : 'Build installment plans, issue invoices and track every payment.'}</p>
+        <p>${invoiceState.view === 'issued' ? 'Review every invoice by invoice number and project.' : 'Build installment plans, export invoice PDFs and track every payment.'}</p>
       </div>
       <div class="invoice-list-actions">
         <button type="button" class="invoice-soa-button" onclick="invoiceOpenSoaModal()">
@@ -656,8 +656,8 @@ function invoiceRenderList() {
         </div>
       ` : `
         <div class="invoice-empty">
-          <strong>${source.length ? 'No invoices match these filters' : invoiceState.view === 'issued' ? 'No invoices have been issued' : 'No accepted or cancelled quotations yet'}</strong>
-          <span>${source.length ? 'Choose another status above.' : invoiceState.view === 'issued' ? 'Issued installments will appear here.' : 'Accepted and cancelled quotations will appear here automatically.'}</span>
+          <strong>${source.length ? 'No invoices match these filters' : invoiceState.view === 'issued' ? 'No invoice PDFs have been exported' : 'No accepted or cancelled quotations yet'}</strong>
+          <span>${source.length ? 'Choose another status above.' : invoiceState.view === 'issued' ? 'Exported invoice PDFs will appear here.' : 'Accepted and cancelled quotations will appear here automatically.'}</span>
         </div>
       `}
     </section>
@@ -980,7 +980,7 @@ function invoiceApplySavedPlan(templateId) {
   const template = invoiceState.planTemplates.find(row => row.id === templateId);
   if (!current || !template) return;
   if ((current.plan.installments || []).some(row => row.invoiceId)) {
-    showNotification('warning', 'Saved plans can only replace a schedule before invoices are issued');
+    showNotification('warning', 'Saved plans can only replace a schedule before invoice PDFs are exported');
     return;
   }
   const total = invoiceLocalSummary(current.plan, current.quotation).adjustedTotal;
@@ -1202,7 +1202,7 @@ function invoiceRenderEditor() {
     <div class="invoice-metrics">
       ${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}
       ${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}
-      ${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}
+      ${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} invoice balance`, 'positive')}
       ${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}
     </div>
     <div class="invoice-editor-grid">
@@ -1241,7 +1241,7 @@ function invoiceRenderEditor() {
           ${(invoiceState.planTemplates || []).length ? `<label class="invoice-saved-plan-select"><span>Saved plan</span><select onchange="invoiceApplySavedPlan(this.value);this.value=''"><option value="">Select a saved plan…</option>${invoiceState.planTemplates.map(row => `<option value="${invoiceAttr(row.id)}">${invoiceEscape(row.name)}</option>`).join('')}</select></label>` : ''}
           <label class="invoice-strategy-name"><span>Plan label</span><input value="${invoiceAttr(plan.strategyLabel || '')}" oninput="invoiceUpdatePlanField('strategyLabel',this.value)"></label>
           <div class="invoice-discount-control ${discountLocked ? 'locked' : ''}">
-            <div><strong>Additional discount</strong><span>${discountLocked ? 'Locked after invoice issue' : 'Applied before installments'}</span></div>
+            <div><strong>Additional discount</strong><span>${discountLocked ? 'Locked after the invoice leaves draft' : 'Applied before installments'}</span></div>
             <div class="invoice-discount-mode">
               <button type="button" class="${(plan.invoiceDiscountMode || 'percentage') === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateDiscount('invoiceDiscountMode','percentage')" ${discountLocked ? 'disabled' : ''}>%</button>
               <button type="button" class="${plan.invoiceDiscountMode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateDiscount('invoiceDiscountMode','amount')" ${discountLocked ? 'disabled' : ''}>$</button>
@@ -1289,24 +1289,21 @@ function invoicePlanBalanceMarkup(summary) {
 function invoiceInstallmentMarkup(row, index) {
   const issued = !!row.invoiceId;
   const status = String(row.status || 'draft').toLowerCase();
-  const detailsEditable = !issued || (
-    status === 'draft' && !row.invoiceFrozen
-  );
+  const detailsEditable = !invoiceInstallmentIsFrozen(row);
   return `
     <article class="invoice-installment ${issued ? 'issued' : ''}" data-installment-id="${invoiceAttr(row.id)}">
       <div class="invoice-installment-index">${String(index + 1).padStart(2, '0')}</div>
       <label><span>Label</span><input value="${invoiceAttr(row.label || '')}" oninput="invoiceUpdateInstallment(${index},'label',this.value)" ${detailsEditable ? '' : 'disabled'}></label>
-      <div class="invoice-mode-field"><span>Calculate by</span><div><button type="button" class="${row.mode === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','percentage')" ${issued ? 'disabled' : ''}>%</button><button type="button" class="${row.mode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','amount')" ${issued ? 'disabled' : ''}>$</button></div></div>
-      <label><span>${row.mode === 'percentage' ? 'Percentage' : 'Amount'}</span><div class="invoice-value-input"><b>${row.mode === 'percentage' ? '%' : '$'}</b><input type="number" min="0" step="0.01" value="${Number(row.value || 0)}" oninput="invoiceUpdateInstallment(${index},'value',this.value)" ${issued ? 'disabled' : ''}></div></label>
+      <div class="invoice-mode-field"><span>Calculate by</span><div><button type="button" class="${row.mode === 'percentage' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','percentage')" ${detailsEditable ? '' : 'disabled'}>%</button><button type="button" class="${row.mode === 'amount' ? 'active' : ''}" onclick="invoiceUpdateInstallment(${index},'mode','amount')" ${detailsEditable ? '' : 'disabled'}>$</button></div></div>
+      <label><span>${row.mode === 'percentage' ? 'Percentage' : 'Amount'}</span><div class="invoice-value-input"><b>${row.mode === 'percentage' ? '%' : '$'}</b><input type="number" min="0" step="0.01" value="${Number(row.value || 0)}" oninput="invoiceUpdateInstallment(${index},'value',this.value)" ${detailsEditable ? '' : 'disabled'}></div></label>
       <label class="invoice-due-date-field"><span>Due date <button type="button" id="invoiceDueCountdown-${invoiceAttr(row.id)}" onclick="event.preventDefault();invoiceEditDueDays(${index})" ${detailsEditable ? '' : 'disabled'}>${invoiceEscape(invoiceDueCountdown(row.dueDate))}</button></span><input type="date" value="${invoiceAttr(row.dueDate || '')}" oninput="invoiceUpdateInstallment(${index},'dueDate',this.value)" ${detailsEditable ? '' : 'disabled'}></label>
       <div class="invoice-installment-amount"><span>Invoice amount</span><strong>${invoiceMoney(row.amount)}</strong></div>
       <div class="invoice-installment-actions">
+        <button type="button" class="invoice-pdf-button" onclick="invoiceExportInstallment(${index})"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>Export PDF</button>
         ${issued ? `
           ${invoiceStatusControlMarkup(status, `installment-status-${row.id}`, `invoiceRequestDocumentStatus('${invoiceAttr(row.invoiceId)}',${index},STATUS_VALUE,'editor')`, invoiceDocumentStatusChoices(status))}
-          <button type="button" class="invoice-pdf-button" onclick="invoiceOpenPdf('${invoiceAttr(row.invoiceId)}',${index})"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path></svg>${invoiceEscape(row.invoiceNumber || 'Export PDF')}</button>
           ${detailsEditable ? `<button type="button" class="invoice-icon-button" title="Renumber draft invoice" onclick="invoiceRenumber('${invoiceAttr(row.invoiceId)}','editor')"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>` : ''}<button type="button" class="invoice-icon-button danger" title="Delete invoice" onclick="invoiceDeleteIssued('${invoiceAttr(row.invoiceId)}','editor')"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"></path></svg></button>
         ` : `
-          <button type="button" class="invoice-issue-button" onclick="invoiceIssueInstallment(${index})">Issue invoice</button>
           <button type="button" class="invoice-remove-button" title="Remove installment" onclick="invoiceRemoveInstallment(${index})"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></button>
         `}
       </div>
@@ -1480,13 +1477,10 @@ function invoiceUpdateDiscount(key, value) {
 
 function invoiceUpdateInstallment(index, key, value) {
   const row = invoiceState.current?.plan?.installments?.[index];
-  const issuedDetailsLocked = row?.invoiceId && (
-    String(row.status || 'draft').toLowerCase() !== 'draft' || row.invoiceFrozen
-  );
+  const issuedDetailsLocked = invoiceInstallmentIsFrozen(row);
   if (
     !row
-    || row.invoiceId && ['mode', 'value'].includes(key)
-    || issuedDetailsLocked && ['label', 'dueDate'].includes(key)
+    || issuedDetailsLocked && ['label', 'mode', 'value', 'dueDate'].includes(key)
   ) return;
   const previousAmount = Number(row.amount || 0);
   row[key] = key === 'value' ? Number(value || 0) : value;
@@ -1516,7 +1510,7 @@ function invoiceRefreshCalculatedValues() {
   const balance = document.querySelector('.invoice-plan-balance');
   if (balance) balance.outerHTML = invoicePlanBalanceMarkup(summary);
   const metrics = document.querySelector('.invoice-metrics');
-  if (metrics) metrics.outerHTML = `<div class="invoice-metrics">${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} issued balance`, 'positive')}${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}</div>`;
+  if (metrics) metrics.outerHTML = `<div class="invoice-metrics">${invoiceMetric('Quotation total', summary.quotationTotal, summary.invoiceDiscountAmount ? `${invoiceMoney(summary.adjustedTotal)} after discount` : '')}${invoiceMetric('Invoiced', summary.invoiced, `${invoiceMoney(summary.notInvoiced)} not invoiced`)}${invoiceMetric('Paid', summary.paid, `${invoiceMoney(summary.invoiceBalance)} invoice balance`, 'positive')}${invoiceMetric('Amount due', summary.due, summary.due ? 'Remaining on quotation' : 'Fully paid', summary.due ? 'due' : 'positive')}</div>`;
   const discountAmount = document.getElementById('invoiceDiscountAmount');
   if (discountAmount) discountAmount.textContent = `-${invoiceMoney(summary.invoiceDiscountAmount)}`;
   document.querySelectorAll('.invoice-payment .invoice-receipt-button').forEach((button, index) => {
@@ -1757,88 +1751,71 @@ async function invoiceFlushPendingSave() {
   return Boolean(saved) && !invoiceState.dirty;
 }
 
-async function invoiceIssueInstallment(index) {
+async function invoiceExportInstallment(index) {
   const current = invoiceState.current;
   const row = current?.plan?.installments?.[index];
-  if (!current || !row || row.invoiceId) return;
+  if (!current || !row) return;
   if (Number(row.amount || 0) <= 0) {
-    showNotification('error', 'Enter an installment amount before issuing the invoice.');
+    showNotification('error', 'Enter an installment amount before exporting the PDF.');
     return;
   }
   const summary = invoiceLocalSummary(current.plan, current.quotation);
   const quotationStatus = String(current.quotation?.status || '').toLowerCase();
   if (
-    quotationStatus === 'accepted'
+    !row.invoiceId
+    && quotationStatus === 'accepted'
     && Number(row.amount || 0) > Number(summary.notInvoiced || 0) + 0.005
   ) {
     showNotification('error', 'This invoice would exceed the remaining quotation amount.');
     return;
   }
+  const previewWindow = window.open('', '_blank');
   const saved = await invoiceFlushPendingSave();
-  if (!saved) return;
-  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
-  const savedRow = invoiceState.current.plan.installments.find(item => item.id === row.id);
-  if (!savedRow || savedRow.invoiceId) return;
-  const confirmedAmount = Number(savedRow.amount || 0);
-  const invoiceDetails = invoicePlanDetails(
-    invoiceState.current?.plan,
-    invoiceState.current?.quotation
-  );
-  const issueDetails = typeof showAppForm === 'function' ? await showAppForm({
-    title: 'Issue invoice',
-    message: `${savedRow.label} will be issued for ${invoiceMoney(savedRow.amount)}. Confirm the invoice and PO / reference numbers below.`,
-    confirmText: 'Issue invoice',
-    cancelText: 'Cancel',
-    fields: [{
-      name: 'invoiceNumber',
-      label: 'Invoice number',
-      defaultValue: invoiceState.current.nextInvoiceNumber || '',
-      placeholder: 'INV-2026-0001',
-      required: true,
-      maxLength: 80
-    }, {
-      name: 'reference',
-      label: 'PO / reference number',
-      defaultValue: invoiceDetails.reference || '',
-      placeholder: 'e.g. PO-2026-001',
-      maxLength: 300
-    }]
-  }) : (window.confirm('Issue this invoice?') ? {
-    invoiceNumber: invoiceState.current.nextInvoiceNumber || '',
-    reference: invoiceDetails.reference || ''
-  } : null);
-  const invoiceNumber = String(issueDetails?.invoiceNumber || '').trim();
-  if (!invoiceNumber) { invoiceRenderEditor(); return; }
-  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
-  const reference = String(issueDetails?.reference || '').trim();
-  const currentDetails = invoicePlanDetails();
-  if (reference !== String(currentDetails.reference || '').trim()) {
-    currentDetails.reference = reference;
-    invoiceMarkDirty();
-    const referenceSaved = await invoiceFlushPendingSave();
-    if (!referenceSaved) return;
+  if (!saved) {
+    previewWindow?.close();
+    return;
   }
-  if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
-  const currentRow = invoiceState.current.plan.installments.find(item => item.id === row.id);
-  if (!currentRow) return;
+  if (invoiceState.current?.quotation?.id !== current.quotation.id) {
+    previewWindow?.close();
+    return;
+  }
+  const savedRow = invoiceState.current.plan.installments.find(item => item.id === row.id);
+  if (!savedRow) {
+    previewWindow?.close();
+    return;
+  }
+  if (savedRow.invoiceId) {
+    const pdfUrl = `/api/invoices/${encodeURIComponent(savedRow.invoiceId)}/pdf`;
+    if (previewWindow) previewWindow.location.href = pdfUrl;
+    else window.open(pdfUrl, '_blank', 'noopener');
+    return;
+  }
+  const confirmedAmount = Number(savedRow.amount || 0);
   try {
-    const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(current.quotation.id)}/installments/${encodeURIComponent(row.id)}/issue`, 'POST', {
-      invoiceDate: invoiceToday(), dueDate: currentRow.dueDate, status: 'draft', number: invoiceNumber,
+    const response = await apiCall(`/api/invoice-plans/${encodeURIComponent(current.quotation.id)}/installments/${encodeURIComponent(row.id)}/export`, 'POST', {
+      invoiceDate: invoiceToday(), dueDate: savedRow.dueDate, status: 'draft',
       expectedAmount: confirmedAmount
     });
-    if (invoiceState.current?.quotation?.id !== current.quotation.id) return;
-    showNotification('success', `${response.data.number} created`);
-    if (Number(response.plan.plan.documentVersion) < invoiceLatestKnownVersion()) return;
-    if (invoiceHasPendingChanges() || invoiceEditorHasFocus()) {
-      invoiceState.pendingRealtime = response.plan;
-      invoiceState.remoteUpdatePending = true;
-      invoiceUpdateSaveState();
-    } else {
-      invoiceAdoptPlan(response.plan);
-      invoiceRenderEditor();
+    const invoiceId = response.data?.id;
+    if (!invoiceId) throw new Error('Invoice PDF is unavailable');
+    if (invoiceState.current?.quotation?.id === current.quotation.id) {
+      if (Number(response.plan.plan.documentVersion) >= invoiceLatestKnownVersion()) {
+        if (invoiceHasPendingChanges() || invoiceEditorHasFocus()) {
+          invoiceState.pendingRealtime = response.plan;
+          invoiceState.remoteUpdatePending = true;
+          invoiceUpdateSaveState();
+        } else {
+          invoiceAdoptPlan(response.plan);
+          invoiceRenderEditor();
+        }
+      }
     }
+    const pdfUrl = `/api/invoices/${encodeURIComponent(invoiceId)}/pdf`;
+    if (previewWindow) previewWindow.location.href = pdfUrl;
+    else window.open(pdfUrl, '_blank', 'noopener');
   } catch (error) {
-    showNotification('error', error.message || 'Unable to issue invoice');
+    previewWindow?.close();
+    showNotification('error', error.message || 'Unable to export invoice PDF');
   }
 }
 

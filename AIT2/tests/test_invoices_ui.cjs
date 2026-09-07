@@ -307,40 +307,58 @@ test('background refresh waits while an enhanced invoice dropdown is open', asyn
   assert.equal(run('renderCount'), 0);
 });
 
-test('issuing uses the confirmed reference after a realtime plan replacement', async () => {
-  const { context, calls, run } = setup();
-  context.financeEscape = value => String(value ?? '');
-  run(`invoiceState.current.nextInvoiceNumber = 'INV-1';
-    invoiceState.current.plan.installments = [{ id: 'i1', mode: 'amount', value: 100, amount: 100 }];`);
-  context.showAppForm = async () => {
-    run(`invoiceAdoptPlan({ quotation: invoiceState.current.quotation,
-      plan: { ...invoiceState.current.plan, documentVersion: 2, invoiceDetails: { reference: 'Remote' } } });`);
-    return { invoiceNumber: 'INV-1', reference: 'Confirmed' };
-  };
-  context.apiCall = async (url, method, payload) => {
-    calls.push({ method, payload });
-    if (method === 'PUT') return { data: { quotation: { id: 'q1' }, plan: { ...payload, documentVersion: 3 } } };
-    return { data: { number: 'INV-1' }, plan: {
-      quotation: { id: 'q1' }, plan: { documentVersion: 4, installments: [], payments: [] }
-    } };
-  };
-  await run('invoiceIssueInstallment(0)');
-  assert.equal(calls[0].method, 'PUT');
-  assert.equal(calls[0].payload.invoiceDetails.reference, 'Confirmed');
-  assert.equal(calls[1].method, 'POST');
+test('installments offer PDF export without an issue-invoice action', () => {
+  const { run } = setup();
+  const markup = run(`invoiceEscape = value => String(value ?? '');
+    invoiceAttr = value => String(value ?? '');
+    invoiceInstallmentMarkup({
+    id: 'i1', label: 'Deposit', mode: 'amount', value: 100, amount: 100,
+    dueDate: '2026-10-01', status: 'planned'
+  }, 0)`);
+  assert.match(markup, /invoiceExportInstallment\(0\)/);
+  assert.match(markup, />Export PDF</);
+  assert.doesNotMatch(markup, /Issue invoice/i);
 });
 
-test('an invoice issue response does not erase edits made while issuing', async () => {
-  const { context, run } = setup();
-  context.showAppForm = async () => ({ invoiceNumber: 'INV-1', reference: '' });
-  run(`invoiceState.current.plan.installments = [{ id: 'i1', mode: 'amount', value: 100, amount: 100 }];`);
-  context.apiCall = async () => {
-    run("invoiceUpdatePlanField('strategyLabel', 'Typed while issuing')");
-    return { data: { number: 'INV-1' }, plan: {
-      quotation: { id: 'q1' }, plan: { documentVersion: 2 }
+test('export creates a draft invoice automatically and opens its PDF', async () => {
+  const { context, calls, run } = setup();
+  const preview = { location: { href: '' }, close() {} };
+  context.window.open = () => preview;
+  run(`invoiceState.current.plan.installments = [{
+    id: 'i1', mode: 'amount', value: 100, amount: 100,
+    dueDate: '2026-10-01', status: 'planned'
+  }];`);
+  context.apiCall = async (url, method, payload) => {
+    calls.push({ url, method, payload });
+    if (method === 'PUT') return { data: {
+      quotation: { id: 'q1', status: 'accepted', totals: { total: 1000, netSubtotal: 1000 }, taxRate: 0 },
+      plan: { ...payload, documentVersion: 2 }
+    } };
+    return { data: { id: 'inv1', number: 'INV-1' }, plan: {
+      quotation: { id: 'q1' },
+      plan: { documentVersion: 3, installments: [], payments: [] }
     } };
   };
-  await run('invoiceIssueInstallment(0)');
-  assert.equal(run('invoiceState.current.plan.strategyLabel'), 'Typed while issuing');
-  assert.equal(run('invoiceState.pendingRealtime.plan.documentVersion'), 2);
+  run('invoiceState.dirty = true');
+  await run('invoiceExportInstallment(0)');
+  assert.equal(calls[0].method, 'PUT');
+  assert.equal(calls[1].method, 'POST');
+  assert.equal(calls[1].url, '/api/invoice-plans/q1/installments/i1/export');
+  assert.equal(calls[1].payload.status, 'draft');
+  assert.equal(preview.location.href, '/api/invoices/inv1/pdf');
+});
+
+test('draft invoice label, calculation value, and due date remain editable', () => {
+  const { run } = setup();
+  run(`invoiceState.current.plan.installments = [{
+    id: 'i1', invoiceId: 'inv1', status: 'draft', invoiceFrozen: false,
+    label: 'Deposit', mode: 'amount', value: 100, amount: 100,
+    dueDate: '2026-10-01'
+  }];
+  invoiceUpdateInstallment(0, 'label', 'Revised deposit');
+  invoiceUpdateInstallment(0, 'value', 125);
+  invoiceUpdateInstallment(0, 'dueDate', '2026-10-15');`);
+  assert.equal(run('invoiceState.current.plan.installments[0].label'), 'Revised deposit');
+  assert.equal(run('invoiceState.current.plan.installments[0].value'), 125);
+  assert.equal(run('invoiceState.current.plan.installments[0].dueDate'), '2026-10-15');
 });

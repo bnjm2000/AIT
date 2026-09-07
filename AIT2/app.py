@@ -39580,6 +39580,7 @@ def _finance_rate_card_rows(finance_data):
             ) or description,
             'department': department,
             'departmentCode': department_code,
+            'productCategory': department,
             'sourceAssetIds': [],
             'searchTags': [],
             'availableQuantity': 0,
@@ -39633,6 +39634,7 @@ def _finance_rate_card_rows(finance_data):
             'productLabel': f'Container {container_id}',
             'department': 'Container',
             'departmentCode': 'CONTAINER',
+            'productCategory': 'Container',
             'unitPrice': 0,
             'uom': 'units',
             'isCustom': False,
@@ -39662,6 +39664,10 @@ def _finance_rate_card_rows(finance_data):
         product_label = str(
             source.get('productLabel') or source.get('label') or ''
         ).strip()[:1000]
+        product_category = str(
+            source.get('productCategory') or source.get('department')
+            or 'Unknown Department'
+        ).strip()[:240] or 'Unknown Department'
         line = _normalise_finance_line(source)
         if not line.get('description'):
             return
@@ -39692,6 +39698,7 @@ def _finance_rate_card_rows(finance_data):
             ) or line.get('description') or '',
             'department': line.get('department') or 'Unknown Department',
             'departmentCode': line.get('departmentCode') or '',
+            'productCategory': product_category,
             'unitPrice': line.get('unitPrice') or 0,
             'uom': line.get('uom') or 'units',
             'isCustom': bool(line.get('isCustom') or not catalog_key),
@@ -39734,6 +39741,9 @@ def _finance_rate_card_rows(finance_data):
             f"custom:{str(payload.get('department') or 'Unknown Department').strip().lower()}::"
             f"{str(payload.get('description') or base_key.removeprefix('custom:')).strip().lower()}"
         )
+        if payload.get('hidden'):
+            rows.pop(identity, None)
+            continue
         if payload.get('deleted'):
             if canonical or identity in rows and rows[identity].get('isContainer'):
                 rows[identity]['unitPrice'] = 0
@@ -39747,6 +39757,7 @@ def _finance_rate_card_rows(finance_data):
             'productLabel': payload.get('productLabel') or '',
             'department': payload.get('department') or 'Unknown Department',
             'departmentCode': payload.get('departmentCode') or '',
+            'productCategory': payload.get('productCategory') or payload.get('department') or 'Unknown Department',
             'brand': payload.get('brand') or '',
             'model': payload.get('model') or '',
             'unitPrice': payload.get('unitPrice'),
@@ -39755,7 +39766,7 @@ def _finance_rate_card_rows(finance_data):
         }, base_key)
 
     return sorted(rows.values(), key=lambda row: (
-        str(row.get('department') or '').casefold(),
+        str(row.get('productCategory') or row.get('department') or '').casefold(),
         ' '.join((
             str(row.get('brand') or ''),
             str(row.get('model') or ''),
@@ -44051,6 +44062,7 @@ def finance_catalog():
             for row in rate_card_rows
             if str(row.get('catalogKey') or '').strip()
         }
+        visible_catalog_keys = set(products_by_catalog_key)
 
     department_cache = {}
 
@@ -44075,9 +44087,14 @@ def finance_catalog():
         display = ' '.join(value for value in (brand, model, description) if value)
         tag_text = ' '.join(normalize_asset_tags(getattr(asset, 'tags', [])))
         key = _finance_catalog_key(department_code, brand, model, description)
+        if key.casefold() not in visible_catalog_keys:
+            continue
         product = products_by_catalog_key.get(key.casefold()) or {}
         product_label = str(product.get('productLabel') or display).strip()
-        haystack = f"{display} {product_label} {department} {department_code} {tag_text}".lower()
+        product_category = str(
+            product.get('productCategory') or department
+        ).strip() or department
+        haystack = f"{display} {product_label} {product_category} {department} {department_code} {tag_text}".lower()
         if query and query not in haystack:
             continue
         if key not in grouped:
@@ -44089,6 +44106,8 @@ def finance_catalog():
                 'productLabel': product_label or display or model or description or 'Inventory item',
                 'department': department,
                 'departmentCode': department_code,
+                'productCategory': product_category,
+                'systemName': product_category,
                 'brand': brand,
                 'model': model,
                 'availableQuantity': 0,
@@ -44113,7 +44132,13 @@ def finance_catalog():
         container_product_label = str(
             container_product.get('productLabel') or f"Container {container_id}"
         )
-        haystack_parts = [container_id, serial_number, container_product_label]
+        container_product_category = str(
+            container_product.get('productCategory') or 'Container'
+        ).strip() or 'Container'
+        haystack_parts = [
+            container_id, serial_number, container_product_label,
+            container_product_category,
+        ]
         for asset_id in getattr(container, 'asset_ids', []) or []:
             asset = data_manager.inventory.get(asset_id)
             if not asset or _is_disposed(asset):
@@ -44128,6 +44153,12 @@ def finance_catalog():
             catalog_key = _finance_catalog_key(
                 department_code, brand, model, description
             )
+            if catalog_key.casefold() not in visible_catalog_keys:
+                continue
+            item_product = products_by_catalog_key.get(catalog_key.casefold()) or {}
+            item_product_category = str(
+                item_product.get('productCategory') or department
+            ).strip() or department
             key = _finance_container_item_key(catalog_key, description)
             if key not in container_items:
                 container_items[key] = {
@@ -44136,6 +44167,8 @@ def finance_catalog():
                     'description': display or 'Container item',
                     'department': department,
                     'departmentCode': department_code,
+                    'productCategory': item_product_category,
+                    'systemName': item_product_category,
                     'brand': brand,
                     'model': model,
                     'availableQuantity': 0,
@@ -44174,6 +44207,12 @@ def finance_catalog():
             catalog_key = _finance_catalog_key(
                 department_code, brand, model, description
             )
+            if catalog_key.casefold() not in visible_catalog_keys:
+                continue
+            item_product = products_by_catalog_key.get(catalog_key.casefold()) or {}
+            item_product_category = str(
+                item_product.get('productCategory') or department
+            ).strip() or department
             key = _finance_container_item_key(catalog_key, description)
             if key not in container_items:
                 container_items[key] = {
@@ -44182,6 +44221,8 @@ def finance_catalog():
                     'description': display,
                     'department': department,
                     'departmentCode': department_code,
+                    'productCategory': item_product_category,
+                    'systemName': item_product_category,
                     'brand': brand,
                     'model': model,
                     'availableQuantity': 0,
@@ -44198,6 +44239,8 @@ def finance_catalog():
             container_items[key]['containerQuantity'] += quantity
 
         if not container_items:
+            continue
+        if f"container:{container_id.lower()}" not in visible_catalog_keys:
             continue
         if query and query not in ' '.join(haystack_parts).lower():
             continue
@@ -44221,6 +44264,8 @@ def finance_catalog():
             'productLabel': container_product_label,
             'department': 'Container',
             'departmentCode': 'CONTAINER',
+            'productCategory': container_product_category,
+            'systemName': container_product_category,
             'brand': '',
             'model': '',
             'availableQuantity': sum(_safe_float(row.get('containerQuantity'), 0) for row in item_rows),
@@ -44250,6 +44295,7 @@ def finance_catalog():
             str(source.get('model') or ''),
             description,
             str(source.get('productLabel') or ''),
+            str(source.get('productCategory') or ''),
             department,
         )).lower()
         if query and query not in haystack:
@@ -44266,6 +44312,12 @@ def finance_catalog():
             'productLabel': str(source.get('productLabel') or description),
             'department': department,
             'departmentCode': department_code,
+            'productCategory': str(
+                source.get('productCategory') or department
+            ).strip() or department,
+            'systemName': str(
+                source.get('productCategory') or department
+            ).strip() or department,
             'brand': str(source.get('brand') or '').strip(),
             'model': str(source.get('model') or '').strip(),
             'availableQuantity': None,
@@ -44297,6 +44349,11 @@ def finance_catalog():
             remembered.get('productLabel') or row.get('productLabel')
             or row.get('description') or ''
         )
+        row['productCategory'] = str(
+            remembered.get('productCategory') or row.get('productCategory')
+            or row.get('department') or 'General'
+        ).strip() or 'General'
+        row['systemName'] = row['productCategory']
     return jsonify({'success': True, 'data': rows})
 
 
@@ -44313,6 +44370,7 @@ def finance_rate_card():
                 rows = [
                     row for row in rows
                     if query in ' '.join((
+                        str(row.get('productCategory') or ''),
                         str(row.get('department') or ''),
                         str(row.get('brand') or ''),
                         str(row.get('model') or ''),
@@ -44328,6 +44386,11 @@ def finance_rate_card():
         product_label = str(
             payload.get('productLabel') or payload.get('label') or description
         ).strip()[:1000]
+        product_category = str(
+            payload.get('productCategory') or payload.get('systemName')
+            or payload.get('department')
+            or 'Unknown Department'
+        ).strip()[:240] or 'Unknown Department'
         department, department_code = _finance_department_details(
             payload.get('department'), payload.get('departmentCode')
         )
@@ -44399,6 +44462,7 @@ def finance_rate_card():
                 'deleted': True,
                 'description': description,
                 'productLabel': product_label,
+                'productCategory': product_category,
                 'department': str(payload.get('department') or 'Unknown Department').strip(),
                 'departmentCode': str(payload.get('departmentCode') or '').strip(),
                 'brand': str(payload.get('brand') or '').strip()[:240],
@@ -44420,6 +44484,7 @@ def finance_rate_card():
             stored = {
                 'description': description,
                 'productLabel': product_label or description,
+                'productCategory': product_category,
                 'department': department,
                 'departmentCode': department_code,
                 'brand': str(payload.get('brand') or '').strip()[:240],
@@ -44441,6 +44506,75 @@ def finance_rate_card():
 
     log_action(action)
     return jsonify({'success': True, 'data': rows})
+
+
+@app.route('/api/finance/products/category', methods=['DELETE'])
+@require_client_access
+def finance_delete_product_category():
+    payload = request.get_json(silent=True) or {}
+    category = str(payload.get('category') or '').strip()[:240]
+    if not category:
+        return jsonify({'error': 'Category is required'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        targets = [
+            row for row in _finance_rate_card_rows(finance_data)
+            if str(
+                row.get('productCategory') or row.get('department') or ''
+            ).strip().casefold() == category.casefold()
+        ]
+        if not targets:
+            return jsonify({'error': 'Product category not found'}), 404
+
+        owner = _finance_current_username().lower()
+        price_book = finance_data.setdefault('priceBook', {})
+        now = datetime.now().isoformat(timespec='seconds')
+        for row in targets:
+            product_key = str(
+                row.get('productKey') or row.get('catalogKey')
+                or _finance_custom_price_key(row.get('description'))
+            ).strip()[:500]
+            source_asset_ids = {
+                str(asset_id).strip().casefold()
+                for asset_id in (row.get('sourceAssetIds') or [])
+                if str(asset_id or '').strip()
+            }
+            for stored_key in list(price_book):
+                base_key = str(stored_key).split('::', 1)[-1].casefold()
+                if base_key == product_key.casefold() or (
+                    base_key.startswith('asset:')
+                    and base_key.rsplit(':', 1)[-1] in source_asset_ids
+                ):
+                    price_book.pop(stored_key, None)
+            price_book[f'product::{product_key}'] = {
+                'hidden': True,
+                'description': str(row.get('description') or '').strip()[:1000],
+                'productLabel': str(
+                    row.get('productLabel') or row.get('description') or ''
+                ).strip()[:1000],
+                'productCategory': category,
+                'department': str(
+                    row.get('department') or 'Unknown Department'
+                ).strip(),
+                'departmentCode': str(row.get('departmentCode') or '').strip(),
+                'brand': str(row.get('brand') or '').strip()[:240],
+                'model': str(row.get('model') or '').strip()[:240],
+                'owner': owner,
+                'updatedAt': now,
+            }
+
+        _save_finance_data(finance_data)
+        rows = _finance_rate_card_rows(finance_data)
+
+    log_action(
+        f"Deleted product category {category} ({len(targets)} products)"
+    )
+    return jsonify({
+        'success': True,
+        'data': rows,
+        'deletedCount': len(targets),
+    })
 
 
 @app.route('/api/finance/price-suggestion', methods=['GET'])
@@ -46507,14 +46641,14 @@ def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
     )
     mode = str(
         existing.get('mode')
-        if issued
+        if issued_locked
         else value.get('mode') or existing.get('mode') or 'amount'
     ).strip().lower()
     if mode not in {'amount', 'percentage'}:
         mode = 'amount'
     raw_value = max(0, _safe_float(
         existing.get('value')
-        if issued
+        if issued_locked
         else value.get('value') if 'value' in value else existing.get('value'),
         0,
     ))
@@ -47152,7 +47286,7 @@ def _invoice_plan_link_error(plan, existing, finance_data):
         if not invoice_id:
             continue
         if invoice_id not in invoices:
-            return 'Each issued installment must belong to this billing plan.'
+            return 'Each exported invoice must belong to this billing plan.'
         if invoice_id in linked_invoice_ids:
             return 'An invoice cannot be linked to more than one installment.'
         linked_invoice_ids.add(invoice_id)
@@ -47531,11 +47665,15 @@ def invoice_plan_item(quotation_id):
 
 
 @app.route(
+    '/api/invoice-plans/<quotation_id>/installments/<installment_id>/export',
+    methods=['POST'],
+)
+@app.route(
     '/api/invoice-plans/<quotation_id>/installments/<installment_id>/issue',
     methods=['POST'],
 )
 @require_sales
-def issue_invoice_plan_installment(quotation_id, installment_id):
+def export_invoice_plan_installment(quotation_id, installment_id):
     with _finance_lock:
         finance_data = _load_finance_data()
         quotation = _invoice_plan_find_quotation(finance_data, quotation_id)
@@ -47576,7 +47714,7 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
                 })
 
         if _safe_float(installment.get('amount'), 0) <= 0:
-            return jsonify({'error': 'Enter an installment amount before issuing the invoice.'}), 400
+            return jsonify({'error': 'Enter an installment amount before exporting the invoice.'}), 400
 
         request_data = request.get_json() or {}
         if 'expectedAmount' in request_data and abs(
@@ -47584,7 +47722,7 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             - _safe_float(installment.get('amount'), 0)
         ) > 0.005:
             return jsonify({
-                'error': 'This installment amount changed. Review the billing plan and issue it again.',
+                'error': 'This installment amount changed. Review the billing plan and export it again.',
                 'code': 'installment_amount_conflict',
             }), 409
 
@@ -47607,7 +47745,7 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
                 if already_invoiced >= quotation_total - 0.01 and quotation_total > 0:
                     error_message = (
                         'This accepted quotation has already been invoiced in full. '
-                        'Delete or void an existing invoice before issuing another.'
+                        'Delete or void an existing invoice before exporting another.'
                     )
                 else:
                     error_message = (
@@ -47696,8 +47834,8 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
             ),
         })
         plan['history'].append(_invoice_plan_history_entry(
-            'invoice-issued',
-            f"Issued {invoice['number']} for {installment.get('label')} ({invoice.get('currency') or '$'} {installment.get('amount', 0):.2f})",
+            'invoice-exported',
+            f"Created {invoice['number']} for PDF export ({invoice.get('currency') or '$'} {installment.get('amount', 0):.2f})",
         ))
         plan['documentVersion'] = max(
             1, _safe_int(plan.get('documentVersion'), 1)
@@ -47712,12 +47850,12 @@ def issue_invoice_plan_installment(quotation_id, installment_id):
         _invoice_plan_sync_documents(finance_data, plan, quotation)
         _save_finance_data(finance_data)
     log_action(
-        f"Issued invoice {invoice.get('number')} from quotation {quotation.get('number')}"
+        f"Created invoice {invoice.get('number')} for PDF export from quotation {quotation.get('number')}"
     )
     mark_realtime_change('finance', {
         'quotationId': quotation_id,
         'invoiceId': invoice.get('id'),
-        'action': 'invoice-issued',
+        'action': 'invoice-exported',
     })
     return jsonify({
         'success': True,

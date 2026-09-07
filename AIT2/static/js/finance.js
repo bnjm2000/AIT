@@ -1877,6 +1877,8 @@ function financePreferredCatalogCategory(selected, document = financeState.curre
 function financeCatalogCategory(selected, explicitCategory = '') {
   const requested = String(explicitCategory || '').trim();
   if (requested) return requested;
+  const productCategory = String(selected?.productCategory || '').trim();
+  if (productCategory) return productCategory;
   const existing = financePreferredCatalogCategory(selected);
   return existing ? financeLineSystem(existing) : financeDefaultSystemName(selected?.department);
 }
@@ -2929,15 +2931,19 @@ function productsRoot() {
   return document.getElementById('products-page-root');
 }
 
+function productCatalogCategory(row) {
+  return String(row?.productCategory || row?.department || 'General').trim() || 'General';
+}
+
 function productCatalogFilteredRows() {
   const query = String(productCatalogState.query || '').trim().toLowerCase();
   return (productCatalogState.rows || []).filter(row => {
     const source = row.isCustom ? 'additional' : 'inventory';
     const matchesSource = productCatalogState.sourceFilters[source];
     const matchesCategory = productCatalogState.category === 'all'
-      || financeLineSystem(row) === productCatalogState.category;
+      || productCatalogCategory(row) === productCatalogState.category;
     return matchesSource && matchesCategory && (!query || [
-      financeLineSystem(row), row.department, row.brand, row.model,
+      productCatalogCategory(row), row.department, row.brand, row.model,
       row.description, row.productLabel, row.containerId, row.containerSerial,
       ...(row.searchTags || [])
     ].join(' ').toLowerCase().includes(query));
@@ -2951,7 +2957,7 @@ function productCatalogFilteredRows() {
 function productCatalogCategories() {
   return [...new Set((productCatalogState.rows || [])
     .filter(row => productCatalogState.sourceFilters[row.isCustom ? 'additional' : 'inventory'])
-    .map(row => financeLineSystem(row))
+    .map(row => productCatalogCategory(row))
     .filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 }
@@ -2960,7 +2966,7 @@ function productCatalogRowsMarkup() {
   const rows = productCatalogFilteredRows();
   if (!rows.length) return `<div class="finance-products-empty"><strong>No products match this view.</strong><span>${productCatalogState.query ? 'Try another product name, brand, model or category.' : 'Choose another category or source filter, or add a product.'}</span></div>`;
   return `<div class="finance-product-table-wrap"><table class="finance-product-table">
-    <thead><tr><th>Product label</th><th>Source</th><th>Availability</th><th>UOM</th><th>Sale price</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <thead><tr><th>Product label</th><th>Category</th><th>Source</th><th>Availability</th><th>UOM</th><th>Sale price</th><th><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>${rows.map(row => {
       const index = productCatalogState.rows.indexOf(row);
       const productLabel = row.productLabel || [row.brand, row.model].filter(Boolean).join(' ') || row.description || 'Unnamed product';
@@ -2970,6 +2976,7 @@ function productCatalogRowsMarkup() {
         : `${financeNumber(row.availableQuantity ?? row.sourceAssetIds?.length, 0)} in inventory`;
       return `<tr>
         <td data-label="Product label"><input class="finance-input finance-product-label-input" value="${financeEscapeAttr(productLabel)}" maxlength="1000" aria-label="Product label" onchange="productCatalogUpdateField(${index},'productLabel',this.value)">${inventoryDetail && inventoryDetail !== productLabel ? `<small>${financeEscape(inventoryDetail)}</small>` : ''}</td>
+        <td data-label="Category"><input class="finance-input finance-product-category-input" value="${financeEscapeAttr(productCatalogCategory(row))}" list="financeProductCategoryOptions" maxlength="240" aria-label="Category for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'productCategory',this.value)"></td>
         <td data-label="Source"><span class="finance-product-source ${row.isCustom ? 'additional' : 'inventory'}">${row.isCustom ? 'Added product' : 'Inventory'}</span></td>
         <td data-label="Availability">${financeEscape(availability)}</td>
         <td data-label="UOM"><select class="finance-input finance-product-uom-select" aria-label="UOM for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'uom',this.value)">${FINANCE_UOMS.map(option => `<option value="${option.value}" ${option.value === row.uom ? 'selected' : ''}>${financeEscape(option.label)}</option>`).join('')}</select></td>
@@ -2989,7 +2996,7 @@ function productCatalogFormMarkup() {
         <label class="finance-field"><span>Brand</span><input class="finance-input" name="brand" maxlength="240"></label>
         <label class="finance-field"><span>Model</span><input class="finance-input" name="model" maxlength="240"></label>
         <label class="finance-field finance-product-description"><span>Product label *</span><input class="finance-input" name="productLabel" maxlength="1000" required></label>
-        <label class="finance-field"><span>Category *</span><input class="finance-input" name="department" list="financeProductCategories" required><datalist id="financeProductCategories">${(financeState.departments || []).map(value => `<option value="${financeEscapeAttr(value)}"></option>`).join('')}</datalist></label>
+        <label class="finance-field"><span>Category *</span><input class="finance-input" name="department" list="financeProductCategoryOptions" required></label>
         <label class="finance-field"><span>Sale price</span><span class="finance-money-input"><span>$</span><input name="unitPrice" type="number" min="0" step="0.01" value="0"></span></label>
         <label class="finance-field"><span>Unit</span><select class="finance-input" name="uom">${FINANCE_UOMS.map(row => `<option value="${row.value}">${financeEscape(row.label)}</option>`).join('')}</select></label>
       </div>
@@ -3005,10 +3012,17 @@ function productCatalogRender() {
   const visibleSourceCount = Number(productCatalogState.sourceFilters.inventory)
     + Number(productCatalogState.sourceFilters.additional);
   const categories = productCatalogCategories();
+  const categoryOptions = [...new Set([
+    ...(financeState.departments || []),
+    ...(productCatalogState.rows || []).map(productCatalogCategory)
+  ].map(value => String(value || '').trim()).filter(Boolean))].sort((left, right) => (
+    left.localeCompare(right, undefined, { sensitivity: 'base' })
+  ));
   if (productCatalogState.category !== 'all' && !categories.includes(productCatalogState.category)) {
     productCatalogState.category = 'all';
   }
   root.innerHTML = `
+    <datalist id="financeProductCategoryOptions">${categoryOptions.map(value => `<option value="${financeEscapeAttr(value)}"></option>`).join('')}</datalist>
     <div class="finance-toolbar finance-products-toolbar">
       <div class="finance-toolbar-heading"><h2>Products</h2><p class="finance-subtitle">The sale catalogue used by quotation search.</p></div>
       <div class="finance-toolbar-actions"><input class="finance-search" type="search" value="${financeEscapeAttr(productCatalogState.query)}" placeholder="Search products..." oninput="productCatalogSetQuery(this.value)"><button type="button" class="btn btn-primary" onclick="productCatalogToggleForm(true)">+ Add Product</button></div>
@@ -3024,7 +3038,7 @@ function productCatalogRender() {
       </div>
       <div class="finance-products-tabs" role="tablist" aria-label="Product categories">
         <button type="button" role="tab" aria-selected="${productCatalogState.category === 'all'}" class="${productCatalogState.category === 'all' ? 'active' : ''}" onclick="productCatalogSetCategory('all')">All products</button>
-        ${categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('')}
+        ${categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" title="Right-click to manage category" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')" oncontextmenu="productCatalogOpenCategoryMenu(event,'${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('')}
       </div>
       <div id="productCatalogResults">${productCatalogRowsMarkup()}</div>
     </div>`;
@@ -3100,6 +3114,7 @@ async function productCatalogCreate(event) {
   const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
   payload.productLabel = String(payload.productLabel || '').trim();
   payload.description = payload.productLabel;
+  payload.productCategory = String(payload.department || '').trim();
   productCatalogState.saving = true;
   try {
     await financePersistProduct({ ...payload, isCustom: true });
@@ -3128,11 +3143,11 @@ async function productCatalogUpdatePrice(index, value) {
 
 async function productCatalogUpdateField(index, field, value) {
   const item = productCatalogState.rows[Number(index)];
-  if (!item || !['productLabel', 'uom'].includes(field)) return;
+  if (!item || !['productLabel', 'productCategory', 'uom'].includes(field)) return;
   const nextValue = String(value || '').trim();
-  if (field === 'productLabel' && !nextValue) {
+  if (['productLabel', 'productCategory'].includes(field) && !nextValue) {
     productCatalogRender();
-    showNotification('error', 'Product label is required');
+    showNotification('error', `${field === 'productCategory' ? 'Category' : 'Product label'} is required`);
     return;
   }
   if (field === 'uom' && !FINANCE_UOMS.some(row => row.value === nextValue)) {
@@ -3142,10 +3157,83 @@ async function productCatalogUpdateField(index, field, value) {
   try {
     await financePersistProduct({ ...item, [field]: nextValue });
     productCatalogRender();
-    showNotification('success', `${field === 'uom' ? 'UOM' : 'Product label'} updated for future additions`);
+    const fieldLabel = field === 'uom' ? 'UOM' : field === 'productCategory' ? 'Category' : 'Product label';
+    showNotification('success', `${fieldLabel} updated for future additions`);
   } catch (error) {
     productCatalogRender();
   }
+}
+
+function productCatalogEnsureCategoryMenu() {
+  let menu = document.getElementById('financeProductCategoryMenu');
+  if (menu) return menu;
+  menu = document.createElement('div');
+  menu.id = 'financeProductCategoryMenu';
+  menu.className = 'finance-product-category-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = '<button type="button" role="menuitem" onclick="productCatalogDeleteCategory()">Delete category</button>';
+  document.body.appendChild(menu);
+  document.addEventListener('pointerdown', event => {
+    if (!menu.contains(event.target)) productCatalogCloseCategoryMenu();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') productCatalogCloseCategoryMenu();
+  });
+  window.addEventListener('blur', productCatalogCloseCategoryMenu);
+  return menu;
+}
+
+function productCatalogCloseCategoryMenu() {
+  const menu = document.getElementById('financeProductCategoryMenu');
+  if (!menu) return;
+  menu.classList.remove('open');
+  menu.removeAttribute('data-category');
+}
+
+function productCatalogOpenCategoryMenu(event, encodedCategory) {
+  event.preventDefault();
+  event.stopPropagation();
+  const category = decodeURIComponent(encodedCategory || '');
+  if (!category) return;
+  const menu = productCatalogEnsureCategoryMenu();
+  menu.dataset.category = category;
+  menu.classList.add('open');
+  const width = 172;
+  const height = 40;
+  menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
+  menu.querySelector('button')?.focus();
+}
+
+async function productCatalogDeleteCategory() {
+  const menu = document.getElementById('financeProductCategoryMenu');
+  const category = String(menu?.dataset.category || '').trim();
+  productCatalogCloseCategoryMenu();
+  if (!category) return;
+  const targets = (productCatalogState.rows || []).filter(row => (
+    productCatalogCategory(row).toLocaleLowerCase() === category.toLocaleLowerCase()
+  ));
+  const inventoryCount = targets.filter(row => !row.isCustom).length;
+  const addedCount = targets.filter(row => row.isCustom).length;
+  const details = [
+    inventoryCount ? `${inventoryCount} inventory product${inventoryCount === 1 ? '' : 's'}` : '',
+    addedCount ? `${addedCount} added product${addedCount === 1 ? '' : 's'}` : ''
+  ].filter(Boolean).join(' and ');
+  const confirmed = await showAppConfirm({
+    title: `Delete ${category} category?`,
+    message: `${details || 'Its products'} will be removed from Products and future quotation search. Inventory records and existing quotations will not change.`,
+    confirmText: 'Delete Category',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    const response = await apiCall('/api/finance/products/category', 'DELETE', { category });
+    financeApplyProductRows(response.data || []);
+    productCatalogState.category = 'all';
+    productCatalogRender();
+    showNotification('success', `${category} category deleted`);
+  } catch (error) {}
 }
 
 async function productCatalogDelete(index) {
@@ -7276,9 +7364,8 @@ function financeAddContainerAsGroup(selected) {
     : [];
   if (!containerId || !containerItems.length) return [];
 
-  const containerDepartment = financeContainerMajorityDepartment(selected);
   const containerCategory = financeCatalogCategory(
-    containerDepartment,
+    selected,
     financeAddDepartmentOverride()
   );
   const groupId = `container_${Date.now()}_${Math.random().toString(16).slice(2)}`;

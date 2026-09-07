@@ -2238,6 +2238,61 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(future['productLabel'], 'Premium subwoofer package')
         self.assertEqual(future['uom'], 'lot')
 
+    def test_product_category_can_change_and_category_delete_hides_sale_products(self):
+        inventory = next(
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('model') == 'SB18 III'
+        )
+        operational_department = inventory['department']
+        moved = self.client.post('/api/finance/products', json={
+            **inventory,
+            'productCategory': 'Premium Audio',
+        })
+        self.assertEqual(moved.status_code, 200, moved.get_data(as_text=True))
+        moved_inventory = next(
+            row for row in moved.get_json()['data']
+            if row.get('model') == 'SB18 III'
+        )
+        self.assertEqual(moved_inventory['productCategory'], 'Premium Audio')
+        self.assertEqual(moved_inventory['department'], operational_department)
+
+        added = self.client.post('/api/finance/products', json={
+            'description': 'Premium audio technician',
+            'productLabel': 'Premium audio technician',
+            'department': 'Specialist Crew',
+            'productCategory': 'Premium Audio',
+            'unitPrice': 700,
+            'uom': 'pax',
+            'isCustom': True,
+        })
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
+        catalog = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Premium Audio'},
+        ).get_json()['data']
+        self.assertTrue(any(row.get('model') == 'SB18 III' for row in catalog))
+        self.assertTrue(all(
+            row.get('productCategory') == 'Premium Audio' for row in catalog
+        ))
+
+        deleted = self.client.delete(
+            '/api/finance/products/category',
+            json={'category': 'Premium Audio'},
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertEqual(deleted.get_json()['deletedCount'], 2)
+        self.assertFalse(any(
+            row.get('productCategory') == 'Premium Audio'
+            for row in deleted.get_json()['data']
+        ))
+        self.assertEqual(
+            self.client.get(
+                '/api/finance/catalog', query_string={'query': 'SB18 III'},
+            ).get_json()['data'],
+            [],
+        )
+        self.assertIn('AX#01', self.data_manager.inventory)
+        self.assertEqual(self.data_manager.inventory['AX#01'].department_code, 'AX')
+
     def test_rate_card_inventory_price_update_reuses_catalog_row_and_aliases(self):
         quotation = self.create_quote('Rate Card Asset Update')
         inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
@@ -2814,8 +2869,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('function productCatalogToggleSource(', source)
         self.assertIn('function productCatalogSetCategory(', source)
         self.assertIn("productCatalogUpdateField(${index},'productLabel'", source)
+        self.assertIn("productCatalogUpdateField(${index},'productCategory'", source)
         self.assertIn("productCatalogUpdateField(${index},'uom'", source)
         self.assertIn('aria-label="Product categories"', source)
+        self.assertIn('function productCatalogOpenCategoryMenu(', source)
+        self.assertIn('function productCatalogDeleteCategory(', source)
+        self.assertIn("'/api/finance/products/category', 'DELETE'", source)
         self.assertIn("title: 'Add this as a product?'", source)
         self.assertIn("title: 'Update the product price?'", source)
         self.assertIn('function financeOpenRateCard()', source)
@@ -8447,16 +8506,18 @@ class FinanceFeatureTests(unittest.TestCase):
                 }],
             },
         ).get_json()['data']
-        issued = self.client.post(
-            f"/api/invoice-plans/{accepted['id']}/installments/draft-invoice/issue",
+        exported = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/draft-invoice/export",
             json={'invoiceDate': '2026-08-10'},
         )
-        self.assertEqual(issued.status_code, 201, issued.get_data(as_text=True))
-        invoice_id = issued.get_json()['data']['id']
+        self.assertEqual(exported.status_code, 201, exported.get_data(as_text=True))
+        invoice_id = exported.get_json()['data']['id']
 
-        draft_plan = issued.get_json()['plan']['plan']
+        draft_plan = exported.get_json()['plan']['plan']
         draft_plan['installments'][0].update({
             'label': 'Final production invoice',
+            'mode': 'amount',
+            'value': 450,
             'dueDate': '2026-09-15',
         })
         edited = self.client.put(
@@ -8467,6 +8528,7 @@ class FinanceFeatureTests(unittest.TestCase):
             f"/api/invoices/{invoice_id}"
         ).get_json()['data']
         self.assertEqual(edited_invoice['invoiceLabel'], 'Final production invoice')
+        self.assertEqual(edited_invoice['invoiceAmount'], 450)
         self.assertEqual(edited_invoice['dueDate'], '2026-09-15')
         edited_pdf = self.client.get(f"/api/invoices/{invoice_id}/pdf")
         edited_pdf_text = '\n'.join(
@@ -8506,6 +8568,8 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']['plan']
         locked_plan['installments'][0].update({
             'label': 'Should not replace sent label',
+            'mode': 'percentage',
+            'value': 25,
             'dueDate': '2026-12-31',
         })
         saved_locked = self.client.put(
@@ -8514,6 +8578,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(saved_locked.status_code, 200, saved_locked.get_data(as_text=True))
         retained = saved_locked.get_json()['data']['plan']['installments'][0]
         self.assertEqual(retained['label'], '')
+        self.assertEqual(retained['mode'], 'amount')
+        self.assertEqual(retained['value'], 450)
         self.assertEqual(retained['dueDate'], sent_due_date)
 
         direct_edit = self.client.put(
@@ -8726,7 +8792,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(unchanged_quote['client']['name'], 'Original Client')
 
         issued = self.client.post(
-            f"/api/invoice-plans/{accepted['id']}/installments/invoice-details-full/issue",
+            f"/api/invoice-plans/{accepted['id']}/installments/invoice-details-full/export",
             json={'invoiceDate': '2026-08-10'},
         )
         self.assertEqual(issued.status_code, 201, issued.get_data(as_text=True))
@@ -8778,7 +8844,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('function invoiceUpdateDetail', invoice_source)
         self.assertIn('function invoiceEditReference', invoice_source)
         self.assertIn('<th>PO / Reference</th>', invoice_source)
-        self.assertIn("name: 'reference'", invoice_source)
+        self.assertIn('function invoiceExportInstallment', invoice_source)
 
     def test_invoice_workspace_preserves_issued_rows_across_presets(self):
         invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
@@ -9043,8 +9109,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("await apiCall('/api/pdf-settings')", invoice_source)
         self.assertIn('invoiceStatusBadgeMarkup(plan.status)', invoice_source)
         self.assertIn('Invoice / Quotation', invoice_source)
-        self.assertIn('nextInvoiceNumber', invoice_source)
-        self.assertIn("name: 'invoiceNumber'", invoice_source)
+        self.assertIn('function invoiceExportInstallment', invoice_source)
+        self.assertIn('/installments/${encodeURIComponent(row.id)}/export', invoice_source)
         self.assertIn('function invoiceOpenSoaModal', invoice_source)
         self.assertIn('/api/statements-of-account/companies', invoice_source)
         self.assertIn('Create SOA', invoice_source)

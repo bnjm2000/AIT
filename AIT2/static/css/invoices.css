@@ -303,7 +303,6 @@
 .invoice-icon-button { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border: 1px solid var(--invoice-border); border-radius: 6px; background: #fff; color: #475467; cursor: pointer; }
 .invoice-icon-button.danger { color: #b42318; }
 .invoice-icon-button svg { width: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
-.invoice-issue-button,
 .invoice-pdf-button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--invoice-green, #0f766e); border-radius: 6px; background: var(--invoice-green, #0f766e); color: #fff; font-size: .72rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .invoice-pdf-button { border-color: #2563eb; background: #2563eb; }
 .invoice-pdf-button svg { width: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
