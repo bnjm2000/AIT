@@ -138,14 +138,14 @@ def _expense_category(expense):
     )
     if category_key == 'vendor-service':
         category = 'Service'
-    elif (
-        source == 'worker-invoice'
-        or (source == 'worker-claim' and category_key in {'meal', 'transport'})
-        or (source == 'manual' and category_key == 'meal')
-    ):
+    elif source == 'worker-invoice':
         category = 'Manpower'
-    elif source == 'manual' and category_key == 'transport':
+    elif category_key == 'meal':
+        category = 'Meal'
+    elif category_key == 'transport':
         category = 'Transport'
+    elif category_key == 'purchase':
+        category = 'Purchase'
     department = str(expense.get('department') or '').strip()
     return f'{category} - {department}' if department else category
 
@@ -556,7 +556,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     else:
         calculation_rows.append(('Revenue', summary.get('revenue'), False))
     calculation_rows.extend([
-        ('Crew & Vendors cost', -_number(summary.get('manpowerCost')), False),
+        ('Manpower cost', -_number(summary.get('manpowerCost')), False),
         ('Transport cost', -_number(summary.get('transportCost')), False),
         ('Other expenses', -_number(summary.get('otherExpenses')), False),
         ('Net profit before commission', summary.get('beforeCommission'), True),
@@ -695,10 +695,10 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         for value in ('COST AREA', 'SOURCE', 'AMOUNT')
     ]]
     source_items = [
-        ('Crew & Vendors', 'Crew invoices or assignment estimate', breakdown.get('manpowerInvoicesOrEstimate')),
-        ('Crew & Vendors', 'Vendor service invoices or assignment estimate', breakdown.get('vendorServices')),
-        ('Crew & Vendors', 'Crew transport claims', breakdown.get('crewTransportClaims')),
-        ('Crew & Vendors', 'Meal claims', breakdown.get('workerMealClaims')),
+        ('Manpower', 'Manpower invoices or assignment estimate', breakdown.get('manpowerInvoicesOrEstimate')),
+        ('Other', 'Vendor service invoices or assignment estimate', breakdown.get('vendorServices')),
+        ('Other', 'Crew transport claims', breakdown.get('crewTransportClaims')),
+        ('Other', 'Meal claims', breakdown.get('workerMealClaims')),
         ('Transport', 'Transport-page bookings', breakdown.get('transportBookings')),
         ('Other', 'Other crew claims', breakdown.get('workerOtherClaims')),
         ('Other', 'Additional meal expenses', breakdown.get('manualMealExpenses')),

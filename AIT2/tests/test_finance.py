@@ -5834,9 +5834,15 @@ class FinanceFeatureTests(unittest.TestCase):
         workforce['freelancers'] = [{
             'id': 'worker-profit', 'name': 'Audio Crew', 'active': True,
         }]
-        workforce['vendors'] = [{
-            'id': 'vendor-profit', 'name': 'External Audio', 'active': True,
-        }]
+        workforce['vendors'] = [
+            {
+                'id': 'vendor-profit', 'name': 'External Audio', 'active': True,
+            },
+            {
+                'id': 'manpower-vendor-profit', 'name': 'Lighting Crew Vendor',
+                'active': True,
+            },
+        ]
         workforce['assignments'] = {'139': [
             {
                 'id': 'worker-row', 'freelancerId': 'worker-profit',
@@ -5854,6 +5860,13 @@ class FinanceFeatureTests(unittest.TestCase):
                 'department': 'LX', 'roleName': 'Lighting crew',
                 'pax': 1, 'ratePerPax': 50, 'days': 1,
             },
+            {
+                'id': 'manpower-vendor-row',
+                'vendorId': 'manpower-vendor-profit',
+                'subjectType': 'vendor', 'providerType': 'manpower',
+                'department': 'LX', 'roleName': 'Lighting operators',
+                'pax': 1, 'ratePerPax': 60, 'days': 1,
+            },
         ]}
         workforce['submissions'] = {'139': {
             'worker-profit': {'invoices': [{
@@ -5864,6 +5877,11 @@ class FinanceFeatureTests(unittest.TestCase):
                 'id': 'vendor-invoice-profit', 'amount': 275,
                 'status': 'Approved',
                 'allocations': [{'department': 'AX', 'amount': 275}],
+            }], 'claims': []},
+            'manpower-vendor-profit': {'invoices': [{
+                'id': 'manpower-vendor-invoice-profit', 'amount': 60,
+                'status': 'Approved',
+                'allocations': [{'department': 'LX', 'amount': 60}],
             }], 'claims': []},
         }}
         save_workforce(app_module._workforce_folder(), workforce)
@@ -5877,31 +5895,38 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         payload = response.get_json()['data']
         summary = payload['summary']
-        self.assertEqual(summary['manpowerCost'], 385)
-        self.assertEqual(summary['manpowerCardCost'], 385)
+        self.assertEqual(summary['manpowerCost'], 170)
+        self.assertEqual(summary['manpowerCardCost'], 170)
         self.assertEqual(summary['vendorServiceCost'], 275)
-        self.assertEqual(summary['directCosts'], 385)
-        self.assertEqual(summary['beforeCommission'], 615)
-        self.assertEqual(summary['commissionBase'], 615)
-        self.assertEqual(summary['commission'], 61.5)
-        self.assertEqual(summary['netProfit'], 553.5)
+        self.assertEqual(summary['directCosts'], 170)
+        self.assertEqual(summary['otherExpenses'], 275)
+        self.assertEqual(summary['beforeCommission'], 555)
+        self.assertEqual(summary['commissionBase'], 555)
+        self.assertEqual(summary['commission'], 55.5)
+        self.assertEqual(summary['netProfit'], 499.5)
         self.assertEqual(payload['vendorServiceDepartments'], [{
-            'department': 'AX', 'label': 'Vendor - AX', 'amount': 275.0,
+            'department': 'AX', 'label': 'Service - Audio', 'amount': 275.0,
         }])
         departmental_chart_rows = [
             row for row in payload['profitChart']
             if row.get('group') == 'manpower' and row.get('department') == 'AX'
         ]
         self.assertEqual(len(departmental_chart_rows), 1)
-        self.assertEqual(departmental_chart_rows[0]['amount'], 385)
+        self.assertEqual(departmental_chart_rows[0]['amount'], 110)
         self.assertTrue(
-            departmental_chart_rows[0]['label'].startswith('Crew & Vendors - ')
+            departmental_chart_rows[0]['label'].startswith('Manpower - ')
         )
-        self.assertFalse(any(
-            row.get('group') == 'manpower'
-            and row.get('label', '').startswith('Vendor - ')
-            for row in payload['profitChart']
-        ))
+        self.assertIn(
+            {'group': 'vendor', 'label': 'Service - Audio', 'amount': 275},
+            [
+                {
+                    'group': row.get('group'),
+                    'label': row.get('label'),
+                    'amount': row.get('amount'),
+                }
+                for row in payload['profitChart']
+            ],
+        )
         vendor_invoice = next(
             row for row in payload['expenses']
             if row.get('sourceId') == 'vendor-invoice-profit'
@@ -5909,6 +5934,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
         self.assertEqual(vendor_invoice['category'], 'Vendor service')
         self.assertEqual(vendor_invoice['categoryLabel'], 'Crew & Vendors')
+        manpower_vendor_invoice = next(
+            row for row in payload['expenses']
+            if row.get('sourceId') == 'manpower-vendor-invoice-profit'
+        )
+        self.assertEqual(manpower_vendor_invoice['categoryKey'], 'manpower')
+        self.assertEqual(manpower_vendor_invoice['category'], 'Manpower')
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
         self.assertIn("category = 'Service';", finance_source)
 
@@ -6117,17 +6148,17 @@ class FinanceFeatureTests(unittest.TestCase):
         payload = self.client.get('/api/finance/profit-loss/136').get_json()['data']
         summary = payload['summary']
         self.assertEqual(payload['quotation']['id'], accepted_quote['id'])
-        self.assertEqual(summary['manpowerCost'], 780)
-        self.assertEqual(summary['manpowerCardCost'], 780)
+        self.assertEqual(summary['manpowerCost'], 700)
+        self.assertEqual(summary['manpowerCardCost'], 700)
         self.assertEqual(summary['crewVendorInvoiceCost'], 700)
         self.assertEqual(summary['mealCost'], 30)
         self.assertEqual(summary['crewTransportClaimsCost'], 50)
         self.assertEqual(summary['transportBookingCost'], 100)
         self.assertEqual(summary['transportCost'], 100)
         self.assertEqual(summary['manualExpensesTotal'], 125)
-        self.assertEqual(summary['otherExpenses'], 145)
+        self.assertEqual(summary['otherExpenses'], 225)
         self.assertEqual(summary['manpowerBudget'], 4860)
-        self.assertEqual(summary['manpowerBudgetVariance'], 4080)
+        self.assertEqual(summary['manpowerBudgetVariance'], 4160)
         self.assertEqual(summary['transportBudget'], 450)
         self.assertEqual(summary['transportBudgetVariance'], 350)
 

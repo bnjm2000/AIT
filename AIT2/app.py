@@ -41350,20 +41350,20 @@ def _finance_profit_loss_payload(event, finance_data):
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
     meal_cost = worker_meal_claims
     vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
-    workforce_invoice_cost = round(
-        workforce_costs['manpowerCost'] + vendor_service_cost,
-        2,
-    )
-    manpower_cost = round(
-        workforce_invoice_cost + meal_cost + crew_transport_claims,
-        2,
-    )
+    manpower_cost = round(workforce_costs['manpowerCost'], 2)
     manpower_card_cost = manpower_cost
-    # Transport Cost is intentionally sourced only from the Transport page.
-    # Crew transport claims belong to Crew & Vendors, while manually entered
-    # P&L expenses remain Other Expenses regardless of their category label.
+    # The manpower card is compared against the quotation's manpower budget, so
+    # it must contain manpower invoices/estimates only. Services and claims are
+    # still P&L costs, but belong under Other Expenses.
     transport_cost = round(workforce_costs['transportCost'], 2)
-    other_expenses = round(worker_other_claims + manual_expenses_total, 2)
+    worker_claims_cost = round(
+        crew_transport_claims + worker_meal_claims + worker_other_claims,
+        2,
+    )
+    other_expenses = round(
+        vendor_service_cost + worker_claims_cost + manual_expenses_total,
+        2,
+    )
     direct_costs = round(manpower_cost + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
     commission_base = max(0, before_commission)
@@ -41411,19 +41411,17 @@ def _finance_profit_loss_payload(event, finance_data):
     )
     quotation_budgets = _finance_profit_loss_quotation_budgets(quotation)
     manpower_department_totals = {}
-    for department_costs in (
-        workforce_costs.get('manpowerDepartments') or {},
-        workforce_costs.get('vendorServiceDepartments') or {},
-    ):
-        for department, amount in department_costs.items():
-            amount = round(_safe_float(amount, 0), 2)
-            if amount <= 0:
-                continue
-            department = str(department or 'Unallocated')
-            manpower_department_totals[department] = round(
-                manpower_department_totals.get(department, 0) + amount,
-                2,
-            )
+    for department, amount in (
+        workforce_costs.get('manpowerDepartments') or {}
+    ).items():
+        amount = round(_safe_float(amount, 0), 2)
+        if amount <= 0:
+            continue
+        department = str(department or 'Unallocated')
+        manpower_department_totals[department] = round(
+            manpower_department_totals.get(department, 0) + amount,
+            2,
+        )
 
     manpower_department_rows = []
     for department, amount in sorted(
@@ -41451,7 +41449,7 @@ def _finance_profit_loss_payload(event, finance_data):
             'key': f"manpower-{_normalise_department_code(row['department']).lower()}",
             'group': 'manpower',
             'department': row['department'],
-            'label': f"Crew & Vendors - {row['label']}",
+            'label': f"Manpower - {row['label']}",
             'amount': row['amount'],
         })
     vendor_service_department_rows = []
@@ -41463,10 +41461,24 @@ def _finance_profit_loss_payload(event, finance_data):
         if amount <= 0:
             continue
         department = str(department or 'Unallocated')
+        code = _normalise_department_code(department)
+        label = (
+            _department_payload(code).get('name')
+            if code and code not in {'UNALLOCATED', 'UNASSIGNED'}
+            else department
+        )
         vendor_service_department_rows.append({
             'department': department,
-            'label': f'Vendor - {department}',
+            'label': f'Service - {label or department}',
             'amount': amount,
+        })
+    for row in vendor_service_department_rows:
+        profit_chart.append({
+            'key': f"service-{_normalise_department_code(row['department']).lower()}",
+            'group': 'vendor',
+            'department': row['department'],
+            'label': row['label'],
+            'amount': row['amount'],
         })
     if meal_cost > 0:
         profit_chart.append({
@@ -41518,7 +41530,7 @@ def _finance_profit_loss_payload(event, finance_data):
 
     breakdown = {
         'manpower': manpower_card_cost,
-        'manpowerDirect': workforce_invoice_cost,
+        'manpowerDirect': manpower_cost,
         'meals': meal_cost,
         'manpowerInvoicesOrEstimate': workforce_costs['manpowerCost'],
         'workerTransportClaims': crew_transport_claims,
@@ -41529,10 +41541,7 @@ def _finance_profit_loss_payload(event, finance_data):
         'manualTransportExpenses': manual_transport_expenses,
         'transport': transport_cost,
         'vendorServices': vendor_service_cost,
-        'workerClaims': round(
-            crew_transport_claims + worker_meal_claims + worker_other_claims,
-            2,
-        ),
+        'workerClaims': worker_claims_cost,
         'workerMealClaims': worker_meal_claims,
         'workerOtherClaims': worker_other_claims,
         'manualOtherExpenses': manual_other_expenses,
@@ -41572,7 +41581,10 @@ def _finance_profit_loss_payload(event, finance_data):
             'directCosts': direct_costs,
             'manpowerCost': manpower_cost,
             'manpowerCardCost': manpower_card_cost,
-            'crewVendorInvoiceCost': workforce_invoice_cost,
+            # Legacy response key retained for older clients; it now represents
+            # manpower invoices/estimates only.
+            'crewVendorInvoiceCost': manpower_cost,
+            'manpowerInvoicesOrEstimateCost': manpower_cost,
             'mealCost': meal_cost,
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
@@ -41595,10 +41607,7 @@ def _finance_profit_loss_payload(event, finance_data):
             'vendorServiceCost': vendor_service_cost,
             'vendorServiceInvoiceCost': workforce_costs['vendorServiceInvoiceCost'],
             'vendorServiceEstimatedCost': workforce_costs['vendorServiceEstimatedCost'],
-            'workerClaimsCost': round(
-                crew_transport_claims + worker_meal_claims + worker_other_claims,
-                2,
-            ),
+            'workerClaimsCost': worker_claims_cost,
             'workerOtherClaimsCost': worker_other_claims,
             'manualOtherExpenses': manual_other_expenses,
             'manualExpensesTotal': manual_expenses_total,

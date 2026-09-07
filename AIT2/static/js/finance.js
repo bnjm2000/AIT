@@ -8715,7 +8715,7 @@ function profitLossRenderCensored(root, data) {
       </div>
     </section>
     <div class="pnl-kpis pnl-kpis-censored" aria-label="Restricted financial summary">
-      ${['Revenue', 'Crew & Vendors Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
+      ${['Revenue', 'Manpower Cost', 'Transport Cost', 'Other Expenses', 'Commission', 'Net Profit', 'Profit Margin']
         .map(label => profitLossKpi(label, 'Restricted', ''))
         .join('')}
     </div>
@@ -8768,13 +8768,11 @@ function renderProfitLossPage() {
     financeNumber(summary.transportBookingCost) > 0 ? `Bookings ${financeSgd(summary.transportBookingCost)}` : ''
   ].filter(Boolean);
   const manpowerNoteParts = [
-    financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`,
-    financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
-    financeNumber(summary.crewTransportClaimsCost) > 0 ? `Transport claims ${financeSgd(summary.crewTransportClaimsCost)}` : '',
-    financeNumber(summary.workerMealClaimsCost) > 0 ? `Meal claims ${financeSgd(summary.workerMealClaimsCost)}` : ''
+    financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`
   ].filter(Boolean);
   const otherNoteParts = [
-    financeNumber(summary.workerOtherClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerOtherClaimsCost)}` : '',
+    financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
+    financeNumber(summary.workerClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerClaimsCost)}` : '',
     financeNumber(summary.manualExpensesTotal) > 0 ? `Added here ${financeSgd(summary.manualExpensesTotal)}` : ''
   ].filter(Boolean);
   const revenueSource = data.revenueSource || (quote ? 'quotation' : 'none');
@@ -8863,7 +8861,7 @@ function renderProfitLossPage() {
 
     <div class="pnl-kpis">
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
-      ${profitLossKpi('Crew & Vendors Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
@@ -8876,7 +8874,7 @@ function renderProfitLossPage() {
         <h3>Profit Calculation</h3>
         <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
-        <div class="pnl-calc-row"><span>Crew &amp; Vendors Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
+        <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
         <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
         <h4>Less: Other Expenses</h4>
