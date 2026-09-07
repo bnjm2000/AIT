@@ -894,6 +894,15 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('.costing-sale-difference.is-below-margin', css_source)
         self.assertIn('.costing-sale-difference.is-below-cost', css_source)
         self.assertIn('onblur="costingFormatMoneyInput(this)"', source)
+        self.assertIn(
+            '<span class="costing-currency-symbol">$</span><input data-line-unit-cost',
+            source,
+        )
+        self.assertIn(
+            '.costing-money-input input { flex: 0 1 11ch;',
+            css_source,
+        )
+        self.assertIn('justify-content: flex-end;', css_source)
         self.assertIn('return showbaseLineWorkspace.addRowMarkup({', source)
         self.assertIn("className: 'costing-add-item'", source)
         self.assertIn('<main class="costing-line-workspace">', source)
@@ -932,8 +941,20 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('value="${costingAttr(costingMoneyInputValue(line.salePrice))}"', source)
         self.assertIn('divisor ? totalSale / divisor : totalSale', source)
         self.assertIn('sale.value = costingMoneyInputValue(line.salePrice)', source)
-        self.assertIn('function costingResetSalePrice(index)', source)
-        self.assertIn('onclick="costingResetSalePrice(${index})"', source)
+        self.assertIn('function costingLineCalculatedPrice(index, value)', source)
+        self.assertIn('oninput="costingLineCalculatedPrice(${index},this.value)"', source)
+        calculated_price_handler = source.split(
+            'function costingLineCalculatedPrice(index, value)', 1
+        )[1].split('function costingLineCostTotal', 1)[0]
+        self.assertIn(
+            '((calculatedPrice - line.costTotal) / line.costTotal) * 100',
+            calculated_price_handler,
+        )
+        self.assertIn(
+            "costingLineRecalculate(line, 'cost');",
+            calculated_price_handler,
+        )
+        self.assertNotIn('costingSetSaleGroupUnitPrice(', calculated_price_handler)
         self.assertIn("toLocaleString('en-SG'", source)
         self.assertIn('function costingVendorManagementMarkup(', source)
         self.assertIn("placeholder=\"Unassigned\"", source)

@@ -163,6 +163,7 @@
       const search = options.search || {};
       const category = options.category || {};
       const extraMarkup = String(options.extraMarkup || '');
+      const afterGroupMarkup = String(options.afterGroupMarkup || '');
       const optionalAttribute = (name, value) => (
         value ? ` ${name}="${escapeAttribute(value)}"` : ''
       );
@@ -187,6 +188,7 @@
         ${extraMarkup}
         <button type="button" class="btn btn-primary" onclick="${escapeAttribute(options.addAction || '')}">+ Add</button>
         ${options.showGroup === false ? '' : `<button type="button" class="btn btn-secondary finance-add-group-button" onclick="${escapeAttribute(options.groupAction || `financeOpenLineGroupEditor('${options.mode || 'finance'}')`)}">+ Group</button>`}
+        ${afterGroupMarkup}
       </div>`;
     },
 

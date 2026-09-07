@@ -7,6 +7,7 @@ from pathlib import Path
 from decimal import Decimal
 from html import escape
 
+from pdf_fonts import pdf_font_names
 from services.accounting_workspace import KINDS, dec, money, snapshot_document_parties
 
 
@@ -73,28 +74,31 @@ def document_html(view):
     return '<article class="ac-document-preview">' + heading + warnings + details + f'<p>Unit prices {"include" if d.get("priceBasis") == "inclusive" else "exclude"} GST.</p>' + table + groups + totals + f'<p>{e(d.get("notes"))}</p></article>'
 
 
-def document_pdf(view):
+def document_pdf(view, company=None):
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-    from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     import reportlab
 
     font = 'AccountingSans'
+    font_bold = font + 'Bold'
     if font not in pdfmetrics.getRegisteredFontNames():
         fonts = Path(reportlab.__file__).parent / 'fonts'
         pdfmetrics.registerFont(TTFont(font, str(fonts / 'Vera.ttf')))
-        pdfmetrics.registerFont(TTFont(font + 'Bold', str(fonts / 'VeraBd.ttf')))
+        pdfmetrics.registerFont(TTFont(font_bold, str(fonts / 'VeraBd.ttf')))
+    if 'STSong-Light' not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+    font, font_bold = pdf_font_names(company, default=(font, font_bold))
     body = ParagraphStyle('AccountingBody', fontName=font, fontSize=10, leading=14, spaceAfter=5)
     small = ParagraphStyle('AccountingSmall', parent=body, fontSize=8, leading=11)
     right = ParagraphStyle('AccountingAmount', parent=small, alignment=TA_RIGHT)
-    title = ParagraphStyle('AccountingTitle', parent=body, fontName=font + 'Bold', fontSize=18, leading=24, spaceAfter=10)
+    title = ParagraphStyle('AccountingTitle', parent=body, fontName=font_bold, fontSize=18, leading=24, spaceAfter=10)
     def para(value, style=body):
         text = escape(str(value or '')).replace('\n', '<br/>')
         text = re.sub(r'[\u2e80-\u9fff]+', lambda match: '<font name="STSong-Light">' + match.group() + '</font>', text)

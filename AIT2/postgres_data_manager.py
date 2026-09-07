@@ -460,6 +460,7 @@ class PostgresDataManager(DataManager):
             'address2': client.address2,
             'address3': client.address3,
             'postalCode': client.postal_code,
+            'active': bool(getattr(client, 'is_active', True)),
         }
 
     # ---------------- Loading ----------------
@@ -712,6 +713,7 @@ class PostgresDataManager(DataManager):
                         address2=data.get('address2', ''),
                         address3=data.get('address3', ''),
                         postal_code=data.get('postalCode', ''),
+                        is_active=data.get('active', True),
                     )
                     clients[client_name] = client
                     snapshots[client_name] = _fingerprint(

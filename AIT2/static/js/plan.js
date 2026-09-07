@@ -896,6 +896,10 @@ function eventSubprojectModelGroups(event, state) {
     const countableAssigned = countableAssignedSpecific + preparedSlots + returnedPreparedSlots;
     const countableReturned = countableReturnedSpecific + returnedPreparedSlots;
     const countablePrepared = Math.max(0, countableAssigned - countableReturned);
+    const extraPreparedEver = Math.max(
+      0,
+      assigned - Math.min(countableAssigned, required)
+    );
     return {
       ...source,
       department: item.department,
@@ -916,6 +920,7 @@ function eventSubprojectModelGroups(event, state) {
       countableReturnedQuantity: Math.min(required, countableReturned),
       countablePreparedQuantity: Math.min(required, countablePrepared),
       countablePreparedEverQuantity: Math.min(required, countableAssigned),
+      extraPreparedEverQuantity: extraPreparedEver,
       extraPreparedQuantity: activeExtraSpecific + Math.max(
         0,
         preparedSlots + countableAssignedSpecific - required
@@ -2680,6 +2685,7 @@ function renderPlanRequirementsCard() {
 
 function renderPlanEventDetailsCard() {
   const event = planPageState.event || {};
+  const notes = String(event.notes || '');
   const eventDates = event.startDate && event.startDate === event.endDate
     ? event.startDate
     : [event.startDate, event.endDate].filter(Boolean).join(' – ');
@@ -2696,6 +2702,20 @@ function renderPlanEventDetailsCard() {
           <div><dt>Date(s)</dt><dd>${escapeHtml(eventDates || '—')}</dd></div>
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
+          <div class="plan-detail-notes-row">
+            <dt>Notes</dt>
+            <dd>
+              <textarea class="plan-notes-textarea" id="planEventNotes"
+                        maxlength="50000"
+                        placeholder="Add notes or special requirements for this event..."
+                        oninput="planNotesChanged(this)"
+                        onblur="planFlushNotesSave()">${escapeHtml(notes)}</textarea>
+              <span class="plan-notes-footer">
+                <span id="planNotesSaveState">Saved</span>
+                <span id="planNotesCharacterCount">${notes.length}/50000</span>
+              </span>
+            </dd>
+          </div>
         </dl>
       </div>
     </section>
@@ -2889,6 +2909,7 @@ function planNotesChanged(textarea) {
   const state = document.getElementById('planNotesSaveState');
   if (counter) counter.textContent = `${notes.length}/50000`;
   if (state) state.textContent = 'Unsaved changes';
+  if (planPageState.event) planPageState.event.notes = notes;
 
   planPendingNotesSave = {
     eventId: Number(planPageState.eventId),

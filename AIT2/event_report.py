@@ -7,6 +7,13 @@ from html import escape
 from io import BytesIO
 import os
 
+from pdf_fonts import (
+    draw_pdf_canvas_text,
+    pdf_font_names,
+    pdf_text_typography,
+    pdf_text_typography_is_custom,
+)
+from pdf_rich_text import draw_pdf_rich_text
 from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
 from workforce_schedule import (
     SHOWBASE_GREEN,
@@ -57,6 +64,7 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
 
     event = payload.get("event") or {}
     company = company or payload.get("company") or {}
+    font_regular, font_bold = pdf_font_names(company)
     page_width, page_height = A4
     margin = 11 * mm
     accent_hex = _safe_colour(company.get("themeColor"), SHOWBASE_GREEN)
@@ -72,6 +80,11 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     letterhead_enabled = company.get("letterheadEnabled", True) is not False
     footer_text = str(company.get("footerText") or "").replace("\n", " | ").strip()
     generated_at = datetime.now().strftime("%d %B %Y, %H:%Mhrs")
+    letterhead_typography = pdf_text_typography(company, "letterhead", 14)
+    footer_typography = pdf_text_typography(company, "footer", 5.8)
+    letterhead_customised = pdf_text_typography_is_custom(company, "letterhead")
+    letterhead_html = company.get("letterheadHtml") or ""
+    footer_html = company.get("footerHtml") or ""
 
     def draw_page(canvas, _doc):
         canvas.saveState()
@@ -87,17 +100,34 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn:
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (112 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                112 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get("fontFamily"), default_size=6.2,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
+            )
+        elif letterhead_enabled and not logo_drawn:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 14)
-            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, margin, page_height - 13 * mm, letterhead_typography, max_chars=48)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
         canvas.setStrokeColor(border)
         canvas.setLineWidth(.5)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or company_name
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_line, "Helvetica"), 5.8)
-        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 25 * mm,
+                default_family=company.get("fontFamily"), default_size=5.8, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_line, margin, 7.5 * mm, footer_typography, max_chars=165)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -115,7 +145,7 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
                 self.__dict__.update(page)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont("Helvetica", 5.8)
+                self.setFont(font_regular, 5.8)
                 self.drawRightString(page_width - margin, 7.5 * mm,
                                      f"Page {page_number} of {page_count}")
                 self.restoreState()
@@ -130,18 +160,18 @@ def build_event_report_pdf(payload, *, company=None, logo_path="", generated_by=
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle("EventReportTitle", parent=styles["Heading1"],
-                           fontName="Helvetica-Bold", fontSize=18, leading=21,
+                           fontName=font_bold, fontSize=18, leading=21,
                            textColor=ink, spaceAfter=3)
     section = ParagraphStyle("EventReportSection", parent=styles["Heading2"],
-                             fontName="Helvetica-Bold", fontSize=10, leading=12,
+                             fontName=font_bold, fontSize=10, leading=12,
                              textColor=ink)
     cell = ParagraphStyle("EventReportCell", parent=styles["BodyText"],
-                          fontName="Helvetica", fontSize=7, leading=8.5, textColor=ink)
-    bold = ParagraphStyle("EventReportBold", parent=cell, fontName="Helvetica-Bold")
+                          fontName=font_regular, fontSize=7, leading=8.5, textColor=ink)
+    bold = ParagraphStyle("EventReportBold", parent=cell, fontName=font_bold)
     table_header = ParagraphStyle("EventReportHeader", parent=bold, textColor=colors.white)
     center = ParagraphStyle("EventReportCenter", parent=cell, alignment=TA_CENTER)
     meta_label = ParagraphStyle("EventReportMetaLabel", parent=cell,
-                                fontName="Helvetica-Bold", fontSize=5.7,
+                                fontName=font_bold, fontSize=5.7,
                                 leading=7, textColor=muted)
     meta_value = ParagraphStyle("EventReportMetaValue", parent=bold)
 

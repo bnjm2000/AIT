@@ -58,8 +58,8 @@ function accountingSvg(name) {
 async function loadAccounting(options = {}) {
   const root = accountingRoot();
   if (!root) return;
-  if (typeof canCurrentUserManageRoles === 'function' && !canCurrentUserManageRoles()) {
-    root.innerHTML = '<div class="accounting-empty">Accounting is available to company admins and platform owners.</div>';
+  if (typeof canCurrentUserAccessAccounting === 'function' && !canCurrentUserAccessAccounting()) {
+    root.innerHTML = '<div class="accounting-empty">Accounting is available to company admins and the read-only platform owner.</div>';
     return;
   }
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading accounting...</div>';
@@ -370,7 +370,10 @@ function renderAccountingBody() {
 function renderAccounting() {
   const root = accountingRoot();
   if (!root || !accountingState.data) return;
-  root.innerHTML = `${accountingHeader()}${accountingTabs()}<main id="accountingBody" class="accounting-body"></main>`;
+  const readOnlyNotice = acCan('read') && !acCan('write')
+    ? '<div class="accounting-notice neutral"><span>Read-only access: you can view and export Accounting data, but you cannot make changes.</span></div>'
+    : '';
+  root.innerHTML = `${accountingHeader()}${accountingTabs()}${readOnlyNotice}<main id="accountingBody" class="accounting-body"></main>`;
   renderAccountingBody();
 }
 

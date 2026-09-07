@@ -1,5 +1,6 @@
 import io
 import copy
+import re
 import unittest
 
 import app as app_module
@@ -19,7 +20,7 @@ class AccountingWorkspaceTests(unittest.TestCase):
         return response.get_json()
 
     def begin(self):
-        self.login('bnjm2000')
+        self.login('sales-admin')
 
     def document(self, kind='invoice', amount=100, **extra):
         data = dict(kind=kind, date='2026-01-15', dueDate='2026-02-15', contact='Example Pte Ltd',
@@ -123,9 +124,18 @@ class AccountingWorkspaceTests(unittest.TestCase):
         statement = self.report('customer-statement', '&contact=Example%20Pte%20Ltd&currency=SGD')
         self.assertEqual(statement['rows'][-1]['balance'], 60)
 
-    def test_only_company_admins_and_owner_can_access_accounting(self):
+    def test_company_admins_have_full_access_and_owner_is_read_only(self):
         self.begin()
-        self.request('actions/controls', dict(roles={'alice': 'bookkeeper', 'bob': 'accountant', 'no-sales': 'auditor'}, approvalRequired=True))
+        self.request('actions/controls', dict(roles={
+            'alice': 'bookkeeper',
+            'bob': 'accountant',
+            'no-sales': 'auditor',
+        }, approvalRequired=True))
+        # Simulate a role left behind by an older release. It must not make the
+        # platform owner writable or visible in Accounting access management.
+        finance_data = app_module._load_finance_data()
+        app_module._accounting_store(finance_data)['settings']['roles']['bnjm2000'] = 'manager'
+        app_module._save_finance_data(finance_data)
         self.login('alice')
         self.assertEqual(self.client.get('/accounting').status_code, 302)
         self.assertEqual(self.client.get('/api/finance/accounting').status_code, 403)
@@ -137,12 +147,32 @@ class AccountingWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.client.get('/accounting').status_code, 302)
         self.assertEqual(self.client.get('/api/finance/accounting').status_code, 403)
         self.request('documents', {}, expected=403)
+        self.login('bnjm2000')
+        self.assertEqual(self.client.get('/accounting').status_code, 200)
+        owner_workspace = self.workspace()
+        self.assertEqual(owner_workspace['workspace']['role'], 'auditor')
+        self.assertEqual(owner_workspace['workspace']['permissions'], ['read'])
+        self.assertNotIn('bnjm2000', owner_workspace['accountingUsers'])
+        self.assertNotIn('bnjm2000', owner_workspace['settings']['roles'])
+        finance_before = copy.deepcopy(app_module._load_finance_data())
+        for rule in app_module.app.url_map.iter_rules():
+            if not rule.rule.startswith('/api/finance/accounting'):
+                continue
+            for method in sorted(rule.methods - {'GET', 'HEAD', 'OPTIONS'}):
+                path = re.sub(r'<(?:[^:<>]+:)?[^<>]+>', 'blocked-id', rule.rule)
+                with self.subTest(method=method, path=path):
+                    response = self.client.open(path, method=method, json={})
+                    self.assertEqual(
+                        response.status_code, 403, response.get_data(as_text=True),
+                    )
+        self.assertEqual(app_module._load_finance_data(), finance_before)
         self.login('sales-admin')
         self.assertEqual(self.client.get('/accounting').status_code, 200)
         workspace = self.workspace()
         self.assertEqual(workspace['workspace']['role'], 'manager')
         self.assertEqual(set(workspace['workspace']['permissions']), {'read', 'write', 'post', 'approve', 'settings'})
         self.assertTrue(workspace['accountingUsers']['sales-admin']['hasAccountingAccess'])
+        self.assertNotIn('bnjm2000', workspace['accountingUsers'])
         self.request('documents', dict(kind='invoice', date='2026-01-15', dueDate='2026-02-15',
                      contact='Admin Customer', currency='SGD', exchangeRate=1,
                      lines=[dict(description='Service', quantity=1, unitPrice=100,

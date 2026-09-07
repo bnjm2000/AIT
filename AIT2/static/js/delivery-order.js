@@ -262,6 +262,7 @@ async function generateDeliveryOrder() {
     try {
         await flushDoEdits(currentDeliveryOrderEvent.id || currentDeliveryOrderEvent.event_id || '0');
         await loadPdfSettings(true);
+        await ensurePdfExportFontReady(document);
 
         generatePdfDO(deliveryOrderData, doWindow);
     } catch (error) {
@@ -290,6 +291,7 @@ function generatePdfDO(data, doWindow) {
     <meta charset="UTF-8">
     <title>Delivery Order - ${escapeHtml(data.jobTitle)}</title>
     <style>
+        ${PDF_EXPORT_FONT_FACE_CSS}
         @page {
             size: A4;
             margin: 20mm;
@@ -708,7 +710,7 @@ function generatePdfDO(data, doWindow) {
             padding-top: 2mm;
             border-top: 0.5pt solid #cbd5e1;
             color: #64748b;
-            font-family: 'Century Gothic', Arial, sans-serif;
+            font-family: ${PDF_EXPORT_FONT_FAMILY};
             font-size: 6.2pt;
             line-height: 1.25;
             text-align: left;
@@ -721,7 +723,7 @@ function generatePdfDO(data, doWindow) {
             bottom: 8mm;
             right: 13mm;
             margin-right: 0;
-            font-family: 'Century Gothic', sans-serif;
+            font-family: ${PDF_EXPORT_FONT_FAMILY};
             font-size: 6.2pt;
             color: #64748b;
             z-index: 101;
@@ -802,7 +804,8 @@ function generatePdfDO(data, doWindow) {
     doWindow.document.close();
 
     // Add print functionality
-    setTimeout(() => {
+    setTimeout(async () => {
+        await ensurePdfExportFontReady(doWindow.document);
         doWindow.focus();
         doWindow.print();
     }, 1000);
@@ -821,12 +824,13 @@ function renderDeliveryOrderLetterheadHtml() {
     const letterheadEnabled = pdfSettings?.letterheadEnabled !== false;
     if (!letterheadEnabled) {
         return logoUrl ? `
-            <div class="do-letterhead">
+            <div class="do-letterhead" ${pdfTypographyStyleAttr('letterhead')}>
                 <div class="do-letterhead-brand"><img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo"></div>
             </div>
         ` : '';
     }
     const companyName = String(pdfSettings?.companyName || '').trim();
+    const richLetterhead = String(pdfSettings?.letterheadHtml || '').trim();
     const customLines = String(pdfSettings?.letterheadText || '')
         .split(/\r?\n/)
         .map(line => line.trim())
@@ -841,14 +845,16 @@ function renderDeliveryOrderLetterheadHtml() {
         .slice(0, 4);
     const brandHtml = logoUrl
         ? `<img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo">`
-        : `<div class="do-wordmark">${safe(companyName || 'Delivery Order')}</div>`;
+        : `<div class="do-wordmark" ${pdfTypographyStyleAttr('letterhead')}>${safe(companyName || 'Delivery Order')}</div>`;
 
     return `
-        <div class="do-letterhead">
+        <div class="do-letterhead" ${pdfTypographyStyleAttr('letterhead')}>
             <div class="do-letterhead-brand">${brandHtml}</div>
-            <div class="do-letterhead-details">
-                ${logoUrl && companyName ? `<strong>${safe(companyName)}</strong>` : ''}
-                ${detailLines.map(line => `<div>${safe(line)}</div>`).join('')}
+            <div class="do-letterhead-details" ${pdfTypographyStyleAttr('letterhead')}>
+                ${richLetterhead
+                    ? renderPdfRichHtml(richLetterhead)
+                    : `${logoUrl && companyName ? `<strong ${pdfTypographyStyleAttr('letterhead')}>${safe(companyName)}</strong>` : ''}
+                       ${detailLines.map(line => `<div ${pdfTypographyStyleAttr('letterhead')}>${safe(line)}</div>`).join('')}`}
             </div>
         </div>
     `;
@@ -1037,7 +1043,7 @@ function generatePagesContent(data, formattedDate) {
         top:0;
         visibility:hidden;
         width:184mm;
-        font-family:'Century Gothic', sans-serif;
+        font-family:${PDF_EXPORT_FONT_FAMILY};
         font-size:9pt;
         line-height:1.2;
         background:white;

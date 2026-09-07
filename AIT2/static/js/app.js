@@ -67,7 +67,96 @@ let __eventAssetRefreshTimer = null;
 const __eventAssetRefreshIds = new Set();
 const EVENT_OVERVIEW_PAGE_SIZE = 30;
 const EVENT_OPTIONS_PAGE_SIZE = 100;
-const PDF_EXPORT_FONT_FAMILY = "'Century Gothic', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans SC', Arial, sans-serif";
+const PDF_FONT_OPTIONS = Object.freeze([
+  ['App Default', "'Century Gothic', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif"],
+  ['Helvetica', "Helvetica, Arial, sans-serif"],
+  ['Arial', "Arial, Helvetica, sans-serif"],
+  ['Aptos', "Aptos, Calibri, Arial, sans-serif"],
+  ['Calibri', "Calibri, Arial, sans-serif"],
+  ['Century Gothic', "'Century Gothic', Arial, sans-serif"],
+  ['Georgia', "Georgia, 'Times New Roman', serif"],
+  ['Garamond', "Garamond, Georgia, serif"],
+  ['Times New Roman', "'Times New Roman', Times, serif"],
+  ['Trebuchet MS', "'Trebuchet MS', Arial, sans-serif"],
+  ['Verdana', "Verdana, Arial, sans-serif"],
+  ['Avenir Next', "'Avenir Next', 'Showbase Avenir Next', Arial, sans-serif"],
+]);
+const PDF_FONT_CSS_BY_NAME = Object.freeze(Object.fromEntries(PDF_FONT_OPTIONS));
+const PDF_EXPORT_FONT_FACE_CSS = `
+  @font-face {
+    font-family: 'Showbase Avenir Next';
+    src: url('/static/fonts/avenir-next/AvenirNextCyr-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+  }
+  @font-face {
+    font-family: 'Showbase Avenir Next';
+    src: url('/static/fonts/avenir-next/AvenirNextCyr-Bold.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+  }
+`;
+
+function normalisePdfFontFamily(value, allowInherit = false) {
+  const clean = String(value || '').trim();
+  if (allowInherit && !clean) return '';
+  return Object.prototype.hasOwnProperty.call(PDF_FONT_CSS_BY_NAME, clean)
+    ? clean
+    : 'App Default';
+}
+
+function pdfFontCssFamily(value, allowInherit = false) {
+  const family = normalisePdfFontFamily(value, allowInherit);
+  if (!family) return PDF_FONT_CSS_BY_NAME[normalisePdfFontFamily(pdfSettings?.fontFamily)];
+  return PDF_FONT_CSS_BY_NAME[family];
+}
+
+function pdfFontOptionsHtml(selected = '', includeInherit = false) {
+  const value = normalisePdfFontFamily(selected, includeInherit);
+  const options = includeInherit ? [['', 'Use document font'], ...PDF_FONT_OPTIONS.map(([name]) => [name, name])] : PDF_FONT_OPTIONS.map(([name]) => [name, name]);
+  return options.map(([optionValue, label]) => {
+    const family = optionValue ? PDF_FONT_CSS_BY_NAME[optionValue] : pdfFontCssFamily('', true);
+    return `<option value="${escapeHtmlAttr(optionValue)}" data-font-preview="${escapeHtmlAttr(family)}"${optionValue === value ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
+function pdfExportUsesAvenir() {
+  const families = [
+    pdfSettings?.fontFamily,
+    pdfSettings?.letterheadTypography?.fontFamily,
+    pdfSettings?.footerTypography?.fontFamily,
+    pdfSettings?.termsTypography?.fontFamily,
+    pdfSettings?.paymentDetailsTypography?.fontFamily,
+  ];
+  return families.some(family => String(family || '').trim().toLowerCase().startsWith('avenir'));
+}
+
+// Existing export modules interpolate this shared value directly. Keeping it
+// string-like makes the selected family company-aware at export time.
+const PDF_EXPORT_FONT_FAMILY = Object.freeze({
+  toString() {
+    return pdfFontCssFamily(pdfSettings?.fontFamily);
+  }
+});
+
+async function ensurePdfExportFontReady(targetDocument = document) {
+  if (!pdfExportUsesAvenir() || !targetDocument) return;
+  let style = targetDocument.getElementById('pdf-custom-font-faces');
+  if (!style) {
+    style = targetDocument.createElement('style');
+    style.id = 'pdf-custom-font-faces';
+    style.textContent = PDF_EXPORT_FONT_FACE_CSS;
+    (targetDocument.head || targetDocument.documentElement).appendChild(style);
+  }
+  if (targetDocument.fonts?.load) {
+    await Promise.all([
+      targetDocument.fonts.load("400 12px 'Showbase Avenir Next'"),
+      targetDocument.fonts.load("700 12px 'Showbase Avenir Next'"),
+    ]);
+  }
+}
 let __allEventsLoadVersion = 0;
 let __allEventsProgressiveLoading = false;
 let assetLookupSource = null;
@@ -331,6 +420,7 @@ let pdfSettings = {
   logoUrl: "",
   hasCustomLogo: false,
   logoOriginalName: "",
+  fontFamily: "App Default",
   updatedAt: ""
 };
 let pdfSettingsLoaded = false;
@@ -502,6 +592,10 @@ function canCurrentUserManageRoles() {
   return !!(currentUser && (currentUser.canManageRoles || currentUserRole() === 'admin'));
 }
 
+function canCurrentUserAccessAccounting() {
+  return !!(currentUser && ['owner', 'admin'].includes(currentUserRole()));
+}
+
 function canCurrentUserViewAllInvoiceClaims() {
   return canCurrentUserManageRoles();
 }
@@ -528,6 +622,20 @@ function canCurrentUserManageUser(user) {
 
 function currentUserHasSalesAccess() {
   return !!(currentUser && (isPlatformAdminUser() || currentUser.hasSalesAccess || currentUser.isSales));
+}
+
+function canCurrentUserAccessClients() {
+  return !!(
+    currentUser
+    && (
+      ['owner', 'admin'].includes(currentUserRole())
+      || currentUserHasSalesAccess()
+    )
+  );
+}
+
+function canCurrentUserAccessProducts() {
+  return canCurrentUserAccessClients();
 }
 
 function userRoleLabel(role = currentUserRole()) {
@@ -641,7 +749,7 @@ function refreshSidebarUserMenu() {
 
 function applyPermissionUi() {
   document.querySelectorAll('.accounting-access-only').forEach(el => {
-    el.style.display = canCurrentUserManageRoles() ? 'block' : 'none';
+    el.style.display = canCurrentUserAccessAccounting() ? 'block' : 'none';
   });
   const adminOnlySelectors = [
     ".admin-only",
@@ -3702,6 +3810,7 @@ function sectionFromSidebarLabel(item) {
     'users': 'users',
     'costing': 'costing',
     'quotations': 'quotations',
+    'clients': 'clients',
     'invoices': 'invoices',
     'profit & loss': 'profit-loss',
     'profit and loss': 'profit-loss',
@@ -3722,8 +3831,10 @@ function sectionFromSidebarLabel(item) {
     ['profit & loss', 'profit-loss'],
     ['profit and loss', 'profit-loss'],
     ['accounting', 'accounting'],
+    ['products', 'products'],
     ['costing', 'costing'],
     ['quotations', 'quotations'],
+    ['clients', 'clients'],
     ['invoices', 'invoices'],
     ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
@@ -3789,6 +3900,8 @@ function navWireIconSvg(section) {
     'maintenance-report': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path>',
     logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
     quotations: '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 12h6M9 16h6"></path>',
+    products: '<path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5M7 5V3h10v2"></path>',
+    clients: '<circle cx="9" cy="8" r="3"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 7h5M18.5 4.5v5"></path>',
     invoices: '<path d="M6 3h12v18H6z"></path><path d="M9 7h6M9 11h6M9 15h3"></path><path d="M15 14v4M13 16h4"></path>',
     costing: '<path d="M4 6h16v14H4z"></path><path d="M7 3h10v6H7zM8 13h2M14 13h2M8 17h2M14 17h2"></path>',
     'profit-loss': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path><path d="m4 6 5-3 6 4 6-5"></path>',
@@ -3821,6 +3934,8 @@ function navLabelForSection(section, fallback = '') {
     'maintenance-report': 'Maintenance Report',
     logs: 'System Logs',
     quotations: 'Quotations',
+    products: 'Products',
+    clients: 'Clients',
     invoices: 'Invoices',
     costing: 'Costing',
     'profit-loss': 'Profit & Loss',
@@ -3927,6 +4042,8 @@ const APP_SECTION_PATHS = Object.freeze({
   logs: '/logs',
   costing: '/costing',
   quotations: '/quotations',
+  products: '/products',
+  clients: '/clients',
   invoices: '/invoices',
   'profit-loss': '/profit-loss',
   accounting: '/accounting',
@@ -4080,7 +4197,13 @@ function showSection(sectionName, options = {}) {
   }
   const adminOnlySections = new Set(["plan", "compare", "workforce", "transport", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const platformAdminOnlySections = new Set(["companies"]);
-  if (sectionName === 'accounting' && !canCurrentUserManageRoles()) {
+  if (sectionName === 'accounting' && !canCurrentUserAccessAccounting()) {
+    return showSection('events', { ...options, replaceHistory: true });
+  }
+  if (sectionName === 'clients' && !canCurrentUserAccessClients()) {
+    return showSection('events', { ...options, replaceHistory: true });
+  }
+  if (sectionName === 'products' && !canCurrentUserAccessProducts()) {
     return showSection('events', { ...options, replaceHistory: true });
   }
   const salesOnlySections = new Set(["quotations", "invoices", "costing"]);
@@ -4116,6 +4239,13 @@ function showSection(sectionName, options = {}) {
     typeof prepareNewFlushNotes === 'function'
   ) {
     prepareNewFlushNotes();
+  }
+  if (
+    sectionName !== 'return' &&
+    document.getElementById('return-section')?.classList.contains('active') &&
+    typeof returnPageFlushNotesSave === 'function'
+  ) {
+    returnPageFlushNotesSave();
   }
 
   const targetSection = document.getElementById(sectionName + "-section");
@@ -4257,6 +4387,12 @@ function showSection(sectionName, options = {}) {
       } else if (typeof loadQuotations === "function") {
         loadQuotations();
       }
+      break;
+    case "products":
+      if (typeof loadProducts === 'function') loadProducts();
+      break;
+    case "clients":
+      if (typeof loadClientsPage === "function") loadClientsPage();
       break;
     case "profit-loss":
       if (typeof loadProfitLoss === "function") loadProfitLoss();
@@ -11755,6 +11891,7 @@ async function generateMaintenanceReportPdf() {
     }
     const rows = getFilteredMaintenanceReportRows();
     await loadPdfSettings(true);
+    await ensurePdfExportFontReady(document);
     const pagesHtml = buildMaintenanceReportPdfPages(rows, {
       generatedBy: currentUserPdfDisplayName(),
       generatedAt: reportGeneratedAt(),
@@ -11768,6 +11905,7 @@ async function generateMaintenanceReportPdf() {
     }
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Maintenance Report</title><style>
+      ${PDF_EXPORT_FONT_FACE_CSS}
       @page { size: A4; margin: 0; }
       * { box-sizing: border-box; }
       body { margin: 0; font-family: ${PDF_EXPORT_FONT_FAMILY}; color: #000; background: #f0f0f0; }
@@ -11796,6 +11934,7 @@ async function generateMaintenanceReportPdf() {
     </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
     win.document.write(html);
     win.document.close();
+    await ensurePdfExportFontReady(win.document);
     win.focus();
     showNotification('success', 'Maintenance report PDF generated successfully');
   } catch (error) {
@@ -13845,6 +13984,9 @@ const returnPageState = {
   customGroupOpenState: new Map(),
 };
 
+var returnPageNotesSaveTimer = null;
+var returnPagePendingNotesSave = null;
+
 function returnPageEncode(value) {
   // encodeURIComponent leaves apostrophes unchanged. These values are also
   // embedded in single-quoted inline handlers, so encode them explicitly to
@@ -14083,6 +14225,8 @@ function returnPageCaptureViewState() {
     focusId: active?.id || '',
     selectionStart: Number.isFinite(active?.selectionStart) ? active.selectionStart : null,
     selectionEnd: Number.isFinite(active?.selectionEnd) ? active.selectionEnd : null,
+    notesValue: document.getElementById('returnEventNotes')?.value ?? null,
+    notesSaveState: document.getElementById('returnNotesSaveState')?.textContent || '',
   };
   if (!scroller) return snapshot;
 
@@ -14117,6 +14261,15 @@ function returnPageRestoreViewState(snapshot) {
         scroller.scrollTop += currentOffset - snapshot.anchorOffset;
       }
     }
+  }
+
+  const notes = document.getElementById('returnEventNotes');
+  if (notes && typeof snapshot.notesValue === 'string') {
+    notes.value = snapshot.notesValue;
+    const counter = document.getElementById('returnNotesCharacterCount');
+    const state = document.getElementById('returnNotesSaveState');
+    if (counter) counter.textContent = `${notes.value.length}/50000`;
+    if (state && snapshot.notesSaveState) state.textContent = snapshot.notesSaveState;
   }
 
   if (snapshot.focusId) {
@@ -14627,6 +14780,7 @@ async function openEventActivityLog(eventId) {
 }
 
 function returnPageEventDetailsHtml(event) {
+  const notes = String(event.notes || '');
   return `
     <section class="return-surface">
       <div class="return-card-header event-detail-card-header">
@@ -14641,9 +14795,62 @@ function returnPageEventDetailsHtml(event) {
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
         </dl>
+        <div class="return-event-notes">
+          <label for="returnEventNotes">Notes</label>
+          <textarea id="returnEventNotes" class="plan-notes-textarea"
+                    maxlength="50000"
+                    placeholder="Add notes or special requirements for this event..."
+                    oninput="returnPageNotesChanged(this)"
+                    onblur="returnPageFlushNotesSave()">${escapeHtml(notes)}</textarea>
+          <div class="plan-notes-footer">
+            <span id="returnNotesSaveState">Saved</span>
+            <span id="returnNotesCharacterCount">${notes.length}/50000</span>
+          </div>
+        </div>
       </div>
     </section>
   `;
+}
+
+function returnPageNotesChanged(textarea) {
+  const notes = String(textarea?.value || '');
+  const state = document.getElementById('returnNotesSaveState');
+  const counter = document.getElementById('returnNotesCharacterCount');
+  if (counter) counter.textContent = `${notes.length}/50000`;
+  if (state) state.textContent = 'Unsaved changes';
+  if (returnPageState.event) returnPageState.event.notes = notes;
+
+  returnPagePendingNotesSave = {
+    eventId: Number(returnPageState.eventId),
+    notes,
+  };
+  clearTimeout(returnPageNotesSaveTimer);
+  returnPageNotesSaveTimer = setTimeout(returnPageFlushNotesSave, 700);
+}
+
+async function returnPageFlushNotesSave() {
+  clearTimeout(returnPageNotesSaveTimer);
+  returnPageNotesSaveTimer = null;
+  const pending = returnPagePendingNotesSave;
+  if (!pending?.eventId) return;
+  returnPagePendingNotesSave = null;
+
+  const state = document.getElementById('returnNotesSaveState');
+  if (state) state.textContent = 'Saving…';
+  try {
+    const response = await apiCall(
+      `/api/events/${pending.eventId}/notes`,
+      'PUT',
+      { notes: pending.notes }
+    );
+    if (Number(returnPageState.eventId) === Number(pending.eventId)) {
+      returnPageState.event.notes = response.data?.notes ?? pending.notes;
+      if (state) state.textContent = 'Saved';
+    }
+  } catch (error) {
+    returnPagePendingNotesSave = pending;
+    if (state) state.textContent = 'Save failed';
+  }
 }
 
 function returnPageQuickReturnHtml(metrics) {
@@ -14948,6 +15155,7 @@ async function loadReturnWorkspace(options = {}) {
 }
 
 async function returnPageSelectEvent(eventId) {
+  await returnPageFlushNotesSave();
   const id = Number(eventId);
   if (!id || id === Number(returnPageState.eventId)) return;
   const version = ++returnPageState.requestVersion;
@@ -15256,6 +15464,7 @@ async function returnPageManualReturn() {
 }
 
 async function returnPageExit() {
+  await returnPageFlushNotesSave();
   const eventId = Number(returnPageState.eventId);
   const metrics = returnPageMetrics();
   if (!eventId || metrics.total <= 0 || metrics.remaining > 0) {
@@ -16023,7 +16232,14 @@ async function refreshEventOverviewNotesAndFiles(eventId, topics) {
     Number(window.currentViewedEventId) === Number(eventId);
   const planningEvent = document.getElementById('plan-section')?.classList.contains('active') &&
     Number(planPageState.eventId) === Number(eventId);
-  if (!viewingEvent && !planningEvent) return;
+  const preparingEvent = topicSet.has('event-notes') &&
+    document.getElementById('prepare-new-section')?.classList.contains('active') &&
+    typeof prepareNewPageState !== 'undefined' &&
+    Number(prepareNewPageState.eventId) === Number(eventId);
+  const returningEvent = topicSet.has('event-notes') &&
+    document.getElementById('return-section')?.classList.contains('active') &&
+    Number(returnPageState.eventId) === Number(eventId);
+  if (!viewingEvent && !planningEvent && !preparingEvent && !returningEvent) return;
 
   const response = await apiCall(`/api/events/${eventId}`);
   const event = response.data;
@@ -16053,6 +16269,30 @@ async function refreshEventOverviewNotesAndFiles(eventId, topics) {
       if (counter) counter.textContent = `${textarea.value.length}/50000`;
       if (state) state.textContent = 'Updated';
       planPageState.event.notes = event.notes || '';
+    }
+  }
+  if (preparingEvent) {
+    const textarea = document.getElementById('prepareNewNotes');
+    const hasLocalEdit = prepareNewPendingNotes?.eventId === Number(eventId);
+    if (textarea && !hasLocalEdit && document.activeElement !== textarea) {
+      textarea.value = String(event.notes || '');
+      const counter = document.querySelector('#prepareNewNotes + .plan-notes-footer span:last-child');
+      const state = document.getElementById('prepareNewNotesSaveState');
+      if (counter) counter.textContent = `${textarea.value.length}/50000`;
+      if (state) state.textContent = 'Updated';
+      prepareNewPageState.event.notes = event.notes || '';
+    }
+  }
+  if (returningEvent) {
+    const textarea = document.getElementById('returnEventNotes');
+    const hasLocalEdit = returnPagePendingNotesSave?.eventId === Number(eventId);
+    if (textarea && !hasLocalEdit && document.activeElement !== textarea) {
+      textarea.value = String(event.notes || '');
+      const counter = document.getElementById('returnNotesCharacterCount');
+      const state = document.getElementById('returnNotesSaveState');
+      if (counter) counter.textContent = `${textarea.value.length}/50000`;
+      if (state) state.textContent = 'Updated';
+      returnPageState.event.notes = event.notes || '';
     }
   }
 }
@@ -25642,7 +25882,8 @@ function fillClientFieldsFromRecord(rec) {
   if (companyEl) companyEl.value = rec.company || '';
   if (a1) a1.value = rec.address1 || '';
   if (a2) a2.value = rec.address2 || '';
-  if (a3) a3.value = rec.address3 || (rec.postalCode ? `${rec.postalCode}` : '');
+  // The Delivery Order's third recipient field is explicitly the postal code.
+  if (a3) a3.value = rec.postalCode || rec.address3 || '';
   if (phoneEl) phoneEl.value = rec.phone || '';
 
   // If you add a dedicated postal code input:

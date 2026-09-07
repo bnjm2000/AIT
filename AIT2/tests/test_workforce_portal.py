@@ -432,6 +432,81 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(included["kindCounts"], {"invoice": 1, "claim": 1})
         self.assertEqual(included["totalUploads"], 2)
 
+    def test_legacy_owner_workforce_records_are_ghosted_from_nonowners(self):
+        owner_username = "ghost-owner"
+        self.manager.users[owner_username] = User(
+            owner_username,
+            hash_password("pw", "salt"),
+            "salt",
+            True,
+            True,
+            role="owner",
+        )
+        self.manager.save_users()
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["assignments"] = {
+                "143": [{
+                    "id": "assignment-owner",
+                    "subjectType": "app-user",
+                    "userUsername": owner_username,
+                    "department": "FT",
+                    "roleName": "Platform owner",
+                    "workDates": ["2026-07-10"],
+                }],
+            }
+            workforce["submissions"] = {
+                "143": {
+                    f"user:{owner_username}": {
+                        "invoices": [{
+                            "id": "invoice-owner",
+                            "originalName": "owner-invoice.pdf",
+                            "submittedAt": "2026-07-10T10:00:00+08:00",
+                            "status": "Pending Review",
+                            "amount": 180,
+                        }],
+                        "claims": [],
+                    },
+                },
+            }
+
+        with patch.object(
+            app_module,
+            "_is_super_admin_username",
+            side_effect=lambda username: str(username or "").casefold()
+            == owner_username,
+        ):
+            self.login("admin", True)
+            workspace = self.client.get("/api/events/143/workforce")
+            overview = self.client.get("/api/events/143/overview")
+            submissions = self.client.get(
+                "/api/workforce/submissions?status=all&includeFullTime=1"
+            )
+
+            self.assertEqual(workspace.status_code, 200)
+            workspace_data = workspace.get_json()["data"]
+            self.assertNotIn(
+                owner_username,
+                [row["username"] for row in workspace_data["appUsers"]],
+            )
+            self.assertEqual(workspace_data["assignments"], [])
+            self.assertNotIn(f"user:{owner_username}", workspace_data["submissions"])
+            self.assertEqual(overview.get_json()["data"]["crew"], [])
+            self.assertEqual(submissions.get_json()["data"]["rows"], [])
+
+            self.login(owner_username, True)
+            owner_workspace = self.client.get("/api/events/143/workforce")
+            self.assertEqual(owner_workspace.status_code, 200)
+            owner_data = owner_workspace.get_json()["data"]
+            self.assertIn(
+                owner_username,
+                [row["username"] for row in owner_data["appUsers"]],
+            )
+            self.assertEqual(
+                owner_data["assignments"][0]["userUsername"],
+                owner_username,
+            )
+            self.assertIn(f"user:{owner_username}", owner_data["submissions"])
+
     def test_submission_queue_uses_status_filters_and_delete_confirmation(self):
         source_path = os.path.join(
             os.path.dirname(app_module.__file__),

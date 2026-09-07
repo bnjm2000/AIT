@@ -10,7 +10,8 @@ live in `services/accounting_close.py`; Excel exports in
 
 ## Start here
 
-1. Accounting is restricted to active company admins and platform owners. In
+1. Accounting is fully editable only by active company admins. Platform owners
+   have read-only page, report and export access. In
    **Settings → Books & permissions**, select the reporting framework, identify
    cash accounts and enable trading inventory if needed.
 2. In **Settings → GST & period lock**, confirm GST registration, financial year
@@ -71,12 +72,14 @@ live in `services/accounting_close.py`; Excel exports in
   the same per-line rounding as the ledger. Review required identity and GST
   details before issue; a PDF download is not InvoiceNow transmission.
 
-Company admins and platform owners have full accounting access. Application
-managers and users cannot open the page, call its APIs or download its exports,
-even if an old accounting-specific assignment remains in stored settings.
+Company admins have full accounting access. Platform owners can open the page,
+view reports and download exports, but every Accounting mutation is rejected.
+Owners are omitted from the Accounting access list and cannot gain additional
+permissions from an old accounting-specific assignment in stored settings.
+Application managers and users cannot open the page or call its APIs.
 Enabling independent approval prevents the creator, last editor or submitter
-from approving their own document, so the company needs a second admin or the
-platform owner for that review. Manual journals must likewise be saved as drafts
+from approving their own document, so the company needs another company admin
+for that review. Manual journals must likewise be saved as drafts
 and posted by another authorised administrator.
 
 Posted documents are corrected with credit notes. Payment reversals retain an
@@ -329,9 +332,10 @@ during these checks. Populated document output, drill-downs and accounting resul
 remain covered by the automated and synthetic-PDF checks described above.
 
 The later access-control update makes the company application role authoritative:
-active company admins and platform owners receive full accounting permissions,
-while managers and users are blocked at navigation, page-route and API layers.
-Legacy accounting-role records cannot bypass this rule. The full 811-test suite,
+active company admins receive full accounting permissions, platform owners receive
+read-only access without appearing in the Accounting access list, and managers and
+users are blocked at navigation, page-route and API layers. Legacy accounting-role
+records cannot grant write access or reveal an owner in that list. The full 811-test suite,
 JavaScript syntax/renderer checks and a signed-in live admin reload passed after
 deployment. The live Settings view showed the application role and resulting
 access without editable accounting-role selectors.

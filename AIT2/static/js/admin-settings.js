@@ -1,9 +1,44 @@
 // Administration, company settings, departments, and user management.
 
 // ---------------- PDF Settings ----------------
+const COMPANY_TYPOGRAPHY_FIELDS = Object.freeze({
+  letterhead: { setting: 'letterheadTypography', htmlSetting: 'letterheadHtml', textSetting: 'letterheadText', fieldId: 'companyDetailsLetterhead' },
+  footer: { setting: 'footerTypography', htmlSetting: 'footerHtml', textSetting: 'footerText', fieldId: 'pdfSettingsFooterText' },
+  terms: { setting: 'termsTypography', htmlSetting: 'defaultTermsHtml', textSetting: 'defaultTerms', fieldId: 'companyDetailsTerms' },
+  paymentDetails: { setting: 'paymentDetailsTypography', htmlSetting: 'paymentDetailsHtml', textSetting: 'paymentDetailsText', fieldId: 'companyDetailsPaymentDetails' },
+});
+
+const companyRichTextSelections = new Map();
+
+function plainTextToCompanyRichHtml(value, boldFirstLine = false) {
+  let firstContent = true;
+  return String(value || '').replace(/\r\n?/g, '\n').split('\n').map(line => {
+    let content = escapeHtml(line) || '<br>';
+    if (boldFirstLine && firstContent && line.trim()) {
+      content = `<strong>${content}</strong>`;
+      firstContent = false;
+    } else if (line.trim()) {
+      firstContent = false;
+    }
+    return `<div>${content}</div>`;
+  }).join('');
+}
+
+function normaliseCompanyTypography(value = {}) {
+  const size = Number(value?.fontSize || 0);
+  return {
+    fontFamily: normalisePdfFontFamily(value?.fontFamily, true),
+    fontSize: size >= 6 && size <= 24 ? size : 0,
+    bold: Boolean(value?.bold),
+    italic: Boolean(value?.italic),
+    underline: Boolean(value?.underline),
+  };
+}
+
 function normalisePdfSettings(settings = {}) {
   return {
     footerText: typeof settings.footerText === 'string' ? settings.footerText : DEFAULT_PDF_FOOTER_TEXT,
+    footerHtml: typeof settings.footerHtml === 'string' ? settings.footerHtml : '',
     logoUrl: settings.logoUrl || "",
     hasCustomLogo: !!settings.hasCustomLogo,
     logoOriginalName: settings.logoOriginalName || "",
@@ -18,6 +53,7 @@ function normalisePdfSettings(settings = {}) {
     bankAccountNumber: settings.bankAccountNumber || "",
     paynowUen: settings.paynowUen || "",
     paymentDetailsText: typeof settings.paymentDetailsText === 'string' ? settings.paymentDetailsText : "",
+    paymentDetailsHtml: typeof settings.paymentDetailsHtml === 'string' ? settings.paymentDetailsHtml : '',
     paymentDetailsEnabled: settings.paymentDetailsEnabled !== false,
     currency: settings.currency || "SGD",
     taxLabel: settings.taxLabel || "GST",
@@ -27,8 +63,15 @@ function normalisePdfSettings(settings = {}) {
     defaultPaymentTerms: settings.defaultPaymentTerms || "30 Days",
     defaultValidityDays: Number(settings.defaultValidityDays || 30),
     defaultTerms: settings.defaultTerms || "",
+    defaultTermsHtml: typeof settings.defaultTermsHtml === 'string' ? settings.defaultTermsHtml : '',
     themeColor: /^#[0-9A-Fa-f]{6}$/.test(settings.themeColor || '') ? settings.themeColor : "#0f766e",
+    fontFamily: normalisePdfFontFamily(settings.fontFamily),
+    letterheadTypography: normaliseCompanyTypography(settings.letterheadTypography),
+    footerTypography: normaliseCompanyTypography(settings.footerTypography),
+    termsTypography: normaliseCompanyTypography(settings.termsTypography),
+    paymentDetailsTypography: normaliseCompanyTypography(settings.paymentDetailsTypography),
     letterheadText: typeof settings.letterheadText === 'string' ? settings.letterheadText : "",
+    letterheadHtml: typeof settings.letterheadHtml === 'string' ? settings.letterheadHtml : '',
     letterheadEnabled: settings.letterheadEnabled !== false,
     updatedAt: settings.updatedAt || ""
   };
@@ -44,10 +87,38 @@ function getPdfFooterText() {
     : DEFAULT_PDF_FOOTER_TEXT;
 }
 
+function pdfTypographyCss(key) {
+  const setting = COMPANY_TYPOGRAPHY_FIELDS[key]?.setting;
+  const typography = normaliseCompanyTypography(setting ? pdfSettings?.[setting] : {});
+  const family = typography.fontFamily || pdfSettings?.fontFamily;
+  return [
+    `font-family:${pdfFontCssFamily(family)}`,
+    typography.fontSize ? `font-size:${typography.fontSize}pt` : '',
+    typography.bold ? 'font-weight:700' : '',
+    typography.italic ? 'font-style:italic' : '',
+    typography.underline ? 'text-decoration:underline' : '',
+  ].filter(Boolean).join(';');
+}
+
+function pdfTypographyStyleAttr(key) {
+  return `style="${escapeHtmlAttr(pdfTypographyCss(key))}"`;
+}
+
+function renderPdfRichHtml(value) {
+  const template = document.createElement('template');
+  template.innerHTML = String(value || '');
+  template.content.querySelectorAll('[style]').forEach(element => {
+    const rawFamily = String(element.style.fontFamily || '').split(',', 1)[0].trim().replace(/^['"]|['"]$/g, '');
+    if (rawFamily) element.style.fontFamily = pdfFontCssFamily(rawFamily);
+  });
+  return template.innerHTML;
+}
+
 function renderPdfFooterHtml() {
   const text = getPdfFooterText();
   if (!text) return '';
-  return text.split(/\r?\n/).map(line => escapeHtml(line)).join('<br>');
+  const content = renderPdfRichHtml(pdfSettings?.footerHtml || plainTextToCompanyRichHtml(text));
+  return `<span ${pdfTypographyStyleAttr('footer')}>${content}</span>`;
 }
 
 function renderPdfLogoRowHtml(className = 'logo-row') {
@@ -168,6 +239,41 @@ function ensurePdfSettingsNavItem() {
   } else {
     settingsSection.appendChild(pdfSettingsTab);
   }
+}
+
+function companyTypographyEditorHtml(key, label, fieldId, rows, options = {}) {
+  const defaultButton = options.defaultAction
+    ? `<button type="button" class="btn btn-secondary company-letterhead-default" onclick="${options.defaultAction}()">Default text</button>`
+    : '';
+  const placeholder = options.placeholder
+    ? ` data-placeholder="${escapeHtmlAttr(options.placeholder)}"`
+    : '';
+  const maxlength = options.maxlength ? ` data-maxlength="${Number(options.maxlength)}"` : '';
+  return `
+    <div class="form-group company-details-wide company-typography-editor" data-typography-key="${escapeHtmlAttr(key)}">
+      <div class="company-letterhead-heading">
+        <label class="form-label" for="${escapeHtmlAttr(fieldId)}">${label}</label>
+        ${defaultButton}
+      </div>
+      <div class="company-typography-toolbar" aria-label="${escapeHtmlAttr(label)} formatting">
+        <label><span>Font</span><select id="companyTypography${key}Font" data-font-selector="true" onchange="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','fontFamily',this.value)">${pdfFontOptionsHtml('', true)}</select></label>
+        <label><span>Size</span><select id="companyTypography${key}Size" onchange="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','fontSize',this.value)">
+          <option value="">Choose size</option>
+          ${[6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24].map(size => `<option value="${size}">${size} pt</option>`).join('')}
+        </select></label>
+        <label class="company-typography-colour"><span>Colour</span><input id="companyTypography${key}Colour" type="color" value="#172033" title="Text colour" onchange="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','color',this.value)"></label>
+        <div class="company-typography-toggles" role="group" aria-label="Text style">
+          <button id="companyTypography${key}Bold" type="button" aria-pressed="false" title="Bold selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','bold')"><strong>B</strong></button>
+          <button id="companyTypography${key}Italic" type="button" aria-pressed="false" title="Italicise selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','italic')"><em>I</em></button>
+          <button id="companyTypography${key}Underline" type="button" aria-pressed="false" title="Underline selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','underline')"><u>U</u></button>
+        </div>
+      </div>
+      <div id="${escapeHtmlAttr(fieldId)}" class="form-input company-typography-textarea" contenteditable="true" role="textbox" aria-multiline="true" style="--editor-rows:${Number(rows)}"${maxlength}${placeholder}
+        onfocus="rememberCompanyRichTextSelection('${escapeHtmlAttr(key)}')"
+        onkeyup="rememberCompanyRichTextSelection('${escapeHtmlAttr(key)}')"
+        onmouseup="rememberCompanyRichTextSelection('${escapeHtmlAttr(key)}')"
+        oninput="companyRichTextChanged('${escapeHtmlAttr(key)}')"></div>
+    </div>`;
 }
 
 function ensurePersonalNotificationsNavItem() {
@@ -306,13 +412,7 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
               <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
               <label class="form-group"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
-              <div class="form-group company-details-wide">
-                <div class="company-letterhead-heading">
-                  <label class="form-label" for="companyDetailsLetterhead">Letterhead</label>
-                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyLetterhead()">Default</button>
-                </div>
-                <textarea id="companyDetailsLetterhead" class="form-input" rows="3"></textarea>
-              </div>
+              ${companyTypographyEditorHtml('letterhead', 'Letterhead', 'companyDetailsLetterhead', 3, { defaultAction: 'populateDefaultCompanyLetterhead' })}
             </div>
           </section>
 
@@ -331,17 +431,15 @@ function ensurePdfSettingsSection() {
                   <button type="button" class="company-theme-swatch" style="--swatch:#7c2d12" onclick="syncCompanyThemeColor('#7c2d12')" title="Warm brown"></button>
                 </div>
               </label>
+              <label class="form-group company-details-wide company-document-font"><span class="form-label">PDF document font</span>
+                <select id="companyDetailsFontFamily" data-font-selector="true" onchange="updateCompanyDocumentFontPreview(this.value)">${pdfFontOptionsHtml(pdfSettings?.fontFamily)}</select>
+                <small>The app keeps the existing sizes and hierarchy for all other PDF content.</small>
+              </label>
               <label class="form-group"><span class="form-label">Bank</span><input id="companyDetailsBank" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
               <label class="form-group"><span class="form-label">PayNow UEN</span><input id="companyDetailsPaynow" class="form-input"></label>
-              <div class="form-group company-details-span-2">
-                <div class="company-letterhead-heading">
-                  <label class="form-label" for="companyDetailsPaymentDetails">Payment details</label>
-                  <button type="button" class="btn btn-secondary company-letterhead-default" onclick="populateDefaultCompanyPaymentDetails()">Default</button>
-                </div>
-                <textarea id="companyDetailsPaymentDetails" class="form-input" rows="4" placeholder="Payment instructions shown on invoices"></textarea>
-              </div>
+              ${companyTypographyEditorHtml('paymentDetails', 'Payment details', 'companyDetailsPaymentDetails', 4, { defaultAction: 'populateDefaultCompanyPaymentDetails', placeholder: 'Payment instructions shown on invoices' })}
               <label class="form-group"><span class="form-label">Currency</span><input id="companyDetailsCurrency" class="form-input" maxlength="6"></label>
               <label class="form-group"><span class="form-label">Tax label</span><input id="companyDetailsTaxLabel" class="form-input"></label>
               <label class="form-group"><span class="form-label">Tax rate (%)</span><input id="companyDetailsTaxRate" class="form-input" type="number" min="0" max="100" step="0.01"></label>
@@ -349,11 +447,13 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Quotation prefix</span><input id="companyDetailsQuotePrefix" class="form-input"></label>
               <label class="form-group"><span class="form-label">Invoice prefix</span><input id="companyDetailsInvoicePrefix" class="form-input"></label>
               <label class="form-group company-details-wide"><span class="form-label">Default payment terms</span><input id="companyDetailsPaymentTerms" class="form-input"></label>
-              <label class="form-group company-details-wide"><span class="form-label">Default terms &amp; conditions</span><textarea id="companyDetailsTerms" class="form-input" rows="6"></textarea></label>
-              <label class="form-group company-details-wide"><span class="form-label">PDF footer</span><textarea id="pdfSettingsFooterText" class="form-input" rows="4" maxlength="2000"></textarea></label>
+              ${companyTypographyEditorHtml('terms', 'Default terms &amp; conditions', 'companyDetailsTerms', 6)}
+              ${companyTypographyEditorHtml('footer', 'PDF footer', 'pdfSettingsFooterText', 4, { maxlength: 2000 })}
+              <p class="company-font-request-note">Don’t see the font you need? Contact your administrator to request it.</p>
             </div>
             <div class="company-details-actions">
               <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Clear Footer</button>
+              <button type="button" class="btn btn-secondary" onclick="previewCompanyPdf()">${settingsIcon('eye')}<span>Preview PDF</span></button>
               <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">${settingsIcon('check')}<span>Save changes</span></button>
             </div>
           </section>
@@ -402,7 +502,6 @@ function renderPdfSettingsForm() {
   const logoPreview = document.getElementById('pdfSettingsLogoPreview');
   const logoPlaceholder = document.getElementById('pdfSettingsLogoPlaceholder');
   const logoName = document.getElementById('pdfSettingsLogoName');
-  const footerText = document.getElementById('pdfSettingsFooterText');
 
   if (logoPreview) {
     const logoUrl = getPdfLogoUrl();
@@ -425,10 +524,6 @@ function renderPdfSettingsForm() {
       : 'No logo uploaded';
   }
 
-  if (footerText && footerText.value !== getPdfFooterText()) {
-    footerText.value = getPdfFooterText();
-  }
-
   const values = {
     companyDetailsName: pdfSettings.companyName,
     companyDetailsRegistration: pdfSettings.registrationNumber,
@@ -436,16 +531,10 @@ function renderPdfSettingsForm() {
     companyDetailsPhone: pdfSettings.phone,
     companyDetailsEmail: pdfSettings.email,
     companyDetailsWebsite: pdfSettings.website,
-    companyDetailsLetterhead: pdfSettings.letterheadEnabled === false
-      ? ''
-      : (pdfSettings.letterheadText || defaultCompanyLetterheadText()),
     companyDetailsBank: pdfSettings.bankName,
     companyDetailsAccountName: pdfSettings.bankAccountName,
     companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
     companyDetailsPaynow: pdfSettings.paynowUen,
-    companyDetailsPaymentDetails: pdfSettings.paymentDetailsEnabled === false
-      ? ''
-      : (pdfSettings.paymentDetailsText || defaultCompanyPaymentDetailsText()),
     companyDetailsCurrency: pdfSettings.currency,
     companyDetailsTaxLabel: pdfSettings.taxLabel,
     companyDetailsTaxRate: pdfSettings.taxRate,
@@ -453,7 +542,6 @@ function renderPdfSettingsForm() {
     companyDetailsQuotePrefix: pdfSettings.quotationPrefix,
     companyDetailsInvoicePrefix: pdfSettings.invoicePrefix,
     companyDetailsPaymentTerms: pdfSettings.defaultPaymentTerms,
-    companyDetailsTerms: pdfSettings.defaultTerms,
     companyDetailsThemeColor: pdfSettings.themeColor
   };
   Object.entries(values).forEach(([id, value]) => {
@@ -464,6 +552,145 @@ function renderPdfSettingsForm() {
   if (themePicker && /^#[0-9A-Fa-f]{6}$/.test(pdfSettings.themeColor || '')) {
     themePicker.value = pdfSettings.themeColor;
   }
+  const documentFont = document.getElementById('companyDetailsFontFamily');
+  if (documentFont) {
+    documentFont.value = normalisePdfFontFamily(pdfSettings.fontFamily);
+    documentFont.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  Object.entries(COMPANY_TYPOGRAPHY_FIELDS).forEach(([key, meta]) => {
+    const editor = document.getElementById(meta.fieldId);
+    let plainText = pdfSettings[meta.textSetting] || '';
+    if (key === 'letterhead' && pdfSettings.letterheadEnabled !== false && !plainText) {
+      plainText = defaultCompanyLetterheadText();
+    }
+    if (key === 'paymentDetails' && pdfSettings.paymentDetailsEnabled !== false && !plainText) {
+      plainText = defaultCompanyPaymentDetailsText();
+    }
+    if ((key === 'letterhead' && pdfSettings.letterheadEnabled === false)
+      || (key === 'paymentDetails' && pdfSettings.paymentDetailsEnabled === false)) {
+      plainText = '';
+    }
+    const richHtml = renderPdfRichHtml(
+      pdfSettings[meta.htmlSetting]
+      || plainTextToCompanyRichHtml(plainText, key === 'letterhead')
+    );
+    if (editor && editor.innerHTML !== richHtml) editor.innerHTML = richHtml;
+    const font = document.getElementById(`companyTypography${key}Font`);
+    const size = document.getElementById(`companyTypography${key}Size`);
+    if (font) font.value = '';
+    if (size) size.value = '';
+    for (const style of ['bold', 'italic', 'underline']) {
+      const button = document.getElementById(
+        `companyTypography${key}${style[0].toUpperCase()}${style.slice(1)}`
+      );
+      if (button) button.setAttribute('aria-pressed', 'false');
+    }
+    companyRichTextChanged(key, { preserveSelection: true });
+  });
+  if (typeof window.refreshShowbaseSelect === 'function') window.refreshShowbaseSelect();
+}
+
+function companyRichTextEditor(key) {
+  const meta = COMPANY_TYPOGRAPHY_FIELDS[key];
+  return meta ? document.getElementById(meta.fieldId) : null;
+}
+
+function rememberCompanyRichTextSelection(key) {
+  const editor = companyRichTextEditor(key);
+  const selection = window.getSelection();
+  if (!editor || !selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+  companyRichTextSelections.set(key, range.cloneRange());
+  updateCompanyRichTextToolbarState(key);
+}
+
+function restoreCompanyRichTextSelection(key) {
+  const range = companyRichTextSelections.get(key);
+  const editor = companyRichTextEditor(key);
+  if (!range || !editor || !editor.contains(range.commonAncestorContainer)) return null;
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return range;
+}
+
+function updateCompanyRichTextToolbarState(key) {
+  for (const [style, command] of Object.entries({ bold: 'bold', italic: 'italic', underline: 'underline' })) {
+    const suffix = `${style[0].toUpperCase()}${style.slice(1)}`;
+    const button = document.getElementById(`companyTypography${key}${suffix}`);
+    if (!button) continue;
+    let active = false;
+    try { active = document.queryCommandState(command); } catch (_error) { active = false; }
+    button.setAttribute('aria-pressed', String(active));
+    button.classList.toggle('active', active);
+  }
+}
+
+function applyCompanyRichTextStyle(key, style, value = '') {
+  const editor = companyRichTextEditor(key);
+  const range = restoreCompanyRichTextSelection(key);
+  if (!editor || !range || range.collapsed) {
+    showNotification('warning', 'Select the text you want to format first');
+    editor?.focus();
+    return;
+  }
+  editor.focus();
+  if (['bold', 'italic', 'underline'].includes(style)) {
+    document.execCommand(style, false);
+  } else {
+    const span = document.createElement('span');
+    if (style === 'fontFamily') {
+      const family = value || document.getElementById('companyDetailsFontFamily')?.value || pdfSettings?.fontFamily;
+      span.style.fontFamily = pdfFontCssFamily(family);
+    } else if (style === 'fontSize') {
+      const size = Number(value || 0);
+      if (!size) return;
+      span.style.fontSize = `${size}pt`;
+    } else if (style === 'color') {
+      if (!/^#[0-9a-f]{6}$/i.test(value)) return;
+      span.style.color = value;
+    }
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    range.selectNodeContents(span);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  rememberCompanyRichTextSelection(key);
+  companyRichTextChanged(key, { preserveSelection: true });
+}
+
+function companyRichTextPlainText(key) {
+  const text = companyRichTextEditor(key)?.innerText || '';
+  return text.replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function companyRichTextChanged(key, options = {}) {
+  const editor = companyRichTextEditor(key);
+  if (!editor) return;
+  const documentFamily = document.getElementById('companyDetailsFontFamily')?.value || pdfSettings?.fontFamily;
+  editor.style.fontFamily = pdfFontCssFamily(documentFamily);
+  const maxLength = Number(editor.dataset.maxlength || 0);
+  if (maxLength && companyRichTextPlainText(key).length > maxLength) {
+    const selection = window.getSelection();
+    document.execCommand('undo');
+    showNotification('warning', `This field is limited to ${maxLength} characters`);
+    selection?.removeAllRanges();
+  }
+  if (!options.preserveSelection) rememberCompanyRichTextSelection(key);
+}
+
+function updateCompanyDocumentFontPreview(value) {
+  const font = normalisePdfFontFamily(value);
+  Object.keys(COMPANY_TYPOGRAPHY_FIELDS).forEach(key => {
+    const editor = companyRichTextEditor(key);
+    if (editor) editor.style.fontFamily = pdfFontCssFamily(font);
+  });
+  const select = document.getElementById('companyDetailsFontFamily');
+  if (select) select.style.fontFamily = pdfFontCssFamily(font);
+  if (typeof window.refreshShowbaseSelect === 'function') window.refreshShowbaseSelect(select);
 }
 
 function defaultCompanyLetterheadText(useFormValues = false) {
@@ -494,10 +721,10 @@ function defaultCompanyLetterheadText(useFormValues = false) {
 }
 
 function populateDefaultCompanyLetterhead() {
-  const textarea = document.getElementById('companyDetailsLetterhead');
-  if (!textarea) return;
-  textarea.value = defaultCompanyLetterheadText(true);
-  textarea.focus();
+  const editor = companyRichTextEditor('letterhead');
+  if (!editor) return;
+  editor.innerHTML = plainTextToCompanyRichHtml(defaultCompanyLetterheadText(true), true);
+  editor.focus();
 }
 
 function defaultCompanyPaymentDetailsText(useFormValues = false) {
@@ -520,10 +747,10 @@ function defaultCompanyPaymentDetailsText(useFormValues = false) {
 }
 
 function populateDefaultCompanyPaymentDetails() {
-  const textarea = document.getElementById('companyDetailsPaymentDetails');
-  if (!textarea) return;
-  textarea.value = defaultCompanyPaymentDetailsText(true);
-  textarea.focus();
+  const editor = companyRichTextEditor('paymentDetails');
+  if (!editor) return;
+  editor.innerHTML = plainTextToCompanyRichHtml(defaultCompanyPaymentDetailsText(true));
+  editor.focus();
 }
 
 async function loadPdfSettingsSection() {
@@ -950,15 +1177,13 @@ function syncCompanyThemeColor(value) {
   if (input && input.value !== normalised) input.value = normalised;
 }
 
-async function saveCompanyDetails() {
-  if (!isAdminUser()) {
-    showNotification('error', 'Admin privileges required');
-    return;
-  }
-
+function collectCompanyDetailsPayload() {
   const value = id => document.getElementById(id)?.value || '';
+  const richHtml = key => companyRichTextEditor(key)?.innerHTML || '';
+  const richText = key => companyRichTextPlainText(key);
   const payload = {
-    footerText: value('pdfSettingsFooterText'),
+    footerText: richText('footer'),
+    footerHtml: richHtml('footer'),
     companyName: value('companyDetailsName'),
     registrationNumber: value('companyDetailsRegistration'),
     billingAddress: value('companyDetailsAddress'),
@@ -969,8 +1194,9 @@ async function saveCompanyDetails() {
     bankAccountName: value('companyDetailsAccountName'),
     bankAccountNumber: value('companyDetailsAccountNumber'),
     paynowUen: value('companyDetailsPaynow'),
-    paymentDetailsText: value('companyDetailsPaymentDetails'),
-    paymentDetailsEnabled: Boolean(value('companyDetailsPaymentDetails').trim()),
+    paymentDetailsText: richText('paymentDetails'),
+    paymentDetailsHtml: richHtml('paymentDetails'),
+    paymentDetailsEnabled: Boolean(richText('paymentDetails')),
     currency: value('companyDetailsCurrency'),
     taxLabel: value('companyDetailsTaxLabel'),
     taxRate: Number(value('companyDetailsTaxRate') || 0),
@@ -978,11 +1204,61 @@ async function saveCompanyDetails() {
     invoicePrefix: value('companyDetailsInvoicePrefix'),
     defaultPaymentTerms: value('companyDetailsPaymentTerms'),
     defaultValidityDays: Number(value('companyDetailsValidity') || 30),
-    defaultTerms: value('companyDetailsTerms'),
+    defaultTerms: richText('terms'),
+    defaultTermsHtml: richHtml('terms'),
     themeColor: value('companyDetailsThemeColor') || '#0f766e',
-    letterheadText: value('companyDetailsLetterhead'),
-    letterheadEnabled: Boolean(value('companyDetailsLetterhead').trim())
+    fontFamily: normalisePdfFontFamily(value('companyDetailsFontFamily')),
+    letterheadText: richText('letterhead'),
+    letterheadHtml: richHtml('letterhead'),
+    letterheadEnabled: Boolean(richText('letterhead'))
   };
+  Object.entries(COMPANY_TYPOGRAPHY_FIELDS).forEach(([key, meta]) => {
+    payload[meta.setting] = normaliseCompanyTypography();
+  });
+  return payload;
+}
+
+async function previewCompanyPdf() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+  const previewWindow = window.open('', '_blank');
+  if (!previewWindow) {
+    showNotification('warning', 'Please allow pop-ups to preview the PDF');
+    return;
+  }
+  previewWindow.document.write('<!doctype html><title>Preparing PDF preview</title><p style="font:14px Arial,sans-serif;padding:24px">Preparing PDF preview…</p>');
+  previewWindow.document.close();
+  try {
+    const response = await fetch('/api/pdf-settings/preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': typeof REALTIME_CLIENT_ID === 'undefined' ? '' : REALTIME_CLIENT_ID,
+      },
+      body: JSON.stringify(collectCompanyDetailsPayload()),
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || 'Failed to generate PDF preview');
+    }
+    const url = URL.createObjectURL(await response.blob());
+    previewWindow.location.replace(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    previewWindow.close();
+    showNotification('error', error.message || 'Failed to generate PDF preview');
+  }
+}
+
+async function saveCompanyDetails() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const payload = collectCompanyDetailsPayload();
 
   try {
     const res = await apiCall('/api/pdf-settings', 'PUT', payload);
@@ -1012,8 +1288,8 @@ async function savePdfSettingsFooter() {
 }
 
 async function resetPdfSettingsFooter() {
-  const textarea = document.getElementById('pdfSettingsFooterText');
-  if (textarea) textarea.value = DEFAULT_PDF_FOOTER_TEXT;
+  const editor = companyRichTextEditor('footer');
+  if (editor) editor.innerHTML = plainTextToCompanyRichHtml(DEFAULT_PDF_FOOTER_TEXT);
 }
 
 
@@ -2553,10 +2829,50 @@ function userRoleSummaryMarkup() {
     + '<span class="user-role-chip user-role-chip-sales"><strong>Sales</strong></span>';
 }
 
-function userActiveBadgeMarkup(user) {
-  return user.isActive
-    ? '<span class="user-status-badge user-status-active">Active</span>'
-    : '<span class="user-status-badge user-status-inactive">Inactive</span>';
+function userTelegramBadgeMarkup(user) {
+  if (!user.telegramConnected) {
+    return '<span class="user-telegram-badge is-unlinked"><span aria-hidden="true">&times;</span> Telegram not linked</span>';
+  }
+  const telegramUsername = String(user.telegramUsername || '').trim().replace(/^@+/, '');
+  const usernameLabel = telegramUsername ? ` @${escapeHtml(telegramUsername)}` : '';
+  const title = telegramUsername
+    ? `Telegram notifications linked to @${telegramUsername}`
+    : 'Telegram notifications linked';
+  return `<span class="user-telegram-badge is-linked" title="${escapeHtmlAttr(title)}"><span aria-hidden="true">&#10003;</span> Telegram${usernameLabel || ' linked'}</span>`;
+}
+
+function userAdminBadgeToggleMarkup({ id, field, checked, disabled, kind }) {
+  const isSales = kind === 'sales';
+  const onLabel = isSales ? 'Sales' : 'Active';
+  const offLabel = isSales ? 'Sales' : 'Inactive';
+  return `
+    <label class="user-admin-badge-toggle user-admin-badge-toggle-${kind}">
+      <input
+        type="checkbox"
+        id="${id}"
+        data-user-admin-autosave="${field}"
+        ${checked ? 'checked' : ''}
+        ${disabled ? 'disabled' : ''}
+      >
+      <span class="user-admin-state-badge user-admin-state-badge-on"><span aria-hidden="true">&#10003;</span> ${onLabel}</span>
+      <span class="user-admin-state-badge user-admin-state-badge-off"><span aria-hidden="true">&times;</span> ${offLabel}</span>
+    </label>
+  `;
+}
+
+function syncUserAdminRoleColour(row) {
+  const roleSelect = row.querySelector('[data-user-admin-autosave="role"]');
+  if (!roleSelect) return;
+  const role = ['owner', 'admin', 'manager', 'user'].includes(roleSelect.value)
+    ? roleSelect.value
+    : 'user';
+  roleSelect.classList.remove(
+    'user-admin-role-select-owner',
+    'user-admin-role-select-admin',
+    'user-admin-role-select-manager',
+    'user-admin-role-select-user'
+  );
+  roleSelect.classList.add(`user-admin-role-select-${role}`);
 }
 
 function ensureUsersSection() {
@@ -2805,7 +3121,7 @@ function usersAdminRowMarkup(user, index) {
           ${canEditUser ? '' : 'disabled'}
         >
         ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
-        <div class="users-admin-inline-meta">${userActiveBadgeMarkup(user)}</div>
+        <div class="users-admin-inline-meta">${userTelegramBadgeMarkup(user)}</div>
       </td>
       <td>
         <input
@@ -2821,17 +3137,19 @@ function usersAdminRowMarkup(user, index) {
       </td>
       <td>
         ${canEditRole ? `
-          <select id="role-${rowId}" class="form-input user-admin-role-select" data-user-admin-autosave="role">
+          <select id="role-${rowId}" class="form-input user-admin-role-select user-admin-role-select-${role}" data-user-admin-autosave="role">
             ${userRoleOptionsMarkup(role)}
           </select>
         ` : roleBadgeMarkup(role)}
       </td>
       <td>
-        <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="sales-${rowId}" data-user-admin-autosave="sales" ${user.hasSalesAccess || user.isSales ? 'checked' : ''} ${canEditRole ? '' : 'disabled'}>
-          <span class="user-admin-switch-slider"></span>
-          <span class="user-admin-switch-text">Sales</span>
-        </label>
+        ${userAdminBadgeToggleMarkup({
+          id: `sales-${rowId}`,
+          field: 'sales',
+          checked: Boolean(user.hasSalesAccess || user.isSales),
+          disabled: !canEditRole,
+          kind: 'sales'
+        })}
       </td>
       ${isSuperAdminUser() ? `
         <td>
@@ -2841,11 +3159,13 @@ function usersAdminRowMarkup(user, index) {
         </td>
       ` : ''}
       <td>
-        <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="active-${rowId}" data-user-admin-autosave="active" ${user.isActive ? 'checked' : ''} ${canEditUser ? '' : 'disabled'}>
-          <span class="user-admin-switch-slider"></span>
-          <span class="user-admin-switch-text">Active</span>
-        </label>
+        ${userAdminBadgeToggleMarkup({
+          id: `active-${rowId}`,
+          field: 'active',
+          checked: Boolean(user.isActive),
+          disabled: !canEditUser,
+          kind: 'active'
+        })}
       </td>
       <td class="user-admin-last-online" title="${rawLastOnline === '-' ? '' : escapeHtmlAttr(rawLastOnline)}">
         ${lastOnlineDisplay}
@@ -2990,7 +3310,7 @@ function applyUserAdminSavedData(row, endpointUsername, submittedPayload, respon
   row.dataset.originalUsername = savedUsername;
   row.dataset.originalCompanyCode = companyCode;
   const activeMeta = row.querySelector('.users-admin-inline-meta');
-  if (activeMeta) activeMeta.innerHTML = userActiveBadgeMarkup(merged);
+  if (activeMeta) activeMeta.innerHTML = userTelegramBadgeMarkup(merged);
   updateUsersAdminSummary();
 
   if (
@@ -3012,6 +3332,7 @@ function applyUserAdminResponseToUnchangedRow(row, responseData) {
   if (field('sales')) field('sales').checked = Boolean(responseData.hasSalesAccess || responseData.isSales);
   if (field('company') && responseData.companyCode) field('company').value = responseData.companyCode;
   if (field('active')) field('active').checked = Boolean(responseData.isActive);
+  syncUserAdminRoleColour(row);
 }
 
 async function flushUserAdminAutosave(row) {
@@ -3099,6 +3420,9 @@ function bindUsersAdminAutosave(root) {
         control.addEventListener('input', () => scheduleUserAdminAutosave(row));
       } else if (field === 'username' || field === 'phone') {
         control.addEventListener('input', () => setUserAdminSaveStatus(row, 'pending', 'Unsaved'));
+      }
+      if (field === 'role') {
+        control.addEventListener('change', () => syncUserAdminRoleColour(row));
       }
       control.addEventListener('change', () => scheduleUserAdminAutosave(row, 0));
       if (control.matches('input[type="text"], input[type="tel"]')) {
@@ -3510,6 +3834,7 @@ function ensureUserAdminStyles() {
     .user-role-chip-owner { border-color: #f2c879; background: #fff7e6; color: #8a4b08; }
     .user-role-chip-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
     .user-role-chip-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
+    .user-role-chip-user { border-color: #d0d5dd; background: #f8fafc; color: #475467; }
     .user-role-chip-sales { border-color: #fcceee; background: #fdf2fa; color: #c11574; }
 
     .users-admin-grid {
@@ -3549,26 +3874,112 @@ function ensureUserAdminStyles() {
 
     .user-admin-role-select {
       min-width: 136px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 750;
     }
 
-    .user-status-badge {
+    .user-admin-role-select-owner { border-color: #f2c879; background: #fff7e6; color: #8a4b08; }
+    .user-admin-role-select-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
+    .user-admin-role-select-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
+    .user-admin-role-select-user { border-color: #d0d5dd; background: #f8fafc; color: #475467; }
+
+    .user-admin-role-select + .sb-select-button {
+      min-height: 34px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .user-admin-role-select-owner + .sb-select-button { border-color: #f2c879; background: #fff7e6; color: #8a4b08; }
+    .user-admin-role-select-admin + .sb-select-button { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
+    .user-admin-role-select-manager + .sb-select-button { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
+    .user-admin-role-select-user + .sb-select-button { border-color: #d0d5dd; background: #f8fafc; color: #475467; }
+
+    .user-telegram-badge,
+    .user-admin-state-badge {
       display: inline-flex;
       align-items: center;
+      gap: 4px;
       min-height: 20px;
       padding: 2px 7px;
+      border: 1px solid transparent;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
     }
 
-    .user-status-active {
-      color: #027a48;
-      background: #ecfdf3;
+    .user-telegram-badge.is-linked {
+      border-color: #b2ddff;
+      background: #eff8ff;
+      color: #175cd3;
     }
 
-    .user-status-inactive {
-      color: #667085;
+    .user-telegram-badge.is-unlinked {
+      border-color: #d0d5dd;
       background: #f2f4f7;
+      color: #667085;
+    }
+
+    .user-admin-badge-toggle {
+      position: relative;
+      display: inline-flex;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .user-admin-badge-toggle input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .user-admin-badge-toggle input:focus-visible ~ .user-admin-state-badge {
+      outline: 3px solid rgba(46, 144, 250, 0.25);
+      outline-offset: 2px;
+    }
+
+    .user-admin-badge-toggle input:disabled ~ .user-admin-state-badge {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .user-admin-state-badge-on {
+      display: none;
+    }
+
+    .user-admin-badge-toggle input:checked ~ .user-admin-state-badge-on {
+      display: inline-flex;
+    }
+
+    .user-admin-badge-toggle input:checked ~ .user-admin-state-badge-off {
+      display: none;
+    }
+
+    .user-admin-badge-toggle-active .user-admin-state-badge-on {
+      border-color: #abefc6;
+      background: #ecfdf3;
+      color: #027a48;
+    }
+
+    .user-admin-badge-toggle-sales .user-admin-state-badge-on {
+      border-color: #fcceee;
+      background: #fdf2fa;
+      color: #c11574;
+    }
+
+    .user-admin-state-badge-off {
+      border-color: #d0d5dd;
+      background: #f2f4f7;
+      color: #667085;
+    }
+
+    .user-admin-badge-toggle-sales .user-admin-state-badge-off {
+      text-decoration: line-through;
     }
 
     .user-admin-switch {

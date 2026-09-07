@@ -6,6 +6,7 @@ import unittest
 import app as app_module
 from data_manager import DataManager
 from models import User, hash_password
+from services.notification_settings import connect_admin_telegram
 
 
 class ChangePasswordTests(unittest.TestCase):
@@ -141,6 +142,29 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertEqual(users['normal']['phone'], '')
         self.assertEqual(users['admin']['role'], 'admin')
         self.assertEqual(users['manager']['role'], 'manager')
+
+    def test_users_api_exposes_telegram_link_without_chat_id(self):
+        connect_admin_telegram(
+            self.data_manager,
+            'normal',
+            chat_id='778899',
+            telegram_username='normal_alerts',
+            display_name='Normal Alerts',
+        )
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['is_active'] = True
+
+        response = self.client.get('/api/users')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        users = {user['username']: user for user in response.get_json()['data']}
+        self.assertTrue(users['normal']['telegramConnected'])
+        self.assertEqual(users['normal']['telegramUsername'], 'normal_alerts')
+        self.assertNotIn('chatId', users['normal'])
+        self.assertFalse(users['manager']['telegramConnected'])
+        self.assertEqual(users['manager']['telegramUsername'], '')
 
     def test_admin_can_update_user_name_and_phone(self):
         with self.client.session_transaction() as session:

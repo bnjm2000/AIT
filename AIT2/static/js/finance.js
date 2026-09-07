@@ -73,6 +73,7 @@ const financeState = {
   dragLineIndex: null,
   dragLineIndexes: [],
   dragWholeLineGroup: false,
+  dragHeaderId: '',
   dragDepartment: '',
   dragSubprojectId: '',
   snapshotMode: false,
@@ -82,6 +83,7 @@ const financeState = {
   rateCardTab: 'assets',
   rateCardUom: 'units',
   rateCardTarget: 'quotation',
+  products: [],
   newClientSalutation: '',
   editorDataLoadedAt: 0,
   mineOnly: true,
@@ -2845,6 +2847,8 @@ function ensureFinanceSections() {
   const sections = [
     ['costing-section', '<div id="costing-page-root" class="finance-page costing-page"><div class="loading">Loading costing...</div></div>'],
     ['quotations-section', '<div id="quotations-page-root" class="finance-page"><div class="loading">Loading...</div></div>'],
+    ['products-section', '<div id="products-page-root" class="finance-page finance-products-page"><div class="loading">Loading products...</div></div>'],
+    ['clients-section', '<div id="clients-page-root" class="finance-page finance-clients-page"><div class="loading">Loading clients...</div></div>'],
     ['invoices-section', '<div id="invoices-page-root" class="finance-page invoice-page"><div class="loading">Loading invoices...</div></div>'],
     ['profit-loss-section', '<div id="profit-loss-page-root" class="finance-page profit-loss-page"><div class="loading">Loading...</div></div>'],
     ['accounting-section', '<div id="accounting-page-root" class="accounting-page"><div class="loading">Loading accounting...</div></div>'],
@@ -2865,12 +2869,24 @@ function setupFinanceNavigation() {
   const canUseFinance = typeof currentUserHasSalesAccess === 'function'
     ? currentUserHasSalesAccess()
     : !!(window.currentUser && (window.currentUser.hasSalesAccess || window.currentUser.isSales || window.currentUser.isSuperAdmin));
-  const isOwner = typeof isPlatformAdminUser === 'function' && isPlatformAdminUser();
-  const canUseAccounting = typeof canCurrentUserManageRoles === 'function'
-    ? canCurrentUserManageRoles()
-    : isOwner || (typeof currentUser !== 'undefined' && String(currentUser?.role || '').toLowerCase() === 'admin');
+  const canUseAccounting = typeof canCurrentUserAccessAccounting === 'function'
+    ? canCurrentUserAccessAccounting()
+    : typeof currentUser !== 'undefined' && ['owner', 'admin'].includes(String(currentUser?.role || '').toLowerCase());
+  const canUseClients = typeof canCurrentUserAccessClients === 'function'
+    ? canCurrentUserAccessClients()
+    : !!(
+      typeof currentUser !== 'undefined'
+      && currentUser
+      && (
+        ['owner', 'admin'].includes(String(currentUser.role || '').toLowerCase())
+        || canUseFinance
+      )
+    );
+  const canUseProducts = typeof canCurrentUserAccessProducts === 'function'
+    ? canCurrentUserAccessProducts()
+    : canUseClients;
   const sidebar = document.getElementById('appSidebar');
-  if (!sidebar || (!canUseFinance && !canUseAccounting)) return;
+  if (!sidebar || (!canUseFinance && !canUseAccounting && !canUseClients && !canUseProducts)) return;
   const existing = sidebar.querySelector('[data-finance-navigation="true"]');
   if (existing) return;
   const section = document.createElement('div');
@@ -2878,12 +2894,14 @@ function setupFinanceNavigation() {
   section.dataset.financeNavigation = 'true';
   section.innerHTML = `
     <h3>Finance</h3>
+    ${canUseProducts ? '<button type="button" class="nav-item nav-item-inline" data-section="products">Products</button>' : ''}
     ${canUseFinance ? `
     <button type="button" class="nav-item nav-item-inline" data-section="costing">Costing</button>
     <button type="button" class="nav-item nav-item-inline" data-section="quotations">Quotations</button>
     <button type="button" class="nav-item nav-item-inline" data-section="invoices">Invoices</button>
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
     ` : ''}
+    ${canUseClients ? '<button type="button" class="nav-item nav-item-inline" data-section="clients">Clients</button>' : ''}
     ${canUseAccounting ? '<button type="button" class="nav-item nav-item-inline accounting-access-only" data-section="accounting">Accounting</button>' : ''}
   `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
@@ -2895,6 +2913,519 @@ function setupFinanceNavigation() {
 
 function financeRoot() {
   return document.getElementById('quotations-page-root');
+}
+
+const productCatalogState = {
+  rows: [],
+  query: '',
+  category: 'all',
+  sourceFilters: { inventory: true, additional: true },
+  formOpen: false,
+  loading: false,
+  saving: false
+};
+
+function productsRoot() {
+  return document.getElementById('products-page-root');
+}
+
+function productCatalogFilteredRows() {
+  const query = String(productCatalogState.query || '').trim().toLowerCase();
+  return (productCatalogState.rows || []).filter(row => {
+    const source = row.isCustom ? 'additional' : 'inventory';
+    const matchesSource = productCatalogState.sourceFilters[source];
+    const matchesCategory = productCatalogState.category === 'all'
+      || financeLineSystem(row) === productCatalogState.category;
+    return matchesSource && matchesCategory && (!query || [
+      financeLineSystem(row), row.department, row.brand, row.model,
+      row.description, row.productLabel, row.containerId, row.containerSerial,
+      ...(row.searchTags || [])
+    ].join(' ').toLowerCase().includes(query));
+  }).sort((left, right) => String(
+    left.productLabel || left.description || ''
+  ).localeCompare(String(
+    right.productLabel || right.description || ''
+  ), undefined, { sensitivity: 'base' }));
+}
+
+function productCatalogCategories() {
+  return [...new Set((productCatalogState.rows || [])
+    .filter(row => productCatalogState.sourceFilters[row.isCustom ? 'additional' : 'inventory'])
+    .map(row => financeLineSystem(row))
+    .filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+}
+
+function productCatalogRowsMarkup() {
+  const rows = productCatalogFilteredRows();
+  if (!rows.length) return `<div class="finance-products-empty"><strong>No products match this view.</strong><span>${productCatalogState.query ? 'Try another product name, brand, model or category.' : 'Choose another category or source filter, or add a product.'}</span></div>`;
+  return `<div class="finance-product-table-wrap"><table class="finance-product-table">
+    <thead><tr><th>Product label</th><th>Source</th><th>Availability</th><th>UOM</th><th>Sale price</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>${rows.map(row => {
+      const index = productCatalogState.rows.indexOf(row);
+      const productLabel = row.productLabel || [row.brand, row.model].filter(Boolean).join(' ') || row.description || 'Unnamed product';
+      const inventoryDetail = [row.brand, row.model, row.description].filter(Boolean).join(' · ');
+      const availability = row.isCustom
+        ? 'Not tracked'
+        : `${financeNumber(row.availableQuantity ?? row.sourceAssetIds?.length, 0)} in inventory`;
+      return `<tr>
+        <td data-label="Product label"><input class="finance-input finance-product-label-input" value="${financeEscapeAttr(productLabel)}" maxlength="1000" aria-label="Product label" onchange="productCatalogUpdateField(${index},'productLabel',this.value)">${inventoryDetail && inventoryDetail !== productLabel ? `<small>${financeEscape(inventoryDetail)}</small>` : ''}</td>
+        <td data-label="Source"><span class="finance-product-source ${row.isCustom ? 'additional' : 'inventory'}">${row.isCustom ? 'Added product' : 'Inventory'}</span></td>
+        <td data-label="Availability">${financeEscape(availability)}</td>
+        <td data-label="UOM"><select class="finance-input finance-product-uom-select" aria-label="UOM for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'uom',this.value)">${FINANCE_UOMS.map(option => `<option value="${option.value}" ${option.value === row.uom ? 'selected' : ''}>${financeEscape(option.label)}</option>`).join('')}</select></td>
+        <td data-label="Sale price"><label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Sale price for ${financeEscapeAttr(productLabel)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="productCatalogUpdatePrice(${index},this.value)"></label></td>
+        <td data-label="Actions">${row.isCustom ? `<button type="button" class="btn btn-danger compact" onclick="productCatalogDelete(${index})">Remove</button>` : ''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+function productCatalogFormMarkup() {
+  if (!productCatalogState.formOpen) return '';
+  return `
+    <form class="finance-card finance-product-form" onsubmit="productCatalogCreate(event)">
+      <div class="finance-product-form-heading"><div><h3>Add product</h3><p>Create a non-inventory product for future quotations.</p></div><button type="button" class="finance-clients-form-close" aria-label="Close product form" onclick="productCatalogToggleForm(false)">×</button></div>
+      <div class="finance-product-form-grid">
+        <label class="finance-field"><span>Brand</span><input class="finance-input" name="brand" maxlength="240"></label>
+        <label class="finance-field"><span>Model</span><input class="finance-input" name="model" maxlength="240"></label>
+        <label class="finance-field finance-product-description"><span>Product label *</span><input class="finance-input" name="productLabel" maxlength="1000" required></label>
+        <label class="finance-field"><span>Category *</span><input class="finance-input" name="department" list="financeProductCategories" required><datalist id="financeProductCategories">${(financeState.departments || []).map(value => `<option value="${financeEscapeAttr(value)}"></option>`).join('')}</datalist></label>
+        <label class="finance-field"><span>Sale price</span><span class="finance-money-input"><span>$</span><input name="unitPrice" type="number" min="0" step="0.01" value="0"></span></label>
+        <label class="finance-field"><span>Unit</span><select class="finance-input" name="uom">${FINANCE_UOMS.map(row => `<option value="${row.value}">${financeEscape(row.label)}</option>`).join('')}</select></label>
+      </div>
+      <div class="finance-product-form-actions"><button type="button" class="btn btn-secondary" onclick="productCatalogToggleForm(false)">Cancel</button><button type="submit" class="btn btn-primary" ${productCatalogState.saving ? 'disabled' : ''}>${productCatalogState.saving ? 'Saving…' : 'Add product'}</button></div>
+    </form>`;
+}
+
+function productCatalogRender() {
+  const root = productsRoot();
+  if (!root) return;
+  const inventoryCount = productCatalogState.rows.filter(row => !row.isCustom).length;
+  const additionalCount = productCatalogState.rows.filter(row => row.isCustom).length;
+  const visibleSourceCount = Number(productCatalogState.sourceFilters.inventory)
+    + Number(productCatalogState.sourceFilters.additional);
+  const categories = productCatalogCategories();
+  if (productCatalogState.category !== 'all' && !categories.includes(productCatalogState.category)) {
+    productCatalogState.category = 'all';
+  }
+  root.innerHTML = `
+    <div class="finance-toolbar finance-products-toolbar">
+      <div class="finance-toolbar-heading"><h2>Products</h2><p class="finance-subtitle">The sale catalogue used by quotation search.</p></div>
+      <div class="finance-toolbar-actions"><input class="finance-search" type="search" value="${financeEscapeAttr(productCatalogState.query)}" placeholder="Search products..." oninput="productCatalogSetQuery(this.value)"><button type="button" class="btn btn-primary" onclick="productCatalogToggleForm(true)">+ Add Product</button></div>
+    </div>
+    <div class="finance-products-guidance"><strong>Future quotations only.</strong><span>Price edits here change future additions; products already placed in quotations keep their saved prices.</span></div>
+    ${productCatalogFormMarkup()}
+    <div class="finance-card finance-products-card">
+      <div class="finance-product-source-filters" aria-label="Product sources">
+        <span>Show</span>
+        <button type="button" class="${productCatalogState.sourceFilters.inventory ? 'active' : ''}" aria-pressed="${productCatalogState.sourceFilters.inventory}" onclick="productCatalogToggleSource('inventory')"><span class="finance-product-filter-check">✓</span> Inventory <strong>${inventoryCount}</strong></button>
+        <button type="button" class="${productCatalogState.sourceFilters.additional ? 'active' : ''}" aria-pressed="${productCatalogState.sourceFilters.additional}" onclick="productCatalogToggleSource('additional')"><span class="finance-product-filter-check">✓</span> Added <strong>${additionalCount}</strong></button>
+        <small>${visibleSourceCount === 2 ? 'Both sources selected' : 'One source selected'}</small>
+      </div>
+      <div class="finance-products-tabs" role="tablist" aria-label="Product categories">
+        <button type="button" role="tab" aria-selected="${productCatalogState.category === 'all'}" class="${productCatalogState.category === 'all' ? 'active' : ''}" onclick="productCatalogSetCategory('all')">All products</button>
+        ${categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('')}
+      </div>
+      <div id="productCatalogResults">${productCatalogRowsMarkup()}</div>
+    </div>`;
+}
+
+function productCatalogSetQuery(value) {
+  productCatalogState.query = String(value || '');
+  productCatalogRender();
+  requestAnimationFrame(() => {
+    const input = productsRoot()?.querySelector('.finance-search');
+    input?.focus();
+    input?.setSelectionRange(input.value.length, input.value.length);
+  });
+}
+
+function productCatalogToggleSource(source) {
+  if (!['inventory', 'additional'].includes(source)) return;
+  const selectedCount = Object.values(productCatalogState.sourceFilters).filter(Boolean).length;
+  if (productCatalogState.sourceFilters[source] && selectedCount === 1) return;
+  productCatalogState.sourceFilters[source] = !productCatalogState.sourceFilters[source];
+  productCatalogRender();
+}
+
+function productCatalogSetCategory(encodedCategory) {
+  const category = encodedCategory === 'all' ? 'all' : decodeURIComponent(encodedCategory);
+  productCatalogState.category = category;
+  productCatalogRender();
+}
+
+function productCatalogToggleForm(open = !productCatalogState.formOpen) {
+  productCatalogState.formOpen = !!open;
+  productCatalogRender();
+  if (productCatalogState.formOpen) requestAnimationFrame(() => productsRoot()?.querySelector('[name="productLabel"]')?.focus());
+}
+
+function financeApplyProductRows(rows) {
+  const nextRows = rows || [];
+  productCatalogState.rows = nextRows;
+  financeState.products = nextRows;
+  financeState.rateCard = nextRows;
+  financeState.catalogCache = {};
+  return nextRows;
+}
+
+async function financePersistProduct(item) {
+  const response = await apiCall('/api/finance/products', 'POST', item);
+  return financeApplyProductRows(response.data || []);
+}
+
+async function loadProducts(options = {}) {
+  const root = productsRoot();
+  if (!root || productCatalogState.loading) return;
+  productCatalogState.loading = true;
+  if (!options.silent) root.innerHTML = '<div class="loading">Loading products...</div>';
+  try {
+    const [productsResponse, departmentsResponse] = await Promise.all([
+      apiCall('/api/finance/products'),
+      apiCall('/api/finance/departments').catch(() => ({ data: [] }))
+    ]);
+    financeState.departments = departmentsResponse.data || financeState.departments;
+    financeApplyProductRows(productsResponse.data || []);
+    productCatalogRender();
+  } catch (error) {
+    root.innerHTML = '<div class="finance-empty">Could not load products.</div>';
+  } finally {
+    productCatalogState.loading = false;
+  }
+}
+
+async function productCatalogCreate(event) {
+  event.preventDefault();
+  if (productCatalogState.saving || !event.currentTarget.reportValidity()) return;
+  const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+  payload.productLabel = String(payload.productLabel || '').trim();
+  payload.description = payload.productLabel;
+  productCatalogState.saving = true;
+  try {
+    await financePersistProduct({ ...payload, isCustom: true });
+    productCatalogState.formOpen = false;
+    productCatalogRender();
+    showNotification('success', 'Product added');
+  } catch (error) {
+    productCatalogRender();
+  } finally {
+    productCatalogState.saving = false;
+    if (productCatalogState.formOpen) productCatalogRender();
+  }
+}
+
+async function productCatalogUpdatePrice(index, value) {
+  const item = productCatalogState.rows[Number(index)];
+  if (!item) return;
+  try {
+    await financePersistProduct({ ...item, unitPrice: financeCurrencyNumber(value) });
+    productCatalogRender();
+    showNotification('success', 'Product price updated for future additions');
+  } catch (error) {
+    productCatalogRender();
+  }
+}
+
+async function productCatalogUpdateField(index, field, value) {
+  const item = productCatalogState.rows[Number(index)];
+  if (!item || !['productLabel', 'uom'].includes(field)) return;
+  const nextValue = String(value || '').trim();
+  if (field === 'productLabel' && !nextValue) {
+    productCatalogRender();
+    showNotification('error', 'Product label is required');
+    return;
+  }
+  if (field === 'uom' && !FINANCE_UOMS.some(row => row.value === nextValue)) {
+    productCatalogRender();
+    return;
+  }
+  try {
+    await financePersistProduct({ ...item, [field]: nextValue });
+    productCatalogRender();
+    showNotification('success', `${field === 'uom' ? 'UOM' : 'Product label'} updated for future additions`);
+  } catch (error) {
+    productCatalogRender();
+  }
+}
+
+async function productCatalogDelete(index) {
+  const item = productCatalogState.rows[Number(index)];
+  if (!item?.isCustom) return;
+  const title = item.productLabel || [item.brand, item.model].filter(Boolean).join(' ') || item.description;
+  const confirmed = await showAppConfirm({
+    title: 'Remove product?',
+    message: `${title} will no longer appear in product or quotation search. Existing quotation items will not change.`,
+    confirmText: 'Remove Product',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    const response = await apiCall('/api/finance/products', 'DELETE', item);
+    financeApplyProductRows(response.data || []);
+    productCatalogRender();
+    showNotification('success', 'Product removed');
+  } catch (error) {}
+}
+
+const clientDirectoryState = {
+  rows: [],
+  query: '',
+  editingName: null,
+  draft: null,
+  loading: false,
+  saving: false
+};
+
+function clientsRoot() {
+  return document.getElementById('clients-page-root');
+}
+
+function clientDirectoryBlankClient() {
+  return {
+    salutation: '',
+    name: '',
+    company: '',
+    contactPerson: '',
+    email: '',
+    phone: '',
+    taxNumber: '',
+    address1: '',
+    address2: '',
+    address3: '',
+    postalCode: ''
+  };
+}
+
+function clientDirectoryFilteredRows() {
+  const query = String(clientDirectoryState.query || '').trim().toLowerCase();
+  return clientDirectoryState.rows
+    .map((client, index) => ({ client, index }))
+    .filter(({ client }) => !query || Object.values(client || {}).some(
+      value => String(value || '').toLowerCase().includes(query)
+    ));
+}
+
+function clientDirectoryAddress(client) {
+  return [client.address1, client.address2, client.address3, client.postalCode]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function clientDirectoryListMarkup() {
+  const rows = clientDirectoryFilteredRows();
+  if (!rows.length) {
+    return `<div class="finance-clients-empty">
+      <strong>${clientDirectoryState.query ? 'No clients match this search.' : 'No clients yet.'}</strong>
+      <span>${clientDirectoryState.query ? 'Try another name, company, email, phone number or address.' : 'Add the first client to reuse their details in quotations and delivery orders.'}</span>
+    </div>`;
+  }
+  return `
+    <div class="finance-clients-table-wrap">
+      <table class="finance-clients-table">
+        <thead><tr><th>Client</th><th>Company</th><th>Contact</th><th>Billing / delivery address</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>${rows.map(({ client, index }) => `
+          <tr>
+            <td data-label="Client"><strong>${financeEscape(financeClientName(client) || client.name || 'Unnamed client')}</strong>${client.contactPerson ? `<small>Attn: ${financeEscape(client.contactPerson)}</small>` : ''}</td>
+            <td data-label="Company"><span>${financeEscape(client.company || '—')}</span>${client.taxNumber ? `<small>Tax no. ${financeEscape(client.taxNumber)}</small>` : ''}</td>
+            <td data-label="Contact"><span>${financeEscape(client.email || '—')}</span><small>${financeEscape(client.phone || '')}</small></td>
+            <td data-label="Address"><span>${financeEscape(clientDirectoryAddress(client) || '—')}</span></td>
+            <td data-label="Actions"><div class="finance-clients-row-actions"><button type="button" class="btn btn-secondary compact" onclick="clientDirectoryStartEdit(${index})">Edit</button><button type="button" class="btn btn-danger compact" onclick="clientDirectoryDelete(${index})">Delete</button></div></td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function clientDirectoryEditorMarkup() {
+  const client = clientDirectoryState.draft;
+  if (!client) {
+    return `
+      <div class="finance-clients-editor-empty">
+        <span class="finance-clients-editor-mark" aria-hidden="true">👤</span>
+        <strong>Select a client to edit</strong>
+        <p>Or add a client to create a reusable address-book record for Quotations and Delivery Orders.</p>
+        <button type="button" class="btn btn-primary" onclick="clientDirectoryStartCreate()">+ Add Client</button>
+      </div>
+    `;
+  }
+  const editing = clientDirectoryState.editingName !== '';
+  return `
+    <form class="finance-clients-form" onsubmit="clientDirectorySave(event)">
+      <div class="finance-clients-form-heading">
+        <div><h3>${editing ? 'Edit client' : 'Add client'}</h3><p>${editing ? `Updating ${financeEscape(clientDirectoryState.editingName)}` : 'Create a reusable client record.'}</p></div>
+        <button type="button" class="finance-clients-form-close" aria-label="Close client editor" onclick="clientDirectoryCancelEdit()">×</button>
+      </div>
+      <div class="finance-clients-form-body">
+        <div class="finance-clients-name-grid">
+          <label class="finance-field"><span>Salutation</span><select class="finance-input" name="salutation">${FINANCE_SALUTATIONS.map(value => `<option value="${financeEscapeAttr(value)}" ${value === client.salutation ? 'selected' : ''}>${financeEscape(value || 'None')}</option>`).join('')}</select></label>
+          <label class="finance-field"><span>Client name *</span><input class="finance-input" name="name" maxlength="160" required autocomplete="name" value="${financeEscapeAttr(client.name || '')}"></label>
+        </div>
+        <label class="finance-field"><span>Company</span><input class="finance-input" name="company" maxlength="200" autocomplete="organization" value="${financeEscapeAttr(client.company || '')}"></label>
+        <label class="finance-field"><span>Contact person</span><input class="finance-input" name="contactPerson" maxlength="160" value="${financeEscapeAttr(client.contactPerson || '')}"></label>
+        <div class="finance-clients-pair-grid">
+          <label class="finance-field"><span>Email</span><input class="finance-input" type="email" name="email" maxlength="200" autocomplete="email" value="${financeEscapeAttr(client.email || '')}"></label>
+          <label class="finance-field"><span>Phone</span><input class="finance-input" type="tel" name="phone" maxlength="80" autocomplete="tel" value="${financeEscapeAttr(client.phone || '')}"></label>
+        </div>
+        <label class="finance-field"><span>Tax / registration number</span><input class="finance-input" name="taxNumber" maxlength="100" value="${financeEscapeAttr(client.taxNumber || '')}"></label>
+        <div class="finance-clients-address-group">
+          <span>Billing / delivery address</span>
+          <input class="finance-input" name="address1" maxlength="240" autocomplete="address-line1" placeholder="Address line 1" value="${financeEscapeAttr(client.address1 || '')}">
+          <input class="finance-input" name="address2" maxlength="240" autocomplete="address-line2" placeholder="Address line 2" value="${financeEscapeAttr(client.address2 || '')}">
+          <input class="finance-input" name="address3" maxlength="240" autocomplete="address-line3" placeholder="Address line 3" value="${financeEscapeAttr(client.address3 || '')}">
+          <input class="finance-input" name="postalCode" maxlength="40" autocomplete="postal-code" placeholder="Postal code" value="${financeEscapeAttr(client.postalCode || '')}">
+        </div>
+      </div>
+      <div class="finance-clients-form-actions">
+        <button type="button" class="btn btn-secondary" onclick="clientDirectoryCancelEdit()">Cancel</button>
+        <button type="submit" class="btn btn-primary" ${clientDirectoryState.saving ? 'disabled' : ''}>${clientDirectoryState.saving ? 'Saving…' : (editing ? 'Save Changes' : 'Add Client')}</button>
+      </div>
+    </form>
+  `;
+}
+
+function clientDirectoryRenderList() {
+  const results = document.getElementById('clientDirectoryResults');
+  if (results) results.innerHTML = clientDirectoryListMarkup();
+  const count = document.getElementById('clientDirectoryCount');
+  if (count) {
+    const visible = clientDirectoryFilteredRows().length;
+    const total = clientDirectoryState.rows.length;
+    count.textContent = clientDirectoryState.query ? `${visible} of ${total} clients` : `${total} client${total === 1 ? '' : 's'}`;
+  }
+}
+
+function clientDirectoryRender() {
+  const root = clientsRoot();
+  if (!root) return;
+  root.innerHTML = `
+    <div class="finance-toolbar finance-clients-toolbar">
+      <div class="finance-toolbar-heading"><h2>Clients</h2><p class="finance-subtitle">Shared client details for Quotations and Delivery Orders.</p></div>
+      <div class="finance-toolbar-actions">
+        <input class="finance-search" type="search" value="${financeEscapeAttr(clientDirectoryState.query)}" placeholder="Search clients..." autocomplete="off" oninput="clientDirectorySetQuery(this.value)">
+        <button type="button" class="btn btn-primary" onclick="clientDirectoryStartCreate()">+ Add Client</button>
+      </div>
+    </div>
+    <div class="finance-clients-guidance"><strong>One shared address book.</strong><span>Selecting a saved client in a quotation or delivery order copies these details into that document.</span></div>
+    <div class="finance-clients-layout">
+      <section class="finance-card finance-clients-list-card">
+        <div class="finance-clients-list-heading"><h3>Client directory</h3><span id="clientDirectoryCount"></span></div>
+        <div id="clientDirectoryResults">${clientDirectoryListMarkup()}</div>
+      </section>
+      <aside class="finance-card finance-clients-editor" id="clientDirectoryEditor">${clientDirectoryEditorMarkup()}</aside>
+    </div>
+  `;
+  clientDirectoryRenderList();
+}
+
+function clientDirectorySetQuery(value) {
+  clientDirectoryState.query = String(value || '');
+  clientDirectoryRenderList();
+}
+
+function clientDirectoryStartCreate() {
+  clientDirectoryState.editingName = '';
+  clientDirectoryState.draft = clientDirectoryBlankClient();
+  clientDirectoryRender();
+  setTimeout(() => document.querySelector('#clientDirectoryEditor [name="name"]')?.focus(), 0);
+}
+
+function clientDirectoryStartEdit(index) {
+  const client = clientDirectoryState.rows[Number(index)];
+  if (!client) return;
+  clientDirectoryState.editingName = client.name;
+  clientDirectoryState.draft = { ...clientDirectoryBlankClient(), ...client };
+  clientDirectoryRender();
+  document.getElementById('clientDirectoryEditor')?.scrollIntoView({ block: 'nearest' });
+}
+
+function clientDirectoryCancelEdit() {
+  clientDirectoryState.editingName = null;
+  clientDirectoryState.draft = null;
+  clientDirectoryRender();
+}
+
+async function clientDirectoryDelete(index) {
+  const client = clientDirectoryState.rows[Number(index)];
+  if (!client) return;
+  const confirmed = await showAppConfirm({
+    title: 'Remove client from directory?',
+    message: `${client.name} will no longer appear in client suggestions. Existing quotations, invoices and delivery orders will keep their saved client details.`,
+    confirmText: 'Remove Client',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    await apiCall(`/api/clients/${encodeURIComponent(client.name)}`, 'DELETE');
+    if (clientDirectoryState.editingName === client.name) {
+      clientDirectoryState.editingName = null;
+      clientDirectoryState.draft = null;
+    }
+    await loadClientsPage({ silent: true });
+    showNotification('success', 'Client removed from suggestions');
+  } catch (error) {
+    // apiCall displays the server message.
+  }
+}
+
+function clientDirectoryRefreshDocumentCaches(rows) {
+  financeState.clients = rows.map(client => ({ ...client }));
+  if (typeof invoiceState !== 'undefined') {
+    invoiceState.clients = rows.map(client => ({ ...client }));
+  }
+}
+
+async function loadClientsPage(options = {}) {
+  const root = clientsRoot();
+  if (!root || clientDirectoryState.loading) return;
+  clientDirectoryState.loading = true;
+  if (!options.silent) root.innerHTML = '<div class="loading">Loading clients...</div>';
+  try {
+    const response = await apiCall('/api/clients');
+    clientDirectoryState.rows = response.data || [];
+    clientDirectoryRefreshDocumentCaches(clientDirectoryState.rows);
+    if (clientDirectoryState.editingName !== null && clientDirectoryState.editingName !== '') {
+      const selected = clientDirectoryState.rows.find(row => row.name === clientDirectoryState.editingName);
+      clientDirectoryState.draft = selected ? { ...selected } : null;
+      if (!selected) clientDirectoryState.editingName = null;
+    }
+    clientDirectoryRender();
+  } catch (error) {
+    root.innerHTML = '<div class="finance-empty">Could not load clients.</div>';
+  } finally {
+    clientDirectoryState.loading = false;
+  }
+}
+
+async function clientDirectorySave(event) {
+  event.preventDefault();
+  if (clientDirectoryState.saving) return;
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  payload.name = String(payload.name || '').trim();
+  if (!payload.name) return;
+  clientDirectoryState.draft = { ...clientDirectoryBlankClient(), ...payload };
+  clientDirectoryState.saving = true;
+  clientDirectoryRender();
+  try {
+    const editingName = clientDirectoryState.editingName;
+    const endpoint = editingName
+      ? `/api/clients/${encodeURIComponent(editingName)}`
+      : '/api/clients';
+    const response = await apiCall(endpoint, editingName ? 'PUT' : 'POST', payload);
+    clientDirectoryState.editingName = response.data.name;
+    clientDirectoryState.draft = { ...response.data };
+    showNotification('success', editingName ? 'Client updated' : 'Client added');
+    await loadClientsPage({ silent: true });
+  } catch (error) {
+    clientDirectoryRender();
+  } finally {
+    clientDirectoryState.saving = false;
+    clientDirectoryRender();
+  }
 }
 
 function profitLossRoot() {
@@ -4211,8 +4742,10 @@ function financeNewGroupedQuotationLine(selected, category) {
   const unitPrice = financeNumber(selected.unitPrice);
   return {
     id: `line_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    productId: selected.productId || selected.id || '',
+    productKey: selected.productKey || selected.catalogKey || '',
     catalogKey: selected.catalogKey || '', sourceAssetIds: selected.sourceAssetIds || [],
-    brand: selected.brand || '', model: selected.model || '', description: selected.description || 'Item',
+    brand: selected.brand || '', model: selected.model || '', description: selected.productLabel || selected.description || 'Item',
     inventoryNameMode: selected.catalogKey ? 'inventory' : '',
     department: selected.department || category, departmentCode: selected.departmentCode || '',
     systemName: category, days, quantity,
@@ -4362,10 +4895,12 @@ function financeCategoryColumnHeader(department) {
   const defaults = financeCategoryMultiplierDefaults(department);
   return `
     <tr class="finance-category-column-header">
-      <td>${document?.showLineNumbers === false ? '' : '#'}</td>
-      <td>Description</td>
-      <td>Category</td>
-      <td>
+      <td class="finance-col-number">${document?.showLineNumbers === false ? '' : '#'}</td>
+      <td class="finance-col-description">Description</td>
+      <td class="finance-col-category">Category</td>
+      <td class="finance-col-quantity">Qty</td>
+      <td class="finance-col-uom">UOM</td>
+      <td class="finance-col-multiplier">
         <div class="finance-custom-control finance-header-control">
           <button type="button" class="finance-header-button showbase-line-header-action" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(financeCategoryMultiplierHeaderLabel(department))}</button>
           <div class="finance-custom-menu finance-days-menu" id="${financeEscapeAttr(menuId)}">
@@ -4379,7 +4914,7 @@ function financeCategoryColumnHeader(department) {
           </div>
         </div>
       </td>
-      <td>Qty</td><td>UOM</td><td>Unit price</td><td>Disc %</td><td>Total</td><td></td>
+      <td class="finance-col-unit-price">Unit price</td><td class="finance-col-discount">Disc %</td><td class="finance-col-total">Total</td><td></td>
     </tr>
   `;
 }
@@ -4401,13 +4936,110 @@ function financeGroupDisplayBuckets(rows, groupId) {
   return [...buckets.values()];
 }
 
+function financeHeaderRows(document = financeState.current) {
+  if (!document) return [];
+  if (!Array.isArray(document.headerRows)) document.headerRows = [];
+  return document.headerRows;
+}
+
+function financeLineUnitKey(line) {
+  const groupId = String(line?.groupId || '');
+  return groupId ? `group:${groupId}` : `line:${String(line?.id || '')}`;
+}
+
+function financeDisplayLineUnits(
+  document = financeState.current,
+  subprojectId = financeCurrentSubprojectId(document)
+) {
+  const units = [];
+  financeActiveDepartments(document, subprojectId).forEach(department => {
+    const rows = (document?.lineItems || []).map((line, index) => ({ line, index }))
+      .filter(row => (
+        !row.line.hiddenFromQuotation
+        && financeLineSystem(row.line) === department
+        && String(row.line.subprojectId || 'main') === String(subprojectId || 'main')
+      ));
+    const seenGroups = new Set();
+    rows.forEach(row => {
+      const groupId = String(row.line.groupId || '');
+      if (groupId && seenGroups.has(groupId)) return;
+      if (groupId) seenGroups.add(groupId);
+      const members = groupId
+        ? rows.filter(candidate => String(candidate.line.groupId || '') === groupId)
+        : [row];
+      units.push({
+        key: financeLineUnitKey(row.line),
+        department,
+        lineIds: members.map(candidate => String(candidate.line.id || '')).filter(Boolean),
+        firstLineId: String(members[0]?.line?.id || '')
+      });
+    });
+  });
+  return units;
+}
+
+function financeHeaderLayout(document = financeState.current, subprojectId = financeCurrentSubprojectId(document)) {
+  const units = financeDisplayLineUnits(document, subprojectId);
+  const unitByLineId = new Map();
+  const firstUnitByDepartment = new Map();
+  units.forEach(unit => {
+    if (!firstUnitByDepartment.has(unit.department)) {
+      firstUnitByDepartment.set(unit.department, unit);
+    }
+    unit.lineIds.forEach(lineId => unitByLineId.set(lineId, unit));
+  });
+  const beforeCategory = new Map();
+  const beforeUnit = new Map();
+  const end = [];
+  financeHeaderRows(document)
+    .filter(row => String(row.subprojectId || 'main') === String(subprojectId || 'main'))
+    .forEach(row => {
+      const unit = unitByLineId.get(String(row.beforeLineId || ''));
+      if (!unit) {
+        end.push(row);
+        return;
+      }
+      const target = firstUnitByDepartment.get(unit.department)?.key === unit.key
+        ? beforeCategory
+        : beforeUnit;
+      const key = target === beforeCategory ? unit.department : unit.key;
+      if (!target.has(key)) target.set(key, []);
+      target.get(key).push(row);
+    });
+  return { units, beforeCategory, beforeUnit, end };
+}
+
+function financeHeaderRowMarkup(header) {
+  const id = financeEscapeAttr(header?.id || '');
+  return `
+    <tr class="finance-quotation-header-row" data-header-id="${id}"
+      ondragover="financeDragHeaderOver(event,'${id}')"
+      ondragleave="financeDragHeaderLeave(event)"
+      ondrop="financeDropHeader(event,'${id}')"
+      ondragend="financeDragHeaderEnd()">
+      <td colspan="10">
+        <div class="finance-quotation-header-content">
+          <span class="finance-header-drag-handle" draggable="true" title="Drag header to reorder" aria-label="Drag header to reorder" ondragstart="financeDragHeaderStart(event,'${id}')" ondragend="financeDragHeaderEnd()">&#9776;</span>
+          <textarea class="finance-quotation-header-input" rows="1" maxlength="2000" placeholder="Header content" aria-label="Header content" oninput="financeHeaderContentInput('${id}',this)">${financeEscape(header?.content || '')}</textarea>
+          <button type="button" class="finance-delete-line finance-delete-header" title="Delete header" aria-label="Delete header" onclick="financeDeleteHeader('${id}')">&times;</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function financeHeaderRowsMarkup(rows) {
+  return (rows || []).map(financeHeaderRowMarkup).join('');
+}
+
 function financeRenderLineGroups() {
   const document = financeState.current;
   const subprojectId = financeCurrentSubprojectId(document);
   const showLineNumbers = document?.showLineNumbers !== false;
   const configured = financeActiveDepartments(document);
+  const headerLayout = financeHeaderLayout(document, subprojectId);
   if (!configured.length) {
     return `
+      ${financeHeaderRowsMarkup(headerLayout.end)}
       <tr class="finance-empty-department">
         <td colspan="10">No line items yet. Add an inventory or custom item below.</td>
       </tr>
@@ -4415,7 +5047,7 @@ function financeRenderLineGroups() {
     `;
   }
   let displayIndex = 0;
-  return configured.map(department => {
+  const categoryMarkup = configured.map(department => {
     const rows = (document.lineItems || []).map((line, index) => ({ line, index }))
       .filter(row => !row.line.hiddenFromQuotation && financeLineSystem(row.line) === department && (row.line.subprojectId || 'main') === subprojectId);
     const base = rows.reduce((sum, row) => sum + financeLineTotal(row.line), 0);
@@ -4430,6 +5062,9 @@ function financeRenderLineGroups() {
       const departmentResultsId = `finance-department-results-${line.id}`;
       const groupId = String(line.groupId || '');
       const isGroupStart = groupId && !renderedGroups.has(groupId);
+      const customHeaders = financeHeaderRowsMarkup(
+        headerLayout.beforeUnit.get(financeLineUnitKey(line)) || []
+      );
       const displayNumber = groupId
         ? (isGroupStart ? ++displayIndex : '')
         : ++displayIndex;
@@ -4452,9 +5087,9 @@ function financeRenderLineGroups() {
             <td class="finance-line-number"><span class="finance-drag-handle finance-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="financeDragLineGroupStart(event,'${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')" ondragend="financeDragLineEnd()">&#9776;</span>${showLineNumbers ? displayNumber : ''}</td>
             <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" class="finance-group-menu-button" title="Edit group" aria-label="Edit ${financeEscapeAttr(leader.groupTitle || 'group')}" aria-haspopup="dialog" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">...</button></div></td>
             <td><div class="finance-inline-combobox"><input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(leader))}" aria-label="Category" autocomplete="off" data-finance-department-index="${leaderIndex}" onfocus="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" oninput="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'${leaderResultsId}')" onchange="financeCommitDepartmentInput(${leaderIndex},this)" onblur="setTimeout(()=>showbaseLineWorkspace.hideSuggestions('${leaderResultsId}'),120)"><div class="finance-inline-suggestions" id="${leaderResultsId}"></div></div></td>
-            <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(leader.days)}" aria-label="Days" onchange="financeLineChange(${leaderIndex},'days',this.value)"></td>
-            <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
-            <td>${financeUomControl(leader, leaderIndex)}</td>
+            <td class="finance-col-quantity"><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
+            <td class="finance-col-uom">${financeUomControl(leader, leaderIndex)}</td>
+            <td class="finance-col-multiplier"><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(leader.days)}" aria-label="Days" onchange="financeLineChange(${leaderIndex},'days',this.value)"></td>
             <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(leader.unitPrice))}" aria-label="Group unit price" onblur="financeFormatMoneyInput(this)" onchange="financeLineChange(${leaderIndex},'unitPrice',this.value)"></div></td>
             <td><span class="finance-percent-input"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(leader.discountPercent || 0)}" aria-label="Group discount percentage" onchange="financeLineChange(${leaderIndex},'discountPercent',this.value)"><span>%</span></span></td>
             <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(financeLineTotal(leader)))}" aria-label="Group total" onblur="financeFormatMoneyInput(this)" onchange="financeSetLineTotal(${leaderIndex},this.value)"></div></td>
@@ -4475,17 +5110,18 @@ function financeRenderLineGroups() {
               ondrop="financeDropLine(event,${representativeIndex})"
               ondragend="financeDragLineEnd()">
               <td class="finance-line-number"><span class="finance-drag-handle" draggable="true" title="Drag to reorder or move out of group" ondragstart="financeDragLineBundleStart(event,'${financeEscapeAttr(indexes)}')" ondragend="financeDragLineEnd()">&#9776;</span></td>
-              <td><div class="finance-group-item-display"><span class="${bucket.customText ? 'showbase-group-custom-text' : ''}">${financeEscape(bucket.description)}</span>${bucket.customText ? '<small>Custom text</small>' : ''}${isConsolidated ? `<small>${bucket.rows.length} matching line items consolidated</small>` : ''}</div></td><td></td><td></td>
-              <td>${quantityControl}</td>
-              <td></td><td></td><td></td><td></td>
+              <td><div class="finance-group-item-display"><span class="${bucket.customText ? 'showbase-group-custom-text' : ''}">${financeEscape(bucket.description)}</span>${bucket.customText ? '<small>Custom text</small>' : ''}${isConsolidated ? `<small>${bucket.rows.length} matching line items consolidated</small>` : ''}</div></td><td></td>
+              <td class="finance-col-quantity">${quantityControl}</td>
+              <td class="finance-col-uom"></td><td class="finance-col-multiplier"></td><td></td><td></td><td></td>
               <td><button type="button" class="finance-delete-line" title="Remove ${isConsolidated ? 'matching items' : 'item'} from group" onclick="financeDeleteGroupChildren('${financeEscapeAttr(indexes)}')">&times;</button></td>
             </tr>`;
         }).join('');
-        return `${groupHeader}${childRows}`;
+        return `${customHeaders}${groupHeader}${childRows}`;
       }
       const groupHeader = '';
       const itemControl = `<input class="finance-line-input" value="${financeEscapeAttr(line.description)}" aria-label="Description" onchange="financeLineChange(${index},'description',this.value)">`;
       return `
+        ${customHeaders}
         ${groupHeader}
         <tr class="finance-line-row" data-line-index="${index}" ${groupId ? `oncontextmenu="financeEditLineGroup(event,'finance','${financeEscapeAttr(groupId)}')"` : ''}
           ondragover="financeDragLineOver(event,${index})"
@@ -4506,9 +5142,9 @@ function financeRenderLineGroups() {
               <div class="finance-inline-suggestions" id="${departmentResultsId}"></div>
             </div>
           </td>
-          <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(line.days)}" aria-label="Days" onchange="financeLineChange(${index},'days',this.value)"></td>
-          <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
-          <td>${financeUomControl(line, index)}</td>
+          <td class="finance-col-quantity"><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
+          <td class="finance-col-uom">${financeUomControl(line, index)}</td>
+          <td class="finance-col-multiplier"><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(line.days)}" aria-label="Days" onchange="financeLineChange(${index},'days',this.value)"></td>
           <td><div class="finance-money-input finance-line-unit-price-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(line.unitPrice))}" aria-label="Unit price" onblur="financeFormatMoneyInput(this)" onchange="financeLineChange(${index},'unitPrice',this.value)"></div></td>
           <td><span class="finance-percent-input"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(line.discountPercent || 0)}" aria-label="Discount percentage" onchange="financeLineChange(${index},'discountPercent',this.value)"><span>%</span></span></td>
           <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(financeLineTotal(line)))}" aria-label="Line total" onblur="financeFormatMoneyInput(this)" onchange="financeSetLineTotal(${index},this.value)"></div></td>
@@ -4535,6 +5171,7 @@ function financeRenderLineGroups() {
         </div>`
     });
     return `
+      ${financeHeaderRowsMarkup(headerLayout.beforeCategory.get(department) || [])}
       ${categoryHeader}
       ${collapsed ? '' : `
         ${financeCategoryColumnHeader(department)}
@@ -4550,7 +5187,10 @@ function financeRenderLineGroups() {
         </tr>
       `}
     `;
-  }).join('') + financeTotalAdjustmentRows();
+  }).join('');
+  return categoryMarkup
+    + financeHeaderRowsMarkup(headerLayout.end)
+    + financeTotalAdjustmentRows();
 }
 
 function financeRenderSubprojectTabs() {
@@ -4572,12 +5212,12 @@ function ensureFinanceRateCardModal() {
   modal.innerHTML = `
     <div class="modal-content finance-rate-card-modal">
       <div class="modal-header">
-        <div><h3>Rate Card</h3><small>Remembered rates from inventory and custom quotation items</small></div>
-        <button type="button" class="close-btn" aria-label="Close rate card" onclick="closeModal('financeRateCardModal')">&times;</button>
+        <div><h3>Products</h3><small>Inventory and added products available for this quotation</small></div>
+        <button type="button" class="close-btn" aria-label="Close products" onclick="closeModal('financeRateCardModal')">&times;</button>
       </div>
       <div class="finance-rate-card-toolbar">
         <input id="financeRateCardSearch" class="finance-input" type="search" placeholder="Search assets or departments..." oninput="financeState.rateCardSearch=this.value;financeRenderRateCard()">
-        <button id="financeRateCardAddButton" type="button" class="btn btn-primary" onclick="financeToggleRateCardForm()">+ Add custom item</button>
+        <button id="financeRateCardAddButton" type="button" class="btn btn-primary" onclick="financeToggleRateCardForm()">+ Add product</button>
       </div>
       <div class="finance-rate-card-tabs" role="tablist" aria-label="Rate card item type">
         <button type="button" data-rate-card-tab="assets" onclick="financeSetRateCardTab('assets')">Assets</button>
@@ -4627,11 +5267,11 @@ async function financeOpenRateCardFor(target = 'quotation') {
   document.getElementById('financeRateCardResults').innerHTML = '<div class="finance-suggestion-empty">Loading rates...</div>';
   openModal('financeRateCardModal');
   try {
-    const response = await apiCall('/api/finance/rate-card');
+    const response = await apiCall('/api/finance/products');
     financeState.rateCard = response.data || [];
     financeRenderRateCard();
   } catch (error) {
-    document.getElementById('financeRateCardResults').innerHTML = `<div class="finance-suggestion-empty">${financeEscape(error.message || 'Unable to load rate card')}</div>`;
+    document.getElementById('financeRateCardResults').innerHTML = `<div class="finance-suggestion-empty">${financeEscape(error.message || 'Unable to load products')}</div>`;
   }
 }
 
@@ -4681,12 +5321,12 @@ function financeRenderRateCard() {
               <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
               <label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
               <button type="button" class="btn btn-secondary" onclick="${financeState.rateCardTarget === 'costing' ? 'costingAddRateCardItem' : 'financeAddRateCardItemToQuotation'}(${index})">Add</button>
-              ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
+              ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete product" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
             </div>
           `;
         }).join('')}
       </section>
-    `).join('') || '<div class="finance-suggestion-empty">No remembered rates match this search.</div>';
+    `).join('') || '<div class="finance-suggestion-empty">No products match this search.</div>';
 }
 
 function financeSetRateCardTab(tab) {
@@ -4725,9 +5365,7 @@ function financeChooseRateCardUom(value) {
 }
 
 async function financeSaveRateCardItem(item) {
-  const response = await apiCall('/api/finance/rate-card', 'POST', item);
-  financeState.rateCard = response.data || [];
-  financeState.catalogCache = {};
+  await financePersistProduct(item);
   financeRenderRateCard();
 }
 
@@ -4759,7 +5397,7 @@ async function financeUpdateRateCardItem(index, value) {
   try {
     const unitPrice = financeCurrencyNumber(value);
     if (unitPrice <= 0 && !item.isCustom) {
-      const response = await apiCall('/api/finance/rate-card', 'DELETE', item);
+      const response = await apiCall('/api/finance/products', 'DELETE', item);
       financeState.rateCard = response.data || [];
       financeState.catalogCache = {};
       financeRenderRateCard();
@@ -4776,14 +5414,14 @@ async function financeDeleteRateCardItem(index) {
   if (!item) return;
   const title = [item.brand, item.model].filter(Boolean).join(' ') || item.description;
   const confirmed = await showAppConfirm({
-    title: 'Delete rate card item',
-    message: `Remove ${title} from the rate card?`,
+    title: 'Delete product',
+    message: `Remove ${title} from Products? Existing quotation items will not change.`,
     confirmText: 'Delete',
     destructive: true
   });
   if (!confirmed) return;
   try {
-    const response = await apiCall('/api/finance/rate-card', 'DELETE', item);
+    const response = await apiCall('/api/finance/products', 'DELETE', item);
     financeState.rateCard = response.data || [];
     financeState.catalogCache = {};
     financeRenderRateCard();
@@ -4942,6 +5580,8 @@ async function financeDeleteSubproject(subprojectId) {
   if (!confirmed) return;
   financeState.current.subprojects = rows.filter(item => item.id !== subprojectId);
   financeState.current.lineItems = (financeState.current.lineItems || []).filter(line => (line.subprojectId || 'main') !== subprojectId);
+  financeState.current.headerRows = financeHeaderRows()
+    .filter(row => (row.subprojectId || 'main') !== subprojectId);
   financeState.current.adjustments = (financeState.current.adjustments || []).filter(item => (item.subprojectId || 'main') !== subprojectId || item.scope === 'total');
   financeState.activeSubprojectId = financeState.current.subprojects[0].id;
   financeSyncDocumentDepartments();
@@ -4999,6 +5639,140 @@ async function financeRenameDepartment(encodedDepartment) {
   financeRenderEditor();
 }
 
+function financeFindHeader(headerId) {
+  return financeHeaderRows().find(row => String(row.id || '') === String(headerId || ''));
+}
+
+function financeResizeHeaderTextarea(input) {
+  if (!input) return;
+  input.style.height = 'auto';
+  input.style.height = `${Math.max(28, input.scrollHeight)}px`;
+}
+
+function financeResizeHeaderTextareas(root = financeRoot()) {
+  root?.querySelectorAll('.finance-quotation-header-input')
+    .forEach(financeResizeHeaderTextarea);
+}
+
+function financeHeaderContentInput(headerId, input) {
+  const header = financeFindHeader(headerId);
+  if (!header) return;
+  header.content = String(input?.value || '').slice(0, 2000);
+  financeResizeHeaderTextarea(input);
+  financeQueueSave();
+}
+
+function financeAddHeader() {
+  if (!financeState.current) return;
+  const header = {
+    id: `header_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    content: '',
+    beforeLineId: '',
+    subprojectId: financeCurrentSubprojectId()
+  };
+  financeHeaderRows().push(header);
+  financeQueueSave();
+  financeRenderEditor();
+  requestAnimationFrame(() => {
+    const input = financeRoot()?.querySelector(
+      `[data-header-id="${header.id}"] .finance-quotation-header-input`
+    );
+    input?.focus();
+  });
+}
+
+function financeDeleteHeader(headerId) {
+  if (!financeState.current) return;
+  financeState.current.headerRows = financeHeaderRows()
+    .filter(row => String(row.id || '') !== String(headerId || ''));
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financePlaceHeader(headerId, beforeLineId = '') {
+  const header = financeFindHeader(headerId);
+  if (!header) return false;
+  const rows = financeHeaderRows();
+  financeState.current.headerRows = rows.filter(row => row !== header);
+  header.beforeLineId = String(beforeLineId || '');
+  header.subprojectId = financeCurrentSubprojectId();
+  financeState.current.headerRows.push(header);
+  return true;
+}
+
+function financeHeaderAnchorForLineDrop(targetIndex, position = 'before') {
+  const target = financeState.current?.lineItems?.[targetIndex];
+  if (!target) return '';
+  const units = financeDisplayLineUnits();
+  const unitIndex = units.findIndex(unit => unit.lineIds.includes(String(target.id || '')));
+  if (unitIndex < 0) return '';
+  return position === 'after'
+    ? String(units[unitIndex + 1]?.firstLineId || '')
+    : String(units[unitIndex]?.firstLineId || '');
+}
+
+function financeHeaderAnchorAfterDepartment(department) {
+  const units = financeDisplayLineUnits();
+  const lastIndex = units.map(unit => unit.department).lastIndexOf(department);
+  return lastIndex >= 0 ? String(units[lastIndex + 1]?.firstLineId || '') : '';
+}
+
+function financeDragHeaderStart(event, headerId) {
+  if (!financeFindHeader(headerId)) return;
+  financeState.dragHeaderId = String(headerId || '');
+  financeState.dragLineIndex = null;
+  financeState.dragLineIndexes = [];
+  financeState.dragWholeLineGroup = false;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/x-showbase-quotation-header', financeState.dragHeaderId);
+  event.dataTransfer.setData('text/plain', financeState.dragHeaderId);
+  event.currentTarget.closest('.finance-quotation-header-row')?.classList.add('dragging');
+}
+
+function financeDragHeaderOver(event, targetHeaderId) {
+  if (!financeState.dragHeaderId || financeState.dragHeaderId === String(targetHeaderId || '')) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  financeClearLineDropTargets();
+  const position = showbaseLineWorkspace.dropPosition(event);
+  event.currentTarget.classList.add(`drag-over-${position}`);
+  event.currentTarget.dataset.dropPosition = position;
+}
+
+function financeDragHeaderLeave(event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return;
+  event.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
+  delete event.currentTarget.dataset.dropPosition;
+}
+
+function financeDropHeader(event, targetHeaderId) {
+  if (!financeState.dragHeaderId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const rows = financeHeaderRows();
+  const moved = rows.find(row => String(row.id || '') === financeState.dragHeaderId);
+  const target = rows.find(row => String(row.id || '') === String(targetHeaderId || ''));
+  if (!moved || !target || moved === target) return financeDragHeaderEnd();
+  const position = showbaseLineWorkspace.dropPosition(event);
+  const retained = rows.filter(row => row !== moved);
+  const targetIndex = retained.indexOf(target);
+  moved.beforeLineId = String(target.beforeLineId || '');
+  moved.subprojectId = String(target.subprojectId || financeCurrentSubprojectId());
+  retained.splice(targetIndex + (position === 'after' ? 1 : 0), 0, moved);
+  financeState.current.headerRows = retained;
+  financeDragHeaderEnd();
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeDragHeaderEnd() {
+  financeState.dragHeaderId = '';
+  document.querySelectorAll('.finance-quotation-header-row.dragging').forEach(row => {
+    row.classList.remove('dragging');
+  });
+  financeClearLineDropTargets();
+}
+
 function financeBeginLineDrag(event, indexes, wholeGroup = false) {
   const lines = financeState.current?.lineItems || [];
   showbaseLineWorkspace.beginDrag(financeState, event, lines, indexes, {
@@ -5033,6 +5807,15 @@ function financeDraggedLineIndexes(event) {
 
 function financeDragLineOver(event, index) {
   const indexes = financeState.dragLineIndexes || [];
+  if (financeState.dragHeaderId) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    financeClearLineDropTargets();
+    const position = showbaseLineWorkspace.dropPosition(event);
+    event.currentTarget.classList.add(`drag-over-${position}`);
+    event.currentTarget.dataset.dropPosition = position;
+    return;
+  }
   if (!indexes.length || indexes.includes(index)) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
@@ -5049,7 +5832,7 @@ function financeDragLineLeave(event) {
 }
 
 function financeClearLineDropTargets() {
-  document.querySelectorAll('.finance-line-row').forEach(row => {
+  document.querySelectorAll('.finance-line-row,.finance-quotation-header-row').forEach(row => {
     row.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
     delete row.dataset.dropPosition;
   });
@@ -5061,6 +5844,19 @@ function financeClearLineDropTargets() {
 function financeDropLine(event, targetIndex) {
   event.preventDefault();
   event.stopPropagation();
+  if (financeState.dragHeaderId) {
+    const beforeLineId = financeHeaderAnchorForLineDrop(
+      targetIndex,
+      showbaseLineWorkspace.dropPosition(event)
+    );
+    const moved = financePlaceHeader(financeState.dragHeaderId, beforeLineId);
+    financeDragHeaderEnd();
+    if (moved) {
+      financeQueueSave();
+      financeRenderEditor();
+    }
+    return;
+  }
   const lines = financeState.current?.lineItems || [];
   const sourceIndexes = financeDraggedLineIndexes(event)
     .filter(index => index >= 0 && !!lines[index]);
@@ -5110,7 +5906,7 @@ function financeDropLine(event, targetIndex) {
 }
 
 function financeDragLineEndOver(event) {
-  if (!(financeState.dragLineIndexes || []).length) return;
+  if (!(financeState.dragLineIndexes || []).length && !financeState.dragHeaderId) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
   financeClearLineDropTargets();
@@ -5120,6 +5916,19 @@ function financeDragLineEndOver(event) {
 function financeDropLineAtEnd(event, encodedDepartment) {
   event.preventDefault();
   event.stopPropagation();
+  const department = decodeURIComponent(encodedDepartment);
+  if (financeState.dragHeaderId) {
+    const moved = financePlaceHeader(
+      financeState.dragHeaderId,
+      financeHeaderAnchorAfterDepartment(department)
+    );
+    financeDragHeaderEnd();
+    if (moved) {
+      financeQueueSave();
+      financeRenderEditor();
+    }
+    return;
+  }
   const lines = financeState.current?.lineItems || [];
   const sourceIndexes = financeDraggedLineIndexes(event)
     .filter(index => index >= 0 && !!lines[index]);
@@ -5128,7 +5937,6 @@ function financeDropLineAtEnd(event, encodedDepartment) {
     financeDragLineEnd();
     return;
   }
-  const department = decodeURIComponent(encodedDepartment);
   const subprojectId = financeCurrentSubprojectId();
   const wholeGroup = !!financeState.dragWholeLineGroup
     || showbaseLineWorkspace.draggedWholeGroup(lines, sourceIndexes);
@@ -5176,6 +5984,12 @@ function financeDragDepartmentStart(event, encodedDepartment) {
 
 function financeDragDepartmentOver(event, encodedDepartment) {
   const department = decodeURIComponent(encodedDepartment);
+  if (financeState.dragHeaderId) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    event.currentTarget.classList.add('drag-over');
+    return;
+  }
   if (financeState.dragLineIndex !== null) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -5197,6 +6011,21 @@ function financeDropDepartment(event, encodedTargetDepartment) {
   event.stopPropagation();
   const targetDepartment = decodeURIComponent(encodedTargetDepartment);
   const lines = financeState.current?.lineItems || [];
+  if (financeState.dragHeaderId) {
+    const firstUnit = financeDisplayLineUnits()
+      .find(unit => unit.department === targetDepartment);
+    const moved = financePlaceHeader(
+      financeState.dragHeaderId,
+      firstUnit?.firstLineId || ''
+    );
+    financeDragHeaderEnd();
+    financeDragDepartmentEnd();
+    if (moved) {
+      financeQueueSave();
+      financeRenderEditor();
+    }
+    return;
+  }
   const sourceIndexes = financeDraggedLineIndexes(event)
     .filter(index => index >= 0 && !!lines[index]);
   if (sourceIndexes.length) {
@@ -5499,17 +6328,18 @@ function financeRenderEditor() {
             <div><h3>Line items</h3><p>Category names accept free text and saved suggestions.</p></div>
             <button type="button" class="btn btn-secondary finance-rate-card-button" onclick="financeOpenRateCard()">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
-              Show rate card
+              Browse products
             </button>
           </div>
           <div class="finance-lines-scroll">
             <table class="finance-lines-table showbase-category-table">
-              <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:72px"><col style="width:88px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
+              <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:88px"><col style="width:72px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
               <tbody>${financeRenderLineGroups()}</tbody>
             </table>
           </div>
           ${showbaseLineWorkspace.addRowMarkup({
             mode: 'finance',
+            className: 'finance-quotation-add-row',
             search: {
               id: 'financeAddItemInput',
               resultsId: 'financeCatalogResults',
@@ -5526,7 +6356,8 @@ function financeRenderEditor() {
               onfocus: 'financeShowAddDepartmentSuggestions(this.value)',
               onkeydown: "showbaseLineWorkspace.suggestionKeydown(event,'financeAddDepartmentResults')"
             },
-            addAction: 'financeAddCustomItem()'
+            addAction: 'financeAddCustomItem()',
+            afterGroupMarkup: '<button type="button" class="btn btn-secondary finance-add-header-button" onclick="financeAddHeader()">+ Header</button>'
           })}
         </section>
 
@@ -5597,6 +6428,7 @@ function financeRenderEditor() {
     </div>
   `;
   financeResizeQuotationNumberInput(globalThis.document.getElementById('financeDocumentNumber'));
+  financeResizeHeaderTextareas(root);
   if (snapshotMode) financeApplySnapshotReadOnly(root);
   showbaseLineWorkspace.restoreViewport(root, viewport);
 }
@@ -5765,9 +6597,43 @@ function financeSetClientAddress(value) {
   financeQueueSave();
 }
 
+async function financeOfferProductPriceUpdate(line, previousPrice) {
+  const nextPrice = financeNumber(line?.unitPrice);
+  if (!line || nextPrice === financeNumber(previousPrice)) return;
+  const isLinkedProduct = Boolean(
+    line.productId
+    || line.productKey
+    || line.catalogKey
+    || (line.sourceAssetIds || []).length
+  );
+  if (!isLinkedProduct) return;
+  const title = [line.brand, line.model].filter(Boolean).join(' ') || line.description || 'this product';
+  const confirmed = await showAppConfirm({
+    title: 'Update the product price?',
+    message: `Use ${financeMoney(nextPrice)} as the price for ${title} in future additions? Products already added to any quotation will keep their saved price.`,
+    confirmText: 'Update Product',
+    cancelText: 'This Quotation Only'
+  });
+  if (!confirmed) return;
+  try {
+    const rows = await financePersistProduct({ ...line, unitPrice: nextPrice });
+    const product = rows.find(row => (
+      (line.productId && (row.productId || row.id) === line.productId)
+      || (line.productKey && row.productKey === line.productKey)
+      || (line.catalogKey && row.catalogKey === line.catalogKey)
+    ));
+    if (product) {
+      if (!line.productId) line.productId = product.productId || product.id || '';
+      if (!line.productKey) line.productKey = product.productKey || product.catalogKey || '';
+    }
+    showNotification('success', 'Product price updated for future additions');
+  } catch (error) {}
+}
+
 function financeLineChange(index, field, value) {
   const line = financeState.current?.lineItems?.[index];
   if (!line) return;
+  const previousUnitPrice = financeNumber(line.unitPrice);
   line[field] = field === 'unitPrice'
     ? financeCurrencyNumber(value)
     : (['days', 'quantity', 'discountPercent'].includes(field) ? financeNumber(value) : value);
@@ -5791,6 +6657,7 @@ function financeLineChange(index, field, value) {
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
+  if (field === 'unitPrice') void financeOfferProductPriceUpdate(line, previousUnitPrice);
 }
 
 function financeSetLineTotal(index, value) {
@@ -6044,6 +6911,7 @@ function financeQuotationIsBlank(document) {
     && !String(document.projectName || '').trim()
     && !(document.departments || []).length
     && !(document.lineItems || []).length
+    && !financeHeaderRows(document).length
     && !hasCustomRooms
     && !hasOtherContent
     && !dateChanged;
@@ -6318,8 +7186,8 @@ function financeGroupEquivalentContainers(rows) {
 }
 
 function financeCatalogDescription(row) {
-  if (!row?.isContainer) return financeEscape(row?.description || '');
-  const label = financeEscape(row.containerFamily || row.description || 'Container');
+  if (!row?.isContainer) return financeEscape(row?.productLabel || row?.description || '');
+  const label = financeEscape(row.productLabel || row.containerFamily || row.description || 'Container');
   return row.containerCount > 1
     ? `${label} <small>(${row.containerCount} matching containers)</small>`
     : label;
@@ -6377,11 +7245,13 @@ function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOver
     : Math.max(0, financeNumber(quantityOverride, 1));
   const line = {
     id: `line_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    productId: selected.productId || selected.id || '',
+    productKey: selected.productKey || selected.catalogKey || '',
     catalogKey: selected.catalogKey || '',
     sourceAssetIds: selected.sourceAssetIds || [],
     brand: selected.brand || '',
     model: selected.model || '',
-    description: selected.description,
+    description: selected.productLabel || selected.description,
     inventoryNameMode: selected.catalogKey ? 'inventory' : '',
     department,
     departmentCode: selected.departmentCode || '',
@@ -6498,7 +7368,9 @@ async function financeAddCustomItem() {
   financeState.catalogAbortController?.abort?.();
   financeState.catalogRequestSeq += 1;
   const exactLoaded = (financeState.catalog || []).find(row =>
-    row.isCustom && String(row.description || '').trim().toLowerCase() === description.toLowerCase()
+    row.isCustom && [row.productLabel, row.description].some(
+      value => String(value || '').trim().toLowerCase() === description.toLowerCase()
+    )
   ) || {};
   const departmentOverride = financeAddDepartmentOverride();
   const category = departmentOverride
@@ -6513,11 +7385,14 @@ async function financeAddCustomItem() {
   const lineId = `line_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   financeState.current.lineItems.push({
     id: lineId,
+    productId: exactLoaded.productId || exactLoaded.id || '',
+    productKey: exactLoaded.productKey || exactLoaded.catalogKey || '',
     catalogKey: '',
     sourceAssetIds: [],
     brand: '',
     model: '',
     description,
+    productLabel: description,
     department,
     departmentCode: categoryDepartment?.departmentCode || exactLoaded.departmentCode || '',
     systemName: category,
@@ -6537,6 +7412,30 @@ async function financeAddCustomItem() {
   financeQueueSave();
   financeRenderEditor();
   financeFocusAddItemInput();
+  if (!exactLoaded.productId && !exactLoaded.id) {
+    const addToProducts = await showAppConfirm({
+      title: 'Add this as a product?',
+      message: `${description} can be saved to Products so it appears in future quotation searches.`,
+      confirmText: 'Add to Products',
+      cancelText: 'Keep in This Quotation'
+    });
+    if (addToProducts) {
+      try {
+        const currentLine = financeState.current?.lineItems?.find(row => row.id === lineId);
+        if (currentLine) {
+          const rows = await financePersistProduct({ ...currentLine, isCustom: true });
+          const savedProduct = rows.find(row => row.isCustom
+            && String(row.description || '').trim().toLowerCase() === description.toLowerCase());
+          if (savedProduct) {
+            currentLine.productId = savedProduct.productId || savedProduct.id || '';
+            currentLine.productKey = savedProduct.productKey || savedProduct.catalogKey || '';
+          }
+          financeQueueSave();
+          showNotification('success', 'Product added for future quotations');
+        }
+      } catch (error) {}
+    }
+  }
   try {
     const remembered = (await apiCall(`/api/finance/price-suggestion?description=${encodeURIComponent(description)}`)).data || {};
     const line = financeState.current?.lineItems?.find(row => row.id === lineId);
@@ -7184,7 +8083,7 @@ function profitLossExpenseCategoryMarkup(expense) {
   const categoryKey = String(expense?.categoryKey || '');
   let category = String(expense?.categoryLabel || expense?.category || 'Other expense');
   if (categoryKey === 'vendor-service') {
-    category = 'Manpower';
+    category = 'Service';
   } else if (source === 'worker-invoice') {
     category = 'Manpower';
   } else if (categoryKey === 'meal') {
@@ -7212,6 +8111,28 @@ function profitLossExpenseCategoryMarkup(expense) {
     ? ` style="--pnl-category-colour:${departmentColour};--pnl-category-text:${profitLossContrastColour(departmentColour)}"`
     : '';
   return `<span class="pnl-category-badge"${style}${title ? ` title="${financeEscapeAttr(title)}"` : ''}>${financeEscape(`${category}${suffix}`)}</span>`;
+}
+
+function profitLossExpenseSourceRank(expense) {
+  return ({
+    manual: 0,
+    'worker-claim': 1,
+    'worker-invoice': 2
+  })[String(expense?.source || 'manual').trim().toLowerCase()] ?? 3;
+}
+
+function profitLossCompareExpenses(left, right) {
+  const sourceDifference = profitLossExpenseSourceRank(left) - profitLossExpenseSourceRank(right);
+  if (sourceDifference) return sourceDifference;
+  const compareText = (leftValue, rightValue) => String(leftValue || '').localeCompare(
+    String(rightValue || ''),
+    undefined,
+    { sensitivity: 'base', numeric: true }
+  );
+  return compareText(left?.department, right?.department)
+    || compareText(left?.vendor || left?.description, right?.vendor || right?.description)
+    || compareText(left?.description, right?.description)
+    || compareText(left?.id, right?.id);
 }
 
 function profitLossExpenseProcessingMarkup(expense) {
@@ -7544,11 +8465,7 @@ function renderProfitLossPage() {
   const event = data.event || {};
   const quote = data.quotation || null;
   const summary = data.summary || {};
-  const expenses = (data.expenses || []).slice().sort((left, right) => (
-    String(right.expenseDate || right.createdAt || '').localeCompare(
-      String(left.expenseDate || left.createdAt || '')
-    )
-  ));
+  const expenses = (data.expenses || []).slice().sort(profitLossCompareExpenses);
   const pendingExpenseRows = profitLossPendingExpenseRowsMarkup();
   const listedExpenseTotal = expenses.reduce((sum, row) => sum + financeNumber(row.amount), 0);
   const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;

@@ -633,19 +633,31 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertTrue(payload['isSuperAdmin'])
         self.assertNotIn('isOwner', payload)
 
-    def test_event_assignee_payload_hides_protected_internal_role(self):
+    def test_event_assignee_payload_hides_owner_except_from_owner(self):
         event = mock.Mock(assigned_users=['bnjm2000'])
 
         with app_module.app.test_request_context('/api/events/1'):
+            session['user'] = 'tech'
+            session['is_super_admin'] = False
             token = app_module._request_data_manager.set(self.data_manager)
             try:
                 rows = app_module._event_assignee_payloads(event)
             finally:
                 app_module._request_data_manager.reset(token)
 
-        self.assertEqual(rows[0]['role'], 'admin')
-        self.assertEqual(rows[0]['roleLabel'], 'Admin')
-        self.assertNotIn('owner', str(rows[0]).lower())
+        self.assertEqual(rows, [])
+
+        with app_module.app.test_request_context('/api/events/1'):
+            session['user'] = 'bnjm2000'
+            session['is_super_admin'] = True
+            token = app_module._request_data_manager.set(self.data_manager)
+            try:
+                owner_rows = app_module._event_assignee_payloads(event)
+            finally:
+                app_module._request_data_manager.reset(token)
+
+        self.assertEqual(owner_rows[0]['role'], 'owner')
+        self.assertEqual(owner_rows[0]['roleLabel'], 'Owner')
 
     def test_super_admin_cannot_delete_active_company(self):
         self.login_super_admin()
@@ -744,6 +756,139 @@ class CompanyManagementTests(unittest.TestCase):
             app_module.log_action('Updated event 999', user='bnjm2000')
 
         self.assertEqual(self.data_manager.logs, [])
+
+    def test_owner_actions_do_not_queue_any_notifications(self):
+        event = SimpleNamespace(event_id=12, name='Silent owner event')
+        asset = SimpleNamespace(
+            asset_id='AX#01', description='Silent asset', model_number='AX',
+        )
+        recipient_functions = (
+            'telegram_recipients_for_upload',
+            'telegram_recipients_for_status_change',
+            'telegram_recipients_for_event_state_change',
+            'telegram_recipients_for_assigned_event',
+            'telegram_recipients_for_asset_status_change',
+            'telegram_recipients_for_access_control_change',
+            'telegram_recipients_for_quotation_status_change',
+        )
+        original_testing = app_module.app.config.get('TESTING')
+        app_module.app.config['TESTING'] = False
+        try:
+            with app_module.app.test_request_context('/'):
+                session['user'] = 'bnjm2000'
+                session['is_super_admin'] = True
+                session['company_code'] = 'AVPL'
+                patches = [
+                    mock.patch.object(
+                        app_module,
+                        function_name,
+                        side_effect=AssertionError('owner notification recipients were queried'),
+                    )
+                    for function_name in recipient_functions
+                ]
+                for patcher in patches:
+                    patcher.start()
+                try:
+                    results = [
+                        app_module._queue_workforce_upload_notification(
+                            manager=self.data_manager, worker_name='Owner',
+                            event_id=12, event_name=event.name, kind='invoice',
+                            file_count=1,
+                        ),
+                        app_module._queue_workforce_status_change_notification(
+                            manager=self.data_manager, worker_name='Owner',
+                            event_id=12, kind='invoice', previous_status='Pending',
+                            new_status='Paid',
+                        ),
+                        app_module._queue_event_state_notification(
+                            manager=self.data_manager, event=event,
+                            previous_state='New', new_state='Ready',
+                        ),
+                        app_module._queue_assigned_event_notification(
+                            manager=self.data_manager, event=event,
+                            assigned_usernames=['tech'],
+                        ),
+                        app_module._queue_asset_status_notification(
+                            manager=self.data_manager, asset=asset,
+                            previous_status='Available', new_status='Missing',
+                        ),
+                        app_module._queue_access_control_notification(
+                            manager=self.data_manager, action='User updated',
+                            target_user='tech',
+                        ),
+                        app_module._queue_quotation_status_notification(
+                            manager=self.data_manager,
+                            quotation={'id': 'quote-1', 'projectName': 'Silent'},
+                            previous_status='draft', new_status='sent',
+                        ),
+                    ]
+                finally:
+                    for patcher in reversed(patches):
+                        patcher.stop()
+        finally:
+            app_module.app.config['TESTING'] = original_testing
+
+        self.assertEqual(results, [False] * 7)
+
+    def test_owner_cannot_send_a_test_notification(self):
+        self.login_super_admin()
+        with mock.patch.object(app_module, 'send_telegram_message') as send:
+            response = self.client.post('/api/notification-settings/telegram/test')
+
+        self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
+        send.assert_not_called()
+
+    def test_owner_telegram_connection_does_not_send_acknowledgement(self):
+        update = {
+            'message': {
+                'text': f"/start {'a' * 20}",
+                'chat': {'id': '12345', 'type': 'private'},
+                'from': {'id': '67890', 'first_name': 'Owner'},
+            },
+        }
+        pending = {'companyCode': 'AVPL', 'username': 'bnjm2000'}
+        with (
+            mock.patch.object(
+                app_module,
+                '_telegram_link_record',
+                side_effect=[pending, None],
+            ),
+            mock.patch.object(app_module, 'connect_admin_telegram') as connect,
+            mock.patch.object(app_module, 'queue_telegram_message') as queue,
+        ):
+            result = app_module._process_telegram_connection_update(update)
+
+        self.assertTrue(result)
+        connect.assert_called_once()
+        queue.assert_not_called()
+
+    def test_non_owner_log_views_filter_legacy_owner_activity(self):
+        self.data_manager.logs = [
+            LogEntry('2026/09/07 10:00:00', 'bnjm2000', 'Legacy owner action'),
+            LogEntry('2026/09/07 09:00:00', 'tech', 'Visible user action'),
+        ]
+        self.data_manager.save_logs()
+        self.data_manager.users['admin-avpl'] = User(
+            'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt',
+            True, True, role='admin',
+        )
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['admin-avpl'] = 'AVPL'
+        app_module._save_company_registry(registry)
+        with self.client.session_transaction() as session_data:
+            session_data['user'] = 'admin-avpl'
+            session_data['is_admin'] = True
+            session_data['is_super_admin'] = False
+            session_data['company_code'] = 'AVPL'
+
+        response = self.client.get('/api/logs')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            [row['action'] for row in response.get_json()['data']],
+            ['Visible user action'],
+        )
 
     def test_owner_sees_all_company_logs_while_admin_sees_own_company(self):
         self.data_manager.logs = [
@@ -930,7 +1075,8 @@ class CompanyManagementTests(unittest.TestCase):
 
     def test_user_management_hides_owners_from_non_owners(self):
         self.data_manager.users['admin-avpl'] = User(
-            'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt', True, True
+            'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt', True, True,
+            role='admin', has_sales_access=True,
         )
         self.data_manager.save_users()
         registry = app_module._load_company_registry()
@@ -949,6 +1095,21 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertIn('admin-avpl', admin_usernames)
         self.assertNotIn('bnjm2000', admin_usernames)
         self.assertNotIn('chief', admin_usernames)
+
+        maintenance_users = {
+            row['username']
+            for row in self.client.get('/api/maintenance/users').get_json()['data']
+        }
+        salespeople = {
+            row['username']
+            for row in self.client.get('/api/finance/salespeople').get_json()['data']
+        }
+        accounting_users = set(
+            self.client.get('/api/finance/accounting').get_json()['data']['accountingUsers']
+        )
+        for visible_usernames in (maintenance_users, salespeople, accounting_users):
+            self.assertNotIn('bnjm2000', visible_usernames)
+            self.assertNotIn('chief', visible_usernames)
 
         self.login_super_admin()
         owner_response = self.client.get('/api/users')

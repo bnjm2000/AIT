@@ -25,6 +25,8 @@ APP_PAGE_SECTIONS = {
     "/logs": "logs",
     "/costing": "costing",
     "/quotations": "quotations",
+    "/products": "products",
+    "/clients": "clients",
     "/invoices": "invoices",
     "/profit-loss": "profit-loss",
     "/accounting": "accounting",
@@ -56,6 +58,7 @@ APP_SALES_PAGE_SECTIONS = {
     "costing",
     "profit-loss",
 }
+APP_CLIENT_PAGE_SECTIONS = {"clients", "products"}
 
 
 def register_app_page_routes(
@@ -71,6 +74,7 @@ def register_app_page_routes(
     is_owner,
     has_sales_access,
     can_access_accounting=None,
+    can_access_clients=None,
 ):
     """Register named workspace and document deep-link routes."""
 
@@ -98,6 +102,8 @@ def register_app_page_routes(
     @app.route("/logs")
     @app.route("/costing")
     @app.route("/quotations")
+    @app.route("/products")
+    @app.route("/clients")
     @app.route("/invoices")
     @app.route("/profit-loss")
     @app.route("/accounting")
@@ -123,7 +129,17 @@ def register_app_page_routes(
             return fallback_event_redirect()
         if section in APP_OWNER_PAGE_SECTIONS and not is_owner():
             return fallback_event_redirect()
-        if section == "accounting" and not (can_access_accounting() if can_access_accounting else is_owner()):
+        if section == "accounting" and not (
+            can_access_accounting()
+            if can_access_accounting
+            else is_owner() or is_admin()
+        ):
+            return fallback_event_redirect()
+        if section in APP_CLIENT_PAGE_SECTIONS and not (
+            can_access_clients()
+            if can_access_clients
+            else is_admin() or has_sales_access()
+        ):
             return fallback_event_redirect()
         if section in APP_SALES_PAGE_SECTIONS and not has_sales_access():
             return fallback_event_redirect()

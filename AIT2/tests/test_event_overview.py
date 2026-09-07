@@ -706,6 +706,8 @@ class EventAssignmentAccessTests(unittest.TestCase):
         # progress excludes the vendor-delivered unit.
         self.assertEqual(payload['assetCount'], 13)
         self.assertEqual(payload['preparedCount'], 12)
+        self.assertEqual(payload['preparationCount'], 12)
+        self.assertEqual(payload['preparationTotal'], 12)
         self.assertEqual(payload['departmentProgress'], [
             {'code': 'LX', 'done': 12, 'total': 12},
         ])
@@ -726,6 +728,21 @@ class EventAssignmentAccessTests(unittest.TestCase):
             'status': 'green',
             'label': 'Prepare: 12/12 assets prepared',
         })
+
+        # An old preparation record for a now-delivered vendor must not
+        # substitute for any unprepared warehouse units in either endpoint.
+        event.actually_prepared = [delivered_loan]
+        self.data_manager.save_event(event)
+        app_module.reset_cache()
+        summary = self.client.get('/api/events?view=summary').get_json()
+        payload = next(row for row in summary['data'] if row['id'] == 1)
+        self.assertEqual(payload['preparationCount'], 0)
+        self.assertEqual(payload['preparationTotal'], 12)
+        self.assertEqual(payload['workflowProgress']['prepare']['label'],
+                         'Prepare: 0/12 assets prepared')
+        detail = self.client.get('/api/events/1').get_json()['data']
+        self.assertEqual(detail['workflowProgress']['prepare']['label'],
+                         'Prepare: 0/12 assets prepared')
 
     def test_summary_keeps_self_pickup_vendor_items_in_prepare_progress(self):
         event = self.data_manager.events[1]

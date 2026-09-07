@@ -25,7 +25,7 @@ class AccountingCloseTests(unittest.TestCase):
 
     def filing(self, **extra):
         value = {'type': 'gst', 'from': '2026-01-01', 'to': '2026-03-31', 'dueDate': '2026-04-30',
-                 'assignedTo': 'bnjm2000', 'checklist': {key: True for key in REVIEW_ITEMS},
+                 'assignedTo': 'sales-admin', 'checklist': {key: True for key in REVIEW_ITEMS},
                  'declarations': {str(key): 0 for key in (9, 10, 11, 12, 14, 15, 16, 17)},
                  'reviewNotes': 'Reviewed outstanding receipts, purchase support and unposted drafts with the finance team.'}
         value.update(extra)
@@ -65,11 +65,12 @@ class AccountingCloseTests(unittest.TestCase):
         self.login('sales-admin')
         draft = self.filing()
         self.request('actions/filing-review', dict(id=draft['id'], version=draft['version']), expected=400)
-        self.begin()
+        self.login('review-admin')
         reviewed = self.request('actions/filing-review', dict(id=draft['id'], version=draft['version']))['record']
         self.request('actions/filing-save', dict(type='gst', id=draft['id'], version=draft['version']), expected=400)
         self.document()
         self.assertTrue(self.close()['filings'][0]['booksChanged'])
+        self.login('sales-admin')
         refreshed = self.filing(id=draft['id'], version=reviewed['version'])
         self.request('actions/filing-review', dict(id=refreshed['id'], version=refreshed['version']), expected=400)
         self.login('review-admin')

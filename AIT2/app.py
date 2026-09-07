@@ -144,6 +144,12 @@ from services.telegram_notifications import (
     telegram_notifications_configured,
 )
 from event_report import build_event_report_pdf
+from pdf_fonts import normalise_pdf_font_family
+from pdf_rich_text import (
+    plain_text_to_rich_html,
+    rich_text_to_plain_text,
+    sanitise_pdf_rich_text,
+)
 from utils import sanitize_filename
 from workforce import (
     VALID_STATUSES,
@@ -1273,6 +1279,11 @@ def _current_user_is_owner():
     return _current_user_is_super_admin()
 
 
+def _owner_identity_is_hidden(username):
+    """Keep owner accounts invisible outside an authenticated owner session."""
+    return _is_owner_username(username) and not _current_user_is_owner()
+
+
 def _effective_user_role(user_or_username=None):
     if hasattr(user_or_username, 'username'):
         user = user_or_username
@@ -1332,6 +1343,11 @@ def _current_user_has_sales_access():
     if session.get('self_user_changes_pending'):
         return bool(session.get('is_super_admin') or session.get('has_sales_access'))
     return _user_has_sales_access(session.get('user'))
+
+
+def _current_user_can_access_clients():
+    """Client records are shared by company admins and sales personnel."""
+    return _current_user_can_manage_roles() or _current_user_has_sales_access()
 
 
 def _sync_user_role_flags(user):
@@ -1501,6 +1517,8 @@ def _normalise_event_assigned_users(values, require_known=False):
         canonical = known_by_lower.get(raw_username.lower(), raw_username)
         if require_known and canonical.lower() not in known_by_lower:
             raise ValueError(f'Assigned user not found: {raw_username}')
+        if require_known and _owner_identity_is_hidden(canonical):
+            raise ValueError(f'Assigned user not found: {raw_username}')
         if require_known and not _user_is_assigned_to_current_company(canonical):
             raise ValueError(f'You can only assign users from your company: {canonical}')
         key = canonical.lower()
@@ -1515,12 +1533,20 @@ def _event_assigned_usernames(event):
     return _normalise_event_assigned_users(getattr(event, 'assigned_users', []) or [])
 
 
+def _event_assigned_usernames_for_response(event):
+    return [
+        username
+        for username in _event_assigned_usernames(event)
+        if not _owner_identity_is_hidden(username)
+    ]
+
+
 def _event_assignee_payloads(event):
     rows = []
-    for username in _event_assigned_usernames(event):
+    for username in _event_assigned_usernames_for_response(event):
         user = data_manager.users.get(username) if data_manager else None
         internal_role = _effective_user_role(user or username)
-        public_role = 'admin' if internal_role == 'owner' else internal_role
+        public_role = internal_role
         rows.append({
             'username': username,
             'name': getattr(user, 'name', '') if user else '',
@@ -2773,8 +2799,16 @@ ALLOWED_PDF_LOGO_EXTENSIONS = {
 
 
 def _pdf_settings_defaults():
+    typography_defaults = {
+        'fontFamily': '',
+        'fontSize': 0,
+        'bold': False,
+        'italic': False,
+        'underline': False,
+    }
     return {
         'footerText': DEFAULT_PDF_FOOTER_TEXT,
+        'footerHtml': '',
         'logoFilename': '',
         'logoOriginalName': '',
         'logoMimeType': '',
@@ -2789,6 +2823,7 @@ def _pdf_settings_defaults():
         'bankAccountNumber': '',
         'paynowUen': '',
         'paymentDetailsText': '',
+        'paymentDetailsHtml': '',
         'paymentDetailsEnabled': True,
         'currency': 'SGD',
         'taxLabel': 'GST',
@@ -2798,8 +2833,15 @@ def _pdf_settings_defaults():
         'defaultPaymentTerms': '30 Days',
         'defaultValidityDays': 30,
         'defaultTerms': DEFAULT_FINANCE_TERMS,
+        'defaultTermsHtml': '',
         'themeColor': DEFAULT_PDF_THEME_COLOR,
+        'fontFamily': 'App Default',
+        'letterheadTypography': typography_defaults.copy(),
+        'footerTypography': typography_defaults.copy(),
+        'termsTypography': typography_defaults.copy(),
+        'paymentDetailsTypography': typography_defaults.copy(),
         'letterheadText': '',
+        'letterheadHtml': '',
         'letterheadEnabled': True,
         'updatedAt': '',
     }
@@ -2855,6 +2897,10 @@ def _pdf_effective_logo_path(settings=None, company_code=None):
 
 
 def _normalise_pdf_settings(settings, company_code=None):
+    resolved_company_code = _normalise_company_code(
+        company_code or _current_company_code(),
+        DEFAULT_COMPANY_CODE,
+    )
     defaults = _pdf_settings_defaults()
     merged = defaults.copy()
     if isinstance(settings, dict):
@@ -2871,7 +2917,8 @@ def _normalise_pdf_settings(settings, company_code=None):
         'website', 'bankName', 'bankAccountName', 'bankAccountNumber',
         'paynowUen', 'paymentDetailsText', 'currency', 'taxLabel', 'quotationPrefix',
         'invoicePrefix', 'defaultPaymentTerms', 'defaultTerms',
-        'themeColor', 'letterheadText',
+        'themeColor', 'fontFamily', 'letterheadText',
+        'letterheadHtml', 'footerHtml', 'defaultTermsHtml', 'paymentDetailsHtml',
     ):
         merged[key] = str(merged.get(key) or '').strip()
     merged['currency'] = merged['currency'].upper()[:6] or 'SGD'
@@ -2893,9 +2940,44 @@ def _normalise_pdf_settings(settings, company_code=None):
     merged['paymentDetailsEnabled'] = bool(payment_details_enabled)
     if not re.fullmatch(r'#[0-9A-Fa-f]{6}', merged.get('themeColor') or ''):
         merged['themeColor'] = DEFAULT_PDF_THEME_COLOR
+    merged['fontFamily'] = normalise_pdf_font_family(merged.get('fontFamily'))
+    rich_text_fields = (
+        ('letterheadHtml', 'letterheadText', True),
+        ('footerHtml', 'footerText', False),
+        ('defaultTermsHtml', 'defaultTerms', False),
+        ('paymentDetailsHtml', 'paymentDetailsText', False),
+    )
+    for html_key, text_key, bold_first_line in rich_text_fields:
+        rich_html = sanitise_pdf_rich_text(merged.get(html_key))
+        if not rich_text_to_plain_text(rich_html) and merged.get(text_key):
+            rich_html = plain_text_to_rich_html(
+                merged.get(text_key), bold_first_line=bold_first_line
+            )
+        merged[html_key] = rich_html
+        merged[text_key] = rich_text_to_plain_text(rich_html)
+    for key in (
+        'letterheadTypography',
+        'footerTypography',
+        'termsTypography',
+        'paymentDetailsTypography',
+    ):
+        raw = merged.get(key) if isinstance(merged.get(key), dict) else {}
+        try:
+            font_size = float(raw.get('fontSize') or 0)
+        except (TypeError, ValueError):
+            font_size = 0
+        merged[key] = {
+            'fontFamily': normalise_pdf_font_family(
+                raw.get('fontFamily'), allow_inherit=True
+            ),
+            'fontSize': font_size if 6 <= font_size <= 24 else 0,
+            'bold': bool(raw.get('bold')),
+            'italic': bool(raw.get('italic')),
+            'underline': bool(raw.get('underline')),
+        }
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
 
-    logo_path = _pdf_logo_path(merged, company_code) if merged['logoFilename'] else ''
+    logo_path = _pdf_logo_path(merged, resolved_company_code) if merged['logoFilename'] else ''
     if logo_path and not os.path.exists(logo_path):
         merged['logoFilename'] = ''
         merged['logoOriginalName'] = ''
@@ -2925,7 +3007,7 @@ def _load_pdf_settings(company_code=None):
                 settings.update(loaded)
         except Exception as e:
             logger.warning("Failed to read PDF settings from PostgreSQL, using defaults: %s", e)
-        settings = _normalise_pdf_settings(settings, company_code)
+        settings = _normalise_pdf_settings(settings, cache_key)
         if has_request_context():
             cache = getattr(g, 'pdf_settings_cache', None)
             if not isinstance(cache, dict):
@@ -2945,7 +3027,7 @@ def _load_pdf_settings(company_code=None):
         except Exception as e:
             logger.warning(f"Failed to read PdfSettings.json, using defaults: {e}")
 
-    settings = _normalise_pdf_settings(settings, company_code)
+    settings = _normalise_pdf_settings(settings, cache_key)
     if has_request_context():
         cache = getattr(g, 'pdf_settings_cache', None)
         if not isinstance(cache, dict):
@@ -2956,7 +3038,7 @@ def _load_pdf_settings(company_code=None):
 
 
 def _save_pdf_settings(settings):
-    settings = _normalise_pdf_settings(settings)
+    settings = _normalise_pdf_settings(settings, _current_company_code())
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'save_company_document'):
         manager.save_company_document('pdf_settings', settings)
@@ -2979,7 +3061,10 @@ def _save_pdf_settings(settings):
 
 
 def _pdf_settings_payload(settings=None):
-    settings = _normalise_pdf_settings(settings or _load_pdf_settings())
+    settings = _normalise_pdf_settings(
+        settings or _load_pdf_settings(),
+        _current_company_code(),
+    )
     logo_path = _pdf_logo_path(settings) if settings.get('logoFilename') else ''
     has_custom_logo = bool(
         logo_path
@@ -2994,6 +3079,7 @@ def _pdf_settings_payload(settings=None):
 
     return {
         'footerText': settings.get('footerText', DEFAULT_PDF_FOOTER_TEXT),
+        'footerHtml': settings.get('footerHtml', ''),
         'logoUrl': logo_url,
         'hasCustomLogo': has_custom_logo,
         'logoOriginalName': settings.get('logoOriginalName', ''),
@@ -3008,6 +3094,7 @@ def _pdf_settings_payload(settings=None):
         'bankAccountNumber': settings.get('bankAccountNumber', ''),
         'paynowUen': settings.get('paynowUen', ''),
         'paymentDetailsText': settings.get('paymentDetailsText', ''),
+        'paymentDetailsHtml': settings.get('paymentDetailsHtml', ''),
         'paymentDetailsEnabled': settings.get('paymentDetailsEnabled', True),
         'currency': settings.get('currency', 'SGD'),
         'taxLabel': settings.get('taxLabel', 'GST'),
@@ -3017,8 +3104,15 @@ def _pdf_settings_payload(settings=None):
         'defaultPaymentTerms': settings.get('defaultPaymentTerms', '30 Days'),
         'defaultValidityDays': settings.get('defaultValidityDays', 30),
         'defaultTerms': settings.get('defaultTerms', DEFAULT_FINANCE_TERMS),
+        'defaultTermsHtml': settings.get('defaultTermsHtml', ''),
         'themeColor': settings.get('themeColor', DEFAULT_PDF_THEME_COLOR),
+        'fontFamily': settings.get('fontFamily', 'App Default'),
+        'letterheadTypography': settings.get('letterheadTypography', {}),
+        'footerTypography': settings.get('footerTypography', {}),
+        'termsTypography': settings.get('termsTypography', {}),
+        'paymentDetailsTypography': settings.get('paymentDetailsTypography', {}),
         'letterheadText': settings.get('letterheadText', ''),
+        'letterheadHtml': settings.get('letterheadHtml', ''),
         'letterheadEnabled': settings.get('letterheadEnabled', True),
         'updatedAt': settings.get('updatedAt', ''),
     }
@@ -6042,6 +6136,29 @@ def _event_extra_asset_quantity(event):
     return total
 
 
+def _event_extra_prepared_quantity(event, model_groups):
+    """Historical prepared-extra quantity, including items since returned."""
+    _ensure_event_custom_lists(event)
+    total = sum(
+        max(0, _safe_int(group.get('extraPreparedEverQuantity', 0), 0))
+        for group in (model_groups or {}).values()
+    )
+
+    # Model groups cover physical, bulk, and anonymous model quantities. Custom
+    # extras are deliberately separate from those groups, so add only custom
+    # markers that were actually prepared (or have since been returned).
+    prepared_history = set(getattr(event, 'actually_prepared', []) or [])
+    prepared_history.update(getattr(event, 'returned_items', []) or [])
+    for ref in getattr(event, 'extra_assets', []) or []:
+        if ref not in prepared_history:
+            continue
+        custom = _parse_custom_marker(ref)
+        if custom:
+            total += max(1, _safe_int(custom.get('quantity'), 1))
+
+    return total
+
+
 def _is_bulk_ref(value):
     return _parse_bulk_marker(value) is not None
 
@@ -7832,6 +7949,8 @@ def _refresh_model_group_statuses(model_groups):
         )
         countable_prepared = max(countable_assigned - countable_returned, 0)
         countable_prepared_ever = countable_assigned
+        credited_prepared_ever = min(countable_assigned, required)
+        extra_prepared_ever = max(0, assigned - credited_prepared_ever)
 
         group['assignedQuantity'] = assigned
         group['assignedSpecificQuantity'] = assigned_specific
@@ -7850,6 +7969,10 @@ def _refresh_model_group_statuses(model_groups):
             min(countable_prepared_ever, required)
             if required > 0 else countable_prepared_ever
         )
+        # Keep a historical extra count just as preparedEverQuantity keeps a
+        # historical prepared count. Returned extras must remain visible on
+        # the Prepare page and in packing-list exports.
+        group['extraPreparedEverQuantity'] = extra_prepared_ever
         group['extraPreparedQuantity'] = (
             _sum_extra_prepared_quantity(group)
             + extra_prepared_slots
@@ -8387,22 +8510,23 @@ def _accounting_user_role(username=None):
     username = username or (session.get('user') if has_request_context() else '')
     if not username:
         return ''
-    # Accounting contains the company's complete financial books. Access follows
-    # the application role so every company admin (and platform owner) receives
-    # the same full workspace, while managers and users cannot bypass the gate
-    # through a legacy accounting-specific assignment.
-    return 'manager' if _effective_user_role(username) in {'owner', 'admin'} else ''
+    # The platform owner may inspect company books but must never mutate them.
+    # Company admins retain the full manager permission set.
+    if _current_user_is_owner() or _is_owner_username(username):
+        return 'auditor'
+    return 'manager' if _effective_user_role(username) == 'admin' else ''
 
 
 def _accounting_company_users():
     return {username: {
                 'name': getattr(user, 'name', '') or username,
                 'appRole': _effective_user_role(user),
-                'hasAccountingAccess': _effective_user_role(user) in {'owner', 'admin'},
+                'hasAccountingAccess': _effective_user_role(user) == 'admin',
             }
             for username, user in data_manager.users.items()
             if getattr(user, 'is_active', True)
-            and (_current_company_code() in _user_company_codes(username) or _is_owner_username(username))}
+            and not _is_owner_username(username)
+            and _current_company_code() in _user_company_codes(username)}
 
 
 def require_accounting(f):
@@ -8498,6 +8622,26 @@ def require_sales(f):
 
         if not _current_user_has_sales_access():
             return jsonify({'error': 'Sales access required'}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def require_client_access(f):
+    """Decorator for the shared finance client directory."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+
+        user = _current_user_obj()
+        if not user or not _current_user_effective_is_active():
+            session.clear()
+            return jsonify({'error': 'Account inactive'}), 401
+
+        if not _current_user_can_access_clients():
+            return jsonify({'error': 'Admin or sales access required'}), 403
 
         return f(*args, **kwargs)
 
@@ -9531,6 +9675,8 @@ def _admin_submission_rows(manager=None, workforce=None):
         if not event or not isinstance(event_subjects, dict):
             continue
         for subject_id, submissions in event_subjects.items():
+            if _workforce_subject_is_hidden_owner(subject_id):
+                continue
             if not isinstance(submissions, dict):
                 continue
             context = submission_context(event_id, event, subject_id)
@@ -9769,6 +9915,8 @@ def _admin_vendor_payload(vendor, workforce):
 
 def _workforce_subject(workforce, subject_id):
     subject_key = str(subject_id or '').strip()
+    if _workforce_subject_is_hidden_owner(subject_key):
+        return None, ''
     if subject_key.startswith('user:'):
         username = subject_key[5:]
         user = data_manager.users.get(username) if data_manager else None
@@ -10159,6 +10307,14 @@ def _workforce_assignment_subject_id(assignment):
     return subject_id
 
 
+def _workforce_subject_is_hidden_owner(subject_id):
+    subject_key = str(subject_id or '').strip()
+    return (
+        subject_key.lower().startswith('user:')
+        and _owner_identity_is_hidden(subject_key[5:])
+    )
+
+
 def _workforce_subject_is_full_time(subject_id, assignments):
     """Return whether a workforce subject is an internal Showbase app user."""
     clean_subject_id = str(subject_id or '').strip()
@@ -10174,14 +10330,10 @@ def _workforce_subject_is_full_time(subject_id, assignments):
 
 def _workforce_app_users(manager=None):
     manager = manager or _current_data_manager_object()
-    current_username = str(session.get('user') or '').strip()
-    can_reveal_owner = _current_user_is_owner()
     rows = []
     for username, user in getattr(manager, 'users', {}).items():
         role = _effective_user_role(user)
-        if role == 'owner' and not (
-            can_reveal_owner and str(username) == current_username
-        ):
+        if _owner_identity_is_hidden(username):
             continue
         if not getattr(user, 'is_active', True):
             continue
@@ -10189,7 +10341,7 @@ def _workforce_app_users(manager=None):
             'username': str(username),
             'name': str(getattr(user, 'name', '') or username),
             'phone': str(getattr(user, 'phone', '') or ''),
-            'role': 'admin' if role == 'owner' else role,
+            'role': role,
         })
     return sorted(rows, key=lambda row: row['name'].lower())
 
@@ -10283,6 +10435,8 @@ def _admin_workforce_payload(event_id, manager=None):
         (workforce.get('submissions') or {}).get(str(event_id), {}) or {}
     )
     for freelancer_id, rows in event_submission_rows.items():
+        if _workforce_subject_is_hidden_owner(freelancer_id):
+            continue
         rows = rows if isinstance(rows, dict) else {}
         expectation = _workforce_submission_expectation(
             workforce, event_id, freelancer_id
@@ -10311,6 +10465,10 @@ def _admin_workforce_payload(event_id, manager=None):
     assignments = []
     for stored_row in event_assignments(workforce, event_id):
         if not isinstance(stored_row, dict):
+            continue
+        if _workforce_subject_is_hidden_owner(
+            _workforce_assignment_subject_id(stored_row)
+        ):
             continue
         row = _workforce_row_with_subproject(stored_row, event, subprojects)
         row['workDates'] = _workforce_assignment_work_dates(row, event)
@@ -10405,7 +10563,11 @@ def _admin_workforce_payload(event_id, manager=None):
         ],
         'roles': workforce.get('roles', []),
         'assignments': assignments,
-        'workerDateConflicts': worker_date_conflicts,
+        'workerDateConflicts': {
+            subject_id: conflicts
+            for subject_id, conflicts in worker_date_conflicts.items()
+            if not _workforce_subject_is_hidden_owner(subject_id)
+        },
         'subprojects': subprojects,
         'transportVendors': _transport_profiles_for_response(workforce),
         'transportLocations': workforce.get('transportLocations', []),
@@ -11298,7 +11460,7 @@ def _queue_workforce_upload_notification(
     """Queue a best-effort alert without ever affecting the upload response."""
     # A developer may have real Telegram credentials in .env. Never use them
     # implicitly while the Flask app is running its automated test suite.
-    if app.config.get('TESTING'):
+    if app.config.get('TESTING') or _owner_action_is_silent():
         return False
     try:
         chat_ids = telegram_recipients_for_upload(manager, kind)
@@ -11342,6 +11504,7 @@ def _queue_workforce_status_change_notification(
     """Queue a best-effort business-state alert after the mutation commits."""
     if (
         app.config.get('TESTING')
+        or _owner_action_is_silent(changed_by)
         or kind not in {'invoice', 'claim'}
         or previous_status == new_status
     ):
@@ -11372,10 +11535,23 @@ def _notification_change_actor(automatic_label='Showbase automatic update'):
     return automatic_label
 
 
+def _owner_action_is_silent(actor=''):
+    """Return whether an action must not emit any user notification."""
+    return (
+        (has_request_context() and _current_user_is_owner())
+        or _is_owner_username(actor)
+    )
+
+
 def _queue_event_state_notification(
     *, manager, event, previous_state, new_state, changed_by=''
 ):
-    if app.config.get('TESTING') or previous_state == new_state or manager is None:
+    if (
+        app.config.get('TESTING')
+        or _owner_action_is_silent(changed_by)
+        or previous_state == new_state
+        or manager is None
+    ):
         return False
     try:
         chat_ids = telegram_recipients_for_event_state_change(
@@ -11398,7 +11574,12 @@ def _queue_event_state_notification(
 
 
 def _queue_assigned_event_notification(*, manager, event, assigned_usernames):
-    if app.config.get('TESTING') or manager is None or not assigned_usernames:
+    if (
+        app.config.get('TESTING')
+        or _owner_action_is_silent()
+        or manager is None
+        or not assigned_usernames
+    ):
         return False
     try:
         chat_ids = telegram_recipients_for_assigned_event(
@@ -11421,7 +11602,12 @@ def _queue_assigned_event_notification(*, manager, event, assigned_usernames):
 def _queue_asset_status_notification(
     *, manager, asset, previous_status, new_status, changed_by=''
 ):
-    if app.config.get('TESTING') or previous_status == new_status or manager is None:
+    if (
+        app.config.get('TESTING')
+        or _owner_action_is_silent(changed_by)
+        or previous_status == new_status
+        or manager is None
+    ):
         return False
     try:
         chat_ids = telegram_recipients_for_asset_status_change(manager)
@@ -11448,7 +11634,11 @@ def _queue_asset_status_notification(
 def _queue_access_control_notification(
     *, manager, action, target_user, detail='', changed_by=''
 ):
-    if app.config.get('TESTING') or manager is None:
+    if (
+        app.config.get('TESTING')
+        or _owner_action_is_silent(changed_by)
+        or manager is None
+    ):
         return False
     try:
         chat_ids = telegram_recipients_for_access_control_change(manager)
@@ -11469,7 +11659,12 @@ def _queue_access_control_notification(
 def _queue_quotation_status_notification(
     *, manager, quotation, previous_status, new_status, changed_by=''
 ):
-    if app.config.get('TESTING') or previous_status == new_status or manager is None:
+    if (
+        app.config.get('TESTING')
+        or _owner_action_is_silent(changed_by)
+        or previous_status == new_status
+        or manager is None
+    ):
         return False
     try:
         chat_ids = telegram_recipients_for_quotation_status_change(manager)
@@ -12826,6 +13021,8 @@ def get_event_operational_overview(event_id):
         if not isinstance(assignment, dict):
             continue
         subject_id = _workforce_assignment_subject_id(assignment)
+        if _workforce_subject_is_hidden_owner(subject_id):
+            continue
         is_vendor = bool(
             assignment.get('vendorId')
             or assignment.get('subjectType') == 'vendor'
@@ -16247,6 +16444,8 @@ def download_event_workforce_files(event_id, kind):
     records = []
     event_rows = (workforce.get('submissions') or {}).get(str(event_id), {}) or {}
     for freelancer_id, rows in event_rows.items():
+        if _workforce_subject_is_hidden_owner(freelancer_id):
+            continue
         freelancer, _subject_type = _workforce_subject(
             workforce, freelancer_id
         )
@@ -16536,6 +16735,8 @@ def _event_activity_logs_for_response(event):
     )
     result = []
     for record in records:
+        if _owner_identity_is_hidden(record.get('user')):
+            continue
         category = _event_activity_category(record.get('action'))
         if category == 'manpower' and not _current_user_is_admin():
             continue
@@ -18954,6 +19155,7 @@ register_app_page_routes(
     is_owner=_current_user_is_owner,
     has_sales_access=_current_user_has_sales_access,
     can_access_accounting=lambda: bool(_accounting_user_role()),
+    can_access_clients=_current_user_can_access_clients,
 )
 
 
@@ -19867,6 +20069,8 @@ def disconnect_telegram_notification_settings():
 @app.route('/api/notification-settings/telegram/test', methods=['POST'])
 @require_auth
 def test_telegram_notification_settings():
+    if _current_user_is_owner():
+        return jsonify({'error': 'Owner actions cannot send notifications'}), 403
     username = str(session.get('user') or '').strip()
     manager = _current_data_manager_object()
     chat_id = admin_telegram_chat_id(manager, username)
@@ -19960,10 +20164,11 @@ def _process_telegram_connection_update(update):
     _telegram_link_record(token, consume=True)
     company = _company_payload(company_code)
     company_name = str(company.get('name') or company_code)
-    queue_telegram_message(
-        f'✅ Connected to Showbase alerts for {company_name}.',
-        chat_id,
-    )
+    if not _is_owner_username(username):
+        queue_telegram_message(
+            f'✅ Connected to Showbase alerts for {company_name}.',
+            chat_id,
+        )
     return True
 
 
@@ -20003,16 +20208,37 @@ def update_pdf_settings():
             'phone', 'email', 'website', 'bankName', 'bankAccountName',
             'bankAccountNumber', 'paynowUen', 'currency', 'taxLabel',
             'quotationPrefix', 'invoicePrefix', 'defaultPaymentTerms',
-            'defaultTerms', 'themeColor', 'letterheadText', 'paymentDetailsText',
+            'defaultTerms', 'themeColor', 'fontFamily', 'letterheadText',
+            'paymentDetailsText', 'letterheadHtml', 'footerHtml',
+            'defaultTermsHtml', 'paymentDetailsHtml',
         )
         for key in text_fields:
             if key not in data:
                 continue
             value = str(data.get(key) or '')
-            max_length = 5000 if key == 'defaultTerms' else 2000
+            max_length = 20000 if key.endswith('Html') else 5000 if key == 'defaultTerms' else 2000
             if len(value) > max_length:
                 return jsonify({'error': f'{key} is too long'}), 400
             settings[key] = value
+
+        for text_key, html_key in (
+            ('letterheadText', 'letterheadHtml'),
+            ('footerText', 'footerHtml'),
+            ('defaultTerms', 'defaultTermsHtml'),
+            ('paymentDetailsText', 'paymentDetailsHtml'),
+        ):
+            if text_key in data and html_key not in data:
+                settings[html_key] = ''
+
+        typography_fields = (
+            'letterheadTypography',
+            'footerTypography',
+            'termsTypography',
+            'paymentDetailsTypography',
+        )
+        for key in typography_fields:
+            if key in data:
+                settings[key] = data.get(key) if isinstance(data.get(key), dict) else {}
 
         if 'letterheadText' in data:
             settings['letterheadEnabled'] = bool(
@@ -20045,6 +20271,7 @@ def update_pdf_settings():
                 'paymentDetailsEnabled',
                 'taxRate',
                 'defaultValidityDays',
+                *typography_fields,
             )
             if key in data
         )
@@ -20057,6 +20284,10 @@ def update_pdf_settings():
                 'letterheadText',
                 'paymentDetailsText',
                 'defaultTerms',
+                'letterheadHtml',
+                'footerHtml',
+                'defaultTermsHtml',
+                'paymentDetailsHtml',
             },
         )
         log_action(f"Updated company details: {company_changes}")
@@ -20065,6 +20296,68 @@ def update_pdf_settings():
     except Exception as e:
         logger.error(f"Error updating PDF settings: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update PDF settings'}), 500
+
+
+@app.route('/api/pdf-settings/preview', methods=['POST'])
+@require_admin
+def preview_pdf_settings():
+    """Render an unsaved sample invoice with the submitted PDF settings."""
+    try:
+        from quotation_pdf import build_finance_pdf
+
+        submitted = request.get_json(silent=True) or {}
+        settings = _load_pdf_settings()
+        if isinstance(submitted, dict):
+            settings.update(submitted)
+        settings = _normalise_pdf_settings(settings, _current_company_code())
+        sample_document = {
+            'id': 'pdf-settings-preview',
+            'type': 'invoice',
+            'number': 'INV-PREVIEW',
+            'projectName': 'Annual Client Conference',
+            'clientName': 'Sample Client',
+            'clientCompany': 'Example Company Pte Ltd',
+            'clientEmail': 'accounts@example.com',
+            'eventLocation': 'Grand Ballroom, Singapore',
+            'invoiceDate': datetime.now().strftime('%Y-%m-%d'),
+            'paymentDueDate': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+            'invoiceAmount': 1200,
+            'quotationTotal': 1200,
+            'lineItems': [{
+                'id': 'preview-line',
+                'description': 'Professional event production services',
+                'department': 'Production',
+                'departmentCode': 'PX',
+                'quantity': 1,
+                'days': 1,
+                'uom': 'service',
+                'unitPrice': 1200,
+                'total': 1200,
+                'subprojectId': 'main',
+            }],
+            'subprojects': [{'id': 'main', 'name': 'Main Event'}],
+            'totals': {'netSubtotal': 1200, 'tax': 0, 'total': 1200},
+            'terms': settings.get('defaultTerms', ''),
+        }
+        pdf_bytes = build_finance_pdf(
+            sample_document,
+            settings,
+            _pdf_effective_logo_path(settings),
+        )
+        response = send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name='company-pdf-preview.pdf',
+            max_age=0,
+        )
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except ImportError:
+        return jsonify({'error': 'PDF export dependency is not installed'}), 503
+    except Exception as exc:
+        logger.error('Failed to render company PDF preview: %s', exc, exc_info=True)
+        return jsonify({'error': 'Failed to generate PDF preview'}), 500
 
 
 @app.route('/api/pdf-settings/logo', methods=['GET'])
@@ -20398,13 +20691,12 @@ def get_maintenance_user_options():
         _current_company_code(),
         DEFAULT_COMPANY_CODE,
     )
-    can_see_owner = _current_user_is_owner()
     rows = []
     for user in data_manager.users.values():
         username = str(getattr(user, 'username', '') or '').strip()
         if not username or not getattr(user, 'is_active', True):
             continue
-        if _is_owner_username(username) and not can_see_owner:
+        if _owner_identity_is_hidden(username):
             continue
         assigned_company = _normalise_company_code(
             _user_assigned_company_code(username),
@@ -20482,6 +20774,20 @@ def get_users():
         payload = _user_payload(user, reveal_owner=can_see_owners)
         payload['companyCode'] = company_code
         payload['companyName'] = _company_payload(company_code).get('name')
+        notification_manager = (
+            _current_data_manager_object()
+            if _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+            == current_company_code
+            else _get_company_data_manager(company_code)
+        )
+        telegram_profile = public_admin_telegram_profile(
+            notification_manager,
+            user.username,
+        )
+        payload['telegramConnected'] = bool(telegram_profile.get('connected'))
+        payload['telegramUsername'] = str(
+            telegram_profile.get('telegramUsername') or ''
+        )
         users_data.append(payload)
 
     return jsonify({'success': True, 'data': users_data})
@@ -20890,6 +21196,21 @@ def update_user(username):
         response_user = _user_payload(
             user,
             reveal_owner=_current_user_is_owner(),
+        )
+        response_notification_manager = (
+            _get_company_data_manager(requested_company)
+            if moved_company
+            else notification_manager
+        )
+        telegram_profile = public_admin_telegram_profile(
+            response_notification_manager,
+            user.username,
+        )
+        response_user['telegramConnected'] = bool(
+            telegram_profile.get('connected')
+        )
+        response_user['telegramUsername'] = str(
+            telegram_profile.get('telegramUsername') or ''
         )
         return jsonify({
             'success': True,
@@ -22115,6 +22436,9 @@ def get_events():
                 'tag': getattr(event, 'tag', 'events'), 
                 'assetCount': total_required,
                 'preparedCount': total_prepared,
+                'preparationTotal': _event_prepare_required_total(event, total_required, custom_counts),
+                'preparationCount': max(0, total_prepared - custom_counts['preparedEver']
+                                        + _custom_counts_for_event(event, exclude_delivered=True)['preparedEver']),
                 'returnedCount': total_returned,
                 'extraCount': _event_extra_asset_quantity(event),
                 'returnableCount': returnable_counts['returnable'],
@@ -22123,7 +22447,7 @@ def get_events():
                 'forceStateOverride': getattr(event, 'force_state_override', False),
                 'hasNotes': bool((getattr(event, 'notes', '') or '').strip()),
                 'fileCount': len(_event_files_for_response(event.event_id)),
-                'assignedUsernames': _event_assigned_usernames(event),
+                'assignedUsernames': _event_assigned_usernames_for_response(event),
                 'assignedUsers': _event_assignee_payloads(event),
                 'departmentProgress': _event_department_progress_payload(
                     event,
@@ -22133,7 +22457,8 @@ def get_events():
                 'workflowProgress': _event_workflow_progress_payload(
                     event,
                     total_required,
-                    total_prepared,
+                    max(0, total_prepared - custom_counts['preparedEver']
+                        + _custom_counts_for_event(event, exclude_delivered=True)['preparedEver']),
                     total_returned,
                     workflow_workforce,
                     workflow_finance,
@@ -22518,11 +22843,13 @@ def get_event(event_id):
             total_returned = specific_counts['returned'] + custom_counts['returned']
 
         total_extra_assets = _event_extra_asset_quantity(event)
+        total_extra_prepared = _event_extra_prepared_quantity(event, model_groups)
 
         logger.debug(
             f"Event {event_id} final asset counts - Required: {total_required}, "
             f"Prepared: {total_prepared}, Returned: {total_returned}, "
-            f"Active extras: {total_extra_assets}, Extra assets in list: {len(event.extra_assets)}"
+            f"Active extras: {total_extra_assets}, Prepared extras: {total_extra_prepared}, "
+            f"Extra assets in list: {len(event.extra_assets)}"
         )
             
         returnable_counts = _event_returnable_counts(event)
@@ -22552,6 +22879,7 @@ def get_event(event_id):
             'totalPrepared': total_prepared,
             'totalReturned': total_returned,
             'totalExtraAssets': total_extra_assets,
+            'totalExtraPrepared': total_extra_prepared,
             'modelGroups': model_groups,
             'subprojects': getattr(event, 'subprojects', []) or [],
             'forceStateOverride': getattr(event, 'force_state_override', False),
@@ -22559,7 +22887,7 @@ def get_event(event_id):
             'files': _event_files_for_response(event.event_id),
             'canDeleteFiles': _current_user_is_admin(),
             'eventLogs': _event_activity_logs_for_response(event),
-            'assignedUsernames': _event_assigned_usernames(event),
+            'assignedUsernames': _event_assigned_usernames_for_response(event),
             'assignedUsers': _event_assignee_payloads(event),
             'vendorManagement': _event_vendor_management(event),
         }
@@ -22584,7 +22912,8 @@ def get_event(event_id):
         event_data['workflowProgress'] = _event_workflow_progress_payload(
             event,
             total_required,
-            total_prepared,
+            max(0, total_prepared - custom_counts['preparedEver']
+                + _custom_counts_for_event(event, exclude_delivered=True)['preparedEver']),
             total_returned,
             workflow_workforce,
             workflow_finance,
@@ -32126,6 +32455,8 @@ def get_logs():
             )
             for log in manager.logs:
                 action = str(log.action or '')
+                if not owner and _is_owner_username(log.user):
+                    continue
                 owner_prefix = next(
                     (prefix for prefix in OWNER_ONLY_LOG_PREFIXES if action.startswith(prefix)),
                     '',
@@ -33174,6 +33505,13 @@ def _backfill_finance_price_book(data):
             continue
         updated_at = document.get('updatedAt') or document.get('createdAt') or ''
         for line in document.get('lineItems') or []:
+            # Custom quotation rows are intentionally local to the quotation.
+            # They become reusable products only through the Products workspace.
+            if line.get('isCustom') or not (
+                str(line.get('catalogKey') or '').strip()
+                or (line.get('sourceAssetIds') or [])
+            ):
+                continue
             key = _finance_price_book_line_key(line)
             payload = _finance_price_book_payload(line, owner, updated_at)
             if not key or not payload:
@@ -34042,7 +34380,11 @@ def _finance_client_key(manager, name):
     )
 
 
-def _finance_client_from_payload(payload):
+def _finance_client_is_active(client):
+    return bool(client and getattr(client, 'is_active', True))
+
+
+def _finance_client_from_payload(payload, *, is_active=True):
     client = _normalise_finance_client(payload)
     return Client(
         name=client['name'],
@@ -34056,6 +34398,7 @@ def _finance_client_from_payload(payload):
         address2=client['address2'],
         address3=client['address3'],
         postal_code=client['postalCode'],
+        is_active=is_active,
     )
 
 
@@ -34082,6 +34425,15 @@ def _sync_finance_client_record(document, previous_document=None, manager=None):
     destination_key = _finance_client_key(manager, client_name)
     linked_key = _finance_client_key(manager, linked_name)
     source_key = destination_key or linked_key
+    if (
+        destination_key
+        and destination_key.casefold() == client_name.casefold()
+        and not _finance_client_is_active(manager.clients.get(destination_key))
+    ):
+        # Removing a client from the directory must not erase the copy already
+        # embedded in a quotation, or let routine quotation edits restore it.
+        document['clientRecordName'] = ''
+        return False
     previous_payload = (
         _client_to_dict(manager.clients[source_key])
         if source_key and source_key in manager.clients
@@ -34537,6 +34889,37 @@ def _normalise_finance_subprojects(value, lines):
     return result
 
 
+def _normalise_finance_header_rows(value):
+    """Return non-financial quotation headers with stable line anchors."""
+    rows = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for index, row in enumerate(rows[:200]):
+        if not isinstance(row, dict):
+            continue
+        header_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('id') or '')
+        )[:80] or f'header_{index + 1}_{secrets.token_hex(4)}'
+        if header_id in seen:
+            continue
+        seen.add(header_id)
+        result.append({
+            'id': header_id,
+            'content': str(
+                row.get('content')
+                if 'content' in row
+                else row.get('headerContent') or ''
+            ).strip()[:2000],
+            'beforeLineId': re.sub(
+                r'[^A-Za-z0-9_-]+', '', str(row.get('beforeLineId') or '')
+            )[:80],
+            'subprojectId': re.sub(
+                r'[^A-Za-z0-9_-]+', '', str(row.get('subprojectId') or '')
+            )[:80] or 'main',
+        })
+    return result
+
+
 def _normalise_finance_schedule_rows(value, limit=500):
     rows = value if isinstance(value, list) else []
     result = []
@@ -34905,6 +35288,23 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         else existing.get('subprojects'),
         lines,
     )
+    header_rows = _normalise_finance_header_rows(
+        value.get('headerRows')
+        if 'headerRows' in value
+        else existing.get('headerRows')
+    )
+    valid_subproject_ids = {row['id'] for row in subprojects}
+    fallback_subproject_id = subprojects[0]['id']
+    valid_line_ids = {
+        str(line.get('id') or '')
+        for line in lines
+        if isinstance(line, dict) and str(line.get('id') or '')
+    }
+    for header_row in header_rows:
+        if header_row['subprojectId'] not in valid_subproject_ids:
+            header_row['subprojectId'] = fallback_subproject_id
+        if header_row['beforeLineId'] not in valid_line_ids:
+            header_row['beforeLineId'] = ''
     adjustments = [
         _normalise_finance_adjustment(row)
         for row in (value.get('adjustments') if 'adjustments' in value else existing.get('adjustments') or [])
@@ -35093,6 +35493,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'notes': str(value.get('notes') if 'notes' in value else existing.get('notes') or '').strip()[:5000],
         'terms': str(value.get('terms') if 'terms' in value else existing.get('terms') or settings.get('defaultTerms', DEFAULT_FINANCE_TERMS)).strip()[:10000],
         'lineItems': lines,
+        'headerRows': header_rows,
         'subprojects': subprojects,
         'adjustments': adjustments,
         'departments': departments,
@@ -37767,6 +38168,12 @@ def _finance_relink_revision_line_ids(request_data, revision_row, current_docume
         source_id = str(line.get('id') or '')
         if source_id in id_mapping:
             line['id'] = id_mapping[source_id]
+    for header in request_data.get('headerRows') or []:
+        if not isinstance(header, dict):
+            continue
+        source_anchor = str(header.get('beforeLineId') or '')
+        if source_anchor in id_mapping:
+            header['beforeLineId'] = id_mapping[source_anchor]
     return request_data
 
 
@@ -39100,6 +39507,13 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
         if isinstance(line, dict) and str(line.get('id') or '')
     }
     for line in document.get('lineItems') or []:
+        # Never turn an ad-hoc quotation row into a reusable product implicitly.
+        # Users can opt in from the quotation prompt or manage it on Products.
+        if line.get('isCustom') or not (
+            str(line.get('catalogKey') or '').strip()
+            or (line.get('sourceAssetIds') or [])
+        ):
+            continue
         previous_line = previous_lines.get(str(line.get('id') or ''))
         if (
             previous_document is not None
@@ -39127,6 +39541,8 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
 
 def _finance_price_book_key_is_visible(key):
     raw = str(key or '')
+    if raw.casefold().startswith('product::'):
+        return True
     can_view_company_rates = (
         _current_user_is_owner()
         or (
@@ -39159,12 +39575,17 @@ def _finance_rate_card_rows(finance_data):
             'brand': brand,
             'model': model,
             'description': description,
+            'productLabel': _finance_display_description(
+                brand, model, description
+            ) or description,
             'department': department,
             'departmentCode': department_code,
             'sourceAssetIds': [],
             'searchTags': [],
+            'availableQuantity': 0,
         })
         canonical['sourceAssetIds'].append(str(asset_id))
+        canonical['availableQuantity'] += _asset_inventory_quantity(asset)
         canonical['searchTags'] = normalize_asset_tags(
             canonical['searchTags'] + normalize_asset_tags(getattr(asset, 'tags', []))
         )
@@ -39182,11 +39603,14 @@ def _finance_rate_card_rows(finance_data):
         identity = canonical['catalogKey'].lower()
         rows[identity] = {
             'id': identity,
+            'productId': identity,
+            'productKey': canonical['catalogKey'],
             **canonical,
             'unitPrice': 0,
             'uom': 'units',
             'isCustom': False,
             'isContainer': False,
+            'sourceType': 'inventory',
         }
 
     for container in getattr(data_manager, 'containers', {}).values():
@@ -39199,20 +39623,25 @@ def _finance_rate_card_rows(finance_data):
         identity = catalog_key.lower()
         rows[identity] = {
             'id': identity,
+            'productId': identity,
+            'productKey': catalog_key,
             'catalogKey': catalog_key,
             'sourceAssetIds': [],
             'brand': '',
             'model': '',
             'description': f'Container {container_id}',
+            'productLabel': f'Container {container_id}',
             'department': 'Container',
             'departmentCode': 'CONTAINER',
             'unitPrice': 0,
             'uom': 'units',
             'isCustom': False,
             'isContainer': True,
+            'sourceType': 'inventory',
             'containerId': container_id,
             'containerSerial': _container_serial_number(container),
             'searchTags': [],
+            'availableQuantity': len(getattr(container, 'asset_ids', []) or []),
         }
 
     def resolve_inventory(line, catalog_key):
@@ -39230,8 +39659,11 @@ def _finance_rate_card_rows(finance_data):
     def add_row(source, key_hint=''):
         if not isinstance(source, dict):
             return
+        product_label = str(
+            source.get('productLabel') or source.get('label') or ''
+        ).strip()[:1000]
         line = _normalise_finance_line(source)
-        if line.get('unitPrice', 0) <= 0 or not line.get('description'):
+        if not line.get('description'):
             return
         key_hint = str(key_hint or '').strip()
         catalog_key = str(line.get('catalogKey') or '').strip()
@@ -39246,11 +39678,18 @@ def _finance_rate_card_rows(finance_data):
         )
         rows[identity] = {
             'id': identity,
+            'productId': identity,
+            'productKey': catalog_key or key_hint or _finance_custom_price_key(
+                line.get('description')
+            ),
             'catalogKey': catalog_key,
             'sourceAssetIds': line.get('sourceAssetIds') or [],
             'brand': line.get('brand') or '',
             'model': line.get('model') or '',
             'description': line.get('description') or '',
+            'productLabel': product_label or _finance_display_description(
+                line.get('brand'), line.get('model'), line.get('description')
+            ) or line.get('description') or '',
             'department': line.get('department') or 'Unknown Department',
             'departmentCode': line.get('departmentCode') or '',
             'unitPrice': line.get('unitPrice') or 0,
@@ -39260,11 +39699,16 @@ def _finance_rate_card_rows(finance_data):
                 line.get('isContainer')
                 or str(catalog_key).lower().startswith('container:')
             ),
+            'sourceType': 'additional' if bool(line.get('isCustom') or not catalog_key) else 'inventory',
+            'availableQuantity': (
+                canonical.get('availableQuantity', 0) if canonical else None
+            ),
             'searchTags': line.get('searchTags') or [],
         }
 
     stored_rows = list((finance_data.get('priceBook') or {}).items())
     stored_rows.sort(key=lambda item: (
+        str(item[0]).casefold().startswith('product::'),
         str((item[1] or {}).get('updatedAt') or '')
         if isinstance(item[1], dict) else '',
         str(item[0]),
@@ -39279,6 +39723,7 @@ def _finance_rate_card_rows(finance_data):
         tombstone_line = _normalise_finance_line({
             'catalogKey': catalog_key,
             'description': payload.get('description') or base_key.removeprefix('custom:'),
+            'productLabel': payload.get('productLabel') or '',
             'department': payload.get('department') or 'Unknown Department',
             'departmentCode': payload.get('departmentCode') or '',
             'brand': payload.get('brand') or '',
@@ -39299,6 +39744,7 @@ def _finance_rate_card_rows(finance_data):
         add_row({
             'catalogKey': catalog_key,
             'description': payload.get('description') or base_key.removeprefix('custom:'),
+            'productLabel': payload.get('productLabel') or '',
             'department': payload.get('department') or 'Unknown Department',
             'departmentCode': payload.get('departmentCode') or '',
             'brand': payload.get('brand') or '',
@@ -39327,6 +39773,7 @@ def _finance_remembered_price(price_book, catalog_key, asset_ids):
     }
     legacy_prefix = str(catalog_key or '').removeprefix('inventory:') + '|'
     candidates = []
+    explicit_products = []
     for index, (key, value) in enumerate(price_book.items()):
         if not isinstance(value, dict) or not _finance_price_book_key_is_visible(key):
             continue
@@ -39337,10 +39784,16 @@ def _finance_remembered_price(price_book, catalog_key, asset_ids):
             or (legacy_prefix and base_key.startswith(legacy_prefix))
         ):
             continue
-        candidates.append((str(value.get('updatedAt') or ''), index, value))
+        candidate = (str(value.get('updatedAt') or ''), index, value)
+        candidates.append(candidate)
+        if str(key or '').casefold().startswith('product::'):
+            explicit_products.append(candidate)
     if not candidates:
         return {}
-    remembered = max(candidates, key=lambda row: (row[0], row[1]))[2]
+    remembered = max(
+        explicit_products or candidates,
+        key=lambda row: (row[0], row[1]),
+    )[2]
     if not remembered.get('deleted'):
         return remembered
     return {}
@@ -39518,6 +39971,27 @@ def _profit_loss_expense_payload(expense):
             'downloadUrl': f'/api/finance/profit-loss/expenses/{expense_id}/file?download=1',
         }
     return row
+
+
+def _finance_profit_loss_expense_sort_key(expense):
+    """Order P&L expenses by source, department, then payee name."""
+    expense = expense if isinstance(expense, dict) else {}
+    source_rank = {
+        'manual': 0,
+        'worker-claim': 1,
+        'worker-invoice': 2,
+    }.get(str(expense.get('source') or 'manual').strip().lower(), 3)
+    return (
+        source_rank,
+        str(expense.get('department') or '').strip().casefold(),
+        str(
+            expense.get('vendor')
+            or expense.get('description')
+            or ''
+        ).strip().casefold(),
+        str(expense.get('description') or '').strip().casefold(),
+        str(expense.get('id') or '').casefold(),
+    )
 
 
 def _finance_event_brief(event):
@@ -39782,7 +40256,7 @@ def _finance_profit_loss_workforce_costs(event_id):
     service_vendor_ids = {
         subject_id
         for subject_id, rows in assignments_by_subject.items()
-        if rows and all(
+        if any(
             (row.get('subjectType') == 'vendor' or row.get('vendorId'))
             and str(row.get('providerType') or '').lower() == 'service'
             for row in rows
@@ -39906,7 +40380,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
         if not isinstance(rows, dict):
             continue
         subject_name = _finance_profit_loss_subject_name(workforce, subject_id)
-        is_vendor_service = subject_provider_types.get(str(subject_id)) == {'service'}
+        is_vendor_service = (
+            'service' in subject_provider_types.get(str(subject_id), set())
+        )
         invoices = rows.get('invoices') if isinstance(rows.get('invoices'), list) else []
         for invoice in invoices:
             if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
@@ -40038,7 +40514,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
                 'updatedBy': subject_name,
             })
-    result.sort(key=lambda row: (row.get('expenseDate') or '', row.get('createdAt') or ''), reverse=True)
+    result.sort(key=_finance_profit_loss_expense_sort_key)
     return result
 
 
@@ -40347,6 +40823,12 @@ def _finance_profit_loss_payload(event, finance_data):
         'manualExpensesTotal': manual_expenses_total,
         'commission': commission,
     }
+    expense_rows = worker_submission_expenses + [
+        _profit_loss_expense_payload(row)
+        for row in expenses
+    ]
+    expense_rows.sort(key=_finance_profit_loss_expense_sort_key)
+
     return {
         'event': _finance_event_brief(event),
         'quotation': ({
@@ -40413,10 +40895,7 @@ def _finance_profit_loss_payload(event, finance_data):
         'breakdown': breakdown,
         'manpowerDepartments': manpower_department_rows,
         'vendorServiceDepartments': vendor_service_department_rows,
-        'expenses': worker_submission_expenses + [
-            _profit_loss_expense_payload(row)
-            for row in expenses
-        ],
+        'expenses': expense_rows,
         'commissions': commissions,
         'expenseCategories': expense_categories,
         'profitChart': profit_chart,
@@ -41070,6 +41549,15 @@ def _accounting_reports(store, start, end):
 
 def _accounting_payload(finance_data, request_args):
     store = _accounting_store(finance_data)
+    settings_payload = copy.deepcopy(store.get('settings') or {})
+    saved_roles = settings_payload.get('roles')
+    settings_payload['roles'] = {
+        username: role
+        for username, role in (
+            saved_roles.items() if isinstance(saved_roles, dict) else ()
+        )
+        if not _is_owner_username(username)
+    }
     start, end = _accounting_period(request_args)
     reports = _accounting_reports(store, start, end)
     sources = _accounting_source_documents(finance_data)
@@ -41092,7 +41580,7 @@ def _accounting_payload(finance_data, request_args):
     ))
     return {
         'period': {'from': start, 'to': end},
-        'settings': store.get('settings') or {},
+        'settings': settings_payload,
         'taxCodes': [
             {'code': code, **details}
             for code, details in ACCOUNTING_TAX_CODES.items()
@@ -41116,7 +41604,11 @@ def _accounting_payload(finance_data, request_args):
             'unmatchedCount': sum(1 for row in bank_transactions if row.get('status') != 'matched'),
         },
         **reports,
-        'workspace': accounting_books.workspace_payload(store, _finance_current_username(), _current_user_effective_is_admin()),
+        'workspace': accounting_books.workspace_payload(
+            store,
+            _finance_current_username(),
+            role=_accounting_user_role(),
+        ),
         'accountingUsers': _accounting_company_users(),
     }
 
@@ -41570,8 +42062,10 @@ def accounting_sources_link():
 register_accounting_routes(
     app, auth=require_accounting, lock=_finance_lock, load=_load_finance_data,
     save=_save_finance_data, store_for=_accounting_store, payload=_accounting_payload,
-    actor=_finance_current_username, owner=_current_user_effective_is_admin,
+    actor=_finance_current_username,
+    role=_accounting_user_role,
     users=_accounting_company_users, finance_path=_finance_path, changed=mark_realtime_change,
+    pdf_company=_load_pdf_settings,
 )
 
 
@@ -43552,6 +44046,11 @@ def finance_catalog():
         finance_data = _load_finance_data()
         price_book = finance_data.get('priceBook') or {}
         rate_card_rows = _finance_rate_card_rows(finance_data)
+        products_by_catalog_key = {
+            str(row.get('catalogKey') or '').casefold(): row
+            for row in rate_card_rows
+            if str(row.get('catalogKey') or '').strip()
+        }
 
     department_cache = {}
 
@@ -43575,14 +44074,19 @@ def finance_catalog():
         description = str(getattr(asset, 'description', '') or '').strip()
         display = ' '.join(value for value in (brand, model, description) if value)
         tag_text = ' '.join(normalize_asset_tags(getattr(asset, 'tags', [])))
-        haystack = f"{display} {department} {department_code} {tag_text}".lower()
+        key = _finance_catalog_key(department_code, brand, model, description)
+        product = products_by_catalog_key.get(key.casefold()) or {}
+        product_label = str(product.get('productLabel') or display).strip()
+        haystack = f"{display} {product_label} {department} {department_code} {tag_text}".lower()
         if query and query not in haystack:
             continue
-        key = _finance_catalog_key(department_code, brand, model, description)
         if key not in grouped:
             grouped[key] = {
+                'productId': key.lower(),
+                'productKey': key,
                 'catalogKey': key,
                 'description': display or model or description or 'Inventory item',
+                'productLabel': product_label or display or model or description or 'Inventory item',
                 'department': department,
                 'departmentCode': department_code,
                 'brand': brand,
@@ -43602,7 +44106,14 @@ def finance_catalog():
             continue
         serial_number = _container_serial_number(container)
         container_items = {}
-        haystack_parts = [container_id, serial_number]
+        container_product = (
+            products_by_catalog_key.get(f"container:{container_id.lower()}")
+            or {}
+        )
+        container_product_label = str(
+            container_product.get('productLabel') or f"Container {container_id}"
+        )
+        haystack_parts = [container_id, serial_number, container_product_label]
         for asset_id in getattr(container, 'asset_ids', []) or []:
             asset = data_manager.inventory.get(asset_id)
             if not asset or _is_disposed(asset):
@@ -43703,8 +44214,11 @@ def finance_catalog():
             row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
             row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
         grouped[f"container:{container_id.lower()}"] = {
+            'productId': f"container:{container_id.lower()}",
+            'productKey': f"container:{container_id}",
             'catalogKey': f"container:{container_id}",
             'description': f"Container {container_id}",
+            'productLabel': container_product_label,
             'department': 'Container',
             'departmentCode': 'CONTAINER',
             'brand': '',
@@ -43735,6 +44249,7 @@ def finance_catalog():
             str(source.get('brand') or ''),
             str(source.get('model') or ''),
             description,
+            str(source.get('productLabel') or ''),
             department,
         )).lower()
         if query and query not in haystack:
@@ -43744,8 +44259,11 @@ def finance_catalog():
             continue
         custom_seen.add(custom_key)
         grouped[f"rate-card:{custom_key}"] = {
+            'productId': str(source.get('id') or custom_key).lower(),
+            'productKey': str(source.get('productKey') or custom_key),
             'catalogKey': '',
             'description': description,
+            'productLabel': str(source.get('productLabel') or description),
             'department': department,
             'departmentCode': department_code,
             'brand': str(source.get('brand') or '').strip(),
@@ -43775,11 +44293,16 @@ def finance_catalog():
         )
         row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
         row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
+        row['productLabel'] = str(
+            remembered.get('productLabel') or row.get('productLabel')
+            or row.get('description') or ''
+        )
     return jsonify({'success': True, 'data': rows})
 
 
+@app.route('/api/finance/products', methods=['GET', 'POST', 'DELETE'])
 @app.route('/api/finance/rate-card', methods=['GET', 'POST', 'DELETE'])
-@require_sales
+@require_client_access
 def finance_rate_card():
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -43794,6 +44317,7 @@ def finance_rate_card():
                         str(row.get('brand') or ''),
                         str(row.get('model') or ''),
                         str(row.get('description') or ''),
+                        str(row.get('productLabel') or ''),
                         ' '.join(normalize_asset_tags(row.get('searchTags') or [])),
                     )).casefold()
                 ]
@@ -43801,12 +44325,17 @@ def finance_rate_card():
 
         payload = request.get_json(silent=True) or {}
         description = str(payload.get('description') or '').strip()[:1000]
+        product_label = str(
+            payload.get('productLabel') or payload.get('label') or description
+        ).strip()[:1000]
         department, department_code = _finance_department_details(
             payload.get('department'), payload.get('departmentCode')
         )
         if not description:
             return jsonify({'error': 'Description is required'}), 400
-        catalog_key = str(payload.get('catalogKey') or '').strip()[:500]
+        catalog_key = str(
+            payload.get('catalogKey') or payload.get('productKey') or ''
+        ).strip()[:500]
         if not catalog_key:
             catalog_key = _finance_custom_price_key(description)
         matched_assets = []
@@ -43848,7 +44377,9 @@ def finance_rate_card():
             )
         owner = _finance_current_username().lower()
         price_book = finance_data.setdefault('priceBook', {})
-        owner_prefix = f'{owner}::'
+        # Products are company-wide. Legacy remembered rates retain their old
+        # per-user keys, while every explicit Products edit uses this namespace.
+        owner_prefix = 'product::'
         target_key = f'{owner_prefix}{catalog_key}'
         source_asset_ids = {
             str(asset_id).strip().lower()
@@ -43858,14 +44389,16 @@ def finance_rate_card():
 
         if request.method == 'DELETE':
             for stored_key in list(price_book):
-                if stored_key.lower() == target_key.lower() or (
-                    stored_key.lower().startswith(f'{owner_prefix}asset:')
-                    and stored_key.rsplit(':', 1)[-1].lower() in source_asset_ids
+                base_key = str(stored_key).split('::', 1)[-1].casefold()
+                if base_key == catalog_key.casefold() or (
+                    base_key.startswith('asset:')
+                    and base_key.rsplit(':', 1)[-1] in source_asset_ids
                 ):
                     price_book.pop(stored_key, None)
             price_book[target_key] = {
                 'deleted': True,
                 'description': description,
+                'productLabel': product_label,
                 'department': str(payload.get('department') or 'Unknown Department').strip(),
                 'departmentCode': str(payload.get('departmentCode') or '').strip(),
                 'brand': str(payload.get('brand') or '').strip()[:240],
@@ -43878,8 +44411,6 @@ def finance_rate_card():
             action = f"Deleted rate card item {description}"
         else:
             unit_price = round(max(0, _safe_float(payload.get('unitPrice'), 0)), 2)
-            if unit_price <= 0:
-                return jsonify({'error': 'Rate must be greater than zero'}), 400
             uom = str(payload.get('uom') or 'units').strip().lower()
             if uom not in {'units', 'pax', 'lot', 'sqm'}:
                 uom = 'units'
@@ -43888,6 +44419,7 @@ def finance_rate_card():
             )
             stored = {
                 'description': description,
+                'productLabel': product_label or description,
                 'department': department,
                 'departmentCode': department_code,
                 'brand': str(payload.get('brand') or '').strip()[:240],
@@ -43898,7 +44430,7 @@ def finance_rate_card():
                 'updatedAt': datetime.now().isoformat(timespec='seconds'),
             }
             for stored_key in list(price_book):
-                if stored_key.lower() == target_key.lower():
+                if str(stored_key).split('::', 1)[-1].casefold() == catalog_key.casefold():
                     price_book.pop(stored_key, None)
             price_book[target_key] = stored
             for asset_id in source_asset_ids:
@@ -44715,7 +45247,7 @@ def finance_compare_add_to_quotation(event_id):
 
 
 @app.route('/api/finance/departments', methods=['GET'])
-@require_sales
+@require_client_access
 def finance_departments():
     query = str(request.args.get('query') or '').strip().lower()
     values = []
@@ -44757,6 +45289,8 @@ def finance_salespeople():
     for user in data_manager.users.values():
         if not getattr(user, 'is_active', True):
             continue
+        if _owner_identity_is_hidden(user.username):
+            continue
         if _normalise_company_code(
             _user_assigned_company_code(user.username), DEFAULT_COMPANY_CODE
         ) != current_company:
@@ -44785,6 +45319,7 @@ def _finance_reassign_document_salesperson(document_id, document_type):
     eligible_users = [
         user for user in data_manager.users.values()
         if getattr(user, 'is_active', True)
+        and not _owner_identity_is_hidden(user.username)
         and _normalise_company_code(
             _user_assigned_company_code(user.username),
             DEFAULT_COMPANY_CODE,
@@ -47958,86 +48493,99 @@ def _client_to_dict(c):
 
 
 @app.route('/api/clients', methods=['GET', 'POST'])
-@require_auth
+@require_client_access
 def clients_collection():
     if request.method == 'GET':
-        query = (request.args.get('query') or '').strip().lower()
+        query = (request.args.get('query') or '').strip().casefold()
         data = []
-        for c in data_manager.clients.values():
-            name = (getattr(c, 'name', '') or '').strip().lower()
-            company = (getattr(c, 'company', '') or '').strip().lower()
-            if not query or (query in name) or (query in company):
-                data.append(_client_to_dict(c))
+        for c in sorted(
+            data_manager.clients.values(),
+            key=lambda row: (
+                str(getattr(row, 'company', '') or '').casefold(),
+                str(getattr(row, 'name', '') or '').casefold(),
+            ),
+        ):
+            if not _finance_client_is_active(c):
+                continue
+            payload = _client_to_dict(c)
+            searchable = ' '.join(str(value or '') for value in payload.values()).casefold()
+            if not query or query in searchable:
+                data.append(payload)
         return jsonify({'success': True, 'data': data})
 
-
-    # POST (create or upsert)
+    # POST (create)
     data = request.get_json(force=True) or {}
-    name = (data.get('name') or '').strip()
+    client = _normalise_finance_client(data)
+    name = client['name']
     if not name:
-        return jsonify({'success': False, 'message': 'Client name is required'}), 400
+        return jsonify({'success': False, 'error': 'Client name is required'}), 400
 
-    c = Client(
-        name=name,
-        salutation=_normalise_finance_salutation(data.get('salutation')),
-        company=(data.get('company') or '').strip(),
-        contact_person=(data.get('contactPerson') or '').strip(),
-        email=(data.get('email') or '').strip(),
-        tax_number=(data.get('taxNumber') or '').strip(),
-        address1=(data.get('address1') or '').strip(),
-        address2=(data.get('address2') or '').strip(),
-        address3=(data.get('address3') or '').strip(),
-        postal_code=(data.get('postalCode') or '').strip(),
-        phone=(data.get('phone') or '').strip(),
-    )
-    data_manager.clients[name] = c
+    existing_key = _finance_client_key(data_manager, name)
+    if existing_key and _finance_client_is_active(data_manager.clients.get(existing_key)):
+        return jsonify({
+            'success': False,
+            'error': f'A client named {name} already exists',
+        }), 409
+    if existing_key:
+        del data_manager.clients[existing_key]
+    storage_key = name
+    client['name'] = name
+    c = _finance_client_from_payload(client, is_active=True)
+    data_manager.clients[storage_key] = c
     data_manager.save_clients()
-    log_action(f"Saved client {name}")
+    log_action(f"Saved client {storage_key}")
     return jsonify({'success': True, 'data': _client_to_dict(c)})
 
 @app.route('/api/clients/<name>', methods=['GET', 'PUT', 'DELETE'])
-@require_auth
+@require_client_access
 def client_item(name):
-    key = unquote_plus(name)
+    key = _finance_client_key(data_manager, unquote_plus(name))
     c = data_manager.clients.get(key)
+    if c and not _finance_client_is_active(c):
+        c = None
     if request.method == 'GET':
         if not c:
-            return jsonify({'success': False, 'message': 'Not found'}), 404
+            return jsonify({'success': False, 'error': 'Client not found'}), 404
         return jsonify({'success': True, 'data': _client_to_dict(c)})
 
     if request.method == 'PUT':
         if not c:
-            return jsonify({'success': False, 'message': 'Not found'}), 404
+            return jsonify({'success': False, 'error': 'Client not found'}), 404
         data = request.get_json(force=True) or {}
-        c.salutation = _normalise_finance_salutation(
-            data.get('salutation') if 'salutation' in data else getattr(c, 'salutation', '')
-        )
-        editable_fields = {
-            'company': 'company',
-            'contactPerson': 'contact_person',
-            'email': 'email',
-            'taxNumber': 'tax_number',
-            'address1': 'address1',
-            'address2': 'address2',
-            'address3': 'address3',
-            'postalCode': 'postal_code',
-            'phone': 'phone',
-        }
-        for payload_key, attribute in editable_fields.items():
-            if payload_key in data:
-                setattr(c, attribute, str(data.get(payload_key) or '').strip())
-        data_manager.save_clients()
-        log_action(f"Updated client {key}")
-        return jsonify({'success': True, 'data': _client_to_dict(c)})
+        merged = _client_to_dict(c)
+        for field in merged:
+            if field in data:
+                merged[field] = data.get(field)
+        updated = _normalise_finance_client(merged)
+        updated_name = updated['name']
+        if not updated_name:
+            return jsonify({'success': False, 'error': 'Client name is required'}), 400
+        destination_key = _finance_client_key(data_manager, updated_name)
+        if destination_key and destination_key != key:
+            return jsonify({
+                'success': False,
+                'error': f'A client named {updated_name} already exists',
+            }), 409
 
-    # DELETE (admin)
+        updated_client = _finance_client_from_payload(updated)
+        if key != updated_name:
+            del data_manager.clients[key]
+        data_manager.clients[updated_name] = updated_client
+        data_manager.save_clients()
+        log_action(
+            f"Renamed client {key} to {updated_name}"
+            if key != updated_name
+            else f"Updated client {key}"
+        )
+        return jsonify({'success': True, 'data': _client_to_dict(updated_client)})
+
+    # DELETE removes the record from future suggestions while keeping the
+    # client details already embedded in quotations, invoices, and delivery orders.
     if not c:
-        return jsonify({'success': False, 'message': 'Not found'}), 404
-    if not _current_user_is_admin():
-        return jsonify({'error': 'Admin privileges required'}), 403
-    del data_manager.clients[key]
+        return jsonify({'success': False, 'error': 'Client not found'}), 404
+    c.is_active = False
     data_manager.save_clients()
-    log_action(f"Deleted client {key}")
+    log_action(f"Removed client {key} from client directory")
     return jsonify({'success': True})
 
 if __name__ == '__main__':

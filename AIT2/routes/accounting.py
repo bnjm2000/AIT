@@ -16,7 +16,8 @@ from services.accounting_documents import document_view, document_html, document
 
 
 def register_accounting_routes(app, *, auth, lock, load, save, store_for, payload,
-                               actor, owner, users, finance_path, changed):
+                               actor, role, users, finance_path, changed,
+                               pdf_company=None):
     prefix = '/api/finance/accounting'
 
     def mutate(callback):
@@ -25,8 +26,8 @@ def register_accounting_routes(app, *, auth, lock, load, save, store_for, payloa
                 data = load()
                 # No partially applied batch can escape if a later item fails validation.
                 store = books.initialise(copy.deepcopy(store_for(data)))
-                role = books.role_for(store, actor(), owner())
-                record = callback(store, role)
+                current_role = role()
+                record = callback(store, current_role)
                 data['accounting'] = store
                 save(data)
                 response = payload(data, request.args)
@@ -59,7 +60,8 @@ def register_accounting_routes(app, *, auth, lock, load, save, store_for, payloa
                 view = copy.deepcopy(document_view(store, books.find(store, 'documents', record_id)))
             if request.path.endswith('/pdf'):
                 filename = secure_filename(view['document']['number']) or 'accounting-document'
-                response = send_file(document_pdf(view), as_attachment=True,
+                company = pdf_company() if callable(pdf_company) else {}
+                response = send_file(document_pdf(view, company=company), as_attachment=True,
                                      download_name=filename + '.pdf', mimetype='application/pdf')
             else:
                 response = jsonify(success=True, html=document_html(view), warnings=view['warnings'])

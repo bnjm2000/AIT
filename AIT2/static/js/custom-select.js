@@ -83,6 +83,7 @@
     const label = selectedLabel(select);
     if (!isDepartmentSelect(select)) {
       if (valueElement.textContent !== label) valueElement.textContent = label;
+      valueElement.style.fontFamily = option?.dataset?.fontPreview || '';
       return;
     }
     const meta = departmentOptionMeta(option);
@@ -177,6 +178,7 @@
       button.append(departmentBadge(department));
     } else {
       label.textContent = option.textContent.trim();
+      label.style.fontFamily = option.dataset.fontPreview || '';
     }
     const check = document.createElement('span');
     check.className = 'sb-select-check';

@@ -45,7 +45,7 @@ EVENT_FIELDNAMES = [
 ]
 CLIENT_FIELDNAMES = [
     'Name', 'Salutation', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
-    'Address1', 'Address2', 'Address3', 'PostalCode',
+    'Address1', 'Address2', 'Address3', 'PostalCode', 'Active',
 ]
 
 
@@ -1428,6 +1428,7 @@ class DataManager:
                     address2=row.get('Address2', '').strip(),
                     address3=row.get('Address3', '').strip(),
                     postal_code=row.get('PostalCode', '').strip(),
+                    is_active=_parse_bool(row.get('Active'), True),
                 )
                 if c.name:
                     self.clients[c.name] = c
@@ -1450,4 +1451,5 @@ class DataManager:
                     'Address2': c.address2,
                     'Address3': c.address3,
                     'PostalCode': c.postal_code,
+                    'Active': str(bool(getattr(c, 'is_active', True))),
                 })

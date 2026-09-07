@@ -38,3 +38,12 @@ def test_packing_list_does_not_include_asset_serial_numbers():
     assert "asset?.serial" not in record_source
     assert "asset.serial" not in html_source
     assert "/ SN " not in html_source
+
+
+def test_pdf_reports_historical_prepared_and_extra_quantities():
+    assert "extraPrepared: packingListExtraPreparedQuantity(group)" in PACKING_LIST_SOURCE
+    assert "event?.totalExtraPrepared" in PACKING_LIST_SOURCE
+    assert '<span>Extras prepared</span>' in PACKING_LIST_SOURCE
+    assert "totals.prepared / totals.required" in PACKING_LIST_SOURCE
+    assert "Prepared includes items that have since been returned." in PACKING_LIST_SOURCE
+    assert '<th class="number-cell">Extra</th>' in PACKING_LIST_SOURCE

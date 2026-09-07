@@ -7,6 +7,13 @@ import os
 import re
 import threading
 
+from pdf_fonts import pdf_font_names, pdf_text_typography
+from pdf_rich_text import (
+    plain_text_to_rich_html,
+    rich_text_to_reportlab_markup,
+    sanitise_pdf_rich_text,
+)
+
 
 _CJK_TEXT_RE = re.compile(
     r'[\u2E80-\u2EFF\u3000-\u303F\u31C0-\u31EF'
@@ -105,6 +112,64 @@ def _group_pdf_line_units(lines):
         else:
             units[group_index].append(line)
     return units
+
+
+def _pdf_line_unit_key(line_unit):
+    line = next(
+        (member for member in (line_unit or []) if member.get('groupLeader')),
+        (line_unit or [{}])[0],
+    )
+    group_id = str(line.get('groupId') or '')
+    return (
+        f'group:{group_id}'
+        if group_id
+        else f"line:{str(line.get('id') or '')}"
+    )
+
+
+def _pdf_header_positions(header_rows, export_groups):
+    """Place custom headers before category blocks, line units, or a room's end."""
+    positions = {}
+    orphaned = []
+    groups_by_subproject = {}
+    for subproject, department, department_lines in export_groups:
+        subproject_id = str(subproject.get('id') or 'main')
+        group = {
+            'department': department,
+            'units': _group_pdf_line_units(department_lines),
+        }
+        groups_by_subproject.setdefault(subproject_id, []).append(group)
+
+    for header in header_rows or []:
+        if not isinstance(header, dict):
+            continue
+        subproject_id = str(header.get('subprojectId') or 'main')
+        subproject_groups = groups_by_subproject.get(subproject_id, [])
+        anchor_id = str(header.get('beforeLineId') or '')
+        anchor = None
+        for group in subproject_groups:
+            for unit_index, line_unit in enumerate(group['units']):
+                if any(str(line.get('id') or '') == anchor_id for line in line_unit):
+                    anchor = (group, unit_index, _pdf_line_unit_key(line_unit))
+                    break
+            if anchor:
+                break
+        if anchor:
+            group, unit_index, unit_key = anchor
+            position_key = (
+                ('before-group', subproject_id, group['department'])
+                if unit_index == 0
+                else ('before-unit', subproject_id, group['department'], unit_key)
+            )
+            positions.setdefault(position_key, []).append(header)
+        elif subproject_groups:
+            last_group = subproject_groups[-1]
+            positions.setdefault(
+                ('end-group', subproject_id, last_group['department']), []
+            ).append(header)
+        else:
+            orphaned.append(header)
+    return positions, orphaned
 
 
 def _group_display_entries(lines):
@@ -633,6 +698,15 @@ def _hex_luminance(value):
     return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
 
+def _light_theme_tint(value, white_ratio=0.94):
+    """Return a very pale version of a company theme colour."""
+    raw = _safe_hex(value).lstrip('#')
+    ratio = max(0.0, min(1.0, float(white_ratio)))
+    channels = [int(raw[index:index + 2], 16) for index in (0, 2, 4)]
+    tinted = [round(channel + (255 - channel) * ratio) for channel in channels]
+    return '#' + ''.join(f'{channel:02X}' for channel in tinted)
+
+
 def build_finance_pdf(document, company, logo_path=''):
     """Return an A4 quotation/invoice as PDF bytes."""
     from reportlab.lib import colors
@@ -654,6 +728,7 @@ def build_finance_pdf(document, company, logo_path=''):
         TableStyle,
     )
 
+    font_regular, font_bold = pdf_font_names(company)
     buffer = BytesIO()
     page_width, page_height = A4
     margin = 13 * mm
@@ -673,10 +748,10 @@ def build_finance_pdf(document, company, logo_path=''):
     ink = colors.HexColor('#172033')
     muted = colors.HexColor('#64748B')
     rule = colors.HexColor('#CBD5E1')
-    panel = colors.HexColor('#F1F5F9')
     accent_hex = _safe_hex(company.get('themeColor'), '#0F766E')
     accent_luminance = _hex_luminance(accent_hex)
     accent = colors.HexColor(accent_hex)
+    panel = colors.HexColor(_light_theme_tint(accent_hex))
     accent_text = colors.black if accent_luminance > 0.68 else colors.white
     accent_on_white = ink if accent_luminance > 0.74 else accent
     success = colors.HexColor('#0F766E')
@@ -684,7 +759,7 @@ def build_finance_pdf(document, company, logo_path=''):
     body = ParagraphStyle(
         'FinanceBody',
         parent=styles['BodyText'],
-        fontName='Helvetica',
+        fontName=font_regular,
         fontSize=8.5,
         leading=11,
         textColor=ink,
@@ -699,11 +774,23 @@ def build_finance_pdf(document, company, logo_path=''):
     label = ParagraphStyle(
         'FinanceLabel',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=7.2,
         leading=9,
         textColor=muted,
         spaceAfter=2,
+    )
+    project_label = ParagraphStyle(
+        'FinanceProjectLabel',
+        parent=label,
+        spaceAfter=-2 * mm,
+    )
+    bill_to_name = ParagraphStyle(
+        'FinanceBillToName',
+        parent=body,
+        fontName=font_bold,
+        fontSize=9.5,
+        leading=12,
     )
     table_header_label = ParagraphStyle(
         'FinanceTableHeaderLabel',
@@ -713,7 +800,7 @@ def build_finance_pdf(document, company, logo_path=''):
     title_style = ParagraphStyle(
         'FinanceTitle',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=20,
         leading=23,
         textColor=ink,
@@ -721,7 +808,7 @@ def build_finance_pdf(document, company, logo_path=''):
     number_style = ParagraphStyle(
         'FinanceNumber',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=12,
         leading=15,
         textColor=accent_on_white,
@@ -729,6 +816,13 @@ def build_finance_pdf(document, company, logo_path=''):
     )
     right = ParagraphStyle('FinanceRight', parent=body, alignment=TA_RIGHT)
     center = ParagraphStyle('FinanceCenter', parent=body, alignment=TA_CENTER)
+    custom_header_style = ParagraphStyle(
+        'FinanceCustomHeader',
+        parent=body,
+        fontName=font_bold,
+        alignment=TA_CENTER,
+        textColor=ink,
+    )
     table_header_center = ParagraphStyle(
         'FinanceTableHeaderCenter', parent=table_header_label, alignment=TA_CENTER
     )
@@ -738,7 +832,7 @@ def build_finance_pdf(document, company, logo_path=''):
     right_bold = ParagraphStyle(
         'FinanceRightBold',
         parent=right,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
     )
     optional_body = ParagraphStyle(
         'FinanceOptionalBody',
@@ -753,13 +847,13 @@ def build_finance_pdf(document, company, logo_path=''):
     optional_right_bold = ParagraphStyle(
         'FinanceOptionalRightBold',
         parent=optional_body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         alignment=TA_RIGHT,
     )
     quotation_reference_style = ParagraphStyle(
         'FinanceQuotationReference',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=9.2,
         leading=11,
         textColor=accent_on_white,
@@ -767,7 +861,7 @@ def build_finance_pdf(document, company, logo_path=''):
     project_name_style = ParagraphStyle(
         'FinanceProjectName',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=11.5,
         leading=14,
         textColor=ink,
@@ -789,7 +883,7 @@ def build_finance_pdf(document, company, logo_path=''):
     section_title = ParagraphStyle(
         'FinanceSectionTitle',
         parent=body,
-        fontName='Helvetica-Bold',
+        fontName=font_bold,
         fontSize=9.5,
         leading=12,
         textColor=ink,
@@ -804,6 +898,44 @@ def build_finance_pdf(document, company, logo_path=''):
         firstLineIndent=0,
         rightIndent=0,
     )
+
+    letterhead_typography = pdf_text_typography(company, 'letterhead', 6.4)
+    footer_typography = pdf_text_typography(company, 'footer', 6.2)
+    terms_typography = pdf_text_typography(company, 'terms', small.fontSize)
+    payment_typography = pdf_text_typography(company, 'paymentDetails', body.fontSize)
+    default_font_family = company.get('fontFamily') or 'App Default'
+    letterhead_html = sanitise_pdf_rich_text(company.get('letterheadHtml'))
+    letterhead_markup = rich_text_to_reportlab_markup(
+        letterhead_html, default_family=default_font_family
+    ) if letterhead_html else ''
+    footer_html = sanitise_pdf_rich_text(company.get('footerHtml'))
+    footer_markup = rich_text_to_reportlab_markup(
+        footer_html, default_family=default_font_family
+    ) if footer_html else ''
+    letterhead_setting = company.get('letterheadTypography')
+    letterhead_setting = letterhead_setting if isinstance(letterhead_setting, dict) else {}
+    letterhead_customised = any((
+        letterhead_setting.get('fontFamily'),
+        letterhead_setting.get('fontSize'),
+        letterhead_setting.get('bold'),
+        letterhead_setting.get('italic'),
+        letterhead_setting.get('underline'),
+    ))
+
+    def draw_typography_text(canvas, value, x, y, typography, *, align='left', fallback_font=None, fallback_size=None):
+        text = _text(value)
+        font_name = _canvas_font(text, fallback_font or typography['fontName'])
+        font_size = float(fallback_size or typography['fontSize'])
+        canvas.setFont(font_name, font_size)
+        if align == 'right':
+            canvas.drawRightString(x, y, text)
+            start_x = x - canvas.stringWidth(text, font_name, font_size)
+        else:
+            canvas.drawString(x, y, text)
+            start_x = x
+        if typography.get('underline'):
+            canvas.setLineWidth(max(0.3, font_size / 20))
+            canvas.line(start_x, y - 1.1, start_x + canvas.stringWidth(text, font_name, font_size), y - 1.1)
 
     footer_text = _text(company.get('footerText')).strip()
     letterhead_lines = [
@@ -854,25 +986,51 @@ def build_finance_pdf(document, company, logo_path=''):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn:
-            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 15)
-            canvas.setFillColor(ink)
-            canvas.drawString(margin, page_height - 14 * mm, company_name[:34])
-
-        if letterhead_enabled and logo_drawn and company_name:
-            canvas.setFillColor(ink)
-            canvas.setFont(
-                _canvas_font(company_name, 'Helvetica-Bold'),
-                8.8,
+        if letterhead_enabled and letterhead_markup:
+            rich_letterhead_style = ParagraphStyle(
+                'FinanceRichLetterhead',
+                parent=small,
+                fontName=font_regular,
+                fontSize=6.4,
+                leading=8.2,
+                textColor=ink,
+                alignment=TA_RIGHT if logo_drawn else TA_LEFT,
             )
-            canvas.drawRightString(page_width - margin, page_height - 9.5 * mm, company_name[:72])
+            rich_letterhead = Paragraph(_cjk_markup(letterhead_markup), rich_letterhead_style)
+            rich_width = 112 * mm if logo_drawn else page_width - (2 * margin)
+            rich_height = rich_letterhead.wrap(rich_width, 20 * mm)[1]
+            rich_x = page_width - margin - rich_width if logo_drawn else margin
+            rich_letterhead.drawOn(canvas, rich_x, page_height - 7 * mm - rich_height)
+        elif letterhead_enabled and not logo_drawn:
+            canvas.setFillColor(ink)
+            draw_typography_text(
+                canvas, company_name[:34], margin, page_height - 14 * mm,
+                letterhead_typography,
+                fallback_font=None if letterhead_customised else font_bold,
+                fallback_size=None if letterhead_setting.get('fontSize') else 15,
+            )
 
-        if letterhead_enabled:
+        if letterhead_enabled and not letterhead_markup and logo_drawn and company_name:
+            canvas.setFillColor(ink)
+            draw_typography_text(
+                canvas, company_name[:72], page_width - margin, page_height - 9.5 * mm,
+                letterhead_typography,
+                align='right',
+                fallback_font=None if letterhead_customised else font_bold,
+                fallback_size=None if letterhead_setting.get('fontSize') else 8.8,
+            )
+
+        if letterhead_enabled and not letterhead_markup:
             canvas.setFillColor(muted)
             y = page_height - 12.8 * mm if logo_drawn and company_name else page_height - 10 * mm
             for line in company_detail_lines[:4]:
-                canvas.setFont(_canvas_font(line, 'Helvetica'), 6.4)
-                canvas.drawRightString(page_width - margin, y, line[:100])
+                draw_typography_text(
+                    canvas, line[:100], page_width - margin, y,
+                    letterhead_typography,
+                    align='right',
+                    fallback_font=None if letterhead_customised else font_regular,
+                    fallback_size=None if letterhead_setting.get('fontSize') else 6.4,
+                )
                 y -= 3 * mm
 
         canvas.setStrokeColor(rule)
@@ -880,8 +1038,16 @@ def build_finance_pdf(document, company, logo_path=''):
         canvas.line(margin, 14 * mm, page_width - margin, 14 * mm)
         canvas.setFillColor(muted)
         footer_line = footer_text.replace('\n', ' | ') if footer_text else company_lines[0] if company_lines else ''
-        canvas.setFont(_canvas_font(footer_line, 'Helvetica'), 6.2)
-        canvas.drawString(margin, 9 * mm, footer_line[:125])
+        if footer_markup:
+            rich_footer_style = ParagraphStyle(
+                'FinanceRichFooter', parent=small, fontName=font_regular,
+                fontSize=6.2, leading=7.2, textColor=muted,
+            )
+            rich_footer = Paragraph(_cjk_markup(footer_markup), rich_footer_style)
+            rich_footer.wrapOn(canvas, page_width - (2 * margin) - 30 * mm, 10 * mm)
+            rich_footer.drawOn(canvas, margin, 7.5 * mm)
+        else:
+            draw_typography_text(canvas, footer_line[:125], margin, 9 * mm, footer_typography)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -899,7 +1065,7 @@ def build_finance_pdf(document, company, logo_path=''):
                 self.__dict__.update(state)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont('Helvetica', 6.2)
+                self.setFont(font_regular, 6.2)
                 self.drawRightString(
                     page_width - margin,
                     9 * mm,
@@ -917,6 +1083,10 @@ def build_finance_pdf(document, company, logo_path=''):
     lines = [
         line for line in (document.get('lineItems') or [])
         if not (isinstance(line, dict) and line.get('hiddenFromQuotation'))
+    ]
+    header_rows = [
+        row for row in (document.get('headerRows') or [])
+        if isinstance(row, dict)
     ]
     adjustments = document.get('adjustments') or []
     subprojects = document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]
@@ -1010,8 +1180,10 @@ def build_finance_pdf(document, company, logo_path=''):
     if bill_lines:
         client_block = [
             _paragraph('BILL TO', label),
-            _paragraph('\n'.join(bill_lines), body),
+            _paragraph(bill_lines[0], bill_to_name),
         ]
+        if len(bill_lines) > 1:
+            client_block.append(_paragraph('\n'.join(bill_lines[1:]), body))
     if client_block or meta_rows:
         if client_block and meta_rows:
             client_data = [[client_block, meta_table]]
@@ -1105,14 +1277,14 @@ def build_finance_pdf(document, company, logo_path=''):
         project_block = []
         if project_name:
             project_block.extend([
-                _paragraph('PROJECT', label),
+                _paragraph('PROJECT', project_label),
                 _paragraph(project_name, project_name_style),
             ])
         if project_location:
             if project_block:
                 project_block.append(Spacer(1, 1 * mm))
             project_block.extend([
-                _paragraph('LOCATION', label),
+                _paragraph('LOCATION', project_label),
                 _paragraph(project_location, project_location_style),
             ])
 
@@ -1156,22 +1328,46 @@ def build_finance_pdf(document, company, logo_path=''):
     show_department_discounts = bool(document.get('showDepartmentDiscounts'))
     show_department_subtotals = document.get('showDepartmentSubtotals', True) is not False
     show_line_numbers = document.get('showLineNumbers', True) is not False
-    column_widths = [
-        8 * mm,
-        72 * mm,
-        13 * mm,
-        20 * mm,
-        23 * mm,
-        14 * mm,
-        30 * mm,
-    ]
+    number_width = 8 * mm
+    multiplier_width = 13 * mm
+    quantity_width = 20 * mm
+    if show_unit_prices:
+        pricing_widths = [23 * mm, 14 * mm, 30 * mm]
+        description_width = doc.width - sum([
+            number_width,
+            multiplier_width,
+            quantity_width,
+            *pricing_widths,
+        ])
+        column_widths = [
+            number_width,
+            description_width,
+            quantity_width,
+            multiplier_width,
+            *pricing_widths,
+        ]
+    else:
+        # Preserve the Days/Mult and Qty widths while using the former pricing
+        # columns to give the description the full available document width.
+        description_width = doc.width - sum([
+            number_width,
+            multiplier_width,
+            quantity_width,
+        ])
+        column_widths = [
+            number_width,
+            description_width,
+            quantity_width,
+            multiplier_width,
+        ]
+    line_table_column_count = len(column_widths)
     description_cell_width = column_widths[1] - 6  # 3pt padding on each side.
     group_content_page_height = max(
         body.leading * 12,
         doc.height - (42 * mm) - body.leading,
     )
 
-    if lines:
+    if lines or header_rows:
         story.append(_paragraph('LINE ITEMS', section_title))
 
     lines_by_group = {}
@@ -1204,6 +1400,26 @@ def build_finance_pdf(document, company, logo_path=''):
                 department,
                 lines_by_group[(subproject_id, department)],
             ))
+    header_positions, orphaned_headers = _pdf_header_positions(
+        header_rows, export_groups
+    )
+
+    def append_custom_headers(table_rows, row_styles, rows):
+        for header in rows or []:
+            header_index = len(table_rows)
+            table_rows.append([
+                _paragraph(header.get('content') or '', custom_header_style),
+                *([''] * (line_table_column_count - 1)),
+            ])
+            row_styles.extend([
+                ('SPAN', (0, header_index), (-1, header_index)),
+                ('ALIGN', (0, header_index), (-1, header_index), 'CENTER'),
+                ('VALIGN', (0, header_index), (-1, header_index), 'MIDDLE'),
+                ('BACKGROUND', (0, header_index), (-1, header_index), panel),
+                ('BOX', (0, header_index), (-1, header_index), 0.35, rule),
+                ('TOPPADDING', (0, header_index), (-1, header_index), 5),
+                ('BOTTOMPADDING', (0, header_index), (-1, header_index), 5),
+            ])
     department_summaries = []
     for subproject, department, department_lines in export_groups:
         subproject_id = str(subproject.get('id') or 'main')
@@ -1245,6 +1461,7 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         department_total += sum(float(row.get('amount') or 0) for row in department_adjustments)
         table_rows = []
+        row_styles = []
         room_header_row = None
         if show_subproject_headers and first_group_for_subproject:
             room_header_row = len(table_rows)
@@ -1255,13 +1472,20 @@ def build_finance_pdf(document, company, logo_path=''):
                     ParagraphStyle(
                         f"Subproject-{subproject_id}",
                         parent=body,
-                        fontName='Helvetica-Bold',
+                        fontName=font_bold,
                         alignment=TA_CENTER,
                         textColor=ink,
                     ),
                 ),
-                '', '', '', '', '', '',
+                *([''] * (line_table_column_count - 1)),
             ])
+        append_custom_headers(
+            table_rows,
+            row_styles,
+            header_positions.get(
+                ('before-group', subproject_id, department), []
+            ),
+        )
         department_header_row = len(table_rows)
         table_rows.extend([
             [
@@ -1270,24 +1494,33 @@ def build_finance_pdf(document, company, logo_path=''):
                     ParagraphStyle(
                         f"Department-{len(story)}",
                         parent=body,
-                        fontName='Helvetica-Bold',
+                        fontName=font_bold,
                         textColor=ink,
                     ),
                 ),
-                '', '', '', '', '', '',
+                *([''] * (line_table_column_count - 1)),
             ],
-            [
-                _paragraph('#' if show_line_numbers else '', table_header_center),
-                _paragraph('DESCRIPTION', table_header_label),
-                _paragraph(multiplier_column_label, table_header_right),
-                _paragraph('QTY', table_header_right),
-                _paragraph('UNIT PRICE' if show_unit_prices else '', table_header_right),
-                _paragraph('DISC %' if show_unit_prices else '', table_header_right),
-                _paragraph('TOTAL' if show_unit_prices else '', table_header_right),
-            ],
+            (
+                [
+                    _paragraph('#' if show_line_numbers else '', table_header_center),
+                    _paragraph('DESCRIPTION', table_header_label),
+                    _paragraph('QTY', table_header_right),
+                    _paragraph(multiplier_column_label, table_header_right),
+                    _paragraph('UNIT PRICE', table_header_right),
+                    _paragraph('DISC %', table_header_right),
+                    _paragraph('TOTAL', table_header_right),
+                ]
+                if show_unit_prices
+                else [
+                    _paragraph('#' if show_line_numbers else '', table_header_center),
+                    _paragraph('DESCRIPTION', table_header_label),
+                    _paragraph('QTY', table_header_right),
+                    _paragraph(multiplier_column_label, table_header_right),
+                ]
+            ),
         ])
         column_header_row = department_header_row + 1
-        row_styles = [
+        row_styles.extend([
             ('SPAN', (0, department_header_row), (-1, department_header_row)),
             ('BACKGROUND', (0, department_header_row), (-1, department_header_row), panel),
             ('BACKGROUND', (0, column_header_row), (-1, column_header_row), accent),
@@ -1299,7 +1532,7 @@ def build_finance_pdf(document, company, logo_path=''):
             ('BOTTOMPADDING', (0, department_header_row), (-1, column_header_row), 5),
             ('BOX', (0, 0), (-1, -1), 0.35, rule),
             ('INNERGRID', (0, column_header_row), (-1, -1), 0.35, rule),
-        ]
+        ])
         if room_header_row is not None:
             row_styles.extend([
                 ('SPAN', (0, room_header_row), (-1, room_header_row)),
@@ -1312,6 +1545,16 @@ def build_finance_pdf(document, company, logo_path=''):
             ])
 
         for line_unit in _group_pdf_line_units(department_lines):
+            append_custom_headers(
+                table_rows,
+                row_styles,
+                header_positions.get((
+                    'before-unit',
+                    subproject_id,
+                    department,
+                    _pdf_line_unit_key(line_unit),
+                ), []),
+            )
             line = next(
                 (member for member in line_unit if member.get('groupLeader')),
                 line_unit[0],
@@ -1375,36 +1618,46 @@ def build_finance_pdf(document, company, logo_path=''):
                     description_flowable = _paragraph(
                         _group_line_description(line), body
                     )
-                table_rows.append([
+                line_cells = [
                     _paragraph(
                         line_number if first_chunk and show_line_numbers else '',
                         center,
                     ),
                     description_flowable,
+                    _paragraph(quantity_label if first_chunk else '', right),
                     _paragraph(
                         f"{display_days:g}" if first_chunk and display_days else '',
                         right,
                     ),
-                    _paragraph(quantity_label if first_chunk else '', right),
-                    _paragraph(
-                        _money(unit_price, currency)
-                        if first_chunk and show_unit_prices else '',
-                        right,
-                    ),
-                    _paragraph(
-                        _discount_percent(line.get('discountPercent'))
-                        if first_chunk and show_unit_prices
-                        and float(line.get('discountPercent') or 0)
-                        else '',
-                        right,
-                    ),
-                    _paragraph(
-                        _money(group_total, currency)
-                        if first_chunk and show_unit_prices else '',
-                        right,
-                    ),
-                ])
+                ]
+                if show_unit_prices:
+                    line_cells.extend([
+                        _paragraph(
+                            _money(unit_price, currency) if first_chunk else '',
+                            right,
+                        ),
+                        _paragraph(
+                            _discount_percent(line.get('discountPercent'))
+                            if first_chunk
+                            and float(line.get('discountPercent') or 0)
+                            else '',
+                            right,
+                        ),
+                        _paragraph(
+                            _money(group_total, currency) if first_chunk else '',
+                            right,
+                        ),
+                    ])
+                table_rows.append(line_cells)
             pdf_line_number += 1
+
+        append_custom_headers(
+            table_rows,
+            row_styles,
+            header_positions.get(
+                ('end-group', subproject_id, department), []
+            ),
+        )
 
         show_department_adjustment_block = bool(
             show_department_discounts
@@ -1414,14 +1667,27 @@ def build_finance_pdf(document, company, logo_path=''):
         if show_department_adjustment_block:
             for adjustment_position, adjustment in enumerate(department_adjustments):
                 adjustment_index = len(table_rows)
-                table_rows.append([
-                    '',
-                    _paragraph(_adjustment_label(adjustment), right),
-                    '', '', '', '',
-                    _paragraph(_money(adjustment.get('amount'), currency), right),
-                ])
+                adjustment_label = _paragraph(_adjustment_label(adjustment), right)
+                adjustment_amount = _paragraph(
+                    _money(adjustment.get('amount'), currency), right
+                )
+                if show_unit_prices:
+                    adjustment_cells = [
+                        '', adjustment_label,
+                        *([''] * (line_table_column_count - 3)),
+                        adjustment_amount,
+                    ]
+                    adjustment_spans = [('SPAN', (1, adjustment_index), (
+                        line_table_column_count - 2, adjustment_index
+                    ))]
+                else:
+                    adjustment_cells = ['', adjustment_label, adjustment_amount, '']
+                    adjustment_spans = [
+                        ('SPAN', (2, adjustment_index), (3, adjustment_index)),
+                    ]
+                table_rows.append(adjustment_cells)
                 row_styles.extend([
-                    ('SPAN', (1, adjustment_index), (5, adjustment_index)),
+                    *adjustment_spans,
                     ('TEXTCOLOR', (1, adjustment_index), (-1, adjustment_index), success),
                     ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), panel),
                 ])
@@ -1432,14 +1698,27 @@ def build_finance_pdf(document, company, logo_path=''):
 
         if show_department_subtotals or optional_category:
             subtotal_index = len(table_rows)
-            table_rows.append([
-                '',
-                _paragraph(f"{department} subtotal", right_bold),
-                '', '', '', '',
-                _paragraph(_money(department_total, currency), right_bold),
-            ])
+            subtotal_label = _paragraph(f"{department} subtotal", right_bold)
+            subtotal_amount = _paragraph(
+                _money(department_total, currency), right_bold
+            )
+            if show_unit_prices:
+                subtotal_cells = [
+                    '', subtotal_label,
+                    *([''] * (line_table_column_count - 3)),
+                    subtotal_amount,
+                ]
+                subtotal_spans = [('SPAN', (1, subtotal_index), (
+                    line_table_column_count - 2, subtotal_index
+                ))]
+            else:
+                subtotal_cells = ['', subtotal_label, subtotal_amount, '']
+                subtotal_spans = [
+                    ('SPAN', (2, subtotal_index), (3, subtotal_index)),
+                ]
+            table_rows.append(subtotal_cells)
             row_styles.extend([
-                ('SPAN', (1, subtotal_index), (5, subtotal_index)),
+                *subtotal_spans,
                 ('BACKGROUND', (0, subtotal_index), (-1, subtotal_index), panel),
             ])
             if not show_department_adjustment_block:
@@ -1449,7 +1728,7 @@ def build_finance_pdf(document, company, logo_path=''):
 
         items_table = Table(
             table_rows,
-            repeatRows=3 if room_header_row is not None else 2,
+            repeatRows=column_header_row + 1,
             colWidths=column_widths,
             style=TableStyle(row_styles),
             splitByRow=1,
@@ -1463,7 +1742,17 @@ def build_finance_pdf(document, company, logo_path=''):
         if group_index < len(export_groups) - 1:
             story.append(Spacer(1, 3 * mm))
 
-    if export_groups:
+    if orphaned_headers:
+        orphan_rows = []
+        orphan_styles = []
+        append_custom_headers(orphan_rows, orphan_styles, orphaned_headers)
+        story.append(Table(
+            orphan_rows,
+            colWidths=column_widths,
+            style=TableStyle(orphan_styles),
+        ))
+
+    if export_groups or orphaned_headers:
         story.append(PageBreak())
 
     final_page_story = []
@@ -1500,7 +1789,10 @@ def build_finance_pdf(document, company, logo_path=''):
             category['total'] += row['total']
         return aggregated
 
-    final_page_story.append(_paragraph('Summary', summary_section_title))
+    summary_heading = (
+        'Invoice Summary' if document_type == 'invoice' else 'Quotation Summary'
+    )
+    final_page_story.append(_paragraph(summary_heading, summary_section_title))
     if department_summaries:
         if use_subproject_summary:
             summary_source = []
@@ -1577,15 +1869,21 @@ def build_finance_pdf(document, company, logo_path=''):
                 ('TOPPADDING', (0, 0), (-1, -1), 5),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                 ('LINEBELOW', (0, 1), (-1, -1), 0.35, rule),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, panel]),
             ]),
         )
         final_page_story.extend([department_summary, Spacer(1, 4 * mm)])
 
     payment_lines = []
+    payment_rich_markup = ''
     if document_type == 'invoice' and company.get('paymentDetailsEnabled', True) is not False:
         custom_payment_details = _text(company.get('paymentDetailsText')).strip()
         if custom_payment_details:
+            payment_html = sanitise_pdf_rich_text(company.get('paymentDetailsHtml'))
+            if payment_html:
+                payment_rich_markup = rich_text_to_reportlab_markup(
+                    payment_html, default_family=default_font_family
+                )
             payment_lines = [
                 escape(line.strip())
                 for line in custom_payment_details.splitlines()
@@ -1681,7 +1979,7 @@ def build_finance_pdf(document, company, logo_path=''):
         ])
         if received_payments:
             summary_rows.append([
-                _paragraph('Balance remaining', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName='Helvetica-Bold')),
+                _paragraph('Balance remaining', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName=font_bold)),
                 _paragraph(_money(outstanding, currency), right_bold),
             ])
         due_caption = []
@@ -1693,7 +1991,7 @@ def build_finance_pdf(document, company, logo_path=''):
         summary_rows.append(
             [
                 [
-                    _paragraph('AMOUNT DUE', ParagraphStyle('InvoiceDueSummaryLabel', parent=body, fontName='Helvetica-Bold', fontSize=11.5, textColor=accent_text)),
+                    _paragraph('AMOUNT DUE', ParagraphStyle('InvoiceDueSummaryLabel', parent=body, fontName=font_bold, fontSize=11.5, textColor=accent_text)),
                     *(
                         [_paragraph(
                             ' - '.join(due_caption),
@@ -1727,22 +2025,26 @@ def build_finance_pdf(document, company, logo_path=''):
             )
             summary_rows.extend([
                 [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
-                [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+                [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName=font_bold, fontSize=10.5)),
                  _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent_on_white))],
             ])
         else:
             summary_rows.append([
-                _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+                _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName=font_bold, fontSize=10.5)),
                 _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent_on_white)),
             ])
+    bottom_column_width = doc.width / 2
+    summary_table_width = bottom_column_width if payment_lines else 96 * mm
+    summary_amount_width = 40 * mm
     summary = Table(
         summary_rows,
-        colWidths=[56 * mm, 40 * mm],
+        colWidths=[summary_table_width - summary_amount_width, summary_amount_width],
         hAlign='RIGHT',
         style=TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LEFTPADDING', (0, 0), (-1, -1), 9),
             ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+            ('RIGHTPADDING', (-1, 0), (-1, -1), 3),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('LINEABOVE', (0, -1), (-1, -1), 1.1, ink),
@@ -1759,13 +2061,23 @@ def build_finance_pdf(document, company, logo_path=''):
             spaceBefore=0,
             spaceAfter=3,
         )
+        payment_style = ParagraphStyle(
+            'FinancePaymentDetails',
+            parent=body,
+            fontName=payment_typography['fontName'],
+            fontSize=payment_typography['fontSize'],
+            leading=payment_typography['fontSize'] * 1.3,
+        )
+        payment_markup = payment_rich_markup or '<br/>'.join(payment_lines)
+        if payment_typography['underline']:
+            payment_markup = f'<u>{payment_markup}</u>'
         payment_details = [
             _paragraph('PAYMENT DETAILS', payment_heading),
-            Paragraph(_cjk_markup('<br/>'.join(payment_lines)), body),
+            Paragraph(_cjk_markup(payment_markup), payment_style),
         ]
         payment_and_total = Table(
             [[payment_details, summary]],
-            colWidths=[doc.width - 100 * mm, 100 * mm],
+            colWidths=[bottom_column_width, bottom_column_width],
             style=TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -1789,30 +2101,47 @@ def build_finance_pdf(document, company, logo_path=''):
             _paragraph(notes, body),
         ])
     if terms:
+        terms_style = ParagraphStyle(
+            'FinanceTermsCustom',
+            parent=small,
+            fontName=terms_typography['fontName'],
+            fontSize=terms_typography['fontSize'],
+            leading=terms_typography['fontSize'] * 1.25,
+        )
+        terms_html = (
+            sanitise_pdf_rich_text(company.get('defaultTermsHtml'))
+            if terms == _text(company.get('defaultTerms')).strip()
+            else plain_text_to_rich_html(terms)
+        )
+        terms_markup = rich_text_to_reportlab_markup(
+            terms_html, default_family=default_font_family
+        )
+        if terms_typography['underline']:
+            terms_markup = f'<u>{terms_markup}</u>'
         final_page_story.extend([
             _paragraph('TERMS AND CONDITIONS', section_title),
-            _paragraph(terms, small),
+            Paragraph(_cjk_markup(terms_markup), terms_style),
         ])
 
     if document_type != 'invoice' and document.get('showSignOff'):
         signoff_heading = ParagraphStyle(
             'FinanceSignOffHeading',
             parent=body,
-            fontName='Helvetica-Bold',
+            fontName=font_bold,
             fontSize=9.5,
             leading=12,
         )
         signoff_name = ParagraphStyle(
             'FinanceSignOffName',
             parent=body,
-            fontName='Helvetica-Bold',
+            fontName=font_bold,
             fontSize=9,
             leading=11,
         )
         signoff_caption = ParagraphStyle(
             'FinanceSignOffCaption',
             parent=small,
-            fontName='Helvetica-Bold',
+            fontName=font_bold,
             fontSize=7.5,
             leading=9,
             alignment=TA_CENTER,
@@ -1888,6 +2217,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
 
     receipt = receipt if isinstance(receipt, dict) else {}
     company = company if isinstance(company, dict) else {}
+    font_regular, font_bold = pdf_font_names(company)
     buffer = BytesIO()
     width, height = A4
     margin = 18 * mm
@@ -1903,7 +2233,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
     panel = colors.HexColor('#f7f9fb')
     styles = getSampleStyleSheet()
     body = ParagraphStyle(
-        'ReceiptBody', parent=styles['BodyText'], fontName='Helvetica',
+        'ReceiptBody', parent=styles['BodyText'], fontName=font_regular,
         fontSize=9, leading=12, textColor=ink,
     )
     small = ParagraphStyle(
@@ -1911,7 +2241,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
         textColor=muted,
     )
     label = ParagraphStyle(
-        'ReceiptLabel', parent=small, fontName='Helvetica-Bold',
+        'ReceiptLabel', parent=small, fontName=font_bold,
         fontSize=7, leading=9, textColor=muted,
     )
     right = ParagraphStyle('ReceiptRight', parent=body, alignment=TA_RIGHT)
@@ -1938,7 +2268,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
             pass
     header_left.extend([
         Paragraph(escape(company_name), ParagraphStyle(
-            'ReceiptCompany', parent=body, fontName='Helvetica-Bold',
+            'ReceiptCompany', parent=body, fontName=font_bold,
             fontSize=17, leading=20,
         )),
         Paragraph(escape(_text(
@@ -1952,7 +2282,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
     receipt_number = _text(receipt.get('receiptNumber') or 'RECEIPT').strip()
     header_right = [
         Paragraph('PAYMENT RECEIPT', ParagraphStyle(
-            'ReceiptTitle', parent=right, fontName='Helvetica-Bold',
+            'ReceiptTitle', parent=right, fontName=font_bold,
             fontSize=20, leading=23, textColor=accent,
         )),
         Paragraph(escape(receipt_number), right_small),
@@ -1980,7 +2310,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
                     'ReceiptAmountLabel', parent=label, textColor=colors.white,
                 )),
                 Paragraph(_money(receipt.get('amount'), currency), ParagraphStyle(
-                    'ReceiptAmount', parent=body, fontName='Helvetica-Bold',
+                    'ReceiptAmount', parent=body, fontName=font_bold,
                     fontSize=24, leading=28, textColor=colors.white,
                 )),
             ],
@@ -1990,7 +2320,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
                     alignment=TA_RIGHT,
                 )),
                 Paragraph(escape(_date_long(receipt.get('date'))), ParagraphStyle(
-                    'ReceiptDate', parent=right, fontName='Helvetica-Bold',
+                    'ReceiptDate', parent=right, fontName=font_bold,
                     fontSize=11, textColor=colors.white,
                 )),
             ],
@@ -2039,7 +2369,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
     )
     story.extend([
         Paragraph('PAYMENT DETAILS', ParagraphStyle(
-            'ReceiptSectionTitle', parent=body, fontName='Helvetica-Bold',
+            'ReceiptSectionTitle', parent=body, fontName=font_bold,
             fontSize=10, leading=13,
         )),
         Spacer(1, 3 * mm), detail_table, Spacer(1, 12 * mm),
@@ -2055,7 +2385,7 @@ def build_payment_receipt_pdf(receipt, company, logo_path=''):
         canvas.setLineWidth(.6)
         canvas.line(margin, 15 * mm, width - margin, 15 * mm)
         canvas.setFillColor(muted)
-        canvas.setFont('Helvetica', 7)
+        canvas.setFont(font_regular, 7)
         canvas.drawString(margin, 10 * mm, company_name)
         canvas.drawRightString(
             width - margin, 10 * mm, f'Receipt {receipt_number}'

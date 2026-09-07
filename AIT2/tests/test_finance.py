@@ -1497,13 +1497,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(renumbered['revision'], 2)
         self.assertEqual(renumbered['status'], 'draft')
 
-    def test_accounting_page_and_api_are_owner_only(self):
+    def test_accounting_page_supports_company_admin_and_read_only_owner(self):
         page = self.client.get('/accounting')
         self.assertEqual(page.status_code, 302)
         self.assertTrue(page.headers['Location'].endswith('/events'))
         self.assertEqual(self.client.get('/api/finance/accounting').status_code, 403)
 
-        self.login('bnjm2000')
+        self.login('sales-admin')
         page = self.client.get('/accounting')
         self.assertEqual(page.status_code, 200)
         self.assertIn(b'accounting.js', page.data)
@@ -1513,8 +1513,29 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(data['settings']['gstRate'], 9.0)
         self.assertTrue(any(row['code'] == '4000' for row in data['accounts']))
 
-    def test_accounting_balanced_journal_gst_reports_and_reversal(self):
         self.login('bnjm2000')
+        self.assertEqual(self.client.get('/accounting').status_code, 200)
+        owner_workspace = self.client.get('/api/finance/accounting')
+        self.assertEqual(
+            owner_workspace.status_code,
+            200,
+            owner_workspace.get_data(as_text=True),
+        )
+        self.assertEqual(
+            owner_workspace.get_json()['data']['workspace']['permissions'],
+            ['read'],
+        )
+        self.assertNotIn(
+            'bnjm2000',
+            owner_workspace.get_json()['data']['accountingUsers'],
+        )
+        self.assertEqual(
+            self.client.put('/api/finance/accounting/settings', json={}).status_code,
+            403,
+        )
+
+    def test_accounting_balanced_journal_gst_reports_and_reversal(self):
+        self.login('sales-admin')
         settings = self.client.put('/api/finance/accounting/settings', json={
             'gstRegistered': True,
             'gstRegistrationNumber': 'M21234567K',
@@ -1587,7 +1608,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(reversed_data['gst']['box6'], 0)
 
     def test_accounting_source_document_can_only_be_posted_once(self):
-        self.login('bnjm2000')
+        self.login('sales-admin')
         quotation = self.create_quote('Accounting Source')
         quotation['taxRate'] = 9
         quotation['lineItems'] = [{
@@ -1621,7 +1642,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('already been posted', repeated.get_json()['error'])
 
     def test_accounting_bank_import_matching_and_duplicate_detection(self):
-        self.login('bnjm2000')
+        self.login('sales-admin')
         self.client.put('/api/finance/accounting/settings', json={
             'gstRegistered': True,
             'gstRegistrationNumber': 'M21234567K',
@@ -1816,7 +1837,7 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertIsNone(unpaired['eventId'])
 
-    def test_asset_price_survives_rename_and_removed_custom_rate_is_retained(self):
+    def test_asset_price_survives_rename_and_custom_rate_requires_product_opt_in(self):
         quotation = self.create_quote('Price Memory')
         catalog = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
         quotation['lineItems'] = [{
@@ -1853,6 +1874,15 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(renamed['unitPrice'], 321)
         self.assertEqual(renamed['uom'], 'units')
 
+        custom_results = self.client.get(
+            '/api/finance/catalog?query=Speclal'
+        ).get_json()['data']
+        self.assertEqual(custom_results, [])
+        created_product = self.client.post('/api/finance/rate-card', json={
+            **next(row for row in saved['lineItems'] if row['description'] == 'Speclal Operator Typo'),
+            'isCustom': True,
+        })
+        self.assertEqual(created_product.status_code, 200, created_product.get_data(as_text=True))
         custom_results = self.client.get(
             '/api/finance/catalog?query=Speclal'
         ).get_json()['data']
@@ -1978,7 +2008,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(rate_rows[0]['model'], 'SB18 III')
         self.assertEqual(rate_rows[0]['searchTags'], ['low-end', 'wireless'])
 
-    def test_rate_card_lists_remembered_inventory_and_custom_items_by_user(self):
+    def test_products_list_inventory_but_not_unapproved_custom_quotation_items(self):
         quotation = self.create_quote('Rate Card Memory')
         inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
         quotation['lineItems'] = [
@@ -2009,8 +2039,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(inventory_rate['model'], 'SB18 III')
         self.assertEqual(inventory_rate['description'], 'Subwoofer')
         self.assertEqual(inventory_rate['unitPrice'], 444)
-        self.assertEqual(by_description['Special projection operator']['unitPrice'], 325)
-        self.assertEqual(by_description['Special projection operator']['uom'], 'pax')
+        self.assertNotIn('Special projection operator', by_description)
         self.assertEqual(
             rows,
             sorted(rows, key=lambda row: (
@@ -2114,6 +2143,100 @@ class FinanceFeatureTests(unittest.TestCase):
             '/api/finance/rate-card', query_string={'query': 'media server'},
         ).get_json()['data']
         self.assertEqual(searched, [])
+
+    def test_products_are_shared_with_admins_and_sales_but_not_other_users(self):
+        self.login('review-admin')
+        available = self.client.get('/api/finance/products')
+        self.assertEqual(available.status_code, 200, available.get_data(as_text=True))
+        admin_page = self.client.get('/products')
+        self.assertEqual(admin_page.status_code, 200)
+        self.assertIn(
+            'window.__INITIAL_APP_SECTION__ = "products"',
+            admin_page.get_data(as_text=True),
+        )
+        inventory = next(
+            row for row in available.get_json()['data']
+            if row.get('model') == 'SB18 III'
+        )
+        self.assertEqual(inventory['sourceType'], 'inventory')
+        self.assertEqual(inventory['availableQuantity'], 1)
+
+        created = self.client.post('/api/finance/products', json={
+            'description': 'Admin-added consumable',
+            'department': 'General',
+            'unitPrice': 0,
+            'uom': 'units',
+            'isCustom': True,
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        product = next(
+            row for row in created.get_json()['data']
+            if row['description'] == 'Admin-added consumable'
+        )
+        self.assertEqual(product['sourceType'], 'additional')
+        self.assertEqual(product['unitPrice'], 0)
+
+        self.login('alice')
+        self.assertEqual(self.client.get('/products').status_code, 200)
+        shared = self.client.get(
+            '/api/finance/products', query_string={'query': 'Admin-added'},
+        )
+        self.assertEqual(shared.status_code, 200, shared.get_data(as_text=True))
+        self.assertEqual(len(shared.get_json()['data']), 1)
+
+        self.login('no-sales')
+        denied = self.client.get('/api/finance/products')
+        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(self.client.get('/products').status_code, 302)
+
+    def test_product_price_changes_only_apply_to_future_quotation_additions(self):
+        original_product = next(
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('model') == 'SB18 III'
+        )
+        priced = self.client.post('/api/finance/products', json={
+            **original_product,
+            'unitPrice': 100,
+        })
+        self.assertEqual(priced.status_code, 200, priced.get_data(as_text=True))
+
+        quotation = self.create_quote('Existing Product Price')
+        selected = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'SB18'},
+        ).get_json()['data'][0]
+        quotation['lineItems'] = [{
+            **selected,
+            'id': 'saved-product-line',
+            'days': 1,
+            'quantity': 1,
+            'discountPercent': 0,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        saved_line = saved.get_json()['data']['lineItems'][0]
+        self.assertEqual(saved_line['unitPrice'], 100)
+
+        updated = self.client.post('/api/finance/products', json={
+            **original_product,
+            'unitPrice': 175,
+            'productLabel': 'Premium subwoofer package',
+            'uom': 'lot',
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        existing = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(existing['lineItems'][0]['unitPrice'], 100)
+        self.assertEqual(existing['lineItems'][0]['description'], saved_line['description'])
+        self.assertEqual(existing['lineItems'][0]['uom'], saved_line['uom'])
+        future = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Premium subwoofer'},
+        ).get_json()['data'][0]
+        self.assertEqual(future['unitPrice'], 175)
+        self.assertEqual(future['productLabel'], 'Premium subwoofer package')
+        self.assertEqual(future['uom'], 'lot')
 
     def test_rate_card_inventory_price_update_reuses_catalog_row_and_aliases(self):
         quotation = self.create_quote('Rate Card Asset Update')
@@ -2233,7 +2356,7 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(stored['unitPrice'], 480)
 
-    def test_custom_rate_rename_removal_and_explicit_deletion_lifecycle(self):
+    def test_custom_quotation_edits_do_not_create_products(self):
         original = self.create_quote('Original Custom Rate')
         original['lineItems'] = [{
             'id': 'original-custom-line',
@@ -2275,14 +2398,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
 
         rate_rows = self.client.get('/api/finance/rate-card').get_json()['data']
-        original_rate = next(
-            row for row in rate_rows
-            if row['description'] == 'Custom scenic backdrop'
-        )
-        self.assertEqual(original_rate['unitPrice'], 1000)
-        revised = next(row for row in rate_rows if row['description'] == 'Revised scenic backdrop')
-        self.assertEqual((revised['brand'], revised['model']), ('Scenic Works SG', 'Backdrop B'))
-        self.assertEqual(revised['unitPrice'], 1250)
+        self.assertFalse(any(
+            row['description'] in {'Custom scenic backdrop', 'Revised scenic backdrop'}
+            for row in rate_rows
+        ))
 
         unchanged_original = self.client.get(
             f"/api/quotations/{original['id']}"
@@ -2290,11 +2409,11 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(unchanged_original['description'], 'Custom scenic backdrop')
         self.assertEqual(unchanged_original['unitPrice'], 1000)
 
-        renamed_document = renamed.get_json()['data']
-        renamed_document['lineItems'] = []
-        self.client.put(
-            f"/api/quotations/{latest['id']}", json=renamed_document,
-        )
+        added = self.client.post('/api/finance/rate-card', json={
+            **renamed.get_json()['data']['lineItems'][0],
+            'isCustom': True,
+        })
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
         retained = self.client.get(
             '/api/finance/rate-card', query_string={'query': 'Revised scenic'},
         ).get_json()['data']
@@ -2323,7 +2442,7 @@ class FinanceFeatureTests(unittest.TestCase):
             {},
         )
 
-    def test_finance_migration_backfills_latest_existing_quotation_rates(self):
+    def test_finance_migration_does_not_backfill_custom_quotation_products(self):
         data = app_module._finance_defaults()
         data['version'] = app_module.FINANCE_VERSION - 1
         data['documents'] = [
@@ -2364,8 +2483,9 @@ class FinanceFeatureTests(unittest.TestCase):
         ]
 
         self.assertTrue(app_module._migrate_finance_data(data))
-        stored = data['priceBook']['admin::custom:historical custom service']
-        self.assertEqual(stored['unitPrice'], 175)
+        self.assertNotIn(
+            'admin::custom:historical custom service', data['priceBook'],
+        )
         self.assertEqual(data['version'], app_module.FINANCE_VERSION)
 
     def test_finance_migration_and_normalisation_align_special_category_departments(self):
@@ -2689,7 +2809,15 @@ class FinanceFeatureTests(unittest.TestCase):
 
         self.assertNotIn('financeToggleSubprojectView', source)
         self.assertNotIn('financeState.showSubprojects', source)
-        self.assertIn('Show rate card', source)
+        self.assertIn('Browse products', source)
+        self.assertIn('function loadProducts(', source)
+        self.assertIn('function productCatalogToggleSource(', source)
+        self.assertIn('function productCatalogSetCategory(', source)
+        self.assertIn("productCatalogUpdateField(${index},'productLabel'", source)
+        self.assertIn("productCatalogUpdateField(${index},'uom'", source)
+        self.assertIn('aria-label="Product categories"', source)
+        self.assertIn("title: 'Add this as a product?'", source)
+        self.assertIn("title: 'Update the product price?'", source)
         self.assertIn('function financeOpenRateCard()', source)
         self.assertIn('function financeDeleteRateCardItem(index)', source)
         self.assertIn('financeRateCardBrand', source)
@@ -3228,6 +3356,26 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         hidden_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         hidden_reader = PdfReader(io.BytesIO(hidden_pdf))
+
+        def assert_line_table_matches_detail_width(reader):
+            page = next(
+                page for page in reader.pages
+                if 'Audio item ' in (page.extract_text() or '')
+            )
+            wide_rectangle_widths = [
+                float(operands[2])
+                for operands, operator in page.get_contents().operations
+                if operator == b're'
+                and 500 < float(operands[2]) < 550
+            ]
+            self.assertGreaterEqual(len(wide_rectangle_widths), 2)
+            self.assertAlmostEqual(
+                min(wide_rectangle_widths),
+                max(wide_rectangle_widths),
+                places=2,
+            )
+
+        assert_line_table_matches_detail_width(hidden_reader)
         hidden_text = '\n'.join(page.extract_text() or '' for page in hidden_reader.pages)
         hidden_last_page_text = hidden_reader.pages[-1].extract_text() or ''
         self.assertIn('DESCRIPTION', hidden_text)
@@ -3235,6 +3383,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('DISC %', hidden_text)
         self.assertNotIn('$123.45', hidden_text)
         self.assertNotIn('10% department discount', hidden_text)
+        self.assertIn('$14,443.65', hidden_text)
         self.assertLess(hidden_text.index('Edgar Tan'), hidden_text.index('Patricia & Edgar Pte Ltd'))
         self.assertGreaterEqual(len(hidden_reader.pages), 2)
         self.assertIn('Summary', hidden_last_page_text)
@@ -3247,6 +3396,26 @@ class FinanceFeatureTests(unittest.TestCase):
                 self.assertIn('Audio', page_text)
                 self.assertIn('DESCRIPTION', page_text)
                 self.assertNotIn('DEPARTMENT', page_text)
+
+        line_item_page = next(
+            page for page in hidden_reader.pages
+            if 'Audio item ' in (page.extract_text() or '')
+        )
+        header_positions = {}
+
+        def capture_header_position(text, current_matrix, text_matrix, *_args):
+            label = text.strip()
+            if label in {'DESCRIPTION', 'DAY(S)', 'MULT', 'QTY'}:
+                header_positions.setdefault(
+                    label, current_matrix[4] + text_matrix[4]
+                )
+
+        line_item_page.extract_text(visitor_text=capture_header_position)
+        multiplier_label = 'DAY(S)' if 'DAY(S)' in header_positions else 'MULT'
+        self.assertGreater(header_positions['QTY'], 440)
+        self.assertGreater(
+            header_positions[multiplier_label], header_positions['QTY']
+        )
 
         saved['showDepartmentSubtotals'] = False
         saved = self.client.put(
@@ -3275,7 +3444,11 @@ class FinanceFeatureTests(unittest.TestCase):
             json=saved,
         )
         visible_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
-        visible_text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(visible_pdf)).pages)
+        visible_reader = PdfReader(io.BytesIO(visible_pdf))
+        assert_line_table_matches_detail_width(visible_reader)
+        visible_text = '\n'.join(
+            page.extract_text() or '' for page in visible_reader.pages
+        )
         self.assertIn('$123.45', visible_text)
         self.assertIn('10% department discount', visible_text)
 
@@ -3898,6 +4071,123 @@ class FinanceFeatureTests(unittest.TestCase):
             pdf_text,
         )
 
+    def test_pdf_neutral_panels_use_a_faint_company_theme_tint(self):
+        from quotation_pdf import _light_theme_tint, build_finance_pdf
+
+        self.assertEqual(_light_theme_tint('#1D90D7'), '#F1F8FD')
+        pdf = build_finance_pdf({
+            'type': 'quotation',
+            'number': 'QT-TINT-QA',
+            'projectName': 'Theme tint check',
+            'eventLocation': 'Singapore',
+            'quotationDate': '2026-09-07',
+            'setupDate': '2026-10-10',
+            'setupTime': '09:00',
+            'lineItems': [{
+                'id': 'tint-line',
+                'description': 'Audio package',
+                'department': 'Audio',
+                'days': 1,
+                'quantity': 1,
+                'uom': 'lot',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            }],
+            'subprojects': [{'id': 'main', 'name': 'Main Room'}],
+            'showUnitPrices': True,
+            'showDepartmentSubtotals': True,
+            'totals': {
+                'subtotal': 100,
+                'netSubtotal': 100,
+                'grandTotal': 100,
+                'total': 100,
+            },
+        }, {
+            'companyName': 'Showbase QA',
+            'currency': 'SGD',
+            'themeColor': '#1D90D7',
+        })
+        fill_colours = [
+            tuple(float(value) for value in operands)
+            for page in PdfReader(io.BytesIO(pdf)).pages
+            for operands, operator in page.get_contents().operations
+            if operator == b'rg'
+        ]
+        expected = tuple(channel / 255 for channel in (0xF1, 0xF8, 0xFD))
+        tinted_fills = [colour for colour in fill_colours if
+            all(abs(actual - target) < 0.001 for actual, target in zip(colour, expected))
+        ]
+        self.assertGreaterEqual(len(tinted_fills), 4)
+        pdf_source = Path('quotation_pdf.py').read_text(encoding='utf-8')
+        finance_pdf_source = pdf_source.split(
+            'def build_finance_pdf', 1
+        )[1].split('def build_receipt_pdf', 1)[0]
+        self.assertNotIn('#F1F5F9', finance_pdf_source)
+        self.assertNotIn('#F8FAFC', finance_pdf_source)
+
+        positions = {}
+
+        def capture_panel_text(text, current_matrix, text_matrix, *_args):
+            content = text.strip()
+            if content in {
+                'PROJECT', 'Theme tint check', 'LOCATION', 'Singapore',
+                'EVENT SCHEDULE', 'Set-up:',
+            }:
+                positions.setdefault(
+                    content, current_matrix[5] + text_matrix[5]
+                )
+
+        PdfReader(io.BytesIO(pdf)).pages[0].extract_text(
+            visitor_text=capture_panel_text
+        )
+        project_gap = positions['PROJECT'] - positions['Theme tint check']
+        location_gap = positions['LOCATION'] - positions['Singapore']
+        schedule_gap = positions['EVENT SCHEDULE'] - positions['Set-up:']
+        self.assertLessEqual(project_gap, schedule_gap + 3)
+        self.assertLessEqual(location_gap, schedule_gap + 3)
+
+    def test_pdf_bill_to_addressee_is_bold(self):
+        from quotation_pdf import build_finance_pdf
+
+        pdf = build_finance_pdf({
+            'type': 'quotation',
+            'number': 'QT-BILL-TO-QA',
+            'quotationDate': '2026-09-07',
+            'client': {
+                'salutation': 'Mr',
+                'name': 'Wesley',
+                'company': 'Example Client Pte Ltd',
+            },
+            'lineItems': [],
+            'totals': {},
+        }, {
+            'companyName': 'Showbase QA',
+            'currency': 'SGD',
+            'themeColor': '#1D90D7',
+        })
+        rendered_text = {}
+
+        def capture_bill_to_font(text, _cm, _tm, font, font_size):
+            content = text.strip()
+            if content in {'Mr Wesley', 'Example Client Pte Ltd'}:
+                rendered_text[content] = {
+                    'font': str((font or {}).get('/BaseFont') or ''),
+                    'size': font_size,
+                }
+
+        PdfReader(io.BytesIO(pdf)).pages[0].extract_text(
+            visitor_text=capture_bill_to_font
+        )
+        self.assertIn('bold', rendered_text['Mr Wesley']['font'].lower())
+        self.assertNotIn(
+            'bold', rendered_text['Example Client Pte Ltd']['font'].lower()
+        )
+        self.assertGreater(
+            rendered_text['Mr Wesley']['size'],
+            rendered_text['Example Client Pte Ltd']['size'],
+        )
+
     def test_pdf_does_not_insert_blank_page_before_boundary_summary(self):
         from quotation_pdf import build_finance_pdf
 
@@ -3957,7 +4247,8 @@ class FinanceFeatureTests(unittest.TestCase):
         reader = PdfReader(io.BytesIO(build_finance_pdf(saved, company)))
         quotation_text = '\n'.join(page.extract_text() or '' for page in reader.pages)
         self.assertNotIn('PAYMENT DETAILS', quotation_text)
-        self.assertNotIn('UOM', quotation_text)
+        self.assertIn('QTY', quotation_text)
+        self.assertNotIn('QTY / UOM', quotation_text)
         self.assertIn('2 pax', quotation_text)
         invoice_reader = PdfReader(io.BytesIO(build_finance_pdf({
             **saved,
@@ -3969,14 +4260,15 @@ class FinanceFeatureTests(unittest.TestCase):
         invoice_text = '\n'.join(page.extract_text() or '' for page in invoice_reader.pages)
         self.assertIn('PAYMENT DETAILS', invoice_text)
         self.assertIn('601 - 546195 - 001', invoice_text)
-        self.assertNotIn('UOM', invoice_text)
+        self.assertIn('QTY', invoice_text)
+        self.assertNotIn('QTY / UOM', invoice_text)
         self.assertIn('2 pax', invoice_text)
         self.assertIn('PROJECT', quotation_text)
         self.assertIn('EVENT SCHEDULE', quotation_text)
         self.assertIn('Quotation ref', invoice_text)
         self.assertEqual(len(reader.pages), 2)
         self.assertIn('LINE ITEMS', reader.pages[0].extract_text() or '')
-        self.assertIn('Summary', reader.pages[1].extract_text() or '')
+        self.assertIn('Quotation Summary', reader.pages[1].extract_text() or '')
         for page in reader.pages:
             text = page.extract_text() or ''
             self.assertTrue(any(marker in text for marker in (
@@ -4131,6 +4423,80 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Please remit payment by bank transfer', pdf_text)
         self.assertIn('Reference: Use the invoice number', pdf_text)
         self.assertNotIn('123-456-789', pdf_text)
+        self.assertIn('Invoice Summary', pdf_text)
+
+        pdf_source = (
+            Path(__file__).resolve().parents[1] / 'quotation_pdf.py'
+        ).read_text(encoding='utf-8')
+        self.assertIn(
+            'colWidths=[bottom_column_width, bottom_column_width]',
+            pdf_source,
+        )
+
+    def test_company_pdf_typography_round_trips_and_preview_renders(self):
+        self.login('bnjm2000')
+        payload = {
+            'fontFamily': 'Georgia',
+            'letterheadText': 'Typography Preview Company',
+            'letterheadHtml': (
+                '<div><strong>Typography</strong> Preview '
+                '<span style="font-family:Arial;font-size:14pt;color:#cc1122">'
+                '<u>Company</u></span></div>'
+            ),
+            'footerText': 'Confidential footer',
+            'footerHtml': '<div><em>Confidential</em> footer</div>',
+            'defaultTerms': 'Preview terms and conditions.',
+            'defaultTermsHtml': (
+                '<div>Preview <span style="color:#334455">terms</span> '
+                'and conditions.</div>'
+            ),
+            'paymentDetailsText': 'Pay by bank transfer.',
+            'paymentDetailsHtml': (
+                '<div>Pay by <strong>bank transfer</strong>.</div>'
+            ),
+            'letterheadTypography': {
+                'fontFamily': 'Arial', 'fontSize': 14,
+                'bold': True, 'italic': False, 'underline': True,
+            },
+            'footerTypography': {
+                'fontFamily': 'Georgia', 'fontSize': 8,
+                'bold': False, 'italic': True, 'underline': False,
+            },
+            'termsTypography': {
+                'fontFamily': 'Times New Roman', 'fontSize': 10,
+                'bold': False, 'italic': False, 'underline': True,
+            },
+            'paymentDetailsTypography': {
+                'fontFamily': 'Verdana', 'fontSize': 9,
+                'bold': True, 'italic': False, 'underline': False,
+            },
+        }
+        with patch.object(app_module, '_mark_company_branding_setup_complete'):
+            response = self.client.put('/api/pdf-settings', json=payload)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(saved['fontFamily'], 'Georgia')
+        self.assertEqual(saved['letterheadTypography']['fontSize'], 14)
+        self.assertTrue(saved['letterheadTypography']['bold'])
+        self.assertTrue(saved['letterheadTypography']['underline'])
+        self.assertEqual(saved['letterheadText'], 'Typography Preview Company')
+        self.assertIn('<strong>Typography</strong> Preview', saved['letterheadHtml'])
+        self.assertIn('font-family:Arial;font-size:14pt;color:#cc1122', saved['letterheadHtml'])
+        self.assertEqual(saved['footerHtml'], '<div><em>Confidential</em> footer</div>')
+        self.assertIn('color:#334455', saved['defaultTermsHtml'])
+        self.assertIn('<strong>bank transfer</strong>', saved['paymentDetailsHtml'])
+
+        preview = self.client.post('/api/pdf-settings/preview', json=payload)
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.mimetype, 'application/pdf')
+        self.assertGreater(len(preview.data), 1000)
+        preview_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(preview.data)).pages
+        )
+        self.assertIn('Typography Preview Company', preview_text)
+        self.assertIn('Preview terms and conditions.', preview_text)
+        self.assertIn('Pay by bank transfer.', preview_text)
 
         app_source = APP_BUNDLE_SOURCE
         self.assertIn('function defaultCompanyPaymentDetailsText', app_source)
@@ -4580,6 +4946,15 @@ class FinanceFeatureTests(unittest.TestCase):
         rows = {row['username']: row for row in suggestions.get_json()['data']}
         self.assertEqual(rows['alice']['name'], 'Alice Lim')
         self.assertEqual(rows['alice']['phone'], '+65 9123 4567')
+        self.assertNotIn('bnjm2000', rows)
+
+        self.login('bnjm2000')
+        owner_rows = {
+            row['username']
+            for row in self.client.get('/api/finance/salespeople').get_json()['data']
+        }
+        self.assertIn('bnjm2000', owner_rows)
+        self.login('alice')
 
         quotation = self.create_quote('Custom Salesperson')
         saved = self.client.put(f"/api/quotations/{quotation['id']}", json={
@@ -4601,6 +4976,184 @@ class FinanceFeatureTests(unittest.TestCase):
         reloaded = DataManager(self.tempdir.name)
         reloaded.load_clients()
         self.assertEqual(reloaded.clients['Jane Tan'].salutation, 'Mrs.')
+
+    def test_client_directory_requires_admin_or_sales_access(self):
+        self.login('no-sales')
+        self.assertEqual(self.client.get('/api/clients').status_code, 403)
+        self.assertEqual(
+            self.client.post('/api/clients', json={'name': 'Blocked Client'}).status_code,
+            403,
+        )
+        denied_page = self.client.get('/clients')
+        self.assertEqual(denied_page.status_code, 302)
+        self.assertTrue(denied_page.headers['Location'].endswith('/events'))
+
+        self.login('manager-no-sales')
+        self.assertEqual(self.client.get('/api/clients').status_code, 403)
+        self.assertEqual(self.client.get('/clients').status_code, 302)
+
+        self.login('review-admin')
+        self.assertEqual(self.client.get('/api/clients').status_code, 200)
+        admin_page = self.client.get('/clients')
+        self.assertEqual(admin_page.status_code, 200)
+        self.assertIn(
+            'window.__INITIAL_APP_SECTION__ = "clients"',
+            admin_page.get_data(as_text=True),
+        )
+
+        self.login('sales-manager')
+        self.assertEqual(self.client.get('/api/clients').status_code, 200)
+        self.assertEqual(self.client.get('/clients').status_code, 200)
+
+    def test_client_directory_edits_every_field_and_supports_renaming(self):
+        created = self.client.post('/api/clients', json={
+            'salutation': 'Mr.',
+            'name': 'Original Client',
+            'company': 'Original Company',
+            'contactPerson': 'Original Contact',
+            'email': 'original@example.com',
+            'phone': '+65 6123 4567',
+            'taxNumber': 'TAX-OLD',
+            'address1': '1 Old Street',
+            'address2': 'Level 1',
+            'address3': 'Old District',
+            'postalCode': '111111',
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+
+        updated = self.client.put('/api/clients/Original%20Client', json={
+            'salutation': 'Ms.',
+            'name': 'Renamed Client',
+            'company': 'Renamed Company',
+            'contactPerson': 'New Contact',
+            'email': 'new@example.com',
+            'phone': '+65 6987 6543',
+            'taxNumber': 'TAX-NEW',
+            'address1': '2 New Street',
+            'address2': 'Level 9',
+            'address3': 'New District',
+            'postalCode': '999999',
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        payload = updated.get_json()['data']
+        self.assertEqual(payload, {
+            'salutation': 'Ms.',
+            'name': 'Renamed Client',
+            'company': 'Renamed Company',
+            'contactPerson': 'New Contact',
+            'email': 'new@example.com',
+            'phone': '+65 6987 6543',
+            'taxNumber': 'TAX-NEW',
+            'address1': '2 New Street',
+            'address2': 'Level 9',
+            'address3': 'New District',
+            'postalCode': '999999',
+        })
+        self.assertNotIn('Original Client', self.data_manager.clients)
+        self.assertIn('Renamed Client', self.data_manager.clients)
+        matched = self.client.get('/api/clients?query=new%20district').get_json()['data']
+        self.assertEqual([row['name'] for row in matched], ['Renamed Client'])
+
+    def test_client_directory_rejects_duplicate_names(self):
+        self.assertEqual(
+            self.client.post('/api/clients', json={'name': 'Existing Client'}).status_code,
+            200,
+        )
+        duplicate = self.client.post('/api/clients', json={'name': 'existing client'})
+        self.assertEqual(duplicate.status_code, 409)
+
+        self.assertEqual(
+            self.client.post('/api/clients', json={'name': 'Another Client'}).status_code,
+            200,
+        )
+        renamed = self.client.put(
+            '/api/clients/Another%20Client',
+            json={'name': 'Existing Client'},
+        )
+        self.assertEqual(renamed.status_code, 409)
+
+    def test_deleting_client_hides_suggestions_without_changing_existing_documents(self):
+        quotation = self.create_quote('Retained Client Details')
+        quotation['client'] = {
+            'salutation': 'Mrs.',
+            'name': 'Archived Directory Client',
+            'company': 'Snapshot Company',
+            'contactPerson': 'Jamie Snapshot',
+            'email': 'snapshot@example.com',
+            'phone': '+65 6123 4567',
+            'taxNumber': 'SNAP-123',
+            'address1': '10 Snapshot Street',
+            'address2': 'Level 5',
+            'address3': 'Central',
+            'postalCode': '123456',
+        }
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        embedded_client = copy.deepcopy(saved['client'])
+
+        deleted = self.client.delete('/api/clients/Archived%20Directory%20Client')
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertFalse(
+            self.data_manager.clients['Archived Directory Client'].is_active,
+        )
+        self.assertNotIn(
+            'Archived Directory Client',
+            [row['name'] for row in self.client.get('/api/clients').get_json()['data']],
+        )
+        self.assertEqual(
+            self.client.get('/api/clients/Archived%20Directory%20Client').status_code,
+            404,
+        )
+
+        existing = self.client.get(f"/api/quotations/{quotation['id']}")
+        self.assertEqual(existing.get_json()['data']['client'], embedded_client)
+
+        # Routine edits retain the embedded details without restoring a client
+        # that was intentionally removed from the directory.
+        existing_document = existing.get_json()['data']
+        existing_document['notes'] = 'Client details remain on this document.'
+        resaved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=existing_document,
+        )
+        self.assertEqual(resaved.status_code, 200, resaved.get_data(as_text=True))
+        self.assertEqual(resaved.get_json()['data']['client'], embedded_client)
+        self.assertNotIn(
+            'Archived Directory Client',
+            [row['name'] for row in self.client.get('/api/clients').get_json()['data']],
+        )
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_clients()
+        self.assertFalse(reloaded.clients['Archived Directory Client'].is_active)
+
+        restored = self.client.post('/api/clients', json={
+            **embedded_client,
+            'company': 'Restored Company',
+        })
+        self.assertEqual(restored.status_code, 200, restored.get_data(as_text=True))
+        self.assertEqual(restored.get_json()['data']['company'], 'Restored Company')
+        self.assertTrue(self.data_manager.clients['Archived Directory Client'].is_active)
+
+    def test_client_directory_ui_is_wired_into_finance_navigation(self):
+        project_root = Path(__file__).resolve().parents[1]
+        finance_source = (project_root / 'static' / 'js' / 'finance.js').read_text(encoding='utf-8')
+        app_source = (project_root / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('data-section="clients"', finance_source)
+        self.assertIn("['clients-section'", finance_source)
+        self.assertIn('function loadClientsPage(', finance_source)
+        self.assertIn('function clientDirectoryDelete(', finance_source)
+        self.assertIn('will no longer appear in client suggestions', finance_source)
+        for field in (
+            'name="salutation"', 'name="name"', 'name="company"',
+            'name="contactPerson"', 'name="email"', 'name="phone"',
+            'name="taxNumber"', 'name="address1"', 'name="address2"',
+            'name="address3"', 'name="postalCode"',
+        ):
+            self.assertIn(field, finance_source)
+        self.assertIn("clients: '/clients'", app_source)
+        self.assertIn("sectionName === 'clients' && !canCurrentUserAccessClients()", app_source)
+        self.assertIn("a3.value = rec.postalCode || rec.address3 || ''", app_source)
 
     def test_saved_client_address_lines_can_be_cleared(self):
         created = self.client.post('/api/clients', json={
@@ -5148,6 +5701,12 @@ class FinanceFeatureTests(unittest.TestCase):
                 'department': 'AX', 'serviceName': 'Audio system service',
                 'serviceCost': 250, 'days': 1,
             },
+            {
+                'id': 'vendor-manpower-row', 'vendorId': 'vendor-profit',
+                'subjectType': 'vendor', 'providerType': 'manpower',
+                'department': 'LX', 'roleName': 'Lighting crew',
+                'pax': 1, 'ratePerPax': 50, 'days': 1,
+            },
         ]}
         workforce['submissions'] = {'139': {
             'worker-profit': {'invoices': [{
@@ -5157,6 +5716,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'vendor-profit': {'invoices': [{
                 'id': 'vendor-invoice-profit', 'amount': 275,
                 'status': 'Approved',
+                'allocations': [{'department': 'AX', 'amount': 275}],
             }], 'claims': []},
         }}
         save_workforce(app_module._workforce_folder(), workforce)
@@ -5200,7 +5760,58 @@ class FinanceFeatureTests(unittest.TestCase):
             if row.get('sourceId') == 'vendor-invoice-profit'
         )
         self.assertEqual(vendor_invoice['categoryKey'], 'vendor-service')
+        self.assertEqual(vendor_invoice['category'], 'Vendor service')
         self.assertEqual(vendor_invoice['categoryLabel'], 'Crew & Vendors')
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn("category = 'Service';", finance_source)
+
+    def test_profit_loss_expenses_sort_by_source_department_and_name(self):
+        rows = [
+            {
+                'id': 'invoice-z', 'source': 'worker-invoice',
+                'department': 'LX', 'vendor': 'Zulu Vendor',
+            },
+            {
+                'id': 'claim-z', 'source': 'worker-claim',
+                'department': 'LX', 'vendor': 'Zulu Worker',
+            },
+            {
+                'id': 'added-z', 'source': 'manual',
+                'department': 'LX', 'vendor': 'Zulu Supplier',
+            },
+            {
+                'id': 'claim-audio-z', 'source': 'worker-claim',
+                'department': 'AX', 'vendor': 'Zulu Worker',
+            },
+            {
+                'id': 'claim-audio-a', 'source': 'worker-claim',
+                'department': 'AX', 'vendor': 'Alpha Worker',
+            },
+            {
+                'id': 'added-a', 'source': 'manual',
+                'department': 'AX', 'vendor': 'Alpha Supplier',
+            },
+            {
+                'id': 'invoice-a', 'source': 'worker-invoice',
+                'department': 'AX', 'vendor': 'Alpha Vendor',
+            },
+        ]
+
+        rows.sort(key=app_module._finance_profit_loss_expense_sort_key)
+
+        self.assertEqual(
+            [row['id'] for row in rows],
+            [
+                'added-a', 'added-z',
+                'claim-audio-a', 'claim-audio-z', 'claim-z',
+                'invoice-a', 'invoice-z',
+            ],
+        )
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn(
+            '.slice().sort(profitLossCompareExpenses)',
+            finance_source,
+        )
 
     def test_profit_loss_groups_worker_claims_under_crew_and_vendors(self):
         self.login('sales-admin')
@@ -6974,6 +7585,126 @@ class FinanceFeatureTests(unittest.TestCase):
 
         self.assertNotIn('MAIN ROOM', text)
         self.assertIn('Audio', text)
+
+    def test_quotation_custom_headers_persist_without_affecting_totals_and_export(self):
+        quotation = self.create_quote('Mixed case headers')
+        quotation['lineItems'] = [
+            {
+                'id': 'audio-console', 'description': 'Audio console',
+                'department': 'Audio Department', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+                'discountPercent': 0, 'subprojectId': 'main',
+            },
+            {
+                'id': 'audio-mics', 'description': 'Wireless microphones',
+                'department': 'Audio Department', 'departmentCode': 'AX',
+                'days': 1, 'quantity': 2, 'uom': 'units', 'unitPrice': 50,
+                'discountPercent': 0, 'subprojectId': 'main',
+            },
+        ]
+        quotation['headerRows'] = [
+            {
+                'id': 'header-intro',
+                'content': 'Phase 1 overview\nAudio setup',
+                'beforeLineId': 'audio-console',
+                'subprojectId': 'main',
+            },
+            {
+                'id': 'header-mics',
+                'content': 'Microphone package 2',
+                'beforeLineId': 'audio-mics',
+                'subprojectId': 'main',
+            },
+        ]
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+
+        self.assertEqual(saved['headerRows'], quotation['headerRows'])
+        self.assertEqual(saved['totals']['subtotal'], 200)
+        exported = self.client.get(f"/api/quotations/{saved['id']}/pdf").data
+        pdf_text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(exported)).pages
+        )
+        self.assertIn('Phase 1 overview', pdf_text)
+        self.assertIn('Audio setup', pdf_text)
+        self.assertIn('Microphone package 2', pdf_text)
+        self.assertLess(pdf_text.index('Phase 1 overview'), pdf_text.index('Audio console'))
+        self.assertLess(pdf_text.index('Audio console'), pdf_text.index('Microphone package 2'))
+        self.assertLess(pdf_text.index('Microphone package 2'), pdf_text.index('Wireless microphones'))
+
+    def test_revision_line_id_relink_keeps_custom_header_anchor(self):
+        snapshot_line = {
+            'id': 'snapshot-line', 'description': 'Console',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'quantity': 1, 'uom': 'units',
+        }
+        canonical_line = {**snapshot_line, 'id': 'canonical-line'}
+        request_data = {
+            'lineItems': [copy.deepcopy(snapshot_line)],
+            'headerRows': [{
+                'id': 'header-one', 'content': 'Audio package',
+                'beforeLineId': 'snapshot-line', 'subprojectId': 'main',
+            }],
+        }
+
+        relinked = app_module._finance_relink_revision_line_ids(
+            request_data,
+            {'snapshot': {'lineItems': [snapshot_line]}},
+            {'lineItems': [canonical_line]},
+        )
+
+        self.assertEqual(relinked['lineItems'][0]['id'], 'canonical-line')
+        self.assertEqual(
+            relinked['headerRows'][0]['beforeLineId'], 'canonical-line'
+        )
+
+    def test_quotation_ui_supports_editable_draggable_full_width_headers(self):
+        js_source = Path('static/js/finance.js').read_text(encoding='utf-8').lower()
+        css_source = Path('static/css/finance.css').read_text(encoding='utf-8').lower()
+
+        self.assertIn('onclick="financeaddheader()">+ header</button>', js_source)
+        self.assertIn('function financedragheaderstart', js_source)
+        self.assertIn('function financeheaderanchorforlinedrop', js_source)
+        self.assertIn('class="finance-quotation-header-input"', js_source)
+        self.assertIn('colspan="10"', js_source)
+        self.assertIn('.finance-quotation-header-input', css_source)
+        self.assertIn('text-align: center;', css_source)
+        self.assertIn('text-transform: none;', css_source)
+
+    def test_quotation_line_columns_align_and_show_quantity_before_multiplier(self):
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        css_source = Path('static/css/finance.css').read_text(encoding='utf-8')
+        header_source = source.split(
+            'function financeCategoryColumnHeader(department) {', 1
+        )[1].split('function financeGroupDisplayBuckets', 1)[0]
+        line_source = source.split(
+            'const itemControl = `<input class="finance-line-input"', 1
+        )[1].split('const categoryHeader =', 1)[0]
+
+        self.assertLess(header_source.index('>Qty</td>'), header_source.index('>UOM</td>'))
+        self.assertLess(
+            header_source.index('>UOM</td>'),
+            header_source.index('financeCategoryMultiplierHeaderLabel(department)'),
+        )
+        self.assertLess(
+            line_source.index('aria-label="Quantity"'),
+            line_source.index('financeUomControl(line, index)'),
+        )
+        self.assertLess(
+            line_source.index('financeUomControl(line, index)'),
+            line_source.index('aria-label="Days"'),
+        )
+        self.assertIn('.finance-col-uom', css_source)
+        self.assertIn('.finance-col-multiplier', css_source)
+        price_alignment = css_source.split(
+            '.finance-line-unit-price-input input,', 1
+        )[1].split('}', 1)[0]
+        self.assertIn('text-align: right;', price_alignment)
 
     def test_quotation_ui_has_no_native_selects(self):
         path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js')

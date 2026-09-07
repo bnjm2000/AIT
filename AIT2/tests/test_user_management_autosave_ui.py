@@ -68,3 +68,34 @@ def test_manager_user_controls_are_limited_by_target_role():
     assert "currentUserRole() === 'manager' && ['manager', 'user'].includes(targetRole)" in script
     assert 'const canEditUser = canCurrentUserManageUser(user);' in user_management
     assert '${canCurrentUserManageUsers() ? `' in script
+
+
+def test_user_management_uses_clickable_status_and_sales_badges():
+    _, user_management = user_management_script()
+
+    assert "function userAdminBadgeToggleMarkup" in APP_BUNDLE_SOURCE
+    assert "user-admin-badge-toggle-active" in APP_BUNDLE_SOURCE
+    assert "user-admin-badge-toggle-sales" in APP_BUNDLE_SOURCE
+    assert "user-admin-state-badge-on" in APP_BUNDLE_SOURCE
+    assert "user-admin-state-badge-off" in APP_BUNDLE_SOURCE
+    assert "text-decoration: line-through" in APP_BUNDLE_SOURCE
+    assert "user-admin-switch-compact" not in user_management
+
+
+def test_user_management_shows_telegram_link_below_username():
+    _, user_management = user_management_script()
+
+    assert "function userTelegramBadgeMarkup" in APP_BUNDLE_SOURCE
+    assert "Telegram not linked" in APP_BUNDLE_SOURCE
+    assert "userTelegramBadgeMarkup(user)" in user_management
+    assert "userActiveBadgeMarkup" not in APP_BUNDLE_SOURCE
+
+
+def test_user_management_role_control_uses_role_palette():
+    _, user_management = user_management_script()
+
+    assert "user-admin-role-select-${role}" in user_management
+    assert "syncUserAdminRoleColour(row)" in user_management
+    assert ".user-admin-role-select + .sb-select-button" in APP_BUNDLE_SOURCE
+    for role in ("owner", "admin", "manager", "user"):
+        assert f"user-admin-role-select-{role}" in APP_BUNDLE_SOURCE

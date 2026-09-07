@@ -695,9 +695,9 @@ def run_recurring(store, value, actor):
     return result
 
 
-def workspace_payload(store, actor, owner=False):
+def workspace_payload(store, actor, owner=False, role=None):
     from services.accounting_reports import CATALOG
-    role = role_for(store, actor, owner)
+    role = role_for(store, actor, owner) if role is None else role
     documents = [dict(d, outstanding=outstanding(store, d), carryingValue=carrying_value(store, d))
                  for d in store['documents']]
     stock = [dict(i, quantity=stock_position(store, i['id'])[0], value=stock_position(store, i['id'])[1])

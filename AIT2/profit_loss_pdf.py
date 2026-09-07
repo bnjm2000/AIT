@@ -4,6 +4,13 @@ from datetime import datetime
 from io import BytesIO
 import os
 
+from pdf_fonts import (
+    draw_pdf_canvas_text,
+    pdf_font_names,
+    pdf_text_typography,
+    pdf_text_typography_is_custom,
+)
+from pdf_rich_text import draw_pdf_rich_text
 from quotation_pdf import _canvas_font, _paragraph, _safe_hex, _text
 
 
@@ -130,7 +137,7 @@ def _expense_category(expense):
         or 'Other expense'
     )
     if category_key == 'vendor-service':
-        category = 'Vendor'
+        category = 'Service'
     elif (
         source == 'worker-invoice'
         or (source == 'worker-claim' and category_key in {'meal', 'transport'})
@@ -141,6 +148,25 @@ def _expense_category(expense):
         category = 'Transport'
     department = str(expense.get('department') or '').strip()
     return f'{category} - {department}' if department else category
+
+
+def _expense_sort_key(expense):
+    source_rank = {
+        'manual': 0,
+        'worker-claim': 1,
+        'worker-invoice': 2,
+    }.get(str(expense.get('source') or 'manual').strip().lower(), 3)
+    return (
+        source_rank,
+        str(expense.get('department') or '').strip().casefold(),
+        str(
+            expense.get('vendor')
+            or expense.get('description')
+            or ''
+        ).strip().casefold(),
+        str(expense.get('description') or '').strip().casefold(),
+        str(expense.get('id') or '').casefold(),
+    )
 
 
 def _expense_category_colour(payload, expense):
@@ -187,6 +213,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         TableStyle,
     )
 
+    font_regular, font_bold = pdf_font_names(company)
     buffer = BytesIO()
     page_width, page_height = landscape(A4)
     margin = 11 * mm
@@ -219,7 +246,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     orange = colors.HexColor('#B56A00')
 
     body = ParagraphStyle(
-        'PnlBody', parent=styles['BodyText'], fontName='Helvetica',
+        'PnlBody', parent=styles['BodyText'], fontName=font_regular,
         fontSize=7, leading=8.5, textColor=ink,
     )
     small = ParagraphStyle(
@@ -229,39 +256,39 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         'PnlTiny', parent=body, fontSize=5.4, leading=6.5, textColor=muted,
     )
     title_style = ParagraphStyle(
-        'PnlTitle', parent=body, fontName='Helvetica-Bold',
+        'PnlTitle', parent=body, fontName=font_bold,
         fontSize=18, leading=21, textColor=ink,
     )
     project_style = ParagraphStyle(
-        'PnlProject', parent=body, fontName='Helvetica-Bold',
+        'PnlProject', parent=body, fontName=font_bold,
         fontSize=12, leading=14, textColor=ink, alignment=TA_RIGHT,
     )
     section_style = ParagraphStyle(
-        'PnlSection', parent=body, fontName='Helvetica-Bold',
+        'PnlSection', parent=body, fontName=font_bold,
         fontSize=9, leading=11, textColor=ink, spaceBefore=2, spaceAfter=4,
     )
     label_style = ParagraphStyle(
-        'PnlLabel', parent=small, fontName='Helvetica-Bold', textColor=muted,
+        'PnlLabel', parent=small, fontName=font_bold, textColor=muted,
     )
     value_style = ParagraphStyle(
-        'PnlValue', parent=body, fontName='Helvetica-Bold',
+        'PnlValue', parent=body, fontName=font_bold,
     )
     table_header = ParagraphStyle(
-        'PnlTableHeader', parent=tiny, fontName='Helvetica-Bold',
+        'PnlTableHeader', parent=tiny, fontName=font_bold,
         textColor=colors.white, alignment=TA_CENTER,
     )
     table_left = ParagraphStyle('PnlTableLeft', parent=small, alignment=TA_LEFT)
     table_left_bold = ParagraphStyle(
-        'PnlTableLeftBold', parent=table_left, fontName='Helvetica-Bold',
+        'PnlTableLeftBold', parent=table_left, fontName=font_bold,
     )
     table_left_inverse = ParagraphStyle(
         'PnlTableLeftInverse', parent=table_left,
-        fontName='Helvetica-Bold', textColor=colors.white,
+        fontName=font_bold, textColor=colors.white,
     )
     table_center = ParagraphStyle('PnlTableCenter', parent=small, alignment=TA_CENTER)
     table_right = ParagraphStyle('PnlTableRight', parent=small, alignment=TA_RIGHT)
     table_right_bold = ParagraphStyle(
-        'PnlTableRightBold', parent=table_right, fontName='Helvetica-Bold',
+        'PnlTableRightBold', parent=table_right, fontName=font_bold,
     )
 
     company_name = _text(company.get('companyName')).strip()
@@ -285,6 +312,13 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     ]
     footer_text = _text(company.get('footerText')).replace('\n', ' | ').strip()
     letterhead_enabled = bool(company.get('letterheadEnabled', True))
+    letterhead_title_typography = pdf_text_typography(company, 'letterhead', 14)
+    letterhead_logo_typography = pdf_text_typography(company, 'letterhead', 8.5)
+    letterhead_detail_typography = pdf_text_typography(company, 'letterhead', 5.8)
+    footer_typography = pdf_text_typography(company, 'footer', 5.8)
+    letterhead_customised = pdf_text_typography_is_custom(company, 'letterhead')
+    letterhead_html = company.get('letterheadHtml') or ''
+    footer_html = company.get('footerHtml') or ''
 
     def draw_page(canvas, _pdf_doc):
         canvas.saveState()
@@ -304,28 +338,51 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn and company_name:
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (115 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                115 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get('fontFamily'), default_size=5.8,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
+            )
+        elif letterhead_enabled and not logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 14)
-            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
-        if letterhead_enabled and company_name and logo_drawn:
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, margin, page_height - 13 * mm, letterhead_title_typography, max_chars=48)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+        if letterhead_enabled and not letterhead_html and company_name and logo_drawn:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 8.5)
-            canvas.drawRightString(page_width - margin, page_height - 8 * mm, company_name[:80])
-        if letterhead_enabled:
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, page_width - margin, page_height - 8 * mm, letterhead_logo_typography, align='right', max_chars=80)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 8.5)
+                canvas.drawRightString(page_width - margin, page_height - 8 * mm, company_name[:80])
+        if letterhead_enabled and not letterhead_html:
             canvas.setFillColor(muted)
             y = page_height - 11 * mm
             for line in company_details[:3]:
-                canvas.setFont(_canvas_font(line, 'Helvetica'), 5.8)
-                canvas.drawRightString(page_width - margin, y, line[:140])
+                if letterhead_customised:
+                    draw_pdf_canvas_text(canvas, line, page_width - margin, y, letterhead_detail_typography, align='right', max_chars=140)
+                else:
+                    canvas.setFont(_canvas_font(line, font_regular), 5.8)
+                    canvas.drawRightString(page_width - margin, y, line[:140])
                 y -= 2.7 * mm
         canvas.setStrokeColor(rule)
         canvas.setLineWidth(0.5)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or (company_lines[0] if company_lines else '')
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_line, 'Helvetica'), 5.8)
-        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 30 * mm,
+                default_family=company.get('fontFamily'), default_size=5.8, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_line, margin, 7.5 * mm, footer_typography, max_chars=165)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -343,7 +400,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
                 self.__dict__.update(state)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont('Helvetica', 5.8)
+                self.setFont(font_regular, 5.8)
                 self.drawRightString(
                     page_width - margin, 7.5 * mm,
                     f'Page {page_number} of {page_count}',
@@ -382,10 +439,10 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
             canvas.setFillColor(colors.white)
             canvas.circle(centre_x, centre_y, radius * 0.57, stroke=0, fill=1)
             canvas.setFillColor(ink)
-            canvas.setFont('Helvetica-Bold', 9)
+            canvas.setFont(font_bold, 9)
             canvas.drawCentredString(centre_x, centre_y + 1.2 * mm, _money(total))
             canvas.setFillColor(muted)
-            canvas.setFont('Helvetica', 5.5)
+            canvas.setFont(font_regular, 5.5)
             canvas.drawCentredString(centre_x, centre_y - 2.5 * mm, 'costs + net profit')
 
     generated_at = datetime.now().strftime('%d %B %Y, %H:%Mhrs')
@@ -706,10 +763,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         ])
 
     expenses = [row for row in payload.get('expenses') or [] if isinstance(row, dict)]
-    expenses.sort(
-        key=lambda row: str(row.get('expenseDate') or row.get('createdAt') or ''),
-        reverse=True,
-    )
+    expenses.sort(key=_expense_sort_key)
     expense_rows = [[
         _paragraph(value, table_header)
         for value in (

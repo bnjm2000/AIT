@@ -9,6 +9,52 @@ function packingListAssetQuantity(asset) {
   return Math.max(1, packingListQuantity(asset?.quantity || 1));
 }
 
+function packingListExtraPreparedQuantity(group) {
+  if (!group) return 0;
+  if (typeof group.extraPreparedEverQuantity !== 'undefined') {
+    return packingListQuantity(group.extraPreparedEverQuantity);
+  }
+  const required = packingListQuantity(group.requiredQuantity);
+  const preparedEver = packingListQuantity(
+    typeof group.preparedEverQuantity !== 'undefined'
+      ? group.preparedEverQuantity
+      : group.assignedQuantity
+  );
+  const countablePreparedEver = packingListQuantity(
+    group.countablePreparedEverQuantity
+  );
+  const credited = required > 0
+    ? Math.min(required, countablePreparedEver)
+    : 0;
+  return Math.max(
+    packingListQuantity(group.extraPreparedQuantity),
+    preparedEver - credited,
+    0
+  );
+}
+
+function packingListExtraPreparedTotal(event, modelGroups, extras, useEventTotal = false) {
+  if (useEventTotal && typeof event?.totalExtraPrepared !== 'undefined') {
+    return packingListQuantity(event.totalExtraPrepared);
+  }
+  const groups = modelGroups || [];
+  const groupedExtraIds = new Set(groups.flatMap(group => (
+    (group.assignedAssets || [])
+      .filter(asset => asset?.isExtra && asset?.id)
+      .map(asset => String(asset.id))
+  )));
+  const groupedTotal = groups.reduce(
+    (sum, group) => sum + packingListExtraPreparedQuantity(group),
+    0
+  );
+  const standaloneTotal = (extras || []).reduce((sum, asset) => (
+    groupedExtraIds.has(String(asset?.id || ''))
+      ? sum
+      : sum + packingListAssetQuantity(asset)
+  ), 0);
+  return groupedTotal + standaloneTotal;
+}
+
 function packingListDateRange(event) {
   if (!event?.startDate) return '-';
   return event.startDate === event.endDate
@@ -80,7 +126,8 @@ function buildPackingListSnapshot(event) {
     });
   });
 
-  const modelGroups = Object.values(event?.modelGroups || {})
+  const allModelGroups = Object.values(event?.modelGroups || {});
+  const modelGroups = allModelGroups
     .filter(group => packingListQuantity(group.requiredQuantity) > 0)
     .sort((a, b) => {
       const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
@@ -129,6 +176,7 @@ function buildPackingListSnapshot(event) {
       required,
       packed,
       returned,
+      extraPrepared: packingListExtraPreparedQuantity(group),
       pending: Math.max(0, required - packed - returned),
       assets: assignedAssets
     };
@@ -269,28 +317,36 @@ function buildPackingListSnapshot(event) {
   });
 
   const required = packingListQuantity(event?.totalAssets);
-  const packed = packingListQuantity(event?.totalPrepared);
+  const prepared = packingListQuantity(event?.totalPrepared);
   const returned = packingListQuantity(event?.totalReturned);
+  const packed = rows.reduce((sum, row) => sum + packingListQuantity(row.packed), 0);
+  const extraRecords = Array.from(extras.values()).sort((a, b) => {
+    const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+      inventoryDepartmentLabel(b.department),
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+    return deptCompare || a.label.localeCompare(b.label, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  });
 
   return {
     rows,
-    extras: Array.from(extras.values()).sort((a, b) => {
-      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
-        inventoryDepartmentLabel(b.department),
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-      return deptCompare || a.label.localeCompare(b.label, undefined, {
-        numeric: true,
-        sensitivity: 'base'
-      });
-    }),
+    extras: extraRecords,
     totals: {
       required,
+      prepared,
       packed,
-      pending: Math.max(0, required - packed - returned),
+      pending: Math.max(0, required - prepared),
       returned,
-      extras: packingListQuantity(event?.totalExtraAssets)
+      extras: packingListExtraPreparedTotal(
+        event,
+        allModelGroups,
+        extraRecords,
+        true
+      )
     }
   };
 }
@@ -317,6 +373,13 @@ function packingListSubprojectAssetRecord(reference, item, event, assetsById) {
 function buildPackingListSubprojectSnapshot(event, subproject, extraReferences = null) {
   const rows = [];
   const assetsById = packingListAssetsById(event);
+  const scopedModelGroups = eventSubprojectModelGroups(event, {
+    activeSubprojectId: String(subproject?.id || '')
+  });
+  const extraPreparedByGroup = new Map(scopedModelGroups.map(group => [
+    eventSubprojectGroupKey(group),
+    packingListExtraPreparedQuantity(group)
+  ]));
   const items = (subproject?.items || []).filter(item => (
     item && packingListQuantity(item.quantity) > 0
   ));
@@ -331,6 +394,11 @@ function buildPackingListSubprojectSnapshot(event, subproject, extraReferences =
     )).filter(asset => !asset.isExtra);
     const custom = references.map(reference => parseCustomAsset(reference)).find(Boolean);
     const required = packingListQuantity(item.quantity);
+    const groupKey = eventSubprojectGroupKey(item);
+    const extraPrepared = custom
+      ? 0
+      : packingListQuantity(extraPreparedByGroup.get(groupKey));
+    extraPreparedByGroup.set(groupKey, 0);
     const packed = Math.min(required, assignedAssets
       .filter(asset => asset.status === 'packed')
       .reduce((sum, asset) => sum + asset.quantity, 0));
@@ -351,6 +419,7 @@ function buildPackingListSubprojectSnapshot(event, subproject, extraReferences =
       required,
       packed,
       returned,
+      extraPrepared,
       pending: Math.max(0, required - packed - returned),
       assets: assignedAssets
     };
@@ -386,12 +455,17 @@ function buildPackingListSubprojectSnapshot(event, subproject, extraReferences =
     });
   const totals = rows.reduce((result, row) => ({
     required: result.required + row.required,
+    prepared: result.prepared + row.packed + row.returned,
     packed: result.packed + row.packed,
     pending: result.pending + row.pending,
     returned: result.returned + row.returned,
     extras: result.extras
-  }), { required: 0, packed: 0, pending: 0, returned: 0, extras: 0 });
-  totals.extras = extras.reduce((sum, asset) => sum + asset.quantity, 0);
+  }), { required: 0, prepared: 0, packed: 0, pending: 0, returned: 0, extras: 0 });
+  totals.extras = packingListExtraPreparedTotal(
+    event,
+    scopedModelGroups,
+    extras
+  );
 
   return { rows, extras, totals };
 }
@@ -456,13 +530,14 @@ function packingListAssetHtml(asset) {
 function packingListTableHead() {
   return `
     <colgroup>
-      <col style="width:25%;">
-      <col style="width:35%;">
+      <col style="width:23%;">
+      <col style="width:31%;">
       <col style="width:7%;">
       <col style="width:7%;">
       <col style="width:7%;">
       <col style="width:7%;">
-      <col style="width:12%;">
+      <col style="width:7%;">
+      <col style="width:11%;">
     </colgroup>
     <thead>
       <tr>
@@ -472,6 +547,7 @@ function packingListTableHead() {
         <th class="number-cell">Packed</th>
         <th class="number-cell">Pending</th>
         <th class="number-cell">Returned</th>
+        <th class="number-cell">Extra</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -502,6 +578,7 @@ function packingListModelRowHtml(row, assetHtml, continued = false) {
         <td class="number-cell">-</td>
         <td class="number-cell">-</td>
         <td class="number-cell">-</td>
+        <td class="number-cell">-</td>
         <td><span class="continued-label">CONTINUED</span></td>
       </tr>
     `;
@@ -515,6 +592,7 @@ function packingListModelRowHtml(row, assetHtml, continued = false) {
       <td class="number-cell packed-number">${row.packed}</td>
       <td class="number-cell ${row.pending > 0 ? 'pending-number' : ''}">${row.pending}</td>
       <td class="number-cell">${row.returned}</td>
+      <td class="number-cell">${packingListQuantity(row.extraPrepared)}</td>
       <td>${packingListStatusBadge(row.state)}</td>
     </tr>
   `;
@@ -530,7 +608,7 @@ function packingListExtrasRowHtml(snapshot, assetHtml, continued = false) {
         <strong>Additional assets</strong>
         ${continued ? '<div class="continued-label">Continued</div>' : ''}
       </td>
-      <td colspan="5">${assetHtml}</td>
+      <td colspan="6">${assetHtml}</td>
       <td>${continued ? '<span class="continued-label">CONTINUED</span>' : packingListStatusBadge(status)}</td>
     </tr>
   `;
@@ -544,7 +622,7 @@ function packingListRowRecords(snapshot) {
     if (row.department !== currentDepartment) {
       currentDepartment = row.department;
       records.push({
-        html: `<tr class="department-row"><td colspan="7">${inventoryDepartmentLabel(currentDepartment)}</td></tr>`,
+        html: `<tr class="department-row"><td colspan="8">${inventoryDepartmentLabel(currentDepartment)}</td></tr>`,
         keepWithNext: true,
         height: 0
       });
@@ -563,7 +641,7 @@ function packingListRowRecords(snapshot) {
     records.push({
       html: `
         <tr class="extras-row">
-          <td colspan="7">EXTRAS - Not included in required or packed totals</td>
+          <td colspan="8">EXTRAS - Not included in required or prepared totals</td>
         </tr>
       `,
       keepWithNext: true,
@@ -581,7 +659,7 @@ function packingListRowRecords(snapshot) {
 
   if (records.length === 0) {
     records.push({
-      html: '<tr><td colspan="7" class="empty-row">No items are assigned to this event.</td></tr>',
+      html: '<tr><td colspan="8" class="empty-row">No items are assigned to this event.</td></tr>',
       height: 0
     });
   }
@@ -612,20 +690,20 @@ function buildPackingListPdfSectionPages(event, snapshot, context) {
   `;
   const totals = snapshot.totals;
   const completion = totals.required > 0
-    ? Math.min(100, Math.round((totals.packed / totals.required) * 100))
+    ? Math.min(100, Math.round((totals.prepared / totals.required) * 100))
     : 100;
   const summaryHtml = `
     <div class="summary-grid">
       <div class="summary-card"><span>Required</span><strong>${totals.required}</strong></div>
-      <div class="summary-card packed"><span>Packed now</span><strong>${totals.packed}</strong></div>
+      <div class="summary-card packed"><span>Prepared</span><strong>${totals.prepared}</strong></div>
       <div class="summary-card pending"><span>Pending</span><strong>${totals.pending}</strong></div>
       <div class="summary-card returned"><span>Returned</span><strong>${totals.returned}</strong></div>
-      <div class="summary-card extras"><span>Active extras</span><strong>${totals.extras}</strong></div>
-      <div class="summary-card completion"><span>Packed</span><strong>${completion}%</strong></div>
+      <div class="summary-card extras"><span>Extras prepared</span><strong>${totals.extras}</strong></div>
+      <div class="summary-card completion"><span>Prepared</span><strong>${completion}%</strong></div>
     </div>
     <div class="snapshot-note">
-      Live event snapshot. Packed means currently prepared; returned items are no longer packed.
-      Extras are shown separately and do not count toward the requirement.
+      Prepared includes items that have since been returned. Packed and returned remain separate in the table.
+      Extras prepared are historical and do not count toward the requirement.
     </div>
   `;
   const rowRecords = packingListRowRecords(snapshot);
@@ -851,6 +929,7 @@ async function generatePackingList(eventId, options = {}) {
       apiCall(`/api/events/${eventId}`),
       loadPdfSettings(true)
     ]);
+    await ensurePdfExportFontReady(document);
     const event = response.data;
     const sections = buildPackingListPdfSections(event);
     const now = new Date();
@@ -867,6 +946,7 @@ async function generatePackingList(eventId, options = {}) {
     const pagesHtml = buildPackingListPdfPages(event, sections, context);
     const title = `Packing List - ${escapeHtml(String(event.name || `Event ${event.id}`))}`;
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+      ${PDF_EXPORT_FONT_FACE_CSS}
       @page { size:A4; margin:0; }
       * { box-sizing:border-box; }
       body { margin:0;font-family:${PDF_EXPORT_FONT_FAMILY};color:#111;background:#f0f0f0;font-size:8pt;line-height:1.25; }
@@ -926,6 +1006,7 @@ async function generatePackingList(eventId, options = {}) {
     packingWindow.document.open();
     packingWindow.document.write(html);
     packingWindow.document.close();
+    await ensurePdfExportFontReady(packingWindow.document);
     packingWindow.focus();
     if (!options.targetWindow) {
       showNotification('success', 'Packing list PDF generated from the latest event state');

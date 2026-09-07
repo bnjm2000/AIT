@@ -124,7 +124,7 @@ function prepareNewModelGroups(event = prepareNewPageState.event, state = prepar
   return eventSubprojectModelGroups(event, state)
     .filter(group => (
       Number(group?.requiredQuantity || 0) > 0
-      || Number(group?.extraPreparedQuantity || 0) > 0
+      || prepareNewExtraPreparedEverQuantity(group) > 0
       || (group?.assignedAssets || []).some(asset => asset?.isExtra)
     ))
     .sort((a, b) => {
@@ -146,8 +146,28 @@ function prepareNewSnapshot(event = prepareNewPageState.event) {
 }
 
 function prepareNewIsComplete(event = prepareNewPageState.event) {
-  const totals = prepareNewTotals(event);
+  const totals = prepareNewEventTotals(event);
   return totals.lineCount > 0 && totals.prepared >= totals.required;
+}
+
+function prepareNewEventTotals(event = prepareNewPageState.event) {
+  return prepareNewTotals(event, { ...prepareNewPageState, activeSubprojectId: EVENT_CONSOLIDATED_SUBPROJECT_ID });
+}
+
+function prepareNewUnassignedWarning(event = prepareNewPageState.event) {
+  const rooms = eventSubprojects(event);
+  if (rooms.length <= 1) return '';
+  const items = rooms.flatMap(room => (room.items || []).filter(item => item.isCustom));
+  const refs = new Set(items.flatMap(item => item.assetRefs || []));
+  const legacyItems = items.filter(item => !(item.assetRefs || []).length);
+  const groups = prepareNewCustomAssets(event, {activeSubprojectId: EVENT_CONSOLIDATED_SUBPROJECT_ID});
+  const unassigned = groups.flatMap(group => group.members || []).filter(asset =>
+    !refs.has(asset.id) && !legacyItems.some(item => eventCustomItemMatchesAsset(item, asset.parsedCustom))
+  );
+  if (!unassigned.length) return '';
+  return `<div class="event-consolidated-notice"><strong>Items not assigned to a room</strong>
+    <span>${unassigned.map(asset => `${Number(asset.parsedCustom.quantity || 1)} × ${escapeHtml(asset.parsedCustom.name)}`).join(', ')}. Check these requirements in the consolidated view.</span>
+    <button type="button" class="plan-button plan-button-small" onclick="eventSelectSubproject('prepareNewPageState','${EVENT_CONSOLIDATED_SUBPROJECT_ID}','renderPrepareNewPage')">View all rooms</button></div>`;
 }
 
 function prepareNewPreparedEverQuantity(group) {
@@ -172,6 +192,24 @@ function prepareNewCountablePreparedEverQuantity(group) {
   return required > 0 ? Math.min(prepared, required) : prepared;
 }
 
+function prepareNewExtraPreparedEverQuantity(group) {
+  if (!group) return 0;
+  if (typeof group.extraPreparedEverQuantity !== 'undefined') {
+    return Math.max(0, Number(group.extraPreparedEverQuantity || 0));
+  }
+  const required = Math.max(0, Number(group.requiredQuantity || 0));
+  const preparedEver = prepareNewPreparedEverQuantity(group);
+  const countablePreparedEver = prepareNewCountablePreparedEverQuantity(group);
+  const credited = required > 0
+    ? Math.min(countablePreparedEver, required)
+    : 0;
+  return Math.max(
+    Number(group.extraPreparedQuantity || 0),
+    preparedEver - credited,
+    0
+  );
+}
+
 function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewPageState) {
   const groups = prepareNewModelGroups(event, state);
   const customAssets = prepareNewCustomAssets(event, state);
@@ -184,16 +222,16 @@ function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewP
   const required = groups.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0) +
     customAssets.reduce((sum, row) => sum + Number(row.parsedCustom?.quantity || 1), 0);
   const prepared = groups.reduce((sum, row) => sum + prepareNewCountablePreparedEverQuantity(row), 0) +
-    customAssets.reduce((sum, row) => (
-      (event?.actuallyPrepared || []).includes(row.id) || (event?.returnedItems || []).includes(row.id)
-        ? sum + Number(row.parsedCustom?.quantity || 1)
-        : sum
-    ), 0);
+    customAssets.reduce((sum, row) => sum + (row.members || [row]).reduce((subtotal, member) => (
+      (event?.actuallyPrepared || []).includes(member.id) || (event?.returnedItems || []).includes(member.id)
+        ? subtotal + Number(member.parsedCustom?.quantity || 1)
+        : subtotal
+    ), 0), 0);
   return {
     lineCount: groups.length + customAssets.length,
     required,
     prepared,
-    extra: groups.reduce((sum, row) => sum + Number(row.extraPreparedQuantity || 0), 0),
+    extra: groups.reduce((sum, row) => sum + prepareNewExtraPreparedEverQuantity(row), 0),
     departments: departmentsInUse.size
   };
 }
@@ -449,7 +487,7 @@ function prepareNewModelSection(group) {
   const activePreparedQuantity = getPreparedQuantity(group);
   const preparedQuantity = prepareNewPreparedEverQuantity(group);
   const countablePrepared = prepareNewCountablePreparedEverQuantity(group);
-  const extraPrepared = getExtraPreparedQuantity(group);
+  const extraPrepared = prepareNewExtraPreparedEverQuantity(group);
   const isBulk = prepareNewGroupIsBulk(group);
   const openSlots = prepareNewOpenPreparedSlots(group);
   const available = prepareNewAvailableAssetsForGroup(group).filter(asset => !asset?.isBulk);
@@ -974,6 +1012,7 @@ function renderPrepareNewCustomList(customAssets = prepareNewCustomAssets()) {
 
 function renderPrepareNewEventDetails() {
   const event = prepareNewPageState.event || {};
+  const notes = String(event.notes || '');
   return `
     <section class="prepare-new-card prepare-new-event-card">
       <div class="prepare-new-card-header event-detail-card-header">
@@ -987,6 +1026,20 @@ function renderPrepareNewEventDetails() {
           <div><dt>Date(s)</dt><dd>${escapeHtml(prepareNewEventDates(event))}</dd></div>
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
+          <div class="plan-detail-notes-row">
+            <dt>Notes</dt>
+            <dd>
+              <textarea id="prepareNewNotes" class="plan-notes-textarea"
+                        maxlength="50000"
+                        placeholder="Add notes or special requirements for this event..."
+                        oninput="prepareNewNotesChanged(this.value)"
+                        onblur="prepareNewFlushNotes()">${escapeHtml(notes)}</textarea>
+              <div class="plan-notes-footer">
+                <span id="prepareNewNotesSaveState">Saved</span>
+                <span>${notes.length}/50000</span>
+              </div>
+            </dd>
+          </div>
         </dl>
       </div>
     </section>
@@ -1035,17 +1088,18 @@ function renderPrepareNewCustomForm() {
 }
 
 function renderPrepareNewOverallProgressCard() {
-  const totals = prepareNewTotals();
+  const totals = prepareNewEventTotals();
   const percent = totals.required > 0
-    ? Math.min(100, Math.round((totals.prepared / totals.required) * 100))
+    ? Math.min(totals.prepared >= totals.required ? 100 : 99, Math.round((totals.prepared / totals.required) * 100))
     : 0;
   return `
     <section class="prepare-new-card prepare-new-progress-card">
       <div class="prepare-new-card-header">
-        <h3>Overall Progress</h3>
+        <h3>Overall Progress · All rooms</h3>
         <span class="prepare-new-status prepare-new-status-${percent >= 100 ? 'complete' : 'pending'}">${percent}%</span>
       </div>
       <div class="prepare-new-card-body">
+        ${prepareNewUnassignedWarning()}
         <div class="prepare-new-overall-copy">
           <strong>${Number(totals.prepared || 0)} / ${Number(totals.required || 0)}</strong>
           <span>prepared</span>
@@ -1187,7 +1241,7 @@ function renderPrepareNewPage() {
         <section class="prepare-new-card prepare-new-assignment-card">
           <div class="prepare-new-card-header">
             <h3><span class="prepare-new-heading-icon">${planMetricIconSvg('assignment')}</span>Assignment Workspace</h3>
-            <span id="prepareNewAssignmentProgress" class="prepare-new-status prepare-new-status-${prepareNewIsComplete() ? 'complete' : 'pending'}">
+            <span id="prepareNewAssignmentProgress" class="prepare-new-status prepare-new-status-${totals.lineCount > 0 && totals.prepared >= totals.required ? 'complete' : 'pending'}">
               ${totals.prepared} / ${totals.required} prepared
             </span>
           </div>
@@ -1248,6 +1302,13 @@ function prepareNewRestoreViewState(state) {
     feedback.innerHTML = state.scanFeedbackHtml || '';
   }
   setValue('prepareNewNotes', state.notesValue);
+  const notesCount = document.querySelector('#prepareNewNotes + .plan-notes-footer span:last-child');
+  if (notesCount) notesCount.textContent = `${String(state.notesValue || '').length}/50000`;
+  const notesSaveState = document.getElementById('prepareNewNotesSaveState');
+  if (
+    notesSaveState &&
+    prepareNewPendingNotes?.eventId === Number(prepareNewPageState.eventId)
+  ) notesSaveState.textContent = 'Unsaved changes';
   setValue('prepareNewCustomName', state.customName);
   setValue('prepareNewCustomQuantity', state.customQuantity);
   setValue('prepareNewCustomCompany', state.customCompany);
@@ -1541,7 +1602,7 @@ function prepareNewRenderCustomMutation() {
   const assignmentProgress = document.getElementById('prepareNewAssignmentProgress');
   if (assignmentProgress) {
     const totals = prepareNewTotals();
-    const complete = prepareNewIsComplete();
+    const complete = totals.lineCount > 0 && totals.prepared >= totals.required;
     assignmentProgress.className = `prepare-new-status prepare-new-status-${complete ? 'complete' : 'pending'}`;
     assignmentProgress.textContent = `${totals.prepared} / ${totals.required} prepared`;
   }
@@ -1713,13 +1774,15 @@ async function prepareNewAddCustomItem() {
 }
 
 function prepareNewNotesChanged(value) {
+  const notes = String(value || '');
   const state = document.getElementById('prepareNewNotesSaveState');
   const footerCount = document.querySelector('#prepareNewNotes + .plan-notes-footer span:last-child');
-  if (footerCount) footerCount.textContent = `${String(value || '').length} / 30000`;
-  if (state) state.textContent = 'Unsaved';
+  if (footerCount) footerCount.textContent = `${notes.length}/50000`;
+  if (state) state.textContent = 'Unsaved changes';
+  if (prepareNewPageState.event) prepareNewPageState.event.notes = notes;
   prepareNewPendingNotes = {
     eventId: Number(prepareNewPageState.eventId),
-    notes: String(value || '')
+    notes
   };
   clearTimeout(prepareNewNotesTimer);
   prepareNewNotesTimer = setTimeout(prepareNewFlushNotes, 700);

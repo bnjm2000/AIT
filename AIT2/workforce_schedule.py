@@ -9,6 +9,13 @@ from io import BytesIO
 import os
 
 from models import format_user_phone
+from pdf_fonts import (
+    draw_pdf_canvas_text,
+    pdf_font_names,
+    pdf_text_typography,
+    pdf_text_typography_is_custom,
+)
+from pdf_rich_text import draw_pdf_rich_text
 from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
 
 
@@ -279,6 +286,7 @@ def build_workforce_schedule_pdf(
 
     event = payload.get("event") or {}
     company = company or payload.get("company") or {}
+    font_regular, font_bold = pdf_font_names(company)
     event_assignments = [
         row for row in (payload.get("assignments") or [])
         if isinstance(row, dict) and _is_schedule_assignment(row)
@@ -341,6 +349,13 @@ def build_workforce_schedule_pdf(
     ]
     footer_text = str(company.get("footerText") or "").replace("\n", " | ").strip()
     generated_at = datetime.now().strftime("%d %B %Y, %H:%Mhrs")
+    letterhead_title_typography = pdf_text_typography(company, "letterhead", 14)
+    letterhead_logo_typography = pdf_text_typography(company, "letterhead", 8.5)
+    letterhead_detail_typography = pdf_text_typography(company, "letterhead", 5.8)
+    footer_typography = pdf_text_typography(company, "footer", 5.8)
+    letterhead_customised = pdf_text_typography_is_custom(company, "letterhead")
+    letterhead_html = company.get("letterheadHtml") or ""
+    footer_html = company.get("footerHtml") or ""
 
     def draw_page(canvas, _pdf_doc):
         canvas.saveState()
@@ -362,30 +377,53 @@ def build_workforce_schedule_pdf(
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn and company_name:
-            canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 14)
-            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
-        if letterhead_enabled and logo_drawn and company_name:
-            canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 8.5)
-            canvas.drawRightString(
-                page_width - margin, page_height - 8 * mm, company_name[:80]
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (112 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                112 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get("fontFamily"), default_size=5.8,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
             )
-        if letterhead_enabled:
+        elif letterhead_enabled and not logo_drawn and company_name:
+            canvas.setFillColor(ink)
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, margin, page_height - 13 * mm, letterhead_title_typography, max_chars=48)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+        if letterhead_enabled and not letterhead_html and logo_drawn and company_name:
+            canvas.setFillColor(ink)
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, page_width - margin, page_height - 8 * mm, letterhead_logo_typography, align="right", max_chars=80)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 8.5)
+                canvas.drawRightString(
+                    page_width - margin, page_height - 8 * mm, company_name[:80]
+                )
+        if letterhead_enabled and not letterhead_html:
             canvas.setFillColor(muted)
             y = page_height - 11 * mm
             for line in company_details[:3]:
-                canvas.setFont(_canvas_font(line, "Helvetica"), 5.8)
-                canvas.drawRightString(page_width - margin, y, line[:140])
+                if letterhead_customised:
+                    draw_pdf_canvas_text(canvas, line, page_width - margin, y, letterhead_detail_typography, align="right", max_chars=140)
+                else:
+                    canvas.setFont(_canvas_font(line, font_regular), 5.8)
+                    canvas.drawRightString(page_width - margin, y, line[:140])
                 y -= 2.7 * mm
         canvas.setStrokeColor(border)
         canvas.setLineWidth(0.5)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or (company_lines[0] if company_lines else "")
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_line, "Helvetica"), 5.8)
-        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 25 * mm,
+                default_family=company.get("fontFamily"), default_size=5.8, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_line, margin, 7.5 * mm, footer_typography, max_chars=165)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -403,7 +441,7 @@ def build_workforce_schedule_pdf(
                 self.__dict__.update(page)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont("Helvetica", 5.8)
+                self.setFont(font_regular, 5.8)
                 self.drawRightString(
                     page_width - margin,
                     7.5 * mm,
@@ -425,19 +463,19 @@ def build_workforce_schedule_pdf(
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "ScheduleTitle", parent=styles["Heading1"], fontName="Helvetica-Bold",
+        "ScheduleTitle", parent=styles["Heading1"], fontName=font_bold,
         fontSize=19, leading=22, textColor=ink, spaceAfter=3,
     )
     section_style = ParagraphStyle(
-        "ScheduleSection", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        "ScheduleSection", parent=styles["Heading2"], fontName=font_bold,
         fontSize=10, leading=12, textColor=ink, spaceAfter=5,
     )
     cell_style = ParagraphStyle(
-        "ScheduleCell", parent=styles["BodyText"], fontName="Helvetica",
+        "ScheduleCell", parent=styles["BodyText"], fontName=font_regular,
         fontSize=7.4, leading=9.2, textColor=ink,
     )
     cell_bold = ParagraphStyle(
-        "ScheduleCellBold", parent=cell_style, fontName="Helvetica-Bold",
+        "ScheduleCellBold", parent=cell_style, fontName=font_bold,
     )
     table_header = ParagraphStyle(
         "ScheduleTableHeader", parent=cell_bold, textColor=colors.white,
@@ -449,11 +487,11 @@ def build_workforce_schedule_pdf(
         "ScheduleCellCenter", parent=cell_style, alignment=TA_CENTER,
     )
     label_style = ParagraphStyle(
-        "ScheduleLabel", parent=cell_style, fontName="Helvetica-Bold",
+        "ScheduleLabel", parent=cell_style, fontName=font_bold,
         fontSize=5.8, leading=7, textColor=muted,
     )
     value_style = ParagraphStyle(
-        "ScheduleValue", parent=cell_style, fontName="Helvetica-Bold",
+        "ScheduleValue", parent=cell_style, fontName=font_bold,
         fontSize=7.4, leading=9, textColor=ink,
     )
     show_room = _event_has_multiple_rooms(payload, event, event_assignments)
@@ -714,6 +752,7 @@ def build_worker_period_schedule_pdf(
     from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     company = company or payload.get("company") or {}
+    font_regular, font_bold = pdf_font_names(company)
     subject = payload.get("subject") or {}
     rows = [row for row in payload.get("rows", []) if isinstance(row, dict)]
     rows.sort(key=lambda row: (
@@ -736,6 +775,11 @@ def build_worker_period_schedule_pdf(
     letterhead_enabled = company.get("letterheadEnabled", True) is not False
     footer_text = str(company.get("footerText") or "").replace("\n", " | ").strip()
     generated_at = datetime.now().strftime("%d %B %Y, %H:%Mhrs")
+    letterhead_typography = pdf_text_typography(company, "letterhead", 14)
+    footer_typography = pdf_text_typography(company, "footer", 5.8)
+    letterhead_customised = pdf_text_typography_is_custom(company, "letterhead")
+    letterhead_html = company.get("letterheadHtml") or ""
+    footer_html = company.get("footerHtml") or ""
 
     def draw_page(canvas, _doc):
         canvas.saveState()
@@ -751,17 +795,34 @@ def build_worker_period_schedule_pdf(
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn and company_name:
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (112 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                112 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get("fontFamily"), default_size=6.2,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
+            )
+        elif letterhead_enabled and not logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, "Helvetica-Bold"), 14)
-            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, margin, page_height - 13 * mm, letterhead_typography, max_chars=48)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
         canvas.setStrokeColor(border)
         canvas.setLineWidth(.5)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or company_name
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_line, "Helvetica"), 5.8)
-        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 25 * mm,
+                default_family=company.get("fontFamily"), default_size=5.8, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_line, margin, 7.5 * mm, footer_typography, max_chars=165)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -779,7 +840,7 @@ def build_worker_period_schedule_pdf(
                 self.__dict__.update(page)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont("Helvetica", 5.8)
+                self.setFont(font_regular, 5.8)
                 self.drawRightString(page_width - margin, 7.5 * mm,
                                      f"Page {page_number} of {page_count}")
                 self.restoreState()
@@ -793,22 +854,22 @@ def build_worker_period_schedule_pdf(
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "PeriodScheduleTitle", parent=styles["Heading1"], fontName="Helvetica-Bold",
+        "PeriodScheduleTitle", parent=styles["Heading1"], fontName=font_bold,
         fontSize=19, leading=22, textColor=ink, spaceAfter=3,
     )
     cell = ParagraphStyle(
-        "PeriodScheduleCell", parent=styles["BodyText"], fontName="Helvetica",
+        "PeriodScheduleCell", parent=styles["BodyText"], fontName=font_regular,
         fontSize=7.2, leading=8.8, textColor=ink,
     )
-    bold = ParagraphStyle("PeriodScheduleBold", parent=cell, fontName="Helvetica-Bold")
+    bold = ParagraphStyle("PeriodScheduleBold", parent=cell, fontName=font_bold)
     header = ParagraphStyle("PeriodScheduleHeader", parent=bold, textColor=colors.white)
     center = ParagraphStyle("PeriodScheduleCenter", parent=cell, alignment=TA_CENTER)
     right = ParagraphStyle("PeriodScheduleRight", parent=cell, alignment=TA_RIGHT)
     label = ParagraphStyle(
-        "PeriodScheduleLabel", parent=cell, fontName="Helvetica-Bold",
+        "PeriodScheduleLabel", parent=cell, fontName=font_bold,
         fontSize=5.8, leading=7, textColor=muted,
     )
-    value = ParagraphStyle("PeriodScheduleValue", parent=cell, fontName="Helvetica-Bold")
+    value = ParagraphStyle("PeriodScheduleValue", parent=cell, fontName=font_bold)
     booking_detail = ParagraphStyle(
         "PeriodScheduleBookingDetail", parent=cell, fontSize=6.2,
         leading=7.4, textColor=muted, spaceBefore=1,

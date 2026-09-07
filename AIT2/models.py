@@ -126,6 +126,7 @@ class Client:
         email='',
         tax_number='',
         salutation='',
+        is_active=True,
     ):
         self.name = name
         self.company = company
@@ -138,6 +139,7 @@ class Client:
         self.email = email
         self.tax_number = tax_number
         self.salutation = salutation
+        self.is_active = bool(is_active)
 
 
 def normalize_asset_tags(value):

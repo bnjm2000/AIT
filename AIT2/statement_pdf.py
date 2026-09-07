@@ -7,6 +7,13 @@ from html import escape
 from io import BytesIO
 import os
 
+from pdf_fonts import (
+    draw_pdf_canvas_text,
+    pdf_font_names,
+    pdf_text_typography,
+    pdf_text_typography_is_custom,
+)
+from pdf_rich_text import draw_pdf_rich_text
 from quotation_pdf import _canvas_font, _cjk_markup, _paragraph
 from workforce_schedule import (
     SHOWBASE_GREEN,
@@ -56,6 +63,7 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
     )
 
     company = company or {}
+    font_regular, font_bold = pdf_font_names(company)
     invoices = [row for row in payload.get("invoices") or [] if isinstance(row, dict)]
     currency = str(payload.get("currency") or company.get("currency") or "SGD").upper()
     account_company = _text(payload.get("accountCompany"), "Company")
@@ -80,6 +88,12 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
     issuer = _text(company.get("companyName") or company.get("name"), "Showbase")
     footer_text = str(company.get("footerText") or "").replace("\n", " | ").strip()
     letterhead_enabled = company.get("letterheadEnabled", True) is not False
+    letterhead_typography = pdf_text_typography(company, "letterhead", 14)
+    letterhead_logo_typography = pdf_text_typography(company, "letterhead", 8.8)
+    footer_typography = pdf_text_typography(company, "footer", 6)
+    letterhead_customised = pdf_text_typography_is_custom(company, "letterhead")
+    letterhead_html = company.get("letterheadHtml") or ""
+    footer_html = company.get("footerHtml") or ""
 
     def draw_page(canvas, _doc):
         canvas.saveState()
@@ -97,22 +111,42 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if logo_drawn and issuer:
-            canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(issuer, "Helvetica-Bold"), 8.8)
-            canvas.drawRightString(
-                page_width - margin, page_height - 10 * mm, issuer[:72]
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (112 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                112 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get("fontFamily"), default_size=6.2,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
             )
-        if letterhead_enabled and not logo_drawn:
+        elif logo_drawn and issuer:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(issuer, "Helvetica-Bold"), 14)
-            canvas.drawString(margin, page_height - 13 * mm, issuer[:55])
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, issuer, page_width - margin, page_height - 10 * mm, letterhead_logo_typography, align="right", max_chars=72)
+            else:
+                canvas.setFont(_canvas_font(issuer, font_bold), 8.8)
+                canvas.drawRightString(
+                    page_width - margin, page_height - 10 * mm, issuer[:72]
+                )
+        if letterhead_enabled and not letterhead_html and not logo_drawn:
+            canvas.setFillColor(ink)
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, issuer, margin, page_height - 13 * mm, letterhead_typography, max_chars=55)
+            else:
+                canvas.setFont(_canvas_font(issuer, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, issuer[:55])
         canvas.setStrokeColor(light_border)
         canvas.setLineWidth(.55)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_text or issuer, "Helvetica"), 6)
-        canvas.drawString(margin, 7.5 * mm, (footer_text or issuer)[:160])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 25 * mm,
+                default_family=company.get("fontFamily"), default_size=6, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_text or issuer, margin, 7.5 * mm, footer_typography, max_chars=160)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -130,7 +164,7 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
                 self.__dict__.update(page)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont("Helvetica", 6)
+                self.setFont(font_regular, 6)
                 self.drawRightString(
                     page_width - margin, 7.5 * mm,
                     f"Page {page_number} of {page_count}",
@@ -151,26 +185,26 @@ def build_statement_of_account_pdf(payload, *, company=None, logo_path=""):
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle(
-        "SOATitle", parent=styles["Heading1"], fontName="Helvetica-Bold",
+        "SOATitle", parent=styles["Heading1"], fontName=font_bold,
         fontSize=19, leading=22, textColor=ink, spaceAfter=2,
     )
     subtitle = ParagraphStyle(
-        "SOASubtitle", parent=styles["BodyText"], fontName="Helvetica",
+        "SOASubtitle", parent=styles["BodyText"], fontName=font_regular,
         fontSize=7.5, leading=10, textColor=muted,
     )
     label = ParagraphStyle(
-        "SOALabel", parent=subtitle, fontName="Helvetica-Bold", fontSize=6.3,
+        "SOALabel", parent=subtitle, fontName=font_bold, fontSize=6.3,
         leading=8, textColor=muted,
     )
     value = ParagraphStyle(
-        "SOAValue", parent=styles["BodyText"], fontName="Helvetica-Bold",
+        "SOAValue", parent=styles["BodyText"], fontName=font_bold,
         fontSize=9, leading=11, textColor=ink,
     )
     cell = ParagraphStyle(
-        "SOACell", parent=styles["BodyText"], fontName="Helvetica",
+        "SOACell", parent=styles["BodyText"], fontName=font_regular,
         fontSize=7, leading=8.5, textColor=ink,
     )
-    cell_bold = ParagraphStyle("SOACellBold", parent=cell, fontName="Helvetica-Bold")
+    cell_bold = ParagraphStyle("SOACellBold", parent=cell, fontName=font_bold)
     cell_right = ParagraphStyle("SOACellRight", parent=cell, alignment=TA_RIGHT)
     cell_right_bold = ParagraphStyle(
         "SOACellRightBold", parent=cell_bold, alignment=TA_RIGHT,

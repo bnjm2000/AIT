@@ -367,6 +367,76 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('color: #c2410c;', pending_style)
         spare_style = template.split('.prepare-new-spare-label,', 1)[1].split('}', 1)[0]
         self.assertIn('color: #2563eb;', spare_style)
+        extra_badge_style = template.split('.prepare-new-status-extra {', 1)[1].split('}', 1)[0]
+        self.assertIn('background: #dbeafe;', extra_badge_style)
+        self.assertIn('color: #2563eb;', extra_badge_style)
+        extra_card_style = template.split('.prepare-new-asset-card.assigned.extra {', 1)[1].split('}', 1)[0]
+        self.assertIn('border-color: #93c5fd;', extra_card_style)
+        self.assertIn('background: #eff6ff;', extra_card_style)
+
+    def test_subproject_warnings_only_underline_the_active_tab(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates' / 'index.html').read_text(encoding='utf-8')
+
+        shortage_style = template.split(
+            '.event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab {',
+            1,
+        )[1].split('}', 1)[0]
+        degraded_style = template.split(
+            '.event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab {',
+            1,
+        )[1].split('}', 1)[0]
+        self.assertIn('border-bottom-color: transparent;', shortage_style)
+        self.assertIn('border-bottom-color: transparent;', degraded_style)
+        self.assertIn(
+            '.event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab.active',
+            template,
+        )
+        self.assertIn(
+            '.event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab.active',
+            template,
+        )
+
+    def test_subproject_drop_target_border_overlays_warning_highlight(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates' / 'index.html').read_text(encoding='utf-8')
+        drop_target_style = template.split(
+            '.event-subproject-tab-wrap.is-drop-target::after {',
+            1,
+        )[1].split('}', 1)[0]
+
+        self.assertIn('position: absolute;', drop_target_style)
+        self.assertIn('inset: 0;', drop_target_style)
+        self.assertIn('z-index: 2;', drop_target_style)
+        self.assertIn('border: 2px solid var(--brand-main);', drop_target_style)
+        self.assertIn('pointer-events: none;', drop_target_style)
+
+    def test_plan_prepare_and_return_event_cards_include_notes_editors(self):
+        script = APP_BUNDLE_SOURCE
+        template = (Path(__file__).resolve().parents[1] / 'templates' / 'index.html').read_text(encoding='utf-8')
+        plan_details = script.split('function renderPlanEventDetailsCard()', 1)[1].split(
+            'function renderPlanVendorManagementCard()',
+            1,
+        )[0]
+        prepare_details = script.split('function renderPrepareNewEventDetails()', 1)[1].split(
+            'function renderPrepareNewCustomForm()',
+            1,
+        )[0]
+        return_details = script.split('function returnPageEventDetailsHtml(event)', 1)[1].split(
+            'function returnPageNotesChanged(',
+            1,
+        )[0]
+
+        self.assertIn('id="planEventNotes"', plan_details)
+        self.assertIn('oninput="planNotesChanged(this)"', plan_details)
+        self.assertIn('onblur="planFlushNotesSave()"', plan_details)
+        self.assertIn('id="prepareNewNotes"', prepare_details)
+        self.assertIn('oninput="prepareNewNotesChanged(this.value)"', prepare_details)
+        self.assertIn('onblur="prepareNewFlushNotes()"', prepare_details)
+        self.assertIn('id="returnEventNotes"', return_details)
+        self.assertIn('oninput="returnPageNotesChanged(this)"', return_details)
+        self.assertIn('onblur="returnPageFlushNotesSave()"', return_details)
+        self.assertIn('function returnPageFlushNotesSave()', script)
+        self.assertIn('await returnPageFlushNotesSave();', script)
+        self.assertIn('.return-event-notes {', template)
 
     def test_matching_loans_remain_owned_by_their_rooms_and_collect_together(self):
         self.login('admin')

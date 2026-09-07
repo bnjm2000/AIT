@@ -1553,8 +1553,8 @@ function costingCategoryMarkup(category, readOnly) {
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
         <span class="costing-subtotal-label"><strong>Category subtotal</strong><small data-category-adjustment>${totals.adjustment ? `Adjustment ${costingMoney(totals.adjustment)}` : 'No category adjustment'}</small></span>
         <label>Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></label>
-        <label>Profit <span class="costing-inline-money">$<input data-category-profit type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.profit))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryProfit('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
-        <label>Client Charge <span class="costing-inline-money">$<input data-category-charge type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.charged))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryCharge('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
+        <label>Profit <span class="costing-inline-money"><span aria-hidden="true">$</span><input data-category-profit type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.profit))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryProfit('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
+        <label>Client Charge <span class="costing-inline-money"><span aria-hidden="true">$</span><input data-category-charge type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(totals.charged))}" ${readOnly ? 'disabled' : ''} oninput="costingCategoryCharge('${costingAttr(encoded)}',this.value)" onblur="costingFormatMoneyInput(this)"></span></label>
       </div></td></tr></tfoot>
     </table></div>
   </section>`;
@@ -1597,10 +1597,10 @@ function costingLineMarkup(line, index, readOnly) {
     <td><div class="costing-multiplier"><input class="costing-stepper-input" aria-label="${line.multiplierLabel === 'Day' ? 'Days' : 'Multiplier'}" type="number" min="0" step=".5" value="${costingAttr(line.multiplier)}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'multiplier',this.value)"></div></td>
     <td><div class="finance-inline-combobox costing-vendor-combobox"><input class="costing-vendor-input ${String(line.vendorName || '').toLowerCase() === 'self' ? 'is-self' : ''} ${costingSelfLinkClass(line)} ${line.vendorName ? '' : 'is-empty'}" style="--vendor-hue:${costingVendorHue(line.vendorName)}" value="${costingAttr(line.vendorName || '')}" placeholder="Unassigned" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" ${readOnly ? 'disabled' : ''} onfocus="costingShowVendorSuggestions(this,${index})" oninput="costingVendorColourChanged(this,${index});costingShowVendorSuggestions(this,${index})" onkeydown="costingLineVendorKeydown(event,this,${index})" onblur="costingVendorInputBlur(this,${index})"><div class="finance-inline-suggestions costing-vendor-suggestions" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(this),120)"></div></div></td>
     <td><textarea class="costing-remarks-input" rows="1" placeholder="Add note" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'remarks',this.value)">${costingEscape(line.remarks || '')}</textarea></td>
-    <td><span class="costing-money-input">$<input data-line-unit-cost aria-label="Unit cost" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.itemCost))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
-    <td><span class="costing-money-input">$<input data-line-cost-total aria-label="Cost total" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.costTotal))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
+    <td><span class="costing-money-input"><span class="costing-currency-symbol">$</span><input data-line-unit-cost aria-label="Unit cost" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.itemCost))}" ${readOnly ? 'disabled' : ''} oninput="costingLineInput(${index},'itemCost',this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
+    <td><span class="costing-money-input"><span class="costing-currency-symbol">$</span><input data-line-cost-total aria-label="Cost total" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.costTotal))}" ${readOnly ? 'disabled' : ''} oninput="costingLineCostTotal(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td class="costing-margin-cell"><div class="costing-margin ${line.calculatedMarginAmount < 0 ? 'is-negative' : 'is-positive'}"><span class="costing-margin-percent"><input data-line-margin-percent aria-label="Calculated margin percentage" type="number" step=".01" value="${costingAttr(line.targetMarginPercent.toFixed(2))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginPercent(${index},this.value)"><span>%</span></span><span class="costing-margin-amount"><span class="costing-currency-symbol">$</span><input data-line-margin-amount aria-label="Calculated margin amount" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.calculatedMarginAmount))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineMarginAmount(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></div></td>
-    <td>${commercialDisabled ? `<strong data-line-calculated>${costingEscape(costingMoney(line.calculatedSalePrice))}</strong>` : `<button type="button" class="costing-calculated-price-reset" data-line-calculated title="Use this calculated price" aria-label="Use calculated price ${costingAttr(costingMoney(line.calculatedSalePrice))}" onclick="costingResetSalePrice(${index})">${costingEscape(costingMoney(line.calculatedSalePrice))}</button>`}</td>
+    <td class="costing-calculated-price-cell"><span class="costing-money-input costing-calculated-price-input"><span class="costing-currency-symbol">$</span><input data-line-calculated aria-label="Calculated price" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.calculatedSalePrice))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineCalculatedPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span></td>
     <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${unitPriceState}" data-line-unit-price-wrap><span class="costing-currency-symbol">$</span><input data-line-unit-price aria-label="Unit price" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(unitPrice))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineUnitPrice(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${unitPriceState}" data-line-unit-difference title="Difference from unit cost">${costingEscape(costingComparisonMoney(unitPrice, line.itemCost))}</small></div></td>
     <td class="costing-sale-price-cell"><div class="costing-sale-cell"><span class="costing-money-input costing-sale-input ${saleState}" data-line-sale-wrap><span class="costing-currency-symbol">$</span><input data-line-sale aria-label="Sale price" type="text" inputmode="decimal" value="${costingAttr(costingMoneyInputValue(line.salePrice))}" ${commercialDisabled ? 'disabled' : ''} oninput="costingLineSale(${index},this.value)" onblur="costingFormatMoneyInput(this)"></span><small class="costing-sale-difference ${saleState}" data-line-sale-difference title="Difference from cost total">${costingEscape(costingComparisonMoney(line.salePrice, line.costTotal))}</small></div></td>
     <td>${readOnly ? '' : `<button type="button" class="costing-remove" aria-label="Remove item" title="Remove item" onclick="costingRemoveLine(${index})">&times;</button>`}</td>
@@ -2322,13 +2322,14 @@ function costingLineUnitPrice(index, value) {
   costingRefreshCalculations();
 }
 
-function costingResetSalePrice(index) {
+function costingLineCalculatedPrice(index, value) {
   const line = costingLines()[index];
   if (!line || line.hiddenFromQuotation) return;
-  costingSetSaleGroupUnitPrice(
-    index,
-    costingLineUnitSale(line, 'calculatedSalePrice')
-  );
+  const calculatedPrice = Math.max(0, costingNumber(value));
+  line.targetMarginPercent = line.costTotal
+    ? ((calculatedPrice - line.costTotal) / line.costTotal) * 100
+    : (calculatedPrice ? 100 : 0);
+  costingLineRecalculate(line, 'cost');
   costingState.changeVersion += 1;
   costingQueueSave();
   costingRefreshCalculations();
@@ -2561,7 +2562,9 @@ function costingRefreshCalculations() {
     if (sale && document.activeElement !== sale) sale.value = costingMoneyInputValue(line.salePrice);
     costingApplyPriceState(unitPriceWrap, unitPriceState);
     costingApplyPriceState(saleWrap, saleState);
-    if (calculated) calculated.textContent = costingMoney(line.calculatedSalePrice);
+    if (calculated && document.activeElement !== calculated) {
+      calculated.value = costingMoneyInputValue(line.calculatedSalePrice);
+    }
     const unitDifference = row.querySelector('[data-line-unit-difference]');
     if (unitDifference) unitDifference.textContent = costingComparisonMoney(currentUnitPrice, line.itemCost);
     costingApplyPriceState(unitDifference, unitPriceState);

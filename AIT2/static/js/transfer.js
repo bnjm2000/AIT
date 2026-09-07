@@ -1468,10 +1468,12 @@ function buildTransferPdfPagesV2(sections, context) {
 
   const showLetterheadText = pdfSettings?.letterheadEnabled !== false;
   const letterheadHtml = (showLetterheadText || logoHtml) ? `
-    <div class="transfer-report-letterhead">
-      ${showLetterheadText ? `<div>
-        <strong>${safe(context.companyName || 'Showbase')}</strong>
-        <span>Asset Operations</span>
+    <div class="transfer-report-letterhead" ${pdfTypographyStyleAttr('letterhead')}>
+      ${showLetterheadText ? `<div ${pdfTypographyStyleAttr('letterhead')}>
+        ${pdfSettings?.letterheadHtml
+          ? renderPdfRichHtml(pdfSettings.letterheadHtml)
+          : `<strong ${pdfTypographyStyleAttr('letterhead')}>${safe(context.companyName || 'Showbase')}</strong>
+             <span ${pdfTypographyStyleAttr('letterhead')}>Asset Operations</span>`}
       </div>` : '<div></div>'}
       ${logoHtml}
     </div>
@@ -1635,6 +1637,7 @@ async function generateTransferPdf(selectedModes = ['common']) {
     deliveryOrderCaptureDocument(eventId);
     await flushDoEdits(eventId);
     await loadPdfSettings(true);
+    await ensurePdfExportFontReady(document);
     const totalQty = sections.reduce(
       (sum, section) => sum + Number(section.quantity || 0),
       0
@@ -1667,6 +1670,7 @@ async function generateTransferPdf(selectedModes = ['common']) {
     });
     const safe = value => escapeHtml(String(value ?? ''));
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Asset Transfer Report - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+      ${PDF_EXPORT_FONT_FACE_CSS}
       @page{size:A4;margin:0}
       *{box-sizing:border-box}
       body{margin:0;background:#eef2f1;color:#172033;font-family:${PDF_EXPORT_FONT_FAMILY}}
@@ -1693,6 +1697,7 @@ async function generateTransferPdf(selectedModes = ['common']) {
     win.document.open();
     win.document.write(html);
     win.document.close();
+    await ensurePdfExportFontReady(win.document);
     win.focus();
     showNotification('success', 'Transfer PDF generated');
   } catch (error) {

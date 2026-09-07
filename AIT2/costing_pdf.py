@@ -7,6 +7,13 @@ from io import BytesIO
 import colorsys
 import os
 
+from pdf_fonts import (
+    draw_pdf_canvas_text,
+    pdf_font_names,
+    pdf_text_typography,
+    pdf_text_typography_is_custom,
+)
+from pdf_rich_text import draw_pdf_rich_text
 from quotation_pdf import (
     _canvas_font,
     _cjk_markup,
@@ -200,6 +207,7 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
         TableStyle,
     )
 
+    font_regular, font_bold = pdf_font_names(company)
     buffer = BytesIO()
     page_width, page_height = landscape(A4)
     margin = 11 * mm
@@ -226,7 +234,7 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
     teal = colors.HexColor('#078C9F')
 
     body = ParagraphStyle(
-        'CostingBody', parent=styles['BodyText'], fontName='Helvetica',
+        'CostingBody', parent=styles['BodyText'], fontName=font_regular,
         fontSize=7, leading=8.5, textColor=ink,
     )
     small = ParagraphStyle(
@@ -236,23 +244,23 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
         'CostingTiny', parent=body, fontSize=5.4, leading=6.4, textColor=muted,
     )
     title_style = ParagraphStyle(
-        'CostingTitle', parent=body, fontName='Helvetica-Bold',
+        'CostingTitle', parent=body, fontName=font_bold,
         fontSize=19, leading=22, textColor=ink,
     )
     project_style = ParagraphStyle(
-        'CostingProject', parent=body, fontName='Helvetica-Bold',
+        'CostingProject', parent=body, fontName=font_bold,
         fontSize=12, leading=14, textColor=ink,
     )
     label_style = ParagraphStyle(
-        'CostingLabel', parent=body, fontName='Helvetica-Bold',
+        'CostingLabel', parent=body, fontName=font_bold,
         fontSize=5.8, leading=7, textColor=muted,
     )
     value_style = ParagraphStyle(
-        'CostingValue', parent=body, fontName='Helvetica-Bold',
+        'CostingValue', parent=body, fontName=font_bold,
         fontSize=7.4, leading=9, textColor=ink,
     )
     table_header = ParagraphStyle(
-        'CostingTableHeader', parent=body, fontName='Helvetica-Bold',
+        'CostingTableHeader', parent=body, fontName=font_bold,
         fontSize=5.5, leading=6.5, textColor=colors.white,
         alignment=TA_CENTER,
     )
@@ -267,20 +275,20 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
         'CostingTableRight', parent=table_left, alignment=TA_RIGHT,
     )
     table_right_bold = ParagraphStyle(
-        'CostingTableRightBold', parent=table_right, fontName='Helvetica-Bold',
+        'CostingTableRightBold', parent=table_right, fontName=font_bold,
     )
     section_style = ParagraphStyle(
-        'CostingSection', parent=body, fontName='Helvetica-Bold',
+        'CostingSection', parent=body, fontName=font_bold,
         fontSize=9, leading=11, textColor=ink, spaceBefore=3, spaceAfter=3,
         keepWithNext=1,
     )
     room_style = ParagraphStyle(
-        'CostingRoom', parent=body, fontName='Helvetica-Bold',
+        'CostingRoom', parent=body, fontName=font_bold,
         fontSize=10, leading=12, textColor=teal, spaceBefore=5, spaceAfter=3,
         keepWithNext=1,
     )
     category_style = ParagraphStyle(
-        'CostingCategory', parent=body, fontName='Helvetica-Bold',
+        'CostingCategory', parent=body, fontName=font_bold,
         fontSize=7.2, leading=8.5, textColor=ink,
     )
 
@@ -306,6 +314,13 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
         if not company_name or line.casefold() != company_name.casefold()
     ]
     footer_text = _text(company.get('footerText')).replace('\n', ' | ').strip()
+    letterhead_title_typography = pdf_text_typography(company, 'letterhead', 14)
+    letterhead_logo_typography = pdf_text_typography(company, 'letterhead', 8.5)
+    letterhead_detail_typography = pdf_text_typography(company, 'letterhead', 5.8)
+    footer_typography = pdf_text_typography(company, 'footer', 5.8)
+    letterhead_customised = pdf_text_typography_is_custom(company, 'letterhead')
+    letterhead_html = company.get('letterheadHtml') or ''
+    footer_html = company.get('footerHtml') or ''
 
     def draw_page(canvas, _pdf_doc):
         canvas.saveState()
@@ -325,28 +340,51 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                 logo_drawn = True
             except Exception:
                 logo_drawn = False
-        if letterhead_enabled and not logo_drawn and company_name:
+        if letterhead_enabled and letterhead_html:
+            draw_pdf_rich_text(
+                canvas, letterhead_html,
+                page_width - margin - (115 * mm) if logo_drawn else margin,
+                page_height - 7 * mm,
+                115 * mm if logo_drawn else page_width - (2 * margin),
+                default_family=company.get('fontFamily'), default_size=5.8,
+                text_color=ink, alignment=2 if logo_drawn else 0, top_y=True,
+            )
+        elif letterhead_enabled and not logo_drawn and company_name:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 14)
-            canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
-        if letterhead_enabled and company_name and logo_drawn:
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, margin, page_height - 13 * mm, letterhead_title_typography, max_chars=48)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 14)
+                canvas.drawString(margin, page_height - 13 * mm, company_name[:48])
+        if letterhead_enabled and not letterhead_html and company_name and logo_drawn:
             canvas.setFillColor(ink)
-            canvas.setFont(_canvas_font(company_name, 'Helvetica-Bold'), 8.5)
-            canvas.drawRightString(page_width - margin, page_height - 8 * mm, company_name[:80])
-        if letterhead_enabled:
+            if letterhead_customised:
+                draw_pdf_canvas_text(canvas, company_name, page_width - margin, page_height - 8 * mm, letterhead_logo_typography, align='right', max_chars=80)
+            else:
+                canvas.setFont(_canvas_font(company_name, font_bold), 8.5)
+                canvas.drawRightString(page_width - margin, page_height - 8 * mm, company_name[:80])
+        if letterhead_enabled and not letterhead_html:
             canvas.setFillColor(muted)
             y = page_height - 11 * mm
             for line in company_details[:3]:
-                canvas.setFont(_canvas_font(line, 'Helvetica'), 5.8)
-                canvas.drawRightString(page_width - margin, y, line[:140])
+                if letterhead_customised:
+                    draw_pdf_canvas_text(canvas, line, page_width - margin, y, letterhead_detail_typography, align='right', max_chars=140)
+                else:
+                    canvas.setFont(_canvas_font(line, font_regular), 5.8)
+                    canvas.drawRightString(page_width - margin, y, line[:140])
                 y -= 2.7 * mm
         canvas.setStrokeColor(rule)
         canvas.setLineWidth(0.5)
         canvas.line(margin, 12 * mm, page_width - margin, 12 * mm)
         footer_line = footer_text or (company_lines[0] if company_lines else '')
         canvas.setFillColor(muted)
-        canvas.setFont(_canvas_font(footer_line, 'Helvetica'), 5.8)
-        canvas.drawString(margin, 7.5 * mm, footer_line[:165])
+        if footer_html:
+            draw_pdf_rich_text(
+                canvas, footer_html, margin, 6.5 * mm, page_width - (2 * margin) - 30 * mm,
+                default_family=company.get('fontFamily'), default_size=5.8, text_color=muted,
+            )
+        else:
+            draw_pdf_canvas_text(canvas, footer_line, margin, 7.5 * mm, footer_typography, max_chars=165)
         canvas.restoreState()
 
     class NumberedCanvas(Canvas):
@@ -364,7 +402,7 @@ def build_costing_pdf(costing, company, logo_path='', generated_by=''):
                 self.__dict__.update(state)
                 self.saveState()
                 self.setFillColor(muted)
-                self.setFont('Helvetica', 5.8)
+                self.setFont(font_regular, 5.8)
                 self.drawRightString(
                     page_width - margin, 7.5 * mm,
                     f'Page {page_number} of {page_count}',

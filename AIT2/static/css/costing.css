@@ -457,8 +457,8 @@
   .costing-inventory-link-choice > div { grid-template-columns: 1fr; }
 }
 
-.costing-money-input { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 1px; color: #526762; }
-.costing-money-input input { text-align: right; }
+.costing-money-input { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 3px; color: #526762; }
+.costing-money-input input { flex: 0 1 11ch; width: 11ch; min-width: 0; text-align: right; }
 .costing-sale-input {
   position: relative;
   inset: auto;
@@ -467,7 +467,7 @@
   height: auto;
   min-height: 0;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -476,30 +476,32 @@
   font-size: 12px;
 }
 .costing-sale-input input {
-  width: 100%;
+  flex: 0 1 11ch;
+  width: 11ch;
   height: 100%;
   min-height: 0;
-  padding: 0 10px;
+  padding: 0 3px;
   border-color: transparent;
   color: #172e48;
   background: transparent;
   font-size: 12px;
   line-height: 1;
-  text-align: center;
+  text-align: right;
 }
 .costing-sale-input:focus-within { border-radius: 4px; background: #f8fafc; box-shadow: inset 0 0 0 1px #b8dce1; }
-.costing-currency-symbol { position: absolute; left: 2px; top: 50%; color: #526762; font-size: 10px; transform: translateY(-50%); pointer-events: none; }
+.costing-currency-symbol { position: static; flex: 0 0 auto; color: #526762; font-size: 10px; transform: none; pointer-events: none; }
 .costing-margin-cell,
+.costing-calculated-price-cell,
 .costing-sale-price-cell { position: relative; padding-block: 0 !important; }
-.costing-calculated-price-reset { padding: 2px 4px; border: 0; border-radius: 4px; color: #087f91; background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
-.costing-calculated-price-reset:hover,
-.costing-calculated-price-reset:focus-visible { color: #075f6c; background: #eaf8f9; outline: none; text-decoration: underline; }
+.costing-calculated-price-input { position: absolute; inset: 1px; color: #087f91; font-weight: 800; }
+.costing-calculated-price-input input { height: 100%; padding-inline: 3px; border-color: transparent; color: inherit; background: transparent; font-weight: inherit; }
+.costing-calculated-price-input:focus-within { border-radius: 4px; background: #f8fafc; box-shadow: inset 0 0 0 1px #b8dce1; }
 .costing-margin { position: absolute; inset: 1px; display: grid; grid-template-rows: 1fr 1fr; width: auto; height: auto; min-height: 0; color: #172e48; line-height: 1; }
-.costing-margin > span { position: relative; display: flex; min-width: 0; height: auto; min-height: 0; align-items: center; justify-content: center; width: 100%; margin: 0; }
-.costing-margin input { width: 100%; height: 100%; min-height: 0; padding: 0 10px; border-color: transparent; color: inherit; background: transparent; text-align: center; line-height: 1; }
+.costing-margin > span { position: relative; display: flex; min-width: 0; height: auto; min-height: 0; align-items: center; justify-content: flex-end; width: 100%; margin: 0; gap: 2px; }
+.costing-margin input { flex: 0 1 8ch; width: 8ch; height: 100%; min-width: 0; padding: 0 3px; border-color: transparent; color: inherit; background: transparent; text-align: right; line-height: 1; }
 .costing-margin-percent { color: #172e48; font-size: 12px; }
 .costing-margin-percent input { font-size: 12px; }
-.costing-margin-percent > span { position: absolute; right: 2px; top: 50%; font-size: 10px; transform: translateY(-50%); pointer-events: none; }
+.costing-margin-percent > span { position: static; flex: 0 0 auto; padding-right: 2px; font-size: 10px; transform: none; pointer-events: none; }
 .costing-margin-amount { color: #64748b; font-size: 10px; font-weight: 750; }
 .costing-margin-amount input { font-size: 10px; }
 .costing-margin-amount .costing-currency-symbol { color: inherit; font-size: 9px; }
@@ -508,7 +510,7 @@
 .costing-margin > span:focus-within { border-radius: 4px; background: #f8fafc; box-shadow: inset 0 0 0 1px #b8dce1; }
 
 .costing-sale-cell { position: absolute; inset: 1px; display: grid; grid-template-rows: 1fr 1fr; width: auto; height: auto; min-height: 0; line-height: 1; }
-.costing-sale-difference { position: static; display: flex; min-width: 0; height: auto; min-height: 0; align-items: center; justify-content: center; margin: 0; color: #64748b; font-size: 10px; font-weight: 750; line-height: 1; text-align: center; white-space: nowrap; }
+.costing-sale-difference { position: static; display: flex; min-width: 0; height: auto; min-height: 0; align-items: center; justify-content: flex-end; margin: 0; padding-right: 3px; color: #64748b; font-size: 10px; font-weight: 750; line-height: 1; text-align: right; white-space: nowrap; }
 .costing-sale-difference.is-above-margin { color: #07823a; }
 .costing-sale-difference.is-below-margin { color: #b56a00; }
 .costing-sale-difference.is-below-cost { color: #c32727; }
@@ -535,8 +537,8 @@
 .costing-subtotal-label { display: grid; gap: 1px; margin-right: auto; text-align: left; }
 .costing-subtotal-label strong { color: #172e48; font-size: 10px; }
 .costing-subtotal-label small { color: #7a899b; font-size: 8.5px; }
-.costing-inline-money { display: grid; grid-template-columns: auto 82px; align-items: center; color: #172e48; font-size: 10px; font-weight: 700; }
-.costing-inline-money input { height: 24px; color: inherit; font: inherit; text-align: right; }
+.costing-inline-money { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; color: #172e48; font-size: 10px; font-weight: 700; }
+.costing-inline-money input { height: 24px; color: inherit; font: inherit; width: 82px; text-align: right; }
 
 .costing-add-item {
   border: 1px solid var(--finance-border);

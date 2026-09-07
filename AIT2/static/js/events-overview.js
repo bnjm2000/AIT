@@ -472,16 +472,20 @@ function eventOverviewProgress(event) {
     return { done, total, label: 'Returned' };
   }
   if (state === 'Ongoing' || state === 'Last Day') {
-    const out = Math.max(0, Number(event.returnableCount ?? event.preparedCount ?? 0));
-    const total = Math.max(out, Number(event.assetCount || out));
-    return { done: out, total, label: 'Out' };
+    // Keep the event-card progress tied to preparation requirements. Physical
+    // returnables include prepared extras, while assetCount also includes
+    // vendor-delivered loans; combining those values produces misleading
+    // percentages such as 383/393 for a fully prepared event.
+    const prepared = Math.max(0, Number(event.preparationCount ?? event.preparedCount ?? 0));
+    const required = Math.max(0, Number(event.preparationTotal ?? event.assetCount ?? 0));
+    return { done: prepared, total: required, label: 'Prepared' };
   }
   if (state === 'New') {
     return { done: 0, total: Math.max(0, Number(event.assetCount || 0)), label: 'Items added', added: true };
   }
   return {
-    done: Math.max(0, Number(event.preparedCount || 0)),
-    total: Math.max(0, Number(event.assetCount || 0)),
+    done: Math.max(0, Number(event.preparationCount ?? event.preparedCount ?? 0)),
+    total: Math.max(0, Number(event.preparationTotal ?? event.assetCount ?? 0)),
     label: state === 'Planning' ? 'Planned' : 'Packed'
   };
 }

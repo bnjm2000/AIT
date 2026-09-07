@@ -5658,7 +5658,17 @@
 
       .event-subproject-tab-wrap.is-drop-target {
         background: color-mix(in srgb, var(--brand-main) 12%, #fff);
-        box-shadow: inset 0 0 0 2px var(--brand-main);
+      }
+
+      .event-subproject-tab-wrap.is-drop-target::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        box-sizing: border-box;
+        border: 2px solid var(--brand-main);
+        border-radius: inherit;
+        pointer-events: none;
       }
 
       .event-subproject-tab-wrap.is-reorderable .event-subproject-tab {
@@ -5727,12 +5737,20 @@
       .event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab {
         color: #b42318;
         background: #fff1f0;
-        border-bottom-color: #d92d20;
+        border-bottom-color: transparent;
       }
 
       .event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab {
         color: #b54708;
         background: #fffaeb;
+        border-bottom-color: transparent;
+      }
+
+      .event-subproject-tab-wrap.has-warning-shortage .event-subproject-tab.active {
+        border-bottom-color: #d92d20;
+      }
+
+      .event-subproject-tab-wrap.has-warning-degraded .event-subproject-tab.active {
         border-bottom-color: #f79009;
       }
 
@@ -8403,8 +8421,8 @@
       }
 
       .prepare-new-status-extra {
-        background: #fef3c7;
-        color: #92400e;
+        background: #dbeafe;
+        color: #2563eb;
       }
 
       .prepare-new-status-degraded {
@@ -8686,8 +8704,8 @@
       }
 
       .prepare-new-asset-card.assigned.extra {
-        border-color: #f3cf73;
-        background: #fffbeb;
+        border-color: #93c5fd;
+        background: #eff6ff;
       }
 
       .prepare-new-asset-card.missing {
@@ -9688,6 +9706,24 @@
         font-weight: 650;
         text-align: right;
         overflow-wrap: anywhere;
+      }
+
+      .return-event-notes {
+        display: grid;
+        gap: 5px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #e8ebf2;
+      }
+
+      .return-event-notes label {
+        color: #344054;
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .return-event-notes .plan-notes-textarea {
+        min-height: 88px;
       }
 
       .return-quick-label {

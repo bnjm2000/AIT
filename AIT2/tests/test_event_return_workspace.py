@@ -124,6 +124,27 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         )
         self.assertNotEqual(event.state, 'Closed')
 
+    def test_returned_extra_remains_in_prepared_extra_history(self):
+        self.data_manager.inventory['A-002'] = self.make_asset('A-002')
+        self.data_manager.save_inventory()
+        event = self.make_event(
+            actually_prepared=['A-001', 'A-002'],
+            returned_items=['A-001', 'A-002'],
+        )
+        event.extra_assets = ['A-002']
+        self.data_manager.save_event(event)
+
+        response = self.client.get(f'/api/events/{event.event_id}')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        data = response.get_json()['data']
+        group = next(iter(data['modelGroups'].values()))
+        self.assertEqual(group['preparedEverQuantity'], 2)
+        self.assertEqual(group['extraPreparedQuantity'], 0)
+        self.assertEqual(group['extraPreparedEverQuantity'], 1)
+        self.assertEqual(data['totalExtraAssets'], 0)
+        self.assertEqual(data['totalExtraPrepared'], 1)
+
     def test_unreturn_rejects_asset_now_used_by_another_event(self):
         event = self.make_event(returned_items=['A-001'])
         self.make_event(

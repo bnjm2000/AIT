@@ -693,6 +693,7 @@ async function generateInventoryPdf() {
     win.document.close();
 
     await loadPdfSettings(true);
+    await ensurePdfExportFontReady(document);
 
     const showIndividual = document.getElementById('inventory-export-individual')?.checked || false;
     const filterSummary = inventoryFilterSummary(filters, filteredAssets.length);
@@ -707,6 +708,7 @@ async function generateInventoryPdf() {
     });
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${reportTitle}</title><style>
+      ${PDF_EXPORT_FONT_FACE_CSS}
       @page { size: A4 ${pageConfig.orientation}; margin: 0; }
       * { box-sizing: border-box; }
       body { margin: 0; font-family: ${PDF_EXPORT_FONT_FAMILY}; color: #000; background: #f0f0f0; font-size: ${pageConfig.bodyFontSize}; line-height: 1.25; }
@@ -744,6 +746,7 @@ async function generateInventoryPdf() {
     win.document.open();
     win.document.write(html);
     win.document.close();
+    await ensurePdfExportFontReady(win.document);
     win.focus();
     showNotification('success', 'Inventory PDF generated successfully');
   } catch (error) {
