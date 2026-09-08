@@ -76,14 +76,14 @@
         </section>
 
         <section class="worker-view" id="statisticsView">
-          <header class="view-heading"><div><h1>Statistics</h1><p>Your approved and paid earnings over time.</p></div>
-            <div class="statistics-filters">
-              <select id="statisticsPeriod"><option value="month">By month</option><option value="year" selected>By year</option></select>
-              <input id="statisticsMonth" type="month" hidden />
-              <select id="statisticsYear"></select>
+          <header class="view-heading"><div><h1>Statistics</h1><p>Your earnings, reimbursements, and work activity in one place.</p></div>
+            <div class="statistics-filters" role="group" aria-label="Statistics period">
+              <select id="statisticsPeriod" aria-label="View by" data-native-select><option value="month">By month</option><option value="year" selected>By year</option></select>
+              <input id="statisticsMonth" type="month" aria-label="Select month" hidden />
+              <select id="statisticsYear" aria-label="Select year" data-native-select></select>
             </div>
           </header>
-          <div class="statistics-grid" id="statisticsGrid"></div>
+          <div id="statisticsDashboard"></div>
         </section>
 
         <section class="worker-view" id="profileView">
@@ -144,6 +144,7 @@
       </section>
     </div>
 
+    <script src="{{ url_for('static', filename='js/worker-statistics.js', v=worker_statistics_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/worker.js', v=worker_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/custom-select.js', v=custom_select_js_version) }}"></script>
   </body>

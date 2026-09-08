@@ -443,32 +443,19 @@ function renderCompanies() {
 }
 
 function renderStatistics() {
-  const events = allEvents();
-  const period = byId('statisticsPeriod').value || 'year';
-  const month = byId('statisticsMonth').value;
-  const year = byId('statisticsYear').value;
-  const submissions = events.flatMap(({ event }) => [
-    ...event.submissions.invoices.map(row => ({ ...row, kind: 'Invoice' })),
-    ...event.submissions.claims.map(row => ({ ...row, kind: 'Claim' }))
-  ]).filter(row => {
-    const earned = ['Approved', 'Paid'].includes(row.adminStatus) || row.status === 'Payment Confirmed';
-    if (!earned) return false;
-    const date = new Date(row.submittedAt);
-    if (Number.isNaN(date.getTime())) return false;
-    if (period === 'month') return month && row.submittedAt.slice(0, 7) === month;
-    return String(date.getFullYear()) === String(year);
+  const yearSelect = byId('statisticsYear');
+  const selectedYear = yearSelect.value;
+  const years = WorkerStatistics.years(workerPortalData.companies);
+  if (years.join(',') !== yearSelect.dataset.years) {
+    yearSelect.innerHTML = years.map(year => `<option>${year}</option>`).join('');
+    yearSelect.dataset.years = years.join(',');
+    if (years.includes(Number(selectedYear))) yearSelect.value = selectedYear;
+  }
+  WorkerStatistics.render(byId('statisticsDashboard'), workerPortalData.companies, {
+    period: byId('statisticsPeriod').value,
+    month: byId('statisticsMonth').value,
+    year: yearSelect.value
   });
-  const invoiceTotal = submissions.filter(row => row.kind === 'Invoice')
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const claimTotal = submissions.filter(row => row.kind === 'Claim')
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const total = invoiceTotal + claimTotal;
-  byId('statisticsGrid').innerHTML = [
-    ['Total Earned', money(total)],
-    ['Invoices', money(invoiceTotal)],
-    ['Claims', money(claimTotal)],
-    ['Approved / Paid Files', submissions.length]
-  ].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join('');
 }
 
 function renderPortal() {
@@ -962,6 +949,17 @@ byId('statisticsPeriod').addEventListener('change', event => {
 });
 byId('statisticsMonth').addEventListener('change', renderStatistics);
 byId('statisticsYear').addEventListener('change', renderStatistics);
+byId('statisticsDashboard').addEventListener('click', event => {
+  const bar = event.target.closest('[data-statistics-bar]');
+  if (bar) {
+    const chart = bar.closest('.stats-chart-scroll');
+    chart.nextElementSibling.textContent = bar.getAttribute('aria-label');
+    chart.querySelectorAll('[data-statistics-bar]').forEach(item => {
+      item.classList.toggle('is-selected', item === bar);
+    });
+  }
+  if (event.target.closest('[data-statistics-events]')) showWorkerView('events');
+});
 byId('mobileMenuButton').addEventListener('click', () => document.body.classList.toggle('mobile-nav-open'));
 byId('workerSignout').addEventListener('click', () => {
   sessionStorage.removeItem('showbaseWorkerPortal');
@@ -1042,16 +1040,7 @@ try {
 } catch (_error) {
   workerPortalData = { companies: [] };
 }
-const statisticsNow = new Date();
-byId('statisticsMonth').value = `${statisticsNow.getFullYear()}-${String(statisticsNow.getMonth() + 1).padStart(2, '0')}`;
-const statisticsYears = [...new Set([
-  statisticsNow.getFullYear(),
-  ...allEvents().flatMap(({ event }) => [
-    ...(event.submissions?.invoices || []),
-    ...(event.submissions?.claims || [])
-  ]).map(row => new Date(row.submittedAt).getFullYear()).filter(Number.isFinite)
-])].sort((a, b) => b - a);
-byId('statisticsYear').innerHTML = statisticsYears.map(year => `<option>${year}</option>`).join('');
+byId('statisticsMonth').value = WorkerStatistics.dateKey(new Date().toISOString()).slice(0, 7);
 if (!workerPortalData.companies?.length) {
   window.location.replace('/login');
 } else {

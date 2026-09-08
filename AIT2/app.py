@@ -11113,6 +11113,7 @@ def worker_portal():
     return render_template(
         'worker.html',
         worker_js_version=_static_asset_version('js/worker.js'),
+        worker_statistics_js_version=_static_asset_version('js/worker-statistics.js'),
         worker_css_version=_static_asset_version('css/worker.css'),
         custom_select_js_version=_static_asset_version('js/custom-select.js'),
         custom_select_css_version=_static_asset_version('css/custom-select.css'),
