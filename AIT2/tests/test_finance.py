@@ -3771,6 +3771,71 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('1x Floor Tom 14x14 Floor tom', text)
         self.assertIn('J120 Guitar Amp', text)
 
+    def test_manual_group_price_is_remembered_for_future_groups(self):
+        quotation = self.create_quote('Remembered Group Price')
+        shared = {
+            'groupId': 'remembered-audio-kit',
+            'groupTitle': 'Audio Package',
+            'groupDisplayFields': ['description'],
+            'groupCustomText': False,
+            'groupHeaderQuantity': 1,
+            'groupItemQuantity': 1,
+            'groupItemDays': 1,
+            'groupItemUom': 'units',
+            'groupItemDiscountPercent': 0,
+            'groupItemTotalMode': 'calculated',
+            'groupItemCommercialStored': True,
+            'groupPricingMode': 'total',
+            'department': 'Audio Department',
+            'systemName': 'Audio',
+            'subprojectId': 'main',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 275,
+            'discountPercent': 0,
+            'totalMode': 'amount',
+        }
+        quotation['lineItems'] = [{
+            **shared,
+            'id': 'remembered-speaker',
+            'description': 'Speaker',
+            'catalogKey': 'inventory:ax|speaker||',
+            'groupLeader': True,
+            'groupItemUnitPrice': 75,
+            'groupItemTotal': 75,
+            'groupItemPriceContribution': 75,
+            'total': 275,
+        }, {
+            **shared,
+            'id': 'remembered-stand',
+            'description': 'Stand',
+            'catalogKey': 'inventory:ax|stand||',
+            'groupLeader': False,
+            'groupItemUnitPrice': 25,
+            'groupItemTotal': 25,
+            'groupItemPriceContribution': 25,
+            'total': 0,
+        }]
+
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.assertTrue(all(
+            line['groupPricingMode'] == 'total'
+            for line in saved['lineItems']
+        ))
+
+        suggestion = self.client.get(
+            '/api/finance/group-price-suggestion',
+            query_string={'title': '  AUDIO   package '},
+        )
+        self.assertEqual(suggestion.status_code, 200)
+        remembered = suggestion.get_json()['data']
+        self.assertTrue(remembered['remembered'])
+        self.assertEqual(remembered['unitPrice'], 275)
+        self.assertEqual(remembered['uom'], 'lot')
+
     def test_group_custom_text_preserves_new_lines_in_editor_and_pdf(self):
         quotation = self.create_quote('Multiline Group Text')
         quotation['lineItems'] = [{
@@ -4884,6 +4949,38 @@ class FinanceFeatureTests(unittest.TestCase):
         event = self.data_manager.events[accepted['eventId']]
         self.assertEqual(event.start_date, '20260801')
         self.assertEqual(event.end_date, '20260805')
+
+    def test_schedule_tbc_time_is_preserved_and_rendered_without_hours_suffix(self):
+        from quotation_pdf import _schedule_date_summary
+
+        quotation = self.create_quote('TBC Schedule')
+        quotation.update({
+            'showDate': '2026-08-03',
+            'showTime': 'TBC',
+            'additionalShows': [
+                {'id': 'show-2', 'date': '2026-08-04', 'time': 'TBC'},
+            ],
+        })
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        self.assertEqual(saved['showTime'], 'TBC')
+        self.assertEqual(saved['additionalShows'][0]['time'], 'TBC')
+        self.assertEqual(
+            _schedule_date_summary([
+                {'date': saved['showDate'], 'time': saved['showTime']},
+                saved['additionalShows'][0],
+            ]),
+            '3 - 4 August 2026, TBC',
+        )
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertIn('TBC', text)
+        self.assertNotIn('TBChrs', text)
 
     def test_dry_hire_schedule_labels_pdf_and_created_event_tag(self):
         quotation = self.create_quote('Dry Hire Schedule')

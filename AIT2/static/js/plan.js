@@ -3140,29 +3140,67 @@ async function loadPlanPage() {
     if (!planPageState.eventId && typeof workflowRememberedEventId === 'function') {
       planPageState.eventId = workflowRememberedEventId();
     }
-    const [eventOptionsLoad, assetsResponse, templatesResponse, containerCache] = await Promise.all([
-      startProgressiveEventOptions(planPageState.eventId, loaded => {
+    const preferredId = Number(planPageState.eventId) || null;
+    const eventOptionsPromise = startProgressiveEventOptions(
+      preferredId,
+      loaded => {
         planPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
         if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-      }),
-      apiCall('/api/assets/available'),
-      apiCall('/api/planning-templates'),
-      refreshContainersCache(true)
+      },
+      { includeReturnable: false },
+    );
+    let eventOptionsApplied = false;
+    const applyEventOptions = eventOptionsLoad => {
+      if (eventOptionsApplied) return;
+      eventOptionsApplied = true;
+      planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
+      eventOptionsLoad.completion.then(loaded => {
+        planPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
+        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+      }).catch(error => console.warn('Unable to load more event options:', error));
+    };
+
+    void apiCall('/api/planning-templates').then(response => {
+      planPageState.templates = response.data || [];
+    }).catch(error => console.warn('Unable to load planning templates:', error));
+    void refreshContainersCache(false).then(containerCache => {
+      planPageState.containers = Object.values(containerCache || {});
+      if (document.getElementById('planAvailableResults')) renderPlanAvailableResults();
+    }).catch(error => console.warn('Unable to load containers:', error));
+
+    const assetsPromise = apiCall('/api/assets/available?view=plan');
+    if (preferredId) {
+      eventOptionsPromise.then(applyEventOptions).catch(error => {
+        console.warn('Unable to load event options:', error);
+      });
+      try {
+        const [assetsResponse, eventResponse, availabilityResponse] = await Promise.all([
+          assetsPromise,
+          apiCall(`/api/events/${preferredId}?view=plan`),
+          apiCall(`/api/events/${preferredId}/availability?view=plan`),
+        ]);
+        planPageState.assets = assetsResponse.data || [];
+        planPageState.event = eventResponse.data;
+        planPageState.availability = availabilityResponse.data || [];
+        planPageState.events = mergeEventsById(
+          planPageState.events,
+          [eventResponse.data],
+        ).sort(planCompareEventsByEventIdDesc);
+        renderPlanPage();
+        return;
+      } catch (preferredError) {
+        console.warn('Unable to load the remembered Plan event:', preferredError);
+      }
+    }
+
+    const [eventOptionsLoad, assetsResponse] = await Promise.all([
+      eventOptionsPromise,
+      assetsPromise,
     ]);
-    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
-    eventOptionsLoad.completion.then(loaded => {
-      planPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
-      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-    }).catch(error => console.warn('Unable to load more event options:', error));
+    applyEventOptions(eventOptionsLoad);
     planPageState.assets = assetsResponse.data || [];
-    planPageState.templates = templatesResponse.data || [];
-    planPageState.containers = Object.values(containerCache || {});
 
-    const preferredId = planPageState.eventId;
-    const selected = planPageState.events.find(item =>
-      Number(item.id) === Number(preferredId)
-    ) || planPageState.events[0];
-
+    const selected = planPageState.events[0];
     if (selected) {
       await selectPlanEvent(selected.id, { renderLoading: false });
     } else {
@@ -3190,8 +3228,8 @@ async function selectPlanEvent(eventId, options = {}) {
 
   try {
     const [eventResponse, availabilityResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/events/${id}/availability`)
+      apiCall(`/api/events/${id}?view=plan`),
+      apiCall(`/api/events/${id}/availability?view=plan`)
     ]);
     planPageState.event = eventResponse.data;
     planPageState.availability = availabilityResponse.data || [];
@@ -3206,8 +3244,8 @@ async function selectPlanEvent(eventId, options = {}) {
 async function refreshPlanSelectedEvent(options = {}) {
   if (!planPageState.eventId) return;
   const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
-    apiCall(`/api/events/${planPageState.eventId}`),
-    apiCall(`/api/events/${planPageState.eventId}/availability`),
+    apiCall(`/api/events/${planPageState.eventId}?view=plan`),
+    apiCall(`/api/events/${planPageState.eventId}/availability?view=plan`),
     options.templates ? apiCall('/api/planning-templates') : Promise.resolve(null)
   ]);
   const viewState = planCaptureViewState();

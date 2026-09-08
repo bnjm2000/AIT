@@ -425,6 +425,15 @@ def _date_long(value):
         return raw
 
 
+def _schedule_time_label(value):
+    value = str(value or '').strip()
+    if not value:
+        return ''
+    if value.casefold() == 'tbc':
+        return 'TBC'
+    return value if value.casefold().endswith('hrs') else f'{value}hrs'
+
+
 def _schedule_date_summary(rows):
     parsed = []
     unparsed = []
@@ -460,12 +469,6 @@ def _schedule_date_summary(rows):
         else:
             groups.append([(value, time_value)])
 
-    def format_time(value):
-        value = str(value or '').strip()
-        if not value:
-            return ''
-        return value if value.lower().endswith('hrs') else f"{value}hrs"
-
     def format_date(value):
         return f"{value.day} {value.strftime('%B %Y')}"
 
@@ -482,16 +485,16 @@ def _schedule_date_summary(rows):
         time_values = [str(time_value or '').strip() for _value, time_value in group]
         unique_times = set(time_values)
         if len(unique_times) == 1 and next(iter(unique_times), ''):
-            label = f"{label}, {format_time(time_values[0])}"
+            label = f"{label}, {_schedule_time_label(time_values[0])}"
         elif any(time_values):
             return '; '.join(
-                f"{format_date(value)}{f', {format_time(time_value)}' if time_value else ''}"
+                f"{format_date(value)}{f', {_schedule_time_label(time_value)}' if time_value else ''}"
                 for value, time_value in group
             )
         return label
 
     unparsed_labels = [
-        f"{date_label}{f', {format_time(time_value)}' if time_value else ''}"
+        f"{date_label}{f', {_schedule_time_label(time_value)}' if time_value else ''}"
         for date_label, time_value in unparsed
     ]
     return '; '.join([*(format_group(group) for group in groups), *unparsed_labels])
@@ -586,7 +589,7 @@ def _schedule_recurring_batch_summary(batch, all_rows):
             recurrence = f"Every {details['interval']} weeks on {day_label}"
         summary = f"{recurrence}, {_schedule_range_label(details['start'], details['end'])}"
     if details['time']:
-        summary += f", {details['time']}hrs"
+        summary += f", {_schedule_time_label(details['time'])}"
 
     missing_dates = sorted(
         datetime.strptime(date_value, '%Y-%m-%d').date()

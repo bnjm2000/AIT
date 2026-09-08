@@ -5034,7 +5034,7 @@ async function apiCall(endpoint, method = "GET", data = null) {
   }
 }
 
-function eventOptionsEndpoint(offset = 0, eventId = null) {
+function eventOptionsEndpoint(offset = 0, eventId = null, options = {}) {
   const params = new URLSearchParams({
     view: 'options',
     sort: 'id',
@@ -5043,6 +5043,7 @@ function eventOptionsEndpoint(offset = 0, eventId = null) {
     offset: String(Math.max(0, Number(offset) || 0)),
   });
   if (eventId) params.set('eventId', String(eventId));
+  if (options.includeReturnable === false) params.set('includeReturnable', '0');
   return `/api/events?${params.toString()}`;
 }
 
@@ -5052,22 +5053,22 @@ function mergeEventsById(current, incoming) {
   return Array.from(byId.values());
 }
 
-async function startProgressiveEventOptions(preferredEventId = null, onProgress = null) {
-  const firstResponse = await apiCall(eventOptionsEndpoint());
+async function startProgressiveEventOptions(preferredEventId = null, onProgress = null, options = {}) {
+  const firstResponse = await apiCall(eventOptionsEndpoint(0, null, options));
   let loaded = firstResponse.data || [];
 
   if (
     preferredEventId &&
     !loaded.some(event => Number(event.id) === Number(preferredEventId))
   ) {
-    const preferredResponse = await apiCall(eventOptionsEndpoint(0, preferredEventId));
+    const preferredResponse = await apiCall(eventOptionsEndpoint(0, preferredEventId, options));
     loaded = mergeEventsById(loaded, preferredResponse.data || []);
   }
 
   const completion = (async () => {
     let meta = firstResponse.meta || {};
     while (meta.hasMore) {
-      const response = await apiCall(eventOptionsEndpoint(meta.nextOffset));
+      const response = await apiCall(eventOptionsEndpoint(meta.nextOffset, null, options));
       loaded = mergeEventsById(loaded, response.data || []);
       meta = response.meta || {};
       if (onProgress) onProgress(loaded.slice(), meta);
@@ -14056,6 +14057,7 @@ const returnPageState = {
   departmentOpenState: new Map(),
   customGroupOpenState: new Map(),
 };
+const returnPageAssetCache = new WeakMap();
 
 var returnPageNotesSaveTimer = null;
 var returnPagePendingNotesSave = null;
@@ -14131,6 +14133,9 @@ function returnPageUpsertEventSummary(event) {
 
 function returnPageAssets(event = returnPageState.event, state = returnPageState) {
   if (!event) return [];
+  const cacheKey = String(state?.activeSubprojectId || '');
+  const cachedByScope = returnPageAssetCache.get(event);
+  if (cachedByScope?.has(cacheKey)) return cachedByScope.get(cacheKey);
   const returned = new Set(event.returnedItems || []);
   const rows = new Map();
 
@@ -14194,11 +14199,15 @@ function returnPageAssets(event = returnPageState.event, state = returnPageState
     });
   });
 
-  return assets.sort((a, b) => (
+  assets.sort((a, b) => (
     compareByDisplayName(a.department, b.department) ||
     Number(a.isReturned) - Number(b.isReturned) ||
     compareByDisplayName(returnPageAssetTitle(a), returnPageAssetTitle(b))
   ));
+  const cache = cachedByScope || new Map();
+  cache.set(cacheKey, assets);
+  if (!cachedByScope) returnPageAssetCache.set(event, cache);
+  return assets;
 }
 
 function returnSubprojectNeedsAttention(room, event = returnPageState.event) {
@@ -15184,22 +15193,53 @@ async function loadReturnWorkspace(options = {}) {
 
   try {
     if (!returnPageState.eventId) returnPageState.eventId = workflowRememberedEventId();
-    const eventOptionsLoad = await startProgressiveEventOptions(
-      returnPageState.eventId,
+    const preferredId = Number(returnPageState.eventId) || null;
+    const eventOptionsPromise = startProgressiveEventOptions(
+      preferredId,
       loaded => {
         returnPageState.events = loaded;
         returnPageUpdatePickerOptions();
       }
     );
-    if (version !== returnPageState.requestVersion) return;
-    returnPageState.events = eventOptionsLoad.first;
-    eventOptionsLoad.completion.then(loaded => {
-      if (version !== returnPageState.requestVersion) return;
-      returnPageState.events = loaded;
+    let eventOptionsApplied = false;
+    const applyEventOptions = eventOptionsLoad => {
+      if (eventOptionsApplied || version !== returnPageState.requestVersion) return;
+      eventOptionsApplied = true;
+      returnPageState.events = eventOptionsLoad.first;
+      events = returnPageState.events;
+      updateOverdueCounter(countOverdueEvents(returnPageState.events));
       returnPageUpdatePickerOptions();
-    }).catch(error => console.warn('Unable to load more event options:', error));
-    events = returnPageState.events;
-    updateOverdueCounter(countOverdueEvents(returnPageState.events));
+      eventOptionsLoad.completion.then(loaded => {
+        if (version !== returnPageState.requestVersion) return;
+        returnPageState.events = loaded;
+        events = loaded;
+        updateOverdueCounter(countOverdueEvents(loaded));
+        returnPageUpdatePickerOptions();
+      }).catch(error => console.warn('Unable to load more event options:', error));
+    };
+
+    if (preferredId && options.keepSelection !== false) {
+      eventOptionsPromise.then(applyEventOptions).catch(error => {
+        console.warn('Unable to load Return event options:', error);
+      });
+      try {
+        const detailResponse = await apiCall(`/api/events/${preferredId}?view=return`);
+        if (version !== returnPageState.requestVersion) return;
+        returnPageState.eventId = preferredId;
+        workflowRememberEvent(preferredId);
+        returnPageState.event = detailResponse.data;
+        returnPageUpsertEventSummary(detailResponse.data);
+        returnPageState.loaded = true;
+        renderReturnPage({ snapshot });
+        return;
+      } catch (preferredError) {
+        console.warn('Unable to load the remembered Return event:', preferredError);
+      }
+    }
+
+    const eventOptionsLoad = await eventOptionsPromise;
+    if (version !== returnPageState.requestVersion) return;
+    applyEventOptions(eventOptionsLoad);
 
     const eligible = returnPageEligibleEvents().filter(event => (
       getEventReturnableCount(event) > 0 && event.state !== 'Closed'
@@ -15219,7 +15259,7 @@ async function loadReturnWorkspace(options = {}) {
       return;
     }
 
-    const detailResponse = await apiCall(`/api/events/${selected.id}`);
+    const detailResponse = await apiCall(`/api/events/${selected.id}?view=return`);
     if (version !== returnPageState.requestVersion) return;
     returnPageState.eventId = Number(selected.id);
     workflowRememberEvent(selected.id);
@@ -15249,7 +15289,7 @@ async function returnPageSelectEvent(eventId) {
   returnPageState.departmentOpenState.clear();
   returnPageState.customGroupOpenState.clear();
   try {
-    const response = await apiCall(`/api/events/${id}`);
+    const response = await apiCall(`/api/events/${id}?view=return`);
     if (version !== returnPageState.requestVersion) return;
     returnPageState.eventId = id;
     workflowRememberEvent(id);
@@ -15268,7 +15308,7 @@ async function returnPageRefreshSelected(options = {}) {
   const snapshot = returnPageCaptureViewState();
   if (options.focusId) snapshot.focusId = options.focusId;
   const version = ++returnPageState.requestVersion;
-  const response = await apiCall(`/api/events/${id}`);
+  const response = await apiCall(`/api/events/${id}?view=return`);
   if (version !== returnPageState.requestVersion || id !== Number(returnPageState.eventId)) return;
   returnPageState.event = response.data;
   returnPageUpsertEventSummary(response.data);

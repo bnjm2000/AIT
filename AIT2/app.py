@@ -8352,6 +8352,29 @@ def _asset_to_available_dict(asset):
         'degradedReasons': _asset_degraded_reasons(asset),
     }
 
+
+def _workspace_available_asset_payload(asset_payload, view_mode):
+    """Return only fields consumed by a specific workflow workspace."""
+    if view_mode == 'plan':
+        fields = (
+            'id', 'bulkId', 'displayId', 'brand', 'model', 'description',
+            'tags', 'department', 'isBulk', 'quantity',
+        )
+    elif view_mode == 'prepare':
+        fields = (
+            'id', 'bulkId', 'displayId', 'brand', 'model', 'department',
+            'serial', 'status', 'isMissing', 'isDegraded', 'isBulk',
+            'quantity',
+        )
+    else:
+        return asset_payload
+
+    return {
+        field: asset_payload[field]
+        for field in fields
+        if field in asset_payload
+    }
+
 def require_auth(f):
     """Decorator to require authentication"""
     @wraps(f)
@@ -8398,6 +8421,7 @@ def get_available_assets_for_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
+        view_mode = request.args.get('view', '').strip().lower()
 
         current_event_refs = _active_physical_asset_refs_for_event(event)
         returned_event_refs = {
@@ -8439,7 +8463,10 @@ def get_available_assets_for_event(event_id):
                 if available_quantity <= 0:
                     continue
 
-                final_list.append(_bulk_asset_to_available_dict(asset, event))
+                final_list.append(_workspace_available_asset_payload(
+                    _bulk_asset_to_available_dict(asset, event),
+                    view_mode,
+                ))
                 continue
 
             is_returned_reconciliation_candidate = (
@@ -8464,7 +8491,7 @@ def get_available_assets_for_event(event_id):
             ):
                 continue
 
-            final_list.append({
+            asset_payload = {
                 'id': asset_id,
                 'brand': asset.brand,
                 'model': asset.model_number,
@@ -8492,7 +8519,11 @@ def get_available_assets_for_event(event_id):
                 'preparableQuantity': 0 if is_missing else 1,
                 'degradedReasons': _asset_degraded_reasons(asset),
                 'notAvailableReason': 'missing' if is_missing else '',
-            })
+            }
+            final_list.append(_workspace_available_asset_payload(
+                asset_payload,
+                view_mode,
+            ))
 
         return jsonify({'success': True, 'data': final_list})
     except Exception as e:
@@ -19154,7 +19185,7 @@ def _refresh_event_vendor_management_mirror(event, finance_data):
     return True
 
 
-def refresh_event_states_for_read(events_to_check=None):
+def refresh_event_states_for_read(events_to_check=None, sync_vendor_management=True):
     """Keep automatically calculated event states current before read responses."""
     if _current_data_manager_object() is None:
         return []
@@ -19174,20 +19205,22 @@ def refresh_event_states_for_read(events_to_check=None):
 
     closure_workforce = load_workforce(_workforce_folder())
     finance_data = None
-    try:
-        finance_data = _load_finance_data()
-    except Exception as finance_error:
-        logger.warning(
-            "Unable to refresh event vendor fulfilment choices: %s",
-            finance_error,
-        )
+    if sync_vendor_management:
+        try:
+            finance_data = _load_finance_data()
+        except Exception as finance_error:
+            logger.warning(
+                "Unable to refresh event vendor fulfilment choices: %s",
+                finance_error,
+            )
 
     saved_any = False
     for event in source_events:
         old_state = normalize_event_state(getattr(event, 'state', 'New'))
         event.state = old_state
-        vendor_management_changed = _refresh_event_vendor_management_mirror(
-            event, finance_data
+        vendor_management_changed = bool(
+            sync_vendor_management
+            and _refresh_event_vendor_management_mirror(event, finance_data)
         )
         update_event_state(event, workforce=closure_workforce)
 
@@ -22839,6 +22872,9 @@ def get_events():
         calendar_view = view_mode == 'calendar'
         summary_view = view_mode in {'summary', 'options', 'calendar'}
         options_view = view_mode == 'options'
+        include_returnable = str(
+            request.args.get('includeReturnable', '1')
+        ).strip().lower() not in {'0', 'false', 'no'}
         range_start_raw = request.args.get('rangeStart', '').strip()
         range_end_raw = request.args.get('rangeEnd', '').strip()
         range_start = _parse_any_date(range_start_raw)
@@ -22914,7 +22950,10 @@ def get_events():
         page_events = filtered_events[
             offset:offset + limit if limit is not None else None
         ] if (offset or limit is not None) else filtered_events
-        refresh_event_states_for_read(page_events)
+        refresh_event_states_for_read(
+            page_events,
+            sync_vendor_management=not options_view,
+        )
 
         if calendar_view:
             events_data = [
@@ -22976,8 +23015,7 @@ def get_events():
                 event.extra_assets = []
 
             if options_view:
-                returnable_counts = _event_returnable_counts(event)
-                events_data.append({
+                event_option = {
                     'id': event.event_id,
                     'name': event.name,
                     'location': getattr(event, 'location', '') or '',
@@ -22985,9 +23023,14 @@ def get_events():
                     'endDate': format_date_output(event.end_date),
                     'state': event.state,
                     'tag': getattr(event, 'tag', 'events'),
-                    'returnableCount': returnable_counts['returnable'],
-                    'returnableTotalCount': returnable_counts['total'],
-                })
+                }
+                if include_returnable:
+                    returnable_counts = _event_returnable_counts(event)
+                    event_option.update({
+                        'returnableCount': returnable_counts['returnable'],
+                        'returnableTotalCount': returnable_counts['total'],
+                    })
+                events_data.append(event_option)
                 continue
 
             extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
@@ -23182,6 +23225,8 @@ def get_events():
 def get_event(event_id):
     """Get a specific event with detailed asset information"""
     try:
+        detail_view = request.args.get('view', '').strip().lower()
+        workspace_view = detail_view in {'plan', 'prepare', 'return'}
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
@@ -23189,7 +23234,10 @@ def get_event(event_id):
         if not _current_user_can_access_event(event):
             return _event_access_denied_response()
 
-        refresh_event_states_for_read([event])
+        refresh_event_states_for_read(
+            [event],
+            sync_vendor_management=not workspace_view,
+        )
 
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
@@ -23529,8 +23577,6 @@ def get_event(event_id):
             f"Extra assets in list: {len(event.extra_assets)}"
         )
             
-        returnable_counts = _event_returnable_counts(event)
-
         event_data = {
             'id': event.event_id,
             'name': event.name,
@@ -23545,82 +23591,98 @@ def get_event(event_id):
             'returnedItems': event.returned_items,
             'extraAssets': event.extra_assets,
             'customCollected': getattr(event, 'custom_collected', []),
-            'returnableCount': returnable_counts['returnable'],
-            'returnableTotalCount': returnable_counts['total'],
-            'returnableRefs': returnable_counts['refs'],
             'assetsByDepartment': sorted_departments,
-            'assignedAssets': assigned_assets,
-            'preparedAssets': prepared_assets,
-            'returnedAssets': returned_assets,
-            'totalAssets': total_required,
-            'totalPrepared': total_prepared,
-            'totalReturned': total_returned,
-            'totalExtraAssets': total_extra_assets,
-            'totalExtraPrepared': total_extra_prepared,
             'modelGroups': model_groups,
             'subprojects': getattr(event, 'subprojects', []) or [],
             'forceStateOverride': getattr(event, 'force_state_override', False),
             'notes': getattr(event, 'notes', '') or '',
-            'files': _event_files_for_response(event.event_id),
-            'canDeleteFiles': _current_user_is_admin(),
-            'eventLogs': _event_activity_logs_for_response(event),
-            'assignedUsernames': _event_assigned_usernames_for_response(event),
-            'assignedUsers': _event_assignee_payloads(event),
-            'vendorManagement': _event_vendor_management(event),
         }
-        try:
-            workflow_workforce = load_workforce(_workforce_folder())
-        except Exception as workforce_error:
-            workflow_workforce = {}
-            logger.warning(
-                "Unable to load workflow progress for event %s: %s",
-                event_id,
-                workforce_error,
-            )
-        try:
-            workflow_finance = _load_finance_data()
-        except Exception as finance_error:
-            workflow_finance = {}
-            logger.warning(
-                "Unable to load finance progress for event %s: %s",
-                event_id,
-                finance_error,
-            )
-        event_data['workflowProgress'] = _event_workflow_progress_payload(
-            event,
-            total_required,
-            max(0, total_prepared - custom_counts['preparedEver']
-                + _custom_counts_for_event(event, exclude_delivered=True)['preparedEver']),
-            total_returned,
-            workflow_workforce,
-            workflow_finance,
-            prepare_required=_event_prepare_required_total(
+
+        if not workspace_view or detail_view == 'return':
+            returnable_counts = _event_returnable_counts(event)
+            event_data.update({
+                'returnableCount': returnable_counts['returnable'],
+                'returnableTotalCount': returnable_counts['total'],
+                'returnableRefs': returnable_counts['refs'],
+            })
+
+        if not workspace_view:
+            event_data.update({
+                'assignedAssets': assigned_assets,
+                'preparedAssets': prepared_assets,
+                'returnedAssets': returned_assets,
+                'totalAssets': total_required,
+                'totalPrepared': total_prepared,
+                'totalReturned': total_returned,
+                'totalExtraAssets': total_extra_assets,
+                'totalExtraPrepared': total_extra_prepared,
+                'files': _event_files_for_response(event.event_id),
+                'canDeleteFiles': _current_user_is_admin(),
+                'eventLogs': _event_activity_logs_for_response(event),
+                'assignedUsernames': _event_assigned_usernames_for_response(event),
+                'assignedUsers': _event_assignee_payloads(event),
+            })
+
+        workflow_workforce = {}
+        workflow_finance = {}
+        if not workspace_view:
+            try:
+                workflow_workforce = load_workforce(_workforce_folder())
+            except Exception as workforce_error:
+                logger.warning(
+                    "Unable to load workflow progress for event %s: %s",
+                    event_id,
+                    workforce_error,
+                )
+        if not workspace_view or detail_view in {'plan', 'prepare'}:
+            try:
+                workflow_finance = _load_finance_data()
+            except Exception as finance_error:
+                logger.warning(
+                    "Unable to load finance progress for event %s: %s",
+                    event_id,
+                    finance_error,
+                )
+
+        if not workspace_view:
+            event_data['workflowProgress'] = _event_workflow_progress_payload(
                 event,
                 total_required,
-                custom_counts,
-            ),
-        )
-        try:
-            linked_quotations = _finance_quotations_for_event(
+                max(0, total_prepared - custom_counts['preparedEver']
+                    + _custom_counts_for_event(event, exclude_delivered=True)['preparedEver']),
+                total_returned,
+                workflow_workforce,
                 workflow_finance,
-                event_id,
-                accessible_only=False,
+                prepare_required=_event_prepare_required_total(
+                    event,
+                    total_required,
+                    custom_counts,
+                ),
             )
-            if linked_quotations:
-                event_data['quotationId'] = linked_quotations[0].get('id') or ''
-                event_data['quotationNumber'] = linked_quotations[0].get('number') or ''
-                linked_costing = _linked_costing_for_quotation(
-                    _load_finance_data(), linked_quotations[0]
+
+        if not workspace_view or detail_view in {'plan', 'prepare'}:
+            event_data['vendorManagement'] = _event_vendor_management(event)
+            try:
+                linked_quotations = _finance_quotations_for_event(
+                    workflow_finance,
+                    event_id,
+                    accessible_only=False,
                 )
-                event_data['vendorManagement'] = _event_vendor_management(
-                    event, linked_costing
+                if linked_quotations:
+                    event_data['quotationId'] = linked_quotations[0].get('id') or ''
+                    event_data['quotationNumber'] = linked_quotations[0].get('number') or ''
+                    linked_costing = _linked_costing_for_quotation(
+                        workflow_finance, linked_quotations[0]
+                    )
+                    event_data['vendorManagement'] = _event_vendor_management(
+                        event, linked_costing
+                    )
+            except Exception as finance_error:
+                logger.warning(
+                    "Unable to resolve paired quotation for event %s: %s",
+                    event_id,
+                    finance_error,
                 )
-        except Exception as finance_error:
-            logger.warning(
-                "Unable to resolve paired quotation for event %s: %s",
-                event_id,
-                finance_error,
-            )
 
         return jsonify({'success': True, 'data': event_data})
 
@@ -23845,6 +23907,20 @@ def delete_event_file_upload(event_id, filename):
         return jsonify({'error': 'Failed to delete event file'}), 500
 
 
+def _workspace_availability_payload(rows, view_mode):
+    if view_mode != 'plan':
+        return rows
+    unused_fields = {'physicalGlobal', 'unavailable', 'adjustedGlobal'}
+    return [
+        {
+            key: value
+            for key, value in row.items()
+            if key not in unused_fields
+        }
+        for row in rows
+    ]
+
+
 @app.route('/api/events/<int:event_id>/availability', methods=['GET'])
 @require_auth
 @require_event_access
@@ -23862,6 +23938,7 @@ def get_event_model_availability(event_id):
     - Still return rows with 0 availability so the frontend can show them.
     """
     try:
+        view_mode = request.args.get('view', '').strip().lower()
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
@@ -23872,7 +23949,13 @@ def get_event_model_availability(event_id):
         cache_key = (event_id, str(session.get('user') or ''))
         cached_result = availability_cache.get(cache_key)
         if isinstance(cached_result, list):
-            return jsonify({'success': True, 'data': copy.deepcopy(cached_result)})
+            return jsonify({
+                'success': True,
+                'data': _workspace_availability_payload(
+                    copy.deepcopy(cached_result),
+                    view_mode,
+                ),
+            })
 
         physical_by_key = defaultdict(int)
         asset_ooc_by_key = defaultdict(int)
@@ -24050,7 +24133,10 @@ def get_event_model_availability(event_id):
 
         availability_cache[cache_key] = copy.deepcopy(result)
 
-        return jsonify({'success': True, 'data': result})
+        return jsonify({
+            'success': True,
+            'data': _workspace_availability_payload(result, view_mode),
+        })
 
     except Exception as e:
         logger.error(f"Error computing model availability for event {event_id}: {e}")
@@ -29916,6 +30002,7 @@ def get_available_assets():
     """
     try:
         available_assets = []
+        view_mode = request.args.get('view', '').strip().lower()
 
         for asset in data_manager.inventory.values():
             if not asset:
@@ -29924,7 +30011,10 @@ def get_available_assets():
             if getattr(asset, 'is_missing', False) or _is_disposed(asset):
                 continue
 
-            available_assets.append(_asset_to_available_dict(asset))
+            available_assets.append(_workspace_available_asset_payload(
+                _asset_to_available_dict(asset),
+                view_mode,
+            ))
 
         available_assets.sort(key=lambda x: (
             x['department'],
@@ -33773,6 +33863,7 @@ def _finance_defaults():
         'documents': [],
         'linkedLineItems': {},
         'priceBook': {},
+        'groupPriceBook': {},
         'costBook': {},
         'invoicePlans': {},
         'invoicePlanTemplates': [],
@@ -34540,6 +34631,8 @@ def _load_finance_data():
             data['documents'] = loaded['documents']
         if isinstance(loaded.get('priceBook'), dict):
             data['priceBook'] = loaded['priceBook']
+        if isinstance(loaded.get('groupPriceBook'), dict):
+            data['groupPriceBook'] = loaded['groupPriceBook']
         if isinstance(loaded.get('costBook'), dict):
             data['costBook'] = loaded['costBook']
         if isinstance(loaded.get('invoicePlans'), dict):
@@ -34576,6 +34669,7 @@ def _finance_storage_payload(data):
         'documents': _finance_persisted_documents(data),
         'linkedLineItems': copy.deepcopy(data.get('linkedLineItems') or {}),
         'priceBook': copy.deepcopy(data.get('priceBook') or {}),
+        'groupPriceBook': copy.deepcopy(data.get('groupPriceBook') or {}),
         'costBook': copy.deepcopy(data.get('costBook') or {}),
         'invoicePlans': copy.deepcopy(data.get('invoicePlans') or {}),
         'invoicePlanTemplates': copy.deepcopy(
@@ -34599,7 +34693,7 @@ def _finance_runtime_from_storage(payload):
     payload = payload if isinstance(payload, dict) else {}
     data = _finance_defaults()
     for key in (
-        'documents', 'linkedLineItems', 'priceBook', 'costBook',
+        'documents', 'linkedLineItems', 'priceBook', 'groupPriceBook', 'costBook',
         'invoicePlans', 'invoicePlanTemplates', 'profitLoss', 'accounting',
     ):
         if key in payload:
@@ -35317,6 +35411,11 @@ def _normalise_finance_line(value):
             value.get('groupItemCommercialStored')
             or 'groupItemUnitPrice' in value
         ),
+        'groupPricingMode': (
+            'total'
+            if str(value.get('groupPricingMode') or '').strip().lower() == 'total'
+            else 'items'
+        ),
         'subprojectId': re.sub(
             r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
         )[:80] or 'main',
@@ -35400,6 +35499,14 @@ def _normalise_finance_line_groups(lines):
             (line for line in group_lines if line.get('groupLeader')), None
         )
         leader = explicit_leader or group_lines[0]
+        group_pricing_mode = (
+            'total'
+            if any(
+                str(line.get('groupPricingMode') or '').strip().lower() == 'total'
+                for line in group_lines
+            )
+            else 'items'
+        )
         if explicit_leader:
             header_days = max(0, _safe_float(leader.get('days'), 1))
             header_quantity = max(0, _safe_float(leader.get('quantity'), 1))
@@ -35462,6 +35569,7 @@ def _normalise_finance_line_groups(lines):
                 line['groupItemCommercialStored'] = True
             line['groupLeader'] = line is leader
             line['groupHeaderQuantity'] = round(header_quantity, 4)
+            line['groupPricingMode'] = group_pricing_mode
             line['days'] = round(header_days, 4)
             line['quantity'] = round(header_quantity, 4)
             line['uom'] = header_uom
@@ -36737,6 +36845,11 @@ def _normalise_costing_line(value):
             value.get('groupItemPriceContribution'), 0
         )), 6),
         'groupItemCommercialStored': bool(value.get('groupItemCommercialStored')),
+        'groupPricingMode': (
+            'total'
+            if str(value.get('groupPricingMode') or '').strip().lower() == 'total'
+            else 'items'
+        ),
     }
     return _costing_refresh_inventory_line(line)
 
@@ -37052,6 +37165,7 @@ def _costing_line_from_quotation_line(quote_line):
         'groupItemTotal': quote_line.get('groupItemTotal', 0),
         'groupItemPriceContribution': quote_line.get('groupItemPriceContribution', 0),
         'groupItemCommercialStored': bool(quote_line.get('groupItemCommercialStored')),
+        'groupPricingMode': quote_line.get('groupPricingMode', 'items'),
     })
 
 
@@ -37119,6 +37233,7 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'groupItemTotal': costing_line.get('groupItemTotal', 0),
         'groupItemPriceContribution': costing_line.get('groupItemPriceContribution', 0),
         'groupItemCommercialStored': bool(costing_line.get('groupItemCommercialStored')),
+        'groupPricingMode': costing_line.get('groupPricingMode', 'items'),
     })
     if pricing_changed:
         existing.update({
@@ -37447,7 +37562,7 @@ def _sync_costing_from_quotation(finance_data, quotation):
                 'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
                 'groupItemDiscountPercent', 'groupItemTotalMode',
                 'groupItemTotal', 'groupItemPriceContribution',
-                'groupItemCommercialStored',
+                'groupItemCommercialStored', 'groupPricingMode',
             ):
                 line[key] = copy.deepcopy(template.get(key))
             synced_lines.append(line)
@@ -37612,7 +37727,7 @@ def _costing_quote_sync_fingerprint(costing, quotation):
                     'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
                     'groupItemDiscountPercent', 'groupItemTotalMode',
                     'groupItemTotal', 'groupItemPriceContribution',
-                    'groupItemCommercialStored',
+                    'groupItemCommercialStored', 'groupPricingMode',
                 )
             }
             for line in quote_lines
@@ -37714,6 +37829,7 @@ def _linked_cost_line_from_record(public_line, allocation):
         'groupItemTotal': public_line.get('groupItemTotal', 0),
         'groupItemPriceContribution': public_line.get('groupItemPriceContribution', 0),
         'groupItemCommercialStored': bool(public_line.get('groupItemCommercialStored')),
+        'groupPricingMode': public_line.get('groupPricingMode', 'items'),
     }
     line = _normalise_costing_line(payload)
     # The canonical commercial record owns current spelling and inventory
@@ -37744,6 +37860,7 @@ def _linked_cost_line_from_record(public_line, allocation):
         'groupItemTotal': _safe_float(public_line.get('groupItemTotal'), 0),
         'groupItemPriceContribution': _safe_float(public_line.get('groupItemPriceContribution'), 0),
         'groupItemCommercialStored': bool(public_line.get('groupItemCommercialStored')),
+        'groupPricingMode': str(public_line.get('groupPricingMode') or 'items'),
         'category': category,
         'departmentCode': str(public_line.get('departmentCode') or ''),
         'inventoryNameMode': (
@@ -40172,6 +40289,57 @@ def _finance_line_price_signature(line):
     )
 
 
+def _finance_group_price_key(title):
+    return re.sub(
+        r'\s+', ' ', str(title or '').strip().casefold()
+    )[:500]
+
+
+def _remember_finance_group_prices(finance_data, document):
+    price_book = finance_data.setdefault('groupPriceBook', {})
+    owner = (
+        _finance_document_owner_username(document)
+        or _finance_current_username()
+    ).lower()
+    groups = {}
+    for line in document.get('lineItems') or []:
+        if not isinstance(line, dict) or not line.get('groupId'):
+            continue
+        key = (
+            str(line.get('subprojectId') or 'main'),
+            str(line.get('groupId') or ''),
+        )
+        groups.setdefault(key, []).append(line)
+    for lines in groups.values():
+        leader = next((line for line in lines if line.get('groupLeader')), lines[0])
+        if str(leader.get('groupPricingMode') or '').strip().lower() != 'total':
+            continue
+        title = str(leader.get('groupTitle') or '').strip()
+        title_key = _finance_group_price_key(title)
+        if not title_key:
+            continue
+        price_book[f'{owner}::{title_key}'] = {
+            'title': title[:500],
+            'unitPrice': round(max(0, _safe_float(leader.get('unitPrice'), 0)), 2),
+            'discountPercent': round(max(-9999, min(
+                100, _safe_float(leader.get('discountPercent'), 0)
+            )), 4),
+            'uom': str(leader.get('uom') or 'lot').strip()[:32] or 'lot',
+            'owner': owner,
+            'updatedAt': str(document.get('updatedAt') or now_iso()),
+            'remembered': True,
+        }
+
+
+def _finance_remembered_group_price(group_price_book, title, owner=''):
+    title_key = _finance_group_price_key(title)
+    owner = str(owner or _finance_current_username()).strip().lower()
+    if not title_key or not owner:
+        return {}
+    row = (group_price_book or {}).get(f'{owner}::{title_key}')
+    return copy.deepcopy(row) if isinstance(row, dict) else {}
+
+
 def _remember_finance_prices(finance_data, document, previous_document=None):
     price_book = finance_data.setdefault('priceBook', {})
     owner = (
@@ -40214,6 +40382,7 @@ def _remember_finance_prices(finance_data, document, previous_document=None):
             price_book.setdefault(
                 f"{owner}::asset:{str(asset_id).lower()}", payload
             )
+    _remember_finance_group_prices(finance_data, document)
 
 
 def _finance_price_book_key_is_visible(key):
@@ -45303,6 +45472,19 @@ def finance_price_suggestion():
             finance_data.get('priceBook') or {},
             _finance_custom_price_key(description),
             [],
+        )
+    return jsonify({'success': True, 'data': remembered or {}})
+
+
+@app.route('/api/finance/group-price-suggestion', methods=['GET'])
+@require_sales
+def finance_group_price_suggestion():
+    title = str(request.args.get('title') or '').strip()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        remembered = _finance_remembered_group_price(
+            finance_data.get('groupPriceBook') or {},
+            title,
         )
     return jsonify({'success': True, 'data': remembered or {}})
 

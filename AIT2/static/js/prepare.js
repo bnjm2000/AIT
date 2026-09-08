@@ -4,6 +4,7 @@ var prepareNewPageState = {
   event: null,
   eventId: null,
   availableAssets: [],
+  availableAssetGroups: new Map(),
   loading: false,
   refreshing: false,
   refreshQueued: false,
@@ -296,19 +297,27 @@ function prepareNewRenderAfterModelToggle(encodedKey) {
   renderPrepareNewPage();
 }
 
-function prepareNewAvailableAssetsForGroup(group) {
-  const department = normalizeDepartmentCode(group?.department || 'UN');
-  return (prepareNewPageState.availableAssets || [])
-    .filter(asset =>
-      normalizeDepartmentCode(asset?.department || 'UN') === department &&
-      String(asset?.brand || '') === String(group?.brand || '') &&
-      String(asset?.model || '') === String(group?.model || '')
-    )
-    .sort((a, b) => String(a?.id || '').localeCompare(
+function prepareNewSetAvailableAssets(assets) {
+  const rows = Array.isArray(assets) ? assets : [];
+  const groups = new Map();
+  rows.forEach(asset => {
+    const key = prepareNewModelKey(asset);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(asset);
+  });
+  groups.forEach(groupAssets => groupAssets.sort((a, b) =>
+    String(a?.id || '').localeCompare(
       String(b?.id || ''),
       undefined,
       { numeric: true, sensitivity: 'base' }
-    ));
+    )
+  ));
+  prepareNewPageState.availableAssets = rows;
+  prepareNewPageState.availableAssetGroups = groups;
+}
+
+function prepareNewAvailableAssetsForGroup(group) {
+  return prepareNewPageState.availableAssetGroups.get(prepareNewModelKey(group)) || [];
 }
 
 function prepareNewGroupPayload(group) {
@@ -490,13 +499,6 @@ function prepareNewModelSection(group) {
   const extraPrepared = prepareNewExtraPreparedEverQuantity(group);
   const isBulk = prepareNewGroupIsBulk(group);
   const openSlots = prepareNewOpenPreparedSlots(group);
-  const available = prepareNewAvailableAssetsForGroup(group).filter(asset => !asset?.isBulk);
-  const assigned = [...(group.assignedAssets || [])].sort((a, b) =>
-    String(a?.id || '').localeCompare(String(b?.id || ''), undefined, {
-      numeric: true,
-      sensitivity: 'base'
-    })
-  ).filter(asset => !asset?.isBulk);
   const key = prepareNewModelKey(group);
   const complete = countablePrepared >= required;
   const hasReturnedAnonymousSlots = Number(group.returnedPreparedSlotQuantity || 0) > 0;
@@ -504,16 +506,6 @@ function prepareNewModelSection(group) {
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
   const canAssignExactAssets = !isBulk;
   const encodedKey = planEncode(key);
-  const allCards = [
-    ...assigned.map(asset => prepareNewAssetCard(asset, {
-      assigned: true,
-      extra: !!asset?.isExtra,
-      modelKey: encodedKey
-    })),
-    ...(canAssignExactAssets
-      ? available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))
-      : [])
-  ];
   const primaryAction = isBulk
     ? (complete
       ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
@@ -539,11 +531,37 @@ function prepareNewModelSection(group) {
   const spareLabel = extraPrepared > 0
     ? `<span class="prepare-new-spare-label">${extraPrepared} spare</span>`
     : '';
-  const showExactAssetPanel = !isBulk;
+  let exactAssetPanel = '';
+  if (canAssignExactAssets && isOpen) {
+    const available = prepareNewAvailableAssetsForGroup(group).filter(asset => !asset?.isBulk);
+    const assigned = [...(group.assignedAssets || [])].sort((a, b) =>
+      String(a?.id || '').localeCompare(String(b?.id || ''), undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      })
+    ).filter(asset => !asset?.isBulk);
+    const allCards = [
+      ...assigned.map(asset => prepareNewAssetCard(asset, {
+        assigned: true,
+        extra: !!asset?.isExtra,
+        modelKey: encodedKey
+      })),
+      ...available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))
+    ];
+    exactAssetPanel = `<div class="prepare-new-model-assets">
+      <div class="prepare-new-model-assets-head">
+        <span>Select exact assets from inventory</span>
+        <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · <span class="prepare-new-spare-text">${extraPrepared} spare</span>` : ''}</span>
+      </div>
+      <div class="prepare-new-asset-grid">
+        ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
+      </div>
+    </div>`;
+  }
   return `
     <details class="prepare-new-model" ${isOpen ? 'open' : ''}
              data-prepare-render-version="${prepareNewPageState.renderVersion}"
-             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open, this)">
+             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open, this);if(this.open&&!this.querySelector('.prepare-new-model-assets'))prepareNewRenderAfterModelToggle('${encodedKey}')">
       <summary>
         <span class="prepare-new-model-title">
           <strong>${escapeHtml(modelName)}</strong>
@@ -553,15 +571,7 @@ function prepareNewModelSection(group) {
         <span class="prepare-new-model-count ${preparedQuantity < required ? 'is-underprepared' : ''}"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
         <span class="prepare-new-model-actions">${primaryAction}${menu}</span>
       </summary>
-      ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
-        <div class="prepare-new-model-assets-head">
-          <span>Select exact assets from inventory</span>
-          <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · <span class="prepare-new-spare-text">${extraPrepared} spare</span>` : ''}</span>
-        </div>
-        <div class="prepare-new-asset-grid">
-          ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
-        </div>
-      </div>` : ''}
+      ${exactAssetPanel}
     </details>
   `;
 }
@@ -1348,21 +1358,40 @@ async function loadPrepareNewPage() {
     if (!prepareNewPageState.eventId && typeof workflowRememberedEventId === 'function') {
       prepareNewPageState.eventId = workflowRememberedEventId();
     }
-    const eventOptionsLoad = await startProgressiveEventOptions(
-      prepareNewPageState.eventId,
+    const preferredId = Number(prepareNewPageState.eventId) || null;
+    const eventOptionsPromise = startProgressiveEventOptions(
+      preferredId,
       loaded => {
         prepareNewPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
         if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-      }
+      },
+      { includeReturnable: false },
     );
-    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
-    eventOptionsLoad.completion.then(loaded => {
-      prepareNewPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
-      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
-    }).catch(error => console.warn('Unable to load more event options:', error));
+    let eventOptionsApplied = false;
+    const applyEventOptions = eventOptionsLoad => {
+      if (eventOptionsApplied) return;
+      eventOptionsApplied = true;
+      prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByEventIdDesc);
+      eventOptionsLoad.completion.then(loaded => {
+        prepareNewPageState.events = [...loaded].sort(planCompareEventsByEventIdDesc);
+        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+      }).catch(error => console.warn('Unable to load more event options:', error));
+    };
+
+    if (preferredId) {
+      eventOptionsPromise.then(applyEventOptions).catch(error => {
+        console.warn('Unable to load event options:', error);
+      });
+      const loadedPreferred = await selectPrepareNewEvent(
+        preferredId,
+        { renderLoading: false },
+      );
+      if (loadedPreferred) return;
+    }
+
+    const eventOptionsLoad = await eventOptionsPromise;
+    applyEventOptions(eventOptionsLoad);
     const selected = prepareNewPageState.events.find(event =>
-      Number(event.id) === Number(prepareNewPageState.eventId)
-    ) || prepareNewPageState.events.find(event =>
       !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))
     ) || prepareNewPageState.events[0];
     if (selected) {
@@ -1394,12 +1423,16 @@ async function selectPrepareNewEvent(eventId, options = {}) {
   const requestSequence = ++prepareNewPageState.requestSequence;
   try {
     const [eventResponse, assetsResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/assets/available-for-event/${id}`)
+      apiCall(`/api/events/${id}?view=prepare`),
+      apiCall(`/api/assets/available-for-event/${id}?view=prepare`)
     ]);
     if (requestSequence !== prepareNewPageState.requestSequence) return;
     prepareNewPageState.event = eventResponse.data;
-    prepareNewPageState.availableAssets = assetsResponse.data || [];
+    prepareNewSetAvailableAssets(assetsResponse.data || []);
+    prepareNewPageState.events = mergeEventsById(
+      prepareNewPageState.events,
+      [eventResponse.data],
+    ).sort(planCompareEventsByEventIdDesc);
     renderPrepareNewPage();
     // Warm the small container index in the background so the first QR/RFID
     // scan does not need to pause before deciding whether it is a container.
@@ -1408,10 +1441,12 @@ async function selectPrepareNewEvent(eventId, options = {}) {
         console.warn('Unable to warm Prepare container cache:', error);
       });
     }
+    return true;
   } catch (error) {
     if (root) {
       root.innerHTML = `<div class="plan-empty">Failed to load event: ${escapeHtml(error.message || String(error))}</div>`;
     }
+    return false;
   }
 }
 
@@ -1433,12 +1468,12 @@ async function refreshPrepareNewSelectedEvent(options = {}) {
   const requestSequence = ++prepareNewPageState.requestSequence;
   try {
     const [eventResponse, assetsResponse] = await Promise.all([
-      apiCall(`/api/events/${id}`),
-      apiCall(`/api/assets/available-for-event/${id}`)
+      apiCall(`/api/events/${id}?view=prepare`),
+      apiCall(`/api/assets/available-for-event/${id}?view=prepare`)
     ]);
     if (requestSequence !== prepareNewPageState.requestSequence) return;
     prepareNewPageState.event = eventResponse.data;
-    prepareNewPageState.availableAssets = assetsResponse.data || [];
+    prepareNewSetAvailableAssets(assetsResponse.data || []);
     renderPrepareNewPage();
     if (viewState) requestAnimationFrame(() => prepareNewRestoreViewState(viewState));
   } catch (error) {

@@ -637,13 +637,57 @@ function financeRemoveScheduleRow(kind, index) {
   financeRenderEditor();
 }
 
+function financeScheduleTimeIsTbc(value) {
+  return String(value || '').trim().toLowerCase() === 'tbc';
+}
+
+function financeClearSchedulePair(key) {
+  if (!financeState.current || !FINANCE_SCHEDULE_KEYS[key]) return;
+  financeState.current[`${key}Date`] = '';
+  financeState.current[`${key}Time`] = '';
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeScheduleTimeChange(key, value) {
+  financeScheduleChange(`${key}Time`, value);
+  financeRenderEditor();
+}
+
+function financeToggleScheduleTimeTbc(key) {
+  if (!financeState.current || !FINANCE_SCHEDULE_KEYS[key]) return;
+  const field = `${key}Time`;
+  financeState.current[field] = financeScheduleTimeIsTbc(financeState.current[field]) ? '' : 'TBC';
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeAdditionalScheduleTimeChange(kind, index, value) {
+  financeAdditionalScheduleChange(kind, index, 'time', value);
+  financeRenderEditor();
+}
+
+function financeToggleAdditionalScheduleTimeTbc(kind, index) {
+  const row = financeAdditionalScheduleRows(kind)[index];
+  if (!row) return;
+  row.time = financeScheduleTimeIsTbc(row.time) ? '' : 'TBC';
+  financeQueueSave();
+  financeRenderEditor();
+}
+
 function financeSchedulePair(label, key) {
   const document = financeState.current || {};
+  const time = document[`${key}Time`] || '';
+  const timeIsTbc = financeScheduleTimeIsTbc(time);
   return `
     <div class="finance-schedule-pair">
       <strong>${financeEscape(label)}</strong>
       <input class="finance-input" type="date" value="${financeEscapeAttr(document[`${key}Date`] || '')}" onchange="financeScheduleChange('${key}Date',this.value)">
-      <input class="finance-input" type="time" value="${financeEscapeAttr(document[`${key}Time`] || '')}" onchange="financeScheduleChange('${key}Time',this.value)">
+      <span class="finance-schedule-time-control">
+        <input class="finance-input" type="time" aria-label="${financeEscapeAttr(label)} time" value="${timeIsTbc ? '' : financeEscapeAttr(time)}" onchange="financeScheduleTimeChange('${key}',this.value)">
+        <button type="button" class="finance-schedule-tbc${timeIsTbc ? ' selected' : ''}" aria-label="Set ${financeEscapeAttr(label)} time as TBC" aria-pressed="${timeIsTbc}" onclick="financeToggleScheduleTimeTbc('${key}')">TBC</button>
+      </span>
+      <button type="button" class="finance-schedule-remove" title="Clear ${financeEscapeAttr(label)} date and time" aria-label="Clear ${financeEscapeAttr(label)} date and time" onclick="financeClearSchedulePair('${key}')">&times;</button>
     </div>
   `;
 }
@@ -651,11 +695,15 @@ function financeSchedulePair(label, key) {
 function financeAdditionalSchedulePair(kind, row, index) {
   const baseLabel = financeScheduleLabel(kind);
   const label = `${baseLabel} ${index + 2}`;
+  const timeIsTbc = financeScheduleTimeIsTbc(row.time);
   return `
     <div class="finance-schedule-pair finance-schedule-extra">
       <strong>${financeEscape(label)}</strong>
       <input class="finance-input" type="date" value="${financeEscapeAttr(row.date || '')}" onchange="financeAdditionalScheduleChange('${kind}',${index},'date',this.value)">
-      <input class="finance-input" type="time" value="${financeEscapeAttr(row.time || '')}" onchange="financeAdditionalScheduleChange('${kind}',${index},'time',this.value)">
+      <span class="finance-schedule-time-control">
+        <input class="finance-input" type="time" aria-label="${financeEscapeAttr(label)} time" value="${timeIsTbc ? '' : financeEscapeAttr(row.time || '')}" onchange="financeAdditionalScheduleTimeChange('${kind}',${index},this.value)">
+        <button type="button" class="finance-schedule-tbc${timeIsTbc ? ' selected' : ''}" aria-label="Set ${financeEscapeAttr(label)} time as TBC" aria-pressed="${timeIsTbc}" onclick="financeToggleAdditionalScheduleTimeTbc('${kind}',${index})">TBC</button>
+      </span>
       <button type="button" class="finance-schedule-remove" title="Remove ${financeEscapeAttr(label)}" aria-label="Remove ${financeEscapeAttr(label)}" onclick="financeRemoveScheduleRow('${kind}',${index})">&times;</button>
     </div>
   `;
@@ -1730,6 +1778,38 @@ function financeGroupItemPriceContribution(line) {
     * (1 - discount / 100);
 }
 
+function financeCalculatedGroupItemContribution(line) {
+  const discount = Math.max(-9999, Math.min(100, financeNumber(line?.groupItemDiscountPercent)));
+  return Math.max(0, financeNumber(line?.groupItemQuantity, 1))
+    * Math.max(0, financeNumber(line?.groupItemUnitPrice))
+    * (1 - discount / 100);
+}
+
+function financeGroupPricingMode(lines) {
+  const members = Array.isArray(lines) ? lines : [lines];
+  return members.some(line => String(line?.groupPricingMode || '').toLowerCase() === 'total')
+    ? 'total'
+    : 'items';
+}
+
+function financeSetGroupPricingMode(lines, mode) {
+  const nextMode = mode === 'total' ? 'total' : 'items';
+  (lines || []).forEach(line => { line.groupPricingMode = nextMode; });
+}
+
+function financeRecalculateGroupPriceFromItems(groupId, subprojectId) {
+  const members = financeLineGroupMembers(groupId, subprojectId);
+  const leader = members.find(line => line.groupLeader) || members[0];
+  if (!leader) return null;
+  financeSetGroupPricingMode(members, 'items');
+  leader.unitPrice = Math.round(members.reduce(
+    (sum, line) => sum + financeGroupItemPriceContribution(line), 0
+  ) * 100) / 100;
+  leader.totalMode = 'calculated';
+  leader.total = financeLineTotal(leader);
+  return leader;
+}
+
 function financeRestoreGroupItemCommercial(line) {
   if (!line) return;
   line.days = Math.max(0, financeNumber(line.groupItemDays, 1));
@@ -1750,7 +1830,7 @@ function financeClearLineGroupFields(line) {
     'groupItemQuantity', 'groupHeaderQuantity', 'groupLeader',
     'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
     'groupItemDiscountPercent', 'groupItemTotalMode', 'groupItemTotal',
-    'groupItemPriceContribution', 'groupItemCommercialStored'
+    'groupItemPriceContribution', 'groupItemCommercialStored', 'groupPricingMode'
   ].forEach(key => delete line[key]);
 }
 
@@ -1766,6 +1846,7 @@ function financeNormaliseLineGroups(document = financeState.current) {
   groups.forEach(lines => {
     const explicitLeader = lines.find(line => line.groupLeader);
     const leader = explicitLeader || lines[0];
+    const groupPricingMode = financeGroupPricingMode(lines);
     lines.forEach(line => financeCaptureGroupItemCommercial(line, !explicitLeader));
     const legacyTotal = explicitLeader
       ? financeLineTotal(leader)
@@ -1800,6 +1881,7 @@ function financeNormaliseLineGroups(document = financeState.current) {
       }
       line.groupLeader = line === leader;
       line.groupHeaderQuantity = header.quantity;
+      line.groupPricingMode = groupPricingMode;
       line.days = header.days;
       line.quantity = header.quantity;
       line.uom = header.uom;
@@ -2140,6 +2222,85 @@ function financeSetGroupItemQuantityValue(line, value) {
   return line.groupItemPriceContribution - previousContribution;
 }
 
+function financeGroupLinesFromIndexes(encodedIndexes) {
+  return String(encodedIndexes || '').split(',')
+    .map(index => Number(index))
+    .filter(index => Number.isInteger(index))
+    .map(index => financeState.current?.lineItems?.[index])
+    .filter(line => line?.groupId && !line.groupCustomText);
+}
+
+function financeCommitGroupItemPricing(lines) {
+  const first = lines?.[0];
+  if (!first) return;
+  financeRecalculateGroupPriceFromItems(first.groupId, first.subprojectId);
+  financeSyncDocumentDepartments();
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeGroupItemUnitPriceChange(encodedIndexes, value) {
+  const lines = financeGroupLinesFromIndexes(encodedIndexes);
+  const unitPrice = Math.max(0, financeCurrencyNumber(value));
+  lines.forEach(line => {
+    line.groupItemUnitPrice = unitPrice;
+    line.groupItemTotalMode = 'calculated';
+    line.groupItemPriceContribution = financeCalculatedGroupItemContribution(line);
+    line.groupItemTotal = Math.round(
+      Math.max(0, financeNumber(line.groupItemDays, 1))
+      * line.groupItemPriceContribution * 100
+    ) / 100;
+  });
+  financeCommitGroupItemPricing(lines);
+}
+
+function financeGroupItemDiscountChange(encodedIndexes, value) {
+  const lines = financeGroupLinesFromIndexes(encodedIndexes);
+  const discount = financePercent(value);
+  lines.forEach(line => {
+    line.groupItemDiscountPercent = discount;
+    line.groupItemTotalMode = 'calculated';
+    line.groupItemPriceContribution = financeCalculatedGroupItemContribution(line);
+    line.groupItemTotal = Math.round(
+      Math.max(0, financeNumber(line.groupItemDays, 1))
+      * line.groupItemPriceContribution * 100
+    ) / 100;
+  });
+  financeCommitGroupItemPricing(lines);
+}
+
+function financeGroupItemAmountChange(encodedIndexes, value) {
+  const lines = financeGroupLinesFromIndexes(encodedIndexes);
+  const amount = Math.max(0, financeCurrencyNumber(value));
+  const denominator = lines.reduce((sum, line) => {
+    const discount = Math.max(-9999, Math.min(100, financeNumber(line.groupItemDiscountPercent)));
+    return sum + Math.max(0, financeNumber(line.groupItemQuantity, 1)) * (1 - discount / 100);
+  }, 0);
+  const unitPrice = denominator > 0 ? amount / denominator : amount;
+  lines.forEach(line => {
+    line.groupItemUnitPrice = Math.round(unitPrice * 100) / 100;
+    line.groupItemTotalMode = 'amount';
+    line.groupItemPriceContribution = financeCalculatedGroupItemContribution(line);
+    line.groupItemTotal = Math.round(
+      Math.max(0, financeNumber(line.groupItemDays, 1))
+      * line.groupItemPriceContribution * 100
+    ) / 100;
+  });
+  const calculatedAmount = lines.reduce(
+    (sum, line) => sum + financeGroupItemPriceContribution(line), 0
+  );
+  if (lines.length && Math.abs(calculatedAmount - amount) >= 0.005) {
+    const last = lines[lines.length - 1];
+    const otherAmount = calculatedAmount - financeGroupItemPriceContribution(last);
+    last.groupItemPriceContribution = Math.max(0, amount - otherAmount);
+    last.groupItemTotal = Math.round(
+      Math.max(0, financeNumber(last.groupItemDays, 1))
+      * last.groupItemPriceContribution * 100
+    ) / 100;
+  }
+  financeCommitGroupItemPricing(lines);
+}
+
 function financeDetachLineFromGroup(line) {
   if (!line?.groupId) return line;
   const members = financeLineGroupMembers(line.groupId, line.subprojectId);
@@ -2160,7 +2321,9 @@ function financeDetachLineFromGroup(line) {
         total: line.total
       });
     }
-    financeAdjustGroupPrice(leader === line ? replacement : leader, -contribution);
+    if (financeGroupPricingMode(members) !== 'total') {
+      financeAdjustGroupPrice(leader === line ? replacement : leader, -contribution);
+    }
   }
   financeRestoreGroupItemCommercial(line);
   financeClearLineGroupFields(line);
@@ -2183,7 +2346,10 @@ function financeAttachLineToGroup(line, targetGroupId, targetSubprojectId) {
   line.groupItemPriceContribution = factor
     ? Math.max(0, financeNumber(line.groupItemTotal)) / factor
     : Math.max(0, financeNumber(line.groupItemUnitPrice)) * Math.max(0, financeNumber(line.groupItemQuantity, 1));
-  financeAdjustGroupPrice(leader, financeGroupItemPriceContribution(line));
+  const pricingMode = financeGroupPricingMode(members);
+  if (pricingMode !== 'total') {
+    financeAdjustGroupPrice(leader, financeGroupItemPriceContribution(line));
+  }
   Object.assign(line, {
     groupId: String(targetGroupId),
     groupTitle: leader.groupTitle || 'Group',
@@ -2191,6 +2357,7 @@ function financeAttachLineToGroup(line, targetGroupId, targetSubprojectId) {
     groupCustomText: false,
     groupLeader: false,
     groupHeaderQuantity: financeNumber(leader.quantity, 1),
+    groupPricingMode: pricingMode,
     subprojectId: roomId,
     systemName: financeLineSystem(leader)
   });
@@ -2202,17 +2369,17 @@ function financeGroupItemQuantityChange(index, value) {
   if (!line?.groupId) return;
   const members = financeLineGroupMembers(line.groupId, line.subprojectId);
   const leader = members.find(member => member.groupLeader) || members[0];
-  financeAdjustGroupPrice(leader, financeSetGroupItemQuantityValue(line, value));
+  const contributionDelta = financeSetGroupItemQuantityValue(line, value);
+  if (financeGroupPricingMode(members) !== 'total') {
+    financeAdjustGroupPrice(leader, contributionDelta);
+  }
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
 }
 
 function financeGroupBucketQuantityChange(encodedIndexes, value) {
-  const indexes = String(encodedIndexes || '').split(',')
-    .map(index => Number(index))
-    .filter(index => Number.isInteger(index) && financeState.current?.lineItems?.[index]?.groupId);
-  const lines = indexes.map(index => financeState.current.lineItems[index]);
+  const lines = financeGroupLinesFromIndexes(encodedIndexes);
   if (!lines.length) return;
   const target = Math.max(0, Math.round(financeNumber(value)));
   const quantities = lines.map(line => Math.max(0, financeNumber(line.groupItemQuantity, 1)));
@@ -2232,12 +2399,15 @@ function financeGroupBucketQuantityChange(encodedIndexes, value) {
         remainder -= 1;
       });
   }
-  const leader = lines.find(line => line.groupLeader) || lines[0];
+  const members = financeLineGroupMembers(lines[0].groupId, lines[0].subprojectId);
+  const leader = members.find(line => line.groupLeader) || members[0];
   const contributionDelta = lines.reduce(
     (sum, line, index) => sum + financeSetGroupItemQuantityValue(line, allocations[index]),
     0
   );
-  financeAdjustGroupPrice(leader, contributionDelta);
+  if (financeGroupPricingMode(members) !== 'total') {
+    financeAdjustGroupPrice(leader, contributionDelta);
+  }
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
@@ -4617,7 +4787,8 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
     unitPrice: financeNumber(commercialLeader.unitPrice),
     discountPercent: financeNumber(commercialLeader.discountPercent),
     totalMode: commercialLeader.totalMode || 'amount',
-    total: financeLineTotal(commercialLeader)
+    total: financeLineTotal(commercialLeader),
+    groupPricingMode: financeGroupPricingMode(existing)
   } : null;
   financeLineGroupState.results = [];
 
@@ -4847,7 +5018,7 @@ function financeNewGroupedQuotationLine(selected, category) {
   };
 }
 
-function financeSaveLineGroup() {
+async function financeSaveLineGroup() {
   const mode = financeLineGroupState.mode;
   const title = String(document.getElementById('financeLineGroupTitle')?.value || '').trim();
   const category = String(document.getElementById('financeLineGroupCategory')?.value || '').trim() || 'General';
@@ -4942,21 +5113,58 @@ function financeSaveLineGroup() {
       (sum, line) => sum + financeGroupItemPriceContribution(line), 0
     );
     const contributionDelta = newContribution - oldContribution;
-    const adjustedHeader = {
-      ...originalHeader,
-      unitPrice: Math.max(0, financeNumber(originalHeader.unitPrice) + contributionDelta),
-      total: Math.max(
-        0,
-        financeNumber(originalHeader.total) + contributionDelta * headerFactor
-      )
-    };
+    const pricingMode = financeGroupPricingMode(originalHeader);
+    const adjustedHeader = pricingMode === 'total'
+      ? { ...originalHeader }
+      : {
+          ...originalHeader,
+          unitPrice: Math.max(0, financeNumber(originalHeader.unitPrice) + contributionDelta),
+          total: Math.max(
+            0,
+            financeNumber(originalHeader.total) + contributionDelta * headerFactor
+          )
+        };
     grouped.forEach((line, index) => {
       Object.assign(line, adjustedHeader, {
         groupLeader: index === 0,
+        groupPricingMode: pricingMode,
         total: index === 0 ? adjustedHeader.total : 0,
         totalMode: 'amount'
       });
     });
+  } else if (mode === 'finance' && grouped.length) {
+    let remembered = {};
+    try {
+      remembered = (await apiCall(
+        `/api/finance/group-price-suggestion?title=${encodeURIComponent(title)}`
+      )).data || {};
+    } catch {
+      remembered = {};
+    }
+    if (remembered.remembered === true) {
+      const headerDays = Math.max(0, financeNumber(grouped[0].days, financeEventDays()));
+      const headerQuantity = 1;
+      const headerDiscount = financePercent(remembered.discountPercent || 0);
+      const headerUnitPrice = Math.max(0, financeNumber(remembered.unitPrice));
+      const headerTotal = Math.round(
+        headerDays * headerQuantity * headerUnitPrice * (1 - headerDiscount / 100) * 100
+      ) / 100;
+      grouped.forEach((line, index) => {
+        financeCaptureGroupItemCommercial(line);
+        Object.assign(line, {
+          days: headerDays,
+          quantity: headerQuantity,
+          uom: remembered.uom || 'lot',
+          unitPrice: headerUnitPrice,
+          discountPercent: headerDiscount,
+          totalMode: 'amount',
+          total: index === 0 ? headerTotal : 0,
+          groupLeader: index === 0,
+          groupHeaderQuantity: headerQuantity,
+          groupPricingMode: 'total'
+        });
+      });
+    }
   }
   const nextLines = [...retained];
   nextLines.splice(Math.min(insertionIndex, nextLines.length), 0, ...grouped);
@@ -5169,6 +5377,9 @@ function financeRenderLineGroups() {
         const leaderIndex = leaderEntry.index;
         const firstGroupIndex = groupRows[0]?.index ?? leaderIndex;
         const leaderResultsId = `finance-department-results-${leader.id}`;
+        const groupPricingOverridden = financeGroupPricingMode(
+          groupRows.map(row => row.line)
+        ) === 'total';
         const groupHeader = `
           <tr class="finance-line-row finance-line-group-header finance-group-commercial-row" data-line-index="${firstGroupIndex}" data-group-boundary="before"
             oncontextmenu="financeEditLineGroup(event,'finance','${financeEscapeAttr(groupId)}')"
@@ -5177,7 +5388,7 @@ function financeRenderLineGroups() {
             ondrop="financeDropLine(event,${firstGroupIndex})"
             ondragend="financeDragLineEnd()">
             <td class="finance-line-number"><span class="finance-drag-handle finance-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="financeDragLineGroupStart(event,'${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')" ondragend="financeDragLineEnd()">&#9776;</span>${showLineNumbers ? displayNumber : ''}</td>
-            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button><button type="button" class="finance-group-menu-button" title="Edit group" aria-label="Edit ${financeEscapeAttr(leader.groupTitle || 'group')}" aria-haspopup="dialog" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">...</button></div></td>
+            <td><div class="finance-group-title"><button type="button" class="finance-group-title-button" title="Rename group header" onclick="financeRenameLineGroup('${financeEscapeAttr(groupId)}','${financeEscapeAttr(subprojectId)}')">${financeEscape(leader.groupTitle || 'Group')}</button>${groupPricingOverridden ? '<small class="finance-group-pricing-note">Manual total</small>' : ''}<button type="button" class="finance-group-menu-button" title="Edit group" aria-label="Edit ${financeEscapeAttr(leader.groupTitle || 'group')}" aria-haspopup="dialog" onclick="financeOpenLineGroupEditor('finance','${financeEscapeAttr(groupId)}')">...</button></div></td>
             <td><div class="finance-inline-combobox"><input class="finance-line-input" value="${financeEscapeAttr(financeLineSystem(leader))}" aria-label="Category" autocomplete="off" data-finance-department-index="${leaderIndex}" onfocus="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" oninput="financeShowDepartmentSuggestions(${leaderIndex},this.value,'${leaderResultsId}')" onkeydown="showbaseLineWorkspace.suggestionKeydown(event,'${leaderResultsId}')" onchange="financeCommitDepartmentInput(${leaderIndex},this)" onblur="setTimeout(()=>showbaseLineWorkspace.hideSuggestions('${leaderResultsId}'),120)"><div class="finance-inline-suggestions" id="${leaderResultsId}"></div></div></td>
             <td class="finance-col-quantity"><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(leader.quantity)}" aria-label="Group quantity" onchange="financeLineChange(${leaderIndex},'quantity',this.value)"></td>
             <td class="finance-col-uom">${financeUomControl(leader, leaderIndex)}</td>
@@ -5189,13 +5400,28 @@ function financeRenderLineGroups() {
           </tr>`;
         const childRows = financeGroupDisplayBuckets(rows, groupId).map(bucket => {
           const representativeIndex = bucket.rows[0].index;
+          const representative = bucket.rows[0].line;
           const indexes = bucket.rows.map(row => row.index).join(',');
           const isConsolidated = bucket.rows.length > 1;
+          const pricingHint = groupPricingOverridden
+            ? 'Editing this value will use the item prices for the group total again.'
+            : '';
           const quantityControl = isConsolidated
             ? `<input class="finance-line-input finance-group-child-quantity" type="number" min="0" step="1" value="${financeEscapeAttr(bucket.quantity)}" aria-label="Consolidated item quantity" title="${bucket.rows.length} matching asset lines" onchange="financeGroupBucketQuantityChange('${financeEscapeAttr(indexes)}',this.value)">`
             : `<input class="finance-line-input finance-group-child-quantity" type="number" min="0" step="1" value="${financeEscapeAttr(bucket.quantity)}" aria-label="Item quantity" onchange="financeGroupItemQuantityChange(${representativeIndex},this.value)">`;
+          const unitPrice = bucket.rows.reduce(
+            (sum, row) => sum + Math.max(0, financeNumber(row.line.groupItemQuantity, 1))
+              * Math.max(0, financeNumber(row.line.groupItemUnitPrice)), 0
+          ) / Math.max(1, bucket.quantity);
+          const itemAmount = bucket.rows.reduce(
+            (sum, row) => sum + financeGroupItemPriceContribution(row.line), 0
+          );
+          const pricingClass = groupPricingOverridden ? ' is-inactive' : '';
+          const unitPriceControl = bucket.customText ? '' : `<div class="finance-money-input finance-line-unit-price-input finance-group-child-pricing${pricingClass}" title="${financeEscapeAttr(pricingHint)}"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(unitPrice))}" aria-label="Item unit price" onblur="financeFormatMoneyInput(this)" onchange="financeGroupItemUnitPriceChange('${financeEscapeAttr(indexes)}',this.value)"></div>`;
+          const discountControl = bucket.customText ? '' : `<span class="finance-percent-input finance-group-child-pricing${pricingClass}" title="${financeEscapeAttr(pricingHint)}"><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(representative.groupItemDiscountPercent || 0)}" aria-label="Item discount percentage" onchange="financeGroupItemDiscountChange('${financeEscapeAttr(indexes)}',this.value)"><span>%</span></span>`;
+          const amountControl = bucket.customText ? '' : `<div class="finance-money-input finance-line-total-input finance-group-child-pricing${pricingClass}" title="${financeEscapeAttr(pricingHint)}"><span>$</span><input class="finance-line-input" type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoneyInputValue(itemAmount))}" aria-label="Item amount per group" onblur="financeFormatMoneyInput(this)" onchange="financeGroupItemAmountChange('${financeEscapeAttr(indexes)}',this.value)"></div>`;
           return `
-            <tr class="finance-line-row finance-group-child-row" data-line-index="${representativeIndex}"
+            <tr class="finance-line-row finance-group-child-row" data-line-index="${representativeIndex}" data-group-pricing="${groupPricingOverridden ? 'total' : 'items'}"
               oncontextmenu="financeEditLineGroup(event,'finance','${financeEscapeAttr(groupId)}')"
               ondragover="financeDragLineOver(event,${representativeIndex})"
               ondragleave="financeDragLineLeave(event)"
@@ -5204,7 +5430,8 @@ function financeRenderLineGroups() {
               <td class="finance-line-number"><span class="finance-drag-handle" draggable="true" title="Drag to reorder or move out of group" ondragstart="financeDragLineBundleStart(event,'${financeEscapeAttr(indexes)}')" ondragend="financeDragLineEnd()">&#9776;</span></td>
               <td><div class="finance-group-item-display"><span class="${bucket.customText ? 'showbase-group-custom-text' : ''}">${financeEscape(bucket.description)}</span>${bucket.customText ? '<small>Custom text</small>' : ''}${isConsolidated ? `<small>${bucket.rows.length} matching line items consolidated</small>` : ''}</div></td><td></td>
               <td class="finance-col-quantity">${quantityControl}</td>
-              <td class="finance-col-uom"></td><td class="finance-col-multiplier"></td><td></td><td></td><td></td>
+              <td class="finance-col-uom">${bucket.customText ? '' : `<span class="finance-group-child-uom">${financeEscape(financeUomLabel(representative.groupItemUom || 'units'))}</span>`}</td>
+              <td class="finance-col-multiplier"></td><td>${unitPriceControl}</td><td>${discountControl}</td><td>${amountControl}</td>
               <td><button type="button" class="finance-delete-line" title="Remove ${isConsolidated ? 'matching items' : 'item'} from group" onclick="financeDeleteGroupChildren('${financeEscapeAttr(indexes)}')">&times;</button></td>
             </tr>`;
         }).join('');
@@ -6894,7 +7121,7 @@ function financeSetClientAddress(value) {
 
 async function financeOfferProductPriceUpdate(line, previousPrice) {
   const nextPrice = financeNumber(line?.unitPrice);
-  if (!line || nextPrice === financeNumber(previousPrice)) return;
+  if (!line || line.groupId || nextPrice === financeNumber(previousPrice)) return;
   const isLinkedProduct = Boolean(
     line.productId
     || line.productKey
@@ -6947,6 +7174,12 @@ function financeLineChange(index, field, value) {
   if (['days', 'quantity', 'unitPrice', 'discountPercent'].includes(field)) {
     line.totalMode = 'calculated';
   }
+  if (line.groupId && line.groupLeader && field === 'unitPrice') {
+    financeSetGroupPricingMode(
+      financeLineGroupMembers(line.groupId, line.subprojectId),
+      'total'
+    );
+  }
   if (field === 'unitPrice') financePropagateLineUnitPrice(line);
   line.total = financeLineTotal(line);
   financeSyncDocumentDepartments();
@@ -6961,6 +7194,20 @@ function financeSetLineTotal(index, value) {
   const target = Math.max(0, financeCurrencyNumber(value));
   const quantity = financeNumber(line.quantity, 0);
   const days = financeNumber(line.days, 0);
+  if (line.groupId && line.groupLeader) {
+    const members = financeLineGroupMembers(line.groupId, line.subprojectId);
+    financeSetGroupPricingMode(members, 'total');
+    line.unitPrice = quantity > 0 && days > 0
+      ? Math.round((target / quantity / days) * 100) / 100
+      : target;
+    line.discountPercent = 0;
+    line.totalMode = 'amount';
+    line.total = target;
+    financeSyncDocumentDepartments();
+    financeQueueSave();
+    financeRenderEditor();
+    return;
+  }
   const unitPrice = financeNumber(line.unitPrice, 0);
   const gross = quantity * days * unitPrice;
   if (gross > 0) {

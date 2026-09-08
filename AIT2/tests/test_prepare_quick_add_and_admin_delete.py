@@ -109,6 +109,79 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             },
         )
 
+    def test_workspace_views_omit_unrelated_event_and_inventory_fields(self):
+        event = self.make_event()
+        self.login_as('admin', is_admin=True)
+
+        plan_assets = self.client.get('/api/assets/available?view=plan')
+        self.assertEqual(plan_assets.status_code, 200, plan_assets.get_data(as_text=True))
+        plan_asset = plan_assets.get_json()['data'][0]
+        self.assertIn('description', plan_asset)
+        self.assertIn('tags', plan_asset)
+        self.assertNotIn('changeHistory', plan_asset)
+        self.assertNotIn('dateOfPurchase', plan_asset)
+        self.assertNotIn('location', plan_asset)
+
+        prepare_assets = self.client.get(
+            f'/api/assets/available-for-event/{event.event_id}?view=prepare'
+        )
+        self.assertEqual(
+            prepare_assets.status_code,
+            200,
+            prepare_assets.get_data(as_text=True),
+        )
+        prepare_asset = prepare_assets.get_json()['data'][0]
+        self.assertIn('serial', prepare_asset)
+        self.assertIn('status', prepare_asset)
+        self.assertNotIn('changeHistory', prepare_asset)
+        self.assertNotIn('purchaseBatches', prepare_asset)
+        self.assertNotIn('dateModified', prepare_asset)
+
+        plan_event = self.client.get(f'/api/events/{event.event_id}?view=plan')
+        self.assertEqual(plan_event.status_code, 200, plan_event.get_data(as_text=True))
+        plan_data = plan_event.get_json()['data']
+        self.assertIn('modelGroups', plan_data)
+        self.assertIn('vendorManagement', plan_data)
+        self.assertNotIn('files', plan_data)
+        self.assertNotIn('eventLogs', plan_data)
+        self.assertNotIn('workflowProgress', plan_data)
+        self.assertNotIn('returnedAssets', plan_data)
+
+        return_event = self.client.get(f'/api/events/{event.event_id}?view=return')
+        self.assertEqual(return_event.status_code, 200, return_event.get_data(as_text=True))
+        return_data = return_event.get_json()['data']
+        self.assertIn('assetsByDepartment', return_data)
+        self.assertIn('returnableCount', return_data)
+        self.assertNotIn('files', return_data)
+        self.assertNotIn('vendorManagement', return_data)
+        self.assertNotIn('workflowProgress', return_data)
+
+        plan_availability = self.client.get(
+            f'/api/events/{event.event_id}/availability?view=plan'
+        )
+        self.assertEqual(
+            plan_availability.status_code,
+            200,
+            plan_availability.get_data(as_text=True),
+        )
+        availability_row = plan_availability.get_json()['data'][0]
+        self.assertIn('available', availability_row)
+        self.assertIn('degradedDetails', availability_row)
+        self.assertNotIn('physicalGlobal', availability_row)
+        self.assertNotIn('adjustedGlobal', availability_row)
+
+        compact_options = self.client.get(
+            '/api/events?view=options&includeReturnable=0&limit=100'
+        )
+        self.assertEqual(
+            compact_options.status_code,
+            200,
+            compact_options.get_data(as_text=True),
+        )
+        option = compact_options.get_json()['data'][0]
+        self.assertNotIn('returnableCount', option)
+        self.assertNotIn('returnableTotalCount', option)
+
     def test_quick_add_disabled_tracks_surplus_as_extra(self):
         event = self.make_event()
 
@@ -399,7 +472,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
     def test_prepare_ui_exposes_specific_assets_before_quantity_is_prepared(self):
         source = APP_BUNDLE_SOURCE
         self.assertIn('const canAssignExactAssets = !isBulk;', source)
-        self.assertIn('const showExactAssetPanel = !isBulk;', source)
+        self.assertIn('if (canAssignExactAssets && isOpen) {', source)
         self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', source)
 
     def test_completed_exact_asset_line_hides_primary_assign_but_keeps_extra_assignment(self):
@@ -432,7 +505,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         )
         self.assertIn("feedback.innerHTML = state.scanFeedbackHtml || '';", source)
         self.assertIn(
-            "ontoggle=\"prepareNewSetModelExpanded('${encodedKey}', this.open, this)\"",
+            "if(this.open&&!this.querySelector('.prepare-new-model-assets'))",
             source,
         )
         self.assertIn('data-prepare-render-version=', source)
