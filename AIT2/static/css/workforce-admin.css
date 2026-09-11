@@ -1062,23 +1062,6 @@
   grid-column: 3 / -1;
 }
 
-.wf-transport-company-invoice .wf-file-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.wf-transport-invoice-amount {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px;
-  font-size: 12px;
-}
-
-.wf-transport-invoice-amount input {
-  min-width: 0;
-  width: 120px;
-}
-
 .wf-trip-card:focus {
   outline: 2px solid var(--wf-brand);
   outline-offset: 2px;
@@ -2464,6 +2447,10 @@ button.wf-calendar-day.selected.has-conflict:hover {
 }
 
 .wf-review-form .wf-field[hidden] {
+  display: none;
+}
+
+.wf-form-grid > .wf-field[hidden] {
   display: none;
 }
 
@@ -4835,6 +4822,27 @@ button.wf-directory-row {
   box-shadow: 0 1px 4px rgba(27, 63, 51, .12);
 }
 
+.wf-field-help {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.wf-on-demand-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #fff1dc;
+  color: #9a5600;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
 .wf-trip-card.fleet-trip {
   border-left: 3px solid #0f766e;
 }
@@ -4911,6 +4919,44 @@ button.wf-directory-row {
   padding: 4px 7px;
   font-size: 9px;
   font-weight: 500;
+}
+
+.wf-on-demand-booking {
+  display: grid;
+  grid-template-columns: minmax(170px, .7fr) minmax(260px, 1fr);
+  gap: 14px;
+  align-items: end;
+  margin-top: 12px;
+  border: 1px solid #ead7b7;
+  border-radius: 7px;
+  background: #fffbf4;
+  padding: 12px;
+}
+
+.wf-on-demand-booking[hidden] {
+  display: none;
+}
+
+.wf-on-demand-booking > div:first-child strong,
+.wf-on-demand-booking > div:first-child small {
+  display: block;
+}
+
+.wf-on-demand-booking > div:first-child strong {
+  color: #593f1f;
+  font-size: 12px;
+}
+
+.wf-on-demand-booking > div:first-child small {
+  margin-top: 4px;
+  color: #78644a;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.wf-booking-vehicle-option > em.on-demand {
+  background: #fff1dc;
+  color: #9a5600;
 }
 
 .wf-booking-source-group {
@@ -5113,6 +5159,11 @@ button.wf-directory-row {
 
   .wf-booking-vehicle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wf-on-demand-booking {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .wf-booking-vehicle-heading {

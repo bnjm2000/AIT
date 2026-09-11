@@ -104,6 +104,21 @@ test('separate return bookings keep their own route and cost; unnamed vehicles a
   assert.match(html, />Return<\/span>/);
 });
 
+test('on-demand bookings count each requested vehicle and explain missing driver details', () => {
+  const { run } = setup([
+    trip('ondemand-1', { profileType: 'on_demand', vendorId: 'lalamove', vehicleNumber: '', company: 'Lalamove', driver: '', driverContact: '' }),
+    trip('ondemand-2', { profileType: 'on_demand', vendorId: 'lalamove', vehicleNumber: '', company: 'Lalamove', driver: '', driverContact: '' }),
+    trip('ondemand-3', { profileType: 'on_demand', vendorId: 'lalamove', vehicleNumber: '', company: 'Lalamove', driver: '', driverContact: '' }),
+  ]);
+  const day = run('wfTransportSchedule(fixture.transportBookings)[0]');
+  assert.equal(day.vehicleCount, 3);
+  assert.equal(day.types[0].count, 3);
+  const html = run('wfTransportCard(fixture.transportBookings[0])');
+  assert.match(html, /On-demand/);
+  assert.match(html, /Assigned by provider/);
+  assert.match(html, /Available after dispatch/);
+});
+
 test('booking details include single subproject, driver, phone, addresses and escaped user text', () => {
   const { run } = setup([trip('details', { vehicleType: '<Lorry>', company: 'Example & Co' })]);
   const html = run('wfTransportCard(fixture.transportBookings[0])');
@@ -113,7 +128,7 @@ test('booking details include single subproject, driver, phone, addresses and es
   assert.match(html, /href="tel:\+6590001122"/);
   assert.match(html, /&lt;Lorry&gt;/);
   assert.match(html, /Example &amp; Co/);
-  assert.match(html, /uploadTransportInvoice\('details',this\)/);
+  assert.match(html, /uploadTransportCompanyInvoice\('details',this\)/);
   assert.match(html, /deleteTransportBooking\('details'\)/);
   assert.match(html, /^<details /);
   assert.doesNotMatch(html, /^<details [^>]*\bopen\b/);
@@ -122,7 +137,8 @@ test('booking details include single subproject, driver, phone, addresses and es
   assert.match(summary, /Main Stage/);
   const fleet = run("wfTransportCard({...fixture.transportBookings[0], sourceType: 'fleet', useEndDate: '2026-07-11', useEndTime: '12:00'})");
   assert.match(fleet, /Vehicle reserved until/);
-  assert.doesNotMatch(fleet, /type="file"/);
+  assert.match(fleet, /Upload claim/);
+  assert.match(fleet, /uploadOwnFleetTransportClaim\('details',this\)/);
 });
 
 test('empty event offers a booking action and no misleading schedule', () => {

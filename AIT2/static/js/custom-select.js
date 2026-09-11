@@ -83,7 +83,8 @@
     const label = selectedLabel(select);
     if (!isDepartmentSelect(select)) {
       if (valueElement.textContent !== label) valueElement.textContent = label;
-      valueElement.style.fontFamily = option?.dataset?.fontPreview || '';
+      const fontFamily = option?.dataset?.fontPreview || '';
+      if (valueElement.style.fontFamily !== fontFamily) valueElement.style.fontFamily = fontFamily;
       return;
     }
     const meta = departmentOptionMeta(option);
@@ -163,7 +164,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'sb-select-option';
-    button.dataset.sbOptionIndex = String([...select.options].indexOf(option));
+    button.dataset.sbOptionIndex = String(option.index);
     button.setAttribute('role', 'option');
     button.setAttribute('aria-selected', String(option.selected));
     button.disabled = option.disabled;
@@ -245,10 +246,11 @@
     if (!button) return;
     const valueElement = button.querySelector('.sb-select-value');
     if (valueElement) renderSelectedValue(select, valueElement);
-    button.disabled = select.disabled;
+    if (button.disabled !== select.disabled) button.disabled = select.disabled;
     wrapper.classList.toggle('is-disabled', select.disabled);
     wrapper.classList.toggle('has-value', Boolean(select.value));
-    button.setAttribute('aria-invalid', String(select.matches(':invalid')));
+    const invalid = String(select.matches(':invalid'));
+    if (button.getAttribute('aria-invalid') !== invalid) button.setAttribute('aria-invalid', invalid);
   }
 
   function enhance(select) {

@@ -74,11 +74,20 @@ const workforceDocumentsState = {
 
 const ADMIN_INVOICE_FILE_ACCEPT = [
   '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
   '.xls',
   '.xlsx',
   'application/pdf',
+  'image/png',
+  'image/jpeg',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+].join(',');
+const ADMIN_CLAIM_FILE_ACCEPT = [
+  '.pdf', '.png', '.jpg', '.jpeg',
+  'application/pdf', 'image/png', 'image/jpeg'
 ].join(',');
 
 function wfEscape(value) {
@@ -352,11 +361,63 @@ function wfAssignmentSubjectId(row) {
   return String(row?.freelancerId || row?.vendorId || '');
 }
 
+function wfTransportCompanyInvoices(booking) {
+  const records = [
+    ...(Array.isArray(booking?.companyInvoices) ? booking.companyInvoices : []),
+    ...(booking?.companyInvoice ? [booking.companyInvoice] : [])
+  ];
+  const seen = new Set();
+  return records.filter(record => {
+    if (!record || typeof record !== 'object') return false;
+    const identity = String(record.id || '');
+    if (identity && seen.has(identity)) return false;
+    if (identity) seen.add(identity);
+    return true;
+  });
+}
+
 function wfFindSubmission(id) {
   for (const [freelancerId, rows] of Object.entries(workforcePageState.data?.submissions || {})) {
     for (const plural of ['invoices', 'claims']) {
       const record = rows?.[plural]?.find(row => String(row.id) === String(id));
       if (record) return { record, freelancerId, kind: plural.slice(0, -1) };
+    }
+  }
+  for (const booking of workforcePageState.data?.transportBookings || []) {
+    const records = [
+      ...(booking?.invoice ? [{ field: 'invoice', record: booking.invoice }] : []),
+      ...wfTransportCompanyInvoices(booking).map(record => ({ field: 'companyInvoice', record })),
+      ...(Array.isArray(booking?.claims)
+        ? booking.claims.map(record => ({ field: 'claim', record }))
+        : [])
+    ];
+    for (const { field, record } of records) {
+      if (record && String(record.id) === String(id)) {
+        const group = (workforcePageState.data?.transportCompanies || []).find(item =>
+          (item.bookings || []).some(row => String(row.id) === String(booking.id))
+        );
+        const company = String(group?.company || record.company || booking.company || 'Transport provider');
+        const expectedAmount = field === 'companyInvoice'
+          ? Number(group?.estimatedCost || 0)
+          : Number(booking.cost || 0) * (booking.twoWay ? 2 : 1);
+        const kind = field === 'claim' ? 'claim' : 'invoice';
+        Object.assign(record, {
+          isTransportInvoice: kind === 'invoice',
+          isTransportClaim: kind === 'claim',
+          transportInvoiceScope: field === 'companyInvoice' ? 'company' : 'booking',
+          subject: record.subject || { name: company, type: 'transport', company },
+          expectedAmount: record.expectedAmount ?? expectedAmount,
+          expectedAmountBreakdown: record.expectedAmountBreakdown || [{
+            role: field === 'companyInvoice' ? 'Company invoice' : 'Transport booking',
+            department: 'Transport',
+            amount: expectedAmount,
+            calculation: field === 'companyInvoice'
+              ? `Estimated event transport: ${wfMoney(expectedAmount)}`
+              : [booking.locationFrom, booking.locationTo].filter(Boolean).join(' to ')
+          }]
+        });
+        return { record, freelancerId: '', kind, isTransport: true };
+      }
     }
   }
   return null;
@@ -996,7 +1057,20 @@ async function wfLoadDocumentEvent(record) {
     workforcePageState.eventId = Number(record.event.id);
     workforcePageState.data = response.data;
   }
-  return Boolean(wfFindSubmission(record.id));
+  const found = wfFindSubmission(record.id);
+  if (found) {
+    Object.assign(found.record, {
+      subject: record.subject,
+      event: record.event,
+      expectedAmount: record.expectedAmount,
+      expectedAmountBreakdown: record.expectedAmountBreakdown,
+      assignmentWorkDates: record.assignmentWorkDates,
+      isTransportInvoice: record.isTransportInvoice,
+      isTransportClaim: record.isTransportClaim,
+      transportInvoiceScope: record.transportInvoiceScope
+    });
+  }
+  return Boolean(found);
 }
 
 async function openWorkforceDocumentSubmission(id) {
@@ -1157,6 +1231,19 @@ function wfClaimDisplayStatus(record) {
   return record.paymentConfirmedAt
     ? 'Payment Confirmed'
     : (record.status || 'Pending Review');
+}
+
+function wfSubmissionStatusBadges(records) {
+  const stateCounts = (records || []).reduce((summary, record) => {
+    const status = wfClaimDisplayStatus(record);
+    summary[status] = (summary[status] || 0) + 1;
+    return summary;
+  }, {});
+  return ['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed']
+    .filter(status => Number(stateCounts[status] || 0) > 0)
+    .map(status =>
+      `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
+    ).join('');
 }
 
 function wfClaimGroupControlId(eventId, subjectId) {
@@ -1438,19 +1525,11 @@ function wfDepartmentHtml(department, assignments) {
     }
     return total + 1;
   }, 0);
-  const stateCounts = subjectIds.reduce((summary, freelancerId) => {
+  const departmentSubmissions = subjectIds.flatMap(freelancerId => {
     const submissions = workforcePageState.data.submissions?.[freelancerId] || {};
-    [...(submissions.invoices || []), ...(submissions.claims || [])].forEach(record => {
-      const status = record.paymentConfirmedAt ? 'Payment Confirmed' : (record.status || 'Pending Review');
-      summary[status] = (summary[status] || 0) + 1;
-    });
-    return summary;
-  }, {});
-  const statusBadges = ['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed']
-    .filter(status => Number(stateCounts[status] || 0) > 0)
-    .map(status =>
-    `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
-  ).join('');
+    return [...(submissions.invoices || []), ...(submissions.claims || [])];
+  });
+  const statusBadges = wfSubmissionStatusBadges(departmentSubmissions);
   const canRemoveDepartment = !(workforcePageState.data.assignments || [])
     .some(row => row.department === department);
   return `<details class="wf-department" data-department="${wfAttr(department)}" style="${wfDepartmentStyle(department)}">
@@ -1480,10 +1559,21 @@ function wfDepartmentHtml(department, assignments) {
 function wfCrewTransportCategoryHtml() {
   const groups = workforcePageState.data?.transportCompanies || [];
   if (!groups.length) return '';
-  const invoiceTotal = groups.reduce((sum, group) => sum + Number(group.invoice?.amount || 0), 0);
+  const transportInvoices = groups.flatMap(group => [
+    ...(Array.isArray(group.invoices)
+      ? group.invoices
+      : (group.invoice ? [group.invoice] : [])),
+    ...(group.bookings || []).map(row => row.invoice).filter(Boolean)
+  ]);
+  const transportClaims = groups.flatMap(group =>
+    (group.bookings || []).flatMap(row => Array.isArray(row.claims) ? row.claims : [])
+  );
+  const invoiceTotal = transportInvoices.reduce((sum, invoice) =>
+    sum + (invoice.status === 'Denied' ? 0 : Number(invoice.amount || 0)), 0);
   const estimatedTotal = groups.reduce((sum, group) => sum + Number(group.estimatedCost || 0), 0);
   return `<details class="wf-department wf-transport-panel" data-department="transport">
-    <summary><span class="wf-department-title"><span class="wf-department-label">Transport <small>${groups.length} compan${groups.length === 1 ? 'y' : 'ies'}</small></span></span>
+    <summary><span class="wf-department-title"><span class="wf-department-label">Transport <small>${groups.length} compan${groups.length === 1 ? 'y' : 'ies'}</small></span>
+        <span class="wf-dept-status-summary">${wfSubmissionStatusBadges([...transportInvoices, ...transportClaims])}</span></span>
       <span class="wf-department-header-actions"><button class="wf-button primary" type="button" onclick="event.preventDefault();event.stopPropagation();openEventWorkforce(${Number(workforcePageState.eventId)},'transport')">View Transport</button></span>
       <span class="wf-dept-total"><span>Invoices</span><strong>${wfMoney(invoiceTotal)}</strong></span>
       <span class="wf-dept-total"><span>Bookings</span><strong>${wfMoney(estimatedTotal)}</strong></span>
@@ -1495,25 +1585,31 @@ function wfCrewTransportCategoryHtml() {
 function wfTransportCompanyHtml(group) {
   const bookings = group.bookings || [];
   const bookingId = group.invoiceBookingId || bookings[0]?.id || '';
-  const invoice = group.invoice;
+  const companyInvoices = Array.isArray(group.invoices)
+    ? group.invoices
+    : (group.invoice ? [group.invoice] : []);
+  const invoices = [
+    ...companyInvoices,
+    ...bookings.map(row => row.invoice).filter(Boolean)
+  ];
+  const fleetClaims = bookings.flatMap(row => Array.isArray(row.claims) ? row.claims : []);
+  const submissions = group.isFleet ? fleetClaims : invoices;
+  const submissionKind = group.isFleet ? 'claim' : 'invoice';
   const chips = bookings.map(booking => `<span class="wf-assignment-chip"><button class="wf-assignment-edit" type="button"
     onclick="openWorkforceTransportBooking('${wfAttr(booking.id)}')" title="View booking on Transport page">
     ${wfRoomBadge(booking)}${wfEscape([booking.departDate, booking.departTime, booking.vehicleNumber || booking.vehicleType].filter(Boolean).join(' · '))} · ${wfMoney(Number(booking.cost || 0) * (booking.twoWay ? 2 : 1))}
   </button></span>`).join('');
-  const legacyInvoices = bookings.filter(row => row.invoice).map(row =>
-    `<div class="wf-file-row"><a class="wf-file-name" href="${wfAttr(row.invoice.previewUrl)}" target="_blank" rel="noopener">${wfEscape(row.invoice.originalName || 'Booking invoice')}</a><small>Booking invoice</small></div>`
-  ).join('');
   return `<article class="wf-worker wf-vendor wf-transport-company">
     <div class="wf-worker-identity"><div class="wf-worker-profile"><span class="wf-avatar vendor">${wfEscape(wfInitials(group.company))}</span>
       <div><strong>${wfEscape(group.company)}</strong><small>${bookings.length} booking${bookings.length === 1 ? '' : 's'}</small><small>Transport cost: ${wfMoney(group.cost)}</small></div></div></div>
     <div class="wf-worker-roles"><div class="wf-column-heading"><strong>Event bookings</strong></div><div class="wf-assignment-list">${chips}</div></div>
-    <section class="wf-submission-box wf-transport-company-invoice" ${group.isFleet ? '' : `ondragenter="wfSubmissionDragOver(event)" ondragover="wfSubmissionDragOver(event)" ondragleave="wfSubmissionDragLeave(event)" ondrop="wfTransportCompanyInvoiceDrop(event,'${wfAttr(bookingId)}')"`}>
-      <header><span>Company invoice · ${invoice ? '1' : '0'}/1</span>${group.isFleet ? '' : `<label class="wf-mini-button">${invoice ? 'Replace' : 'Upload'}<input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportCompanyInvoice('${wfAttr(bookingId)}',this)"></label>`}</header>
-      ${invoice ? `<div class="wf-file-row"><a class="wf-file-name" href="${wfAttr(invoice.previewUrl)}" target="_blank" rel="noopener">${wfEscape(invoice.originalName || 'Company invoice')}</a>
-        <button class="wf-icon-button danger" type="button" title="Delete invoice" onclick="deleteWorkforceSubmission('${wfAttr(invoice.id)}')">&times;</button></div>
-        <label class="wf-transport-invoice-amount">Invoice total ($)<input type="number" min="0" step="0.01" value="${wfAttr(invoice.amount ?? '')}" placeholder="Enter amount" aria-label="Invoice total for ${wfAttr(group.company)}" onchange="saveTransportCompanyInvoiceAmount('${wfAttr(bookingId)}',this)"></label>`
-        : `<div class="wf-empty">${group.isFleet ? 'Own fleet booking costs.' : 'Upload one invoice covering this company’s event bookings.'}</div>`}
-      ${legacyInvoices}
+    <section class="wf-submission-box wf-transport-company-invoice"
+      ondragenter="wfSubmissionDragOver(event)" ondragover="wfSubmissionDragOver(event)" ondragleave="wfSubmissionDragLeave(event)"
+      ondrop="${group.isFleet ? 'wfOwnFleetClaimDrop' : 'wfTransportCompanyInvoiceDrop'}(event,'${wfAttr(bookingId)}')">
+      <header><span>${group.isFleet ? 'Claims' : 'Invoices'} · ${submissions.length}</span><label class="wf-mini-button">Upload ${submissionKind}<input type="file" accept="${group.isFleet ? ADMIN_CLAIM_FILE_ACCEPT : ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="${group.isFleet ? 'uploadOwnFleetTransportClaim' : 'uploadTransportCompanyInvoice'}('${wfAttr(bookingId)}',this)"></label></header>
+      ${submissions.length
+        ? submissions.map(record => wfSubmissionRow(record, submissionKind)).join('')
+        : `<div class="wf-empty">${group.isFleet ? 'Upload parking receipts or other own-fleet claims.' : 'Upload an invoice for this company’s event bookings.'}</div>`}
     </section>
   </article>`;
 }
@@ -1541,6 +1637,40 @@ async function uploadTransportCompanyInvoice(bookingId, input) {
   }
 }
 
+async function uploadOwnFleetTransportClaim(bookingId, input) {
+  if (!input.files?.[0]) return;
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  input.disabled = true;
+  try {
+    const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(bookingId)}/claim`, 'POST', form);
+    workforcePageState.data = response.data;
+    renderWorkforcePage();
+    showNotification('success', 'Own-fleet claim uploaded. Review its category and amount.');
+  } catch (error) {
+    showNotification('error', error.message);
+  } finally {
+    input.disabled = false;
+    input.value = '';
+  }
+}
+
+async function wfOwnFleetClaimDrop(event, bookingId) {
+  event.preventDefault();
+  event.stopPropagation();
+  const area = event.currentTarget;
+  area.classList.remove('is-file-dragging');
+  const files = [...(event.dataTransfer?.files || [])];
+  if (!files.length) return;
+  if (files.length > 1) {
+    showNotification('warning', 'Upload one claim at a time.');
+    return;
+  }
+  const input = area.querySelector('input[type="file"]');
+  if (!input || input.disabled) return;
+  await uploadOwnFleetTransportClaim(bookingId, { files, value: '', disabled: false });
+}
+
 async function wfTransportCompanyInvoiceDrop(event, bookingId) {
   event.preventDefault();
   event.stopPropagation();
@@ -1557,20 +1687,6 @@ async function wfTransportCompanyInvoiceDrop(event, bookingId) {
   input.disabled = true;
   try {
     await uploadTransportCompanyInvoice(bookingId, { files, value: '' });
-  } finally {
-    input.disabled = false;
-  }
-}
-
-async function saveTransportCompanyInvoiceAmount(bookingId, input) {
-  if (!input.value || !input.reportValidity()) return;
-  input.disabled = true;
-  try {
-    const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(bookingId)}/company-invoice`, 'PUT', {amount: Number(input.value)});
-    workforcePageState.data = response.data;
-    renderWorkforcePage();
-  } catch (error) {
-    showNotification('error', error.message);
   } finally {
     input.disabled = false;
   }
@@ -1609,18 +1725,29 @@ function wfLocationBadge(value, label, explicitAddress = '') {
 
 function wfTransportCard(booking) {
   const isFleet = booking.sourceType === 'fleet';
+  const isOnDemand = booking.profileType === 'on_demand';
   const invoice = booking.invoice;
+  const companyGroup = (workforcePageState.data?.transportCompanies || []).find(group =>
+    (group.bookings || []).some(row => String(row.id) === String(booking.id))
+  );
+  const companyInvoices = Array.isArray(companyGroup?.invoices)
+    ? companyGroup.invoices
+    : (companyGroup?.invoice ? [companyGroup.invoice] : []);
+  const visibleInvoices = [
+    ...(invoice ? [invoice] : []),
+    ...companyInvoices
+  ];
+  const fleetClaims = Array.isArray(booking.claims) ? booking.claims : [];
   const contact = wfFormatPhone(booking.driverContact || booking.contactNumber);
   const phone = contact.replace(/[^\d+]/g, '');
   const cost = Number(booking.cost || 0) * (booking.twoWay ? 2 : 1);
-  const invoiceDrop = isFleet ? ''
-    : `ondragenter="wfTransportInvoiceDragOver(event)" ondragover="wfTransportInvoiceDragOver(event)" ondragleave="wfTransportInvoiceDragLeave(event)" ondrop="wfTransportInvoiceDrop(event,'${wfAttr(booking.id)}')"`;
+  const invoiceDrop = `ondragenter="wfTransportInvoiceDragOver(event)" ondragover="wfTransportInvoiceDragOver(event)" ondragleave="wfTransportInvoiceDragLeave(event)" ondrop="${isFleet ? 'wfOwnFleetClaimDrop' : 'wfTransportCompanyInvoiceDrop'}(event,'${wfAttr(booking.id)}')"`;
   return `<details data-transport-booking-id="${wfAttr(booking.id)}" class="wf-transport-card wf-booking-card" ${invoiceDrop}>
     <summary class="wf-booking-heading" aria-label="View booking: ${wfAttr(wfTransportVehicleType(booking))}${booking.vehicleNumber ? `, ${wfAttr(booking.vehicleNumber)}` : ''}, ${wfAttr(wfTransportDateLabel(booking.departDate))}, ${wfAttr(wfTransportTimeLabel(booking.departTime))}">
       <div class="wf-booking-vehicle"><span class="wf-booking-icon">${wfMetricIconSvg('transport')}</span><div>
         <h4>${wfEscape(wfTransportVehicleType(booking))}</h4>
         <div class="wf-booking-provider">${booking.vehicleNumber ? `<strong>${wfEscape(booking.vehicleNumber)}</strong><span aria-hidden="true">·</span>` : ''}
-          <span>${booking.twoWay ? 'Depart & return' : booking.tripType === 'return' ? 'Return' : 'Depart'}</span></div>
+          ${isOnDemand ? '<strong class="wf-on-demand-badge">On-demand</strong><span aria-hidden="true">·</span>' : ''}<span>${booking.twoWay ? 'Depart & return' : booking.tripType === 'return' ? 'Return' : 'Depart'}</span></div>
       </div></div>
       <div class="wf-booking-glance"><span>${wfEscape(wfLocationParts(booking.locationFrom, booking.locationFromAddress).name || 'From TBC')} <span aria-hidden="true">→</span> ${wfEscape(wfLocationParts(booking.locationTo, booking.locationToAddress).name || 'To TBC')}</span>
         <small>${wfEscape(wfSubprojectName(booking) || 'Subproject not assigned')}</small></div>
@@ -1634,13 +1761,19 @@ function wfTransportCard(booking) {
     </div><dl class="wf-booking-details">
       <div><dt>Subproject</dt><dd>${wfEscape(wfSubprojectName(booking) || 'Not assigned')}</dd></div>
       <div><dt>Transport provider</dt><dd>${isFleet ? 'Own fleet' : wfEscape(booking.company || 'External transport')}</dd></div>
-      <div><dt>Driver</dt><dd>${wfEscape(booking.driver || booking.companyDriver || 'Driver TBC')}</dd></div>
-      <div><dt>Contact number</dt><dd>${/\d/.test(phone) ? `<a href="tel:${wfAttr(phone)}">${wfEscape(contact)}</a>` : wfEscape(contact || 'Contact TBC')}</dd></div>
+      <div><dt>Driver</dt><dd>${isOnDemand ? 'Assigned by provider' : wfEscape(booking.driver || booking.companyDriver || 'Driver TBC')}</dd></div>
+      <div><dt>Contact number</dt><dd>${isOnDemand && !contact ? 'Available after dispatch' : (/\d/.test(phone) ? `<a href="tel:${wfAttr(phone)}">${wfEscape(contact)}</a>` : wfEscape(contact || 'Contact TBC'))}</dd></div>
       ${booking.twoWay ? `<div><dt>Cost per trip</dt><dd>${wfMoney(booking.cost)} × 2 trips</dd></div>` : ''}
     </dl></div>
-    <footer class="wf-booking-footer"><div class="wf-booking-invoice">${isFleet ? '<span>Own fleet booking</span>' : `
-      ${invoice ? `<a href="${wfAttr(invoice.previewUrl)}" target="_blank" rel="noopener">${wfEscape(invoice.originalName || 'View invoice')}</a>` : '<span>Invoice not uploaded</span>'}
-      <label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}<input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>`}</div>
+    <footer class="wf-booking-footer"><div class="wf-booking-invoice">${isFleet ? `
+      ${fleetClaims.length
+        ? fleetClaims.map(record => `<button class="wf-link-button" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')">${wfEscape(record.originalName || 'View claim')}</button>`).join('')
+        : '<span>No own-fleet claims uploaded</span>'}
+      <label class="wf-link-button">Upload claim<input type="file" accept="${ADMIN_CLAIM_FILE_ACCEPT}" hidden onchange="uploadOwnFleetTransportClaim('${wfAttr(booking.id)}',this)"></label>` : `
+      ${visibleInvoices.length
+        ? visibleInvoices.map(record => `<button class="wf-link-button" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')">${wfEscape(record.originalName || 'View invoice')}</button>`).join('')
+        : '<span>Invoice not uploaded</span>'}
+      <label class="wf-link-button">Upload invoice<input type="file" accept="${ADMIN_INVOICE_FILE_ACCEPT}" hidden onchange="uploadTransportCompanyInvoice('${wfAttr(booking.id)}',this)"></label>`}</div>
       <div class="wf-booking-actions"><button class="wf-button" type="button" onclick="openTransportBooking('${wfAttr(booking.vendorId || '')}','${wfAttr(booking.id)}','${wfAttr(booking.sourceType || 'external')}')">Edit booking</button>
         <button class="wf-button danger" type="button" onclick="deleteTransportBooking('${wfAttr(booking.id)}')">Remove</button></div>
     </footer>
@@ -2159,16 +2292,21 @@ function ensureWorkforceModals() {
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfDepartmentModal')">Cancel</button>
       <button class="wf-button primary" type="submit">Add Department</button></footer></form>`) +
     wfModal('wfTransportDirectoryModal', 'Manage Transport', `<div class="wf-modal-body">
-      <div class="wf-directory-toolbar"><input class="wf-search" id="wfTransportSearch" type="search" placeholder="Search vehicle or company" oninput="renderTransportDirectory(this.value)">
+      <div class="wf-directory-toolbar"><input class="wf-search" id="wfTransportSearch" type="search" placeholder="Search vehicle or provider" oninput="renderTransportDirectory(this.value)">
         <div><button class="wf-button" type="button" onclick="openLocationsManager()">Manage Locations</button>
           <button class="wf-button fleet" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button>
-          <button class="wf-button primary" type="button" onclick="openTransportProfile()">Add new transport</button></div></div>
+          <button class="wf-button primary" type="button" onclick="openTransportProfile()">Add vehicle or provider</button></div></div>
       <div class="wf-directory-list wf-directory-grid" id="wfTransportDirectoryList"></div></div>`, '', true) +
     wfModal('wfTransportProfileModal', 'Add New Transport', `<form id="wfTransportProfileForm"><div class="wf-modal-body">
-      <div class="wf-form-grid"><label class="wf-field"><span>Vehicle type *</span><input id="wfProfileVehicleType" required></label>
-        <label class="wf-field"><span>Company</span><input id="wfProfileCompany"></label>
+      <input id="wfProfileType" type="hidden" value="vehicle">
+      <div class="wf-form-grid"><div class="wf-field full"><span>What are you saving?</span><div class="wf-segmented">
+          <button type="button" id="wfProfileTypeVehicle" class="active" onclick="setTransportProfileType('vehicle')">Known vehicle</button>
+          <button type="button" id="wfProfileTypeOnDemand" onclick="setTransportProfileType('on_demand')">On-demand provider</button>
+        </div><small class="wf-field-help" id="wfProfileTypeHelp">Save a vehicle that you expect to book again.</small></div>
+        <label class="wf-field" id="wfProfileVehicleTypeField"><span id="wfProfileVehicleTypeLabel">Vehicle type *</span><input id="wfProfileVehicleType" required></label>
+        <label class="wf-field"><span id="wfProfileCompanyLabel">Company</span><input id="wfProfileCompany"></label>
         <label class="wf-field"><span>Contact number</span><input id="wfProfileContact" type="tel"></label>
-        <label class="wf-field full"><span>Vehicle / Lorry number</span><input id="wfProfileVehicleNumber"></label>
+        <label class="wf-field full" id="wfProfileVehicleNumberField"><span>Vehicle / Lorry number</span><input id="wfProfileVehicleNumber"></label>
       </div><div class="wf-error" id="wfTransportProfileError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfTransportProfileModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Save Transport</button></footer></form>`) +
@@ -2208,15 +2346,22 @@ function ensureWorkforceModals() {
         <label class="wf-field full"><span>Cost (per trip, $)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
       </div>
       <section class="wf-booking-vehicle-section">
-        <div class="wf-booking-vehicle-heading"><div><h4>Choose one or more vehicles</h4><p>Selected vehicles will share the trip details above.</p></div>
+        <div class="wf-booking-vehicle-heading"><div><h4>Choose vehicles or an on-demand provider</h4><p>Selected vehicles will share the trip details above.</p></div>
           <button class="wf-button" type="button" onclick="openTransportProfileForBooking()">+ Add transport</button></div>
         <div class="wf-booking-selection-summary" id="wfBookingSelectionSummary">No vehicles selected</div>
+        <div class="wf-on-demand-booking" id="wfOnDemandBookingFields" hidden>
+          <div><strong id="wfOnDemandProviderName">On-demand provider</strong><small>Driver and registration details are assigned by the provider for each trip.</small></div>
+          <div class="wf-form-grid">
+            <label class="wf-field"><span>Vehicle type *</span><input id="wfOnDemandVehicleType" placeholder="e.g. 10ft lorry" oninput="setTransportBookingSource('external')"></label>
+            <label class="wf-field" id="wfOnDemandQuantityField"><span>Number of vehicles *</span><input id="wfOnDemandQuantity" type="number" min="1" max="50" step="1" value="1" oninput="setTransportBookingSource('external')"></label>
+          </div>
+        </div>
         <input id="wfBookingVendor" type="hidden">
         <input id="wfBookingFleetVehicle" type="hidden">
         <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Own fleet</strong>
           <button class="wf-link-button" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button></div>
           <div id="wfFleetVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
-        <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Known external vehicles</strong></div>
+        <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>External transport</strong></div>
           <div id="wfExternalVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
         <section class="wf-booking-drivers" id="wfBookingDrivers" hidden></section>
       </section>
@@ -3667,7 +3812,7 @@ function openAdminWorkforceUpload(freelancerId, kind) {
   file.multiple = true;
   document.getElementById('wfAdminUploadFileLabel').textContent = claim
     ? 'Claim files (PDF, PNG or JPG) *'
-    : 'Invoice files (PDF or Excel) *';
+    : 'Invoice files (PDF, PNG, JPG or Excel) *';
   document.getElementById('wfAdminUploadDropPrompt').textContent = claim ? 'Drag & drop or choose claim files' : 'Drag & drop or choose invoice files';
   updateAdminWorkforceDropzoneFiles();
   const submit = document.querySelector('#wfAdminUploadForm .wf-button.primary');
@@ -3789,12 +3934,38 @@ function renderTransportDirectory(search) {
   const query = String(search || '').toLowerCase();
   const rows = (workforcePageState.data?.transportVendors || []).filter(row =>
     `${row.vehicleType || ''} ${row.company || ''} ${row.vehicleNumber || ''}`.toLowerCase().includes(query));
-  document.getElementById('wfTransportDirectoryList').innerHTML = rows.map(row =>
-    `<div class="wf-directory-row"><button class="wf-directory-main" type="button" onclick="openTransportBooking('${wfAttr(row.id)}')">
-      <span class="wf-avatar">${wfMetricIconSvg('transport')}</span><span><strong>${wfEscape(row.vehicleType || 'Vehicle')} &middot; ${wfEscape(row.vehicleNumber || '')}</strong>
-      <small>${wfEscape(row.company || '')}${row.contactNumber ? ` &middot; ${wfEscape(row.contactNumber)}` : ''}</small></span></button>
-      <button class="wf-button" type="button" onclick="openTransportProfile('${wfAttr(row.id)}')">Edit</button></div>`).join('') ||
+  document.getElementById('wfTransportDirectoryList').innerHTML = rows.map(row => {
+    const isOnDemand = row.profileType === 'on_demand';
+    const title = isOnDemand
+      ? (row.company || 'On-demand provider')
+      : [row.vehicleType || 'Vehicle', row.vehicleNumber].filter(Boolean).join(' · ');
+    const details = isOnDemand
+      ? [row.vehicleType ? `Default: ${row.vehicleType}` : 'Choose vehicle type per booking', row.contactNumber].filter(Boolean).join(' · ')
+      : [row.company, row.contactNumber].filter(Boolean).join(' · ');
+    return `<div class="wf-directory-row"><button class="wf-directory-main" type="button" onclick="openTransportBooking('${wfAttr(row.id)}')">
+      <span class="wf-avatar">${wfMetricIconSvg('transport')}</span><span><strong>${wfEscape(title)}</strong>
+      <small>${isOnDemand ? '<b class="wf-on-demand-badge">On-demand</b>' : ''}${wfEscape(details)}</small></span></button>
+      <button class="wf-button" type="button" onclick="openTransportProfile('${wfAttr(row.id)}')">Edit</button></div>`;
+  }).join('') ||
       '<div class="wf-empty">No saved transport profiles. Add one to begin.</div>';
+}
+
+function setTransportProfileType(type) {
+  const value = type === 'on_demand' ? 'on_demand' : 'vehicle';
+  const isOnDemand = value === 'on_demand';
+  document.getElementById('wfProfileType').value = value;
+  document.getElementById('wfProfileTypeVehicle').classList.toggle('active', !isOnDemand);
+  document.getElementById('wfProfileTypeOnDemand').classList.toggle('active', isOnDemand);
+  document.getElementById('wfProfileVehicleType').required = !isOnDemand;
+  document.getElementById('wfProfileCompany').required = isOnDemand;
+  document.getElementById('wfProfileVehicleNumberField').hidden = isOnDemand;
+  document.getElementById('wfProfileVehicleTypeLabel').textContent =
+    isOnDemand ? 'Default vehicle type' : 'Vehicle type *';
+  document.getElementById('wfProfileCompanyLabel').textContent =
+    isOnDemand ? 'Provider name *' : 'Company';
+  document.getElementById('wfProfileTypeHelp').textContent = isOnDemand
+    ? 'For services such as Lalamove or GoGoX. Choose the vehicle type and quantity for each booking.'
+    : 'Save a specific vehicle that you expect to book again.';
 }
 
 function openTransportProfile(id = '', returnToBooking = false) {
@@ -3804,6 +3975,7 @@ function openTransportProfile(id = '', returnToBooking = false) {
   workforcePageState.editingTransportProfileId = row?.id || null;
   document.getElementById('wfTransportProfileForm').reset();
   document.getElementById('wfTransportProfileModalTitle').textContent = row ? 'Edit Transport' : 'Add New Transport';
+  setTransportProfileType(row?.profileType || 'vehicle');
   document.getElementById('wfProfileVehicleType').value = row?.vehicleType || '';
   document.getElementById('wfProfileCompany').value = row?.company || '';
   document.getElementById('wfProfileContact').value = row?.contactNumber || '';
@@ -3817,6 +3989,7 @@ async function saveTransportProfile(event) {
   const id = workforcePageState.editingTransportProfileId;
   try {
     const response = await apiCall(id ? `/api/workforce/transport-profiles/${encodeURIComponent(id)}` : '/api/workforce/transport-profiles', id ? 'PUT' : 'POST', {
+      profileType: document.getElementById('wfProfileType').value,
       vehicleType: document.getElementById('wfProfileVehicleType').value,
       company: document.getElementById('wfProfileCompany').value,
       contactNumber: document.getElementById('wfProfileContact').value,
@@ -4063,6 +4236,16 @@ function wfTransportSelectionKey(sourceType, id) {
   return `${sourceType}:${id}`;
 }
 
+function wfTransportSelectionProfile(selection) {
+  if (selection?.sourceType !== 'external') return null;
+  return (workforcePageState.data?.transportVendors || [])
+    .find(row => String(row.id) === String(selection.id)) || null;
+}
+
+function wfTransportSelectionIsOnDemand(selection) {
+  return wfTransportSelectionProfile(selection)?.profileType === 'on_demand';
+}
+
 function wfTransportSelectionLabel(selection) {
   if (selection.sourceType === 'fleet') {
     const vehicle = (workforcePageState.data?.vehicles || [])
@@ -4074,6 +4257,14 @@ function wfTransportSelectionLabel(selection) {
   }
   const profile = (workforcePageState.data?.transportVendors || [])
     .find(row => String(row.id) === String(selection.id));
+  if (profile?.profileType === 'on_demand') {
+    return {
+      title: profile.company || 'On-demand provider',
+      subtitle: profile.vehicleType
+        ? `Default: ${profile.vehicleType}`
+        : 'Vehicle type chosen per booking'
+    };
+  }
   return {
     title: [profile?.vehicleType, profile?.vehicleNumber].filter(Boolean).join(' - ') || 'External transport',
     subtitle: profile?.company || 'External vehicle'
@@ -4092,9 +4283,11 @@ function renderTransportVehicleDrivers() {
   const singleFields = document.getElementById('wfSingleDriverFields');
   if (!root || !singleFields) return;
   const selections = wfSelectedTransportVehicles();
+  const usesOnDemandProvider = selections.length === 1
+    && wfTransportSelectionIsOnDemand(selections[0]);
   const usesIndividualDrivers = selections.length > 1;
   root.hidden = !usesIndividualDrivers;
-  singleFields.hidden = usesIndividualDrivers;
+  singleFields.hidden = usesIndividualDrivers || usesOnDemandProvider;
   if (!usesIndividualDrivers) {
     if (selections.length === 1) {
       const selection = selections[0];
@@ -4121,6 +4314,37 @@ function renderTransportVehicleDrivers() {
     }).join('')}</div>`;
 }
 
+function syncOnDemandBookingFields() {
+  const selections = wfSelectedTransportVehicles();
+  const selection = selections.length === 1 ? selections[0] : null;
+  const profile = wfTransportSelectionIsOnDemand(selection)
+    ? wfTransportSelectionProfile(selection)
+    : null;
+  const root = document.getElementById('wfOnDemandBookingFields');
+  const typeInput = document.getElementById('wfOnDemandVehicleType');
+  const quantityInput = document.getElementById('wfOnDemandQuantity');
+  const quantityField = document.getElementById('wfOnDemandQuantityField');
+  if (!root || !typeInput || !quantityInput || !quantityField) return null;
+  root.hidden = !profile;
+  typeInput.required = Boolean(profile);
+  quantityInput.required = Boolean(profile) && !workforcePageState.editingTransportId;
+  quantityField.hidden = Boolean(workforcePageState.editingTransportId);
+  if (!profile) {
+    typeInput.dataset.profileId = '';
+    return null;
+  }
+  document.getElementById('wfOnDemandProviderName').textContent =
+    profile.company || 'On-demand provider';
+  if (typeInput.dataset.profileId !== String(profile.id)) {
+    typeInput.value = profile.vehicleType || '';
+    typeInput.dataset.profileId = String(profile.id);
+  }
+  if (!quantityInput.value || Number(quantityInput.value) < 1) {
+    quantityInput.value = '1';
+  }
+  return profile;
+}
+
 function setTransportBookingSource(source) {
   const selections = workforcePageState.transportVehicleSelections;
   const selectedSources = [
@@ -4140,14 +4364,18 @@ function setTransportBookingSource(source) {
       selections[option.dataset.source]?.has(String(option.dataset.id))
     );
   });
+  const onDemandProfile = syncOnDemandBookingFields();
   const count = selections.fleet.size + selections.external.size;
+  const quantity = onDemandProfile
+    ? Math.max(1, Math.min(50, Number(document.getElementById('wfOnDemandQuantity').value) || 1))
+    : count;
   const summary = document.getElementById('wfBookingSelectionSummary');
-  if (summary) summary.textContent = count
-    ? `${count} vehicle${count === 1 ? '' : 's'} selected`
-    : 'No vehicles selected';
+  if (summary) summary.textContent = onDemandProfile
+    ? `${onDemandProfile.company || 'On-demand provider'} · ${quantity} vehicle${quantity === 1 ? '' : 's'}`
+    : (count ? `${count} vehicle${count === 1 ? '' : 's'} selected` : 'No vehicles selected');
   const submit = document.getElementById('wfTransportBookingSubmit');
   if (submit && !workforcePageState.editingTransportId) {
-    submit.textContent = count > 1 ? `Add ${count} to Event` : 'Add to Event';
+    submit.textContent = quantity > 1 ? `Add ${quantity} to Event` : 'Add to Event';
   }
   renderTransportVehicleDrivers();
 }
@@ -4213,6 +4441,15 @@ function openTransportBooking(profileId = '', bookingId = '', preferredSource = 
     booking?.useEndDate || tripDateInput.value;
   document.getElementById('wfVehicleUseEndTime').value = booking?.useEndTime || '';
   document.getElementById('wfTransportCost').value = booking?.cost ?? 0;
+  const onDemandTypeInput = document.getElementById('wfOnDemandVehicleType');
+  const isOnDemandProfile = profile?.profileType === 'on_demand';
+  onDemandTypeInput.value = isOnDemandProfile
+    ? (booking?.vehicleType || profile?.vehicleType || '')
+    : '';
+  onDemandTypeInput.dataset.profileId = isOnDemandProfile
+    ? String(profile.id)
+    : '';
+  document.getElementById('wfOnDemandQuantity').value = '1';
   document.getElementById('wfSaveBookingLocations').checked = true;
   setTransportTripType(tripType, false);
   renderExternalTransportChoices(profile?.id || '');
@@ -4244,7 +4481,11 @@ function selectTransportVehicle(source, id) {
   const selected = selections[source];
   const selectionKey = wfTransportSelectionKey(source, String(id));
   const wasSelected = selected.has(String(id));
-  const previousCount = selections.fleet.size + selections.external.size;
+  let previousCount = selections.fleet.size + selections.external.size;
+  const incomingSelection = { sourceType: source, id: String(id) };
+  const incomingIsOnDemand = wfTransportSelectionIsOnDemand(incomingSelection);
+  const selectedOnDemand = wfSelectedTransportVehicles()
+    .some(selection => wfTransportSelectionIsOnDemand(selection));
   if (workforcePageState.editingTransportId) {
     selections.fleet.clear();
     selections.external.clear();
@@ -4258,6 +4499,14 @@ function selectTransportVehicle(source, id) {
     selected.delete(String(id));
     workforcePageState.transportDriverDetails.delete(selectionKey);
   } else {
+    if (incomingIsOnDemand || selectedOnDemand) {
+      selections.fleet.clear();
+      selections.external.clear();
+      workforcePageState.transportDriverDetails.clear();
+      document.getElementById('wfTransportDriver').value = '';
+      document.getElementById('wfTransportDriverContact').value = '';
+      previousCount = 0;
+    }
     if (previousCount === 1) {
       const existingSelection = wfSelectedTransportVehicles()[0];
       const existingKey = wfTransportSelectionKey(
@@ -4298,10 +4547,13 @@ function renderExternalTransportChoices(selectedId = '') {
   if (!root) return;
   const profiles = workforcePageState.data?.transportVendors || [];
   root.innerHTML = profiles.length ? profiles.map(profile => {
-    const label = [
-      profile.vehicleType,
-      profile.vehicleNumber
-    ].filter(Boolean).join(' - ');
+    const isOnDemand = profile.profileType === 'on_demand';
+    const label = isOnDemand
+      ? (profile.company || 'On-demand provider')
+      : [profile.vehicleType, profile.vehicleNumber].filter(Boolean).join(' - ');
+    const subtitle = isOnDemand
+      ? (profile.vehicleType ? `Default: ${profile.vehicleType}` : 'Choose vehicle type per booking')
+      : (profile.company || 'Company not recorded');
     const lastCost = profile.lastCost === null || profile.lastCost === undefined
       ? 'No previous cost'
       : `Last cost ${wfMoney(profile.lastCost)}`;
@@ -4309,8 +4561,8 @@ function renderExternalTransportChoices(selectedId = '') {
         data-source="external" data-id="${wfAttr(profile.id)}"
         onclick="selectTransportVehicle('external','${wfAttr(profile.id)}')">
       <span><strong>${wfEscape(label || 'External transport')}</strong>
-        <small>${wfEscape(profile.company || 'Company not recorded')}</small></span>
-      <em>${wfEscape(lastCost)}</em>
+        <small>${wfEscape(subtitle)}</small></span>
+      <em class="${isOnDemand ? 'on-demand' : ''}">${isOnDemand ? 'On-demand' : wfEscape(lastCost)}</em>
     </button>`;
   }).join('') : `<div class="wf-vehicle-choice-empty">No known external vehicles yet.
     <button class="wf-link-button" type="button" onclick="openTransportProfileForBooking()">Add transport</button></div>`;
@@ -4420,16 +4672,38 @@ async function saveTransportBooking(event) {
   const tripType = document.getElementById('wfTransportTripType').value;
   const selections = wfSelectedTransportVehicles();
   if (!selections.length) {
-    wfError('wfTransportBookingError', 'Choose at least one own-fleet or known external vehicle.');
+    wfError('wfTransportBookingError', 'Choose an own-fleet vehicle, external vehicle or on-demand provider.');
+    return;
+  }
+  const onDemandSelection = selections.length === 1
+    && wfTransportSelectionIsOnDemand(selections[0]);
+  const onDemandVehicleType = String(
+    document.getElementById('wfOnDemandVehicleType')?.value || ''
+  ).trim();
+  const requestedQuantity = Number(
+    document.getElementById('wfOnDemandQuantity')?.value || 1
+  );
+  if (onDemandSelection && !onDemandVehicleType) {
+    wfError('wfTransportBookingError', 'Choose a vehicle type for this booking.');
+    return;
+  }
+  if (
+    onDemandSelection
+    && !id
+    && (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 50)
+  ) {
+    wfError('wfTransportBookingError', 'Enter a quantity from 1 to 50.');
     return;
   }
   if (selections.length > 1) {
-    const missingDriver = selections.some(selection => {
+    const missingDriver = selections
+      .filter(selection => !wfTransportSelectionIsOnDemand(selection))
+      .some(selection => {
       const details = workforcePageState.transportDriverDetails.get(
         wfTransportSelectionKey(selection.sourceType, selection.id)
       );
       return !String(details?.driver || '').trim();
-    });
+      });
     if (missingDriver) {
       wfError('wfTransportBookingError', 'Assign a driver to every selected vehicle.');
       return;
@@ -4439,51 +4713,58 @@ async function saveTransportBooking(event) {
   if (submit) submit.disabled = true;
   try {
     let latestResponse = null;
+    let savedCount = 0;
     for (const selection of selections) {
       const individualDriver = workforcePageState.transportDriverDetails.get(
         wfTransportSelectionKey(selection.sourceType, selection.id)
       ) || {};
-      latestResponse = await apiCall(id
-        ? `/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}`
-        : `/api/events/${workforcePageState.eventId}/workforce/transport`, id ? 'PUT' : 'POST', {
-        sourceType: selection.sourceType,
-        subprojectId: document.getElementById('wfTransportSubproject').value,
-        tripType,
-        vendorId: selection.sourceType === 'external' ? selection.id : '',
-        vehicleId: selection.sourceType === 'fleet' ? selection.id : '',
-        driver: selections.length > 1
-          ? individualDriver.driver
-          : document.getElementById('wfTransportDriver').value,
-        driverContact: selections.length > 1
-          ? individualDriver.contact
-          : document.getElementById('wfTransportDriverContact').value,
-        locationFrom: document.getElementById('wfLocationFrom').value,
-        locationFromName: document.getElementById('wfLocationFrom').value,
-        locationFromAddress: document.getElementById('wfLocationFromAddress').value,
-        locationTo: document.getElementById('wfLocationTo').value,
-        locationToName: document.getElementById('wfLocationTo').value,
-        locationToAddress: document.getElementById('wfLocationToAddress').value,
-        saveLocations: document.getElementById('wfSaveBookingLocations').checked,
-        departDate: document.getElementById('wfDepartDate').value,
-        departTime: document.getElementById('wfDepartTime').value,
-        useEndDate: selection.sourceType === 'fleet'
-          ? document.getElementById('wfVehicleUseEndDate').value
-          : '',
-        useEndTime: selection.sourceType === 'fleet'
-          ? document.getElementById('wfVehicleUseEndTime').value
-          : '',
-        cost: document.getElementById('wfTransportCost').value,
-        twoWay: Boolean(currentBooking?.twoWay),
-        returnDate: currentBooking?.twoWay ? currentBooking.returnDate : '',
-        returnTime: currentBooking?.twoWay ? currentBooking.returnTime : '',
-        status: currentBooking?.status || 'Pending Review'
-      });
-      workforcePageState.data = latestResponse.data;
+      const selectionIsOnDemand = wfTransportSelectionIsOnDemand(selection);
+      const bookingCount = selectionIsOnDemand && !id ? requestedQuantity : 1;
+      for (let bookingIndex = 0; bookingIndex < bookingCount; bookingIndex += 1) {
+        latestResponse = await apiCall(id
+          ? `/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}`
+          : `/api/events/${workforcePageState.eventId}/workforce/transport`, id ? 'PUT' : 'POST', {
+          sourceType: selection.sourceType,
+          subprojectId: document.getElementById('wfTransportSubproject').value,
+          tripType,
+          vendorId: selection.sourceType === 'external' ? selection.id : '',
+          vehicleId: selection.sourceType === 'fleet' ? selection.id : '',
+          vehicleType: selectionIsOnDemand ? onDemandVehicleType : '',
+          driver: selectionIsOnDemand ? '' : (selections.length > 1
+            ? individualDriver.driver
+            : document.getElementById('wfTransportDriver').value),
+          driverContact: selectionIsOnDemand ? '' : (selections.length > 1
+            ? individualDriver.contact
+            : document.getElementById('wfTransportDriverContact').value),
+          locationFrom: document.getElementById('wfLocationFrom').value,
+          locationFromName: document.getElementById('wfLocationFrom').value,
+          locationFromAddress: document.getElementById('wfLocationFromAddress').value,
+          locationTo: document.getElementById('wfLocationTo').value,
+          locationToName: document.getElementById('wfLocationTo').value,
+          locationToAddress: document.getElementById('wfLocationToAddress').value,
+          saveLocations: document.getElementById('wfSaveBookingLocations').checked,
+          departDate: document.getElementById('wfDepartDate').value,
+          departTime: document.getElementById('wfDepartTime').value,
+          useEndDate: selection.sourceType === 'fleet'
+            ? document.getElementById('wfVehicleUseEndDate').value
+            : '',
+          useEndTime: selection.sourceType === 'fleet'
+            ? document.getElementById('wfVehicleUseEndTime').value
+            : '',
+          cost: document.getElementById('wfTransportCost').value,
+          twoWay: Boolean(currentBooking?.twoWay),
+          returnDate: currentBooking?.twoWay ? currentBooking.returnDate : '',
+          returnTime: currentBooking?.twoWay ? currentBooking.returnTime : '',
+          status: currentBooking?.status || 'Pending Review'
+        });
+        workforcePageState.data = latestResponse.data;
+        savedCount += 1;
+      }
     }
     closeWorkforceModal('wfTransportBookingModal');
     renderWorkforcePage();
-    showNotification('success', selections.length > 1
-      ? `${selections.length} ${tripType === 'return' ? 'return' : 'depart'} transport bookings saved`
+    showNotification('success', savedCount > 1
+      ? `${savedCount} ${tripType === 'return' ? 'return' : 'depart'} transport bookings saved`
       : `${tripType === 'return' ? 'Return' : 'Depart'} transport saved`);
   } catch (error) {
     wfError('wfTransportBookingError', error.message);
@@ -4765,8 +5046,8 @@ function selectWorkforceReviewStatus(event, status) {
 function wfReviewClaimCategoryFields(record, verified) {
   const rawCategory = String(record.category || '');
   const category = rawCategory === 'Cab'
-    ? 'Transport'
-    : (['Transport', 'Meal', 'Purchase'].includes(rawCategory) ? rawCategory : (rawCategory ? 'Other' : ''));
+    ? 'Crew Transport'
+    : (['Transport', 'Crew Transport', 'Equipment Transport', 'Parking', 'Meal', 'Purchase'].includes(rawCategory) ? rawCategory : (rawCategory ? 'Other' : ''));
   const otherValue = category === 'Other' ? rawCategory : '';
   return `<label class="wf-field"><span>Claim date *</span>
       <input id="wfReviewClaimDate" type="date" value="${wfAttr(record.claimDate || '')}" required ${verified ? 'disabled' : ''}>
@@ -4776,6 +5057,9 @@ function wfReviewClaimCategoryFields(record, verified) {
         onchange="syncWorkforceReviewClaimCategory()">
         <option value="" ${category ? '' : 'selected'} disabled>Select category</option>
         <option value="Transport" ${category === 'Transport' ? 'selected' : ''}>Transport</option>
+        <option value="Crew Transport" ${category === 'Crew Transport' ? 'selected' : ''}>Crew Transport</option>
+        <option value="Equipment Transport" ${category === 'Equipment Transport' ? 'selected' : ''}>Equipment Transport</option>
+        <option value="Parking" ${category === 'Parking' ? 'selected' : ''}>Parking</option>
         <option value="Meal" ${category === 'Meal' ? 'selected' : ''}>Meal</option>
         <option value="Other" ${category === 'Other' ? 'selected' : ''}>Other</option>
         <option value="Purchase" ${category === 'Purchase' ? 'selected' : ''}>Purchase</option>
@@ -4808,7 +5092,7 @@ function wfReviewExpectedAmountHtml(record) {
   return `<section class="wf-amount-check ${hasExpected ? '' : 'is-unavailable'}" id="wfReviewAmountCheck"
       data-expected="${hasExpected ? Number(expected) : ''}">
     <div class="wf-amount-check-values">
-      <div><span>Expected from role</span><strong>${hasExpected ? wfMoney(expected) : 'Not available'}</strong></div>
+      <div><span>${record.isTransportInvoice ? 'Expected transport cost' : 'Expected from role'}</span><strong>${hasExpected ? wfMoney(expected) : 'Not available'}</strong></div>
       <div><span>Detected / entered</span><strong id="wfReviewDetectedAmount">${record.amount == null ? 'Not detected' : wfMoney(record.amount)}</strong></div>
       <span class="wf-amount-match" id="wfReviewAmountMatch">${hasExpected ? 'Checking' : 'No role estimate'}</span>
     </div>
@@ -5007,6 +5291,7 @@ function updateWorkforceExpectedComparison() {
 
 async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = false) {
   ensureWorkforceModals();
+  const documentRecord = wfFindDocumentSubmission(id);
   let found = wfFindSubmission(id);
   if (!found) return;
   if (found.record.processingState === 'Processing') {
@@ -5026,6 +5311,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
         'POST'
       );
       workforcePageState.data = response.data;
+      if (documentRecord) await wfLoadDocumentEvent(documentRecord);
       found = wfFindSubmission(id);
     } catch (error) {
       showNotification('error', `Invoice scan could not determine the total: ${error.message}`);
@@ -5034,15 +5320,18 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   if (!found) return;
   workforcePageState.reviewSubmissionId = id;
   const { record, freelancerId, kind } = found;
+  const transportInvoice = Boolean(
+    record.isTransportInvoice || (found.isTransport && kind === 'invoice')
+  );
   const detailsRequired =
     kind === 'claim' && record.submissionStage === 'Details Required';
-  const freelancer = wfFindFreelancer(freelancerId) || wfFindVendor(freelancerId) || {};
-  const departments = wfDepartmentsForFreelancer(freelancerId);
+  const freelancer = wfFindFreelancer(freelancerId) || wfFindVendor(freelancerId) || record.subject || {};
+  const departments = transportInvoice ? [] : wfDepartmentsForFreelancer(freelancerId);
   const verified = Boolean(record.verifiedAt);
   const pendingDecision = record.status === 'Pending Review';
   const savedAllocations = record.allocations || [];
   workforcePageState.autoAllocation =
-    kind === 'invoice' && !savedAllocations.length;
+    kind === 'invoice' && !transportInvoice && !savedAllocations.length;
   const allocations = savedAllocations.length
     ? Object.fromEntries(savedAllocations.map(row => [row.department, row.amount]))
     : wfEvenAllocationMap(departments, record.amount);
@@ -5055,7 +5344,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   document.getElementById('wfReviewContent').innerHTML = `<div class="wf-review-layout">
     <div class="wf-preview">${pdf ? `<iframe src="${wfAttr(record.previewUrl)}#toolbar=1" title="Uploaded PDF"></iframe>`
       : spreadsheet ? `<iframe src="${wfAttr(record.previewUrl)}" sandbox="allow-same-origin allow-downloads" title="Uploaded Excel invoice"></iframe>`
-      : `<img src="${wfAttr(record.previewUrl)}" alt="Uploaded claim">`}</div>
+      : `<img src="${wfAttr(record.previewUrl)}" alt="Uploaded ${kind === 'invoice' ? 'invoice' : 'claim'}">`}</div>
     <form class="wf-review-form" id="wfReviewForm"><p class="wf-form-intro">${wfEscape(freelancer.name || '')} &middot; ${wfEscape(record.originalName || '')}</p>
       ${detailsRequired ? `<div class="wf-details-required-note"><strong>Claim details required</strong>
         <span>Complete the missing information below on behalf of the worker before saving or approving this claim.</span></div>` : ''}
@@ -5071,7 +5360,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
           <textarea id="wfReviewClaimNotes" placeholder="Add a description or note for this claim">${wfEscape(record.notes || record.description || '')}</textarea>
         </label>` : ''}
       </div>
-      ${kind === 'invoice' ? `<div class="wf-section-card"><h4>Department allocation</h4>
+      ${kind === 'invoice' && !transportInvoice ? `<div class="wf-section-card"><h4>Department allocation</h4>
         ${departments.map(code => `<label class="wf-allocation-row"><span>${wfEscape(code)}</span>
           <input class="wf-allocation-input" data-department="${wfAttr(code)}" type="number" min="0" step=".01" value="${allocations[code] ?? ''}"></label>`).join('')}
         <div class="wf-allocation-progress" id="wfAllocationProgress"></div></div>` : ''}

@@ -6,6 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APP_SCRIPT_FILES = (
     "app.js",
+    "asset-check.js",
     "plan.js",
     "prepare.js",
     "admin-settings.js",

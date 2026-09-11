@@ -27,6 +27,7 @@ from workforce_schedule import build_workforce_schedule_pdf
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"test-image"
+JPEG_BYTES = b"\xff\xd8\xff" + b"test-image"
 XLS_BYTES = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"test-workbook"
 
 
@@ -1566,6 +1567,42 @@ class WorkforcePortalTests(unittest.TestCase):
         ]
         self.assertEqual(invoices[-1]["contentType"], "application/vnd.ms-excel")
 
+    def test_worker_invoice_upload_accepts_photo_files(self):
+        self.create_worker_assignment()
+        token = self.worker_token()
+
+        with patch.object(
+            app_module,
+            "extract_invoice_amount",
+            return_value={
+                "amount": 245.5,
+                "confidence": "High",
+                "source": "Receipt image OCR",
+                "matchedText": "TOTAL 245.50",
+                "ocrUsed": True,
+            },
+        ):
+            response = self.client.post(
+                "/api/worker/submissions",
+                data={
+                    "token": token,
+                    "eventId": "143",
+                    "kind": "invoice",
+                    "warningAcknowledged": "true",
+                    "file": (io.BytesIO(PNG_BYTES), "invoice-photo.png"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        invoice = response.get_json()["data"]["events"][0]["submissions"][
+            "invoices"
+        ][0]
+        self.assertEqual(invoice["originalName"], "invoice-photo.png")
+        self.assertEqual(invoice["contentType"], "image/png")
+        self.assertEqual(invoice["amount"], 245.5)
+        self.assertEqual(invoice["processingState"], "Complete")
+
     def test_excel_invoice_previews_are_authorized_escaped_and_downloadable(self):
         from tests.test_spreadsheet_preview import invoice_xlsx_bytes
 
@@ -1792,6 +1829,59 @@ class WorkforcePortalTests(unittest.TestCase):
             {row["name"] for row in payload["transportLocations"]},
             {"Main Warehouse", "Test Venue"},
         )
+
+    def test_on_demand_transport_provider_does_not_require_a_saved_vehicle(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/transport-profiles",
+            json={
+                "profileType": "on_demand",
+                "company": "Lalamove",
+                "contactNumber": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        profile = response.get_json()["data"]
+        self.assertEqual(profile["profileType"], "on_demand")
+        self.assertEqual(profile["vehicleType"], "")
+        self.assertEqual(profile["vehicleNumber"], "")
+
+        missing_type = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "external",
+                "vendorId": profile["id"],
+                "locationFrom": "Main Warehouse",
+                "locationTo": "Test Venue",
+                "departDate": "2026-07-10",
+                "departTime": "08:30",
+                "cost": 75,
+            },
+        )
+        self.assertEqual(missing_type.status_code, 400)
+        self.assertIn("vehicle type", missing_type.get_json()["error"].lower())
+
+        response = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "external",
+                "vendorId": profile["id"],
+                "vehicleType": "10ft Lorry",
+                "locationFrom": "Main Warehouse",
+                "locationTo": "Test Venue",
+                "departDate": "2026-07-10",
+                "departTime": "08:30",
+                "cost": 75,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        booking = response.get_json()["data"]["transportBookings"][0]
+        self.assertEqual(booking["profileType"], "on_demand")
+        self.assertEqual(booking["company"], "Lalamove")
+        self.assertEqual(booking["vehicleType"], "10ft Lorry")
+        self.assertEqual(booking["vehicleNumber"], "")
+        self.assertEqual(booking["driver"], "")
+        self.assertEqual(booking["driverContact"], "")
 
     def test_fleet_vehicles_support_timeline_bookings_and_event_trips(self):
         self.login("admin", True)
@@ -2823,7 +2913,10 @@ class WorkforcePortalTests(unittest.TestCase):
         group = next(row for row in payload['transportCompanies'] if len(row['bookings']) == 2)
         self.assertEqual(group['cost'], 450)
         self.assertEqual(group['estimatedCost'], 300)
-        self.assertEqual(sum(bool(row.get('companyInvoice')) for row in payload['transportBookings']), 1)
+        self.assertEqual(sum(
+            len(row.get('companyInvoices') or []) + bool(row.get('companyInvoice'))
+            for row in payload['transportBookings']
+        ), 1)
         invoice = group['invoice']
         self.assertEqual(self.client.get(invoice['previewUrl']).status_code, 200)
         self.assertEqual(app_module._finance_profit_loss_workforce_costs(143)['transportCost'], 540)
@@ -2837,6 +2930,368 @@ class WorkforcePortalTests(unittest.TestCase):
         response = self.client.delete(f"/api/workforce/submissions/{invoice['id']}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['data']['totals']['transport'], 290)
+
+    def test_transport_company_accepts_multiple_invoices_and_lists_them_in_profit_loss(self):
+        self.login('admin', True)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['transportBookings']['143'] = [{
+                'id': 'trip-multi-invoice',
+                'company': 'Multi Invoice Logistics',
+                'sourceType': 'external',
+                'cost': 300,
+            }]
+
+        with patch.object(
+            app_module,
+            'extract_invoice_amount',
+            side_effect=[
+                {'amount': 120, 'confidence': 'High', 'source': 'PDF text'},
+                {'amount': 80, 'confidence': 'High', 'source': 'PDF text'},
+            ],
+        ):
+            first = self.client.post(
+                '/api/events/143/workforce/transport/trip-multi-invoice/company-invoice',
+                data={'file': (io.BytesIO(PDF_BYTES), 'transport-1.pdf')},
+                content_type='multipart/form-data',
+            )
+            second = self.client.post(
+                '/api/events/143/workforce/transport/trip-multi-invoice/company-invoice',
+                data={'file': (io.BytesIO(PDF_BYTES), 'transport-2.pdf')},
+                content_type='multipart/form-data',
+            )
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        payload = second.get_json()['data']
+        group = payload['transportCompanies'][0]
+        self.assertEqual(len(group['invoices']), 2)
+        self.assertEqual(
+            {row['originalName'] for row in group['invoices']},
+            {'transport-1.pdf', 'transport-2.pdf'},
+        )
+        self.assertEqual(group['cost'], 200)
+        self.assertEqual(payload['totals']['transport'], 200)
+
+        transport_booking = payload['transportBookings'][0]
+        self.assertEqual(len(transport_booking['companyInvoices']), 2)
+        self.assertNotIn('companyInvoice', transport_booking)
+
+        profit_loss_expenses = app_module._finance_profit_loss_worker_submission_expenses(
+            load_workforce(self.manager.data_folder),
+            143,
+        )
+        transport_expenses = [
+            row for row in profit_loss_expenses
+            if row.get('source') == 'transport-invoice'
+        ]
+        self.assertEqual(len(transport_expenses), 2)
+        self.assertEqual(
+            {row['attachment']['originalName'] for row in transport_expenses},
+            {'transport-1.pdf', 'transport-2.pdf'},
+        )
+
+        first_invoice_id = next(
+            row['id'] for row in group['invoices']
+            if row['originalName'] == 'transport-1.pdf'
+        )
+        deleted = self.client.delete(
+            f'/api/workforce/submissions/{first_invoice_id}'
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        remaining_group = deleted.get_json()['data']['transportCompanies'][0]
+        self.assertEqual(len(remaining_group['invoices']), 1)
+        self.assertEqual(remaining_group['invoices'][0]['originalName'], 'transport-2.pdf')
+        self.assertEqual(remaining_group['cost'], 80)
+
+    def test_own_fleet_claim_upload_uses_claim_review_and_profit_loss(self):
+        self.login('admin', True)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['transportBookings']['143'] = [{
+                'id': 'fleet-claim-trip',
+                'sourceType': 'fleet',
+                'vehicleId': 'fleet-1',
+                'vehicleNumber': 'GBD1234A',
+                'vehicleType': '14ft Lorry',
+                'departDate': '2026-07-10',
+                'cost': 0,
+            }]
+
+        with patch.object(app_module, 'extract_claim_amount', return_value={
+            'amount': 18,
+            'date': '2026-07-10',
+            'confidence': 'High',
+            'source': 'Receipt image OCR',
+            'matchedText': 'PARKING 18.00',
+            'ocrUsed': True,
+        }):
+            uploaded = self.client.post(
+                '/api/events/143/workforce/transport/fleet-claim-trip/claim',
+                data={'file': (io.BytesIO(JPEG_BYTES), 'parking.jpg')},
+                content_type='multipart/form-data',
+            )
+
+        self.assertEqual(uploaded.status_code, 200, uploaded.get_data(as_text=True))
+        claim = uploaded.get_json()['data']['transportBookings'][0]['claims'][0]
+        self.assertEqual(claim['amount'], 18)
+        self.assertEqual(claim['claimDate'], '2026-07-10')
+        self.assertEqual(claim['submissionStage'], 'Details Required')
+
+        documents = self.client.get(
+            '/api/workforce/submissions',
+            query_string={'eventId': 143, 'kind': 'claim', 'status': 'all'},
+        ).get_json()['data']
+        central_claim = next(
+            row for row in documents['rows']
+            if row.get('isTransportClaim')
+        )
+        self.assertEqual(central_claim['id'], claim['id'])
+        self.assertEqual(central_claim['originalName'], 'parking.jpg')
+
+        reviewed = self.client.put(
+            f"/api/workforce/submissions/{claim['id']}",
+            json={
+                'amount': 18,
+                'status': 'Approved',
+                'confirmReview': True,
+                'claimDate': '2026-07-10',
+                'category': 'Parking',
+                'notes': 'Venue parking',
+            },
+        )
+        self.assertEqual(reviewed.status_code, 200, reviewed.get_data(as_text=True))
+        reviewed_claim = reviewed.get_json()['data']['transportBookings'][0]['claims'][0]
+        self.assertEqual(reviewed_claim['status'], 'Approved')
+        self.assertTrue(reviewed_claim['detailsComplete'])
+
+        expenses = app_module._finance_profit_loss_worker_submission_expenses(
+            load_workforce(self.manager.data_folder),
+            143,
+        )
+        profit_loss_claim = next(
+            row for row in expenses if row.get('source') == 'transport-claim'
+        )
+        self.assertEqual(profit_loss_claim['amount'], 18)
+        self.assertEqual(profit_loss_claim['categoryKey'], 'equipment-transport')
+        self.assertTrue(profit_loss_claim['countsTowardCosts'])
+
+    def test_transport_photo_invoices_use_shared_processing_queue(self):
+        self.login('admin', True)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['transportBookings']['143'] = [{
+                'id': 'trip-photo',
+                'company': 'Photo Logistics',
+                'sourceType': 'external',
+                'cost': 0,
+            }]
+
+        extraction_results = [
+            {
+                'amount': 275,
+                'confidence': 'High',
+                'source': 'Receipt image OCR',
+                'matchedText': 'TOTAL 275.00',
+                'ocrUsed': True,
+            },
+            {
+                'amount': 500,
+                'confidence': 'High',
+                'source': 'Receipt image OCR',
+                'matchedText': 'TOTAL 500.00',
+                'ocrUsed': True,
+            },
+        ]
+        with patch.object(
+            app_module, 'extract_invoice_amount', side_effect=extraction_results
+        ), patch.object(
+            app_module,
+            '_queue_worker_submission_processing',
+            wraps=app_module._queue_worker_submission_processing,
+        ) as queue:
+            booking_response = self.client.post(
+                '/api/events/143/workforce/transport/trip-photo/invoice',
+                data={'file': (io.BytesIO(PNG_BYTES), 'trip-invoice.png')},
+                content_type='multipart/form-data',
+            )
+            company_response = self.client.post(
+                '/api/events/143/workforce/transport/trip-photo/company-invoice',
+                data={'file': (io.BytesIO(JPEG_BYTES), 'company-invoice.jpg')},
+                content_type='multipart/form-data',
+            )
+
+        self.assertEqual(
+            booking_response.status_code,
+            200,
+            booking_response.get_data(as_text=True),
+        )
+        booking = booking_response.get_json()['data']['transportBookings'][0]
+        self.assertEqual(booking['invoice']['contentType'], 'image/png')
+        self.assertEqual(booking['invoice']['processingState'], 'Complete')
+        self.assertEqual(booking['invoice']['amount'], 275)
+        self.assertEqual(booking['cost'], 275)
+
+        self.assertEqual(
+            company_response.status_code,
+            200,
+            company_response.get_data(as_text=True),
+        )
+        company_invoice = company_response.get_json()['data'][
+            'transportCompanies'
+        ][0]['invoice']
+        self.assertEqual(company_invoice['contentType'], 'image/jpeg')
+        self.assertEqual(company_invoice['processingState'], 'Complete')
+        self.assertEqual(company_invoice['amount'], 500)
+        self.assertEqual(queue.call_count, 2)
+        self.assertTrue(all(
+            call.args[0][-1] == 'transport'
+            for call in queue.call_args_list
+        ))
+
+        documents_response = self.client.get(
+            '/api/workforce/submissions',
+            query_string={
+                'eventId': 143,
+                'kind': 'invoice',
+                'status': 'all',
+            },
+        )
+        self.assertEqual(documents_response.status_code, 200)
+        documents = documents_response.get_json()['data']
+        transport_invoices = [
+            row for row in documents['rows']
+            if row.get('isTransportInvoice')
+        ]
+        self.assertEqual(len(transport_invoices), 2)
+        self.assertTrue(all(
+            row['kind'] == 'invoice'
+            and row['status'] == 'Pending Review'
+            and row['statusKey'] == 'to-review'
+            and row['ocrSource'] == 'Receipt image OCR'
+            and row['departmentDetails'][0]['name'] == 'Transport'
+            for row in transport_invoices
+        ))
+        self.assertEqual(
+            {row['transportInvoiceScope'] for row in transport_invoices},
+            {'booking', 'company'},
+        )
+        self.assertEqual(documents['kindCounts']['invoice'], 2)
+
+        company_document = next(
+            row for row in transport_invoices
+            if row['transportInvoiceScope'] == 'company'
+        )
+        with patch.object(
+            app_module, '_queue_workforce_status_change_notification'
+        ) as status_update:
+            review_response = self.client.put(
+                f"/api/workforce/submissions/{company_document['id']}",
+                json={
+                    'amount': 500,
+                    'status': 'Approved',
+                    'confirmReview': True,
+                    'allocations': [],
+                },
+            )
+        self.assertEqual(
+            review_response.status_code,
+            200,
+            review_response.get_data(as_text=True),
+        )
+        reviewed_invoice = review_response.get_json()['data'][
+            'transportCompanies'
+        ][0]['invoice']
+        self.assertEqual(reviewed_invoice['status'], 'Approved')
+        self.assertTrue(reviewed_invoice['verifiedAt'])
+        self.assertEqual(status_update.call_args.kwargs['kind'], 'invoice')
+
+        approved_response = self.client.get(
+            '/api/workforce/submissions',
+            query_string={
+                'eventId': 143,
+                'kind': 'invoice',
+                'status': 'to-pay',
+            },
+        )
+        approved_rows = approved_response.get_json()['data']['rows']
+        self.assertEqual([row['id'] for row in approved_rows], [
+            company_document['id']
+        ])
+
+    def test_all_invoice_pickers_accept_photo_formats(self):
+        root = Path(app_module.__file__).parent
+        admin_source = (root / 'static' / 'js' / 'workforce-admin.js').read_text(
+            encoding='utf-8'
+        )
+        worker_source = (root / 'static' / 'js' / 'worker.js').read_text(
+            encoding='utf-8'
+        )
+        claims_source = (root / 'static' / 'js' / 'my-claims.js').read_text(
+            encoding='utf-8'
+        )
+
+        for source in (admin_source, worker_source, claims_source):
+            self.assertIn('.png', source)
+            self.assertIn('.jpg', source)
+            self.assertIn('image/png', source)
+            self.assertIn('image/jpeg', source)
+        self.assertIn('PDF, PNG, JPG or Excel', admin_source)
+        self.assertIn('PDF, PNG, JPG or Excel', claims_source)
+
+    def test_transport_invoices_resolve_through_standard_document_review_ui(self):
+        source = (
+            Path(app_module.__file__).parent
+            / 'static'
+            / 'js'
+            / 'workforce-admin.js'
+        ).read_text(encoding='utf-8')
+        styles = (
+            Path(app_module.__file__).parent
+            / 'static'
+            / 'css'
+            / 'workforce-admin.css'
+        ).read_text(encoding='utf-8')
+        finder = source.split('function wfFindSubmission(id)', 1)[1].split(
+            'function wfAssignmentsForFreelancer', 1
+        )[0]
+        loader = source.split('async function wfLoadDocumentEvent', 1)[1].split(
+            'async function openWorkforceDocumentSubmission', 1
+        )[0]
+        review = source.split('async function openWorkforceReview', 1)[1].split(
+            'function updateAllocationProgress', 1
+        )[0]
+        transport_category = source.split('function wfCrewTransportCategoryHtml()', 1)[1].split(
+            'function wfTransportCompanyHtml', 1
+        )[0]
+        transport_company = source.split('function wfTransportCompanyHtml(group)', 1)[1].split(
+            'function openWorkforceTransportBooking', 1
+        )[0]
+        transport_card = source.split('function wfTransportCard(booking)', 1)[1].split(
+            'function wfTransportDateKey', 1
+        )[0]
+
+        self.assertIn('wfTransportCompanyInvoices(booking)', finder)
+        self.assertIn("const kind = field === 'claim' ? 'claim' : 'invoice'", finder)
+        self.assertIn("return { record, freelancerId: '', kind, isTransport: true }", finder)
+        self.assertIn('Object.assign(found.record', loader)
+        self.assertIn('isTransportInvoice: record.isTransportInvoice', loader)
+        self.assertIn('isTransportClaim: record.isTransportClaim', loader)
+        self.assertIn('const transportInvoice = Boolean(', review)
+        self.assertIn("kind === 'invoice' && !transportInvoice", review)
+        self.assertIn('if (documentRecord) await wfLoadDocumentEvent', review)
+        self.assertIn(
+            'wfSubmissionStatusBadges([...transportInvoices, ...transportClaims])',
+            transport_category,
+        )
+        self.assertIn(
+            "submissions.map(record => wfSubmissionRow(record, submissionKind)).join('')",
+            transport_company,
+        )
+        self.assertIn("const submissionKind = group.isFleet ? 'claim' : 'invoice'", transport_company)
+        self.assertIn('group.invoices', transport_company)
+        self.assertIn('companyGroup?.invoices', transport_card)
+        self.assertIn('visibleInvoices.map', transport_card)
+        self.assertNotIn('wf-transport-invoice-amount', transport_company)
+        self.assertNotIn('saveTransportCompanyInvoiceAmount', source)
+        self.assertNotIn('.wf-transport-company-invoice .wf-file-row', styles)
 
     def test_transport_group_uses_profile_company_for_legacy_blank_bookings(self):
         self.login('admin', True)
@@ -2878,7 +3333,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn(".wf-route-arrow", styles)
         self.assertIn(".wf-transport-meta > div > span", styles)
         self.assertIn("function wfSelectedTransportVehicles()", source)
-        self.assertIn("Choose one or more vehicles", source)
+        self.assertIn("Choose vehicles or an on-demand provider", source)
         self.assertIn("for (const selection of selections)", source)
         self.assertIn("Assign a driver to every selected vehicle", source)
         self.assertNotIn("duplicate driver", source.lower())

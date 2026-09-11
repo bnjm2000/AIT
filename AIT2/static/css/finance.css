@@ -5510,13 +5510,23 @@ button.pnl-kpi:focus-visible {
   border: 1px solid var(--pnl-category-colour, #d8e1e8);
   border-radius: 5px;
   color: var(--pnl-category-text, #475569);
-  background: var(--pnl-category-colour, #eef2f6);
+  background: var(--pnl-category-background, var(--pnl-category-colour, #eef2f6));
   overflow: hidden;
   font-size: 10px;
   font-weight: 750;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pnl-category-badge[data-pnl-chart-keys] {
+  cursor: pointer;
+}
+
+.pnl-category-badge[data-pnl-chart-keys]:hover,
+.pnl-category-badge[data-pnl-chart-keys]:focus-visible {
+  outline: 2px solid var(--pnl-category-colour, #64748b);
+  outline-offset: 2px;
 }
 
 .pnl-attachment-actions {
@@ -5741,7 +5751,18 @@ button.pnl-kpi:focus-visible {
 .pnl-chart-segment {
   stroke: var(--segment-colour);
   cursor: pointer;
-  transition: stroke-width 150ms ease, opacity 150ms ease;
+  transition: stroke-width 150ms ease, opacity 150ms ease, filter 150ms ease;
+}
+
+.pnl-profit-chart.has-badge-highlight .pnl-chart-segment.is-badge-muted {
+  stroke-width: 18;
+  opacity: 0.18;
+}
+
+.pnl-profit-chart.has-badge-highlight .pnl-chart-segment.is-badge-highlight {
+  stroke-width: 25;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(15, 23, 42, 0.4));
 }
 
 .pnl-chart-segment:hover,

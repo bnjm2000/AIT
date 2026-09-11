@@ -3,6 +3,7 @@ import io
 import os
 import tempfile
 import unittest
+from urllib.parse import quote
 
 import app as app_module
 from data_manager import DataManager
@@ -118,6 +119,31 @@ class ContainerSerialNumberTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['data']['serialNumber'], '')
         self.assertEqual(self.data_manager.containers['CASE-OLD'].serial_number, '')
+
+    def test_container_ids_with_quotes_and_plus_signs_remain_addressable(self):
+        self.login()
+        container_ids = [
+            'DW Collector\'s Series - Black Velvet - 02 (24" Double)',
+            'DW Collectors - Black Velvet - 01 (22" Dbl + 20")',
+        ]
+
+        for container_id in container_ids:
+            created = self.client.post('/api/containers', json={
+                'id': container_id,
+                'assetIds': ['A#01'],
+            })
+            self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+
+            endpoint = f"/api/containers/{quote(container_id, safe='')}"
+            fetched = self.client.get(endpoint)
+            self.assertEqual(fetched.status_code, 200, fetched.get_data(as_text=True))
+            self.assertEqual(fetched.get_json()['data']['id'], container_id)
+
+            updated = self.client.put(endpoint, json={
+                'assetIds': ['A#02'],
+            })
+            self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+            self.assertEqual(updated.get_json()['data']['assetIds'], ['A#02'])
 
     def test_container_serial_is_optional_and_conflicts_are_rejected(self):
         self.login()

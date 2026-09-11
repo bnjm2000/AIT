@@ -184,6 +184,7 @@ from workforce import (
     now_iso,
     save_upload,
     submission_totals,
+    transport_company_invoices,
     transport_company_groups,
     upload_absolute_path,
     worker_submissions,
@@ -9795,6 +9796,151 @@ def _admin_submission_rows(manager=None, workforce=None):
                     })
                     rows.append(payload)
 
+    transport_profiles = workforce.get('transportVendors', [])
+    for raw_event_id, stored_bookings in (
+        workforce.get('transportBookings') or {}
+    ).items():
+        try:
+            event_id = int(raw_event_id)
+        except (TypeError, ValueError):
+            continue
+        event = manager.events.get(event_id)
+        bookings = (
+            stored_bookings if isinstance(stored_bookings, list) else []
+        )
+        if not event or not bookings:
+            continue
+        groups = transport_company_groups(bookings, transport_profiles)
+        company_groups_by_invoice = {
+            str(invoice.get('id')): group
+            for group in groups
+            for invoice in group.get('invoices', [])
+            if isinstance(invoice, dict) and invoice.get('id')
+        }
+        for booking in bookings:
+            if not isinstance(booking, dict):
+                continue
+            transport_records = [('invoice', 'booking', booking.get('invoice'))]
+            transport_records.extend(
+                ('invoice', 'company', invoice)
+                for invoice in transport_company_invoices(booking)
+            )
+            transport_records.extend(
+                ('claim', 'fleet', claim)
+                for claim in (
+                    booking.get('claims', [])
+                    if isinstance(booking.get('claims'), list) else []
+                )
+            )
+            for submission_kind, transport_scope, record in transport_records:
+                if not isinstance(record, dict) or not record.get('id'):
+                    continue
+                group = company_groups_by_invoice.get(
+                    str(record.get('id'))
+                )
+                company = str(
+                    (group or {}).get('company')
+                    or record.get('company')
+                    or booking.get('company')
+                    or 'Transport provider'
+                ).strip()
+                vehicle = str(
+                    booking.get('vehicleNumber')
+                    or booking.get('vehicleType')
+                    or 'Transport booking'
+                ).strip()
+                route = ' to '.join(filter(None, (
+                    str(booking.get('locationFrom') or '').strip(),
+                    str(booking.get('locationTo') or '').strip(),
+                )))
+                if submission_kind == 'claim':
+                    expected_amount = None
+                    role = 'Own fleet claim'
+                    calculation = str(
+                        record.get('category') or 'Parking or fleet expense'
+                    )
+                elif transport_scope == 'company':
+                    booking_count = len((group or {}).get('bookings') or [])
+                    expected_amount = money(
+                        (group or {}).get('estimatedCost'), 0.0
+                    ) or 0.0
+                    role = (
+                        f'{booking_count} transport booking'
+                        f'{"s" if booking_count != 1 else ""}'
+                    )
+                    calculation = f'Estimated event transport: ${expected_amount:,.2f}'
+                else:
+                    expected_amount = round(
+                        (money(booking.get('cost'), 0) or 0)
+                        * (2 if booking.get('twoWay') else 1),
+                        2,
+                    )
+                    role = vehicle
+                    calculation = route or 'Event transport booking'
+                status_key, status_label = (
+                    _admin_submission_display_status(record)
+                )
+                payload = _admin_file_payload(
+                    record, event_id, '', submission_kind, {
+                        'expectedAmount': expected_amount,
+                        'expectedAmountBreakdown': [{
+                            'role': role,
+                            'department': 'Transport',
+                            'amount': expected_amount,
+                            'calculation': calculation,
+                        }],
+                        'assignmentWorkDates': sorted(filter(None, (
+                            str(booking.get('departDate') or '').strip(),
+                            str(booking.get('returnDate') or '').strip()
+                            if booking.get('twoWay') else '',
+                        ))),
+                    }
+                )
+                payload.update({
+                    'isTransportInvoice': submission_kind == 'invoice',
+                    'isTransportClaim': submission_kind == 'claim',
+                    'transportInvoiceScope': transport_scope,
+                    'statusKey': status_key,
+                    'statusLabel': status_label,
+                    'subject': {
+                        'id': '',
+                        'name': company,
+                        'type': 'transport',
+                        'company': company,
+                        'phone': str(
+                            booking.get('driverContact')
+                            or booking.get('contactNumber')
+                            or ''
+                        ),
+                    },
+                    'departments': ['Transport'],
+                    'departmentDetails': [{
+                        'code': 'Transport',
+                        'name': 'Transport',
+                        'color': '#DBEAFE',
+                        'textColor': '#1D4ED8',
+                        'roles': [role],
+                    }],
+                    'event': {
+                        'id': event_id,
+                        'name': str(event.name or f'Event {event_id}'),
+                        'location': str(
+                            getattr(event, 'location', '') or ''
+                        ),
+                        'startDate': _event_date_for_worker(event.start_date),
+                        'endDate': _event_date_for_worker(event.end_date),
+                        'startDateValue': _event_date_for_input(
+                            event.start_date
+                        ),
+                        'endDateValue': _event_date_for_input(event.end_date),
+                        'state': str(event.state or 'New'),
+                        'tag': str(
+                            getattr(event, 'tag', 'events') or 'events'
+                        ),
+                    },
+                })
+                rows.append(payload)
+
     for raw_event_id, assignments in (workforce.get('assignments') or {}).items():
         try:
             event_id = int(raw_event_id)
@@ -9861,7 +10007,7 @@ def _group_admin_claim_rows(all_rows, filtered_rows):
     """Collapse same-event, same-subject claims into one paginated display row."""
     claim_groups = {}
     for row in all_rows:
-        if row.get('kind') != 'claim':
+        if row.get('kind') != 'claim' or row.get('isTransportClaim'):
             continue
         key = (int(row.get('eventId') or 0), str(row.get('freelancerId') or ''))
         claim_groups.setdefault(key, []).append(row)
@@ -9869,7 +10015,7 @@ def _group_admin_claim_rows(all_rows, filtered_rows):
     grouped = []
     emitted = set()
     for row in filtered_rows:
-        if row.get('kind') != 'claim':
+        if row.get('kind') != 'claim' or row.get('isTransportClaim'):
             grouped.append(row)
             continue
         key = (int(row.get('eventId') or 0), str(row.get('freelancerId') or ''))
@@ -10079,6 +10225,12 @@ def _transport_profiles_for_response(workforce):
                     'cost': money(booking.get('cost'), 0.0) or 0.0,
                 }
     for profile in profiles:
+        profile['profileType'] = (
+            'on_demand'
+            if str(profile.get('profileType') or '').strip().lower()
+            == 'on_demand'
+            else 'vehicle'
+        )
         latest = latest_by_vendor.get(str(profile.get('id') or ''))
         profile['lastCost'] = latest['cost'] if latest else None
         profile['lastUsedAt'] = latest['timestamp'] if latest else ''
@@ -10624,6 +10776,34 @@ def _admin_workforce_payload(event_id, manager=None):
                 invoice['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
                 invoice['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
                 row[invoice_field] = invoice
+        company_invoices = []
+        for invoice in transport_company_invoices(row):
+            if not invoice.get('id'):
+                continue
+            submission_id = quote(str(invoice['id']))
+            invoice_payload = dict(invoice)
+            invoice_payload['previewUrl'] = (
+                f'/api/workforce/submissions/{submission_id}/file'
+            )
+            invoice_payload['downloadUrl'] = (
+                f'/api/workforce/submissions/{submission_id}/file?download=1'
+            )
+            company_invoices.append(invoice_payload)
+        row['companyInvoices'] = company_invoices
+        claims = []
+        for claim in row.get('claims', []) if isinstance(row.get('claims'), list) else []:
+            if not isinstance(claim, dict) or not claim.get('id'):
+                continue
+            submission_id = quote(str(claim['id']))
+            claim_payload = dict(claim)
+            claim_payload['previewUrl'] = (
+                f'/api/workforce/submissions/{submission_id}/file'
+            )
+            claim_payload['downloadUrl'] = (
+                f'/api/workforce/submissions/{submission_id}/file?download=1'
+            )
+            claims.append(claim_payload)
+        row['claims'] = claims
         bookings.append(row)
 
     upload_allowances = {}
@@ -11993,12 +12173,24 @@ def _process_worker_submission_upload(
     manager, data_folder, event_id, freelancer_id, submission_id, kind
 ):
     """Extract a document amount after the upload request has completed."""
+    def find_submission(workforce):
+        if kind not in {'transport', 'transport-claim'}:
+            return _find_worker_owned_submission(
+                workforce, freelancer_id, submission_id
+            )
+        found = _find_submission_record(workforce, submission_id)
+        if (
+            found
+            and found['kind'] == 'transport'
+            and found['eventId'] == int(event_id)
+        ):
+            return found
+        return None
+
     manager_token = _request_data_manager.set(manager)
     try:
         with mutate_workforce(data_folder) as workforce:
-            found = _find_worker_owned_submission(
-                workforce, freelancer_id, submission_id
-            )
+            found = find_submission(workforce)
             if not found:
                 return
             found['record'].update({
@@ -12010,9 +12202,7 @@ def _process_worker_submission_upload(
         _workforce_changed(event_id, f'{kind}-processing-started')
 
         with mutate_workforce(data_folder) as workforce:
-            found = _find_worker_owned_submission(
-                workforce, freelancer_id, submission_id
-            )
+            found = find_submission(workforce)
             if not found:
                 return
             record = found['record']
@@ -12026,7 +12216,7 @@ def _process_worker_submission_upload(
 
         extraction = (
             extract_invoice_amount(path, data_folder=data_folder)
-            if kind == 'invoice'
+            if kind in {'invoice', 'transport'}
             else extract_claim_amount(
                 path,
                 content_type,
@@ -12036,17 +12226,21 @@ def _process_worker_submission_upload(
         )
 
         with mutate_workforce(data_folder) as workforce:
-            found = _find_worker_owned_submission(
-                workforce, freelancer_id, submission_id
-            )
+            found = find_submission(workforce)
             if not found:
                 return
             record = found['record']
             detected_amount = extraction.get('amount')
             if detected_amount is not None:
                 record['amount'] = detected_amount
+                if (
+                    kind == 'transport'
+                    and found.get('invoiceField') == 'invoice'
+                    and not found['container'].get('cost')
+                ):
+                    found['container']['cost'] = detected_amount
             if (
-                kind == 'claim'
+                kind in {'claim', 'transport-claim'}
                 and extraction.get('date')
                 and not record.get('claimDate')
             ):
@@ -12063,7 +12257,8 @@ def _process_worker_submission_upload(
                 'processedAt': now_iso(),
                 'submissionStage': (
                     'Details Required'
-                    if kind == 'claim' and not record.get('detailsComplete')
+                    if kind in {'claim', 'transport-claim'}
+                    and not record.get('detailsComplete')
                     else 'Submitted'
                 ),
             })
@@ -12077,9 +12272,7 @@ def _process_worker_submission_upload(
         )
         try:
             with mutate_workforce(data_folder) as workforce:
-                found = _find_worker_owned_submission(
-                    workforce, freelancer_id, submission_id
-                )
+                found = find_submission(workforce)
                 if found:
                     record = found['record']
                     record.update({
@@ -12087,7 +12280,7 @@ def _process_worker_submission_upload(
                         'processingError': '',
                         'submissionStage': (
                             'Details Required'
-                            if kind == 'claim'
+                            if kind in {'claim', 'transport-claim'}
                             else 'Submitted'
                         ),
                     })
@@ -14943,15 +15136,33 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
 
 def _transport_vendor_payload(raw):
     payload = raw if isinstance(raw, dict) else {}
+    profile_type = str(
+        payload.get('profileType') or 'vehicle'
+    ).strip().lower()
+    if profile_type not in {'vehicle', 'on_demand'}:
+        profile_type = 'vehicle'
     return {
+        'profileType': profile_type,
         'vehicleType': str(payload.get('vehicleType') or '').strip(),
         'company': str(payload.get('company') or '').strip(),
         'driver': str(
             payload.get('driver') or payload.get('name') or ''
         ).strip(),
         'contactNumber': normalize_phone(payload.get('contactNumber')),
-        'vehicleNumber': str(payload.get('vehicleNumber') or '').strip(),
+        'vehicleNumber': (
+            '' if profile_type == 'on_demand'
+            else str(payload.get('vehicleNumber') or '').strip()
+        ),
     }
+
+
+def _transport_profile_type(profile):
+    return (
+        'on_demand'
+        if str((profile or {}).get('profileType') or '').strip().lower()
+        == 'on_demand'
+        else 'vehicle'
+    )
 
 
 def _transport_payload(raw):
@@ -14976,6 +15187,7 @@ def _transport_payload(raw):
         'vehicleId': str(payload.get('vehicleId') or '').strip(),
         'sourceType': source_type,
         'tripType': trip_type,
+        'vehicleType': str(payload.get('vehicleType') or '').strip(),
         'driver': str(payload.get('driver') or '').strip(),
         'driverContact': normalize_phone(payload.get('driverContact')),
         'locationFrom': from_name,
@@ -15571,8 +15783,10 @@ def _remember_transport_location(workforce, name, address=''):
 @require_admin
 def create_transport_profile():
     payload = _transport_vendor_payload(request.get_json(silent=True) or {})
-    if not payload['vehicleType']:
+    if payload['profileType'] == 'vehicle' and not payload['vehicleType']:
         return jsonify({'error': 'Vehicle type is required'}), 400
+    if payload['profileType'] == 'on_demand' and not payload['company']:
+        return jsonify({'error': 'Provider name is required'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
         profile = {
             'id': new_id('vendor'),
@@ -15582,7 +15796,12 @@ def create_transport_profile():
             'updatedAt': now_iso(),
         }
         workforce.setdefault('transportVendors', []).append(profile)
-    log_action(f"Created transport profile {payload['vehicleNumber']}")
+    profile_label = (
+        payload['company']
+        or payload['vehicleNumber']
+        or payload['vehicleType']
+    )
+    log_action(f"Created transport profile {profile_label}")
     return jsonify({'success': True, 'data': profile})
 
 
@@ -15590,8 +15809,10 @@ def create_transport_profile():
 @require_admin
 def update_transport_profile(profile_id):
     payload = _transport_vendor_payload(request.get_json(silent=True) or {})
-    if not payload['vehicleType']:
+    if payload['profileType'] == 'vehicle' and not payload['vehicleType']:
         return jsonify({'error': 'Vehicle type is required'}), 400
+    if payload['profileType'] == 'on_demand' and not payload['company']:
+        return jsonify({'error': 'Provider name is required'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
         profile = find_by_id(workforce.get('transportVendors'), profile_id)
         if not profile:
@@ -15606,6 +15827,7 @@ def update_transport_profile(profile_id):
         previous_profile,
         profile,
         (
+            ('profileType', 'Transport kind'),
             ('vehicleNumber', 'Vehicle number'),
             ('vehicleType', 'Vehicle type'),
             ('driver', 'Driver'),
@@ -15613,9 +15835,12 @@ def update_transport_profile(profile_id):
             ('company', 'Company'),
         ),
     )
-    log_action(
-        f"Updated transport profile {payload['vehicleNumber']}: {profile_changes}"
+    profile_label = (
+        payload['company']
+        or payload['vehicleNumber']
+        or payload['vehicleType']
     )
+    log_action(f"Updated transport profile {profile_label}: {profile_changes}")
     return jsonify({'success': True, 'data': profile})
 
 
@@ -15711,6 +15936,35 @@ def delete_transport_location(location_id):
     return jsonify({'success': True})
 
 
+def _set_transport_company_invoices(booking, records):
+    """Store company invoices as a deduplicated list and remove the legacy field."""
+    invoices = []
+    seen = set()
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        identity = str(record.get('id') or id(record))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        invoices.append(record)
+    booking['companyInvoices'] = invoices
+    booking.pop('companyInvoice', None)
+    return invoices
+
+
+def _move_transport_company_invoices(source, target):
+    moving = transport_company_invoices(source)
+    if not moving:
+        return []
+    _set_transport_company_invoices(
+        target, transport_company_invoices(target) + moving
+    )
+    source.pop('companyInvoices', None)
+    source.pop('companyInvoice', None)
+    return moving
+
+
 @app.route('/api/events/<int:event_id>/workforce/transport', methods=['POST'])
 @require_admin
 def create_transport_booking(event_id):
@@ -15780,6 +16034,7 @@ def create_transport_booking(event_id):
     with mutate_workforce(_workforce_folder()) as workforce:
         vendor = None
         vehicle = None
+        profile_type = 'vehicle'
         if booking_data['sourceType'] == 'fleet':
             vehicle = find_by_id(
                 workforce.get('vehicles'), booking_data.get('vehicleId')
@@ -15821,6 +16076,17 @@ def create_transport_booking(event_id):
                 booking_data['vendorId'] = vendor['id']
             if not vendor:
                 return jsonify({'error': 'Choose a saved transport profile'}), 404
+            profile_type = _transport_profile_type(vendor)
+            if (
+                profile_type == 'on_demand'
+                and not (
+                    booking_data['vehicleType']
+                    or str(vendor.get('vehicleType') or '').strip()
+                )
+            ):
+                return jsonify({
+                    'error': 'Choose a vehicle type for this booking'
+                }), 400
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
                 workforce, booking_data['locationFromName'], booking_data['locationFromAddress']
@@ -15846,10 +16112,18 @@ def create_transport_booking(event_id):
             'id': new_id('transport'),
             **booking_data,
             'vehicleType': str(
-                (vehicle or {}).get('vehicleType')
-                or (vendor or {}).get('vehicleType')
+                (
+                    booking_data['vehicleType']
+                    or (vendor or {}).get('vehicleType')
+                )
+                if profile_type == 'on_demand'
+                else (
+                    (vehicle or {}).get('vehicleType')
+                    or (vendor or {}).get('vehicleType')
+                )
                 or ''
             ),
+            'profileType': profile_type,
             'company': company_name,
             'driver': trip_driver,
             'driverContact': driver_contact,
@@ -15859,8 +16133,10 @@ def create_transport_booking(event_id):
             ))),
             'contactNumber': driver_contact,
             'vehicleNumber': str(
-                (vehicle or {}).get('registrationNumber')
-                or (vendor or {}).get('vehicleNumber')
+                '' if profile_type == 'on_demand' else (
+                    (vehicle or {}).get('registrationNumber')
+                    or (vendor or {}).get('vehicleNumber')
+                )
                 or ''
             ),
             'purpose': 'Event transport',
@@ -15924,6 +16200,7 @@ def update_transport_booking(event_id, booking_id):
             return jsonify({'error': 'Complete all required transport fields'}), 400
         vendor = None
         vehicle = None
+        profile_type = 'vehicle'
         if booking_data['sourceType'] == 'fleet':
             vehicle = find_by_id(
                 workforce.get('vehicles'), booking_data.get('vehicleId')
@@ -15960,6 +16237,17 @@ def update_transport_booking(event_id, booking_id):
             )
             if not vendor:
                 return jsonify({'error': 'Choose a saved transport profile'}), 404
+            profile_type = _transport_profile_type(vendor)
+            if (
+                profile_type == 'on_demand'
+                and not (
+                    booking_data['vehicleType']
+                    or str(vendor.get('vehicleType') or '').strip()
+                )
+            ):
+                return jsonify({
+                    'error': 'Choose a vehicle type for this booking'
+                }), 400
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
                 workforce, booking_data['locationFromName'], booking_data['locationFromAddress']
@@ -15988,7 +16276,7 @@ def update_transport_booking(event_id, booking_id):
             _company_payload(_current_company_code()).get('name', '')
             if vehicle else str((vendor or {}).get('company') or '')
         )
-        if booking.get('companyInvoice') and (
+        if transport_company_invoices(booking) and (
             ' '.join(company_name.casefold().split())
             != ' '.join(str(booking.get('company') or '').casefold().split())
             or booking_data['sourceType'] != booking.get('sourceType', 'external')
@@ -15998,14 +16286,22 @@ def update_transport_booking(event_id, booking_id):
             remaining = [row for row in original_group['bookings'] if row is not booking]
             if not remaining:
                 return jsonify({'error': 'Remove the company invoice before moving its last booking to another company'}), 409
-            remaining[0]['companyInvoice'] = booking.pop('companyInvoice')
+            _move_transport_company_invoices(booking, remaining[0])
         booking.update({
             **booking_data,
             'vehicleType': str(
-                (vehicle or {}).get('vehicleType')
-                or (vendor or {}).get('vehicleType')
+                (
+                    booking_data['vehicleType']
+                    or (vendor or {}).get('vehicleType')
+                )
+                if profile_type == 'on_demand'
+                else (
+                    (vehicle or {}).get('vehicleType')
+                    or (vendor or {}).get('vehicleType')
+                )
                 or ''
             ),
+            'profileType': profile_type,
             'company': company_name,
             'driver': trip_driver,
             'driverContact': driver_contact,
@@ -16015,8 +16311,10 @@ def update_transport_booking(event_id, booking_id):
             ))),
             'contactNumber': driver_contact,
             'vehicleNumber': str(
-                (vehicle or {}).get('registrationNumber')
-                or (vendor or {}).get('vehicleNumber')
+                '' if profile_type == 'on_demand' else (
+                    (vehicle or {}).get('registrationNumber')
+                    or (vendor or {}).get('vehicleNumber')
+                )
                 or ''
             ),
         })
@@ -16054,16 +16352,21 @@ def delete_transport_booking(event_id, booking_id):
         booking = find_by_id(rows, booking_id)
         if not booking:
             return jsonify({'error': 'Transport booking not found'}), 404
-        if isinstance(booking.get('companyInvoice'), dict):
+        company_invoices = transport_company_invoices(booking)
+        if company_invoices:
             group = next(group for group in transport_company_groups(rows, workforce.get('transportVendors', []))
                          if booking in group['bookings'])
             remaining = [row for row in group['bookings'] if row is not booking]
             if remaining:
-                remaining[0]['companyInvoice'] = booking.pop('companyInvoice')
+                _move_transport_company_invoices(booking, remaining[0])
             else:
-                delete_upload(_workforce_folder(), booking['companyInvoice'])
+                for invoice in company_invoices:
+                    delete_upload(_workforce_folder(), invoice)
         if isinstance(booking.get('invoice'), dict):
             delete_upload(_workforce_folder(), booking['invoice'])
+        for claim in booking.get('claims', []) if isinstance(booking.get('claims'), list) else []:
+            if isinstance(claim, dict):
+                delete_upload(_workforce_folder(), claim)
         fleet_vehicle_id = (
             str(booking.get('vehicleId') or '')
             if str(booking.get('sourceType') or '').lower() == 'fleet'
@@ -16099,15 +16402,18 @@ def upload_transport_invoice(event_id, booking_id):
     if not uploaded_file or not uploaded_file.filename:
         return jsonify({'error': 'Choose an invoice file'}), 400
     saved = None
+    data_folder = ''
     try:
-        with mutate_workforce(_workforce_folder()) as workforce:
+        manager = _current_data_manager_object()
+        data_folder = _workforce_folder(manager)
+        with mutate_workforce(data_folder) as workforce:
             booking = find_by_id(event_bookings(workforce, event_id), booking_id)
             if not booking:
                 return jsonify({'error': 'Transport booking not found'}), 404
             if isinstance(booking.get('invoice'), dict):
-                delete_upload(_workforce_folder(), booking['invoice'])
+                delete_upload(data_folder, booking['invoice'])
             saved = save_upload(
-                _workforce_folder(),
+                data_folder,
                 uploaded_file,
                 event_id,
                 f'transport-{booking_id}',
@@ -16118,32 +16424,95 @@ def upload_transport_invoice(event_id, booking_id):
                 'id': new_id('transport_invoice'),
                 **saved,
                 'submittedAt': now_iso(),
+                'status': 'Pending Review',
+                'reviewHistory': [],
+                'processingState': 'Queued',
+                'submissionStage': 'Queued',
+                'company': str(
+                    booking.get('company')
+                    or booking.get('driver')
+                    or 'Transport provider'
+                ),
+                'scope': 'booking',
             }
-            extraction = extract_invoice_amount(
-                upload_absolute_path(_workforce_folder(), record['storedPath']),
-                data_folder=_workforce_folder(),
-            )
-            record.update({
-                'amount': extraction.get('amount'),
-                'ocrConfidence': extraction.get('confidence', 'Low'),
-                'ocrSource': extraction.get('source', ''),
-                'ocrMatchedText': extraction.get('matchedText', ''),
-                'ocrUsed': bool(extraction.get('ocrUsed')),
-            })
             booking['invoice'] = record
-            if not booking.get('cost') and record.get('amount') is not None:
-                booking['cost'] = record['amount']
             booking['updatedAt'] = now_iso()
         log_action(f"Uploaded transport invoice for event {event_id}")
         _workforce_changed(event_id, 'transport-invoice-uploaded')
+        _queue_worker_submission_processing((
+            manager, data_folder, event_id, '', record['id'], 'transport'
+        ))
         return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
     except ValueError as exc:
         if saved:
-            delete_upload(_workforce_folder(), saved)
+            delete_upload(data_folder or _workforce_folder(), saved)
         return jsonify({'error': str(exc)}), 400
     except Exception as exc:
         logger.error('Transport invoice upload failed: %s', exc, exc_info=True)
         return jsonify({'error': 'Transport invoice upload failed'}), 500
+
+
+@app.route(
+    '/api/events/<int:event_id>/workforce/transport/<booking_id>/claim',
+    methods=['POST'],
+)
+@require_admin
+def upload_own_fleet_transport_claim(event_id, booking_id):
+    uploaded_file = request.files.get('file')
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({'error': 'Choose a claim or receipt file'}), 400
+    saved = None
+    data_folder = ''
+    try:
+        manager = _current_data_manager_object()
+        data_folder = _workforce_folder(manager)
+        with mutate_workforce(data_folder) as workforce:
+            booking = find_by_id(event_bookings(workforce, event_id), booking_id)
+            if not booking:
+                return jsonify({'error': 'Transport booking not found'}), 404
+            if str(booking.get('sourceType') or '').lower() != 'fleet':
+                return jsonify({
+                    'error': 'Own-fleet claims apply only to fleet bookings'
+                }), 400
+            saved = save_upload(
+                data_folder,
+                uploaded_file,
+                event_id,
+                f'transport-fleet-{booking_id}',
+                'claim',
+            )
+            record = {
+                'id': new_id('transport_claim'),
+                **saved,
+                'submittedAt': now_iso(),
+                'amount': None,
+                'claimDate': '',
+                'category': '',
+                'description': '',
+                'notes': '',
+                'detailsComplete': False,
+                'company': 'Own fleet',
+                'scope': 'fleet',
+                'status': 'Pending Review',
+                'reviewHistory': [],
+                'processingState': 'Queued',
+                'submissionStage': 'Queued',
+            }
+            booking.setdefault('claims', []).append(record)
+            booking['updatedAt'] = now_iso()
+        log_action(f'Uploaded own-fleet transport claim for event {event_id}')
+        _workforce_changed(event_id, 'transport-claim-uploaded')
+        _queue_worker_submission_processing((
+            manager, data_folder, event_id, '', record['id'], 'transport-claim'
+        ))
+        return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+    except ValueError as exc:
+        if saved:
+            delete_upload(data_folder or _workforce_folder(), saved)
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Own-fleet claim upload failed: %s', exc, exc_info=True)
+        return jsonify({'error': 'Own-fleet claim upload failed'}), 500
 
 
 @app.route(
@@ -16155,9 +16524,12 @@ def update_transport_company_invoice(event_id, booking_id):
     if event_id not in data_manager.events:
         return jsonify({'error': 'Event not found'}), 404
     saved = None
-    old_invoice = None
+    queued_record_id = ''
+    data_folder = ''
     try:
-        with mutate_workforce(_workforce_folder()) as workforce:
+        manager = _current_data_manager_object()
+        data_folder = _workforce_folder(manager)
+        with mutate_workforce(data_folder) as workforce:
             groups = transport_company_groups(event_bookings(workforce, event_id), workforce.get('transportVendors', []))
             group = next((group for group in groups if any(
                 str(row.get('id')) == str(booking_id) for row in group['bookings']
@@ -16166,11 +16538,16 @@ def update_transport_company_invoice(event_id, booking_id):
                 return jsonify({'error': 'Transport booking not found'}), 404
             if group['isFleet']:
                 return jsonify({'error': 'Company invoices apply to external transport'}), 400
-            owner = next((row for row in group['bookings'] if row.get('companyInvoice')), group['bookings'][0])
+            owner = next(
+                (row for row in group['bookings']
+                 if transport_company_invoices(row)),
+                group['bookings'][0],
+            )
             if request.method == 'PUT':
-                record = owner.get('companyInvoice')
-                if not record:
+                company_invoices = group.get('invoices', [])
+                if not company_invoices:
                     return jsonify({'error': 'Upload the company invoice first'}), 400
+                record = company_invoices[-1]
                 amount = money((request.get_json(silent=True) or {}).get('amount'))
                 if amount is None or amount < 0:
                     return jsonify({'error': 'Enter a valid invoice amount'}), 400
@@ -16179,31 +16556,30 @@ def update_transport_company_invoice(event_id, booking_id):
                 uploaded = request.files.get('file')
                 if not uploaded or not uploaded.filename:
                     return jsonify({'error': 'Choose an invoice file'}), 400
-                saved = save_upload(_workforce_folder(), uploaded, event_id,
+                saved = save_upload(data_folder, uploaded, event_id,
                                     f'transport-company-{owner["id"]}', 'transport', allow_spreadsheets=True)
-                try:
-                    extraction = extract_invoice_amount(
-                        upload_absolute_path(_workforce_folder(), saved['storedPath']),
-                        data_folder=_workforce_folder(),
-                    )
-                except Exception:
-                    logger.exception('Could not detect transport company invoice amount')
-                    extraction = {}
-                old_invoice = owner.get('companyInvoice')
-                owner['companyInvoice'] = {
+                record = {
                     **saved, 'id': new_id('transport_invoice'),
-                    'submittedAt': now_iso(), 'amount': money(extraction.get('amount')),
+                    'submittedAt': now_iso(), 'amount': None,
                     'company': group['company'], 'scope': 'company',
+                    'status': 'Pending Review', 'reviewHistory': [],
+                    'processingState': 'Queued', 'submissionStage': 'Queued',
                 }
+                _set_transport_company_invoices(
+                    owner, transport_company_invoices(owner) + [record]
+                )
+                queued_record_id = record['id']
             owner['updatedAt'] = now_iso()
-        if old_invoice:
-            delete_upload(_workforce_folder(), old_invoice)
-        log_action(f'Updated transport company invoice for {group["company"]} in event {event_id}')
+        log_action(f'Added transport company invoice for {group["company"]} in event {event_id}')
         _workforce_changed(event_id, 'transport-company-invoice-updated')
+        if queued_record_id:
+            _queue_worker_submission_processing((
+                manager, data_folder, event_id, '', queued_record_id, 'transport'
+            ))
         return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
     except ValueError as exc:
         if saved:
-            delete_upload(_workforce_folder(), saved)
+            delete_upload(data_folder or _workforce_folder(), saved)
         return jsonify({'error': str(exc)}), 400
 
 
@@ -16229,16 +16605,38 @@ def _find_submission_record(workforce, submission_id):
                         }
     for event_id, bookings in (workforce.get('transportBookings') or {}).items():
         for booking in bookings if isinstance(bookings, list) else []:
-            for invoice_field in ('invoice', 'companyInvoice'):
-                invoice = booking.get(invoice_field) if isinstance(booking, dict) else None
-                if isinstance(invoice, dict) and str(invoice.get('id')) == str(submission_id):
+            if not isinstance(booking, dict):
+                continue
+            invoice = booking.get('invoice')
+            if isinstance(invoice, dict) and str(invoice.get('id')) == str(submission_id):
+                return {
+                    'eventId': int(event_id),
+                    'freelancerId': '',
+                    'kind': 'transport',
+                    'record': invoice,
+                    'container': booking,
+                    'invoiceField': 'invoice',
+                }
+            for invoice in transport_company_invoices(booking):
+                if str(invoice.get('id')) == str(submission_id):
                     return {
                         'eventId': int(event_id),
                         'freelancerId': '',
                         'kind': 'transport',
                         'record': invoice,
                         'container': booking,
-                        'invoiceField': invoice_field,
+                        'invoiceField': 'companyInvoices',
+                    }
+            for claim in booking.get('claims', []) if isinstance(booking.get('claims'), list) else []:
+                if isinstance(claim, dict) and str(claim.get('id')) == str(submission_id):
+                    return {
+                        'eventId': int(event_id),
+                        'freelancerId': '',
+                        'kind': 'transport',
+                        'submissionKind': 'claim',
+                        'record': claim,
+                        'container': booking,
+                        'invoiceField': 'claims',
                     }
     return None
 
@@ -16550,6 +16948,10 @@ def review_workforce_submission(submission_id):
         if not found:
             return jsonify({'error': 'Submission not found'}), 404
         record = found['record']
+        submission_kind = found.get(
+            'submissionKind',
+            'invoice' if found['kind'] == 'transport' else found['kind'],
+        )
         previous_notification_status = _submission_notification_status(record)
         status = str(payload.get('status', record.get('status', 'Pending Review')))
         if status not in VALID_STATUSES:
@@ -16583,7 +16985,7 @@ def review_workforce_submission(submission_id):
             if can_edit_details
             else record.get('allocations', [])
         )
-        if found['kind'] == 'invoice':
+        if submission_kind == 'invoice':
             if not isinstance(allocations, list):
                 return jsonify({'error': 'Invalid department allocation'}), 400
             clean_allocations = []
@@ -16638,12 +17040,12 @@ def review_workforce_submission(submission_id):
                 }), 400
             record['allocations'] = clean_allocations
         if (
-            found['kind'] == 'claim'
+            submission_kind == 'claim'
             and can_edit_details
             and payload.get('department') is not None
         ):
             record['department'] = str(payload.get('department') or '').strip()
-        if found['kind'] == 'claim' and can_edit_details:
+        if submission_kind == 'claim' and can_edit_details:
             claim_date = str(
                 payload.get('claimDate', record.get('claimDate') or '')
                 or ''
@@ -16706,14 +17108,25 @@ def review_workforce_submission(submission_id):
             'amount': amount,
         })
         event_id = found['eventId']
-        submission_kind = found['kind']
-        worker_name = _submission_subject_display_name(
-            manager, workforce, found['freelancerId']
+        is_transport_submission = found['kind'] == 'transport'
+        worker_name = (
+            str(
+                record.get('company')
+                or found['container'].get('company')
+                or 'Transport provider'
+            )
+            if is_transport_submission
+            else _submission_subject_display_name(
+                manager, workforce, found['freelancerId']
+            )
         )
         new_notification_status = _submission_notification_status(record)
         subject_id = found['freelancerId']
-        worker_recipient_ids = _submission_worker_recipient_ids(
-            workforce, subject_id, record
+        worker_recipient_ids = (
+            [] if is_transport_submission
+            else _submission_worker_recipient_ids(
+                workforce, subject_id, record
+            )
         )
     log_action(
         f"Changed {found['kind']} {submission_id} from {old_status} to {status} for event {event_id}"
@@ -16743,7 +17156,21 @@ def delete_workforce_submission(submission_id):
             return jsonify({'error': 'Submission not found'}), 404
         delete_upload(_workforce_folder(), found['record'])
         if found['kind'] == 'transport':
-            found['container'][found.get('invoiceField', 'invoice')] = None
+            if found.get('invoiceField') == 'companyInvoices':
+                remaining = [
+                    record
+                    for record in transport_company_invoices(found['container'])
+                    if str(record.get('id')) != str(submission_id)
+                ]
+                _set_transport_company_invoices(found['container'], remaining)
+            elif found.get('invoiceField') == 'claims':
+                found['container']['claims'] = [
+                    record
+                    for record in found['container'].get('claims', [])
+                    if str(record.get('id')) != str(submission_id)
+                ]
+            else:
+                found['container'][found.get('invoiceField', 'invoice')] = None
         else:
             found['container'].remove(found['record'])
         event_id = found['eventId']
@@ -19435,6 +19862,7 @@ def _render_app_page(section):
             'requestMb': max(1, app.config['MAX_CONTENT_LENGTH'] // MEBIBYTE),
         },
         app_js_version=_static_asset_version('js/app.js'),
+        asset_check_js_version=_static_asset_version('js/asset-check.js'),
         custom_select_js_version=_static_asset_version('js/custom-select.js'),
         custom_select_css_version=_static_asset_version('css/custom-select.css'),
         plan_js_version=_static_asset_version('js/plan.js'),
@@ -19458,11 +19886,6 @@ def _render_app_page(section):
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
         my_claims_js_version=_static_asset_version('js/my-claims.js'),
         my_claims_css_version=_static_asset_version('css/my-claims.css'),
-        my_claims_layout_css_version=_static_asset_version('css/my-claims-layout.css'),
-        my_claims_actions_css_version=_static_asset_version('css/my-claims-actions.css'),
-        my_claims_preview_css_version=_static_asset_version('css/my-claims-preview.css'),
-        my_claims_preview_fix_css_version=_static_asset_version('css/my-claims-preview-fix.css'),
-        my_claims_contrast_css_version=_static_asset_version('css/my-claims-contrast.css'),
         submission_status_css_version=_static_asset_version('css/submission-status.css'),
         workforce_schedule_js_version=_static_asset_version('js/workforce-schedule.js'),
         workforce_schedule_css_version=_static_asset_version('css/workforce-schedule.css'),
@@ -24542,8 +24965,15 @@ def delete_event(event_id):
                     fleet_vehicle_ids_removed.append(
                         str(booking.get('vehicleId'))
                     )
-                for invoice_field in ('invoice', 'companyInvoice'):
-                    invoice = booking.get(invoice_field) if isinstance(booking, dict) else None
+                if not isinstance(booking, dict):
+                    continue
+                invoices = [booking.get('invoice')]
+                invoices.extend(transport_company_invoices(booking))
+                invoices.extend(
+                    booking.get('claims', [])
+                    if isinstance(booking.get('claims'), list) else []
+                )
+                for invoice in invoices:
                     if isinstance(invoice, dict):
                         delete_upload(workforce_folder, invoice)
                         workforce_files_removed += 1
@@ -32925,7 +33355,9 @@ def containers_collection():
 def maintain_container(container_id):
     """Create one container history record and copy it to every current asset."""
     try:
-        lookup = unquote_plus(container_id).strip()
+        # Flask has already URL-decoded path parameters. Decoding them as form
+        # data a second time changes literal "+" characters into spaces.
+        lookup = str(container_id or '').strip()
         container = _find_container_by_lookup(lookup)
         if not container:
             return jsonify({'error': 'Container not found'}), 404
@@ -33034,7 +33466,7 @@ def maintain_container(container_id):
 @app.route('/api/containers/<path:container_id>/photo', methods=['GET', 'POST', 'DELETE'])
 @require_auth
 def container_photo(container_id):
-    container = _find_container_by_lookup(unquote_plus(container_id).strip())
+    container = _find_container_by_lookup(str(container_id or '').strip())
     if not container:
         return jsonify({'error': 'Container not found'}), 404
 
@@ -33093,7 +33525,7 @@ def container_photo(container_id):
 def container_resource(container_id):
     """Get one container (GET), update (PUT), delete (DELETE)"""
     try:
-        container_id = unquote_plus(container_id).strip()
+        container_id = str(container_id or '').strip()
         container = _find_container_by_lookup(container_id)
 
         if not container:
@@ -40763,7 +41195,18 @@ def _finance_profit_loss_event_commissions(data, event_id, commission_base=0, cr
 
 def _finance_profit_loss_expense_bucket(category):
     text = re.sub(r'\s+', ' ', str(category or '').strip()).casefold()
-    if any(term in text for term in ('transport', 'lorry', 'cab', 'taxi', 'grab', 'vehicle')):
+    if 'crew transport' in text or any(
+        term in text for term in ('staff transport', 'crew cab', 'crew taxi', 'crew grab')
+    ):
+        return 'crew-transport'
+    if 'equipment transport' in text or any(
+        term in text for term in (
+            'lorry', 'truck', 'equipment delivery', 'vehicle rental',
+            'parking', 'carpark', 'toll', 'erp', 'fuel',
+        )
+    ):
+        return 'equipment-transport'
+    if any(term in text for term in ('transport', 'cab', 'taxi', 'grab', 'vehicle')):
         return 'transport'
     if any(term in text for term in ('meal', 'food', 'refreshment')):
         return 'meal'
@@ -40777,6 +41220,10 @@ def _finance_profit_loss_category_label(category, source='manual'):
     bucket = _finance_profit_loss_expense_bucket(label)
     if bucket == 'meal':
         return 'Meal'
+    if bucket == 'crew-transport':
+        return 'Crew Transport'
+    if bucket == 'equipment-transport':
+        return 'Equipment Transport'
     if bucket == 'transport':
         return 'Transport'
     if bucket == 'purchase':
@@ -40860,6 +41307,8 @@ def _finance_profit_loss_expense_sort_key(expense):
         'manual': 0,
         'worker-claim': 1,
         'worker-invoice': 2,
+        'transport-invoice': 3,
+        'transport-claim': 4,
     }.get(str(expense.get('source') or 'manual').strip().lower(), 3)
     return (
         source_rank,
@@ -41117,78 +41566,122 @@ def _finance_profit_loss_submission_invoices(
 def _finance_profit_loss_workforce_costs(event_id):
     workforce = load_workforce(_workforce_folder())
     totals = submission_totals(workforce, event_id)
-    assignment_department_estimates = {}
-    vendor_service_department_estimates = {}
     assignments = [
         row for row in event_assignments(workforce, event_id)
         if isinstance(row, dict)
     ]
-    assignments_by_subject = {}
     assignment_departments = {}
+    manpower_estimates_by_subject = {}
+    service_estimates_by_subject = {}
+
+    def add_estimate(target, subject_id, department, amount):
+        entry = target.setdefault(subject_id, {'total': 0.0, 'departments': {}})
+        entry['total'] = round(entry['total'] + amount, 2)
+        entry['departments'][department] = round(
+            entry['departments'].get(department, 0) + amount,
+            2,
+        )
+
+    def add_departments(target, source):
+        for department, amount in (source or {}).items():
+            amount = round(_safe_float(amount, 0), 2)
+            if amount <= 0:
+                continue
+            department = str(department or 'Unallocated')
+            target[department] = round(target.get(department, 0) + amount, 2)
+
     for assignment in assignments:
         subject_id = _workforce_assignment_subject_id(assignment)
-        if subject_id:
-            assignments_by_subject.setdefault(subject_id, []).append(assignment)
-            department = str(assignment.get('department') or 'Unassigned')
-            departments = assignment_departments.setdefault(subject_id, [])
-            if department not in departments:
-                departments.append(department)
-    service_vendor_ids = {
-        subject_id
-        for subject_id, rows in assignments_by_subject.items()
-        if any(
-            (row.get('subjectType') == 'vendor' or row.get('vendorId'))
-            and str(row.get('providerType') or '').lower() == 'service'
-            for row in rows
-        )
-    }
-    manpower_subject_ids = set(assignments_by_subject) - service_vendor_ids
-    for assignment in assignments:
-        if not isinstance(assignment, dict):
+        if not subject_id:
             continue
         department = str(assignment.get('department') or 'Unassigned')
-        target = (
-            vendor_service_department_estimates
-            if _workforce_assignment_subject_id(assignment) in service_vendor_ids
-            else assignment_department_estimates
+        departments = assignment_departments.setdefault(subject_id, [])
+        if department not in departments:
+            departments.append(department)
+        is_vendor_service = (
+            (assignment.get('subjectType') == 'vendor' or assignment.get('vendorId'))
+            and str(assignment.get('providerType') or '').strip().lower() == 'service'
         )
-        target[department] = round(
-            target.get(department, 0) + _finance_profit_loss_assignment_estimate(assignment), 2
+        add_estimate(
+            service_estimates_by_subject if is_vendor_service else manpower_estimates_by_subject,
+            subject_id,
+            department,
+            _finance_profit_loss_assignment_estimate(assignment),
         )
-    assignment_estimate = round(
-        sum(assignment_department_estimates.values()),
-        2,
-    )
-    vendor_service_estimate = round(sum(vendor_service_department_estimates.values()), 2)
-    manpower_invoices = _finance_profit_loss_submission_invoices(
-        workforce, event_id, manpower_subject_ids, assignment_departments
-    )
-    vendor_service_invoices = _finance_profit_loss_submission_invoices(
-        workforce, event_id, service_vendor_ids, assignment_departments
-    )
-    invoice_total = manpower_invoices['total']
-    if invoice_total > 0:
-        manpower_departments = manpower_invoices['departments']
-    else:
-        manpower_departments = assignment_department_estimates
-    vendor_service_cost = (
-        vendor_service_invoices['total']
-        if vendor_service_invoices['total'] > 0
-        else vendor_service_estimate
-    )
-    vendor_service_departments = (
-        vendor_service_invoices['departments']
-        if vendor_service_invoices['total'] > 0
-        else vendor_service_department_estimates
-    )
+
+    manpower_cost = 0.0
+    manpower_invoice_cost = 0.0
+    manpower_fallback_estimate = 0.0
+    manpower_departments = {}
+    vendor_service_cost = 0.0
+    vendor_service_invoice_cost = 0.0
+    vendor_service_fallback_estimate = 0.0
+    vendor_service_departments = {}
+    subject_ids = set(manpower_estimates_by_subject) | set(service_estimates_by_subject)
+    for subject_id in subject_ids:
+        invoices = _finance_profit_loss_submission_invoices(
+            workforce,
+            event_id,
+            {subject_id},
+            assignment_departments,
+        )
+        # A mixed vendor's invoice remains a service invoice because the one
+        # invoice cannot reliably separate its manpower and service portions.
+        # Until it arrives, however, both assignment types retain their own
+        # estimates so vendor-provided manpower is represented in the P&L.
+        if invoices['total'] > 0:
+            if subject_id in service_estimates_by_subject:
+                vendor_service_cost = round(vendor_service_cost + invoices['total'], 2)
+                vendor_service_invoice_cost = round(
+                    vendor_service_invoice_cost + invoices['total'],
+                    2,
+                )
+                add_departments(vendor_service_departments, invoices['departments'])
+            else:
+                manpower_cost = round(manpower_cost + invoices['total'], 2)
+                manpower_invoice_cost = round(
+                    manpower_invoice_cost + invoices['total'],
+                    2,
+                )
+                add_departments(manpower_departments, invoices['departments'])
+            continue
+
+        manpower_estimate = manpower_estimates_by_subject.get(subject_id)
+        if manpower_estimate:
+            manpower_cost = round(manpower_cost + manpower_estimate['total'], 2)
+            manpower_fallback_estimate = round(
+                manpower_fallback_estimate + manpower_estimate['total'],
+                2,
+            )
+            add_departments(manpower_departments, manpower_estimate['departments'])
+        service_estimate = service_estimates_by_subject.get(subject_id)
+        if service_estimate:
+            vendor_service_cost = round(
+                vendor_service_cost + service_estimate['total'],
+                2,
+            )
+            vendor_service_fallback_estimate = round(
+                vendor_service_fallback_estimate + service_estimate['total'],
+                2,
+            )
+            add_departments(vendor_service_departments, service_estimate['departments'])
+
+    assignment_estimate = round(sum(
+        entry['total'] for entry in manpower_estimates_by_subject.values()
+    ), 2)
+    vendor_service_estimate = round(sum(
+        entry['total'] for entry in service_estimates_by_subject.values()
+    ), 2)
     return {
-        'manpowerCost': invoice_total if invoice_total > 0 else assignment_estimate,
-        'manpowerInvoiceCost': invoice_total,
+        'manpowerCost': manpower_cost,
+        'manpowerInvoiceCost': manpower_invoice_cost,
         'manpowerEstimatedCost': assignment_estimate,
+        'manpowerFallbackEstimatedCost': manpower_fallback_estimate,
         'manpowerDepartments': manpower_departments,
         'vendorServiceCost': round(vendor_service_cost, 2),
-        'vendorServiceInvoiceCost': vendor_service_invoices['total'],
+        'vendorServiceInvoiceCost': vendor_service_invoice_cost,
         'vendorServiceEstimatedCost': vendor_service_estimate,
+        'vendorServiceFallbackEstimatedCost': vendor_service_fallback_estimate,
         'vendorServiceDepartments': vendor_service_departments,
         'workerClaimsCost': round(_safe_float(totals.get('claims'), 0), 2),
         'transportCost': round(_safe_float(totals.get('transport'), 0), 2),
@@ -41394,6 +41887,145 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
                 'updatedBy': subject_name,
             })
+    seen_transport_invoices = set()
+    for group in transport_company_groups(
+        event_bookings(workforce, event_id),
+        workforce.get('transportVendors', []),
+    ):
+        company = str(group.get('company') or 'Transport provider')
+        invoice_entries = [
+            (booking.get('invoice'), 'booking')
+            for booking in group.get('bookings', [])
+            if isinstance(booking, dict)
+        ]
+        invoice_entries.extend(
+            (invoice, 'company')
+            for invoice in group.get('invoices', [])
+        )
+        for invoice, scope in invoice_entries:
+            if not isinstance(invoice, dict) or invoice.get('status') == 'Denied':
+                continue
+            invoice_id = str(invoice.get('id') or '')
+            if not invoice_id or invoice_id in seen_transport_invoices:
+                continue
+            seen_transport_invoices.add(invoice_id)
+            submission_id = quote(invoice_id)
+            original_name = str(invoice.get('originalName') or '').strip()
+            attachment = None
+            if original_name or invoice.get('storedPath'):
+                attachment = {
+                    'originalName': original_name or 'Transport invoice file',
+                    'contentType': str(invoice.get('contentType') or ''),
+                    'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
+                    'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
+                }
+            status = str(invoice.get('status') or 'Pending Review')
+            processing_state = str(invoice.get('processingState') or '').strip()
+            result.append({
+                'id': f'transport-invoice-{invoice_id}'[:120],
+                'sourceId': invoice_id,
+                'source': 'transport-invoice',
+                'sourceLabel': 'Transport invoice',
+                'readOnly': True,
+                'needsReview': status == 'Pending Review',
+                'countsTowardCosts': True,
+                'processingState': processing_state,
+                'processingError': str(invoice.get('processingError') or ''),
+                'submissionStage': str(invoice.get('submissionStage') or ''),
+                'eventId': int(event_id),
+                'description': (
+                    f'{company} - '
+                    f'{"Company" if scope == "company" else "Booking"} invoice'
+                )[:300],
+                'category': 'Transport',
+                'categoryKey': 'transport',
+                'categoryLabel': 'Transport',
+                'department': 'Transport',
+                'vendor': company,
+                'amount': round(money(invoice.get('amount'), 0.0) or 0.0, 2),
+                'expenseDate': _finance_normalise_iso_date(
+                    invoice.get('invoiceDate')
+                    or invoice.get('date')
+                    or invoice.get('submittedAt')
+                ),
+                'attachment': attachment,
+                'status': status,
+                'createdAt': str(invoice.get('submittedAt') or ''),
+                'createdBy': company,
+                'updatedAt': str(
+                    invoice.get('detailsCompletedAt')
+                    or invoice.get('processedAt')
+                    or invoice.get('submittedAt')
+                    or ''
+                ),
+                'updatedBy': company,
+            })
+        for booking in group.get('bookings', []):
+            if not isinstance(booking, dict):
+                continue
+            for claim in booking.get('claims', []) if isinstance(booking.get('claims'), list) else []:
+                if not isinstance(claim, dict) or claim.get('status') == 'Denied':
+                    continue
+                claim_id = str(claim.get('id') or '')
+                if not claim_id:
+                    continue
+                submission_id = quote(claim_id)
+                original_name = str(claim.get('originalName') or '').strip()
+                attachment = None
+                if original_name or claim.get('storedPath'):
+                    attachment = {
+                        'originalName': original_name or 'Own-fleet claim file',
+                        'contentType': str(claim.get('contentType') or ''),
+                        'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
+                        'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
+                    }
+                category = str(claim.get('category') or 'Other').strip()
+                category_key = _finance_profit_loss_expense_bucket(category)
+                status = str(claim.get('status') or 'Pending Review')
+                details_complete = bool(claim.get('detailsComplete'))
+                result.append({
+                    'id': f'transport-claim-{claim_id}'[:120],
+                    'sourceId': claim_id,
+                    'source': 'transport-claim',
+                    'sourceLabel': 'Own-fleet claim',
+                    'readOnly': True,
+                    'needsReview': (
+                        status == 'Pending Review'
+                        or not details_complete
+                        or str(claim.get('submissionStage') or '') == 'Details Required'
+                    ),
+                    'countsTowardCosts': details_complete,
+                    'processingState': str(claim.get('processingState') or ''),
+                    'processingError': str(claim.get('processingError') or ''),
+                    'submissionStage': str(claim.get('submissionStage') or ''),
+                    'eventId': int(event_id),
+                    'description': str(
+                        claim.get('description')
+                        or f'{company} - {category or "Claim"}'
+                    )[:300],
+                    'category': category[:120],
+                    'categoryKey': category_key,
+                    'categoryLabel': _finance_profit_loss_category_label(
+                        category, 'transport-claim'
+                    ),
+                    'department': 'Transport',
+                    'vendor': company,
+                    'amount': round(money(claim.get('amount'), 0.0) or 0.0, 2),
+                    'expenseDate': _finance_normalise_iso_date(
+                        claim.get('claimDate') or claim.get('date')
+                    ),
+                    'attachment': attachment,
+                    'status': status,
+                    'createdAt': str(claim.get('submittedAt') or ''),
+                    'createdBy': company,
+                    'updatedAt': str(
+                        claim.get('detailsCompletedAt')
+                        or claim.get('processedAt')
+                        or claim.get('submittedAt')
+                        or ''
+                    ),
+                    'updatedBy': company,
+                })
     result.sort(key=_finance_profit_loss_expense_sort_key)
     return result
 
@@ -41483,11 +42115,27 @@ def _finance_profit_loss_payload(event, finance_data):
         row for row in worker_submission_expenses
         if row.get('source') == 'worker-claim' and row.get('countsTowardCosts', True)
     ]
-    manual_transport_expenses = round(sum(
+    own_fleet_claim_expenses = [
+        row for row in worker_submission_expenses
+        if row.get('source') == 'transport-claim'
+        and row.get('countsTowardCosts', True)
+    ]
+    manual_crew_transport_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in expenses
-        if _finance_profit_loss_expense_bucket(row.get('category')) == 'transport'
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'crew-transport'
     ), 2)
+    manual_equipment_transport_expenses = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses
+        if _finance_profit_loss_expense_bucket(row.get('category')) in {
+            'equipment-transport', 'transport'
+        }
+    ), 2)
+    manual_transport_expenses = round(
+        manual_crew_transport_expenses + manual_equipment_transport_expenses,
+        2,
+    )
     manual_meal_expenses = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in expenses
@@ -41505,7 +42153,24 @@ def _finance_profit_loss_payload(event, finance_data):
     crew_transport_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
-        if row.get('categoryKey') == 'transport'
+        if row.get('categoryKey') in {'transport', 'crew-transport'}
+    ), 2)
+    own_fleet_crew_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in own_fleet_claim_expenses
+        if row.get('categoryKey') == 'crew-transport'
+    ), 2)
+    own_fleet_equipment_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in own_fleet_claim_expenses
+        if row.get('categoryKey') in {'equipment-transport', 'transport'}
+    ), 2)
+    own_fleet_other_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in own_fleet_claim_expenses
+        if row.get('categoryKey') not in {
+            'crew-transport', 'equipment-transport', 'transport'
+        }
     ), 2)
     worker_meal_claims = round(sum(
         _safe_float(row.get('amount'), 0)
@@ -41520,18 +42185,37 @@ def _finance_profit_loss_payload(event, finance_data):
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
     meal_cost = worker_meal_claims
     vendor_service_cost = round(workforce_costs['vendorServiceCost'], 2)
-    manpower_cost = round(workforce_costs['manpowerCost'], 2)
+    workforce_manpower_cost = round(workforce_costs['manpowerCost'], 2)
+    manpower_cost = round(
+        workforce_manpower_cost
+        + manual_crew_transport_expenses
+        + own_fleet_crew_claims,
+        2,
+    )
     manpower_card_cost = manpower_cost
-    # The manpower card is compared against the quotation's manpower budget, so
-    # it must contain manpower invoices/estimates only. Services and claims are
-    # still P&L costs, but belong under Other Expenses.
-    transport_cost = round(workforce_costs['transportCost'], 2)
+    # Manual crew transport belongs to the crew/manpower budget, while equipment
+    # transport belongs to the event transport budget. Both remain direct costs.
+    transport_cost = round(
+        workforce_costs['transportCost'] + manual_equipment_transport_expenses,
+        2,
+    )
+    transport_cost = round(
+        transport_cost + own_fleet_equipment_claims,
+        2,
+    )
     worker_claims_cost = round(
         crew_transport_claims + worker_meal_claims + worker_other_claims,
         2,
     )
     other_expenses = round(
-        vendor_service_cost + worker_claims_cost + manual_expenses_total,
+        vendor_service_cost
+        + worker_claims_cost
+        + manual_expenses_total
+        - manual_transport_expenses,
+        2,
+    )
+    other_expenses = round(
+        other_expenses + own_fleet_other_claims,
         2,
     )
     direct_costs = round(manpower_cost + transport_cost, 2)
@@ -41563,7 +42247,16 @@ def _finance_profit_loss_payload(event, finance_data):
     for row in worker_claim_expenses:
         if row.get('categoryKey') in {'other', 'purchase'}:
             add_expense_category(row)
+    for row in own_fleet_claim_expenses:
+        if row.get('categoryKey') not in {
+            'crew-transport', 'equipment-transport', 'transport'
+        }:
+            add_expense_category(row)
     for row in expenses:
+        if _finance_profit_loss_expense_bucket(row.get('category')) in {
+            'crew-transport', 'equipment-transport', 'transport'
+        }:
+            continue
         payload_row = _profit_loss_expense_payload(row)
         manual_category = str(
             payload_row.get('categoryLabel')
@@ -41621,6 +42314,18 @@ def _finance_profit_loss_payload(event, finance_data):
             'department': row['department'],
             'label': f"Manpower - {row['label']}",
             'amount': row['amount'],
+        })
+    crew_budget_transport = round(
+        manual_crew_transport_expenses + own_fleet_crew_claims,
+        2,
+    )
+    if crew_budget_transport > 0:
+        profit_chart.append({
+            'key': 'manpower-crew-transport',
+            'group': 'manpower',
+            'department': '',
+            'label': 'Crew Transport',
+            'amount': crew_budget_transport,
         })
     vendor_service_department_rows = []
     for department, amount in sorted(
@@ -41703,12 +42408,17 @@ def _finance_profit_loss_payload(event, finance_data):
         'manpowerDirect': manpower_cost,
         'meals': meal_cost,
         'manpowerInvoicesOrEstimate': workforce_costs['manpowerCost'],
+        'manualCrewTransportExpenses': manual_crew_transport_expenses,
+        'ownFleetCrewClaims': own_fleet_crew_claims,
         'workerTransportClaims': crew_transport_claims,
         'workerMealClaims': worker_meal_claims,
         'manualMealExpenses': manual_meal_expenses,
         'transportBookings': workforce_costs['transportCost'],
         'crewTransportClaims': crew_transport_claims,
         'manualTransportExpenses': manual_transport_expenses,
+        'manualEquipmentTransportExpenses': manual_equipment_transport_expenses,
+        'ownFleetEquipmentClaims': own_fleet_equipment_claims,
+        'ownFleetOtherClaims': own_fleet_other_claims,
         'transport': transport_cost,
         'vendorServices': vendor_service_cost,
         'workerClaims': worker_claims_cost,
@@ -41758,8 +42468,13 @@ def _finance_profit_loss_payload(event, finance_data):
             'mealCost': meal_cost,
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
+            'manpowerFallbackEstimatedCost': workforce_costs[
+                'manpowerFallbackEstimatedCost'
+            ],
             'workerMealClaimsCost': worker_meal_claims,
             'manualMealExpenses': manual_meal_expenses,
+            'manualCrewTransportExpenses': manual_crew_transport_expenses,
+            'ownFleetCrewClaimsCost': own_fleet_crew_claims,
             'manpowerBudget': quotation_budgets['manpower'],
             'manpowerBudgetVariance': round(
                 quotation_budgets['manpower'] - manpower_card_cost,
@@ -41768,6 +42483,9 @@ def _finance_profit_loss_payload(event, finance_data):
             'transportBookingCost': workforce_costs['transportCost'],
             'crewTransportClaimsCost': crew_transport_claims,
             'manualTransportExpenses': manual_transport_expenses,
+            'manualEquipmentTransportExpenses': manual_equipment_transport_expenses,
+            'ownFleetEquipmentClaimsCost': own_fleet_equipment_claims,
+            'ownFleetOtherClaimsCost': own_fleet_other_claims,
             'transportCost': transport_cost,
             'transportBudget': quotation_budgets['transport'],
             'transportBudgetVariance': round(
@@ -41777,6 +42495,9 @@ def _finance_profit_loss_payload(event, finance_data):
             'vendorServiceCost': vendor_service_cost,
             'vendorServiceInvoiceCost': workforce_costs['vendorServiceInvoiceCost'],
             'vendorServiceEstimatedCost': workforce_costs['vendorServiceEstimatedCost'],
+            'vendorServiceFallbackEstimatedCost': workforce_costs[
+                'vendorServiceFallbackEstimatedCost'
+            ],
             'workerClaimsCost': worker_claims_cost,
             'workerOtherClaimsCost': worker_other_claims,
             'manualOtherExpenses': manual_other_expenses,
@@ -49247,6 +49968,8 @@ def discard_quotation_revision(document_id):
             'eventId': current.get('eventId'),
             'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
             'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+            'sourceCostingId': current.get('sourceCostingId') or '',
+            'costingDisabled': bool(current.get('costingDisabled')),
             'statusChangedAt': (
                 target.get('statusChangedAt')
                 or target['snapshot'].get('statusChangedAt')
@@ -49260,6 +49983,10 @@ def discard_quotation_revision(document_id):
             restored if str(row.get('id')) == str(document_id) else row
             for row in finance_data.get('documents') or []
         ]
+        # The live costing mirrors the draft that is being discarded. Rebuild
+        # its line membership from the restored snapshot before strict linked-
+        # line validation runs, otherwise draft-only allocations are orphaned.
+        _sync_costing_from_quotation(finance_data, restored)
         _finance_expire_sent_documents(finance_data, notify=False)
         _save_finance_data(finance_data)
         _queue_quotation_status_notification(
@@ -49365,6 +50092,8 @@ def update_or_delete_quotation_revision(document_id, revision):
                         'eventId': current.get('eventId'),
                         'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
                         'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+                        'sourceCostingId': current.get('sourceCostingId') or '',
+                        'costingDisabled': bool(current.get('costingDisabled')),
                         'statusChangedAt': (
                             fallback.get('statusChangedAt')
                             or fallback['snapshot'].get('statusChangedAt')
@@ -49387,6 +50116,9 @@ def update_or_delete_quotation_revision(document_id, revision):
                 replacement if str(row.get('id')) == str(document_id) else row
                 for row in finance_data.get('documents') or []
             ]
+            # Deleting the active revision can restore different line items;
+            # keep its costing projection atomic with that restoration too.
+            _sync_costing_from_quotation(finance_data, replacement)
             _finance_expire_sent_documents(finance_data, notify=False)
             _save_finance_data(finance_data)
             _queue_quotation_status_notification(

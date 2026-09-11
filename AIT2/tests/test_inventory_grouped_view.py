@@ -768,6 +768,19 @@ def test_inventory_bulk_edit_supports_notes():
     assert "payload.notes = readValue('bulkEditNotes')" in script
 
 
+def test_inventory_bulk_edit_updates_every_selected_asset_when_groups_merge():
+    script = APP_BUNDLE_SOURCE
+    save_source = script.split('async function saveBulkAssetEditModal()', 1)[1].split(
+        'function ensureDeleteAssetModal()', 1
+    )[0]
+
+    assert "const groupFieldsSelected = ['department', 'brand', 'model', 'description']" in save_source
+    assert 'const existingDestinationAssets = assets.filter' in save_source
+    assert 'if (existingDestinationAssets.length)' in save_source
+    assert 'payload.confirmModelGroupMerge = true;' in save_source
+    assert 'for (const asset of selectedAssets)' in save_source
+
+
 def test_inventory_selection_can_open_bulk_maintenance_workflow():
     script = APP_BUNDLE_SOURCE
 

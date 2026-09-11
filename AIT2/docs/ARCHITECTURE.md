@@ -34,6 +34,7 @@ feature modules currently include:
 - `events-overview.js`: event overview and event list presentation.
 - `inventory-export.js`: inventory reporting and export behavior.
 - `transfer.js`: asset-transfer workspace and exports.
+- `asset-check.js`: stock-check session state, rendering, and actions.
 
 The scripts are intentionally loaded as classic scripts in dependency order.
 Shared shell helpers load first, followed by feature modules, followed by the
@@ -41,6 +42,15 @@ already separate finance, costing, workforce, and vehicle modules. Do not copy
 shared state into a feature module; pass data explicitly where practical and
 leave true cross-feature helpers in the shell until they can be moved into a
 small shared module.
+
+The obsolete Return renderer that targeted `event-summary`,
+`assets-return-section`, and `return-assets-list` has been removed. The active
+Return workspace uses `return-page-root` and the `returnPage*` functions. Extend
+that workspace rather than reintroducing its retired renderer.
+
+My Claims styles are owned by `my-claims.css`. The empty layout, actions,
+preview, preview-fix, and contrast compatibility stylesheets have been removed
+from both the template and the static-version context.
 
 ## Tests
 

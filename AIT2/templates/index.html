@@ -11127,11 +11127,6 @@
       href="{{ url_for('static', filename='css/split-screen.css', v=split_screen_css_version) }}"
     />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims.css', v=my_claims_css_version) }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-layout.css', v=my_claims_layout_css_version) }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-actions.css', v=my_claims_actions_css_version) }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-preview.css', v=my_claims_preview_css_version) }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-preview-fix.css', v=my_claims_preview_fix_css_version) }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/my-claims-contrast.css', v=my_claims_contrast_css_version) }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/submission-status.css', v=submission_status_css_version) }}" />
   </head>
   <body>
@@ -13319,6 +13314,7 @@
       window.__MAINTENANCE_UPLOAD_LIMITS__ = {{ maintenance_upload_limits|tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/asset-check.js', v=asset_check_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/line-workspace.js', v=line_workspace_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/plan.js', v=plan_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/prepare.js', v=prepare_js_version) }}"></script>

@@ -136,7 +136,7 @@ function myClaimsSection(event, kind) {
   const remaining = event[`${kind}SlotsRemaining`];
   const rows = myClaimsRows(event, kind);
   const active = limit - remaining;
-  const acceptedFiles = invoice ? '.pdf,.xls,.xlsx,.csv' : 'PDF, PNG or JPG';
+  const acceptedFiles = invoice ? 'PDF, PNG, JPG or Excel' : 'PDF, PNG or JPG';
   const total = (event[key] || [])
     .filter(row => row.status !== 'Denied')
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -168,7 +168,7 @@ function myClaimsSection(event, kind) {
     : `<div class="my-claims-empty compact"><p>No ${key} uploaded for this event.</p></div>`;
 
   const accept = invoice
-    ? '.pdf,.xls,.xlsx,.csv,application/pdf'
+    ? '.pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv,application/pdf,image/png,image/jpeg'
     : '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
 
   return `
@@ -487,7 +487,7 @@ function openMyClaimsUpload(kind) {
   const invoice = kind === 'invoice';
   const input = document.getElementById('myClaimsFileInput');
   input.accept = invoice
-    ? '.pdf,.xls,.xlsx,.csv,application/pdf'
+    ? '.pdf,.png,.jpg,.jpeg,.xls,.xlsx,.csv,application/pdf,image/png,image/jpeg'
     : '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
   document.getElementById('myClaimsUploadTitle').textContent = `Upload ${kind} files`;
   document.getElementById('myClaimsModalSlots').textContent = `${event[`${kind}SlotsRemaining`]} upload slots available`;

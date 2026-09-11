@@ -24,9 +24,9 @@ WORKFORCE_FILENAME = "Workforce.json"
 UPLOAD_FOLDERNAME = "workforce_uploads"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 VALID_STATUSES = {"Pending Review", "Approved", "Denied", "Paid"}
-INVOICE_EXTENSIONS = {".pdf"}
+INVOICE_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 CLAIM_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
-TRANSPORT_EXTENSIONS = {".pdf"}
+TRANSPORT_EXTENSIONS = set(INVOICE_EXTENSIONS)
 INVOICE_SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 _STORE_LOCKS: dict[str, threading.RLock] = {}
@@ -1179,8 +1179,25 @@ def _local_submission_amount(result: dict) -> dict:
     return result
 
 
+def transport_company_invoices(booking):
+    """Return company invoices from the current list and legacy single record."""
+    if not isinstance(booking, dict):
+        return []
+    records = []
+    seen = set()
+    for record in _list(booking.get('companyInvoices')) + [booking.get('companyInvoice')]:
+        if not isinstance(record, dict):
+            continue
+        identity = str(record.get('id') or id(record))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        records.append(record)
+    return records
+
+
 def transport_company_groups(bookings, profiles=()):
-    """Group event bookings by company and count a company invoice once."""
+    """Group event bookings by company and collect each company invoice once."""
     profiles_by_id = {str(row.get('id')): row for row in profiles if isinstance(row, dict)}
     grouped = {}
     for booking in bookings:
@@ -1197,21 +1214,36 @@ def transport_company_groups(bookings, profiles=()):
         )
         group = grouped.setdefault(key, {
             'key': key, 'company': company or 'External transport',
-            'isFleet': fleet, 'bookings': [], 'invoice': None,
+            'isFleet': fleet, 'bookings': [], 'invoice': None, 'invoices': [],
             'invoiceBookingId': '', 'estimatedCost': 0.0,
         })
         group['bookings'].append(booking)
         if booking.get('status') != 'Denied':
             group['estimatedCost'] += (money(booking.get('cost'), 0) or 0) * (2 if booking.get('twoWay') else 1)
-        invoice = booking.get('companyInvoice')
-        if isinstance(invoice, dict):
-            group['invoice'] = invoice
-            group['invoiceBookingId'] = str(booking.get('id') or '')
+        known_invoice_ids = {
+            str(row.get('id') or id(row)) for row in group['invoices']
+        }
+        for invoice in transport_company_invoices(booking):
+            identity = str(invoice.get('id') or id(invoice))
+            if identity not in known_invoice_ids:
+                group['invoices'].append(invoice)
+                known_invoice_ids.add(identity)
+        if group['invoices']:
+            # Keep the singular alias while older clients transition to invoices.
+            group['invoice'] = group['invoices'][-1]
+            group['invoiceBookingId'] = str(group['bookings'][0].get('id') or '')
     for group in grouped.values():
         group['estimatedCost'] = round(group['estimatedCost'], 2)
-        invoice = group['invoice'] or {}
-        amount = money(invoice.get('amount')) if invoice.get('status') != 'Denied' else None
-        group['cost'] = amount if amount is not None else group['estimatedCost']
+        invoice_amounts = [
+            money(invoice.get('amount'))
+            for invoice in group['invoices']
+            if invoice.get('status') != 'Denied'
+            and money(invoice.get('amount')) is not None
+        ]
+        group['cost'] = (
+            round(sum(invoice_amounts), 2)
+            if invoice_amounts else group['estimatedCost']
+        )
     return sorted(grouped.values(), key=lambda group: group['company'].casefold())
 
 

@@ -2730,19 +2730,94 @@ function financeSnapshotValidity(snapshot) {
   ].filter(Boolean).join(' · ') || 'No validity recorded';
 }
 
+function financeRestoreCustomMenu(menu) {
+  if (!menu) return;
+  menu.classList.remove('open', 'open-up');
+  if (menu.dataset?.financeMenuPortal !== 'true') return;
+  const origin = menu.__financeMenuOriginParent;
+  const nextSibling = menu.__financeMenuOriginNextSibling;
+  if (origin?.isConnected) {
+    origin.insertBefore(menu, nextSibling?.parentNode === origin ? nextSibling : null);
+  } else {
+    menu.remove();
+  }
+  for (const property of [
+    'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'maxHeight', 'overflowY'
+  ]) {
+    menu.style[property] = '';
+  }
+  delete menu.dataset.financeMenuPortal;
+  delete menu.__financeMenuOriginParent;
+  delete menu.__financeMenuOriginNextSibling;
+}
+
+function financeCloseCustomMenus() {
+  document.querySelectorAll(
+    '.finance-custom-menu.open, .finance-custom-menu[data-finance-menu-portal]'
+  ).forEach(financeRestoreCustomMenu);
+}
+
+function financePortalScrollableMenu(menu, control, event) {
+  const trigger = event?.currentTarget?.getBoundingClientRect
+    ? event.currentTarget
+    : control;
+  if (!menu || !trigger || !document.body) return;
+  const viewport = typeof showbaseViewport !== 'undefined'
+    ? showbaseViewport
+    : {
+        rect: rect => rect,
+        width: () => window.innerWidth,
+        height: () => window.innerHeight
+      };
+  const triggerRect = viewport.rect(trigger.getBoundingClientRect());
+  menu.__financeMenuOriginParent = menu.parentElement;
+  menu.__financeMenuOriginNextSibling = menu.nextSibling;
+  document.body.appendChild(menu);
+  menu.dataset.financeMenuPortal = 'true';
+  const menuRect = viewport.rect(menu.getBoundingClientRect());
+  const margin = 8;
+  const gap = 5;
+  const viewportWidth = viewport.width();
+  const viewportHeight = viewport.height();
+  const roomBelow = viewportHeight - triggerRect.bottom - gap - margin;
+  const roomAbove = triggerRect.top - gap - margin;
+  const openAbove = roomBelow < menuRect.height && roomAbove > roomBelow;
+  const availableHeight = Math.max(48, openAbove ? roomAbove : roomBelow);
+  const visibleHeight = Math.min(menuRect.height, availableHeight);
+  const preferredTop = openAbove
+    ? triggerRect.top - visibleHeight - gap
+    : triggerRect.bottom + gap;
+  menu.style.position = 'fixed';
+  menu.style.top = `${Math.max(
+    margin,
+    Math.min(preferredTop, viewportHeight - visibleHeight - margin)
+  )}px`;
+  menu.style.left = `${Math.max(
+    margin,
+    Math.min(triggerRect.left, viewportWidth - menuRect.width - margin)
+  )}px`;
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.zIndex = '2000';
+  menu.style.maxHeight = `${availableHeight}px`;
+  menu.style.overflowY = 'auto';
+}
+
 function financeToggleMenu(menuId, event) {
   event?.stopPropagation();
   const target = document.getElementById(menuId);
   if (!target) return;
   const open = !target.classList.contains('open');
-  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => {
-    menu.classList.remove('open', 'open-up');
-  });
+  financeCloseCustomMenus();
   if (!open) return;
   target.classList.add('open');
   const scrollContainer = target.closest('.finance-lines-scroll');
   const control = target.closest('.finance-custom-control');
   if (!scrollContainer || !control) return;
+  if (target.classList.contains('finance-uom-menu')) {
+    financePortalScrollableMenu(target, control, event);
+    return;
+  }
   const menuRect = target.getBoundingClientRect();
   const scrollRect = scrollContainer.getBoundingClientRect();
   const controlRect = control.getBoundingClientRect();
@@ -2772,9 +2847,7 @@ function financeValidityUnitControl(currentUnit, menuId, selectHandler) {
 }
 
 function financeCloseMenus() {
-  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => {
-    menu.classList.remove('open', 'open-up');
-  });
+  financeCloseCustomMenus();
   financeCloseQuotationContextMenu();
   financeCloseSubprojectContextMenu();
 }
@@ -8619,7 +8692,90 @@ function profitLossContrastColour(value) {
   return luminance > 0.58 ? '#172033' : '#ffffff';
 }
 
-function profitLossExpenseCategoryMarkup(expense) {
+function profitLossExpenseChartSegments(expense, chartSegments = []) {
+  const source = String(expense?.source || 'manual');
+  const categoryKey = String(expense?.categoryKey || '');
+  const categoryLabel = String(
+    expense?.categoryLabel || expense?.category || 'Other'
+  ).trim();
+  let group = 'other';
+  let label = source === 'manual'
+    ? `Added Expense - ${categoryLabel}`
+    : categoryLabel;
+
+  if (categoryKey === 'vendor-service') {
+    group = 'vendor';
+    label = '';
+  } else if (source === 'transport-invoice') {
+    group = 'transport';
+    label = '';
+  } else if (source === 'worker-invoice') {
+    group = 'manpower';
+    label = '';
+  } else if (source === 'worker-claim' && categoryKey === 'meal') {
+    group = 'meal';
+    label = '';
+  } else if (source === 'worker-claim' && ['transport', 'crew-transport'].includes(categoryKey)) {
+    group = 'crew-transport';
+    label = '';
+  } else if (source === 'manual' && categoryKey === 'crew-transport') {
+    group = 'manpower';
+    label = 'Crew Transport';
+  } else if (source === 'manual' && ['transport', 'equipment-transport'].includes(categoryKey)) {
+    group = 'transport';
+    label = '';
+  } else if (source === 'transport-claim' && categoryKey === 'crew-transport') {
+    group = 'manpower';
+    label = 'Crew Transport';
+  } else if (source === 'transport-claim' && ['transport', 'equipment-transport'].includes(categoryKey)) {
+    group = 'transport';
+    label = '';
+  }
+
+  let matches = chartSegments.filter(row => String(row?.group || 'other') === group);
+  if (label) {
+    matches = matches.filter(row => (
+      String(row?.label || '').trim().toLowerCase() === label.toLowerCase()
+    ));
+  }
+  if (group === 'manpower' || group === 'vendor') {
+    const departments = String(expense?.department || '')
+      .split(',')
+      .map(value => value.trim().toLowerCase())
+      .filter(Boolean);
+    if (departments.length) {
+      matches = matches.filter(row => departments.includes(
+        String(row?.department || '').trim().toLowerCase()
+      ));
+    }
+  }
+  return matches;
+}
+
+function profitLossExpenseChartColours(expense, chartSegments = []) {
+  const matches = profitLossExpenseChartSegments(expense, chartSegments);
+  return [...new Set(matches.map(row => String(row?.colour || '')).filter(
+    colour => /^#[0-9a-f]{6}$/i.test(colour)
+  ))];
+}
+
+function profitLossHighlightExpenseSlices(badge, active) {
+  const chart = badge?.closest('.content-section')?.querySelector('.pnl-profit-chart')
+    || document.querySelector('#profit-loss-section .pnl-profit-chart');
+  if (!chart) return;
+  const keys = new Set(
+    String(badge?.dataset?.pnlChartKeys || '').split(' ').filter(Boolean)
+  );
+  const keepActive = Boolean(active || badge?.matches(':hover, :focus-visible')) && keys.size > 0;
+  chart.classList.toggle('has-badge-highlight', keepActive);
+  chart.querySelectorAll('.pnl-chart-segment').forEach(segment => {
+    const isMatch = keepActive && keys.has(String(segment.dataset.chartKey || ''));
+    segment.classList.toggle('is-badge-highlight', isMatch);
+    segment.classList.toggle('is-badge-muted', keepActive && !isMatch);
+  });
+}
+
+function profitLossExpenseCategoryMarkup(expense, chartSegments = []) {
   const source = String(expense?.source || 'manual');
   const categoryKey = String(expense?.categoryKey || '');
   let category = String(expense?.categoryLabel || expense?.category || 'Other expense');
@@ -8629,6 +8785,10 @@ function profitLossExpenseCategoryMarkup(expense) {
     category = 'Manpower';
   } else if (categoryKey === 'meal') {
     category = 'Meal';
+  } else if (categoryKey === 'crew-transport') {
+    category = 'Crew Transport';
+  } else if (categoryKey === 'equipment-transport') {
+    category = 'Equipment Transport';
   } else if (categoryKey === 'transport') {
     category = 'Transport';
   } else if (categoryKey === 'purchase') {
@@ -8638,27 +8798,40 @@ function profitLossExpenseCategoryMarkup(expense) {
   const department = String(expense?.department || '').trim();
   const departmentMeta = profitLossDepartmentMeta(department);
   const departmentCode = String(departmentMeta?.code || '');
-  const departmentColour = departmentMeta
-    ? profitLossSolidColour(departmentMeta.color)
-    : '';
+  const matchingChartSegments = profitLossExpenseChartSegments(expense, chartSegments);
+  const chartColours = profitLossExpenseChartColours(expense, matchingChartSegments);
+  const chartKeys = [...new Set(matchingChartSegments.map(row => String(row?.key || '')).filter(Boolean))];
+  const categoryColour = chartColours[0] || '';
+  const categoryBackground = chartColours.length > 1
+    ? `linear-gradient(90deg, ${chartColours.map((colour, index) => {
+      const start = index / chartColours.length * 100;
+      const end = (index + 1) / chartColours.length * 100;
+      return `${colour} ${start}%, ${colour} ${end}%`;
+    }).join(', ')})`
+    : categoryColour;
 
-  const suffix = department
+  const suffix = department && source !== 'transport-invoice'
     ? ` - ${departmentCode || department}`
     : '';
   const title = departmentMeta
     ? departmentMeta.name || departmentCode
     : department;
-  const style = departmentColour
-    ? ` style="--pnl-category-colour:${departmentColour};--pnl-category-text:${profitLossContrastColour(departmentColour)}"`
+  const style = categoryColour
+    ? ` style="--pnl-category-colour:${categoryColour};--pnl-category-background:${categoryBackground};--pnl-category-text:${profitLossContrastColour(categoryColour)}"`
     : '';
-  return `<span class="pnl-category-badge"${style}${title ? ` title="${financeEscapeAttr(title)}"` : ''}>${financeEscape(`${category}${suffix}`)}</span>`;
+  const chartInteraction = chartKeys.length
+    ? ` tabindex="0" data-pnl-chart-keys="${financeEscapeAttr(chartKeys.join(' '))}" onpointerenter="profitLossHighlightExpenseSlices(this, true)" onpointerleave="profitLossHighlightExpenseSlices(this, false)" onfocus="profitLossHighlightExpenseSlices(this, true)" onblur="profitLossHighlightExpenseSlices(this, false)"`
+    : '';
+  return `<span class="pnl-category-badge"${style}${chartInteraction}${title ? ` title="${financeEscapeAttr(title)}"` : ''}>${financeEscape(`${category}${suffix}`)}</span>`;
 }
 
 function profitLossExpenseSourceRank(expense) {
   return ({
     manual: 0,
     'worker-claim': 1,
-    'worker-invoice': 2
+    'worker-invoice': 2,
+    'transport-invoice': 3,
+    'transport-claim': 4
   })[String(expense?.source || 'manual').trim().toLowerCase()] ?? 3;
 }
 
@@ -8685,7 +8858,7 @@ function profitLossExpenseProcessingMarkup(expense) {
     return '<span class="pnl-upload-state is-processing"><i></i>Processing</span>';
   }
   if (!expense?.needsReview) return '';
-  const action = expense.source === 'worker-claim'
+  const action = ['worker-claim', 'worker-invoice', 'transport-invoice', 'transport-claim'].includes(expense.source)
     ? `profitLossOpenClaimReview('${financeEscapeAttr(expense.sourceId)}')`
     : `profitLossOpenExpenseModal('${financeEscapeAttr(expense.id)}')`;
   return `<button type="button" class="pnl-review-pill" onclick="${action}">Needs review</button>`;
@@ -8832,8 +9005,8 @@ function profitLossHideChartTooltip(segment) {
   if (tooltip) tooltip.classList.remove('is-visible', 'is-below');
 }
 
-function profitLossChartMarkup(rows, summary) {
-  const segments = profitLossChartRows(rows);
+function profitLossChartMarkup(rows, summary, rowsAreSegments = false) {
+  const segments = rowsAreSegments ? rows : profitLossChartRows(rows);
   if (!segments.length) {
     return '<div class="pnl-chart-empty">No costs or profit to chart yet.</div>';
   }
@@ -8851,6 +9024,7 @@ function profitLossChartMarkup(rows, summary) {
               data-amount="${financeEscapeAttr(financeSgd(row.amount))}"
               data-percent="${financeEscapeAttr(financePercentDisplay(row.percent))}"
               data-colour="${row.colour}"
+              data-chart-key="${financeEscapeAttr(row.key || '')}"
               aria-label="${financeEscapeAttr(`${row.label}: ${financeSgd(row.amount)}, ${financePercentDisplay(row.percent)}`)}"
               onpointerenter="profitLossShowChartTooltip(event, this)"
               onpointermove="profitLossPositionChartTooltip(event, this)"
@@ -9007,6 +9181,7 @@ function renderProfitLossPage() {
   const quote = data.quotation || null;
   const summary = data.summary || {};
   const expenses = (data.expenses || []).slice().sort(profitLossCompareExpenses);
+  const profitChartSegments = profitLossChartRows(data.profitChart || []);
   const pendingExpenseRows = profitLossPendingExpenseRowsMarkup();
   const listedExpenseTotal = expenses.reduce((sum, row) => sum + financeNumber(row.amount), 0);
   const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
@@ -9014,8 +9189,14 @@ function renderProfitLossPage() {
   const transportNoteParts = [
     financeNumber(summary.transportBookingCost) > 0 ? `Bookings ${financeSgd(summary.transportBookingCost)}` : ''
   ].filter(Boolean);
+  const manpowerInvoiceCost = financeNumber(summary.manpowerInvoiceCost);
+  const manpowerFallbackEstimate = financeNumber(
+    summary.manpowerFallbackEstimatedCost
+      ?? (manpowerInvoiceCost > 0 ? 0 : summary.manpowerEstimatedCost)
+  );
   const manpowerNoteParts = [
-    financeNumber(summary.manpowerInvoiceCost) > 0 ? `Invoices ${financeSgd(summary.manpowerInvoiceCost)}` : `Assignments ${financeSgd(summary.manpowerEstimatedCost)}`
+    manpowerInvoiceCost > 0 ? `Invoices ${financeSgd(manpowerInvoiceCost)}` : '',
+    manpowerFallbackEstimate > 0 ? `Pending estimates ${financeSgd(manpowerFallbackEstimate)}` : ''
   ].filter(Boolean);
   const otherNoteParts = [
     financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
@@ -9158,7 +9339,7 @@ function renderProfitLossPage() {
                 <tr>
                   <td><strong>${financeEscape(row.description)}</strong>${profitLossExpenseProcessingMarkup(row)}</td>
                   <td><span class="pnl-source-pill pnl-source-${financeEscapeAttr(row.source || 'manual')}">${financeEscape(row.sourceLabel || (row.readOnly ? 'Claim' : 'Added'))}</span></td>
-                  <td>${profitLossExpenseCategoryMarkup(row)}</td>
+                  <td>${profitLossExpenseCategoryMarkup(row, profitChartSegments)}</td>
                   <td>${financeEscape(row.vendor || '-')}</td>
                   <td>${financeEscape(row.expenseDate || '-')}</td>
                   <td><strong>${financeSgd(row.amount)}</strong></td>
@@ -9168,12 +9349,12 @@ function renderProfitLossPage() {
                       <a class="pnl-attachment-download" href="${financeEscapeAttr(row.attachment.downloadUrl || row.attachment.previewUrl)}" download>Download</a>
                     </span>
                   ` : '-'}</td>
-                  <td>${row.source === 'worker-claim' ? `
+                  <td>${['worker-claim', 'transport-invoice', 'transport-claim'].includes(row.source) ? `
                     <span class="pnl-expense-actions">
-                      <button type="button" class="pnl-expense-edit" onclick="profitLossOpenClaimReview('${financeEscapeAttr(row.sourceId)}')" aria-label="Review claim" title="Review claim">
+                      <button type="button" class="pnl-expense-edit" onclick="profitLossOpenClaimReview('${financeEscapeAttr(row.sourceId)}')" aria-label="Review ${row.source === 'transport-invoice' ? 'transport invoice' : 'claim'}" title="Review ${row.source === 'transport-invoice' ? 'transport invoice' : 'claim'}">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
                       </button>
-                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, 'claims')" aria-label="Open Crew &amp; Vendors" title="Open Crew &amp; Vendors">
+                      <button type="button" class="pnl-expense-edit pnl-expense-source" onclick="profitLossOpenManpower(${Number(event.id) || 0}, '${row.source.startsWith('transport-') ? 'transport' : 'claims'}')" aria-label="Open Crew &amp; Vendors" title="Open Crew &amp; Vendors">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <circle cx="8" cy="8" r="3"></circle>
                           <path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path>
@@ -9209,7 +9390,7 @@ function renderProfitLossPage() {
       <aside class="pnl-side">
         <section class="finance-card pnl-summary-card">
           <h3>Profit Summary</h3>
-          ${profitLossChartMarkup(data.profitChart || [], summary)}
+          ${profitLossChartMarkup(profitChartSegments, summary, true)}
         </section>
         <section class="finance-card pnl-activity">
           <div class="pnl-section-head"><h3>Recent Activity</h3></div>
@@ -9248,7 +9429,7 @@ function financeEnsureProfitLossExpenseModal() {
                     <span id="profitLossExpenseCategoryLabel">Select category</span><span aria-hidden="true">⌄</span>
                   </button>
                   <div class="finance-custom-menu" id="profit-loss-expense-category-menu" role="menu">
-                    ${['Meal', 'Transport', 'Other', 'Purchase'].map(category => `
+                    ${['Meal', 'Crew Transport', 'Equipment Transport', 'Other', 'Purchase'].map(category => `
                       <button type="button" data-expense-category="${category}" onclick="profitLossChooseExpenseCategory('${category}')">${category}</button>
                     `).join('')}
                   </div>
@@ -9403,7 +9584,12 @@ function profitLossExpenseCategorySelection(value) {
   const category = String(value || '').trim();
   const normalized = category.toLowerCase();
   if (['meal', 'meals'].includes(normalized)) return { selection: 'Meal', other: '' };
-  if (normalized === 'transport' || normalized === 'cab') return { selection: 'Transport', other: '' };
+  if (['crew transport', 'staff transport', 'cab', 'taxi', 'grab'].includes(normalized)) {
+    return { selection: 'Crew Transport', other: '' };
+  }
+  if (['equipment transport', 'transport', 'lorry', 'vehicle'].includes(normalized)) {
+    return { selection: 'Equipment Transport', other: '' };
+  }
   if (['purchase', 'purchases'].includes(normalized)) return { selection: 'Purchase', other: '' };
   if (!category || ['other', 'miscellaneous'].includes(normalized)) {
     return { selection: category ? 'Other' : '', other: '' };
