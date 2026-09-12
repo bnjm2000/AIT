@@ -9608,6 +9608,12 @@ def _admin_file_payload(
     record, event_id, freelancer_id, kind, expectation=None
 ):
     payload = dict(record)
+    payload['submittedAt'] = str(
+        record.get('submittedAt')
+        or record.get('uploadedAt')
+        or record.get('createdAt')
+        or ''
+    )
     submission_id = quote(str(record.get('id') or ''))
     payload['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
     payload['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
@@ -10047,6 +10053,110 @@ def _group_admin_claim_rows(all_rows, filtered_rows):
         })
         grouped.append(group)
     return grouped
+
+
+_ADMIN_SUBMISSION_STATUS_SORT_ORDER = {
+    'awaiting-upload': 0,
+    'queued': 1,
+    'processing': 2,
+    'details-required': 3,
+    'to-review': 4,
+    'to-pay': 5,
+    'paid': 6,
+    'awaiting-confirmation': 6,
+    'payment-confirmed': 7,
+    'denied': 8,
+}
+
+
+def _admin_submission_sort_timestamp(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace('Z', '+00:00')).timestamp()
+    except (TypeError, ValueError, OverflowError):
+        pass
+    for format_string in (
+        '%Y%m%d %H:%M:%S',
+        '%Y%m%d',
+        '%d/%m/%Y %H:%M:%S',
+        '%d/%m/%Y %H:%M',
+        '%d/%m/%Y',
+    ):
+        try:
+            return datetime.strptime(raw, format_string).timestamp()
+        except (TypeError, ValueError, OverflowError):
+            continue
+    return None
+
+
+def _sort_admin_submission_display_rows(rows, sort_by='event', direction='desc'):
+    """Sort the complete display queue before pagination."""
+    sort_by = sort_by if sort_by in {'event', 'uploader', 'submitted', 'status'} else 'event'
+    direction = direction if direction in {'asc', 'desc'} else (
+        'asc' if sort_by in {'uploader', 'status'} else 'desc'
+    )
+
+    def grouped_records(row):
+        claims = row.get('claims') if row.get('isClaimGroup') else None
+        return claims if isinstance(claims, list) and claims else [row]
+
+    def tie_key(row):
+        event = row.get('event') or {}
+        subject = row.get('subject') or {}
+        return (
+            str(subject.get('name') or '').casefold(),
+            str(event.get('name') or '').casefold(),
+            str(row.get('originalName') or '').casefold(),
+            str(row.get('id') or '').casefold(),
+        )
+
+    def primary_value(row):
+        event = row.get('event') or {}
+        subject = row.get('subject') or {}
+        if sort_by == 'event':
+            date_digits = re.sub(
+                r'\D', '', str(event.get('startDateValue') or '')
+            )
+            return int(date_digits) if date_digits else None
+        if sort_by == 'uploader':
+            return str(subject.get('name') or '').strip().casefold()
+        if sort_by == 'submitted':
+            timestamps = [
+                timestamp
+                for timestamp in (
+                    next((
+                        parsed
+                        for parsed in (
+                            _admin_submission_sort_timestamp(record.get(field))
+                            for field in ('submittedAt', 'uploadedAt', 'createdAt')
+                        )
+                        if parsed is not None
+                    ), None)
+                    for record in grouped_records(row)
+                )
+                if timestamp is not None
+            ]
+            return max(timestamps) if timestamps else None
+        status_orders = [
+            _ADMIN_SUBMISSION_STATUS_SORT_ORDER.get(
+                str(record.get('statusKey') or ''), 99
+            )
+            for record in grouped_records(row)
+        ]
+        return min(status_orders, default=99)
+
+    sorted_rows = sorted(rows, key=tie_key)
+    valued_rows = []
+    missing_rows = []
+    for row in sorted_rows:
+        value = primary_value(row)
+        (missing_rows if value is None else valued_rows).append((value, row))
+    valued_rows.sort(key=lambda item: item[0], reverse=direction == 'desc')
+    return [row for _value, row in valued_rows] + [
+        row for _value, row in missing_rows
+    ]
 
 
 def _admin_freelancer_payload(freelancer):
@@ -16704,6 +16814,17 @@ def list_workforce_submissions():
     if not requested_kinds or 'all' in requested_kinds:
         requested_kinds = {'invoice', 'claim'}
     search = str(request.args.get('search') or '').strip().casefold()
+    sort_by = str(request.args.get('sort') or 'event').strip().lower()
+    if sort_by not in {'event', 'uploader', 'submitted', 'status'}:
+        sort_by = 'event'
+    default_sort_direction = (
+        'asc' if sort_by in {'uploader', 'status'} else 'desc'
+    )
+    sort_direction = str(
+        request.args.get('direction') or default_sort_direction
+    ).strip().lower()
+    if sort_direction not in {'asc', 'desc'}:
+        sort_direction = default_sort_direction
 
     filtered = []
     for row in scoped_rows:
@@ -16740,7 +16861,11 @@ def list_workforce_submissions():
                 continue
         filtered.append(row)
 
-    display_rows = _group_admin_claim_rows(scoped_rows, filtered)
+    display_rows = _sort_admin_submission_display_rows(
+        _group_admin_claim_rows(scoped_rows, filtered),
+        sort_by,
+        sort_direction,
+    )
     page = max(1, request.args.get('page', default=1, type=int) or 1)
     page_size = min(
         100,
@@ -16767,6 +16892,8 @@ def list_workforce_submissions():
                 + status_counts.get('to-pay', 0)
             ),
             'includeFullTime': include_full_time,
+            'sortBy': sort_by,
+            'sortDirection': sort_direction,
         },
     })
 

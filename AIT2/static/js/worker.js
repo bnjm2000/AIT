@@ -950,6 +950,9 @@ byId('statisticsPeriod').addEventListener('change', event => {
 byId('statisticsMonth').addEventListener('change', renderStatistics);
 byId('statisticsYear').addEventListener('change', renderStatistics);
 byId('statisticsDashboard').addEventListener('click', event => {
+  const statusButton = event.target.closest('[data-statistics-status]');
+  if (statusButton) WorkerStatistics.selectStatus(byId('statisticsDashboard'), statusButton.dataset.statisticsStatus);
+  if (event.target.closest('[data-statistics-close]')) WorkerStatistics.selectStatus(byId('statisticsDashboard'), null);
   const bar = event.target.closest('[data-statistics-bar]');
   if (bar) {
     const chart = bar.closest('.stats-chart-scroll');
@@ -959,6 +962,12 @@ byId('statisticsDashboard').addEventListener('click', event => {
     });
   }
   if (event.target.closest('[data-statistics-events]')) showWorkerView('events');
+});
+byId('statisticsDashboard').addEventListener('keydown', event => {
+  if (event.target.matches('circle[data-statistics-status]') && ['Enter', ' '].includes(event.key)) {
+    event.preventDefault();
+    WorkerStatistics.selectStatus(byId('statisticsDashboard'), event.target.dataset.statisticsStatus);
+  }
 });
 byId('mobileMenuButton').addEventListener('click', () => document.body.classList.toggle('mobile-nav-open'));
 byId('workerSignout').addEventListener('click', () => {

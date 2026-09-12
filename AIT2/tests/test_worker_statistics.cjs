@@ -94,3 +94,26 @@ test('renders readable empty data and escapes category text without exposing com
   assert.doesNotMatch(root.innerHTML, /<img|Private Company/);
   assert.match(root.innerHTML, /View exact figures/);
 });
+
+test('status details reconcile with chart counts and preserve file identity across companies', () => {
+  const companies = ['A', 'B'].map(code => ({ code, name: `Company ${code}`, events: [event(1, [
+    row('shared-id', 100, 'Pending Review', { originalName: `${code}.pdf`, fileUrl: `/api/worker/submissions/shared-id/file?token=${code}` }),
+    row('outside', 900, 'Pending Review', { submittedAt: '2025-09-08' }),
+    row('denied', 25, 'Denied', { denialReason: 'Incorrect date', fileUrl: 'javascript:alert(1)' })
+  ], [row('claim', null, 'Pending Review', { needsDetails: true })], { name: 'Audio event' })] }));
+  const model = stats.build(companies, year);
+  for (const [state, total] of Object.entries(model.summary)) {
+    const matching = model.rows.filter(row => row.state === state);
+    assert.equal(matching.length, total.count);
+    assert.equal(matching.reduce((sum, row) => sum + row.cents, 0), total.cents);
+  }
+  const matching = model.rows.filter(row => row.state === 'review');
+  assert.equal(matching.length, 2);
+  assert.equal(matching[0].companyName, 'Company A');
+  assert.equal(matching[1].filename, 'B.pdf');
+  assert.equal(matching[1].fileUrl, '/api/worker/submissions/shared-id/file?token=B');
+  assert.equal(matching[1].eventName, 'Audio event');
+  assert.equal(model.rows.find(row => row.state === 'denied').denialReason, 'Incorrect date');
+  assert.equal(model.rows.find(row => row.state === 'denied').fileUrl, '');
+  assert.equal(model.rows.find(row => row.state === 'details').known, false);
+});

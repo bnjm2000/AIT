@@ -1,6 +1,7 @@
 /* Personal statistics across all companies. Amounts are grouped by submission
  * date, never presented as payment-date cash flow or company pay comparisons. */
 const WorkerStatistics = (() => {
+  const views = new WeakMap();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const states = [
     { key: 'received', label: 'Receipt confirmed', colour: '#0f766e' },
@@ -48,7 +49,7 @@ const WorkerStatistics = (() => {
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).map(event => ({ companyCode: company.code, event })));
+    }).map(event => ({ companyCode: company.code, companyName: company.name || company.code, event })));
   }
 
   function years(companies) {
@@ -100,7 +101,7 @@ const WorkerStatistics = (() => {
     const rowKeys = new Set();
     const inPeriod = date => date && date.startsWith(periodKey);
     const bucketFor = date => buckets[Number(date.slice(monthly ? 8 : 5, monthly ? 10 : 7)) - 1];
-    personalEvents(companies).forEach(({ companyCode, event }) => {
+    personalEvents(companies).forEach(({ companyCode, companyName, event }) => {
       const start = dateKey(event.startDate);
       const eventKey = JSON.stringify([companyCode, event.id]);
       if (!eventKeys.has(eventKey)) {
@@ -129,7 +130,13 @@ const WorkerStatistics = (() => {
           const bucket = bucketFor(date);
           bucket.files += 1;
           const accepted = ['approved', 'paid', 'received'].includes(state);
-          model.rows.push({ kind, state, cents, known });
+          model.rows.push({
+            kind, state, cents, known, date,
+            companyName, eventName: event.name || `Event ${event.id}`,
+            filename: row.originalName || (kind === 'invoice' ? 'Invoice' : 'Claim'),
+            fileUrl: /^\/api\/worker\/submissions\/[^/?#]+\/file\?/.test(String(row.fileUrl || '')) ? row.fileUrl : '',
+            denialReason: state === 'denied' ? String(row.denialReason || '') : ''
+          });
           if (!accepted) return;
           model[kind] += cents;
           model[`${kind}Count`] += 1;
@@ -182,29 +189,71 @@ const WorkerStatistics = (() => {
     let offset = 0;
     const segments = states.map(state => {
       const start = offset;
-      offset += percent(model.summary[state.key].count, total);
-      return `${state.colour} ${start}% ${offset}%`;
+      const count = model.summary[state.key].count;
+      const size = percent(count, total);
+      offset += size;
+      if (!count) return '';
+      return `<circle cx="50" cy="50" r="43" fill="none" stroke="${state.colour}" stroke-width="14" pathLength="100"
+        stroke-dasharray="${size} ${100 - size}" stroke-dashoffset="${-start}" transform="rotate(-90 50 50)"
+        tabindex="0" role="button" data-statistics-status="${state.key}" aria-controls="statsPaymentDetails" aria-expanded="false"
+        aria-label="${state.label}: ${files(count)}. View files."><title>${state.label}: ${files(count)}</title></circle>`;
     });
     return `<div class="stats-payment-body">
-      <div class="stats-donut" role="img" aria-label="${total} submissions by current status; counts and amounts are listed alongside."
-        style="background:conic-gradient(${total ? segments.join(',') : '#e8eef3 0% 100%'})">
+      <div class="stats-donut stats-donut-interactive">
+        <svg viewBox="0 0 100 100" role="group" aria-label="Payment status chart. Select a segment to view files.">
+          <circle cx="50" cy="50" r="43" fill="none" stroke="#e8eef3" stroke-width="14" />${segments.join('')}
+        </svg>
         <div><strong>${total}</strong><span>submissions</span></div>
       </div>
       <ul class="stats-status-list">${states.map(state => {
         const item = model.summary[state.key];
-        return `<li><span><i style="background:${state.colour}"></i>${state.label}<small>${files(item.count)}</small></span><strong>${currency(item.cents)}</strong></li>`;
+        return `<li><button type="button" class="stats-status-button" data-statistics-status="${state.key}" aria-controls="statsPaymentDetails" aria-expanded="false"><span><i style="background:${state.colour}"></i>${state.label}<small>${files(item.count)} · View files</small></span><strong>${currency(item.cents)}</strong></button></li>`;
       }).join('')}</ul>
-    </div><p class="stats-chart-caption">Ring shows file counts. Amounts include invoices and claims submitted in this period, at their current status.</p>`;
+    </div><p class="stats-chart-caption">Tap a status or chart segment to view its invoices and claims. Files are limited to the selected period.</p>
+    <section id="statsPaymentDetails" class="stats-payment-details" aria-labelledby="statsPaymentDetailsTitle" hidden></section>`;
+  }
+
+  function selectStatus(root, key, focus = true) {
+    const view = views.get(root);
+    const panel = root.querySelector('#statsPaymentDetails');
+    if (!view || !panel) return;
+    const selected = states.find(state => state.key === key);
+    const previous = view.selected;
+    view.selected = selected?.key || null;
+    root.querySelectorAll('[data-statistics-status]').forEach(button => {
+      const active = button.dataset.statisticsStatus === view.selected;
+      button.setAttribute('aria-expanded', String(active));
+      button.classList.toggle('is-selected', active);
+    });
+    panel.hidden = !selected;
+    if (!selected) {
+      panel.innerHTML = '';
+      if (focus && previous) root.querySelector(`.stats-status-button[data-statistics-status="${previous}"]`)?.focus({ preventScroll: true });
+      return;
+    }
+    const rows = view.model.rows.filter(row => row.state === key).sort((a, b) => b.date.localeCompare(a.date));
+    panel.innerHTML = `<header><div><h3 id="statsPaymentDetailsTitle" tabindex="-1">${selected.label}</h3><p>${files(rows.length)} · ${esc(view.model.label)} · Invoices and claims</p></div><button type="button" class="stats-details-close" data-statistics-close aria-label="Close status files">Close</button></header>
+      ${rows.length ? `<ul class="stats-file-list">${rows.map(row => `<li><div class="stats-file-top"><span class="stats-file-kind">${row.kind === 'invoice' ? 'Invoice' : 'Claim'}</span><strong>${row.known ? currency(row.cents) : 'Amount pending'}</strong></div>
+        ${row.fileUrl ? `<a href="${esc(row.fileUrl)}" target="_blank" rel="noopener noreferrer">${esc(row.filename)}<span class="sr-only"> (opens in a new tab)</span></a>` : `<strong class="stats-file-name">${esc(row.filename)}</strong>`}
+        <p>${esc(row.eventName)} · ${esc(row.companyName)}</p><small>Submitted ${Number(row.date.slice(8, 10))} ${months[Number(row.date.slice(5, 7)) - 1]} ${row.date.slice(0, 4)}</small>
+        ${row.denialReason ? `<p class="stats-file-reason">Reason: ${esc(row.denialReason)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="stats-details-empty">No invoices or claims with this status in the selected period.</p>'}`;
+    if (focus) {
+      panel.querySelector('h3').focus({ preventScroll: true });
+      panel.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    }
   }
 
   function render(root, companies, selection) {
     if (!root) return;
     const model = build(companies, selection);
     if (!model) {
+      views.delete(root);
       root.innerHTML = '<div class="stats-empty" role="status">Choose a valid period to see your statistics.</div>';
       return;
     }
     const tableOpen = root.querySelector('[data-statistics-table]')?.open;
+    const selectedStatus = views.get(root)?.selected;
+    views.set(root, { model, selected: null });
     const accepted = model.invoice + model.claim;
     const received = model.summary.received;
     const approved = model.summary.approved;
@@ -242,6 +291,7 @@ const WorkerStatistics = (() => {
         <div><strong>${accepted ? Math.round(percent(received.cents, accepted)) : 0}%</strong><span>receipt confirmed<small>Of approved / paid value</small></span></div>
       </div><button type="button" class="secondary-button" data-statistics-events>Go to My Events</button></section>
       ${notes.length ? `<aside class="stats-notes" aria-label="About these statistics">${notes.map(note => `<p>${esc(note)}</p>`).join('')}</aside>` : ''}`;
+    if (selectedStatus) selectStatus(root, selectedStatus, false);
   }
-  return { dateKey, years, build, render };
+  return { dateKey, years, build, render, selectStatus };
 })();

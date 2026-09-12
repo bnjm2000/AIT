@@ -59,6 +59,8 @@ const workforceDocumentsState = {
   kind: 'all',
   includeFullTime: false,
   search: '',
+  sortBy: 'event',
+  sortDirection: 'desc',
   page: 1,
   pageSize: 50,
   pageCount: 1,
@@ -626,6 +628,29 @@ const WF_DOCUMENT_STATUS_FILTERS = [
   ['denied', 'Denied']
 ];
 
+const WF_DOCUMENT_SORT_FIELDS = new Set(['event', 'uploader', 'submitted', 'status']);
+
+function wfDocumentSortDirectionLabel(sortBy, direction) {
+  const ascending = direction === 'asc';
+  if (sortBy === 'event') return ascending ? 'Oldest event first' : 'Newest event first';
+  if (sortBy === 'uploader') return ascending ? 'A to Z' : 'Z to A';
+  if (sortBy === 'submitted') return ascending ? 'Oldest first' : 'Newest first';
+  return ascending ? 'Workflow order' : 'Reverse workflow';
+}
+
+function wfDocumentSortHeader(sortBy, label) {
+  const active = workforceDocumentsState.sortBy === sortBy;
+  const direction = active ? workforceDocumentsState.sortDirection : '';
+  const nextDirection = active && direction === 'asc' ? 'desc' : 'asc';
+  const currentLabel = active ? wfDocumentSortDirectionLabel(sortBy, direction) : '';
+  return `<button class="wf-document-sort-header ${active ? 'is-active' : ''}" type="button"
+    onclick="wfDocumentsSetSort('${sortBy}')" aria-pressed="${active}"
+    title="${wfAttr(active ? `Sorted ${currentLabel}. Click to reverse.` : `Sort by ${label}`)}">
+    <span>${wfEscape(label)}</span><i aria-hidden="true">${active ? (direction === 'asc' ? '&uarr;' : '&darr;') : '&harr;'}</i>
+    <span class="sr-only">${active ? `Sorted ${direction}. Activate for ${nextDirection}.` : `Activate to sort by ${label}.`}</span>
+  </button>`;
+}
+
 function wfDocumentStatusClass(statusKey) {
   return {
     'awaiting-upload': 'status-awaiting-upload',
@@ -698,7 +723,6 @@ function ensureWorkforceDocumentsLayout() {
         <h2>Invoices &amp; Claims</h2>
         <p id="wfDocumentsScope">Review every worker and vendor upload across your company.</p>
       </div>
-      <div class="wf-documents-sort-note">Newest event dates first, then uploader name</div>
     </div>
     <div class="wf-document-metrics" id="wfDocumentMetrics"></div>
     <section class="wf-panel wf-documents-panel">
@@ -744,7 +768,9 @@ async function loadWorkforceDocumentsPage(options = {}) {
   const params = new URLSearchParams({
     page: String(workforceDocumentsState.page),
     pageSize: String(workforceDocumentsState.pageSize),
-    kind: workforceDocumentsState.kind
+    kind: workforceDocumentsState.kind,
+    sort: workforceDocumentsState.sortBy,
+    direction: workforceDocumentsState.sortDirection
   });
   if (Number(workforceDocumentsState.eventId || 0) > 0) {
     params.set('eventId', String(Number(workforceDocumentsState.eventId)));
@@ -821,7 +847,7 @@ function renderWorkforceDocumentsPage() {
     }).join('');
 
   list.innerHTML = `<div class="wf-documents-list-head">
-      <span>Event</span><span>Uploader</span><span>File</span><span>Submitted</span><span>Amount</span><span>Status</span><span>Download</span>
+      ${wfDocumentSortHeader('event', 'Event')}${wfDocumentSortHeader('uploader', 'Uploader')}<span>File</span>${wfDocumentSortHeader('submitted', 'Submitted')}<span>Amount</span>${wfDocumentSortHeader('status', 'Status')}<span>Download</span>
     </div>` + (workforceDocumentsState.rows.length
       ? workforceDocumentsState.rows.map(wfDocumentEntry).join('')
       : `<div class="wf-documents-empty"><strong>No matching uploads</strong><span>Try another status, type, or search term.</span></div>`);
@@ -868,7 +894,7 @@ function wfDocumentRow(record) {
         ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
     </button>
     ${fileCell}
-    <div class="wf-document-submitted" data-label="Submitted"><strong>${awaitingUpload ? 'Not uploaded' : wfEscape(wfDateTime(record.submittedAt) || 'Unknown')}</strong></div>
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${awaitingUpload ? 'Not uploaded' : wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong></div>
     <div class="wf-document-amount" data-label="Amount"><strong>${awaitingUpload ? '-' : (record.amount == null ? 'To verify' : wfMoney(record.amount))}</strong></div>
     <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
     <div class="wf-document-download" data-label="Download">${downloadCell}</div>
@@ -877,6 +903,10 @@ function wfDocumentRow(record) {
 
 function wfDocumentEntry(record) {
   return record.isClaimGroup ? wfDocumentClaimGroup(record) : wfDocumentRow(record);
+}
+
+function wfDocumentSubmittedAt(record) {
+  return String(record?.submittedAt || record?.uploadedAt || record?.createdAt || '');
 }
 
 function wfDocumentDepartmentRoles(departmentDetails = []) {
@@ -898,7 +928,7 @@ function wfDocumentClaimGroupItem(record, index) {
       <span><span class="wf-file-title"><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || 'Claim upload')}</strong>${wfClaimCategoryBadge(record)}</span>
         <small class="wf-claim-date">${wfClaimDate(record)}</small></span>
     </button>
-    <div class="wf-document-submitted" data-label="Submitted"><strong>${wfEscape(wfDateTime(record.submittedAt) || 'Unknown')}</strong></div>
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong></div>
     <div class="wf-document-amount" data-label="Amount"><strong>${record.amount == null ? 'To verify' : wfMoney(record.amount)}</strong></div>
     <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
     <div class="wf-document-download" data-label="Download"><a class="wf-icon-button" href="${wfAttr(record.downloadUrl)}" download
@@ -924,7 +954,7 @@ function wfDocumentClaimGroup(group) {
   const groupKey = `documents-${wfClaimGroupControlId(event.id, subject.id)}`;
   const reviewedCount = claims.filter(record => record.verifiedAt).length;
   const submittedAt = claims.reduce((latest, record) => {
-    const value = String(record.submittedAt || '');
+    const value = wfDocumentSubmittedAt(record);
     return value > latest ? value : latest;
   }, '');
   return `<section class="wf-document-claim-group" id="wfDocumentClaimGroup-${wfAttr(groupKey)}"
@@ -995,6 +1025,22 @@ function renderWorkforceDocumentsPagination(node) {
 
 function wfDocumentsSetKind(kind) {
   workforceDocumentsState.kind = ['invoice', 'claim'].includes(kind) ? kind : 'all';
+  workforceDocumentsState.page = 1;
+  loadWorkforceDocumentsPage();
+}
+
+function wfDocumentsSetSort(sortBy) {
+  const validSort = WF_DOCUMENT_SORT_FIELDS.has(sortBy) ? sortBy : 'event';
+  if (workforceDocumentsState.sortBy === validSort) {
+    workforceDocumentsState.sortDirection = workforceDocumentsState.sortDirection === 'asc'
+      ? 'desc'
+      : 'asc';
+  } else {
+    workforceDocumentsState.sortBy = validSort;
+    workforceDocumentsState.sortDirection = ['uploader', 'status'].includes(validSort)
+      ? 'asc'
+      : 'desc';
+  }
   workforceDocumentsState.page = 1;
   loadWorkforceDocumentsPage();
 }
@@ -5283,8 +5329,11 @@ function updateWorkforceExpectedComparison() {
   if (Math.abs(difference) <= 0.01) {
     resultNode.textContent = 'Match';
     resultNode.classList.add('is-match');
+  } else if (difference < 0) {
+    resultNode.textContent = `${wfMoney(Math.abs(difference))} under expected`;
+    resultNode.classList.add('is-under');
   } else {
-    resultNode.textContent = `${difference > 0 ? '+' : '-'}${wfMoney(Math.abs(difference))} difference`;
+    resultNode.textContent = `${wfMoney(difference)} over expected`;
     resultNode.classList.add('is-difference');
   }
 }

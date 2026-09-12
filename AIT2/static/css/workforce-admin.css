@@ -355,13 +355,6 @@
   font-weight: 500;
 }
 
-.wf-documents-sort-note {
-  color: var(--wf-muted);
-  font-size: 10px;
-  font-weight: 700;
-  text-align: right;
-}
-
 .wf-document-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -656,6 +649,46 @@
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.wf-document-sort-header {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px 0;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.wf-document-sort-header i {
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.wf-document-sort-header:hover,
+.wf-document-sort-header:focus-visible,
+.wf-document-sort-header.is-active {
+  color: var(--wf-brand-dark);
+  outline: 0;
+}
+
+.wf-document-sort-header:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .12);
+}
+
+.wf-document-sort-header.is-active i {
+  color: var(--wf-brand-dark);
 }
 
 .wf-document-row {
@@ -2709,6 +2742,12 @@ button.wf-calendar-day.selected.has-conflict:hover {
   color: #166534;
 }
 
+.wf-amount-match.is-under {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .wf-amount-match.is-difference {
   border-color: #fecaca;
   background: #fff1f2;
@@ -4365,7 +4404,27 @@ button.wf-directory-row {
   }
 
   .wf-documents-list-head {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 7px 10px;
+  }
+
+  .wf-documents-list-head > span {
     display: none;
+  }
+
+  .wf-document-sort-header {
+    flex: 0 0 auto;
+    border: 1px solid #dbe3ea;
+    border-radius: 999px;
+    background: #fff;
+    padding: 5px 9px;
+  }
+
+  .wf-document-sort-header.is-active {
+    border-color: #99d5ca;
+    background: #ecfdf5;
   }
 
   .wf-document-row {
@@ -4589,10 +4648,6 @@ button.wf-directory-row {
 
   .wf-manpower-heading-actions .wf-view-switch {
     align-self: flex-end;
-  }
-
-  .wf-documents-sort-note {
-    text-align: left;
   }
 
   .wf-document-metrics {

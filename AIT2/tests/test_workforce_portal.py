@@ -230,7 +230,7 @@ class WorkforcePortalTests(unittest.TestCase):
                         "claims": [{
                             "id": "claim-a",
                             "originalName": "amy-claim.pdf",
-                            "submittedAt": "2026-07-10T09:00:00+08:00",
+                            "createdAt": "2026-07-10T09:00:00+08:00",
                             "status": "Approved",
                             "amount": 30,
                         }],
@@ -307,11 +307,77 @@ class WorkforcePortalTests(unittest.TestCase):
             ["claim-paid"],
         )
 
+        sort_cases = (
+            (
+                "event",
+                "asc",
+                ["claim-a", "awaiting-upload:143:worker-b", "claim-paid", "invoice-z", "invoice-later"],
+            ),
+            (
+                "uploader",
+                "asc",
+                ["invoice-later", "claim-a", "awaiting-upload:143:worker-b", "claim-paid", "invoice-z"],
+            ),
+            (
+                "submitted",
+                "desc",
+                ["invoice-later", "claim-paid", "invoice-z", "claim-a", "awaiting-upload:143:worker-b"],
+            ),
+            (
+                "status",
+                "asc",
+                ["awaiting-upload:143:worker-b", "invoice-later", "invoice-z", "claim-a", "claim-paid"],
+            ),
+        )
+        for sort_by, direction, expected_ids in sort_cases:
+            with self.subTest(sort_by=sort_by, direction=direction):
+                sorted_data = self.client.get(
+                    "/api/workforce/submissions",
+                    query_string={
+                        "status": "all",
+                        "sort": sort_by,
+                        "direction": direction,
+                    },
+                ).get_json()["data"]
+                self.assertEqual(
+                    [row["id"] for row in sorted_data["rows"]],
+                    expected_ids,
+                )
+                self.assertEqual(sorted_data["sortBy"], sort_by)
+                self.assertEqual(sorted_data["sortDirection"], direction)
+        self.assertEqual(
+            self.client.get(
+                "/api/workforce/submissions",
+                query_string={"status": "all", "sort": "submitted"},
+            ).get_json()["data"]["rows"][3]["submittedAt"],
+            "2026-07-10T09:00:00+08:00",
+        )
+
         self.login("normal", False)
         self.assertEqual(
             self.client.get("/api/workforce/submissions").status_code,
             403,
         )
+
+    def test_admin_submission_queue_has_clickable_sort_headers(self):
+        source = (
+            Path(app_module.__file__).parent
+            / "static"
+            / "js"
+            / "workforce-admin.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function wfDocumentSortHeader(sortBy, label)", source)
+        self.assertIn("wfDocumentSortHeader('event', 'Event')", source)
+        self.assertIn("wfDocumentSortHeader('uploader', 'Uploader')", source)
+        self.assertIn("wfDocumentSortHeader('submitted', 'Submitted')", source)
+        self.assertIn("wfDocumentSortHeader('status', 'Status')", source)
+        self.assertIn("sort: workforceDocumentsState.sortBy", source)
+        self.assertIn("direction: workforceDocumentsState.sortDirection", source)
+        self.assertIn("function wfDocumentsSetSort(sortBy)", source)
+        self.assertIn("workforceDocumentsState.sortBy === validSort", source)
+        self.assertNotIn('id="wfDocumentsSort"', source)
+        self.assertNotIn("function wfDocumentsToggleSortDirection()", source)
 
     def test_manager_can_review_one_event_but_not_the_company_submission_queue(self):
         self.login("manager", True)
@@ -578,6 +644,29 @@ class WorkforcePortalTests(unittest.TestCase):
             source,
         )
         self.assertIn('/api/workforce/submissions/bulk-status', source)
+
+    def test_invoice_review_marks_under_expected_amounts_blue(self):
+        static_root = Path(app_module.__file__).parent / "static"
+        source = (static_root / "js" / "workforce-admin.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (static_root / "css" / "workforce-admin.css").read_text(
+            encoding="utf-8"
+        )
+        comparison = source.split(
+            "function updateWorkforceExpectedComparison()", 1
+        )[1].split("async function openWorkforceReview", 1)[0]
+        under_style = styles.split(
+            ".wf-amount-match.is-under", 1
+        )[1].split("}", 1)[0]
+
+        self.assertIn("else if (difference < 0)", comparison)
+        self.assertIn("under expected", comparison)
+        self.assertIn("classList.add('is-under')", comparison)
+        self.assertIn("over expected", comparison)
+        self.assertIn("classList.add('is-difference')", comparison)
+        self.assertIn("background: #eff6ff", under_style)
+        self.assertIn("color: #1d4ed8", under_style)
 
     def test_worker_history_group_header_prefers_positive_invoice_status(self):
         source_path = os.path.join(
