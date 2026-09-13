@@ -2323,6 +2323,62 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(self.client.get('/products').status_code, 302)
 
+    def test_zero_inventory_products_are_not_listed_or_suggested(self):
+        finance_data = app_module._load_finance_data()
+        stored_product = {
+            'description': 'Subwoofer',
+            'productLabel': 'L-Acoustics SB18 III Subwoofer',
+            'productCategory': 'Audio Department',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'brand': 'L-Acoustics',
+            'model': 'SB18 III',
+            'unitPrice': 400,
+            'uom': 'units',
+        }
+        finance_data.setdefault('priceBook', {})[
+            'product::inventory:ax|l-acoustics|sb18 iii'
+        ] = stored_product
+        finance_data['priceBook']['product::asset:ax#01'] = stored_product
+        app_module._save_finance_data(finance_data)
+
+        original_quantity = app_module._asset_inventory_quantity
+
+        def inventory_quantity(asset):
+            if getattr(asset, 'asset_id', '') == 'AX#01':
+                return 0
+            return original_quantity(asset)
+
+        with patch.object(
+            app_module,
+            '_asset_inventory_quantity',
+            side_effect=inventory_quantity,
+        ):
+            products = self.client.get('/api/finance/products').get_json()['data']
+            suggestions = self.client.get(
+                '/api/finance/catalog', query_string={'query': 'SB18'},
+            ).get_json()['data']
+
+        self.assertFalse(any(row.get('model') == 'SB18 III' for row in products))
+        self.assertFalse(any(row.get('model') == 'SB18 III' for row in suggestions))
+        self.assertTrue(any(row.get('model') == 'Spiider' for row in products))
+        remaining_keys = {
+            key.casefold()
+            for key in app_module._load_finance_data()['priceBook']
+        }
+        self.assertNotIn(
+            'product::inventory:ax|l-acoustics|sb18 iii', remaining_keys
+        )
+        self.assertNotIn('product::asset:ax#01', remaining_keys)
+
+        restored = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'SB18'},
+        ).get_json()['data']
+        restored_product = next(
+            row for row in restored if row.get('model') == 'SB18 III'
+        )
+        self.assertEqual(restored_product['unitPrice'], 0)
+
     def test_product_price_changes_only_apply_to_future_quotation_additions(self):
         original_product = next(
             row for row in self.client.get('/api/finance/products').get_json()['data']

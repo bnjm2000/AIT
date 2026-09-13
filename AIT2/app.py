@@ -41620,7 +41620,15 @@ def _finance_rate_card_rows(finance_data):
             'isCustom': base_key.startswith('custom:'),
         }, base_key)
 
-    return sorted(rows.values(), key=lambda row: (
+    visible_rows = [
+        row for row in rows.values()
+        if (
+            row.get('isCustom')
+            or row.get('isContainer')
+            or _safe_float(row.get('availableQuantity'), 0) > 0
+        )
+    ]
+    return sorted(visible_rows, key=lambda row: (
         str(row.get('productCategory') or row.get('department') or '').casefold(),
         ' '.join((
             str(row.get('brand') or ''),
@@ -41628,6 +41636,75 @@ def _finance_rate_card_rows(finance_data):
             str(row.get('description') or ''),
         )).casefold(),
     ))
+
+
+def _finance_prune_unavailable_inventory_products(finance_data, rows):
+    """Permanently discard saved product data with no inventory behind it."""
+    price_book = finance_data.get('priceBook')
+    if not isinstance(price_book, dict):
+        return 0
+
+    inventory_rows = [
+        row for row in rows
+        if not row.get('isCustom') and not row.get('isContainer')
+        and _safe_float(row.get('availableQuantity'), 0) > 0
+    ]
+    active_catalog_keys = {
+        str(row.get('catalogKey') or '').strip().casefold()
+        for row in inventory_rows
+        if str(row.get('catalogKey') or '').strip()
+    }
+    active_asset_ids = {
+        str(asset_id or '').strip().casefold()
+        for row in inventory_rows
+        for asset_id in (row.get('sourceAssetIds') or [])
+        if str(asset_id or '').strip()
+    }
+    active_signatures = {
+        (
+            _normalise_department_code(
+                row.get('departmentCode') or row.get('department')
+            ),
+            str(row.get('brand') or '').strip().casefold(),
+            str(row.get('model') or '').strip().casefold(),
+        )
+        for row in inventory_rows
+    }
+
+    removed = 0
+    for stored_key, payload in list(price_book.items()):
+        if not isinstance(payload, dict):
+            continue
+        base_key = str(stored_key or '').split('::', 1)[-1].strip()
+        normalized_key = base_key.casefold()
+        if normalized_key.startswith(('custom:', 'container:')):
+            continue
+        if normalized_key.startswith('asset:'):
+            if normalized_key.removeprefix('asset:') not in active_asset_ids:
+                price_book.pop(stored_key, None)
+                removed += 1
+            continue
+
+        signature = (
+            _normalise_department_code(
+                payload.get('departmentCode') or payload.get('department')
+            ),
+            str(payload.get('brand') or '').strip().casefold(),
+            str(payload.get('model') or '').strip().casefold(),
+        )
+        is_inventory_record = (
+            normalized_key.startswith('inventory:')
+            or ('|' in normalized_key and bool(signature[1] or signature[2]))
+        )
+        if not is_inventory_record:
+            continue
+        if (
+            normalized_key not in active_catalog_keys
+            and signature not in active_signatures
+        ):
+            price_book.pop(stored_key, None)
+            removed += 1
+    return removed
 
 
 def _finance_remembered_price(price_book, catalog_key, asset_ids):
@@ -46269,8 +46346,12 @@ def finance_catalog():
     query = str(request.args.get('query') or '').strip().lower()
     with _finance_lock:
         finance_data = _load_finance_data()
-        price_book = finance_data.get('priceBook') or {}
         rate_card_rows = _finance_rate_card_rows(finance_data)
+        if _finance_prune_unavailable_inventory_products(
+            finance_data, rate_card_rows
+        ):
+            _save_finance_data(finance_data)
+        price_book = finance_data.get('priceBook') or {}
         products_by_catalog_key = {
             str(row.get('catalogKey') or '').casefold(): row
             for row in rate_card_rows
@@ -46575,9 +46656,11 @@ def finance_catalog():
 def finance_rate_card():
     with _finance_lock:
         finance_data = _load_finance_data()
+        rows = _finance_rate_card_rows(finance_data)
+        if _finance_prune_unavailable_inventory_products(finance_data, rows):
+            _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().casefold()
-            rows = _finance_rate_card_rows(finance_data)
             if query:
                 rows = [
                     row for row in rows
