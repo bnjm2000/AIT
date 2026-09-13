@@ -2644,9 +2644,9 @@ class FinanceFeatureTests(unittest.TestCase):
             'unitPrice': 480,
             'discountPercent': 0,
         }]
-        saved = self.client.put(
+        self.client.put(
             f"/api/quotations/{quotation['id']}", json=quotation,
-        ).get_json()['data']
+        )
         saved['lineItems'] = []
         removed = self.client.put(
             f"/api/quotations/{quotation['id']}", json=saved,
@@ -8358,6 +8358,48 @@ class FinanceFeatureTests(unittest.TestCase):
         )[1].split('async function financeFlushPendingSave', 1)[0]
 
         self.assertNotIn('financeSynchroniseLinkedSubprojects(', save_source)
+
+    def test_category_collapse_state_is_saved_per_subproject(self):
+        quotation = self.create_quote('Remember Category Collapse')
+        quotation['subprojects'] = [
+            {
+                'id': 'main',
+                'name': 'Ballroom',
+                'collapsedCategories': [
+                    'Audio System', ' audio system ', '', 'Lighting System',
+                ],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'collapsedCategories': ['Video System'],
+            },
+        ]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        reloaded = self.client.get(
+            f"/api/quotations/{quotation['id']}",
+        ).get_json()['data']
+
+        self.assertEqual(
+            reloaded['subprojects'][0]['collapsedCategories'],
+            ['Audio System', 'Lighting System'],
+        )
+        self.assertEqual(
+            reloaded['subprojects'][1]['collapsedCategories'],
+            ['Video System'],
+        )
+
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        toggle_source = source.split(
+            'function financeToggleDepartmentCollapse', 1,
+        )[1].split('async function financeRenameDepartment', 1)[0]
+        self.assertIn('subproject.collapsedCategories = existing', toggle_source)
+        self.assertIn(
+            'financeQueueSave({ sourceSubprojectId: subprojectId });',
+            toggle_source,
+        )
 
     def test_set_uom_round_trips_and_exports_with_display_label(self):
         quotation = self.create_quote('Set UOM')

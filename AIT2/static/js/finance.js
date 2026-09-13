@@ -71,7 +71,6 @@ const financeState = {
   contextSubprojectId: '',
   salespersonReassignmentTarget: null,
   addDepartment: '',
-  collapsedDepartments: {},
   dragLineIndex: null,
   dragLineIndexes: [],
   dragWholeLineGroup: false,
@@ -2796,12 +2795,23 @@ function financeApplyLockedTotalAdjustment(document = financeState.current) {
   ];
 }
 
-function financeDepartmentCollapseKey(department, document = financeState.current) {
-  return `${document?.id || 'current'}::${financeCurrentSubprojectId(document)}::${department}`;
+function financeSubprojectCollapsedCategories(
+  document = financeState.current,
+  subprojectId = financeCurrentSubprojectId(document)
+) {
+  const subproject = financeSubprojects(document).find(row => (
+    String(row.id || '') === String(subprojectId || '')
+  ));
+  return Array.isArray(subproject?.collapsedCategories)
+    ? subproject.collapsedCategories
+    : [];
 }
 
 function financeIsDepartmentCollapsed(department) {
-  return !!financeState.collapsedDepartments[financeDepartmentCollapseKey(department)];
+  const target = String(department || '').trim().toLocaleLowerCase();
+  return financeSubprojectCollapsedCategories().some(value => (
+    String(value || '').trim().toLocaleLowerCase() === target
+  ));
 }
 
 function financeStatusLabel(status) {
@@ -6937,8 +6947,21 @@ async function financeDeleteSubproject(subprojectId) {
 
 function financeToggleDepartmentCollapse(encodedDepartment) {
   const department = decodeURIComponent(encodedDepartment);
-  const key = financeDepartmentCollapseKey(department);
-  financeState.collapsedDepartments[key] = !financeState.collapsedDepartments[key];
+  const document = financeState.current;
+  const subprojectId = financeCurrentSubprojectId(document);
+  const subproject = financeSubprojects(document).find(row => (
+    String(row.id || '') === String(subprojectId || '')
+  ));
+  if (!document || !subproject || !department) return;
+  const target = department.toLocaleLowerCase();
+  const existing = financeSubprojectCollapsedCategories(document, subprojectId)
+    .filter(value => String(value || '').trim().toLocaleLowerCase() !== target);
+  if (!financeIsDepartmentCollapsed(department)) existing.push(department);
+  if (existing.length) subproject.collapsedCategories = existing;
+  else delete subproject.collapsedCategories;
+  if (!financeState.snapshotMode) {
+    financeQueueSave({ sourceSubprojectId: subprojectId });
+  }
   financeRenderEditor();
 }
 
@@ -6974,11 +6997,17 @@ async function financeRenameDepartment(encodedDepartment) {
       row.department = nextName;
     }
   });
-  const oldCollapseKey = financeDepartmentCollapseKey(currentName, document);
-  const nextCollapseKey = financeDepartmentCollapseKey(nextName, document);
-  if (Object.prototype.hasOwnProperty.call(financeState.collapsedDepartments, oldCollapseKey)) {
-    financeState.collapsedDepartments[nextCollapseKey] = financeState.collapsedDepartments[oldCollapseKey];
-    delete financeState.collapsedDepartments[oldCollapseKey];
+  const subproject = financeSubprojects(document).find(row => (
+    String(row.id || '') === String(subprojectId)
+  ));
+  if (Array.isArray(subproject?.collapsedCategories)) {
+    subproject.collapsedCategories = [...new Set(
+      subproject.collapsedCategories.map(value => (
+        String(value || '').trim().toLocaleLowerCase() === currentName.toLocaleLowerCase()
+          ? nextName
+          : value
+      )).filter(Boolean)
+    )];
   }
   financeSyncDocumentDepartments(document);
   financeQueueSave();

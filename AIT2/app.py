@@ -36446,6 +36446,21 @@ def _normalise_finance_subprojects(value, lines):
             'id': subproject_id,
             'name': str(row.get('name') or '').strip()[:160] or f'Room {index + 1}',
         }
+        collapsed_categories = []
+        collapsed_seen = set()
+        for category in (
+            row.get('collapsedCategories')
+            if isinstance(row.get('collapsedCategories'), list)
+            else []
+        )[:200]:
+            category_name = re.sub(r'\s+', ' ', str(category or '').strip())[:240]
+            category_key = category_name.casefold()
+            if not category_name or category_key in collapsed_seen:
+                continue
+            collapsed_seen.add(category_key)
+            collapsed_categories.append(category_name)
+        if collapsed_categories:
+            subproject['collapsedCategories'] = collapsed_categories
         if linked_group_id:
             subproject['linkedGroupId'] = linked_group_id
         result.append(subproject)
