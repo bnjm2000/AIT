@@ -2444,6 +2444,7 @@ class CostingFeatureTests(unittest.TestCase):
 
         quote['subprojects'] = [{'id': 'main', 'name': 'Ballroom'}]
         quote['lineItems'] = [combined]
+        quote['_deletedSubprojectIds'] = ['breakout']
         updated = self.client.put(
             f"/api/quotations/{quote['id']}", json=quote,
         )
@@ -2455,6 +2456,180 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertEqual(
             {row['id'] for row in costing_after_quote['lineItems']},
             {'self-split', 'vendor-split'},
+        )
+
+    def test_quotation_save_cannot_collapse_subprojects_or_reassign_all_items(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Protected multi-room quote',
+            'subprojects': [
+                {'id': 'main', 'name': 'Main Plenary'},
+                {'id': 'breakout', 'name': 'Breakout Room'},
+            ],
+            'lineItems': [{
+                'id': 'main-line',
+                'description': 'Main PA',
+                'department': 'Audio',
+                'systemName': 'Audio',
+                'subprojectId': 'main',
+                'quantity': 1,
+                'days': 1,
+                'total': 100,
+            }, {
+                'id': 'breakout-line',
+                'description': 'Breakout PA',
+                'department': 'Audio',
+                'systemName': 'Audio',
+                'subprojectId': 'breakout',
+                'quantity': 1,
+                'days': 1,
+                'total': 50,
+            }],
+            'headerRows': [{
+                'id': 'breakout-header',
+                'content': 'Breakout location',
+                'beforeLineId': 'breakout-line',
+                'subprojectId': 'breakout',
+            }],
+        }).get_json()['data']
+
+        collapsed = json.loads(json.dumps(quotation))
+        collapsed['subprojects'] = [{'id': 'main', 'name': 'Main Room'}]
+        collapsed['headerRows'] = []
+        collapsed['showUnitPrices'] = not collapsed['showUnitPrices']
+        for line in collapsed['lineItems']:
+            line['subprojectId'] = 'main'
+        blocked = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=collapsed,
+        )
+        self.assertEqual(blocked.status_code, 409, blocked.get_data(as_text=True))
+        self.assertEqual(
+            blocked.get_json()['code'], 'subproject_structure_conflict'
+        )
+
+        saved = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(
+            [row['id'] for row in saved['subprojects']],
+            ['main', 'breakout'],
+        )
+        self.assertEqual(
+            {row['id']: row['subprojectId'] for row in saved['lineItems']},
+            {'main-line': 'main', 'breakout-line': 'breakout'},
+        )
+        self.assertEqual(
+            saved['headerRows'][0]['subprojectId'], 'breakout'
+        )
+
+        assignment_only = json.loads(json.dumps(saved))
+        for line in assignment_only['lineItems']:
+            line['subprojectId'] = 'main'
+        blocked_assignment = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=assignment_only,
+        )
+        self.assertEqual(
+            blocked_assignment.status_code,
+            409,
+            blocked_assignment.get_data(as_text=True),
+        )
+        self.assertEqual(
+            blocked_assignment.get_json()['code'],
+            'subproject_structure_conflict',
+        )
+
+    def test_costing_save_cannot_collapse_linked_subprojects(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Protected multi-room costing',
+            'subprojects': [
+                {'id': 'main', 'name': 'Main Plenary'},
+                {'id': 'breakout', 'name': 'Breakout Room'},
+            ],
+            'lineItems': [{
+                'id': 'main-line',
+                'description': 'Main PA',
+                'department': 'Audio',
+                'systemName': 'Audio',
+                'subprojectId': 'main',
+                'quantity': 1,
+                'days': 1,
+                'total': 100,
+            }, {
+                'id': 'breakout-line',
+                'description': 'Breakout PA',
+                'department': 'Audio',
+                'systemName': 'Audio',
+                'subprojectId': 'breakout',
+                'quantity': 1,
+                'days': 1,
+                'total': 50,
+            }],
+        }).get_json()['data']
+        costing_id = quotation['sourceCostingId']
+        costing = self.client.get(
+            f'/api/costings/{costing_id}'
+        ).get_json()['data']
+        costing['subprojects'] = [{'id': 'main', 'name': 'Main Room'}]
+        costing['eventLocation'] = 'Layout edit made during a quick switch'
+        for line in costing['lineItems']:
+            line['subprojectId'] = 'main'
+
+        blocked = self.client.put(
+            f'/api/costings/{costing_id}', json=costing,
+        )
+        self.assertEqual(blocked.status_code, 409, blocked.get_data(as_text=True))
+        self.assertEqual(
+            blocked.get_json()['code'], 'subproject_structure_conflict'
+        )
+
+        saved_costing = self.client.get(
+            f'/api/costings/{costing_id}'
+        ).get_json()['data']
+        saved_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        for saved in (saved_costing, saved_quote):
+            self.assertEqual(
+                [row['id'] for row in saved['subprojects']],
+                ['main', 'breakout'],
+            )
+            self.assertEqual(
+                {row['id']: row['subprojectId'] for row in saved['lineItems']},
+                {'main-line': 'main', 'breakout-line': 'breakout'},
+            )
+
+    def test_subproject_delete_token_cannot_authorize_item_reassignment(self):
+        self.login('owner')
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Protected explicit deletion',
+            'subprojects': [
+                {'id': 'main', 'name': 'Main Plenary'},
+                {'id': 'breakout', 'name': 'Breakout Room'},
+            ],
+            'lineItems': [{
+                'id': 'main-line',
+                'description': 'Main PA',
+                'department': 'Audio',
+                'subprojectId': 'main',
+            }, {
+                'id': 'breakout-line',
+                'description': 'Breakout PA',
+                'department': 'Audio',
+                'subprojectId': 'breakout',
+            }],
+        }).get_json()['data']
+        quotation['subprojects'] = [{'id': 'main', 'name': 'Main Plenary'}]
+        quotation['_deletedSubprojectIds'] = ['breakout']
+        for line in quotation['lineItems']:
+            line['subprojectId'] = 'main'
+
+        blocked = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(blocked.status_code, 409, blocked.get_data(as_text=True))
+        self.assertEqual(
+            blocked.get_json()['code'], 'subproject_structure_conflict'
         )
 
     def test_split_sale_rate_is_shared_unless_multiplier_differs(self):
@@ -2868,6 +3043,96 @@ class CostingFeatureTests(unittest.TestCase):
             self.assertEqual(line['groupItemTotal'], 243)
             self.assertEqual(line['groupItemPriceContribution'], 121.5)
             self.assertTrue(line['groupItemCommercialStored'])
+
+    def test_group_quantity_and_item_prices_are_expanded_in_costing(self):
+        self.login('owner')
+        shared = {
+            'department': 'Audio',
+            'systemName': 'Audio',
+            'subprojectId': 'main',
+            'days': 2,
+            'quantity': 2,
+            'uom': 'lot',
+            'unitPrice': 55,
+            'discountPercent': 0,
+            'totalMode': 'amount',
+            'groupId': 'drum-package',
+            'groupTitle': 'Drum package',
+            'groupHeaderQuantity': 2,
+            'groupItemQuantity': 1,
+            'groupItemCommercialStored': True,
+        }
+        quotation = self.client.post('/api/quotations', json={
+            'projectName': 'Expanded group costing',
+            'lineItems': [{
+                **shared,
+                'id': 'rack-tom',
+                'description': 'Rack tom',
+                'groupLeader': True,
+                'groupItemUnitPrice': 25,
+                'groupItemPriceContribution': 25,
+                'total': 220,
+            }, {
+                **shared,
+                'id': 'floor-tom',
+                'description': 'Floor tom',
+                'groupLeader': False,
+                'groupItemUnitPrice': 30,
+                'groupItemPriceContribution': 30,
+                'total': 0,
+            }],
+        }).get_json()['data']
+
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        lines = {line['id']: line for line in costing['lineItems']}
+        self.assertEqual(lines['rack-tom']['salePrice'], 100)
+        self.assertEqual(lines['floor-tom']['salePrice'], 120)
+        self.assertTrue(all(
+            line['groupHeaderQuantity'] == 2 for line in lines.values()
+        ))
+        self.assertEqual(
+            app_module._costing_line_unit_sale(lines['rack-tom']), 25
+        )
+        self.assertEqual(
+            app_module._costing_line_unit_sale(lines['floor-tom']), 30
+        )
+
+        for line in costing['lineItems']:
+            line['itemCost'] = 10
+        saved = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        self.assertEqual(
+            [line['costTotal'] for line in saved.get_json()['data']['lineItems']],
+            [40, 40],
+        )
+        linked_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        grouped = [
+            line for line in linked_quote['lineItems']
+            if line.get('groupId') == 'drum-package'
+        ]
+        leader = next(line for line in grouped if line['groupLeader'])
+        self.assertEqual(leader['quantity'], 2)
+        self.assertEqual(leader['total'], 220)
+        self.assertEqual(sum(line['total'] for line in grouped), 220)
+
+        source = Path('static/js/costing.js').read_text(encoding='utf-8')
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        css_source = Path('static/css/costing.css').read_text(encoding='utf-8')
+        self.assertIn('function costingLineUnits(line)', source)
+        self.assertIn('class="costing-group-quantity"', source)
+        self.assertIn('function costingSetLineGroupQuantity(', source)
+        self.assertIn('costingLineUnits(line) * line.itemCost', source)
+        self.assertIn(
+            "const supportsGroupQuantity = mode === 'costing' || mode === 'delivery-order';",
+            finance_source,
+        )
+        self.assertIn('.costing-group-header-content {', css_source)
 
     def test_items_groups_and_headers_round_trip_between_open_documents(self):
         self.login('owner')

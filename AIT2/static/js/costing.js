@@ -129,8 +129,15 @@ function costingLineRecalculate(line, mode = 'cost') {
   }
   line.quantity = Math.max(0, costingNumber(line.quantity, 1));
   line.multiplier = Math.max(0, costingNumber(line.multiplier, 1));
+  if (line.groupId) {
+    line.groupItemQuantity = line.quantity;
+    line.groupHeaderQuantity = Math.max(
+      0,
+      costingNumber(line.groupHeaderQuantity, 1)
+    );
+  }
   line.itemCost = Math.max(0, costingNumber(line.itemCost));
-  line.costTotal = line.quantity * line.multiplier * line.itemCost;
+  line.costTotal = costingLineUnits(line) * line.itemCost;
   line.targetMarginPercent = Math.max(-100, Math.min(9999, costingNumber(line.targetMarginPercent, 20)));
   line.calculatedSalePrice = Math.max(0, line.costTotal * (1 + line.targetMarginPercent / 100));
   if (mode === 'margin-percent') {
@@ -341,16 +348,26 @@ function costingLineSaleGroupKey(line) {
   return nameKey ? `name:${nameKey}` : costingLineItemKey(line);
 }
 
+function costingLineGroupQuantity(line) {
+  return line?.groupId
+    ? Math.max(0, costingNumber(line.groupHeaderQuantity, 1))
+    : 1;
+}
+
+function costingLineUnits(line) {
+  return Math.max(0, costingNumber(line?.quantity))
+    * Math.max(0, costingNumber(line?.multiplier))
+    * costingLineGroupQuantity(line);
+}
+
 function costingLineUnitSale(line, field = 'salePrice') {
-  const divisor = Math.max(0, costingNumber(line?.quantity))
-    * Math.max(0, costingNumber(line?.multiplier));
+  const divisor = costingLineUnits(line);
   const total = Math.max(0, costingNumber(line?.[field]));
   return divisor ? total / divisor : total;
 }
 
 function costingLineStoredUnitSale(line) {
-  const divisor = Math.max(0, costingNumber(line?.quantity))
-    * Math.max(0, costingNumber(line?.multiplier));
+  const divisor = costingLineUnits(line);
   const total = line?.hiddenFromQuotation
     ? Math.max(0, costingNumber(line.quotationSalePriceBeforeHide))
     : Math.max(0, costingNumber(line?.salePrice));
@@ -363,8 +380,7 @@ function costingSetSaleGroupUnitPrice(index, unitPrice) {
   const groupKey = costingLineSaleGroupKey(source);
   costingLines().forEach(line => {
     if (line.hiddenFromQuotation || costingLineSaleGroupKey(line) !== groupKey) return;
-    const divisor = Math.max(0, costingNumber(line.quantity))
-      * Math.max(0, costingNumber(line.multiplier));
+    const divisor = costingLineUnits(line);
     line.salePrice = Math.round(
       Math.max(0, costingNumber(unitPrice)) * (divisor || 1) * 100
     ) / 100;
@@ -390,13 +406,11 @@ function costingEqualiseSaleGroups(lines) {
       (sum, line) => sum + Math.max(0, costingNumber(line.salePrice)), 0
     );
     const totalUnits = rows.reduce(
-      (sum, line) => sum + Math.max(0, costingNumber(line.quantity))
-        * Math.max(0, costingNumber(line.multiplier)), 0
+      (sum, line) => sum + costingLineUnits(line), 0
     );
     const unitPrice = totalUnits ? totalSale / totalUnits : totalSale / rows.length;
     rows.forEach(line => {
-      const divisor = Math.max(0, costingNumber(line.quantity))
-        * Math.max(0, costingNumber(line.multiplier));
+      const divisor = costingLineUnits(line);
       line.salePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
       costingLineRecalculate(line, 'sale');
     });
@@ -1263,8 +1277,7 @@ async function costingSplitLineFromMenu() {
   line.quantity = Math.round((currentQuantity - splitQuantity) * 10000) / 10000;
   clone.quantity = Math.round(splitQuantity * 10000) / 10000;
   [line, clone].forEach(row => {
-    const divisor = Math.max(0, costingNumber(row.quantity))
-      * Math.max(0, costingNumber(row.multiplier));
+    const divisor = costingLineUnits(row);
     const splitSalePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
     if (row.hiddenFromQuotation) {
       row.quotationSalePriceBeforeHide = splitSalePrice;
@@ -1342,8 +1355,7 @@ function costingLinkSameNamePricesFromMenu() {
   const unitPrice = costingLineUnitSale(source);
   matches.forEach(line => {
     line.pricingBindingId = '';
-    const divisor = Math.max(0, costingNumber(line.quantity))
-      * Math.max(0, costingNumber(line.multiplier));
+    const divisor = costingLineUnits(line);
     line.salePrice = Math.round(unitPrice * (divisor || 1) * 100) / 100;
     costingLineRecalculate(line, 'sale');
   });
@@ -1672,12 +1684,15 @@ function costingGroupedLinesMarkup(lines, readOnly, headerLayout = costingHeader
       const firstGroupIndex = lines.find(
         row => String(row.line.groupId || '') === groupId
       )?.index ?? index;
+      const encodedGroupId = encodeURIComponent(groupId);
+      const encodedSubprojectId = encodeURIComponent(line.subprojectId || 'main');
+      const groupQuantity = costingLineGroupQuantity(line);
       header = `<tr class="costing-line-group-header" data-costing-line="${firstGroupIndex}" data-group-boundary="before"
         oncontextmenu="financeEditLineGroup(event,'costing','${costingAttr(groupId)}')"
         ondragover="costingDragLineOver(event,${firstGroupIndex})"
         ondragleave="costingDragLineLeave(event)"
         ondrop="costingDropLine(event,${firstGroupIndex},'${costingAttr(encodeURIComponent(line.category || 'General'))}')"
-        ondragend="costingDragEnd()"><td colspan="12">${readOnly ? '' : `<span class="finance-drag-handle costing-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="costingDragLineGroupStart(event,'${costingAttr(groupId)}','${costingAttr(line.subprojectId || 'main')}')" ondragend="costingDragEnd()">&#9776;</span>`}<span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</td></tr>`;
+        ondragend="costingDragEnd()"><td colspan="12"><div class="costing-group-header-content"><div class="costing-group-heading">${readOnly ? '' : `<span class="finance-drag-handle costing-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="costingDragLineGroupStart(event,'${costingAttr(groupId)}','${costingAttr(line.subprojectId || 'main')}')" ondragend="costingDragEnd()">&#9776;</span>`}<span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</div><label class="costing-group-quantity"><span>Group qty</span><input type="number" min="0" step="1" value="${costingAttr(groupQuantity)}" aria-label="Group quantity" ${readOnly ? 'disabled' : ''} oninput="costingSetLineGroupQuantity('${costingAttr(encodedGroupId)}','${costingAttr(encodedSubprojectId)}',this.value)"></label></div></td></tr>`;
     }
     return customHeaders + header + costingLineMarkup(line, index, readOnly);
   }).join('');
@@ -1949,6 +1964,9 @@ function costingAttachLineToGroup(line, targetGroupId, targetSubprojectId) {
     groupTitle: leader.groupTitle || 'Group',
     groupDisplayFields: [...(leader.groupDisplayFields || ['brand', 'model', 'description'])],
     groupCustomText: false,
+    groupItemQuantity: Math.max(0, costingNumber(line.quantity, 1)),
+    groupHeaderQuantity: costingLineGroupQuantity(leader),
+    groupLeader: false,
     subprojectId: roomId,
     category: leader.category || 'General'
   });
@@ -2531,6 +2549,10 @@ async function costingDeleteSubproject(subprojectId) {
     variant: 'danger'
   });
   if (!confirmed) return;
+  costingState.current._deletedSubprojectIds = [...new Set([
+    ...(costingState.current._deletedSubprojectIds || []),
+    subprojectId
+  ])];
   costingState.current.subprojects = rows.filter(item => item.id !== subprojectId);
   costingState.current.lineItems = costingLines().filter(
     line => String(line.subprojectId || 'main') !== subprojectId
@@ -2605,8 +2627,7 @@ function costingLineInput(index, field, value) {
     }
     costingLineRecalculate(line, 'cost');
     if (line.hiddenFromQuotation && (field === 'quantity' || field === 'multiplier')) {
-      const divisor = Math.max(0, costingNumber(line.quantity))
-        * Math.max(0, costingNumber(line.multiplier));
+      const divisor = costingLineUnits(line);
       line.quotationSalePriceBeforeHide = Math.round(
         previousUnitSale * (divisor || 1) * 100
       ) / 100;
@@ -2614,8 +2635,7 @@ function costingLineInput(index, field, value) {
     if (followedCalculation) {
       costingLineRecalculate(line, 'margin-percent');
     } else if (field === 'quantity' || field === 'multiplier') {
-      const divisor = Math.max(0, costingNumber(line.quantity))
-        * Math.max(0, costingNumber(line.multiplier));
+      const divisor = costingLineUnits(line);
       line.salePrice = Math.round(previousUnitSale * (divisor || 1) * 100) / 100;
       costingLineRecalculate(line, 'sale');
     }
@@ -2626,12 +2646,43 @@ function costingLineInput(index, field, value) {
   costingRefreshCalculations();
 }
 
+function costingSetLineGroupQuantity(encodedGroupId, encodedSubprojectId, value) {
+  const groupId = decodeURIComponent(encodedGroupId);
+  const subprojectId = decodeURIComponent(encodedSubprojectId);
+  const quantity = Math.max(0, costingNumber(value, 1));
+  const members = costingLines().filter(line => (
+    String(line.groupId || '') === groupId
+    && String(line.subprojectId || 'main') === subprojectId
+  ));
+  if (!members.length) return;
+  members.forEach(line => {
+    const previousUnits = costingLineUnits(line);
+    const previousUnitSale = costingLineUnitSale(line);
+    const followedCalculation = Math.abs(
+      costingNumber(line.salePrice) - costingNumber(line.calculatedSalePrice)
+    ) < 0.005;
+    line.groupHeaderQuantity = quantity;
+    costingLineRecalculate(line, 'cost');
+    if (followedCalculation) {
+      costingLineRecalculate(line, 'margin-percent');
+    } else if (previousUnits > 0) {
+      line.salePrice = Math.round(
+        previousUnitSale * (costingLineUnits(line) || 1) * 100
+      ) / 100;
+      costingLineRecalculate(line, 'sale');
+    }
+  });
+  costingEqualiseSaleGroups(costingLines());
+  costingState.changeVersion += 1;
+  costingQueueSave();
+  costingRefreshCalculations();
+}
+
 function costingLineSale(index, value) {
   const line = costingLines()[index];
   if (!line) return;
   const totalSale = Math.max(0, costingNumber(value));
-  const divisor = Math.max(0, costingNumber(line.quantity))
-    * Math.max(0, costingNumber(line.multiplier));
+  const divisor = costingLineUnits(line);
   costingSetSaleGroupUnitPrice(index, divisor ? totalSale / divisor : totalSale);
   costingState.changeVersion += 1;
   costingQueueSave();
@@ -2666,7 +2717,7 @@ function costingLineCostTotal(index, value) {
     costingNumber(line.salePrice) - costingNumber(line.calculatedSalePrice)
   ) < 0.005;
   const targetTotal = Math.max(0, costingNumber(value));
-  const divisor = costingNumber(line.quantity) * costingNumber(line.multiplier);
+  const divisor = costingLineUnits(line);
   line.itemCost = divisor > 0
     ? Math.round((targetTotal / divisor) * 1000000) / 1000000
     : 0;
@@ -2771,8 +2822,7 @@ function costingApplyMultiplierAll(valueOverride, encodedCategory = '') {
     if (followedCalculation) {
       costingLineRecalculate(line, 'margin-percent');
     } else {
-      const divisor = Math.max(0, costingNumber(line.quantity))
-        * Math.max(0, costingNumber(line.multiplier));
+      const divisor = costingLineUnits(line);
       line.salePrice = Math.round(previousUnitSale * (divisor || 1) * 100) / 100;
       costingLineRecalculate(line, 'sale');
     }
@@ -3007,8 +3057,7 @@ function costingNewLine(selected) {
     row => costingLineSaleGroupKey(row) === costingLineSaleGroupKey(line)
   );
   if (matchingLine && savedUnitPrice <= 0) {
-    const divisor = Math.max(0, costingNumber(line.quantity))
-      * Math.max(0, costingNumber(line.multiplier));
+    const divisor = costingLineUnits(line);
     line.salePrice = Math.round(
       costingLineUnitSale(matchingLine) * (divisor || 1) * 100
     ) / 100;
@@ -3023,10 +3072,10 @@ function costingAppendCatalogSelection(selected) {
     const groupTitle = typeof financeContainerFamilyLabel === 'function'
       ? financeContainerFamilyLabel(selected.containerId || selected.description || 'Container')
       : (selected.description || selected.containerId || 'Container');
-    selected.containerItems.forEach(item => costingLines().push({ ...costingNewLine({
+    selected.containerItems.forEach((item, index) => costingLines().push({ ...costingNewLine({
       ...item,
       quantityOverride: item.containerQuantity || item.availableQuantity || 1
-    }), groupId, groupTitle, groupDisplayFields: ['brand', 'model', 'description'], groupCustomText: false }));
+    }), groupId, groupTitle, groupDisplayFields: ['brand', 'model', 'description'], groupCustomText: false, groupHeaderQuantity: 1, groupLeader: index === 0 }));
   } else {
     costingLines().push(costingNewLine(selected));
   }
@@ -3211,6 +3260,23 @@ async function costingPerformSave(notify = false, conflictRetry = 0) {
     if (response.quotation?.status === 'draft') costingState.quotationSyncMode = '';
     return response.data;
   } catch (error) {
+    if (
+      error.payload?.code === 'subproject_structure_conflict'
+      && error.payload?.data
+      && costingState.current?.id === current.id
+    ) {
+      const latest = error.payload.data;
+      costingState.baseDocument = financeCloneDocument(latest);
+      costingState.current = latest;
+      costingState.changeVersion += 1;
+      costingRenderEditor();
+      if (state) state.textContent = 'Unsafe sub-project change blocked';
+      showNotification(
+        'error',
+        'A save that would combine sub-projects was blocked. The latest saved layout was restored.'
+      );
+      return latest;
+    }
     if (
       error.payload?.code === 'document_version_conflict'
       && error.payload?.data

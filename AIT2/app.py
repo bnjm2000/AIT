@@ -36247,6 +36247,183 @@ def _propagate_finance_quotation_price_changes(lines, existing_lines):
         )
 
 
+class FinanceSubprojectStructureConflict(ValueError):
+    """Raised when a save would silently discard sub-project structure."""
+
+    def __init__(self, reason, removed_ids=None):
+        super().__init__(reason)
+        self.reason = str(reason)
+        self.removed_ids = sorted({
+            str(value or '').strip()
+            for value in (removed_ids or [])
+            if str(value or '').strip()
+        })
+
+
+def _finance_subproject_ids(value):
+    rows = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for index, row in enumerate(rows[:40]):
+        if not isinstance(row, dict):
+            continue
+        subproject_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('id') or '')
+        )[:80] or f'room_{index + 1}'
+        if subproject_id in seen:
+            continue
+        seen.add(subproject_id)
+        result.append(subproject_id)
+    return result or ['main']
+
+
+def _finance_requested_subproject_deletions(value):
+    return {
+        re.sub(r'[^A-Za-z0-9_-]+', '', str(subproject_id or ''))[:80]
+        for subproject_id in (value if isinstance(value, list) else [])[:40]
+        if re.sub(r'[^A-Za-z0-9_-]+', '', str(subproject_id or ''))[:80]
+    }
+
+
+def _finance_validate_subproject_update(
+    request_data,
+    existing,
+    requested_deletions=None,
+):
+    """Reject implicit room removal and cross-room assignment collapse.
+
+    Sub-project deletion is destructive and must be explicitly identified by
+    the client. Even then, rows from a deleted room must be absent rather than
+    silently reassigned to another room.
+    """
+    request_data = request_data if isinstance(request_data, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    existing_ids = _finance_subproject_ids(existing.get('subprojects'))
+    if len(existing_ids) <= 1:
+        return
+
+    requested_ids = (
+        _finance_subproject_ids(request_data.get('subprojects'))
+        if 'subprojects' in request_data
+        else list(existing_ids)
+    )
+    existing_id_set = set(existing_ids)
+    requested_id_set = set(requested_ids)
+    removed_ids = existing_id_set - requested_id_set
+    allowed_deletions = _finance_requested_subproject_deletions(
+        requested_deletions
+    )
+    if removed_ids - allowed_deletions:
+        raise FinanceSubprojectStructureConflict(
+            'The save tried to remove sub-projects without an explicit deletion.',
+            removed_ids,
+        )
+
+    line_source = (
+        request_data.get('lineItems')
+        if 'lineItems' in request_data
+        else existing.get('lineItems') or []
+    )
+    requested_lines = [
+        row for row in line_source if isinstance(row, dict)
+    ] if isinstance(line_source, list) else []
+    requested_line_ids = {
+        str(row.get('id') or '').strip()
+        for row in requested_lines
+        if str(row.get('id') or '').strip()
+    }
+    if removed_ids:
+        reassigned_deleted_lines = [
+            str(row.get('id') or '').strip()
+            for row in existing.get('lineItems') or []
+            if isinstance(row, dict)
+            and str(row.get('subprojectId') or 'main') in removed_ids
+            and str(row.get('id') or '').strip() in requested_line_ids
+        ]
+        if reassigned_deleted_lines:
+            raise FinanceSubprojectStructureConflict(
+                'Items from a deleted sub-project must be removed, not reassigned.',
+                removed_ids,
+            )
+
+    invalid_line_assignments = [
+        str(row.get('id') or row.get('quotationLineId') or '').strip()
+        for row in requested_lines
+        if str(row.get('subprojectId') or 'main') not in requested_id_set
+    ]
+    if invalid_line_assignments:
+        raise FinanceSubprojectStructureConflict(
+            'The save contained items assigned to a missing sub-project.',
+            removed_ids,
+        )
+
+    existing_lines_by_id = {
+        str(row.get('id') or '').strip(): row
+        for row in existing.get('lineItems') or []
+        if isinstance(row, dict) and str(row.get('id') or '').strip()
+    }
+    matched_assignments = [
+        (existing_lines_by_id[line_id], row)
+        for row in requested_lines
+        for line_id in [str(row.get('id') or '').strip()]
+        if line_id in existing_lines_by_id
+        and str(existing_lines_by_id[line_id].get('subprojectId') or 'main')
+        not in removed_ids
+    ]
+    previous_assignment_ids = {
+        str(previous.get('subprojectId') or 'main')
+        for previous, _requested in matched_assignments
+    }
+    requested_assignment_ids = {
+        str(requested.get('subprojectId') or 'main')
+        for _previous, requested in matched_assignments
+    }
+    if (
+        len(matched_assignments) > 1
+        and len(previous_assignment_ids) > 1
+        and len(requested_assignment_ids) <= 1
+    ):
+        raise FinanceSubprojectStructureConflict(
+            'The save tried to combine items from multiple sub-projects into one.',
+            removed_ids,
+        )
+
+    header_source = (
+        request_data.get('headerRows')
+        if 'headerRows' in request_data
+        else existing.get('headerRows') or []
+    )
+    requested_headers = [
+        row for row in header_source if isinstance(row, dict)
+    ] if isinstance(header_source, list) else []
+    requested_header_ids = {
+        str(row.get('id') or '').strip()
+        for row in requested_headers
+        if str(row.get('id') or '').strip()
+    }
+    if removed_ids:
+        reassigned_deleted_headers = [
+            str(row.get('id') or '').strip()
+            for row in existing.get('headerRows') or []
+            if isinstance(row, dict)
+            and str(row.get('subprojectId') or 'main') in removed_ids
+            and str(row.get('id') or '').strip() in requested_header_ids
+        ]
+        if reassigned_deleted_headers:
+            raise FinanceSubprojectStructureConflict(
+                'Headers from a deleted sub-project must be removed, not reassigned.',
+                removed_ids,
+            )
+    if any(
+        str(row.get('subprojectId') or 'main') not in requested_id_set
+        for row in requested_headers
+    ):
+        raise FinanceSubprojectStructureConflict(
+            'The save contained headers assigned to a missing sub-project.',
+            removed_ids,
+        )
+
+
 def _normalise_finance_subprojects(value, lines):
     rows = value if isinstance(value, list) else []
     result = []
@@ -37331,10 +37508,17 @@ def _normalise_costing_line(value):
     value = value if isinstance(value, dict) else {}
     quantity = round(max(0, _safe_float(value.get('quantity'), 1)), 4)
     multiplier = round(max(0, _safe_float(value.get('multiplier'), 1)), 4)
+    group_id = re.sub(
+        r'[^A-Za-z0-9_-]+', '', str(value.get('groupId') or '')
+    )[:80]
+    group_header_quantity = round(max(0, _safe_float(
+        value.get('groupHeaderQuantity'), 1
+    )), 4)
+    effective_quantity = quantity * (group_header_quantity if group_id else 1)
     # Retain enough precision for lump-sum totals divided across quantity and
     # multiplier (for example, $100 / 3). The displayed total remains cents.
     item_cost = round(max(0, _safe_float(value.get('itemCost'), 0)), 6)
-    cost_total = round(quantity * multiplier * item_cost, 2)
+    cost_total = round(effective_quantity * multiplier * item_cost, 2)
     target_margin = round(
         max(-100, min(9999, _safe_float(value.get('targetMarginPercent'), 20))),
         4,
@@ -37426,18 +37610,18 @@ def _normalise_costing_line(value):
         'marginPercent': margin_percent,
         'saleDifference': round(sale_price - calculated_sale, 2),
         'isCustom': bool(value.get('isCustom') or not value.get('catalogKey')),
-        'groupId': re.sub(
-            r'[^A-Za-z0-9_-]+', '', str(value.get('groupId') or '')
-        )[:80],
+        'groupId': group_id,
         'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
         'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
         'groupCustomText': bool(value.get('groupCustomText')),
-        'groupItemQuantity': round(max(0, _safe_float(
-            value.get('groupItemQuantity'), quantity
-        )), 4),
-        'groupHeaderQuantity': round(max(0, _safe_float(
-            value.get('groupHeaderQuantity'), 1
-        )), 4),
+        'groupItemQuantity': (
+            quantity
+            if group_id
+            else round(max(0, _safe_float(
+                value.get('groupItemQuantity'), quantity
+            )), 4)
+        ),
+        'groupHeaderQuantity': group_header_quantity,
         'groupLeader': bool(value.get('groupLeader')),
         'groupItemDays': round(max(0, _safe_float(
             value.get('groupItemDays'), 1
@@ -37506,6 +37690,28 @@ def _normalise_costing_document(value, existing=None):
             line['saleDifference'] = round(
                 -_safe_float(line.get('calculatedSalePrice'), 0), 2
             )
+    costing_groups = {}
+    for line in lines:
+        group_id = str(line.get('groupId') or '')
+        if not group_id:
+            continue
+        group_key = (str(line.get('subprojectId') or 'main'), group_id)
+        costing_groups.setdefault(group_key, []).append(line)
+    for group_lines in costing_groups.values():
+        leader = next(
+            (line for line in group_lines if line.get('groupLeader')),
+            group_lines[0],
+        )
+        group_quantity = round(max(0, _safe_float(
+            leader.get('groupHeaderQuantity'), 1
+        )), 4)
+        for line in group_lines:
+            line['groupLeader'] = line is leader
+            line['groupHeaderQuantity'] = group_quantity
+    lines = [
+        _normalise_costing_line(line) if line.get('groupId') else line
+        for line in lines
+    ]
     lines = _costing_equalise_group_sale_prices(
         lines, existing.get('lineItems') or []
     )
@@ -37688,15 +37894,78 @@ def _normalise_costing_document(value, existing=None):
     }
 
 
+def _costing_lines_from_quotation_lines(quotation_lines):
+    """Expand quotation group pricing into useful per-item costing amounts."""
+    quote_lines = [
+        row for row in quotation_lines or [] if isinstance(row, dict)
+    ]
+    lines = [
+        _costing_line_from_quotation_line(quote_line)
+        for quote_line in quote_lines
+    ]
+    groups = {}
+    for index, quote_line in enumerate(quote_lines):
+        group_id = str(quote_line.get('groupId') or '').strip()
+        if not group_id:
+            continue
+        key = (str(quote_line.get('subprojectId') or 'main'), group_id)
+        groups.setdefault(key, []).append(index)
+
+    for indexes in groups.values():
+        total = round(sum(
+            max(0, _safe_float(quote_lines[index].get('total'), 0))
+            for index in indexes
+        ), 2)
+        weights = [
+            max(0, _safe_float(
+                quote_lines[index].get('groupItemPriceContribution'), 0
+            ))
+            for index in indexes
+        ]
+        if sum(weights) <= 0:
+            weights = [
+                max(0, _safe_float(
+                    quote_lines[index].get('groupItemTotal'), 0
+                ))
+                for index in indexes
+            ]
+        if sum(weights) <= 0:
+            weights = [
+                0 if quote_lines[index].get('groupCustomText') else max(
+                    0,
+                    _safe_float(
+                        quote_lines[index].get('groupItemQuantity'), 1
+                    ),
+                )
+                for index in indexes
+            ]
+        if sum(weights) <= 0:
+            weights = [1 for _index in indexes]
+
+        weight_total = sum(weights)
+        last_weighted_position = max(
+            position for position, weight in enumerate(weights) if weight > 0
+        )
+        used = 0.0
+        for position, index in enumerate(indexes):
+            amount = (
+                total - used
+                if position == last_weighted_position
+                else 0
+                if weights[position] <= 0
+                else round(total * weights[position] / weight_total, 2)
+            )
+            lines[index]['salePrice'] = round(max(0, amount), 2)
+            used = round(used + lines[index]['salePrice'], 2)
+            lines[index] = _normalise_costing_line(lines[index])
+    return lines
+
+
 def _costing_from_quotation(quotation):
     """Create an editable internal costing counterpart for a quotation."""
     quotation = _normalise_finance_document(quotation, 'quotation', quotation)
     owner = _finance_document_owner_username(quotation) or _finance_owner_username()
-    lines = [
-        _costing_line_from_quotation_line(quote_line)
-        for quote_line in quotation.get('lineItems') or []
-        if isinstance(quote_line, dict)
-    ]
+    lines = _costing_lines_from_quotation_lines(quotation.get('lineItems') or [])
 
     adjustment_by_category = {}
     global_adjustment = 0
@@ -37812,7 +38081,7 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
     is_group = bool(costing_line.get('groupId'))
     commercial_quantity = (
         max(0, _safe_float(
-            existing.get('quantity'), costing_line.get('groupHeaderQuantity', 1)
+            costing_line.get('groupHeaderQuantity'), existing.get('quantity', 1)
         ))
         if is_group else quantity
     )
@@ -37824,9 +38093,32 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
             existing.get('groupItemQuantity') if is_group else existing.get('quantity'),
             1,
         ) - quantity) >= 0.0001,
+        is_group and abs(
+            _safe_float(existing.get('quantity'), 1) - commercial_quantity
+        ) >= 0.0001,
         abs(_safe_float(existing.get('days'), 1) - days) >= 0.0001,
         abs(_safe_float(existing.get('total'), 0) - sale_price) >= 0.005,
     ))
+    group_item_discount = max(-9999, min(100, _safe_float(
+        costing_line.get('groupItemDiscountPercent'), 0
+    )))
+    group_item_contribution = max(0, _safe_float(
+        costing_line.get('groupItemPriceContribution'), 0
+    ))
+    group_item_unit_price = max(0, _safe_float(
+        costing_line.get('groupItemUnitPrice'), 0
+    ))
+    if is_group:
+        header_discount = max(-9999, min(100, _safe_float(
+            existing.get('discountPercent'), 0
+        )))
+        header_factor = commercial_quantity * days * (1 - header_discount / 100)
+        if header_factor:
+            group_item_contribution = sale_price / header_factor
+            item_factor = quantity * (1 - group_item_discount / 100)
+            group_item_unit_price = (
+                group_item_contribution / item_factor if item_factor else 0
+            )
     underlying_department = str(existing.get('department') or '').strip()
     if not underlying_department:
         department_code = costing_line.get('departmentCode') or ''
@@ -37860,22 +38152,28 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'groupItemQuantity': costing_line.get(
             'groupItemQuantity', costing_line.get('quantity', 1)
         ),
+        'groupHeaderQuantity': commercial_quantity,
         'groupLeader': bool(costing_line.get('groupLeader')),
         'groupItemDays': costing_line.get('groupItemDays', 1),
         'groupItemUom': costing_line.get('groupItemUom', 'units'),
-        'groupItemUnitPrice': costing_line.get('groupItemUnitPrice', 0),
-        'groupItemDiscountPercent': costing_line.get('groupItemDiscountPercent', 0),
+        'groupItemUnitPrice': round(group_item_unit_price, 2),
+        'groupItemDiscountPercent': round(group_item_discount, 4),
         'groupItemTotalMode': costing_line.get('groupItemTotalMode', 'calculated'),
         'groupItemTotal': costing_line.get('groupItemTotal', 0),
-        'groupItemPriceContribution': costing_line.get('groupItemPriceContribution', 0),
-        'groupItemCommercialStored': bool(costing_line.get('groupItemCommercialStored')),
+        'groupItemPriceContribution': round(group_item_contribution, 6),
+        'groupItemCommercialStored': bool(
+            is_group or costing_line.get('groupItemCommercialStored')
+        ),
         'groupPricingMode': costing_line.get('groupPricingMode', 'items'),
     })
     if pricing_changed:
         existing.update({
             'uom': existing.get('uom') or 'units',
             'unitPrice': round(sale_price / divisor, 2) if divisor else sale_price,
-            'discountPercent': 0,
+            'discountPercent': (
+                _safe_float(existing.get('discountPercent'), 0)
+                if is_group else 0
+            ),
             'totalMode': 'amount',
             'total': sale_price,
         })
@@ -37945,6 +38243,8 @@ def _costing_line_unit_sale(line):
     divisor = max(0, _safe_float(line.get('quantity'), 0)) * max(
         0, _safe_float(line.get('multiplier'), 0)
     )
+    if line.get('groupId'):
+        divisor *= max(0, _safe_float(line.get('groupHeaderQuantity'), 1))
     sale_price = max(0, _safe_float(line.get('salePrice'), 0))
     return sale_price / divisor if divisor else sale_price
 
@@ -37977,6 +38277,10 @@ def _costing_equalise_group_sale_prices(lines, existing_lines=None):
         total_units = sum(
             max(0, _safe_float(row.get('quantity'), 0))
             * max(0, _safe_float(row.get('multiplier'), 0))
+            * (
+                max(0, _safe_float(row.get('groupHeaderQuantity'), 1))
+                if row.get('groupId') else 1
+            )
             for row in rows
         )
         if identity in changed_rates:
@@ -37994,6 +38298,8 @@ def _costing_equalise_group_sale_prices(lines, existing_lines=None):
             units = max(0, _safe_float(row.get('quantity'), 0)) * max(
                 0, _safe_float(row.get('multiplier'), 0)
             )
+            if row.get('groupId'):
+                units *= max(0, _safe_float(row.get('groupHeaderQuantity'), 1))
             payload = {
                 **row,
                 'salePrice': round(unit_rate * (units or 1), 2),
@@ -38088,6 +38394,8 @@ def _costing_grouped_quotation_lines(costing, quotation):
         first['quantity'] = round(sum(
             max(0, _safe_float(row.get('quantity'), 0)) for row in rows
         ), 4)
+        if first.get('groupId'):
+            first['groupItemQuantity'] = first['quantity']
         first['salePrice'] = round(sum(
             max(0, _safe_float(row.get('salePrice'), 0)) for row in rows
         ), 2)
@@ -38100,6 +38408,38 @@ def _costing_grouped_quotation_lines(costing, quotation):
         quote_lines.append(_quotation_line_from_costing_line(
             first, existing_lines.get(quote_id)
         ))
+
+    quotation_groups = {}
+    for line in quote_lines:
+        group_id = str(line.get('groupId') or '').strip()
+        if not group_id:
+            continue
+        key = (str(line.get('subprojectId') or 'main'), group_id)
+        quotation_groups.setdefault(key, []).append(line)
+    for rows in quotation_groups.values():
+        leader = next((line for line in rows if line.get('groupLeader')), rows[0])
+        total = round(sum(
+            max(0, _safe_float(line.get('total'), 0)) for line in rows
+        ), 2)
+        group_quantity = max(0, _safe_float(
+            leader.get('groupHeaderQuantity'), leader.get('quantity', 1)
+        ))
+        days = max(0, _safe_float(leader.get('days'), 1))
+        discount = max(
+            -9999,
+            min(100, _safe_float(leader.get('discountPercent'), 0)),
+        )
+        factor = group_quantity * days * (1 - discount / 100)
+        unit_price = round(total / factor, 2) if factor else total
+        for line in rows:
+            line['groupLeader'] = line is leader
+            line['groupHeaderQuantity'] = round(group_quantity, 4)
+            line['quantity'] = round(group_quantity, 4)
+            line['days'] = round(days, 4)
+            line['unitPrice'] = unit_price
+            line['discountPercent'] = round(discount, 4)
+            line['totalMode'] = 'amount'
+            line['total'] = total if line is leader else 0
     return quote_lines
 
 
@@ -38168,10 +38508,10 @@ def _sync_costing_from_quotation(finance_data, quotation):
         if quote_line_id:
             existing_groups.setdefault(quote_line_id, []).append(copy.deepcopy(line))
     synced_lines = []
-    for quote_line in quotation.get('lineItems') or []:
-        if not isinstance(quote_line, dict):
-            continue
-        template = _costing_line_from_quotation_line(quote_line)
+    templates = _costing_lines_from_quotation_lines(
+        quotation.get('lineItems') or []
+    )
+    for template in templates:
         quote_line_id = str(template.get('quotationLineId') or template.get('id') or '')
         group = existing_groups.get(quote_line_id) or [copy.deepcopy(template)]
         if len(group) > 1:
@@ -41226,6 +41566,16 @@ def _finance_rate_card_rows(finance_data):
             f"custom:{str(payload.get('department') or 'Unknown Department').strip().lower()}::"
             f"{str(payload.get('description') or base_key.removeprefix('custom:')).strip().lower()}"
         )
+        if (
+            not canonical
+            and not base_key.startswith('custom:')
+            and identity not in rows
+        ):
+            # Inventory names can change while remembered prices retain their
+            # former catalogue key. Those orphaned rows are historical price
+            # records, not separate products. Asset-level price records still
+            # carry the saved price/display override to the renamed item.
+            continue
         if payload.get('hidden'):
             existing_inventory = rows.get(identity)
             if canonical:
@@ -45455,6 +45805,9 @@ def _finance_get_update_delete(document_id, document_type):
 
         request_data = request.get_json() or {}
         base_document = request_data.pop('_baseDocument', None)
+        requested_subproject_deletions = request_data.pop(
+            '_deletedSubprojectIds', []
+        )
         current_document_version = max(
             1, _safe_int(existing.get('documentVersion'), 1)
         )
@@ -45540,6 +45893,26 @@ def _finance_get_update_delete(document_id, document_type):
                     request_data.update(_invoice_sent_timing(request_data))
                 except ValueError as exc:
                     return jsonify({'error': str(exc)}), 400
+        if document_type == 'quotation':
+            try:
+                _finance_validate_subproject_update(
+                    request_data,
+                    existing,
+                    requested_subproject_deletions,
+                )
+            except FinanceSubprojectStructureConflict as exc:
+                return jsonify({
+                    'error': (
+                        'An unsafe sub-project change was blocked. '
+                        'The latest saved quotation has been kept.'
+                    ),
+                    'code': 'subproject_structure_conflict',
+                    'reason': exc.reason,
+                    'removedSubprojectIds': exc.removed_ids,
+                    'data': _normalise_finance_document(
+                        existing, document_type, existing
+                    ),
+                }), 409
         updated = _normalise_finance_document(request_data, document_type, existing)
         previous_document = _normalise_finance_document(
             existing,
@@ -47650,6 +48023,9 @@ def costing_item(costing_id):
             return jsonify({'error': 'Converted costings are read-only'}), 409
         payload = request.get_json(silent=True) or {}
         base_document = payload.pop('_baseDocument', None)
+        requested_subproject_deletions = payload.pop(
+            '_deletedSubprojectIds', []
+        )
         current_document_version = max(
             1, _safe_int(existing.get('documentVersion'), 1)
         )
@@ -47693,6 +48069,26 @@ def costing_item(costing_id):
         ):
             payload['status'] = 'linked'
         previous_costing = _normalise_costing_document(existing, existing)
+        try:
+            _finance_validate_subproject_update(
+                payload,
+                previous_costing,
+                requested_subproject_deletions,
+            )
+        except FinanceSubprojectStructureConflict as exc:
+            previous_costing['vendorDiscrepancies'] = (
+                _costing_vendor_discrepancies(previous_costing)
+            )
+            return jsonify({
+                'error': (
+                    'An unsafe sub-project change was blocked. '
+                    'The latest saved costing has been kept.'
+                ),
+                'code': 'subproject_structure_conflict',
+                'reason': exc.reason,
+                'removedSubprojectIds': exc.removed_ids,
+                'data': previous_costing,
+            }), 409
         costing = _normalise_costing_document(payload, existing)
         linked_quotation = _linked_quotation_for_costing(finance_data, costing)
         sync_mode = str(payload.get('quotationSyncMode') or '').strip().lower()

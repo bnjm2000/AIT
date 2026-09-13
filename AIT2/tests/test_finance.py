@@ -1945,6 +1945,20 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data'][0]
         self.assertEqual(renamed['unitPrice'], 321)
         self.assertEqual(renamed['uom'], 'units')
+        self.assertEqual(
+            self.client.get(
+                '/api/finance/catalog', query_string={'query': 'SB18 III'},
+            ).get_json()['data'],
+            [],
+        )
+        renamed_products = [
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('brand') == 'L-Acoustics'
+            and str(row.get('model') or '').startswith('SB18')
+        ]
+        self.assertEqual(len(renamed_products), 1)
+        self.assertEqual(renamed_products[0]['model'], 'SB18 Renamed')
+        self.assertEqual(renamed_products[0]['availableQuantity'], 1)
 
         custom_results = self.client.get(
             '/api/finance/catalog?query=Speclal'

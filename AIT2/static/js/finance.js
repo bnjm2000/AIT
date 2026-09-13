@@ -5225,10 +5225,11 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
   const quantityField = document.getElementById('financeLineGroupQuantityField');
   const quantityControl = document.getElementById('financeLineGroupQuantity');
   if (quantityField && quantityControl) {
-    quantityField.hidden = mode !== 'delivery-order';
+    const supportsGroupQuantity = mode === 'costing' || mode === 'delivery-order';
+    quantityField.hidden = !supportsGroupQuantity;
     quantityField.closest('.finance-line-group-basics')?.classList.toggle(
       'has-group-quantity',
-      mode === 'delivery-order'
+      supportsGroupQuantity
     );
     quantityControl.value = financeLineGroupState.groupQuantity;
   }
@@ -5472,7 +5473,8 @@ async function financeSaveLineGroup() {
       groupTitle: title,
       groupDisplayFields: fields,
       groupCustomText: false,
-      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {})
+      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {}),
+      ...(mode === 'costing' ? { groupHeaderQuantity: groupQuantity } : {})
     };
   });
   if (customText) {
@@ -5491,8 +5493,12 @@ async function financeSaveLineGroup() {
       groupDisplayFields: fields,
       groupCustomText: true,
       isCustom: true,
-      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {})
+      ...(mode === 'delivery-order' ? { groupHeaderQuantity: groupQuantity } : {}),
+      ...(mode === 'costing' ? { groupHeaderQuantity: groupQuantity } : {})
     });
+  }
+  if (mode === 'costing') {
+    grouped.forEach((line, index) => { line.groupLeader = index === 0; });
   }
   if (mode === 'finance' && financeLineGroupState.commercialHeader && grouped.length) {
     const originalHeader = financeLineGroupState.commercialHeader;
@@ -6773,6 +6779,10 @@ async function financeDeleteSubproject(subprojectId) {
     destructive: true
   });
   if (!confirmed) return;
+  financeState.current._deletedSubprojectIds = [...new Set([
+    ...(financeState.current._deletedSubprojectIds || []),
+    subprojectId
+  ])];
   financeState.current.subprojects = rows.filter(item => item.id !== subprojectId);
   financeState.current.lineItems = (financeState.current.lineItems || []).filter(line => (line.subprojectId || 'main') !== subprojectId);
   financeState.current.headerRows = financeHeaderRows()
@@ -8237,6 +8247,23 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
     if (notify) showNotification('success', 'Quotation saved');
     return response.data;
   } catch (error) {
+    if (
+      error.payload?.code === 'subproject_structure_conflict'
+      && error.payload?.data
+      && financeState.current?.id === current.id
+    ) {
+      const latest = error.payload.data;
+      financeState.baseDocument = financeCloneDocument(latest);
+      financeState.current = latest;
+      financeState.changeVersion += 1;
+      financeRenderEditor();
+      if (state) state.textContent = 'Unsafe sub-project change blocked';
+      showNotification(
+        'error',
+        'A save that would combine sub-projects was blocked. The latest saved layout was restored.'
+      );
+      return latest;
+    }
     if (
       error.payload?.code === 'document_version_conflict'
       && error.payload?.data
