@@ -401,17 +401,12 @@ function renderVirtualTable({
 }
 
 const REALTIME_CLIENT_ID = (() => {
-  try {
-    const existing = sessionStorage.getItem("showbaseRealtimeClientId");
-    if (existing) return existing;
-    const id = (crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    sessionStorage.setItem("showbaseRealtimeClientId", id);
-    return id;
-  } catch (error) {
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
+  // Keep the origin identifier page-specific. Browsers may copy sessionStorage
+  // when a tab is duplicated; reusing that value would make each copy mistake
+  // the other tab's saves for its own and suppress the live update.
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 })();
 
 const DEFAULT_PDF_FOOTER_TEXT = "";

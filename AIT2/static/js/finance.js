@@ -2133,6 +2133,277 @@ function financeCurrentSubprojectId(document = financeState.current) {
   return financeState.activeSubprojectId;
 }
 
+function financeLinkedRecordId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(16).slice(2)}`;
+}
+
+function financeLinkedSubprojectMembers(subprojectId, document = financeState.current) {
+  const rows = financeSubprojects(document);
+  const source = rows.find(row => String(row.id) === String(subprojectId || ''));
+  const linkedGroupId = String(source?.linkedGroupId || '');
+  if (!linkedGroupId) return source ? [source] : [];
+  return rows.filter(row => String(row.linkedGroupId || '') === linkedGroupId);
+}
+
+function financeSubprojectsAreLinked(leftId, rightId, document = financeState.current) {
+  const rows = financeSubprojects(document);
+  const left = rows.find(row => String(row.id) === String(leftId || ''));
+  const right = rows.find(row => String(row.id) === String(rightId || ''));
+  return !!(
+    left?.linkedGroupId
+    && String(left.linkedGroupId) === String(right?.linkedGroupId || '')
+  );
+}
+
+function financeClearLinkedRoomKeys(document, subprojectId) {
+  const roomId = String(subprojectId || '');
+  (document?.lineItems || []).forEach(line => {
+    if (String(line.subprojectId || 'main') === roomId) delete line.linkedItemId;
+  });
+  (document?.headerRows || []).forEach(header => {
+    if (String(header.subprojectId || 'main') === roomId) delete header.linkedHeaderId;
+  });
+  (document?.adjustments || []).forEach(adjustment => {
+    if (
+      adjustment.scope !== 'total'
+      && String(adjustment.subprojectId || 'main') === roomId
+    ) delete adjustment.linkedAdjustmentId;
+  });
+}
+
+function financeRepairLinkedSubprojectGroups(document = financeState.current) {
+  if (!document) return;
+  const groups = new Map();
+  financeSubprojects(document).forEach(row => {
+    const linkedGroupId = String(row.linkedGroupId || '');
+    if (!linkedGroupId) return;
+    if (!groups.has(linkedGroupId)) groups.set(linkedGroupId, []);
+    groups.get(linkedGroupId).push(row);
+  });
+  groups.forEach(rows => {
+    if (rows.length > 1) return;
+    rows.forEach(row => {
+      delete row.linkedGroupId;
+      financeClearLinkedRoomKeys(document, row.id);
+    });
+  });
+}
+
+function financeEnsureLinkedRoomKeys(document, subprojectId) {
+  const roomId = String(subprojectId || '');
+  (document?.lineItems || []).forEach(line => {
+    if (String(line.subprojectId || 'main') !== roomId) return;
+    line.linkedItemId = String(line.linkedItemId || financeLinkedRecordId('linked_line'));
+  });
+  (document?.headerRows || []).forEach(header => {
+    if (String(header.subprojectId || 'main') !== roomId) return;
+    header.linkedHeaderId = String(
+      header.linkedHeaderId || financeLinkedRecordId('linked_header')
+    );
+  });
+  (document?.adjustments || []).forEach(adjustment => {
+    if (
+      adjustment.scope === 'total'
+      || String(adjustment.subprojectId || 'main') !== roomId
+    ) return;
+    adjustment.linkedAdjustmentId = String(
+      adjustment.linkedAdjustmentId || financeLinkedRecordId('linked_adjustment')
+    );
+  });
+}
+
+function financeLinkedText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function financeLinkedLineIdentity(line) {
+  const catalogIdentity = [line?.productId, line?.productKey, line?.catalogKey]
+    .map(financeLinkedText)
+    .find(Boolean);
+  const assetIdentity = [...new Set((line?.sourceAssetIds || []).map(financeLinkedText).filter(Boolean))]
+    .sort()
+    .join('|');
+  const itemIdentity = catalogIdentity
+    ? `catalog:${catalogIdentity}`
+    : assetIdentity
+      ? `assets:${assetIdentity}`
+      : `text:${[
+          line?.brand, line?.model, line?.description, line?.departmentCode
+        ].map(financeLinkedText).join('|')}`;
+  const groupIdentity = line?.groupId
+    ? `group:${financeLinkedText(line.groupTitle) || 'group'}`
+    : 'line';
+  return `${groupIdentity}::${itemIdentity}`;
+}
+
+function financeLinkedHeaderIdentity(header, lines) {
+  const anchor = (lines || []).find(
+    line => String(line.id || '') === String(header?.beforeLineId || '')
+  );
+  return `${financeLinkedText(header?.content)}::${String(anchor?.linkedItemId || '')}`;
+}
+
+function financeLinkedAdjustmentIdentity(adjustment) {
+  return [
+    adjustment?.scope,
+    adjustment?.department,
+    adjustment?.label,
+    adjustment?.kind,
+  ].map(financeLinkedText).join('::');
+}
+
+function financeLinkedCounterpart(source, targetRows, used, identity, linkField) {
+  const linkedId = String(source?.[linkField] || '');
+  const exact = linkedId
+    ? targetRows.find(row => !used.has(row) && String(row?.[linkField] || '') === linkedId)
+    : null;
+  if (exact) return exact;
+  return targetRows.find(row => !used.has(row) && identity(row) === identity(source)) || null;
+}
+
+function financeReplaceRoomRecords(records, subprojectId, replacements, include) {
+  const rows = Array.isArray(records) ? records : [];
+  const roomId = String(subprojectId || '');
+  const matches = row => (
+    String(row?.subprojectId || 'main') === roomId
+    && (!include || include(row))
+  );
+  const firstIndex = rows.findIndex(matches);
+  if (firstIndex < 0) return [...rows, ...replacements];
+  const result = [];
+  rows.forEach((row, index) => {
+    if (index === firstIndex) result.push(...replacements);
+    if (!matches(row)) result.push(row);
+  });
+  return result;
+}
+
+function financeSynchroniseLinkedSubprojects(
+  document = financeState.current,
+  sourceSubprojectId = financeCurrentSubprojectId(document)
+) {
+  if (!document) return false;
+  financeRepairLinkedSubprojectGroups(document);
+  const members = financeLinkedSubprojectMembers(sourceSubprojectId, document);
+  if (members.length < 2) return false;
+  const sourceId = String(sourceSubprojectId || members[0].id);
+  const source = members.find(row => String(row.id) === sourceId) || members[0];
+  financeEnsureLinkedRoomKeys(document, source.id);
+  const sourceLines = (document.lineItems || []).filter(
+    line => String(line.subprojectId || 'main') === String(source.id)
+  );
+  const sourceHeaders = (document.headerRows || []).filter(
+    header => String(header.subprojectId || 'main') === String(source.id)
+  );
+  const sourceAdjustments = (document.adjustments || []).filter(adjustment => (
+    adjustment.scope !== 'total'
+    && String(adjustment.subprojectId || 'main') === String(source.id)
+  ));
+
+  members.filter(row => row !== source).forEach(target => {
+    const targetId = String(target.id);
+    const targetLines = (document.lineItems || []).filter(
+      line => String(line.subprojectId || 'main') === targetId
+    );
+    const usedLines = new Set();
+    const linePairs = sourceLines.map(sourceLine => {
+      const existing = financeLinkedCounterpart(
+        sourceLine,
+        targetLines,
+        usedLines,
+        financeLinkedLineIdentity,
+        'linkedItemId'
+      );
+      if (existing) usedLines.add(existing);
+      return { sourceLine, existing };
+    });
+    const groupIdMap = new Map();
+    linePairs.forEach(({ sourceLine, existing }) => {
+      if (sourceLine.groupId && existing?.groupId && !groupIdMap.has(sourceLine.groupId)) {
+        groupIdMap.set(sourceLine.groupId, existing.groupId);
+      }
+    });
+    const targetLineIdBySourceId = new Map();
+    const syncedLines = linePairs.map(({ sourceLine, existing }) => {
+      const clone = financeCloneDocument(sourceLine);
+      clone.id = existing?.id || financeLinkedRecordId('line');
+      clone.subprojectId = targetId;
+      clone.linkedItemId = sourceLine.linkedItemId;
+      if (sourceLine.groupId) {
+        if (!groupIdMap.has(sourceLine.groupId)) {
+          groupIdMap.set(sourceLine.groupId, financeLinkedRecordId('group'));
+        }
+        clone.groupId = groupIdMap.get(sourceLine.groupId);
+      } else {
+        clone.groupId = '';
+      }
+      targetLineIdBySourceId.set(String(sourceLine.id || ''), clone.id);
+      return clone;
+    });
+    document.lineItems = financeReplaceRoomRecords(
+      document.lineItems,
+      targetId,
+      syncedLines
+    );
+
+    const targetHeaders = (document.headerRows || []).filter(
+      header => String(header.subprojectId || 'main') === targetId
+    );
+    const usedHeaders = new Set();
+    const syncedHeaders = sourceHeaders.map(sourceHeader => {
+      const existing = financeLinkedCounterpart(
+        sourceHeader,
+        targetHeaders,
+        usedHeaders,
+        header => financeLinkedHeaderIdentity(header, document.lineItems),
+        'linkedHeaderId'
+      );
+      if (existing) usedHeaders.add(existing);
+      const clone = financeCloneDocument(sourceHeader);
+      clone.id = existing?.id || financeLinkedRecordId('header');
+      clone.subprojectId = targetId;
+      clone.linkedHeaderId = sourceHeader.linkedHeaderId;
+      clone.beforeLineId = targetLineIdBySourceId.get(
+        String(sourceHeader.beforeLineId || '')
+      ) || '';
+      return clone;
+    });
+    document.headerRows = financeReplaceRoomRecords(
+      document.headerRows,
+      targetId,
+      syncedHeaders
+    );
+
+    const targetAdjustments = (document.adjustments || []).filter(adjustment => (
+      adjustment.scope !== 'total'
+      && String(adjustment.subprojectId || 'main') === targetId
+    ));
+    const usedAdjustments = new Set();
+    const syncedAdjustments = sourceAdjustments.map(sourceAdjustment => {
+      const existing = financeLinkedCounterpart(
+        sourceAdjustment,
+        targetAdjustments,
+        usedAdjustments,
+        financeLinkedAdjustmentIdentity,
+        'linkedAdjustmentId'
+      );
+      if (existing) usedAdjustments.add(existing);
+      const clone = financeCloneDocument(sourceAdjustment);
+      clone.id = existing?.id || financeLinkedRecordId('adjustment');
+      clone.subprojectId = targetId;
+      clone.linkedAdjustmentId = sourceAdjustment.linkedAdjustmentId;
+      return clone;
+    });
+    document.adjustments = financeReplaceRoomRecords(
+      document.adjustments,
+      targetId,
+      syncedAdjustments,
+      adjustment => adjustment.scope !== 'total'
+    );
+  });
+  return true;
+}
+
 function financeActiveDepartments(document = financeState.current, subprojectId = financeCurrentSubprojectId(document)) {
   const departments = [];
   (document?.lineItems || []).forEach(line => {
@@ -3171,6 +3442,7 @@ const productCatalogState = {
   loading: false,
   saving: false
 };
+const productCatalogSaveQueues = new Map();
 
 function productsRoot() {
   return document.getElementById('products-page-root');
@@ -3210,6 +3482,19 @@ function productCatalogCategories() {
     .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 }
 
+function productCatalogTabsMarkup(categories = productCatalogCategories()) {
+  return categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" title="Right-click to manage category" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')" oncontextmenu="productCatalogOpenCategoryMenu(event,'${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('');
+}
+
+function productCatalogRefreshTabs() {
+  const categories = productCatalogCategories();
+  if (!categories.includes(productCatalogState.category)) {
+    productCatalogState.category = categories[0] || '';
+  }
+  const tabs = productsRoot()?.querySelector('.finance-products-tabs');
+  if (tabs) tabs.innerHTML = productCatalogTabsMarkup(categories);
+}
+
 function productCatalogRowsMarkup() {
   const rows = productCatalogFilteredRows();
   if (!rows.length) return `<div class="finance-products-empty"><strong>No products match this view.</strong><span>${productCatalogState.query ? 'Try another product name, brand, model or category.' : 'Choose another category or source filter, or add a product.'}</span></div>`;
@@ -3218,17 +3503,16 @@ function productCatalogRowsMarkup() {
     <tbody>${rows.map(row => {
       const index = productCatalogState.rows.indexOf(row);
       const productLabel = row.productLabel || [row.brand, row.model].filter(Boolean).join(' ') || row.description || 'Unnamed product';
-      const inventoryDetail = [row.brand, row.model, row.description].filter(Boolean).join(' · ');
       const availability = row.isCustom
         ? 'Not tracked'
         : `${financeNumber(row.availableQuantity ?? row.sourceAssetIds?.length, 0)} in inventory`;
       return `<tr>
-        <td data-label="Product label"><input class="finance-input finance-product-label-input" value="${financeEscapeAttr(productLabel)}" maxlength="1000" aria-label="Product label" onchange="productCatalogUpdateField(${index},'productLabel',this.value)">${inventoryDetail && inventoryDetail !== productLabel ? `<small>${financeEscape(inventoryDetail)}</small>` : ''}</td>
-        <td data-label="Category"><input class="finance-input finance-product-category-input" value="${financeEscapeAttr(productCatalogCategory(row))}" list="financeProductCategoryOptions" maxlength="240" aria-label="Category for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'productCategory',this.value)"></td>
+        <td data-label="Product label"><input class="finance-input finance-product-label-input" value="${financeEscapeAttr(productLabel)}" maxlength="1000" aria-label="Product label" onchange="productCatalogUpdateField(${index},'productLabel',this.value,this)"></td>
+        <td data-label="Category"><input class="finance-input finance-product-category-input" value="${financeEscapeAttr(productCatalogCategory(row))}" list="financeProductCategoryOptions" maxlength="240" aria-label="Category for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'productCategory',this.value,this)"></td>
         <td data-label="Source"><span class="finance-product-source ${row.isCustom ? 'additional' : 'inventory'}">${row.isCustom ? 'Added product' : 'Inventory'}</span></td>
         <td data-label="Availability">${financeEscape(availability)}</td>
-        <td data-label="UOM"><select class="finance-input finance-product-uom-select" aria-label="UOM for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'uom',this.value)">${FINANCE_UOMS.map(option => `<option value="${option.value}" ${option.value === row.uom ? 'selected' : ''}>${financeEscape(option.label)}</option>`).join('')}</select></td>
-        <td data-label="Sale price"><label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Sale price for ${financeEscapeAttr(productLabel)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="productCatalogUpdatePrice(${index},this.value)"></label></td>
+        <td data-label="UOM"><select class="finance-input finance-product-uom-select" aria-label="UOM for ${financeEscapeAttr(productLabel)}" onchange="productCatalogUpdateField(${index},'uom',this.value,this)">${FINANCE_UOMS.map(option => `<option value="${option.value}" ${option.value === row.uom ? 'selected' : ''}>${financeEscape(option.label)}</option>`).join('')}</select></td>
+        <td data-label="Sale price"><label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Sale price for ${financeEscapeAttr(productLabel)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="productCatalogUpdatePrice(${index},this.value,this)"></label></td>
         <td data-label="Actions">${row.isCustom ? `<button type="button" class="btn btn-danger compact" onclick="productCatalogDelete(${index})">Remove</button>` : ''}</td>
       </tr>`;
     }).join('')}</tbody>
@@ -3241,9 +3525,7 @@ function productCatalogFormMarkup() {
     <form class="finance-card finance-product-form" onsubmit="productCatalogCreate(event)">
       <div class="finance-product-form-heading"><div><h3>Add product</h3><p>Create a non-inventory product for future quotations.</p></div><button type="button" class="finance-clients-form-close" aria-label="Close product form" onclick="productCatalogToggleForm(false)">×</button></div>
       <div class="finance-product-form-grid">
-        <label class="finance-field"><span>Brand</span><input class="finance-input" name="brand" maxlength="240"></label>
-        <label class="finance-field"><span>Model</span><input class="finance-input" name="model" maxlength="240"></label>
-        <label class="finance-field finance-product-description"><span>Product label *</span><input class="finance-input" name="productLabel" maxlength="1000" required></label>
+        <label class="finance-field finance-product-description"><span>Item label *</span><input class="finance-input" name="productLabel" maxlength="1000" required></label>
         <label class="finance-field"><span>Category *</span><input class="finance-input" name="department" list="financeProductCategoryOptions" required></label>
         <label class="finance-field"><span>Sale price</span><span class="finance-money-input"><span>$</span><input name="unitPrice" type="number" min="0" step="0.01" value="0"></span></label>
         <label class="finance-field"><span>Unit</span><select class="finance-input" name="uom">${FINANCE_UOMS.map(row => `<option value="${row.value}">${financeEscape(row.label)}</option>`).join('')}</select></label>
@@ -3286,7 +3568,7 @@ function productCatalogRender() {
         <small>${visibleSourceCount === 2 ? 'Both sources selected' : 'One source selected'}</small>
       </div>
       <div class="finance-products-tabs" role="tablist" aria-label="Product categories">
-        ${categories.map(category => `<button type="button" role="tab" aria-selected="${productCatalogState.category === category}" class="${productCatalogState.category === category ? 'active' : ''}" title="Right-click to manage category" onclick="productCatalogSetCategory('${financeEscapeAttr(encodeURIComponent(category))}')" oncontextmenu="productCatalogOpenCategoryMenu(event,'${financeEscapeAttr(encodeURIComponent(category))}')">${financeEscape(category)}</button>`).join('')}
+        ${productCatalogTabsMarkup(categories)}
       </div>
       <div id="productCatalogResults">${productCatalogRowsMarkup()}</div>
     </div>`;
@@ -3330,9 +3612,30 @@ function financeApplyProductRows(rows) {
   return nextRows;
 }
 
-async function financePersistProduct(item) {
+async function financePersistProduct(item, options = {}) {
   const response = await apiCall('/api/finance/products', 'POST', item);
+  financeState.catalogCache = {};
+  if (options.applyRows === false) return response.data || [];
   return financeApplyProductRows(response.data || []);
+}
+
+async function productCatalogPersistInline(item) {
+  const key = String(
+    item?.productKey || item?.catalogKey || item?.productId || item?.id || ''
+  ).toLocaleLowerCase();
+  const previous = productCatalogSaveQueues.get(key) || Promise.resolve();
+  const snapshot = { ...item };
+  const pending = previous.catch(() => undefined).then(() => (
+    financePersistProduct(snapshot, { applyRows: false })
+  ));
+  productCatalogSaveQueues.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (productCatalogSaveQueues.get(key) === pending) {
+      productCatalogSaveQueues.delete(key);
+    }
+  }
 }
 
 async function loadProducts(options = {}) {
@@ -3376,38 +3679,62 @@ async function productCatalogCreate(event) {
   }
 }
 
-async function productCatalogUpdatePrice(index, value) {
+async function productCatalogUpdatePrice(index, value, control = null) {
   const item = productCatalogState.rows[Number(index)];
   if (!item) return;
+  const previousPrice = item.unitPrice;
+  item.unitPrice = financeCurrencyNumber(value);
   try {
-    await financePersistProduct({ ...item, unitPrice: financeCurrencyNumber(value) });
-    productCatalogRender();
+    await productCatalogPersistInline(item);
     showNotification('success', 'Product price updated for future additions');
   } catch (error) {
-    productCatalogRender();
+    item.unitPrice = previousPrice;
+    if (control) control.value = financeNumber(previousPrice) ? financeMoneyInputValue(previousPrice) : '';
   }
 }
 
-async function productCatalogUpdateField(index, field, value) {
+async function productCatalogUpdateField(index, field, value, control = null) {
   const item = productCatalogState.rows[Number(index)];
   if (!item || !['productLabel', 'productCategory', 'uom'].includes(field)) return;
   const nextValue = String(value || '').trim();
   if (['productLabel', 'productCategory'].includes(field) && !nextValue) {
-    productCatalogRender();
+    if (control) control.value = item[field] || '';
     showNotification('error', `${field === 'productCategory' ? 'Category' : 'Product label'} is required`);
     return;
   }
   if (field === 'uom' && !FINANCE_UOMS.some(row => row.value === nextValue)) {
-    productCatalogRender();
     return;
   }
+  const previousValue = item[field];
+  const previousDescription = item.description;
+  item[field] = nextValue;
+  if (field === 'productLabel' && item.isCustom) item.description = nextValue;
   try {
-    await financePersistProduct({ ...item, [field]: nextValue });
-    productCatalogRender();
+    await productCatalogPersistInline({
+      ...item,
+      ...(item.isCustom ? { brand: '', model: '', description: item.productLabel } : {})
+    });
+    if (field === 'productCategory' && previousValue !== nextValue) {
+      const results = document.getElementById('productCatalogResults');
+      const rowsRemainingInPreviousCategory = productCatalogFilteredRows().length;
+      if (rowsRemainingInPreviousCategory) {
+        control?.closest('tr')?.remove();
+      } else {
+        productCatalogState.category = nextValue;
+        if (results) results.innerHTML = productCatalogRowsMarkup();
+      }
+      const categoryOptions = document.getElementById('financeProductCategoryOptions');
+      if (categoryOptions && ![...categoryOptions.options].some(option => option.value === nextValue)) {
+        categoryOptions.append(new Option('', nextValue));
+      }
+      productCatalogRefreshTabs();
+    }
     const fieldLabel = field === 'uom' ? 'UOM' : field === 'productCategory' ? 'Category' : 'Product label';
     showNotification('success', `${fieldLabel} updated for future additions`);
   } catch (error) {
-    productCatalogRender();
+    item[field] = previousValue;
+    if (field === 'productLabel' && item.isCustom) item.description = previousDescription;
+    if (control) control.value = previousValue || '';
   }
 }
 
@@ -3462,13 +3789,13 @@ async function productCatalogDeleteCategory() {
   ));
   const inventoryCount = targets.filter(row => !row.isCustom).length;
   const addedCount = targets.filter(row => row.isCustom).length;
-  const details = [
-    inventoryCount ? `${inventoryCount} inventory product${inventoryCount === 1 ? '' : 's'}` : '',
-    addedCount ? `${addedCount} added product${addedCount === 1 ? '' : 's'}` : ''
-  ].filter(Boolean).join(' and ');
+  if (!addedCount) {
+    showNotification('warning', 'Inventory products cannot be deleted');
+    return;
+  }
   const confirmed = await showAppConfirm({
     title: `Delete ${category} category?`,
-    message: `${details || 'Its products'} will be removed from Products and future quotation search. Inventory records and existing quotations will not change.`,
+    message: `${addedCount} added product${addedCount === 1 ? '' : 's'} will be deleted.${inventoryCount ? ` ${inventoryCount} inventory product${inventoryCount === 1 ? '' : 's'} will remain because inventory products cannot be deleted.` : ''} Existing quotations will not change.`,
     confirmText: 'Delete Category',
     cancelText: 'Cancel',
     destructive: true
@@ -3477,9 +3804,8 @@ async function productCatalogDeleteCategory() {
   try {
     const response = await apiCall('/api/finance/products/category', 'DELETE', { category });
     financeApplyProductRows(response.data || []);
-    productCatalogState.category = '';
     productCatalogRender();
-    showNotification('success', `${category} category deleted`);
+    showNotification('success', inventoryCount ? 'Added products deleted; inventory products retained' : `${category} category deleted`);
   } catch (error) {}
 }
 
@@ -5591,6 +5917,7 @@ function financeRenderSubprojectTabs() {
     activeId: financeCurrentSubprojectId(),
     readOnly: financeState.snapshotMode,
     allowItemDrop: true,
+    showLinkedStatus: true,
     handlerPrefix: 'finance',
     ariaLabel: 'Quotation sub-projects'
   });
@@ -5853,18 +6180,259 @@ function financeSelectSubproject(subprojectId) {
   financeRenderEditor();
 }
 
+function financeMergeLinkedRoomContent(document, sourceSubprojectId, targetSubprojectId) {
+  const sourceId = String(sourceSubprojectId || '');
+  const targetId = String(targetSubprojectId || '');
+  financeEnsureLinkedRoomKeys(document, sourceId);
+  financeEnsureLinkedRoomKeys(document, targetId);
+  const sourceLines = (document.lineItems || []).filter(
+    line => String(line.subprojectId || 'main') === sourceId
+  );
+  const targetLines = (document.lineItems || []).filter(
+    line => String(line.subprojectId || 'main') === targetId
+  );
+  const usedSourceLines = new Set();
+  const pairs = targetLines.map(targetLine => {
+    const sourceLine = financeLinkedCounterpart(
+      targetLine,
+      sourceLines,
+      usedSourceLines,
+      financeLinkedLineIdentity,
+      'linkedItemId'
+    );
+    if (sourceLine) usedSourceLines.add(sourceLine);
+    return { targetLine, sourceLine };
+  });
+  const targetGroupToSourceGroup = new Map();
+  pairs.forEach(({ targetLine, sourceLine }) => {
+    if (targetLine.groupId && sourceLine?.groupId) {
+      targetGroupToSourceGroup.set(targetLine.groupId, sourceLine.groupId);
+    }
+  });
+  const addedLines = [];
+  pairs.forEach(({ targetLine, sourceLine }) => {
+    if (sourceLine) {
+      const linkedItemId = String(
+        sourceLine.linkedItemId || targetLine.linkedItemId || financeLinkedRecordId('linked_line')
+      );
+      sourceLine.linkedItemId = linkedItemId;
+      targetLine.linkedItemId = linkedItemId;
+      return;
+    }
+    const clone = financeCloneDocument(targetLine);
+    clone.id = financeLinkedRecordId('line');
+    clone.subprojectId = sourceId;
+    clone.linkedItemId = String(
+      targetLine.linkedItemId || financeLinkedRecordId('linked_line')
+    );
+    targetLine.linkedItemId = clone.linkedItemId;
+    if (targetLine.groupId) {
+      if (!targetGroupToSourceGroup.has(targetLine.groupId)) {
+        targetGroupToSourceGroup.set(targetLine.groupId, financeLinkedRecordId('group'));
+      }
+      clone.groupId = targetGroupToSourceGroup.get(targetLine.groupId);
+    } else {
+      clone.groupId = '';
+    }
+    addedLines.push(clone);
+  });
+  document.lineItems = [...(document.lineItems || []), ...addedLines];
+
+  const sourceHeaderCandidates = (document.headerRows || []).filter(
+    header => String(header.subprojectId || 'main') === sourceId
+  );
+  const targetHeaders = (document.headerRows || []).filter(
+    header => String(header.subprojectId || 'main') === targetId
+  );
+  const usedSourceHeaders = new Set();
+  const addedHeaders = [];
+  targetHeaders.forEach(targetHeader => {
+    const sourceHeader = financeLinkedCounterpart(
+      targetHeader,
+      sourceHeaderCandidates,
+      usedSourceHeaders,
+      header => financeLinkedHeaderIdentity(header, document.lineItems),
+      'linkedHeaderId'
+    );
+    if (sourceHeader) {
+      usedSourceHeaders.add(sourceHeader);
+      const linkedHeaderId = String(
+        sourceHeader.linkedHeaderId
+        || targetHeader.linkedHeaderId
+        || financeLinkedRecordId('linked_header')
+      );
+      sourceHeader.linkedHeaderId = linkedHeaderId;
+      targetHeader.linkedHeaderId = linkedHeaderId;
+      return;
+    }
+    const clone = financeCloneDocument(targetHeader);
+    clone.id = financeLinkedRecordId('header');
+    clone.subprojectId = sourceId;
+    clone.linkedHeaderId = String(
+      targetHeader.linkedHeaderId || financeLinkedRecordId('linked_header')
+    );
+    targetHeader.linkedHeaderId = clone.linkedHeaderId;
+    const targetAnchor = targetLines.find(
+      line => String(line.id || '') === String(targetHeader.beforeLineId || '')
+    );
+    const sourceAnchor = (document.lineItems || []).find(line => (
+      String(line.subprojectId || 'main') === sourceId
+      && String(line.linkedItemId || '') === String(targetAnchor?.linkedItemId || '')
+    ));
+    clone.beforeLineId = sourceAnchor?.id || '';
+    addedHeaders.push(clone);
+    sourceHeaderCandidates.push(clone);
+  });
+  document.headerRows = [...(document.headerRows || []), ...addedHeaders];
+
+  const sourceAdjustmentCandidates = (document.adjustments || []).filter(adjustment => (
+    adjustment.scope !== 'total'
+    && String(adjustment.subprojectId || 'main') === sourceId
+  ));
+  const targetAdjustments = (document.adjustments || []).filter(adjustment => (
+    adjustment.scope !== 'total'
+    && String(adjustment.subprojectId || 'main') === targetId
+  ));
+  const usedSourceAdjustments = new Set();
+  const addedAdjustments = [];
+  targetAdjustments.forEach(targetAdjustment => {
+    const sourceAdjustment = financeLinkedCounterpart(
+      targetAdjustment,
+      sourceAdjustmentCandidates,
+      usedSourceAdjustments,
+      financeLinkedAdjustmentIdentity,
+      'linkedAdjustmentId'
+    );
+    if (sourceAdjustment) {
+      usedSourceAdjustments.add(sourceAdjustment);
+      const linkedAdjustmentId = String(
+        sourceAdjustment.linkedAdjustmentId
+        || targetAdjustment.linkedAdjustmentId
+        || financeLinkedRecordId('linked_adjustment')
+      );
+      sourceAdjustment.linkedAdjustmentId = linkedAdjustmentId;
+      targetAdjustment.linkedAdjustmentId = linkedAdjustmentId;
+      return;
+    }
+    const clone = financeCloneDocument(targetAdjustment);
+    clone.id = financeLinkedRecordId('adjustment');
+    clone.subprojectId = sourceId;
+    clone.linkedAdjustmentId = String(
+      targetAdjustment.linkedAdjustmentId || financeLinkedRecordId('linked_adjustment')
+    );
+    targetAdjustment.linkedAdjustmentId = clone.linkedAdjustmentId;
+    addedAdjustments.push(clone);
+    sourceAdjustmentCandidates.push(clone);
+  });
+  document.adjustments = [...(document.adjustments || []), ...addedAdjustments];
+  return {
+    lines: addedLines.length,
+    headers: addedHeaders.length,
+    adjustments: addedAdjustments.length,
+  };
+}
+
+function financeLinkSubprojects(sourceSubprojectId, targetSubprojectId) {
+  const document = financeState.current;
+  const rows = financeSubprojects(document);
+  const source = rows.find(row => String(row.id) === String(sourceSubprojectId || ''));
+  const target = rows.find(row => String(row.id) === String(targetSubprojectId || ''));
+  if (
+    !document
+    || financeState.snapshotMode
+    || !source
+    || !target
+    || source === target
+    || financeSubprojectsAreLinked(source.id, target.id, document)
+  ) return false;
+  const groupIds = new Set(
+    [source.linkedGroupId, target.linkedGroupId].filter(Boolean).map(String)
+  );
+  const members = rows.filter(row => (
+    row === source
+    || row === target
+    || groupIds.has(String(row.linkedGroupId || ''))
+  ));
+  const linkedGroupId = String(
+    source.linkedGroupId || target.linkedGroupId || financeLinkedRecordId('linked_rooms')
+  );
+  const merged = financeMergeLinkedRoomContent(document, source.id, target.id);
+  members.forEach(row => { row.linkedGroupId = linkedGroupId; });
+  financeState.activeSubprojectId = source.id;
+  financeSynchroniseLinkedSubprojects(document, source.id);
+  financeSyncDocumentDepartments(document);
+  financeQueueSave({ sourceSubprojectId: source.id, immediate: true });
+  financeRenderEditor();
+  const additions = merged.lines + merged.headers + merged.adjustments;
+  showNotification(
+    'success',
+    `${source.name} and ${target.name} linked${additions ? `; ${additions} missing entr${additions === 1 ? 'y was' : 'ies were'} added` : ''}`
+  );
+  return true;
+}
+
+function financeUnlinkSubproject(subprojectId) {
+  const document = financeState.current;
+  const row = financeSubprojects(document).find(
+    item => String(item.id) === String(subprojectId || '')
+  );
+  const members = financeLinkedSubprojectMembers(subprojectId, document);
+  if (!document || financeState.snapshotMode || !row?.linkedGroupId || members.length < 2) {
+    return false;
+  }
+  delete row.linkedGroupId;
+  financeClearLinkedRoomKeys(document, row.id);
+  const remaining = members.filter(member => member !== row);
+  if (remaining.length === 1) {
+    delete remaining[0].linkedGroupId;
+    financeClearLinkedRoomKeys(document, remaining[0].id);
+  }
+  financeQueueSave({
+    sourceSubprojectId: financeCurrentSubprojectId(document),
+    immediate: true
+  });
+  financeRenderEditor();
+  showNotification('success', `${row.name} unlinked`);
+  return true;
+}
+
+function financeSubprojectContextMenuMarkup(subprojectId) {
+  const rows = financeSubprojects();
+  const source = rows.find(row => String(row.id) === String(subprojectId || ''));
+  if (!source) return '';
+  const members = financeLinkedSubprojectMembers(source.id);
+  const linkedNames = members.filter(row => row !== source).map(row => row.name);
+  const candidates = rows.filter(row => (
+    row !== source && !financeSubprojectsAreLinked(source.id, row.id)
+  ));
+  return `
+    <button type="button" role="menuitem" onclick="event.stopPropagation();financeDuplicateSubprojectFromMenu()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"></rect><path d="M16 8V4H4v12h4"></path></svg>
+      <span>Duplicate sub-project</span>
+    </button>
+    ${linkedNames.length ? `
+      <div class="finance-subproject-menu-label">Linked with ${financeEscape(linkedNames.join(', '))}</div>
+      <button type="button" role="menuitem" onclick="event.stopPropagation();financeUnlinkSubprojectFromMenu()">
+        <span aria-hidden="true">&#128279;</span><span>Unlink this sub-project</span>
+      </button>
+    ` : ''}
+    ${candidates.length ? `
+      <div class="finance-subproject-menu-label">Link sub-project</div>
+      ${candidates.map(row => `
+        <button type="button" role="menuitem" onclick="event.stopPropagation();financeLinkSubprojectFromMenu('${financeEscapeAttr(row.id)}')">
+          <span aria-hidden="true">&#128279;</span><span>Link with ${financeEscape(row.name)}</span>
+        </button>
+      `).join('')}
+    ` : ''}`;
+}
+
 function financeEnsureSubprojectContextMenu() {
   let menu = document.getElementById('financeSubprojectContextMenu');
   if (menu) return menu;
   menu = document.createElement('div');
   menu.id = 'financeSubprojectContextMenu';
-  menu.className = 'finance-quotation-context-menu';
+  menu.className = 'finance-quotation-context-menu finance-subproject-context-menu';
   menu.setAttribute('role', 'menu');
-  menu.innerHTML = `
-    <button type="button" role="menuitem" onclick="event.stopPropagation();financeDuplicateSubprojectFromMenu()">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"></rect><path d="M16 8V4H4v12h4"></path></svg>
-      <span>Duplicate sub-project</span>
-    </button>`;
   document.body.appendChild(menu);
   return menu;
 }
@@ -5886,6 +6454,7 @@ function financeOpenSubprojectContextMenu(event, subprojectId) {
   financeCloseMenus();
   const menu = financeEnsureSubprojectContextMenu();
   financeState.contextSubprojectId = String(subprojectId);
+  menu.innerHTML = financeSubprojectContextMenuMarkup(subprojectId);
   document.querySelector(
     `.finance-subproject-tab[data-subproject-id="${CSS.escape(String(subprojectId))}"]`
   )?.classList.add('context-open');
@@ -5918,6 +6487,10 @@ function financeDuplicateSubproject(subprojectId) {
   );
   if (!document || financeState.snapshotMode || sourceIndex < 0) return '';
   const source = rows[sourceIndex];
+  source.linkedGroupId = String(
+    source.linkedGroupId || financeLinkedRecordId('linked_rooms')
+  );
+  financeEnsureLinkedRoomKeys(document, source.id);
   const newSubprojectId = `room_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const lineIdMap = new Map();
   const groupIdMap = new Map();
@@ -5970,9 +6543,9 @@ function financeDuplicateSubproject(subprojectId) {
   financeState.activeSubprojectId = newSubprojectId;
   financeState.addDepartment = '';
   financeSyncDocumentDepartments(document);
-  financeQueueSave();
+  financeQueueSave({ sourceSubprojectId: newSubprojectId, immediate: true });
   financeRenderEditor();
-  showNotification('success', `${clone.name} created`);
+  showNotification('success', `${clone.name} created and linked with ${source.name}`);
   return newSubprojectId;
 }
 
@@ -5980,6 +6553,18 @@ function financeDuplicateSubprojectFromMenu() {
   const subprojectId = financeState.contextSubprojectId;
   financeCloseSubprojectContextMenu();
   if (subprojectId) financeDuplicateSubproject(subprojectId);
+}
+
+function financeLinkSubprojectFromMenu(targetSubprojectId) {
+  const sourceSubprojectId = financeState.contextSubprojectId;
+  financeCloseSubprojectContextMenu();
+  if (sourceSubprojectId) financeLinkSubprojects(sourceSubprojectId, targetSubprojectId);
+}
+
+function financeUnlinkSubprojectFromMenu() {
+  const subprojectId = financeState.contextSubprojectId;
+  financeCloseSubprojectContextMenu();
+  if (subprojectId) financeUnlinkSubproject(subprojectId);
 }
 
 function financeMoveLinesToSubproject(sourceIndexes, targetSubprojectId) {
@@ -6000,6 +6585,16 @@ function financeMoveLinesToSubproject(sourceIndexes, targetSubprojectId) {
     financeDragLineEnd();
     return 0;
   }
+  const sourceRoomIds = [...new Set(movedItems.map(
+    line => String(line.subprojectId || 'main')
+  ))];
+  if (sourceRoomIds.some(sourceId => (
+    financeSubprojectsAreLinked(sourceId, targetId, document)
+  ))) {
+    financeDragLineEnd();
+    showNotification('info', 'Those sub-projects are linked, so their items are already shared');
+    return 0;
+  }
   const wholeGroup = !!financeState.dragWholeLineGroup
     || showbaseLineWorkspace.draggedWholeGroup(lines, selectedIndexes);
   if (!wholeGroup) {
@@ -6010,16 +6605,22 @@ function financeMoveLinesToSubproject(sourceIndexes, targetSubprojectId) {
   [...selectedIndexes].sort((left, right) => right - left).forEach(
     index => lines.splice(index, 1)
   );
-  movedItems.forEach(line => { line.subprojectId = targetId; });
+  movedItems.forEach(line => {
+    line.subprojectId = targetId;
+    delete line.linkedItemId;
+  });
   let insertionIndex = lines.reduce((last, line, index) => (
     String(line.subprojectId || 'main') === targetId ? index + 1 : last
   ), -1);
   if (insertionIndex < 0) insertionIndex = lines.length;
   lines.splice(insertionIndex, 0, ...movedItems);
+  sourceRoomIds.forEach(sourceId => {
+    financeSynchroniseLinkedSubprojects(document, sourceId);
+  });
   financeState.activeSubprojectId = targetId;
   financeState.addDepartment = '';
   financeSyncDocumentDepartments(document);
-  financeQueueSave();
+  financeQueueSave({ sourceSubprojectId: targetId });
   financeDragLineEnd();
   financeRenderEditor();
   showNotification(
@@ -6177,6 +6778,7 @@ async function financeDeleteSubproject(subprojectId) {
   financeState.current.headerRows = financeHeaderRows()
     .filter(row => (row.subprojectId || 'main') !== subprojectId);
   financeState.current.adjustments = (financeState.current.adjustments || []).filter(item => (item.subprojectId || 'main') !== subprojectId || item.scope === 'total');
+  financeRepairLinkedSubprojectGroups(financeState.current);
   financeState.activeSubprojectId = financeState.current.subprojects[0].id;
   financeSyncDocumentDepartments();
   financeQueueSave();
@@ -6939,6 +7541,7 @@ function financeRenderEditor() {
               id: 'financeAddItemInput',
               resultsId: 'financeCatalogResults',
               placeholder: 'Search inventory or previously used custom items...',
+              onfocus: 'financeSearchCatalog(this.value)',
               oninput: 'financeSearchCatalog(this.value)',
               onkeydown: 'financeAddItemKeydown(event)'
             },
@@ -7473,12 +8076,23 @@ function financeSetSummaryGrouping(grouping) {
 
 function financeQueueSave(options = {}) {
   if (financeState.discardingRevision) return;
+  financeSynchroniseLinkedSubprojects(
+    financeState.current,
+    options.sourceSubprojectId || financeCurrentSubprojectId(financeState.current)
+  );
   financeState.automaticDraftDateRefresh =
     options.automaticDraftDateRefresh === true;
   financeState.changeVersion += 1;
   const state = document.getElementById('financeSaveState');
   if (state) state.textContent = 'Unsaved changes';
   clearTimeout(financeState.saveTimer);
+  if (options.immediate === true) {
+    financeState.saveTimer = null;
+    void financeSaveCurrent(false).catch(error => {
+      showNotification('error', error.message || 'Failed to save quotation');
+    });
+    return;
+  }
   financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 650);
 }
 
@@ -7551,6 +8165,7 @@ async function financeSaveCurrent(notify = false, conflictRetry = 0) {
     }
     return financeSaveCurrent(notify, conflictRetry);
   }
+  financeSynchroniseLinkedSubprojects(current, financeCurrentSubprojectId(current));
   financeSyncDocumentDepartments(current);
   financeApplyLockedTotalAdjustment(current);
   clearTimeout(financeState.saveTimer);
@@ -7690,16 +8305,15 @@ function financeSearchCatalog(query) {
   const results = document.getElementById('financeCatalogResults');
   const clean = String(query || '').trim();
   const cacheKey = clean.toLowerCase();
+  const requestSeq = ++financeState.catalogRequestSeq;
   financeState.catalogAbortController?.abort?.();
   if (!clean) {
-    financeState.catalogRequestSeq += 1;
     financeState.catalog = [];
     financeState.catalogQuery = '';
     results?.classList.remove('open');
     return;
   }
   if (cacheKey.length < 2) {
-    financeState.catalogRequestSeq += 1;
     financeState.catalog = [];
     financeState.catalogQuery = cacheKey;
     if (results) {
@@ -7709,18 +8323,26 @@ function financeSearchCatalog(query) {
     return;
   }
   if (financeState.catalogCache[cacheKey]) {
-    financeState.catalogRequestSeq += 1;
     financeState.catalog = financeState.catalogCache[cacheKey];
     financeState.catalogQuery = cacheKey;
     financeRenderCatalog();
     return;
   }
+  const cachedPrefix = Object.keys(financeState.catalogCache)
+    .filter(key => key.length >= 2 && cacheKey.startsWith(key))
+    .sort((left, right) => right.length - left.length)[0];
+  if (cachedPrefix) {
+    financeState.catalog = financeState.catalogCache[cachedPrefix].filter(row => (
+      financeCatalogMatchesQuery(row, cacheKey)
+    ));
+    financeState.catalogQuery = cacheKey;
+    financeRenderCatalog();
+  }
   if (results) {
-    results.innerHTML = '<div class="finance-suggestion-empty">Searching... You can press Add now to create this as a custom item.</div>';
+    if (!cachedPrefix) results.innerHTML = '<div class="finance-suggestion-empty">Searching... You can press Add now to create this as a custom item.</div>';
     results.classList.add('open');
   }
   const runSearch = async () => {
-    const requestSeq = ++financeState.catalogRequestSeq;
     const controller = new AbortController();
     financeState.catalogAbortController = controller;
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -7753,7 +8375,18 @@ function financeSearchCatalog(query) {
     if (requestSeq !== financeState.catalogRequestSeq) return;
     financeRenderCatalog();
   };
-  financeState.catalogTimer = setTimeout(runSearch, 120);
+  financeState.catalogTimer = setTimeout(runSearch, 60);
+}
+
+function financeCatalogMatchesQuery(row, query) {
+  const haystack = [
+    row?.brand, row?.model, row?.description, row?.productLabel,
+    row?.productCategory, row?.department, row?.departmentCode,
+    row?.containerId, row?.containerSerial, ...(row?.searchTags || [])
+  ].join(' ').toLocaleLowerCase();
+  return String(query || '').trim().toLocaleLowerCase().split(/\s+/).every(
+    token => haystack.includes(token)
+  );
 }
 
 function financeContainerFamilyLabel(containerId) {
@@ -7841,7 +8474,7 @@ function financeRenderCatalog() {
   if (!results) return;
   results.innerHTML = financeState.catalog.map((row, index) => `
     <button type="button" class="finance-catalog-option" onkeydown="financeCatalogSuggestionKeydown(event,${index})" onclick="financeSelectCatalog(${index})">
-      <span><strong>${financeCatalogDescription(row)}</strong><br><small>${financeEscape(financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
+      <span><strong>${financeCatalogDescription(row)}</strong><small>${financeEscape(financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">Press Add to create a custom item</div>';
@@ -8037,9 +8670,17 @@ async function financeAddCustomItem() {
       try {
         const currentLine = financeState.current?.lineItems?.find(row => row.id === lineId);
         if (currentLine) {
-          const rows = await financePersistProduct({ ...currentLine, isCustom: true });
+          const rows = await financePersistProduct({
+            ...currentLine,
+            brand: '',
+            model: '',
+            description: currentLine.productLabel || currentLine.description,
+            productLabel: currentLine.productLabel || currentLine.description,
+            productCategory: currentLine.systemName || currentLine.department,
+            isCustom: true
+          });
           const savedProduct = rows.find(row => row.isCustom
-            && String(row.description || '').trim().toLowerCase() === description.toLowerCase());
+            && String(row.productLabel || '').trim().toLowerCase() === description.toLowerCase());
           if (savedProduct) {
             currentLine.productId = savedProduct.productId || savedProduct.id || '';
             currentLine.productKey = savedProduct.productKey || savedProduct.catalogKey || '';

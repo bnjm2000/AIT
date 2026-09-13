@@ -1265,10 +1265,18 @@ class WorkforcePortalTests(unittest.TestCase):
                 "invoices": [{
                     "id": "invoice-paid",
                     "status": "Paid",
-                    "paymentConfirmedAt": now_iso(),
                 }],
                 "claims": [],
             }
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Pending Closure")
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            invoice = workforce["submissions"]["143"][freelancer_id][
+                "invoices"
+            ][0]
+            invoice["paymentConfirmedAt"] = now_iso()
 
         app_module.update_event_state(event)
         self.assertEqual(event.state, "Closed")
@@ -1278,12 +1286,11 @@ class WorkforcePortalTests(unittest.TestCase):
                 "invoices"
             ][0]
             invoice.pop("paymentConfirmedAt")
-            invoice["status"] = "Approved"
 
         app_module.update_event_state(event)
         self.assertEqual(event.state, "Pending Closure")
 
-    def test_manpower_only_event_closes_when_every_invoice_is_paid(self):
+    def test_manpower_only_event_waits_for_payment_confirmation(self):
         freelancer_id = self.create_worker_assignment()
         event = self.manager.events[143]
         event.prepared_items = []
@@ -1308,7 +1315,85 @@ class WorkforcePortalTests(unittest.TestCase):
             }
 
         app_module.update_event_state(event)
+        self.assertEqual(event.state, "Pending Closure")
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            invoice = workforce["submissions"]["143"][freelancer_id][
+                "invoices"
+            ][0]
+            invoice["paymentConfirmedAt"] = now_iso()
+
+        app_module.update_event_state(event)
         self.assertEqual(event.state, "Closed")
+
+    def test_detached_event_fails_financial_closure_safely(self):
+        freelancer_id = self.create_worker_assignment()
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce.setdefault("submissions", {}).setdefault(
+                "143", {}
+            )[freelancer_id] = {
+                "invoices": [{
+                    "id": "invoice-confirmed",
+                    "status": "Paid",
+                    "paymentConfirmedAt": now_iso(),
+                }],
+                "claims": [],
+            }
+
+        workforce = load_workforce(self.manager.data_folder)
+        self.assertTrue(app_module._workforce_financial_closure_complete(
+            143,
+            manager=self.manager,
+            event=self.manager.events[143],
+            workforce=workforce,
+        ))
+        detached = Event(
+            143,
+            "Detached Test Production",
+            "20260710",
+            "20260712",
+            [],
+        )
+        self.assertFalse(app_module._workforce_financial_closure_complete(
+            143,
+            manager=self.manager,
+            event=detached,
+            workforce=workforce,
+        ))
+
+    def test_read_refresh_uses_current_event_and_automatic_actor(self):
+        event = self.manager.events[143]
+        event.state = "Pending Closure"
+        event.prepared_items = ["A-001"]
+        event.actually_prepared = []
+        event.returned_items = ["A-001"]
+        self.manager.save_event(event)
+        detached = Event(
+            143,
+            "Detached Test Production",
+            event.start_date,
+            event.end_date,
+            [],
+            prepared_items=["A-001"],
+            returned_items=["A-001"],
+            actually_prepared=[],
+            state="Pending Closure",
+        )
+
+        with patch.object(
+            app_module, "_queue_event_state_notification"
+        ) as queued:
+            updated = app_module.refresh_event_states_for_read(
+                [detached], sync_vendor_management=False
+            )
+
+        self.assertEqual(self.manager.events[143].state, "Closed")
+        self.assertEqual(updated[0]["eventId"], 143)
+        self.assertIs(queued.call_args.kwargs["event"], self.manager.events[143])
+        self.assertEqual(
+            queued.call_args.kwargs["changed_by"],
+            "Showbase automatic update",
+        )
 
     def test_worker_assignment_allows_role_and_rate_to_be_added_later(self):
         self.login("admin", True)

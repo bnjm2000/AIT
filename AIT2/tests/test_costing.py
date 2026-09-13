@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager
@@ -154,6 +155,78 @@ class CostingFeatureTests(unittest.TestCase):
             'costingState.baseDocument = financeCloneDocument(latest);',
             realtime,
         )
+
+    def test_linked_quotation_and_costing_updates_identify_both_documents(self):
+        self.login('owner')
+        created = self.client.post('/api/quotations', json={
+            'projectName': 'Live linked project',
+            'eventLocation': 'Hall A',
+        })
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        quotation = created.get_json()['data']
+        costing_id = quotation['sourceCostingId']
+        costing = self.client.get(
+            f'/api/costings/{costing_id}'
+        ).get_json()['data']
+
+        costing['eventLocation'] = 'Hall B'
+        with patch.object(app_module, '_publish_realtime_update_now') as publish:
+            saved_costing = self.client.put(
+                f'/api/costings/{costing_id}',
+                json=costing,
+                headers={'X-Client-Id': 'costing-tab'},
+            )
+        self.assertEqual(
+            saved_costing.status_code, 200, saved_costing.get_data(as_text=True)
+        )
+        publish.assert_called_once()
+        topic, notice, origin = publish.call_args.args
+        self.assertEqual(topic, 'data-changed')
+        self.assertEqual(origin, 'costing-tab')
+        costing_change = next(
+            row['details'] for row in notice['changes']
+            if row['topic'] == 'finance'
+        )
+        self.assertEqual(costing_change['action'], 'costing-updated')
+        self.assertEqual(costing_change['costingId'], costing_id)
+        self.assertEqual(costing_change['quotationId'], quotation['id'])
+
+        latest_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        latest_quote['eventLocation'] = 'Hall C'
+        with patch.object(app_module, '_publish_realtime_update_now') as publish:
+            saved_quote = self.client.put(
+                f"/api/quotations/{quotation['id']}",
+                json=latest_quote,
+                headers={'X-Client-Id': 'quotation-tab'},
+            )
+        self.assertEqual(
+            saved_quote.status_code, 200, saved_quote.get_data(as_text=True)
+        )
+        publish.assert_called_once()
+        topic, notice, origin = publish.call_args.args
+        self.assertEqual(topic, 'data-changed')
+        self.assertEqual(origin, 'quotation-tab')
+        quotation_change = next(
+            row['details'] for row in notice['changes']
+            if row['topic'] == 'finance'
+        )
+        self.assertEqual(quotation_change['action'], 'quotation-updated')
+        self.assertEqual(quotation_change['quotationId'], quotation['id'])
+        self.assertEqual(quotation_change['costingId'], costing_id)
+
+    def test_realtime_client_id_is_unique_to_each_browser_tab(self):
+        source = (
+            Path(app_module.__file__).resolve().parent
+            / 'static' / 'js' / 'app.js'
+        ).read_text(encoding='utf-8')
+        client_id_source = source.split(
+            'const REALTIME_CLIENT_ID = (() => {', 1
+        )[1].split('})();', 1)[0]
+        self.assertIn("typeof crypto !== 'undefined'", client_id_source)
+        self.assertIn('crypto.randomUUID()', client_id_source)
+        self.assertNotIn('sessionStorage.getItem', client_id_source)
 
     def test_costing_applies_rate_card_prices_and_opens_rate_card(self):
         root = Path(app_module.__file__).resolve().parent
@@ -2795,6 +2868,123 @@ class CostingFeatureTests(unittest.TestCase):
             self.assertEqual(line['groupItemTotal'], 243)
             self.assertEqual(line['groupItemPriceContribution'], 121.5)
             self.assertTrue(line['groupItemCommercialStored'])
+
+    def test_items_groups_and_headers_round_trip_between_open_documents(self):
+        self.login('owner')
+        created = self.client.post('/api/quotations', json={
+            'projectName': 'Live structure project',
+        })
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+        quotation = created.get_json()['data']
+        quotation['lineItems'] = [{
+            'id': 'standalone-line',
+            'description': 'Lectern microphone',
+            'department': 'Audio',
+            'systemName': 'Audio',
+            'quantity': 1,
+            'days': 1,
+            'unitPrice': 50,
+            'subprojectId': 'main',
+        }, {
+            'id': 'grouped-line',
+            'description': 'Speaker package item',
+            'department': 'Audio',
+            'systemName': 'Audio',
+            'quantity': 1,
+            'days': 1,
+            'totalMode': 'amount',
+            'total': 200,
+            'subprojectId': 'main',
+            'groupId': 'audio-package',
+            'groupTitle': 'Audio package',
+            'groupDisplayFields': ['description'],
+        }]
+        quotation['headerRows'] = [{
+            'id': 'audio-introduction',
+            'content': 'Main plenary audio',
+            'beforeLineId': 'standalone-line',
+            'subprojectId': 'main',
+        }]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(
+            saved_quote.status_code, 200, saved_quote.get_data(as_text=True)
+        )
+
+        costing = self.client.get(
+            f"/api/costings/{quotation['sourceCostingId']}"
+        ).get_json()['data']
+        self.assertEqual(
+            {row['id'] for row in costing['lineItems']},
+            {'standalone-line', 'grouped-line'},
+        )
+        self.assertEqual(costing['headerRows'], quotation['headerRows'])
+        grouped = next(row for row in costing['lineItems'] if row['groupId'])
+        self.assertEqual(grouped['groupTitle'], 'Audio package')
+
+        standalone = next(
+            row for row in costing['lineItems']
+            if row['id'] == 'standalone-line'
+        )
+        standalone['description'] = 'Updated lectern microphone'
+        grouped['groupTitle'] = 'Updated audio package'
+        costing['lineItems'].append({
+            'id': 'costing-added-line',
+            'quotationLineId': '',
+            'description': 'Costing-added monitor',
+            'category': 'Audio',
+            'quantity': 1,
+            'multiplier': 1,
+            'salePrice': 75,
+            'subprojectId': 'main',
+            'isCustom': True,
+        })
+        costing['headerRows'][0]['content'] = 'Updated main plenary audio'
+        costing['headerRows'].append({
+            'id': 'monitor-header',
+            'content': 'Monitor package',
+            'beforeLineId': 'costing-added-line',
+            'subprojectId': 'main',
+        })
+        saved_costing = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            saved_costing.status_code, 200,
+            saved_costing.get_data(as_text=True),
+        )
+
+        refreshed_quote = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertIn(
+            'Updated lectern microphone',
+            {row['description'] for row in refreshed_quote['lineItems']},
+        )
+        self.assertIn(
+            'Costing-added monitor',
+            {row['description'] for row in refreshed_quote['lineItems']},
+        )
+        refreshed_group = next(
+            row for row in refreshed_quote['lineItems'] if row['groupId']
+        )
+        self.assertEqual(refreshed_group['groupTitle'], 'Updated audio package')
+        self.assertEqual(
+            [row['content'] for row in refreshed_quote['headerRows']],
+            ['Updated main plenary audio', 'Monitor package'],
+        )
+
+    def test_costing_renders_synced_headers_at_their_line_anchors(self):
+        source = Path('static/js/costing.js').read_text(encoding='utf-8')
+        css_source = Path('static/css/costing.css').read_text(encoding='utf-8')
+        self.assertIn('function costingHeaderLayout(', source)
+        self.assertIn('function costingHeaderRowsMarkup(rows)', source)
+        self.assertIn('headerLayout.beforeCategory.get(category)', source)
+        self.assertIn('headerLayout.beforeUnit.get(costingHeaderUnitKey(line))', source)
+        self.assertIn('colspan="12"', source)
+        self.assertIn('.costing-table .costing-quotation-header-row td', css_source)
+        self.assertIn('text-align: center;', css_source)
 
     def test_sent_revision_keeps_original_item_spelling_after_inventory_rename(self):
         self.login('owner')

@@ -180,6 +180,96 @@ function costingVisibleLines(subprojectId = costingActiveSubprojectId()) {
   );
 }
 
+function costingHeaderRows(document = costingState.current) {
+  if (!document) return [];
+  if (!Array.isArray(document.headerRows)) document.headerRows = [];
+  return document.headerRows;
+}
+
+function costingHeaderUnitKey(line) {
+  const groupId = String(line?.groupId || '');
+  return groupId
+    ? `group:${groupId}`
+    : `line:${String(line?.quotationLineId || line?.id || '')}`;
+}
+
+function costingHeaderLayout(
+  document = costingState.current,
+  subprojectId = costingActiveSubprojectId(document)
+) {
+  const lines = (document?.lineItems || []).filter(line => (
+    String(line?.subprojectId || 'main') === String(subprojectId || 'main')
+  ));
+  const categories = [];
+  lines.forEach(line => {
+    const category = String(line?.category || 'General').trim() || 'General';
+    if (!categories.includes(category)) categories.push(category);
+  });
+  const units = [];
+  categories.forEach(category => {
+    const categoryLines = lines.filter(line => (
+      String(line?.category || 'General') === category
+    ));
+    const seenGroups = new Set();
+    categoryLines.forEach(line => {
+      const groupId = String(line?.groupId || '');
+      if (groupId && seenGroups.has(groupId)) return;
+      if (groupId) seenGroups.add(groupId);
+      const members = groupId
+        ? categoryLines.filter(candidate => String(candidate?.groupId || '') === groupId)
+        : [line];
+      const lineIds = [...new Set(members.flatMap(member => [
+        String(member?.id || ''),
+        String(member?.quotationLineId || '')
+      ]).filter(Boolean))];
+      units.push({
+        key: costingHeaderUnitKey(line),
+        category,
+        lineIds
+      });
+    });
+  });
+  const unitByLineId = new Map();
+  const firstUnitByCategory = new Map();
+  units.forEach(unit => {
+    if (!firstUnitByCategory.has(unit.category)) {
+      firstUnitByCategory.set(unit.category, unit);
+    }
+    unit.lineIds.forEach(lineId => unitByLineId.set(lineId, unit));
+  });
+  const beforeCategory = new Map();
+  const beforeUnit = new Map();
+  const end = [];
+  costingHeaderRows(document)
+    .filter(row => String(row?.subprojectId || 'main') === String(subprojectId || 'main'))
+    .forEach(row => {
+      const unit = unitByLineId.get(String(row?.beforeLineId || ''));
+      if (!unit) {
+        end.push(row);
+        return;
+      }
+      const target = firstUnitByCategory.get(unit.category)?.key === unit.key
+        ? beforeCategory
+        : beforeUnit;
+      const key = target === beforeCategory ? unit.category : unit.key;
+      if (!target.has(key)) target.set(key, []);
+      target.get(key).push(row);
+    });
+  return { beforeCategory, beforeUnit, end };
+}
+
+function costingHeaderRowsMarkup(rows) {
+  return (rows || []).map(header => {
+    const content = costingEscape(header?.content || '').replace(/\r?\n/g, '<br>') || '&nbsp;';
+    return `<tr class="costing-quotation-header-row" data-costing-header-id="${costingAttr(header?.id || '')}"><td colspan="12"><div>${content}</div></td></tr>`;
+  }).join('');
+}
+
+function costingTrailingHeadersMarkup(rows) {
+  if (!(rows || []).length) return '';
+  return `<section class="costing-category-card costing-header-only-card"><div class="costing-table-wrap"><table class="costing-table"><tbody>${costingHeaderRowsMarkup(rows)}</tbody></table></div></section>`;
+}
+
 function costingCategories(subprojectId = costingActiveSubprojectId()) {
   const categories = [];
   costingVisibleLines(subprojectId).forEach(line => {
@@ -1448,6 +1538,7 @@ function costingRenderEditor() {
   const hasLinkedQuotation = Boolean(current.convertedQuotationId || current.sourceQuotationId);
   const totals = costingTotals();
   const categories = costingCategories();
+  const headerLayout = costingHeaderLayout(current);
   const activeRoom = costingSubprojects().find(
     row => row.id === costingActiveSubprojectId()
   ) || costingSubprojects()[0];
@@ -1488,7 +1579,9 @@ function costingRenderEditor() {
       <main class="costing-line-workspace">
         ${costingSubprojectTabsMarkup(readOnly)}
         <div class="costing-category-list showbase-category-stack">
-          ${categories.map(category => costingCategoryMarkup(category, readOnly)).join('') || '<section class="costing-empty-card">No items yet. Search inventory or enter a custom item below.</section>'}
+          ${categories.map(category => costingCategoryMarkup(category, readOnly, headerLayout)).join('')}
+          ${costingTrailingHeadersMarkup(headerLayout.end)}
+          ${!categories.length && !headerLayout.end.length ? '<section class="costing-empty-card">No items yet. Search inventory or enter a custom item below.</section>' : ''}
           ${readOnly ? '' : costingAddItemMarkup()}
         </div>
       </main>
@@ -1518,7 +1611,7 @@ function costingRenderEditor() {
   showbaseLineWorkspace.restoreViewport(root, viewport);
 }
 
-function costingCategoryMarkup(category, readOnly) {
+function costingCategoryMarkup(category, readOnly, headerLayout = costingHeaderLayout()) {
   const encoded = encodeURIComponent(category);
   const subprojectId = costingActiveSubprojectId();
   const collapseKey = `${subprojectId}::${category}`;
@@ -1548,10 +1641,11 @@ function costingCategoryMarkup(category, readOnly) {
     <div class="costing-table-wrap"><table class="costing-table showbase-category-table">
       <colgroup><col class="col-item"><col class="col-qty"><col class="col-mult"><col class="col-vendor"><col class="col-remarks"><col class="col-money"><col class="col-money"><col class="col-margin"><col class="col-money"><col class="col-unit-price"><col class="col-sale"><col class="col-menu"></colgroup>
       <thead>
+        ${costingHeaderRowsMarkup(headerLayout.beforeCategory.get(category) || [])}
         ${categoryHeader}
         <tr class="costing-column-header showbase-category-column-header"><th>Item</th><th>Qty</th><th>${readOnly ? costingMultiplierHeaderLabel(category) : `<details class="costing-header-menu"><summary class="showbase-line-header-action">${costingMultiplierHeaderLabel(category)}</summary><div><span class="costing-menu-caption">Column label</span><div class="costing-label-choice"><button type="button" onclick="costingSetAllMultiplierLabels('Mult','${costingAttr(encoded)}')">Mult</button><button type="button" onclick="costingSetAllMultiplierLabels('Day','${costingAttr(encoded)}')">Day(s)</button></div><label>Value for all lines<input type="number" min="0" step=".5" value="${costingAttr(defaults.multiplier)}"></label><button type="button" class="apply" onclick="costingApplyMultiplierAll(this.closest('details').querySelector('input').value,'${costingAttr(encoded)}')">Apply value to this category</button></div></details>`}</th><th>${readOnly ? 'Vendor' : `<details class="costing-header-menu costing-vendor-menu"><summary class="showbase-line-header-action">Vendor</summary><div><div class="finance-inline-combobox costing-vendor-combobox costing-category-vendor-combobox"><label>Vendor for this category<input autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Select or enter vendor" onfocus="costingShowVendorSuggestions(this)" oninput="costingShowVendorSuggestions(this)" onkeydown="costingVendorSuggestionInputKeydown(event,this)" onblur="costingVendorInputBlur(this)"></label><div class="finance-inline-suggestions costing-vendor-suggestions" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused(this),120)"></div></div><button type="button" class="apply" onclick="costingApplyCategoryVendor('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Remarks</th><th>Unit Cost</th><th>Cost Total</th><th>${readOnly ? 'Margin' : `<details class="costing-header-menu costing-margin-menu"><summary class="showbase-line-header-action">Margin</summary><div><label>Margin percentage<input type="number" min="-100" max="9999" step=".01" value="${costingAttr(defaults.targetMarginPercent)}"></label><button type="button" class="apply" onclick="costingApplyCategoryMargin('${costingAttr(encoded)}',this.closest('details').querySelector('input').value)">Apply to this category</button></div></details>`}</th><th>Calc. Price</th><th>Unit Price</th><th>Sale Price</th><th></th></tr>
       </thead>
-      <tbody>${costingGroupedLinesMarkup(lines, readOnly)}</tbody>
+      <tbody>${costingGroupedLinesMarkup(lines, readOnly, headerLayout)}</tbody>
       <tfoot><tr class="costing-category-subtotal" ondragover="costingDragLineEndOver(event)" ondragleave="costingDragLineLeave(event)" ondrop="costingDropLineAtCategoryEnd(event,'${costingAttr(encoded)}')"><td colspan="12"><div>
         <span class="costing-subtotal-label"><strong>Category subtotal</strong><small data-category-adjustment>${totals.adjustment ? `Adjustment ${costingMoney(totals.adjustment)}` : 'No category adjustment'}</small></span>
         <label>Cost <strong data-category-cost>${costingEscape(costingMoney(totals.cost))}</strong></label>
@@ -1562,12 +1656,18 @@ function costingCategoryMarkup(category, readOnly) {
   </section>`;
 }
 
-function costingGroupedLinesMarkup(lines, readOnly) {
+function costingGroupedLinesMarkup(lines, readOnly, headerLayout = costingHeaderLayout()) {
   const rendered = new Set();
   return lines.map(({ line, index }) => {
     const groupId = String(line.groupId || '');
+    const isGroupStart = Boolean(groupId && !rendered.has(groupId));
+    const customHeaders = (!groupId || isGroupStart)
+      ? costingHeaderRowsMarkup(
+          headerLayout.beforeUnit.get(costingHeaderUnitKey(line)) || []
+        )
+      : '';
     let header = '';
-    if (groupId && !rendered.has(groupId)) {
+    if (isGroupStart) {
       rendered.add(groupId);
       const firstGroupIndex = lines.find(
         row => String(row.line.groupId || '') === groupId
@@ -1579,7 +1679,7 @@ function costingGroupedLinesMarkup(lines, readOnly) {
         ondrop="costingDropLine(event,${firstGroupIndex},'${costingAttr(encodeURIComponent(line.category || 'General'))}')"
         ondragend="costingDragEnd()"><td colspan="12">${readOnly ? '' : `<span class="finance-drag-handle costing-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="costingDragLineGroupStart(event,'${costingAttr(groupId)}','${costingAttr(line.subprojectId || 'main')}')" ondragend="costingDragEnd()">&#9776;</span>`}<span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</td></tr>`;
     }
-    return header + costingLineMarkup(line, index, readOnly);
+    return customHeaders + header + costingLineMarkup(line, index, readOnly);
   }).join('');
 }
 
@@ -2156,11 +2256,16 @@ function costingDuplicateSubproject(subprojectId) {
   const source = rows[sourceIndex];
   const newSubprojectId = `room_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const groupIdMap = new Map();
+  const lineIdMap = new Map();
   const clonedLines = costingLines().filter(
     line => String(line.subprojectId || 'main') === String(subprojectId)
   ).map((line, index) => {
     const clone = JSON.parse(JSON.stringify(line));
     clone.id = `costline_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`;
+    lineIdMap.set(String(line.id || ''), clone.id);
+    if (line.quotationLineId) {
+      lineIdMap.set(String(line.quotationLineId), clone.id);
+    }
     clone.quotationLineId = '';
     clone.subprojectId = newSubprojectId;
     if (line.groupId) {
@@ -2175,6 +2280,15 @@ function costingDuplicateSubproject(subprojectId) {
     }
     return clone;
   });
+  const clonedHeaders = costingHeaderRows(document).filter(
+    row => String(row.subprojectId || 'main') === String(subprojectId)
+  ).map((row, index) => ({
+    ...JSON.parse(JSON.stringify(row)),
+    id: `header_${Date.now()}_${index}_${Math.random().toString(16).slice(2)}`,
+    linkedHeaderId: '',
+    beforeLineId: lineIdMap.get(String(row.beforeLineId || '')) || '',
+    subprojectId: newSubprojectId
+  }));
   const clonedAdjustments = (document.categoryAdjustments || []).filter(
     row => String(row.subprojectId || 'main') === String(subprojectId)
   ).map(row => ({
@@ -2189,6 +2303,7 @@ function costingDuplicateSubproject(subprojectId) {
   document.subprojects = [...rows];
   document.subprojects.splice(sourceIndex + 1, 0, clone);
   document.lineItems = [...costingLines(), ...clonedLines];
+  document.headerRows = [...costingHeaderRows(document), ...clonedHeaders];
   document.categoryAdjustments = [
     ...(document.categoryAdjustments || []),
     ...clonedAdjustments
@@ -2420,6 +2535,8 @@ async function costingDeleteSubproject(subprojectId) {
   costingState.current.lineItems = costingLines().filter(
     line => String(line.subprojectId || 'main') !== subprojectId
   );
+  costingState.current.headerRows = costingHeaderRows()
+    .filter(row => String(row.subprojectId || 'main') !== subprojectId);
   costingState.current.categoryAdjustments = (
     costingState.current.categoryAdjustments || []
   ).filter(item => String(item.subprojectId || 'main') !== subprojectId);

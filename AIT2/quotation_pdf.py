@@ -902,6 +902,46 @@ def build_finance_pdf(document, company, logo_path=''):
         rightIndent=0,
     )
 
+    class FinanceDepartmentTable(Table):
+        """Mark repeated department headers after a table page split."""
+
+        def __init__(
+            self,
+            *args,
+            continuation_row=None,
+            continuation_factory=None,
+            **kwargs,
+        ):
+            self._continuation_row = continuation_row
+            self._continuation_factory = continuation_factory
+            self._split_callback_count = 0
+            super().__init__(*args, **kwargs)
+
+        def onSplit(self, fragment, byRow=1):
+            fragment._continuation_row = self._continuation_row
+            fragment._continuation_factory = self._continuation_factory
+            fragment._split_callback_count = 0
+            self._split_callback_count += 1
+            # ReportLab calls onSplit first for the current-page fragment and
+            # then for the continuation fragment. Only the latter gets the
+            # muted continuation marker; it retains the same behavior if it
+            # has to split again on a later page.
+            if self._split_callback_count % 2 != 0:
+                return
+            row_index = self._continuation_row
+            if (
+                row_index is None
+                or not callable(self._continuation_factory)
+                or row_index < 0
+                or row_index >= len(fragment._cellvalues)
+            ):
+                return
+            # Repeated header rows share their source list with the first
+            # fragment. Copy the row before replacing its leading cell so the
+            # first page keeps the unmarked department heading.
+            fragment._cellvalues[row_index] = fragment._cellvalues[row_index][:]
+            fragment._cellvalues[row_index][0] = self._continuation_factory()
+
     letterhead_typography = pdf_text_typography(company, 'letterhead', 6.4)
     footer_typography = pdf_text_typography(company, 'footer', 6.2)
     terms_typography = pdf_text_typography(company, 'terms', small.fontSize)
@@ -1490,17 +1530,51 @@ def build_finance_pdf(document, company, logo_path=''):
             ),
         )
         department_header_row = len(table_rows)
+        department_header_style = ParagraphStyle(
+            f"Department-{len(story)}",
+            parent=body,
+            fontName=font_bold,
+            textColor=ink,
+        )
+        department_continued_style = ParagraphStyle(
+            f"DepartmentContinued-{len(story)}",
+            parent=small,
+            fontName=font_regular,
+            fontSize=6.5,
+            leading=body.leading,
+            alignment=TA_RIGHT,
+            textColor=muted,
+        )
+
+        def department_heading(
+            continued=False,
+            department_name=department,
+            header_style=department_header_style,
+            continued_style=department_continued_style,
+        ):
+            continued_width = 24 * mm
+            content_width = doc.width - 6
+            return Table(
+                [[
+                    _paragraph(department_name, header_style),
+                    (
+                        _paragraph('Continued', continued_style)
+                        if continued else ''
+                    ),
+                ]],
+                colWidths=[content_width - continued_width, continued_width],
+                style=TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]),
+            )
+
         table_rows.extend([
             [
-                _paragraph(
-                    department,
-                    ParagraphStyle(
-                        f"Department-{len(story)}",
-                        parent=body,
-                        fontName=font_bold,
-                        textColor=ink,
-                    ),
-                ),
+                department_heading(),
                 *([''] * (line_table_column_count - 1)),
             ],
             (
@@ -1729,12 +1803,16 @@ def build_finance_pdf(document, company, logo_path=''):
                     ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink)
                 )
 
-        items_table = Table(
+        items_table = FinanceDepartmentTable(
             table_rows,
             repeatRows=column_header_row + 1,
             colWidths=column_widths,
             style=TableStyle(row_styles),
             splitByRow=1,
+            continuation_row=department_header_row,
+            continuation_factory=(
+                lambda heading=department_heading: heading(True)
+            ),
         )
         table_flowable = (
             KeepTogether([items_table])
@@ -1817,6 +1895,12 @@ def build_finance_pdf(document, company, logo_path=''):
             )
         else:
             summary_source = aggregate_category_summaries(department_summaries)
+        # Preserve the existing order within each group while guaranteeing
+        # that optional categories form the final row(s) of the summary.
+        summary_source = sorted(
+            summary_source,
+            key=lambda row: bool(row['optional']),
+        )
         summary_shows_price = (
             show_department_subtotals
             or any(row['optional'] for row in summary_source)

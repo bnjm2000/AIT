@@ -10,12 +10,16 @@ const sharedSource = fs.readFileSync(
 const financeSource = fs.readFileSync(
   path.join(__dirname, '../static/js/finance.js'), 'utf8'
 );
+const financeCss = fs.readFileSync(
+  path.join(__dirname, '../static/css/finance.css'), 'utf8'
+);
 const costingSource = fs.readFileSync(
   path.join(__dirname, '../static/js/costing.js'), 'utf8'
 );
 
 function setup() {
   const notices = [];
+  const queuedSaves = [];
   const document = {
     addEventListener() {},
     getElementById() { return null; },
@@ -33,6 +37,7 @@ function setup() {
   };
   const context = vm.createContext({
     document,
+    queuedSaves,
     CSS: { escape: value => String(value) },
     clearTimeout,
     setTimeout,
@@ -41,6 +46,8 @@ function setup() {
       width: () => 1200,
       height: () => 800,
     },
+    escapeHtml: value => String(value),
+    escapeHtmlAttr: value => String(value),
     showNotification(type, message) { notices.push({ type, message }); },
   });
   context.window = context;
@@ -48,13 +55,19 @@ function setup() {
   vm.runInContext(financeSource, context);
   vm.runInContext(costingSource, context);
   vm.runInContext(`
-    financeQueueSave = () => {};
+    financeQueueSave = options => {
+      queuedSaves.push(options || {});
+      financeSynchroniseLinkedSubprojects(
+        financeState.current,
+        options?.sourceSubprojectId || financeCurrentSubprojectId(financeState.current)
+      );
+    };
     financeRenderEditor = () => {};
     costingQueueSave = () => {};
     costingRenderEditor = () => {};
     costingEqualiseSaleGroups = () => {};
   `, context);
-  return { context, notices };
+  return { context, notices, queuedSaves };
 }
 
 function value(context, expression) {
@@ -64,18 +77,32 @@ function value(context, expression) {
 test('sub-project tabs expose context actions and item drop targets', () => {
   const { context } = setup();
   const markup = vm.runInContext(`showbaseLineWorkspace.subprojectTabsMarkup({
-    rows: [{ id: 'main', name: 'Main Room' }, { id: 'side', name: 'Side Room' }],
+    rows: [
+      { id: 'main', name: 'Main Room', linkedGroupId: 'linked-1' },
+      { id: 'side', name: 'Side Room', linkedGroupId: 'linked-1' }
+    ],
     activeId: 'main',
     allowItemDrop: true,
+    showLinkedStatus: true,
     handlerPrefix: 'finance'
   })`, context);
   assert.match(markup, /financeOpenSubprojectContextMenu\(event,'main'\)/);
   assert.match(markup, /financeSubprojectDrop\(event,'side'\)/);
   assert.match(markup, /Drop items here or right-click for sub-project actions/);
+  assert.match(markup, /finance-subproject-tab active is-linked/);
+  assert.match(markup, /Linked with Side Room/);
+  assert.match(markup, /> Linked<\/span>/);
+});
+
+test('quotation sub-project tabs scroll inside the page without a visible scrollbar', () => {
+  assert.match(financeCss, /\.finance-editor-layout\s*\{[^}]*max-width:\s*100%/s);
+  assert.match(financeCss, /\.finance-lines-card\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
+  assert.match(financeCss, /\.finance-subproject-tabs\s*\{[^}]*width:\s*100%[^}]*overflow-x:\s*auto[^}]*scrollbar-width:\s*none/s);
+  assert.match(financeCss, /\.finance-subproject-tabs::\-webkit-scrollbar\s*\{[^}]*display:\s*none/s);
 });
 
 test('quotation sub-project duplication remaps room-owned records', () => {
-  const { context } = setup();
+  const { context, queuedSaves } = setup();
   vm.runInContext(`
     financeState.current = {
       subprojects: [{ id: 'main', name: 'Ballroom' }, { id: 'side', name: 'Side Room' }],
@@ -98,13 +125,112 @@ test('quotation sub-project duplication remaps room-owned records', () => {
   const clonedLines = document.lineItems.filter(line => line.subprojectId === clone.id);
   const clonedHeader = document.headerRows.find(row => row.subprojectId === clone.id);
   assert.equal(clone.name, 'Ballroom Copy');
+  assert.equal(document.subprojects[0].linkedGroupId, clone.linkedGroupId);
   assert.equal(clonedLines.length, 2);
   assert.notEqual(clonedLines[0].id, 'line-a');
+  assert.equal(
+    clonedLines[0].linkedItemId,
+    document.lineItems.find(line => line.id === 'line-a').linkedItemId
+  );
   assert.equal(clonedLines[0].groupId, clonedLines[1].groupId);
   assert.notEqual(clonedLines[0].groupId, 'group-a');
   assert.equal(clonedHeader.beforeLineId, clonedLines[0].id);
   assert.equal(document.adjustments.filter(row => row.subprojectId === clone.id).length, 1);
   assert.equal(document.adjustments.filter(row => row.scope === 'total').length, 1);
+  assert.equal(queuedSaves.at(-1).immediate, true);
+});
+
+test('quotation sub-project links merge unique content, mirror edits, and can unlink one room', () => {
+  const { context, queuedSaves } = setup();
+  vm.runInContext(`
+    financeState.current = {
+      subprojects: [
+        { id: 'main', name: 'Ballroom' },
+        { id: 'side', name: 'Side Room' },
+        { id: 'foyer', name: 'Foyer' }
+      ],
+      lineItems: [
+        { id: 'shared-main', subprojectId: 'main', description: 'Speaker', department: 'Audio', systemName: 'Audio', days: 1, quantity: 1, unitPrice: 10 },
+        { id: 'main-only', subprojectId: 'main', description: 'Console', department: 'Audio', systemName: 'Audio', days: 1, quantity: 1, unitPrice: 20 },
+        { id: 'shared-side', subprojectId: 'side', description: 'Speaker', department: 'Audio', systemName: 'Audio', days: 1, quantity: 2, unitPrice: 15 },
+        { id: 'side-only', subprojectId: 'side', description: 'Microphone', department: 'Audio', systemName: 'Audio', days: 1, quantity: 1, unitPrice: 5 },
+        { id: 'foyer-only', subprojectId: 'foyer', description: 'Projector', department: 'Video', systemName: 'Video', days: 1, quantity: 1, unitPrice: 30 }
+      ],
+      headerRows: [
+        { id: 'main-header', content: 'Main package', subprojectId: 'main', beforeLineId: 'shared-main' },
+        { id: 'side-header', content: 'Speech package', subprojectId: 'side', beforeLineId: 'side-only' }
+      ],
+      adjustments: [
+        { id: 'main-adjustment', scope: 'department', department: 'Audio', label: 'Main discount', subprojectId: 'main', amount: -5 },
+        { id: 'side-adjustment', scope: 'department', department: 'Audio', label: 'Speech discount', subprojectId: 'side', amount: -2 }
+      ]
+    };
+    financeState.activeSubprojectId = 'main';
+  `, context);
+
+  assert.match(
+    vm.runInContext("financeSubprojectContextMenuMarkup('main')", context),
+    /Link with Side Room/
+  );
+  assert.equal(vm.runInContext("financeLinkSubprojects('main', 'side')", context), true);
+  assert.equal(queuedSaves.at(-1).immediate, true);
+  assert.equal(vm.runInContext("financeLinkSubprojects('main', 'foyer')", context), true);
+
+  let document = value(context, 'financeState.current');
+  assert.equal(new Set(document.subprojects.map(row => row.linkedGroupId)).size, 1);
+  for (const room of document.subprojects) {
+    const descriptions = document.lineItems
+      .filter(line => line.subprojectId === room.id)
+      .map(line => line.description);
+    assert.deepEqual(descriptions, ['Speaker', 'Console', 'Microphone', 'Projector']);
+  }
+  assert.equal(document.lineItems.find(line => line.id === 'shared-side').quantity, 1);
+  assert.equal(document.lineItems.find(line => line.id === 'side-only').description, 'Microphone');
+  assert.equal(document.headerRows.filter(row => row.subprojectId === 'main').length, 2);
+  assert.equal(document.headerRows.filter(row => row.subprojectId === 'side').length, 2);
+  assert.equal(document.adjustments.filter(row => row.subprojectId === 'foyer').length, 2);
+  assert.match(
+    vm.runInContext("financeSubprojectContextMenuMarkup('main')", context),
+    /Unlink this sub-project/
+  );
+
+  vm.runInContext(`
+    const mainConsoleIndex = financeState.current.lineItems.findIndex(
+      line => line.subprojectId === 'main' && line.description === 'Console'
+    );
+    financeLineChange(mainConsoleIndex, 'quantity', '4');
+  `, context);
+  document = value(context, 'financeState.current');
+  assert.equal(
+    document.lineItems.find(line => line.subprojectId === 'side' && line.description === 'Console').quantity,
+    4
+  );
+  assert.equal(
+    document.lineItems.find(line => line.subprojectId === 'foyer' && line.description === 'Console').quantity,
+    4
+  );
+
+  assert.equal(vm.runInContext("financeUnlinkSubproject('side')", context), true);
+  assert.equal(queuedSaves.at(-1).immediate, true);
+  vm.runInContext(`
+    financeState.activeSubprojectId = 'main';
+    const mainConsoleIndexAfterUnlink = financeState.current.lineItems.findIndex(
+      line => line.subprojectId === 'main' && line.description === 'Console'
+    );
+    financeLineChange(mainConsoleIndexAfterUnlink, 'quantity', '6');
+  `, context);
+  document = value(context, 'financeState.current');
+  assert.equal(document.subprojects.find(row => row.id === 'side').linkedGroupId, undefined);
+  assert.equal(document.subprojects.find(row => row.id === 'main').linkedGroupId,
+    document.subprojects.find(row => row.id === 'foyer').linkedGroupId);
+  assert.equal(
+    document.lineItems.find(line => line.subprojectId === 'foyer' && line.description === 'Console').quantity,
+    6
+  );
+  assert.equal(
+    document.lineItems.find(line => line.subprojectId === 'side' && line.description === 'Console').quantity,
+    4
+  );
 });
 
 test('quotation lines can move to another sub-project as a whole group', () => {

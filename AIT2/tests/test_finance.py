@@ -2080,6 +2080,37 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(rate_rows[0]['model'], 'SB18 III')
         self.assertEqual(rate_rows[0]['searchTags'], ['low-end', 'wireless'])
 
+    def test_catalog_model_match_is_not_displaced_by_matching_container_names(self):
+        self.data_manager.inventory['ESPRITE#01'] = InventoryItem(
+            asset_id='ESPRITE#01',
+            brand='Robe',
+            model_number='ESPRITE',
+            serial_number='ESPRITE-SN-1',
+            description='Profile LED',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='LX',
+        )
+        for index in range(35):
+            container_id = f'Esprite Case #{index + 1:02d}'
+            self.data_manager.containers[container_id] = Container(
+                container_id,
+                ['ESPRITE#01'],
+            )
+
+        response = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Esprite'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = response.get_json()['data']
+        product = next(
+            row for row in rows
+            if not row.get('isContainer') and row.get('model') == 'ESPRITE'
+        )
+        self.assertEqual(rows[0]['catalogKey'], product['catalogKey'])
+        self.assertEqual(product['brand'], 'Robe')
+
     def test_products_list_inventory_but_not_unapproved_custom_quotation_items(self):
         quotation = self.create_quote('Rate Card Memory')
         inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
@@ -2234,6 +2265,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(inventory['availableQuantity'], 1)
 
         created = self.client.post('/api/finance/products', json={
+            'productLabel': 'Admin-added consumable',
             'description': 'Admin-added consumable',
             'department': 'General',
             'unitPrice': 0,
@@ -2247,6 +2279,9 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(product['sourceType'], 'additional')
         self.assertEqual(product['unitPrice'], 0)
+        self.assertEqual(product['brand'], '')
+        self.assertEqual(product['model'], '')
+        self.assertEqual(product['productLabel'], 'Admin-added consumable')
 
         self.login('alice')
         self.assertEqual(self.client.get('/products').status_code, 200)
@@ -2255,6 +2290,19 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(shared.status_code, 200, shared.get_data(as_text=True))
         self.assertEqual(len(shared.get_json()['data']), 1)
+        by_brand = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'acoustics l'},
+        )
+        self.assertEqual(by_brand.status_code, 200, by_brand.get_data(as_text=True))
+        brand_matches = [
+            row for row in by_brand.get_json()['data']
+            if row.get('model') == 'SB18 III'
+        ]
+        self.assertEqual(len(brand_matches), 1)
+        self.assertEqual(
+            brand_matches[0]['productLabel'],
+            'L-Acoustics SB18 III Subwoofer',
+        )
 
         self.login('no-sales')
         denied = self.client.get('/api/finance/products')
@@ -2265,6 +2313,10 @@ class FinanceFeatureTests(unittest.TestCase):
         original_product = next(
             row for row in self.client.get('/api/finance/products').get_json()['data']
             if row.get('model') == 'SB18 III'
+        )
+        self.assertEqual(
+            original_product['productLabel'],
+            'L-Acoustics SB18 III Subwoofer',
         )
         priced = self.client.post('/api/finance/products', json={
             **original_product,
@@ -2309,6 +2361,59 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(future['unitPrice'], 175)
         self.assertEqual(future['productLabel'], 'Premium subwoofer package')
         self.assertEqual(future['uom'], 'lot')
+        by_inventory_identity = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Subwoofer L-Acoustics'},
+        ).get_json()['data']
+        self.assertTrue(any(
+            row.get('productKey') == original_product['productKey']
+            for row in by_inventory_identity
+        ))
+        by_brand = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'L-Acoustics'},
+        ).get_json()['data']
+        same_product = next(row for row in by_brand if row.get('model') == 'SB18 III')
+        self.assertEqual(same_product['productKey'], original_product['productKey'])
+        self.assertEqual(same_product['productLabel'], 'Premium subwoofer package')
+
+    def test_inventory_product_default_label_can_change_without_losing_identity(self):
+        self.data_manager.inventory['AX#02'] = InventoryItem(
+            asset_id='AX#02',
+            brand='Shure',
+            model_number='ULXD2 (L50)',
+            serial_number='SHURE-1',
+            description='handheld microphone',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='AX',
+        )
+        self.data_manager.save_inventory()
+
+        product = next(
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('model') == 'ULXD2 (L50)'
+        )
+        self.assertEqual(
+            product['productLabel'],
+            'Shure ULXD2 (L50) handheld microphone',
+        )
+        product_key = product['productKey']
+
+        updated = self.client.post('/api/finance/products', json={
+            **product,
+            'productLabel': 'Wireless handheld mic',
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+
+        by_custom_label = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Wireless handheld'},
+        ).get_json()['data']
+        by_inventory_fields = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'Shure ULXD2 microphone'},
+        ).get_json()['data']
+        for rows in (by_custom_label, by_inventory_fields):
+            matched = next(row for row in rows if row.get('model') == 'ULXD2 (L50)')
+            self.assertEqual(matched['productKey'], product_key)
+            self.assertEqual(matched['productLabel'], 'Wireless handheld mic')
 
     def test_product_category_can_change_and_category_delete_hides_sale_products(self):
         inventory = next(
@@ -2351,17 +2456,23 @@ class FinanceFeatureTests(unittest.TestCase):
             json={'category': 'Premium Audio'},
         )
         self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
-        self.assertEqual(deleted.get_json()['deletedCount'], 2)
-        self.assertFalse(any(
-            row.get('productCategory') == 'Premium Audio'
-            for row in deleted.get_json()['data']
+        self.assertEqual(deleted.get_json()['deletedCount'], 1)
+        self.assertEqual(deleted.get_json()['retainedInventoryCount'], 1)
+        retained = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'SB18 III'},
+        ).get_json()['data']
+        self.assertTrue(any(
+            row.get('model') == 'SB18 III' for row in retained
         ))
-        self.assertEqual(
-            self.client.get(
-                '/api/finance/catalog', query_string={'query': 'SB18 III'},
-            ).get_json()['data'],
-            [],
+        self.assertFalse(any(
+            row.get('productLabel') == 'Premium audio technician'
+            for row in self.client.get('/api/finance/products').get_json()['data']
+        ))
+        denied_delete = self.client.delete(
+            '/api/finance/products/category',
+            json={'category': 'Premium Audio'},
         )
+        self.assertEqual(denied_delete.status_code, 409)
         self.assertIn('AX#01', self.data_manager.inventory)
         self.assertEqual(self.data_manager.inventory['AX#01'].department_code, 'AX')
 
@@ -2954,6 +3065,30 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("productCatalogUpdateField(${index},'productLabel'", source)
         self.assertIn("productCatalogUpdateField(${index},'productCategory'", source)
         self.assertIn("productCatalogUpdateField(${index},'uom'", source)
+        product_form = source.split('function productCatalogFormMarkup()', 1)[1].split(
+            'function productCatalogRender()', 1,
+        )[0]
+        self.assertIn('name="productLabel"', product_form)
+        self.assertNotIn('name="brand"', product_form)
+        self.assertNotIn('name="model"', product_form)
+        self.assertNotIn('name="description"', product_form)
+        self.assertNotIn('finance-product-details', source)
+        self.assertNotIn('function financeCatalogProductDetails(', source)
+        self.assertIn('function financeCatalogMatchesQuery(', source)
+        self.assertIn('const requestSeq = ++financeState.catalogRequestSeq;', source)
+        self.assertIn('setTimeout(runSearch, 60)', source)
+        update_price = source.split('async function productCatalogUpdatePrice', 1)[1].split(
+            'async function productCatalogUpdateField', 1,
+        )[0]
+        update_field = source.split('async function productCatalogUpdateField', 1)[1].split(
+            'function productCatalogEnsureCategoryMenu', 1,
+        )[0]
+        self.assertIn('productCatalogPersistInline(', update_price)
+        self.assertIn('productCatalogPersistInline(', update_field)
+        self.assertIn('const productCatalogSaveQueues = new Map();', source)
+        self.assertIn('financePersistProduct(snapshot, { applyRows: false })', source)
+        self.assertNotIn('productCatalogRender()', update_price)
+        self.assertNotIn('productCatalogRender()', update_field)
         self.assertIn('aria-label="Product categories"', source)
         self.assertIn('function productCatalogOpenCategoryMenu(', source)
         self.assertIn('function productCatalogDeleteCategory(', source)
@@ -4276,6 +4411,74 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertTrue(
             any('Floor Tom' in line for line in pdf_text.splitlines()),
             pdf_text,
+        )
+
+    def test_pdf_marks_a_department_heading_when_its_table_continues(self):
+        from quotation_pdf import build_finance_pdf
+
+        lines = [{
+            'id': f'audio-{index}',
+            'description': (
+                f'Audio equipment line {index + 1} with enough descriptive '
+                'text to exercise measured table pagination'
+            ),
+            'department': 'Audio',
+            'days': 2,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 10,
+            'total': 20,
+            'subprojectId': 'main',
+        } for index in range(75)] + [{
+            'id': 'transport-1',
+            'description': 'Delivery and collection',
+            'department': 'Transportation',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'trip',
+            'unitPrice': 100,
+            'total': 100,
+            'subprojectId': 'main',
+        }]
+        pdf = build_finance_pdf({
+            'type': 'quotation',
+            'number': 'QT-CONTINUED-QA',
+            'projectName': 'Department table pagination QA',
+            'quotationDate': '2026-09-13',
+            'lineItems': lines,
+            'subprojects': [{'id': 'main', 'name': 'Main Room'}],
+            'showLineNumbers': True,
+            'showUnitPrices': False,
+            'showDepartmentSubtotals': True,
+            'totals': {'subtotal': 1500, 'netSubtotal': 1500, 'total': 1500},
+            'terms': 'QA preview',
+        }, {
+            'companyName': 'Showbase QA',
+            'currency': 'SGD',
+            'taxLabel': 'GST',
+            'themeColor': '#334155',
+        })
+        pages = [
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf)).pages
+        ]
+
+        self.assertGreaterEqual(len(pages), 3)
+        self.assertNotIn('Continued', pages[0])
+        self.assertTrue(
+            any('Continued' in page for page in pages[1:-1]),
+            '\n--- PAGE ---\n'.join(pages),
+        )
+        first_audio_continuation = next(
+            page for page in pages
+            if 'Audio equipment line 28' in page
+        )
+        self.assertIn('Audio', first_audio_continuation)
+        self.assertIn('Continued', first_audio_continuation)
+        self.assertNotIn('Transportation', first_audio_continuation)
+        self.assertEqual(
+            sum(page.count('Audio equipment line') for page in pages),
+            75,
         )
 
     def test_pdf_neutral_panels_use_a_faint_company_theme_tint(self):
@@ -5931,7 +6134,10 @@ class FinanceFeatureTests(unittest.TestCase):
         pdf_source = Path('quotation_pdf.py').read_text(encoding='utf-8')
         discount_block = pdf_source[
             pdf_source.index('show_department_adjustment_block = bool('):
-            pdf_source.index('items_table = Table(', pdf_source.index('show_department_adjustment_block = bool('))
+            pdf_source.index(
+                'items_table = FinanceDepartmentTable(',
+                pdf_source.index('show_department_adjustment_block = bool('),
+            )
         ]
         adjustment_line = discount_block.index(
             "('LINEABOVE', (0, adjustment_index), (-1, adjustment_index), 0.8, ink)"
@@ -7651,6 +7857,139 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Robe Spiider LED wash fixture', pdf_text)
         self.assertIn('L-Acoustics SB18 III Subwoofer', pdf_text)
 
+    def test_linked_subproject_metadata_round_trips_with_quotation(self):
+        quotation = self.create_quote('Linked Rooms')
+        quotation['subprojects'] = [
+            {'id': 'main', 'name': 'Ballroom', 'linkedGroupId': 'linked-rooms-1'},
+            {'id': 'breakout', 'name': 'Breakout', 'linkedGroupId': 'linked-rooms-1'},
+        ]
+        quotation['lineItems'] = [
+            {
+                'id': 'main-speaker', 'linkedItemId': 'linked-speaker',
+                'description': 'Speaker', 'department': 'Audio Department',
+                'departmentCode': 'AX', 'days': 1, 'quantity': 1,
+                'uom': 'units', 'unitPrice': 100, 'discountPercent': 0,
+                'subprojectId': 'main',
+            },
+            {
+                'id': 'breakout-speaker', 'linkedItemId': 'linked-speaker',
+                'description': 'Speaker', 'department': 'Audio Department',
+                'departmentCode': 'AX', 'days': 1, 'quantity': 1,
+                'uom': 'units', 'unitPrice': 100, 'discountPercent': 0,
+                'subprojectId': 'breakout',
+            },
+        ]
+        quotation['headerRows'] = [{
+            'id': 'main-header', 'linkedHeaderId': 'linked-header',
+            'content': 'Sound package', 'beforeLineId': 'main-speaker',
+            'subprojectId': 'main',
+        }, {
+            'id': 'breakout-header', 'linkedHeaderId': 'linked-header',
+            'content': 'Sound package', 'beforeLineId': 'breakout-speaker',
+            'subprojectId': 'breakout',
+        }]
+        quotation['adjustments'] = [{
+            'id': 'main-discount', 'linkedAdjustmentId': 'linked-discount',
+            'scope': 'department', 'department': 'Audio', 'label': 'Discount',
+            'amount': -5, 'subprojectId': 'main',
+        }, {
+            'id': 'breakout-discount', 'linkedAdjustmentId': 'linked-discount',
+            'scope': 'department', 'department': 'Audio', 'label': 'Discount',
+            'amount': -5, 'subprojectId': 'breakout',
+        }]
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(
+            {row['linkedGroupId'] for row in saved['subprojects']},
+            {'linked-rooms-1'},
+        )
+        self.assertEqual(
+            {row['linkedItemId'] for row in saved['lineItems']},
+            {'linked-speaker'},
+        )
+        self.assertEqual(
+            {row['linkedHeaderId'] for row in saved['headerRows']},
+            {'linked-header'},
+        )
+        self.assertEqual(
+            {row['linkedAdjustmentId'] for row in saved['adjustments']},
+            {'linked-discount'},
+        )
+        finance_data = app_module._load_finance_data()
+        costing = app_module._linked_costing_for_quotation(finance_data, saved)
+        self.assertEqual(
+            {row['linkedGroupId'] for row in costing['subprojects']},
+            {'linked-rooms-1'},
+        )
+
+        reloaded = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(
+            {row['linkedGroupId'] for row in reloaded['subprojects']},
+            {'linked-rooms-1'},
+        )
+        self.assertEqual(
+            {row['linkedItemId'] for row in reloaded['lineItems']},
+            {'linked-speaker'},
+        )
+
+    def test_link_only_change_persists_for_otherwise_identical_subprojects(self):
+        quotation = self.create_quote('Identical Rooms')
+        quotation['subprojects'] = [
+            {'id': 'main', 'name': 'Ballroom'},
+            {'id': 'breakout', 'name': 'Breakout'},
+        ]
+        quotation['lineItems'] = [{
+            'id': 'main-speaker', 'description': 'Speaker',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+            'discountPercent': 0, 'subprojectId': 'main',
+        }, {
+            'id': 'breakout-speaker', 'description': 'Speaker',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'units', 'unitPrice': 100,
+            'discountPercent': 0, 'subprojectId': 'breakout',
+        }]
+        baseline_response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation
+        )
+        self.assertEqual(
+            baseline_response.status_code, 200,
+            baseline_response.get_data(as_text=True),
+        )
+        linked = baseline_response.get_json()['data']
+        for subproject in linked['subprojects']:
+            subproject['linkedGroupId'] = 'linked-identical-rooms'
+        for line in linked['lineItems']:
+            line['linkedItemId'] = 'linked-identical-speaker'
+
+        linked_response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=linked
+        )
+
+        self.assertEqual(
+            linked_response.status_code, 200,
+            linked_response.get_data(as_text=True),
+        )
+        self.assertFalse(linked_response.get_json().get('unchanged', False))
+        reloaded = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(
+            {row.get('linkedGroupId') for row in reloaded['subprojects']},
+            {'linked-identical-rooms'},
+        )
+        self.assertEqual(
+            {row.get('linkedItemId') for row in reloaded['lineItems']},
+            {'linked-identical-speaker'},
+        )
+
     def test_subprojects_export_as_rooms_and_copy_to_accepted_event(self):
         quotation = self.create_quote('Multi Room Conference')
         quotation['subprojects'] = [
@@ -7938,6 +8277,9 @@ class FinanceFeatureTests(unittest.TestCase):
                 },
             ],
         })
+        # Optional arrives first in the source data, but the PDF summary must
+        # always place it after every included category.
+        quotation['lineItems'].reverse()
 
         response = self.client.put(
             f"/api/quotations/{quotation['id']}",
@@ -7964,7 +8306,11 @@ class FinanceFeatureTests(unittest.TestCase):
         optional_summary_position = last_page_text.index(
             'oPtIoNaL Lighting System', summary_position
         )
+        required_summary_position = last_page_text.index(
+            'Audio System', summary_position
+        )
         total_position = last_page_text.rindex('TOTAL')
+        self.assertLess(required_summary_position, optional_summary_position)
         self.assertLess(optional_summary_position, total_position)
         self.assertIn('Not included in total', last_page_text)
         self.assertNotIn('Optional items', last_page_text)

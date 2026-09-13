@@ -178,7 +178,7 @@
         : '');
       return `<div class="finance-add-row finance-add-row-expanded showbase-line-workspace-add-row ${escapeAttribute(options.className || '')}">
         <div class="finance-add-item-wrap ${escapeAttribute(search.wrapClass || '')}">
-          <input id="${escapeAttribute(search.id || '')}" class="finance-input" placeholder="${escapeAttribute(search.placeholder || '')}" autocomplete="off"${optionalAttribute('oninput', search.oninput)}${optionalAttribute('onblur', searchBlur)}${optionalAttribute('onkeydown', search.onkeydown)}>
+          <input id="${escapeAttribute(search.id || '')}" class="finance-input" placeholder="${escapeAttribute(search.placeholder || '')}" autocomplete="off"${optionalAttribute('onfocus', search.onfocus)}${optionalAttribute('oninput', search.oninput)}${optionalAttribute('onblur', searchBlur)}${optionalAttribute('onkeydown', search.onkeydown)}>
           <div id="${escapeAttribute(search.resultsId || '')}" class="finance-catalog-results" onfocusout="setTimeout(()=>showbaseLineWorkspace.hideSuggestionsUnlessFocused('${escapeAttribute(search.resultsId || '')}'),120)"></div>
         </div>
         <div class="finance-inline-combobox">
@@ -264,6 +264,15 @@
         ${rows.map((row, index) => {
           const id = escapeAttribute(row.id || '');
           const name = escapeAttribute(row.name || 'Untitled');
+          const linkedPeers = options.showLinkedStatus && row.linkedGroupId
+            ? rows.filter(candidate => (
+                candidate !== row
+                && String(candidate.linkedGroupId || '') === String(row.linkedGroupId)
+              ))
+            : [];
+          const linkedLabel = linkedPeers.length
+            ? `Linked with ${linkedPeers.map(candidate => candidate.name || 'Untitled').join(', ')}`
+            : '';
           return `${canReorder ? `
             <span class="finance-subproject-drop-slot ${index === 0 ? 'is-first' : ''}" aria-hidden="true"
                   data-drop-index="${index}"
@@ -271,7 +280,7 @@
                   ondragleave="${prefix}SubprojectSlotDragLeave(event)"
                   ondrop="${prefix}SubprojectDropAtIndex(event,${index})"></span>
           ` : ''}
-          <span class="finance-subproject-tab ${String(row.id || '') === activeId ? 'active' : ''}"
+          <span class="finance-subproject-tab ${String(row.id || '') === activeId ? 'active' : ''} ${linkedPeers.length ? 'is-linked' : ''}"
                 data-subproject-id="${id}"
                 ${canReorder ? `draggable="true"
                   ondragstart="${prefix}SubprojectDragStart(event,'${id}')"
@@ -287,7 +296,9 @@
                     title="${canDropItems
                       ? 'Drop items here or right-click for sub-project actions'
                       : canManage ? 'Right-click for sub-project actions' : 'Select sub-project'}"
-                    onclick="${prefix}SelectSubproject('${id}')">${name}</button>
+                    onclick="${prefix}SelectSubproject('${id}')"><span>${name}</span>${linkedPeers.length ? `
+                      <span class="finance-subproject-link-badge" title="${escapeAttribute(linkedLabel)}" aria-label="${escapeAttribute(linkedLabel)}"><span aria-hidden="true">&#128279;</span> Linked</span>
+                    ` : ''}</button>
             ${canManage ? `<button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="${prefix}RenameSubproject('${id}')">&#9998;</button>` : ''}
             ${canManage && rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="${prefix}DeleteSubproject('${id}')">&times;</button>` : ''}
           </span>`;

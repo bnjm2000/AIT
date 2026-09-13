@@ -10994,14 +10994,18 @@ def _workforce_financial_closure_complete(
 
     Full-time company users may still upload claims for reimbursement, but
     their submission activity never blocks the operational event from closing.
+    External submissions are settled only after payment receipt is confirmed.
     """
     manager = manager or _current_data_manager_object()
     if manager is None:
-        return True
+        return False
 
     managed_event = getattr(manager, 'events', {}).get(int(event_id))
     if managed_event is None or (event is not None and managed_event is not event):
-        return True
+        # A detached event can be left behind when another request reloads the
+        # shared manager. Never let that stale reference bypass the financial
+        # checks and close an event.
+        return False
 
     workforce = (
         workforce
@@ -11042,7 +11046,10 @@ def _workforce_financial_closure_complete(
             for row in rows.get('claims', [])
             if isinstance(row, dict) and row.get('status') != 'Denied'
         ]
-        if any(row.get('status') != 'Paid' for row in payable_rows):
+        if any(
+            row.get('status') != 'Paid' or not row.get('paymentConfirmedAt')
+            for row in payable_rows
+        ):
             return False
     return True
 
@@ -19435,7 +19442,7 @@ def get_assigned_assets():
         logger.error(f"get_assigned_assets traceback: {traceback.format_exc()}")
         return set()  # Return empty set on error
 
-def update_event_state(event, workforce=None):
+def update_event_state(event, workforce=None, changed_by=''):
     """Update the state of an event based on model, bulk, regular, and custom preparation."""
     previous_state = normalize_event_state(getattr(event, 'state', 'New'))
     state_update_succeeded = True
@@ -19658,6 +19665,7 @@ def update_event_state(event, workforce=None):
             event=event,
             previous_state=previous_state,
             new_state=current_state,
+            changed_by=changed_by,
         )
 
 
@@ -19742,23 +19750,47 @@ def _refresh_event_vendor_management_mirror(event, finance_data):
 
 def refresh_event_states_for_read(events_to_check=None, sync_vendor_management=True):
     """Keep automatically calculated event states current before read responses."""
-    if _current_data_manager_object() is None:
+    manager = _current_data_manager_object()
+    if manager is None:
         return []
+
+    # A GET request can overlap a shared-data reload. Keep the manager's event
+    # objects stable for the full calculation/save cycle so a stale reference
+    # cannot be mistaken for an event with no financial requirements.
+    with _data_reload_lock_for(manager):
+        return _refresh_event_states_for_read_locked(
+            manager,
+            events_to_check=events_to_check,
+            sync_vendor_management=sync_vendor_management,
+        )
+
+
+def _refresh_event_states_for_read_locked(
+    manager, events_to_check=None, sync_vendor_management=True
+):
+    """Refresh event states while the manager's reload lock is held."""
 
     now = time.monotonic()
     refresh_window_seconds = 15
     cache = _current_manager_cache()
     refreshed_at = cache.setdefault('event_state_refreshes', {})
     updated_events = []
-    source_events = events_to_check if events_to_check is not None else data_manager.events.values()
+    source_events = (
+        events_to_check
+        if events_to_check is not None
+        else manager.events.values()
+    )
     source_events = [
-        event for event in list(source_events)
-        if event and now - refreshed_at.get(event.event_id, 0) >= refresh_window_seconds
+        manager.events.get(int(getattr(event, 'event_id', 0)))
+        for event in list(source_events)
+        if event
+        and manager.events.get(int(getattr(event, 'event_id', 0))) is not None
+        and now - refreshed_at.get(event.event_id, 0) >= refresh_window_seconds
     ]
     if not source_events:
         return []
 
-    closure_workforce = load_workforce(_workforce_folder())
+    closure_workforce = load_workforce(_workforce_folder(manager))
     finance_data = None
     if sync_vendor_management:
         try:
@@ -19777,13 +19809,17 @@ def refresh_event_states_for_read(events_to_check=None, sync_vendor_management=T
             sync_vendor_management
             and _refresh_event_vendor_management_mirror(event, finance_data)
         )
-        update_event_state(event, workforce=closure_workforce)
+        update_event_state(
+            event,
+            workforce=closure_workforce,
+            changed_by='Showbase automatic update',
+        )
 
         state_changed = getattr(event, 'state', 'New') != old_state
         if not state_changed and not vendor_management_changed:
             continue
 
-        data_manager.save_event(event)
+        manager.save_event(event)
         saved_any = True
         if not state_changed:
             continue
@@ -35883,8 +35919,12 @@ def _normalise_finance_line(value):
         field for field in (value.get('groupDisplayFields') or [])
         if field in {'brand', 'model', 'description'}
     ]
+    linked_item_id = re.sub(
+        r'[^A-Za-z0-9_-]+', '', str(value.get('linkedItemId') or '')
+    )[:80]
     return {
         'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
+        **({'linkedItemId': linked_item_id} if linked_item_id else {}),
         'catalogKey': catalog_key,
         'sourceAssetIds': source_asset_ids,
         'brand': brand[:240],
@@ -36220,10 +36260,16 @@ def _normalise_finance_subprojects(value, lines):
         if subproject_id in seen:
             continue
         seen.add(subproject_id)
-        result.append({
+        linked_group_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('linkedGroupId') or '')
+        )[:80]
+        subproject = {
             'id': subproject_id,
             'name': str(row.get('name') or '').strip()[:160] or f'Room {index + 1}',
-        })
+        }
+        if linked_group_id:
+            subproject['linkedGroupId'] = linked_group_id
+        result.append(subproject)
     if not result:
         result = [{'id': 'main', 'name': 'Main Room'}]
     valid_ids = {row['id'] for row in result}
@@ -36248,7 +36294,10 @@ def _normalise_finance_header_rows(value):
         if header_id in seen:
             continue
         seen.add(header_id)
-        result.append({
+        linked_header_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('linkedHeaderId') or '')
+        )[:80]
+        header = {
             'id': header_id,
             'content': str(
                 row.get('content')
@@ -36261,7 +36310,10 @@ def _normalise_finance_header_rows(value):
             'subprojectId': re.sub(
                 r'[^A-Za-z0-9_-]+', '', str(row.get('subprojectId') or '')
             )[:80] or 'main',
-        })
+        }
+        if linked_header_id:
+            header['linkedHeaderId'] = linked_header_id
+        result.append(header)
     return result
 
 
@@ -36385,8 +36437,12 @@ def _normalise_finance_adjustment(value):
     label = str(value.get('label') or 'Discount').strip()[:300] or 'Discount'
     if scope == 'department' and label.casefold() == 'system discount':
         label = 'Discount'
+    linked_adjustment_id = re.sub(
+        r'[^A-Za-z0-9_-]+', '', str(value.get('linkedAdjustmentId') or '')
+    )[:80]
     return {
         'id': adjustment_id,
+        **({'linkedAdjustmentId': linked_adjustment_id} if linked_adjustment_id else {}),
         'scope': scope,
         'department': department if scope == 'department' else '',
         'label': label,
@@ -37459,6 +37515,24 @@ def _normalise_costing_document(value, existing=None):
         else existing.get('subprojects'),
         lines,
     )
+    header_rows = _normalise_finance_header_rows(
+        value.get('headerRows')
+        if 'headerRows' in value
+        else existing.get('headerRows')
+    )
+    valid_subproject_ids = {row['id'] for row in subprojects}
+    fallback_subproject_id = subprojects[0]['id']
+    valid_line_ids = {
+        str(line.get(key) or '')
+        for line in lines
+        for key in ('id', 'quotationLineId')
+        if str(line.get(key) or '')
+    }
+    for header_row in header_rows:
+        if header_row['subprojectId'] not in valid_subproject_ids:
+            header_row['subprojectId'] = fallback_subproject_id
+        if header_row['beforeLineId'] not in valid_line_ids:
+            header_row['beforeLineId'] = ''
     category_source = (
         value.get('categoryAdjustments')
         if 'categoryAdjustments' in value
@@ -37556,6 +37630,7 @@ def _normalise_costing_document(value, existing=None):
         ).strip()[:600],
         'status': status,
         'lineItems': lines,
+        'headerRows': header_rows,
         'subprojects': subprojects,
         'categoryAdjustments': category_adjustments,
         'categoryTotals': category_totals,
@@ -37653,6 +37728,7 @@ def _costing_from_quotation(quotation):
         'eventLocation': quotation.get('eventLocation') or '',
         'status': 'linked',
         'lineItems': lines,
+        'headerRows': copy.deepcopy(quotation.get('headerRows') or []),
         'subprojects': copy.deepcopy(quotation.get('subprojects') or []),
         'categoryAdjustments': [
             {
@@ -38134,6 +38210,7 @@ def _sync_costing_from_quotation(finance_data, quotation):
         'projectName': quotation.get('projectName') or quotation.get('title') or '',
         'eventLocation': quotation.get('eventLocation') or '',
         'lineItems': synced_lines,
+        'headerRows': copy.deepcopy(quotation.get('headerRows') or []),
         'subprojects': copy.deepcopy(quotation.get('subprojects') or []),
         'categoryAdjustments': adjustment_template.get('categoryAdjustments') or [],
         'sourceQuotationId': quotation.get('id') or '',
@@ -38225,6 +38302,7 @@ def _sync_quotation_from_costing(finance_data, costing):
         'salesperson': costing.get('salesperson') or '',
         'salespersonUsername': costing.get('salespersonUsername') or '',
         'lineItems': quote_lines,
+        'headerRows': copy.deepcopy(costing.get('headerRows') or []),
         'subprojects': copy.deepcopy(costing.get('subprojects') or []),
         'adjustments': preserved_adjustments,
         'sourceCostingId': costing.get('id') or '',
@@ -38292,6 +38370,7 @@ def _costing_quote_sync_fingerprint(costing, quotation):
             }
             for line in quote_lines
         ],
+        'headerRows': copy.deepcopy(costing_copy.get('headerRows') or []),
         'categoryAdjustments': sorted((
             {
                 'subprojectId': str(row.get('subprojectId') or 'main'),
@@ -41148,8 +41227,26 @@ def _finance_rate_card_rows(finance_data):
             f"{str(payload.get('description') or base_key.removeprefix('custom:')).strip().lower()}"
         )
         if payload.get('hidden'):
-            rows.pop(identity, None)
-            continue
+            existing_inventory = rows.get(identity)
+            if canonical:
+                # Inventory-backed products are permanent. Older category
+                # deletion tombstones are treated as ordinary display
+                # overrides so the product becomes visible again.
+                pass
+            elif existing_inventory and not existing_inventory.get('isCustom'):
+                existing_inventory['productLabel'] = str(
+                    payload.get('productLabel')
+                    or existing_inventory.get('productLabel') or ''
+                )
+                existing_inventory['productCategory'] = str(
+                    payload.get('productCategory')
+                    or existing_inventory.get('productCategory')
+                    or existing_inventory.get('department') or 'General'
+                )
+                continue
+            else:
+                rows.pop(identity, None)
+                continue
         if payload.get('deleted'):
             if canonical or identity in rows and rows[identity].get('isContainer'):
                 rows[identity]['unitPrice'] = 0
@@ -45745,6 +45842,9 @@ def _finance_get_update_delete(document_id, document_type):
         if document_type == 'quotation':
             previous_status = str(existing_normalised.get('status') or 'draft')
             current_status = str(updated.get('status') or 'draft')
+            linked_costing = _linked_costing_for_quotation(
+                finance_data, updated
+            )
             _queue_quotation_status_notification(
                 manager=_current_data_manager_object(),
                 quotation=updated,
@@ -45772,6 +45872,11 @@ def _finance_get_update_delete(document_id, document_type):
                     f"Updated quotation {updated['number']}: "
                     f"{'; '.join(significant_changes)}"
                 )
+            mark_realtime_change('finance', {
+                'action': 'quotation-updated',
+                'quotationId': str(updated.get('id') or ''),
+                'costingId': str((linked_costing or {}).get('id') or ''),
+            })
         else:
             log_action(f"Updated {document_type} {updated['number']}")
             if document_type == 'invoice':
@@ -45806,52 +45911,50 @@ def finance_catalog():
             department_cache[cache_key] = _finance_department_details(value, code_hint)
         return department_cache[cache_key]
 
+    query_tokens = query.split()
+
+    def matches_query(*values):
+        if not query_tokens:
+            return True
+        haystack = ' '.join(str(value or '') for value in values).casefold()
+        return all(token in haystack for token in query_tokens)
+
     grouped = {}
-    for asset in data_manager.inventory.values():
-        if _is_disposed(asset):
+    # The rate-card builder has already grouped inventory assets and applied
+    # product overrides. Reusing those rows avoids scanning the full inventory
+    # a second time for every quotation keystroke.
+    for product in rate_card_rows:
+        if product.get('isCustom') or product.get('isContainer'):
             continue
-        department_code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
-        department, department_code = catalog_department(
-            department_code,
-            department_code,
-        )
-        brand = str(getattr(asset, 'brand', '') or '').strip()
-        model = str(getattr(asset, 'model_number', '') or '').strip()
-        description = str(getattr(asset, 'description', '') or '').strip()
+        key = str(product.get('catalogKey') or '').strip()
+        if not key:
+            continue
+        brand = str(product.get('brand') or '').strip()
+        model = str(product.get('model') or '').strip()
+        description = str(product.get('description') or '').strip()
         display = ' '.join(value for value in (brand, model, description) if value)
-        tag_text = ' '.join(normalize_asset_tags(getattr(asset, 'tags', [])))
-        key = _finance_catalog_key(department_code, brand, model, description)
-        if key.casefold() not in visible_catalog_keys:
-            continue
-        product = products_by_catalog_key.get(key.casefold()) or {}
+        department = str(product.get('department') or 'General').strip() or 'General'
+        department_code = str(product.get('departmentCode') or '').strip()
         product_label = str(product.get('productLabel') or display).strip()
         product_category = str(
             product.get('productCategory') or department
         ).strip() or department
-        haystack = f"{display} {product_label} {product_category} {department} {department_code} {tag_text}".lower()
-        if query and query not in haystack:
+        if not matches_query(
+            brand, model, description, product_label, product_category,
+            department, department_code, *(product.get('searchTags') or []),
+        ):
             continue
-        if key not in grouped:
-            grouped[key] = {
-                'productId': key.lower(),
-                'productKey': key,
-                'catalogKey': key,
-                'description': display or model or description or 'Inventory item',
-                'productLabel': product_label or display or model or description or 'Inventory item',
-                'department': department,
-                'departmentCode': department_code,
-                'productCategory': product_category,
-                'systemName': product_category,
-                'brand': brand,
-                'model': model,
-                'availableQuantity': 0,
-                'sourceAssetIds': [],
-                'unitPrice': 0,
-                'uom': 'units',
-                'isCustom': False,
-            }
-        grouped[key]['sourceAssetIds'].append(asset.asset_id)
-        grouped[key]['availableQuantity'] += _asset_inventory_quantity(asset)
+        grouped[key] = {
+            **product,
+            'productId': str(product.get('productId') or key.lower()),
+            'productKey': str(product.get('productKey') or key),
+            'catalogKey': key,
+            'description': display or model or description or 'Inventory item',
+            'productLabel': product_label or display or model or description or 'Inventory item',
+            'productCategory': product_category,
+            'systemName': product_category,
+            'isCustom': False,
+        }
 
     for container in getattr(data_manager, 'containers', {}).values():
         container_id = str(getattr(container, 'container_id', '') or '').strip()
@@ -45976,7 +46079,7 @@ def finance_catalog():
             continue
         if f"container:{container_id.lower()}" not in visible_catalog_keys:
             continue
-        if query and query not in ' '.join(haystack_parts).lower():
+        if not matches_query(*haystack_parts):
             continue
         item_rows = sorted(
             container_items.values(),
@@ -46024,15 +46127,11 @@ def finance_catalog():
             source.get('department'),
             source.get('departmentCode'),
         )
-        haystack = ' '.join((
-            str(source.get('brand') or ''),
-            str(source.get('model') or ''),
-            description,
-            str(source.get('productLabel') or ''),
-            str(source.get('productCategory') or ''),
+        if not matches_query(
+            source.get('brand'), source.get('model'), description,
+            source.get('productLabel'), source.get('productCategory'),
             department,
-        )).lower()
-        if query and query not in haystack:
+        ):
             continue
         custom_key = _finance_custom_price_key(description)
         if custom_key in custom_seen:
@@ -46064,7 +46163,11 @@ def finance_catalog():
     rows = sorted(
         grouped.values(),
         key=lambda row: (
-            0 if row.get('isContainer') else 1,
+            # Container names often contain the model they carry (for
+            # example, "Esprite Case #01"). Keep actual products ahead of
+            # those matches so the product is not buried or cut off by the
+            # result limit.
+            1 if row.get('isContainer') else 0,
             row['department'],
             row['description'].lower(),
         ),
@@ -46260,11 +46363,17 @@ def finance_delete_product_category():
         ]
         if not targets:
             return jsonify({'error': 'Product category not found'}), 404
+        deletable = [row for row in targets if row.get('isCustom')]
+        retained_count = len(targets) - len(deletable)
+        if not deletable:
+            return jsonify({
+                'error': 'Inventory products cannot be deleted',
+            }), 409
 
         owner = _finance_current_username().lower()
         price_book = finance_data.setdefault('priceBook', {})
         now = datetime.now().isoformat(timespec='seconds')
-        for row in targets:
+        for row in deletable:
             product_key = str(
                 row.get('productKey') or row.get('catalogKey')
                 or _finance_custom_price_key(row.get('description'))
@@ -46302,12 +46411,13 @@ def finance_delete_product_category():
         rows = _finance_rate_card_rows(finance_data)
 
     log_action(
-        f"Deleted product category {category} ({len(targets)} products)"
+        f"Deleted product category {category} ({len(deletable)} added products)"
     )
     return jsonify({
         'success': True,
         'data': rows,
-        'deletedCount': len(targets),
+        'deletedCount': len(deletable),
+        'retainedInventoryCount': retained_count,
     })
 
 
@@ -47670,7 +47780,9 @@ def costing_item(costing_id):
                 changed_by=_finance_current_username(),
             )
     mark_realtime_change('finance', {
-        'action': 'costing-updated', 'costingId': costing['id'],
+        'action': 'costing-updated',
+        'costingId': costing['id'],
+        'quotationId': str((linked_quotation or {}).get('id') or ''),
     })
     costing['vendorDiscrepancies'] = _costing_vendor_discrepancies(costing)
     return jsonify({
@@ -47934,6 +48046,7 @@ def costing_convert_to_quotation(costing_id):
             'projectName': costing['projectName'],
             'eventLocation': costing.get('eventLocation') or '',
             'lineItems': quotation_lines,
+            'headerRows': copy.deepcopy(costing.get('headerRows') or []),
             'adjustments': adjustments,
             'subprojects': copy.deepcopy(costing.get('subprojects') or []),
             'sourceCostingId': costing['id'],

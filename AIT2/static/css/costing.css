@@ -264,6 +264,18 @@
   text-align: left;
 }
 .costing-category-header .showbase-category-header-content { align-items: center; flex-direction: row; flex-wrap: nowrap; }
+.costing-table .costing-quotation-header-row td {
+  padding: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #102840;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+}
+.costing-quotation-header-row div { white-space: normal; }
+.costing-header-only-card { overflow-x: auto; }
 .costing-category-title { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 9px; }
 .costing-category-title input { min-width: 0; max-width: 320px; height: 24px; flex: 1 1 140px; padding: 2px 3px; border: 1px solid transparent; border-radius: 5px; color: #102840; background: transparent; font: inherit; font-size: 12px; font-weight: 750; outline: 0; }
 .costing-category-title input:focus { border-bottom-color: #08a3b6; }
