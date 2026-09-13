@@ -237,7 +237,9 @@ class CostingFeatureTests(unittest.TestCase):
             encoding='utf-8'
         )
 
-        new_line = source.split('function costingNewLine(selected)', 1)[1].split(
+        new_line = source.split(
+            "function costingNewLine(selected, categoryOverride = '')", 1,
+        )[1].split(
             'function costingAppendCatalogSelection', 1
         )[0]
         self.assertIn(
@@ -3128,9 +3130,12 @@ class CostingFeatureTests(unittest.TestCase):
         self.assertIn('class="costing-group-quantity"', source)
         self.assertIn('function costingSetLineGroupQuantity(', source)
         self.assertIn('costingLineUnits(line) * line.itemCost', source)
+        self.assertIn('const supportsGroupQuantity = true;', finance_source)
+        self.assertIn('unitSale * (costingLineUnits(line) || 1)', finance_source)
+        self.assertIn("line.multiplier = 1;", finance_source)
         self.assertIn(
-            "const supportsGroupQuantity = mode === 'costing' || mode === 'delivery-order';",
-            finance_source,
+            "function costingNewLine(selected, categoryOverride = '')",
+            source,
         )
         self.assertIn('.costing-group-header-content {', css_source)
 

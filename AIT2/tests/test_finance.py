@@ -3530,7 +3530,21 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('function financeCatalogCategory(', source)
         self.assertIn('function financePreferredCatalogCategory(', source)
         self.assertIn('financeSameOperationalDepartment(line, selected)', source)
-        self.assertIn('newest(inCurrentSubproject).find(financeIsRenamedCategory)', source)
+        self.assertIn('newest(matches).find(financeIsRenamedCategory)', source)
+        preferred_category_source = source.split(
+            'function financePreferredCatalogCategory(', 1,
+        )[1].split('function financeCatalogCategory', 1)[0]
+        self.assertIn(
+            "String(line.subprojectId || 'main') === String(subprojectId)",
+            preferred_category_source,
+        )
+        catalog_category_source = source.split(
+            'function financeCatalogCategory(', 1
+        )[1].split('function financeCategoryOperationalDepartment', 1)[0]
+        self.assertLess(
+            catalog_category_source.index('financeIsRenamedCategory(existing)'),
+            catalog_category_source.index('selected?.productCategory'),
+        )
         suggestion_source = source.split(
             'function financeDepartmentSuggestions(query)', 1,
         )[1].split('function financeShowDepartmentSuggestions', 1)[0]
@@ -3954,7 +3968,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(len(leaders), 1)
         self.assertEqual(leaders[0]['days'], 2)
         self.assertEqual(leaders[0]['quantity'], 2)
-        self.assertEqual(leaders[0]['uom'], 'lot')
+        self.assertEqual(leaders[0]['uom'], 'sets')
         self.assertEqual(leaders[0]['unitPrice'], 55)
         self.assertEqual(leaders[0]['total'], 220)
         self.assertEqual(sum(line['total'] for line in grouped_lines), 220)
@@ -8236,6 +8250,88 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('.finance-line-group-quantity input', finance_css)
         self.assertIn('.finance-lines-table input[type="number"]', finance_css)
 
+    def test_group_editor_defaults_and_reordering_controls(self):
+        finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        finance_css = Path('static/css/finance.css').read_text(encoding='utf-8')
+
+        self.assertIn("{ value: 'sets', label: 'set(s)' }", finance_source)
+        self.assertIn("uom: 'sets'", finance_source)
+        self.assertIn('const headerDays = 1;', finance_source)
+        self.assertIn('const headerQuantity = groupQuantity;', finance_source)
+        self.assertIn('financeLineGroupCategoryResults', finance_source)
+        self.assertIn(
+            'function financeShowLineGroupCategorySuggestions(', finance_source
+        )
+        self.assertIn(
+            'function financeLineGroupSelectionDragStart(', finance_source
+        )
+        self.assertIn(
+            'function financeLineGroupSelectionHandleKeydown(', finance_source
+        )
+        self.assertIn('.finance-line-group-selection-row.drag-over-before', finance_css)
+        self.assertIn(
+            '.finance-lines-table .finance-col-uom .finance-custom-control',
+            finance_css,
+        )
+
+    def test_category_reorder_is_scoped_to_the_active_subproject(self):
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        reorder_source = source.split(
+            'function financeDropDepartment(event, encodedTargetDepartment)', 1,
+        )[1].split('function financeDragDepartmentEnd', 1)[0]
+
+        self.assertIn(
+            'financeActiveDepartments(financeState.current, subprojectId)',
+            reorder_source,
+        )
+        self.assertIn(
+            "String(line.subprojectId || 'main') === String(subprojectId)\n"
+            "      ? reordered[reorderedIndex++]\n"
+            "      : line",
+            reorder_source,
+        )
+        self.assertIn(
+            'financeQueueSave({ sourceSubprojectId: subprojectId });',
+            reorder_source,
+        )
+
+    def test_delayed_save_does_not_sync_from_a_newly_selected_subproject(self):
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        save_source = source.split(
+            'async function financeSaveCurrent', 1,
+        )[1].split('async function financeFlushPendingSave', 1)[0]
+
+        self.assertNotIn('financeSynchroniseLinkedSubprojects(', save_source)
+
+    def test_set_uom_round_trips_and_exports_with_display_label(self):
+        quotation = self.create_quote('Set UOM')
+        quotation['lineItems'] = [{
+            'id': 'group-line',
+            'description': 'Lighting package',
+            'department': 'Lighting Department',
+            'systemName': 'Lighting System',
+            'days': 1,
+            'quantity': 2,
+            'uom': 'set(s)',
+            'unitPrice': 100,
+            'discountPercent': 0,
+            'subprojectId': 'main',
+            'groupId': 'lighting-package',
+            'groupTitle': 'Lighting package',
+            'groupLeader': True,
+            'groupHeaderQuantity': 2,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        self.assertEqual(saved['lineItems'][0]['uom'], 'sets')
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf")
+        text = '\n'.join(
+            page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf.data)).pages
+        )
+        self.assertIn('2 set(s)', text)
+
     def test_optional_categories_are_visible_but_excluded_from_totals(self):
         quotation = self.create_quote('Optional Systems')
         quotation.update({
@@ -8638,7 +8734,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-tax-rate-input', source)
         self.assertIn('finance-tax-amount-input', source)
         self.assertIn('min=\"-9999\"', source)
-        self.assertIn('<col style=\"width:350px\"><col style=\"width:120px\"', source)
+        self.assertIn('<col style=\"width:368px\"><col style=\"width:120px\"', source)
+        self.assertIn('<col style=\"width:70px\">', source)
         self.assertIn("aria-label=\"days\" onchange", source)
         self.assertIn("step=\"0.5\" value=\"${financeescapeattr(line.days)}\"", source)
         self.assertIn("step=\"1\" value=\"${financeescapeattr(line.quantity)}\"", source)

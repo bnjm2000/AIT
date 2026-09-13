@@ -1653,7 +1653,9 @@ def build_finance_pdf(document, company, logo_path=''):
                 display_days = float(line.get('days') or 0)
                 quantity = f"{float(line.get('quantity') or 0):g}"
                 uom = _text(
-                    'unit(s)' if line.get('uom') == 'units' else line.get('uom')
+                    {'units': 'unit(s)', 'sets': 'set(s)'}.get(
+                        line.get('uom'), line.get('uom')
+                    )
                 ).strip()
                 quantity_label = f"{quantity} {uom}".strip()
                 unit_price = float(line.get('unitPrice') or 0)
@@ -1663,7 +1665,9 @@ def build_finance_pdf(document, company, logo_path=''):
                 display_days = float(line.get('days') or 0)
                 quantity = f"{float(line.get('quantity') or 0):g}"
                 uom = _text(
-                    'unit(s)' if line.get('uom') == 'units' else line.get('uom')
+                    {'units': 'unit(s)', 'sets': 'set(s)'}.get(
+                        line.get('uom'), line.get('uom')
+                    )
                 ).strip()
                 quantity_label = f"{quantity} {uom}".strip()
                 unit_price = float(line.get('unitPrice') or 0)

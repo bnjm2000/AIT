@@ -35900,6 +35900,8 @@ def _normalise_finance_line(value):
         and _normalise_department_code(department_code or department) == 'MANPOWER'
     ):
         uom = 'pax'
+    elif raw_uom in {'set', 'sets', 'set(s)'}:
+        uom = 'sets'
     elif raw_uom in {'lot', 'lots'}:
         uom = 'lot'
     elif raw_uom in {'sqm', 'm2', 'm²'}:
@@ -36110,7 +36112,7 @@ def _normalise_finance_line_groups(lines):
         if explicit_leader:
             header_days = max(0, _safe_float(leader.get('days'), 1))
             header_quantity = max(0, _safe_float(leader.get('quantity'), 1))
-            header_uom = leader.get('uom') or 'lot'
+            header_uom = leader.get('uom') or 'sets'
             header_unit_price = max(0, _safe_float(leader.get('unitPrice'), 0))
             header_discount = max(
                 -9999, min(100, _safe_float(leader.get('discountPercent'), 0))
@@ -36130,7 +36132,7 @@ def _normalise_finance_line_groups(lines):
             # while migrating to one commercial group header.
             header_days = max(0, _safe_float(leader.get('days'), 1))
             header_quantity = 1
-            header_uom = 'lot'
+            header_uom = 'sets'
             header_discount = 0
             header_total_mode = 'amount'
             header_total = sum(
@@ -38168,7 +38170,7 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
     })
     if pricing_changed:
         existing.update({
-            'uom': existing.get('uom') or 'units',
+            'uom': existing.get('uom') or ('sets' if is_group else 'units'),
             'unitPrice': round(sale_price / divisor, 2) if divisor else sale_price,
             'discountPercent': (
                 _safe_float(existing.get('discountPercent'), 0)
@@ -41303,7 +41305,7 @@ def _remember_finance_group_prices(finance_data, document):
             'discountPercent': round(max(-9999, min(
                 100, _safe_float(leader.get('discountPercent'), 0)
             )), 4),
-            'uom': str(leader.get('uom') or 'lot').strip()[:32] or 'lot',
+            'uom': str(leader.get('uom') or 'sets').strip()[:32] or 'sets',
             'owner': owner,
             'updatedAt': str(document.get('updatedAt') or now_iso()),
             'remembered': True,
@@ -46465,7 +46467,7 @@ def finance_catalog():
                 row['sourceAssetIds'],
             )
             row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
-            row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
+            row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'sets', 'pax', 'lot', 'sqm') else 'units'
         grouped[f"container:{container_id.lower()}"] = {
             'productId': f"container:{container_id.lower()}",
             'productKey': f"container:{container_id}",
@@ -46529,7 +46531,7 @@ def finance_catalog():
             'availableQuantity': None,
             'sourceAssetIds': [],
             'unitPrice': _safe_float(source.get('unitPrice'), 0),
-            'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units',
+            'uom': source.get('uom') if source.get('uom') in ('units', 'sets', 'pax', 'lot', 'sqm') else 'units',
             'isCustom': True,
         }
 
@@ -46554,7 +46556,7 @@ def finance_catalog():
             row['sourceAssetIds'],
         )
         row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
-        row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot', 'sqm') else 'units'
+        row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'sets', 'pax', 'lot', 'sqm') else 'units'
         row['productLabel'] = str(
             remembered.get('productLabel') or row.get('productLabel')
             or row.get('description') or ''
@@ -46686,7 +46688,7 @@ def finance_rate_card():
         else:
             unit_price = round(max(0, _safe_float(payload.get('unitPrice'), 0)), 2)
             uom = str(payload.get('uom') or 'units').strip().lower()
-            if uom not in {'units', 'pax', 'lot', 'sqm'}:
+            if uom not in {'units', 'sets', 'pax', 'lot', 'sqm'}:
                 uom = 'units'
             department, department_code = _finance_department_details(
                 payload.get('department'), payload.get('departmentCode')

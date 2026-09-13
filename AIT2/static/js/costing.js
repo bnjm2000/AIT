@@ -3018,9 +3018,10 @@ function costingRenderCatalog() {
   results.classList.toggle('open', document.activeElement === document.getElementById('costingAddItemInput'));
 }
 
-function costingNewLine(selected) {
+function costingNewLine(selected, categoryOverride = '') {
   const category = String(
-    document.getElementById('costingAddCategoryInput')?.value
+    categoryOverride
+    || document.getElementById('costingAddCategoryInput')?.value
     || costingState.addCategory
     || selected.department
     || 'General'
