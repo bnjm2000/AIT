@@ -11508,9 +11508,10 @@
               #inventory-section .inventory-selected-count-button:focus-visible { outline:2px solid var(--inventory-green);outline-offset:2px; }
               #inventory-section .inventory-selected-count-button:disabled { cursor:default;opacity:.72; }
               .inventory-catalogue { border:1px solid var(--inventory-line);border-radius:7px;background:#fff;overflow:visible; }
-              .inventory-model-head,.inventory-model-summary { display:grid;grid-template-columns:minmax(190px,1.15fr) minmax(180px,1.25fr) minmax(105px,.55fr) minmax(110px,.55fr) minmax(120px,.6fr) 28px;gap:12px;align-items:center; }
+              .inventory-model-head,.inventory-model-summary { display:grid;grid-template-columns:minmax(190px,1.15fr) minmax(180px,1.25fr) minmax(105px,.55fr) minmax(110px,.55fr) minmax(120px,.6fr) 68px;gap:12px;align-items:center; }
               .inventory-model-head { padding:7px 12px;background:#f2f7f5;border-bottom:1px solid var(--inventory-line);color:#62756f;font-size:10px;font-weight:800;text-transform:uppercase; }
               .inventory-model-group + .inventory-model-group { border-top:2px solid #e7eeec; }
+              .inventory-model-group { position:relative; }
               .inventory-model-summary { width:100%;min-height:50px;padding:6px 12px;border:0;background:#fff;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .15s ease; }
               .inventory-model-summary:hover,.inventory-model-summary[aria-expanded="true"] { background:#f4faf8; }
               .inventory-model-group.has-selected-assets > .inventory-model-summary { background:#edf7f4;box-shadow:inset 3px 0 0 #78aa9d; }
@@ -11523,6 +11524,10 @@
               .inventory-model-quantity span,.inventory-last-maintenance span { display:block;color:var(--inventory-muted);font-size:9px; }
               .inventory-last-maintenance { color:#334b44;font-size:10px;font-weight:700; }
               .inventory-chevron { width:23px;height:23px;border:1px solid #d8e4e0;border-radius:5px;display:grid;place-items:center;color:#547069;transition:transform .18s ease; }
+              .inventory-model-summary .inventory-chevron { justify-self:end; }
+              .inventory-model-calendar-button { position:absolute;right:48px;top:12px;width:27px;height:27px;padding:0;border:1px solid #bbd8d2;border-radius:5px;background:#eef8f5;color:#0f766e;display:grid;place-items:center;cursor:pointer; }
+              .inventory-model-calendar-button:hover,.inventory-model-calendar-button:focus-visible { border-color:#0f766e;background:#dff3ed;outline-color:#0f766e; }
+              .inventory-model-calendar-button svg { width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
               .inventory-model-summary[aria-expanded="true"] .inventory-chevron { transform:rotate(180deg); }
               .inventory-model-detail { display:grid;grid-template-columns:200px minmax(0,1fr);gap:12px;padding:10px;background:#fbfdfc;border-top:1px solid #e2ebe8;animation:inventoryReveal .18s ease-out; }
               @keyframes inventoryReveal { from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none} }
@@ -11543,6 +11548,78 @@
               .inventory-icon-button { width:27px;height:27px;padding:0;border:1px solid #cbdad5;border-radius:5px;background:#fff;color:#31564c;display:grid;place-items:center;cursor:pointer; }
               .inventory-icon-button:hover { border-color:var(--inventory-green);background:var(--inventory-green-soft); }
               .inventory-icon-button svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+              #inventoryAvailabilityCalendarModal .inventory-availability-shell { width:min(1180px,calc(var(--scaled-vw, 100vw) - 30px));max-width:1180px;max-height:calc(var(--scaled-dvh, 100dvh) - 30px);padding:0;overflow:hidden;background:#edf4fb; }
+              .inventory-availability-modal-header { margin:0!important;padding:12px 16px!important;background:#fff;border-bottom:1px solid #dce7ef; }
+              .inventory-availability-modal-header h3 { color:#172b3a;font-size:16px; }
+              .inventory-availability-modal-header p { margin:2px 0 0;color:#64748b;font-size:11px; }
+              .inventory-availability-content { max-height:calc(var(--scaled-dvh, 100dvh) - 100px);padding:10px;overflow:auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.95fr);gap:10px;color:#23354b;font-size:11px; }
+              .inventory-availability-loading { grid-column:1/-1;min-height:280px;display:grid;place-items:center;color:#64748b; }
+              .inventory-availability-panel { min-width:0;padding:12px;border:1px solid #e0e9f3;border-radius:7px;background:#fff;box-shadow:0 1px 3px rgba(15,35,60,.04); }
+              .inventory-availability-calendar-panel { display:flex;flex-direction:column; }
+              .inventory-availability-panel-heading,.inventory-availability-month-controls,.inventory-availability-heading-title { display:flex;align-items:center;gap:9px; }
+              .inventory-availability-panel-heading { justify-content:space-between;flex-wrap:wrap;margin-bottom:10px; }
+              .inventory-availability-heading-title { min-width:0;align-items:flex-start; }
+              .inventory-availability-heading-title>svg { width:21px;height:21px;flex:none;color:#008d8a;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+              .inventory-availability-heading-title strong,.inventory-availability-heading-title span { display:block; }
+              .inventory-availability-heading-title strong { color:#24344d;font-size:12px;line-height:1.25; }
+              .inventory-availability-heading-title span { margin-top:3px;color:#64748b;font-size:10px;line-height:1.35; }
+              .inventory-availability-month-controls { gap:4px; }
+              .inventory-availability-month-controls button { min-height:27px;padding:3px 8px;border:1px solid #e2eaf4;border-radius:5px;background:#fff;color:#38506a;font:inherit;cursor:pointer; }
+              .inventory-availability-month-controls button:hover { background:#f0f7fb;border-color:#a7c3d5; }
+              .inventory-availability-month-controls strong { padding:4px 8px;border:1px solid #e2eaf4;border-radius:5px;white-space:nowrap;font-size:10px; }
+              .inventory-availability-month-controls button:last-child { margin-left:5px; }
+              .inventory-availability-weekdays,.inventory-availability-grid { display:grid;grid-template-columns:repeat(7,minmax(0,1fr)); }
+              .inventory-availability-weekdays { border:1px solid #e2eaf4;border-bottom:0;border-radius:6px 6px 0 0; }
+              .inventory-availability-weekdays span { padding:9px 2px;color:#667892;text-align:center;font-size:10px;font-weight:700; }
+              .inventory-availability-grid { border-top:1px solid #e2eaf4;border-left:1px solid #e2eaf4; }
+              .inventory-availability-day { min-width:0;min-height:82px;padding:7px 5px;border:0;border-right:1px solid #e2eaf4;border-bottom:1px solid #e2eaf4;background:#fff;color:#23354b;text-align:left;font:inherit;cursor:pointer; }
+              .inventory-availability-day:hover { background:#f1f8fb; }
+              .inventory-availability-day.is-selected { position:relative;z-index:1;outline:2px solid #63a5f1;outline-offset:-2px;border-radius:3px;background:#f1f7ff; }
+              .inventory-availability-day.is-outside { background:#f8faff;color:#aab8cc;cursor:default; }
+              .inventory-availability-day strong,.inventory-availability-day span,.inventory-availability-day small { display:block; }
+              .inventory-availability-day strong { font-size:11px; }
+              .inventory-availability-day span { margin-top:20px;white-space:nowrap;font-size:9px; }
+              .inventory-availability-day small { margin-top:3px;color:#74849d;font-size:9px;white-space:nowrap; }
+              .inventory-availability-dot { display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;vertical-align:1px;background:#22a06b; }
+              .inventory-availability-dot.is-medium { background:#f49b28; }
+              .inventory-availability-dot.is-low { background:#e85e64; }
+              .inventory-availability-legend { margin-top:auto;padding:13px 2px 2px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#63758f;font-size:9px; }
+              .inventory-availability-selected-key { display:inline-block;width:10px;height:10px;margin-right:4px;background:#e1f0ff;border:1px solid #63a5f1;border-radius:2px;vertical-align:-1px; }
+              .inventory-availability-sidebar { min-width:0;display:grid;gap:10px;align-content:start; }
+              .inventory-availability-events { display:grid;gap:6px;margin:10px 0;max-height:220px;overflow:auto; }
+              .inventory-availability-event { position:relative;width:100%;min-height:69px;padding:8px 90px 8px 12px;border:1px solid #e0e9f3;border-left:4px solid var(--event-accent);border-radius:6px;background:#fff;color:#31435f;text-align:left;font:inherit;cursor:pointer; }
+              .inventory-availability-event:hover { background:#f7fbff;border-color:#bdd5e5; }
+              .inventory-availability-event-name,.inventory-availability-event-meta { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+              .inventory-availability-event-name { color:#273a55;font-weight:800;font-size:11px; }
+              .inventory-availability-event-meta { margin-top:3px;color:#708199;font-size:9px; }
+              .inventory-availability-event-quantity { position:absolute;right:9px;top:50%;transform:translateY(-50%);padding:5px 7px;border-radius:99px;background:#e7f1ff;color:#30465f;font-size:9px;font-weight:800;white-space:nowrap; }
+              .inventory-availability-empty { padding:13px;color:#708199;font-size:10px; }
+              .inventory-availability-summary { display:flex;align-items:center;gap:10px;padding:11px;border-radius:5px;background:linear-gradient(100deg,#effcf5,#daf7e7);color:#087456; }
+              .inventory-availability-summary svg { width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2; }
+              .inventory-availability-summary strong,.inventory-availability-summary span { display:block; }
+              .inventory-availability-summary span { margin-top:3px;color:#61778a;font-size:9px; }
+              .inventory-availability-range-panel>.inventory-availability-heading-title { margin-bottom:11px; }
+              .inventory-availability-range-fields { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:7px;align-items:end; }
+              .inventory-availability-range-fields label { min-width:0;color:#63758e;font-size:9px; }
+              .inventory-availability-range-fields input { width:100%;min-width:0;min-height:35px;margin-top:4px;padding:5px;font-size:10px; }
+              .inventory-availability-range-fields button { min-height:35px;padding:5px 8px;font-size:9px;white-space:nowrap; }
+              .inventory-availability-results { margin-top:10px;padding:10px;border-radius:5px;background:#f1f6fb; }
+              .inventory-availability-results>strong { display:block;margin-bottom:8px;color:#273a55;font-size:10px; }
+              .inventory-availability-result-cards { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px; }
+              .inventory-availability-result-cards>div { padding:8px;border-radius:5px;background:#fff; }
+              .inventory-availability-result-cards span,.inventory-availability-result-cards strong { display:block; }
+              .inventory-availability-result-cards span { color:#667892;font-size:9px; }
+              .inventory-availability-result-cards strong { margin-top:2px;color:#273a55;font-size:15px; }
+              .inventory-availability-result-cards strong.is-green { color:#0b9b55; }
+              .inventory-availability-result-cards strong.is-red { color:#e14b58; }
+              .inventory-availability-result-caption { display:block;margin:8px 0 10px;color:#667892;font-size:9px; }
+              .inventory-availability-range-events { max-height:165px;overflow:auto;border:1px solid #e0e9f3;border-radius:5px;background:#fff; }
+              .inventory-availability-range-events>div:not(.inventory-availability-empty) { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 35px;gap:6px;padding:5px 8px;border-bottom:1px solid #e0e9f3;border-left:3px solid var(--event-accent);font-size:9px; }
+              .inventory-availability-range-events>div:last-child { border-bottom:0; }
+              .inventory-availability-range-events span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+              .inventory-availability-range-events strong { text-align:right; }
+              @media(max-width:850px) { .inventory-availability-content { grid-template-columns:1fr; }.inventory-availability-day { min-height:70px; }.inventory-availability-day span { margin-top:12px; } }
+              @media(max-width:520px) { .inventory-availability-panel-heading { align-items:flex-start; }.inventory-availability-month-controls { width:100%; }.inventory-availability-day { min-height:63px;padding:5px 3px; }.inventory-availability-day span,.inventory-availability-day small { font-size:7px; }.inventory-availability-range-fields { grid-template-columns:1fr 1fr; }.inventory-availability-range-fields button { grid-column:1/-1; }.inventory-model-calendar-button { right:45px;top:11px; } }
               #assetDetailsModal .asset-details-shell { width:min(920px,calc(var(--scaled-vw, 100vw) - 28px));max-width:920px;max-height:calc(var(--scaled-dvh, 100dvh) - 28px);overflow:hidden; }
               #assetDetailsModal .asset-details-body { max-height:calc(var(--scaled-dvh, 100dvh) - 96px);overflow:auto;padding:0 20px 18px; }
               .asset-details-identity { padding:18px 0;border-bottom:1px solid #dce7e3; }
@@ -11629,6 +11706,8 @@
               @media(max-width:780px) { #inventory-section .inventory-page-header{align-items:stretch}#inventory-section .inventory-page-header .btn{align-self:flex-start}#inventory-section .inventory-filter-grid{grid-template-columns:1fr 1fr}.inventory-model-head{display:none}.inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 28px;gap:8px;padding:11px}.inventory-model-summary>*:nth-child(2),.inventory-model-summary>*:nth-child(3),.inventory-model-summary>*:nth-child(5){display:none}.inventory-model-summary .inventory-model-quantity{display:block}.inventory-model-detail{grid-template-columns:1fr;padding:10px}.inventory-group-condition{border-right:0;border-bottom:1px solid #e2ebe8;padding-bottom:13px}.inventory-individual-head,.inventory-individual-row{grid-template-columns:25px minmax(95px,1fr) minmax(90px,1fr) 90px}.inventory-individual-head>*:nth-child(4),.inventory-individual-head>*:nth-child(5),.inventory-individual-head>*:nth-child(6),.inventory-individual-row>*:nth-child(4),.inventory-individual-row>*:nth-child(5),.inventory-individual-row>*:nth-child(6){display:none}.maintenance-log-modal{align-items:stretch!important;padding:8px}.maintenance-log-content{width:100%!important;height:calc(var(--scaled-dvh, 100dvh) - 16px)!important;max-height:none!important;padding:12px!important}.maintenance-log-content>.modal-header{margin-bottom:10px!important;padding-bottom:10px!important}.maintenance-log-content>.modal-header .close-btn{width:38px;height:38px;flex:none}.maintenance-history-shell{display:block;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}.maintenance-history-aside{padding:0 0 14px;border:0;border-bottom:1px solid #e1eae7;overflow:visible}#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}.maintenance-history-main{overflow:visible;margin-top:14px;padding-right:0}.maintenance-history-toolbar{position:sticky;top:0;grid-template-columns:minmax(0,1fr) auto;padding:8px 0 10px}.maintenance-history-toolbar h4{grid-column:1}.maintenance-history-toolbar .btn{min-height:38px}.maintenance-history-search{grid-column:1/-1;grid-row:2}.maintenance-timeline-top{display:grid;grid-template-columns:minmax(0,1fr) auto}.maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}.maintenance-log-content>.modal-actions{margin-top:10px!important;padding-top:10px!important}.maintenance-log-content>.modal-actions .btn{width:100%;min-height:40px}.asset-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-stock-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.asset-details-operational-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-identity-record{grid-template-columns:1fr;gap:8px}}
               @media(max-width:520px) { #inventory-section .inventory-page-header{flex-direction:column}#inventory-section .inventory-page-header h2{font-size:22px}#inventory-section .inventory-stat-grid{grid-template-columns:1fr 1fr;gap:7px}#inventory-section .inventory-stat{min-height:82px;padding:10px;gap:8px}#inventory-section .inventory-stat-mark{width:32px;height:32px}#inventory-section .inventory-stat-value{font-size:19px}#inventory-section .inventory-filter-grid{grid-template-columns:1fr}#inventory-section #asset-count{width:100%;margin-left:0}.inventory-individual-head,.inventory-individual-row{grid-template-columns:23px minmax(82px,1fr) minmax(70px,.8fr) 90px}.inventory-condition-legend{width:100%}.maintenance-history-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.maintenance-history-stat:nth-child(2){border-right:0}.maintenance-history-stat:last-child{grid-column:1/-1;border-top:1px solid #dfe8e5}.maintenance-history-toolbar h4{font-size:14px}.maintenance-timeline-item{padding:11px 10px 11px 15px}.maintenance-event-logs-button{min-height:34px;padding:6px 9px}}
               @media(max-width:520px) { .asset-bulk-purchases-heading,.asset-bulk-purchase-footer{align-items:stretch;flex-direction:column}.asset-bulk-purchase-row{grid-template-columns:minmax(0,1fr) 82px 30px} }
+              @media(max-width:1100px) { .inventory-model-head,.inventory-model-summary{grid-template-columns:minmax(170px,1.1fr) minmax(160px,1fr) 100px 105px 68px} }
+              @media(max-width:780px) { .inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 68px} }
             </style>
             <div class="inventory-page-header">
               <div>

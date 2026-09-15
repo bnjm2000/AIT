@@ -30061,6 +30061,141 @@ def get_asset_usage_summary(asset_id):
     })
 
 
+@app.route('/api/assets/<path:asset_id>/availability-calendar', methods=['GET'])
+@require_auth
+def get_asset_availability_calendar(asset_id):
+    """Calendar and range availability for the selected asset's exact model group."""
+    asset = data_manager.inventory.get(unquote_plus(asset_id).strip())
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    month_value = str(request.args.get('month') or datetime.now().strftime('%Y-%m')).strip()
+    try:
+        month_start = datetime.strptime(month_value, '%Y-%m').date()
+        if month_start.strftime('%Y-%m') != month_value:
+            raise ValueError
+    except ValueError:
+        return jsonify({'error': 'Month must be in YYYY-MM format'}), 400
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+
+    start_value = str(request.args.get('start') or '').strip()
+    end_value = str(request.args.get('end') or '').strip()
+    if bool(start_value) != bool(end_value):
+        return jsonify({'error': 'Start and end dates are required together'}), 400
+    range_start = range_end = None
+    if start_value:
+        try:
+            range_start = datetime.strptime(start_value, '%Y-%m-%d').date()
+            range_end = datetime.strptime(end_value, '%Y-%m-%d').date()
+            if (range_start.isoformat(), range_end.isoformat()) != (start_value, end_value):
+                raise ValueError
+        except ValueError:
+            return jsonify({'error': 'Dates must be in YYYY-MM-DD format'}), 400
+        if range_end < range_start:
+            return jsonify({'error': 'End date must not be before start date'}), 400
+        if (range_end - range_start).days > 366:
+            return jsonify({'error': 'Date range must be 367 days or shorter'}), 400
+
+    group = _asset_group_from_item(asset)
+    group_key = _event_asset_group_key(asset)
+    matching_assets = [
+        item for item in data_manager.inventory.values()
+        if _asset_matches_group(item, group)
+    ]
+    total = sum(_asset_inventory_quantity(item) for item in matching_assets)
+    usable = 0
+    for item in matching_assets:
+        if _is_disposed(item) or getattr(item, 'is_missing', False) or getattr(item, 'is_ooc', False):
+            continue
+        quantity = _asset_inventory_quantity(item)
+        if _is_bulk_asset(item):
+            faults = _bulk_maintenance_quantity_counts(item)
+            quantity = max(0, quantity - faults['ooc'] - faults['missing'])
+        usable += quantity
+
+    window_start = min(month_start, range_start) if range_start else month_start
+    window_end = max(month_end, range_end) if range_end else month_end
+    bookings = []
+    for event in data_manager.events.values():
+        if str(getattr(event, 'state', '') or '').strip().casefold() == 'cancelled':
+            continue
+        event_start = _parse_any_date(getattr(event, 'start_date', ''))
+        event_end = _parse_any_date(getattr(event, 'end_date', '') or getattr(event, 'start_date', ''))
+        if not event_start or not event_end or event_end < event_start:
+            continue
+        if event_end < window_start or event_start > window_end:
+            continue
+        quantity = max(0, _safe_int(_event_reserved_quantities_by_key(event).get(group_key), 0))
+        if quantity <= 0:
+            continue
+        can_access = _current_user_can_access_event(event)
+        bookings.append({
+            'eventId': event.event_id if can_access else None,
+            'name': str(event.name or 'Unnamed event') if can_access else 'Other scheduled event',
+            'location': str(getattr(event, 'location', '') or '') if can_access else '',
+            'start': event_start.isoformat(),
+            'end': event_end.isoformat(),
+            'quantity': quantity,
+            '_start': event_start,
+            '_end': event_end,
+        })
+    bookings.sort(key=lambda row: (row['_start'], row['name'].casefold()))
+
+    def booking_payload(row):
+        return {key: value for key, value in row.items() if not key.startswith('_')}
+
+    def availability_on(day):
+        active = [row for row in bookings if row['_start'] <= day <= row['_end']]
+        allocated = sum(row['quantity'] for row in active)
+        available = max(0, usable - allocated)
+        ratio = available / usable if usable else 0
+        return {
+            'date': day.isoformat(),
+            'available': available,
+            'allocated': allocated,
+            'eventCount': len(active),
+            'status': 'high' if ratio >= .8 else 'medium' if ratio >= .5 else 'low',
+            'events': [booking_payload(row) for row in active],
+        }
+
+    days = []
+    day = month_start
+    while day <= month_end:
+        days.append(availability_on(day))
+        day += timedelta(days=1)
+
+    range_result = None
+    if range_start:
+        range_days = []
+        day = range_start
+        while day <= range_end:
+            range_days.append(availability_on(day))
+            day += timedelta(days=1)
+        overlapping = [
+            booking_payload(row) for row in bookings
+            if row['_start'] <= range_end and row['_end'] >= range_start
+        ]
+        range_result = {
+            'start': range_start.isoformat(),
+            'end': range_end.isoformat(),
+            'available': min(row['available'] for row in range_days),
+            'allocated': max(row['allocated'] for row in range_days),
+            'eventCount': len(overlapping),
+            'events': overlapping,
+        }
+
+    return jsonify({'success': True, 'data': {
+        'assetId': asset.asset_id,
+        'group': group,
+        'month': month_value,
+        'total': total,
+        'usable': usable,
+        'days': days,
+        'range': range_result,
+    }})
+
+
 def _asset_check_find_asset(identifier):
     """Find an asset by Asset ID or Serial Number for Asset Check."""
     return _find_inventory_asset_by_identifier(identifier)

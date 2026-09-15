@@ -781,6 +781,21 @@ def test_inventory_bulk_edit_updates_every_selected_asset_when_groups_merge():
     assert 'for (const asset of selectedAssets)' in save_source
 
 
+def test_inventory_group_has_availability_calendar_button_and_date_range_popup():
+    script = APP_BUNDLE_SOURCE
+    template = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+
+    assert 'class="inventory-model-calendar-button"' in script
+    assert "onclick=\"openInventoryAvailabilityCalendar('" in script
+    assert 'id="inventoryAvailabilityCalendarModal"' not in script  # created dynamically
+    assert "modal.id = 'inventoryAvailabilityCalendarModal'" in script
+    assert 'function renderInventoryAvailabilityCalendar()' in script
+    assert 'function checkInventoryAvailabilityRange()' in script
+    assert '/availability-calendar?' in script
+    assert '.inventory-availability-content' in template
+    assert '.inventory-availability-grid' in template
+
+
 def test_inventory_selection_can_open_bulk_maintenance_workflow():
     script = APP_BUNDLE_SOURCE
 

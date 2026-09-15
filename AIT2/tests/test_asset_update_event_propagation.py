@@ -1661,6 +1661,93 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         )
         self.assertEqual(asset_payload['purchaseBatches'], [{'date': '', 'quantity': 6}])
 
+    def test_availability_calendar_counts_overlapping_events_for_exact_asset_group(self):
+        self.login_admin()
+        first = self.make_event(
+            301, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        first.start_date, first.end_date = '20261017', '20261019'
+        second = self.make_event(
+            302, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        second.start_date = second.end_date = '20261017'
+        cancelled = self.make_event(
+            303, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        cancelled.start_date = cancelled.end_date = '20261017'
+        cancelled.state = 'Cancelled'
+
+        response = self.client.get(
+            '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-16&end=2026-10-19'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['total'], 2)
+        self.assertEqual(payload['usable'], 2)
+        days = {row['date']: row for row in payload['days']}
+        self.assertEqual(days['2026-10-16']['available'], 2)
+        self.assertEqual(days['2026-10-17']['available'], 0)
+        self.assertEqual(days['2026-10-17']['allocated'], 2)
+        self.assertEqual(days['2026-10-17']['eventCount'], 2)
+        self.assertEqual(days['2026-10-18']['available'], 1)
+        self.assertEqual(payload['range']['available'], 0)
+        self.assertEqual(payload['range']['allocated'], 2)
+        self.assertEqual(len(payload['range']['events']), 2)
+
+    def test_availability_calendar_uses_current_faults_and_validates_range(self):
+        self.login_admin()
+        self.data_manager.inventory['A#02'].is_ooc = True
+        response = self.client.get('/api/assets/A%2301/availability-calendar?month=2026-10')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['total'], 2)
+        self.assertEqual(payload['usable'], 1)
+        self.assertTrue(all(day['available'] == 1 for day in payload['days']))
+
+        invalid = self.client.get(
+            '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-19&end=2026-10-17'
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_availability_range_uses_peak_daily_reservations_not_sum_of_events(self):
+        self.login_admin()
+        first = self.make_event(
+            305, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        first.start_date = first.end_date = '20261017'
+        second = self.make_event(
+            306, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        second.start_date = second.end_date = '20261019'
+
+        response = self.client.get(
+            '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-17&end=2026-10-19'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        result = response.get_json()['data']['range']
+        self.assertEqual(result['eventCount'], 2)
+        self.assertEqual(result['allocated'], 1)
+        self.assertEqual(result['available'], 1)
+
+    def test_availability_calendar_does_not_disclose_unassigned_event_details(self):
+        self.data_manager.users['viewer'] = User(
+            'viewer', hash_password('pw', 'viewer-salt'), 'viewer-salt', False, True
+        )
+        with self.client.session_transaction() as session:
+            session['user'] = 'viewer'
+            session['is_admin'] = False
+        event = self.make_event(
+            304, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        event.name = 'Private Client Event'
+        event.start_date = event.end_date = '20261017'
+        response = self.client.get('/api/assets/A%2301/availability-calendar?month=2026-10')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        day = next(row for row in response.get_json()['data']['days'] if row['date'] == '2026-10-17')
+        self.assertEqual(day['available'], 1)
+        self.assertEqual(day['events'][0]['name'], 'Other scheduled event')
+        self.assertIsNone(day['events'][0]['eventId'])
+
     def test_bulk_purchase_batch_requires_positive_quantity(self):
         self.login_admin()
         response = self.client.put(

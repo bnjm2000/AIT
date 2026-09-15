@@ -7250,6 +7250,7 @@ function inventoryIcon(name) {
     alert: '<path d="M12 3 2.5 20h19z"/><path d="M12 9v4m0 3h.01"/>',
     wrench: '<path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-3-3z"/>',
     eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-14 4h2m3 0h2m3 0h1"/>',
     edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
     chevron: '<path d="m7 9 5 5 5-5"/>'
@@ -7754,6 +7755,232 @@ function toggleInventoryModelGroup(encodedKey) {
   displayFilteredInventory();
 }
 
+const inventoryAvailabilityCalendarState = {
+  assetId: '', month: '', selectedDate: '', rangeStart: '', rangeEnd: '', data: null, requestId: 0,
+};
+
+function inventoryAvailabilityIso(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function inventoryAvailabilityDate(value) {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function inventoryAvailabilityDateLabel(value, options = { day: 'numeric', month: 'short', year: 'numeric' }) {
+  return inventoryAvailabilityDate(value).toLocaleDateString('en-SG', options);
+}
+
+function ensureInventoryAvailabilityCalendarModal() {
+  if (document.getElementById('inventoryAvailabilityCalendarModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'inventoryAvailabilityCalendarModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content inventory-availability-shell">
+      <div class="modal-header inventory-availability-modal-header">
+        <div><h3 class="modal-title">Inventory Availability Calendar</h3><p id="inventoryAvailabilitySubtitle"></p></div>
+        <button type="button" class="close-btn" aria-label="Close availability calendar" onclick="closeModal('inventoryAvailabilityCalendarModal')">&times;</button>
+      </div>
+      <div id="inventoryAvailabilityCalendarContent" class="inventory-availability-content" aria-live="polite"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal(modal.id);
+  });
+  document.body.appendChild(modal);
+}
+
+async function openInventoryAvailabilityCalendar(encodedAssetId) {
+  const assetId = decodeURIComponent(String(encodedAssetId || ''));
+  const asset = getAssetByApiIdentifier(assetId);
+  if (!asset) {
+    showNotification('error', 'Asset not found');
+    return;
+  }
+  ensureInventoryAvailabilityCalendarModal();
+  const today = new Date();
+  const rangeEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
+  Object.assign(inventoryAvailabilityCalendarState, {
+    assetId,
+    month: inventoryAvailabilityIso(today).slice(0, 7),
+    selectedDate: inventoryAvailabilityIso(today),
+    rangeStart: inventoryAvailabilityIso(today),
+    rangeEnd: inventoryAvailabilityIso(rangeEnd),
+    data: null,
+  });
+  document.getElementById('inventoryAvailabilitySubtitle').textContent =
+    `${asset.brand || ''} ${asset.model || ''} · ${asset.description || 'Asset availability'}`;
+  openModal('inventoryAvailabilityCalendarModal');
+  await loadInventoryAvailabilityCalendar();
+}
+
+async function loadInventoryAvailabilityCalendar() {
+  const state = inventoryAvailabilityCalendarState;
+  const requestId = ++state.requestId;
+  const content = document.getElementById('inventoryAvailabilityCalendarContent');
+  if (content) content.innerHTML = '<div class="inventory-availability-loading">Loading availability…</div>';
+  const query = new URLSearchParams({ month: state.month });
+  if (state.rangeStart && state.rangeEnd) {
+    query.set('start', state.rangeStart);
+    query.set('end', state.rangeEnd);
+  }
+  try {
+    const response = await apiCall(
+      `/api/assets/${encodeURIComponent(state.assetId)}/availability-calendar?${query}`
+    );
+    if (requestId !== state.requestId) return;
+    state.data = response.data;
+    renderInventoryAvailabilityCalendar();
+  } catch (error) {
+    if (requestId !== state.requestId) return;
+    if (content) content.innerHTML = `<div class="inventory-availability-loading">Could not load availability: ${escapeHtml(error.message)}</div>`;
+    showNotification('error', `Could not load asset availability: ${error.message}`);
+  }
+}
+
+async function changeInventoryAvailabilityMonth(delta) {
+  const state = inventoryAvailabilityCalendarState;
+  const [year, month] = state.month.split('-').map(Number);
+  const target = new Date(year, month - 1 + delta, 1);
+  state.month = inventoryAvailabilityIso(target).slice(0, 7);
+  state.selectedDate = inventoryAvailabilityIso(target);
+  await loadInventoryAvailabilityCalendar();
+}
+
+async function inventoryAvailabilityToday() {
+  const today = inventoryAvailabilityIso(new Date());
+  inventoryAvailabilityCalendarState.month = today.slice(0, 7);
+  inventoryAvailabilityCalendarState.selectedDate = today;
+  await loadInventoryAvailabilityCalendar();
+}
+
+function selectInventoryAvailabilityDate(date) {
+  inventoryAvailabilityCalendarState.selectedDate = date;
+  renderInventoryAvailabilityCalendar();
+}
+
+async function checkInventoryAvailabilityRange() {
+  const start = document.getElementById('inventoryAvailabilityStart')?.value || '';
+  const end = document.getElementById('inventoryAvailabilityEnd')?.value || '';
+  if (!start || !end || end < start) {
+    showNotification('warning', 'Choose a valid start and end date');
+    return;
+  }
+  if ((inventoryAvailabilityDate(end) - inventoryAvailabilityDate(start)) / 86400000 > 366) {
+    showNotification('warning', 'Choose a date range of 367 days or shorter');
+    return;
+  }
+  inventoryAvailabilityCalendarState.rangeStart = start;
+  inventoryAvailabilityCalendarState.rangeEnd = end;
+  await loadInventoryAvailabilityCalendar();
+}
+
+function openInventoryAvailabilityEvent(eventId) {
+  if (!Number.isInteger(Number(eventId))) return;
+  closeModal('inventoryAvailabilityCalendarModal');
+  viewEvent(Number(eventId));
+}
+
+function inventoryAvailabilityEventHtml(event, index = 0) {
+  const accessible = event.eventId !== null && event.eventId !== undefined;
+  const dates = event.start === event.end
+    ? inventoryAvailabilityDateLabel(event.start)
+    : `${inventoryAvailabilityDateLabel(event.start)} – ${inventoryAvailabilityDateLabel(event.end)}`;
+  const body = `
+    <span class="inventory-availability-event-name">${escapeHtml(event.name)}</span>
+    <span class="inventory-availability-event-meta">${escapeHtml(event.location || 'Scheduled event')}</span>
+    <span class="inventory-availability-event-meta">${escapeHtml(dates)}</span>
+    <span class="inventory-availability-event-quantity">${escapeHtml(String(event.quantity))} reserved</span>
+  `;
+  return accessible
+    ? `<button type="button" class="inventory-availability-event" style="--event-accent:${index % 2 ? '#7c3aed' : '#0f766e'}" onclick="openInventoryAvailabilityEvent(${Number(event.eventId)})">${body}</button>`
+    : `<div class="inventory-availability-event" style="--event-accent:#94a3b8">${body}</div>`;
+}
+
+function renderInventoryAvailabilityCalendar() {
+  const state = inventoryAvailabilityCalendarState;
+  const data = state.data;
+  const content = document.getElementById('inventoryAvailabilityCalendarContent');
+  if (!data || !content) return;
+  const startDraft = document.getElementById('inventoryAvailabilityStart')?.value || state.rangeStart;
+  const endDraft = document.getElementById('inventoryAvailabilityEnd')?.value || state.rangeEnd;
+  const [year, month] = state.month.split('-').map(Number);
+  const first = new Date(year, month - 1, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const gridLength = Math.ceil((offset + data.days.length) / 7) * 7;
+  const byDate = new Map(data.days.map(day => [day.date, day]));
+  const selected = byDate.get(state.selectedDate) || data.days[0];
+  if (selected && selected.date !== state.selectedDate) state.selectedDate = selected.date;
+  const grid = Array.from({ length: gridLength }, (_, index) => {
+    const date = new Date(year, month - 1, index - offset + 1);
+    const iso = inventoryAvailabilityIso(date);
+    const day = byDate.get(iso);
+    if (!day) return `<div class="inventory-availability-day is-outside"><span>${date.getDate()}</span></div>`;
+    return `
+      <button type="button" class="inventory-availability-day ${iso === state.selectedDate ? 'is-selected' : ''}" onclick="selectInventoryAvailabilityDate('${iso}')" aria-label="${escapeHtmlAttr(inventoryAvailabilityDateLabel(iso))}: ${day.available} available, ${day.eventCount} events">
+        <strong>${date.getDate()}</strong>
+        <span>${day.available} available</span>
+        <small><i class="inventory-availability-dot is-${day.status}"></i>${day.eventCount} event${day.eventCount === 1 ? '' : 's'}</small>
+      </button>
+    `;
+  }).join('');
+  const monthLabel = first.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+  const selectedEvents = selected?.events || [];
+  const range = data.range;
+  const rangeDates = range ? `${inventoryAvailabilityDateLabel(range.start)} – ${inventoryAvailabilityDateLabel(range.end)}` : '';
+
+  content.innerHTML = `
+    <section class="inventory-availability-panel inventory-availability-calendar-panel">
+      <div class="inventory-availability-panel-heading">
+        <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Inventory Availability Calendar</strong><span>Scheduled availability for this asset item</span></div></div>
+        <div class="inventory-availability-month-controls">
+          <button type="button" onclick="changeInventoryAvailabilityMonth(-1)" aria-label="Previous month">‹</button>
+          <strong>${escapeHtml(monthLabel)}</strong>
+          <button type="button" onclick="changeInventoryAvailabilityMonth(1)" aria-label="Next month">›</button>
+          <button type="button" onclick="inventoryAvailabilityToday()">Today</button>
+        </div>
+      </div>
+      <div class="inventory-availability-weekdays">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(name => `<span>${name}</span>`).join('')}</div>
+      <div class="inventory-availability-grid">${grid}</div>
+      <div class="inventory-availability-legend"><span><i class="inventory-availability-dot is-high"></i>High (≥80%)</span><span><i class="inventory-availability-dot is-medium"></i>Medium (50–79%)</span><span><i class="inventory-availability-dot is-low"></i>Low (&lt;50%)</span><span><i class="inventory-availability-selected-key"></i>Selected date</span></div>
+    </section>
+    <div class="inventory-availability-sidebar">
+      <section class="inventory-availability-panel inventory-availability-events-panel">
+        <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Events on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</strong><span>${selected?.eventCount || 0} event${selected?.eventCount === 1 ? '' : 's'} · ${selected?.allocated || 0} reserved</span></div></div>
+        <div class="inventory-availability-events">${selectedEvents.length ? selectedEvents.map(inventoryAvailabilityEventHtml).join('') : '<div class="inventory-availability-empty">No event reservations on this date.</div>'}</div>
+        <div class="inventory-availability-summary">${inventoryIcon('box')}<div><strong>${selected?.available || 0} available on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate))}</strong><span>${data.usable ? Math.round((selected.available / data.usable) * 100) : 0}% of current usable stock</span></div></div>
+      </section>
+      <section class="inventory-availability-panel inventory-availability-range-panel">
+        <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Check Availability for a Date Range</strong><span>See overlapping events and the lowest available quantity.</span></div></div>
+        <div class="inventory-availability-range-fields">
+          <label>Start Date<input id="inventoryAvailabilityStart" type="date" class="form-input" value="${escapeHtmlAttr(startDraft)}"></label>
+          <label>End Date<input id="inventoryAvailabilityEnd" type="date" class="form-input" value="${escapeHtmlAttr(endDraft)}"></label>
+          <button type="button" class="btn btn-primary" onclick="checkInventoryAvailabilityRange()">Check Availability</button>
+        </div>
+        ${range ? `
+          <div class="inventory-availability-results">
+            <strong>Results for ${escapeHtml(rangeDates)}</strong>
+            <div class="inventory-availability-result-cards">
+              <div><span>Total stock</span><strong>${data.total}</strong></div>
+              <div><span>Lowest available</span><strong class="is-green">${range.available}</strong></div>
+              <div><span>Peak allocated</span><strong class="is-red">${range.allocated}</strong></div>
+            </div>
+            <span class="inventory-availability-result-caption">Current usable stock: ${data.usable}. Availability is the minimum across this period.</span>
+            <strong>Events in this period</strong>
+            <div class="inventory-availability-range-events">
+              ${range.events.length ? range.events.map((event, index) => `
+                <div style="--event-accent:${index % 2 ? '#7c3aed' : '#0f766e'}"><span>${escapeHtml(event.name)}</span><span>${escapeHtml(inventoryAvailabilityDateLabel(event.start))} – ${escapeHtml(inventoryAvailabilityDateLabel(event.end))}</span><strong>${event.quantity}</strong></div>
+              `).join('') : '<div class="inventory-availability-empty">No event reservations overlap this period.</div>'}
+            </div>
+          </div>
+        ` : ''}
+      </section>
+    </div>
+  `;
+}
+
 function renderInventorySummary() {
   const sourceAssets = Array.isArray(assets) ? assets : [];
   const conditionCounts = inventoryConditionCounts(sourceAssets);
@@ -7826,6 +8053,7 @@ function displayInventoryTable(assetsToShow) {
               <span class="inventory-last-maintenance">${escapeHtml(inventoryMaintenanceDateText(latest))}<span>${latest?.type ? escapeHtml(inventoryStatusText(latest.type)) : ''}</span></span>
               <span class="inventory-chevron">${inventoryIcon('chevron')}</span>
             </button>
+            <button type="button" class="inventory-model-calendar-button" onclick="openInventoryAvailabilityCalendar('${escapeHtmlAttr(encodeURIComponent(inventoryAssetIdentifier(group.assets[0])))}')" title="Check availability over a period" aria-label="Check availability for ${escapeHtmlAttr([group.brand, group.model].filter(Boolean).join(' '))}">${inventoryIcon('calendar')}</button>
             ${expanded ? `
               <div class="inventory-model-detail">
                 <div class="inventory-group-condition"><h4>Availability overview</h4>${inventoryAvailabilityChartHtml(availability, true)}</div>
