@@ -6,7 +6,8 @@ import unittest
 from unittest.mock import patch
 
 from document_learning import CACHE_FILENAME, MODEL_FILENAME, VERSION, atomic_json, submission_records, train_snapshot
-from workforce import _amount_from_text, _date_from_text, extract_claim_amount, extract_invoice_amount, money
+from workforce import (_amount_from_text, _date_from_text, _unlabelled_invoice_table_total,
+                       extract_claim_amount, extract_invoice_amount, money)
 
 
 class DocumentDetectionTests(unittest.TestCase):
@@ -114,6 +115,53 @@ class DocumentDetectionTests(unittest.TestCase):
             self.assertEqual(report['exclusions']['extractionError'], 1)
             self.assertEqual(report['exclusions']['noReadableAmount'], 1)
             self.assertFalse((root / MODEL_FILENAME).exists())
+
+    def test_unlabelled_invoice_total_is_read_in_visual_pdf_order(self):
+        import fitz
+        from document_learning import predicted_amount, training_candidates
+        from workforce import _pdf_text
+
+        # Deliberately write cells in a different order from their page position,
+        # as spreadsheet exports do. Repetition made item prices look confident.
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / 'invoice.pdf')
+            with fitz.open() as document:
+                page = document.new_page(width=600, height=700)
+                page.insert_text((30, 70), 'Date       Description       Venue       Role       Amount')
+                for index in range(6):
+                    page.insert_text((30, 100 + 25 * index), f'{index + 1:02d}-Sep-26   Event   Hall   Setup')
+                for index in (3, 4):
+                    page.insert_text((450, 100 + 25 * index), '$180.00')
+                page.insert_text((450, 350), '$1,150.00')
+                for index in (0, 1, 2, 5):
+                    page.insert_text((450, 100 + 25 * index), '$250.00' if index == 5 else '$180.00')
+                page.insert_text((30, 390), 'Bank Details')
+                document.save(path)
+            native = _amount_from_text(_pdf_text(path))
+            self.assertEqual(native['amount'], 180)
+            self.assertEqual(native['confidence'], 'High')
+            with patch('workforce._ocr_pdf') as ocr:
+                result = extract_invoice_amount(path)
+                trained = predicted_amount(training_candidates(path, 'invoice'))
+            self.assertEqual(result['amount'], 1150)
+            self.assertEqual(result['matchedText'], '$1,150.00')
+            self.assertEqual(result['source'], 'PDF table layout')
+            self.assertEqual(trained, 1150)
+            ocr.assert_not_called()
+
+    def test_unlabelled_table_requires_a_printed_matching_summary(self):
+        rows = 'Date Description Venue Role Amount\n01-Sep-26 Event Hall Setup $123.45\n02-Sep-26 Event Hall TD $234.56\n'
+        self.assertEqual(_unlabelled_invoice_table_total(rows + '$358.01\nBank Details'), 358.01)
+        self.assertIsNone(_unlabelled_invoice_table_total(rows + 'Bank Details'))
+        self.assertIsNone(_unlabelled_invoice_table_total(rows + '$357.01'))
+        self.assertIsNone(_unlabelled_invoice_table_total(rows + 'Discount $10.00\n$348.01'))
+        self.assertIsNone(_unlabelled_invoice_table_total(rows + '03-Sep-26 Unreadable\n$358.01'))
+
+    def test_unlabelled_table_rejects_multiple_price_columns_or_summaries(self):
+        header = 'Date Description Venue Role Amount\n'
+        self.assertIsNone(_unlabelled_invoice_table_total(header + '01-Sep-26 Event $100.00 $200.00\n$200.00'))
+        table = header + '01-Sep-26 Event $100.00\n$100.00\n'
+        self.assertIsNone(_unlabelled_invoice_table_total(table + table))
 
 
 if __name__ == '__main__':

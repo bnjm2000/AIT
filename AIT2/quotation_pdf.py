@@ -2217,9 +2217,13 @@ def build_finance_pdf(document, company, logo_path=''):
 
     final_page_story.append(Spacer(1, 5 * mm))
 
-    if terms_details:
+    notes_details = (
+        [_paragraph('NOTES', section_title), _paragraph(notes, body)]
+        if notes else []
+    )
+    if document_type != 'invoice' and terms_details and notes_details:
         final_page_story.append(Table(
-            [[terms_details]],
+            [[terms_details + [Spacer(1, 10 * mm)] + notes_details]],
             colWidths=[doc.width],
             style=TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -2229,11 +2233,20 @@ def build_finance_pdf(document, company, logo_path=''):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
             ]),
         ))
-    if notes:
-        final_page_story.extend([
-            _paragraph('NOTES', section_title),
-            _paragraph(notes, body),
-        ])
+    else:
+        if terms_details:
+            final_page_story.append(Table(
+                [[terms_details]],
+                colWidths=[doc.width],
+                style=TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]),
+            ))
+        final_page_story.extend(notes_details)
     if document_type != 'invoice' and document.get('showSignOff'):
         signoff_heading = ParagraphStyle(
             'FinanceSignOffHeading',

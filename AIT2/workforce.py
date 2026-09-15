@@ -34,7 +34,7 @@ _STORE_LOCKS_GUARD = threading.RLock()
 _DOCUMENT_STORES = {}
 _OCR_ENGINE = None
 _OCR_ENGINE_LOCK = threading.RLock()
-DOCUMENT_EXTRACTOR_VERSION = 2
+DOCUMENT_EXTRACTOR_VERSION = 3
 
 
 def now_iso() -> str:
@@ -1096,6 +1096,66 @@ def _date_from_filename(filename: str) -> dict:
     }
 
 
+def _unlabelled_invoice_table_total(text: str):
+    """Confirm a printed summary against dated rows in a single amount column.
+
+    Some spreadsheet-exported invoices have no total label and serialize their
+    cells out of visual order. Arithmetic is only supporting evidence: the total
+    must already be printed below the rows, never synthesized from them.
+    """
+    lines = [re.sub(r'\s+', ' ', line).strip() for line in text.splitlines() if line.strip()]
+    item_cents = []
+    totals = []
+    in_table = False
+    for line in lines:
+        if (re.search(r'\bdate\b', line, re.I)
+                and re.search(r'\bamount(?:\s*\(SGD\))?\s*$', line, re.I)
+                and re.search(r'\b(?:description|venue|role)\b', line, re.I)):
+            item_cents = []
+            in_table = True
+            continue
+        if not in_table:
+            continue
+        if any(pattern.search(line) for pattern in _DATE_PATTERNS):
+            amounts = [match for match in _AMOUNT_RE.finditer(line)
+                       if match.group('currency') or re.search(r'[.,]\d{2}$', match.group('amount'))]
+            # Multiple price columns or an unreadable row cannot substantiate
+            # the summary. Leave those documents to the established detector.
+            if len(amounts) != 1:
+                in_table = False
+                continue
+            value = _invoice_amount_number(amounts[0].group('amount'))
+            if value is None:
+                in_table = False
+                continue
+            item_cents.append(round(value * 100))
+            continue
+        summary = _AMOUNT_RE.fullmatch(line)
+        if summary and summary.group('currency') and item_cents:
+            value = _invoice_amount_number(summary.group('amount'))
+            if value is not None and value > 0 and round(value * 100) == sum(item_cents):
+                totals.append(value)
+            in_table = False
+        elif re.search(r'\b(?:bank|payment|subtotal|total|discount|tax|gst)\b', line, re.I):
+            in_table = False
+    return totals[0] if len(totals) == 1 else None
+
+
+def _pdf_invoice_table_text(path: str) -> str:
+    """Use visual PDF order only when its printed, unlabelled sum is verified."""
+    try:
+        import fitz
+
+        with fitz.open(path) as document:
+            text = '\n'.join(page.get_text('text', sort=True) for page in list(document)[:8])
+        total = _unlabelled_invoice_table_total(text)
+        if total is not None and _amount_from_text(text)['amount'] == total:
+            return text
+    except Exception:
+        pass
+    return ''
+
+
 def _document_extraction_text(path: str, kind: str, content_type: str = "") -> dict:
     """Shared routing for live extraction and offline calibration.
 
@@ -1107,13 +1167,18 @@ def _document_extraction_text(path: str, kind: str, content_type: str = "") -> d
         text = _ocr_image(path)
         return {'text': text, 'dateText': text, 'source': 'Receipt image OCR', 'ocrUsed': True}
     native = _pdf_text(path)
+    source = 'PDF text'
+    if kind == 'invoice' and not re.search(r'\b(?:total|subtotal|payable|amount\s+due)\b', native, re.I):
+        layout = _pdf_invoice_table_text(path)
+        if layout:
+            native, source = layout, 'PDF table layout'
     baseline = _amount_from_text(native)
     date = _date_from_text(native) if kind == 'claim' else {}
     single_letters = len(re.findall(r'\b[A-Za-z]\b', native))
     fragmented = single_letters > 30 and single_letters > len(re.findall(r'\b[A-Za-z]{2,}\b', native))
-    unlabelled_invoice = (kind == 'invoice' and baseline['confidence'] != 'High'
+    unlabelled_invoice = (kind == 'invoice' and source != 'PDF table layout' and baseline['confidence'] != 'High'
                           and not re.search(r'\b(?:total|subtotal|payable|amount\s+due)\b', native, re.I))
-    result = {'text': native, 'dateText': native, 'source': 'PDF text', 'ocrUsed': False}
+    result = {'text': native, 'dateText': native, 'source': source, 'ocrUsed': False}
     if not fragmented and not unlabelled_invoice and baseline['amount'] is not None and baseline['confidence'] != 'Low' and (kind != 'claim' or date.get('date')):
         return result
     scanned = _ocr_pdf(path)

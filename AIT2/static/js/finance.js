@@ -46,6 +46,8 @@ const financeState = {
   catalogRequestSeq: 0,
   catalogCache: {},
   catalogAbortController: null,
+  catalogInFlight: false,
+  catalogQueuedSearch: null,
   catalogQuery: '',
   pendingCatalogSelection: null,
   listTimer: null,
@@ -291,6 +293,10 @@ const financeLineGroupState = {
   commercialHeader: null,
   results: [],
   searchTimer: null,
+  searchRequestSeq: 0,
+  searchAbortController: null,
+  searchInFlight: false,
+  queuedSearch: null,
   dragSelectionIndex: -1
 };
 
@@ -5157,6 +5163,10 @@ function financeGroupActiveSubproject(mode = financeLineGroupState.mode) {
 }
 
 function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
+  clearTimeout(financeLineGroupState.searchTimer);
+  financeLineGroupState.searchRequestSeq += 1;
+  financeLineGroupState.queuedSearch = null;
+  financeLineGroupState.searchAbortController?.abort?.();
   const lines = financeGroupWorkingLines(mode);
   const activeSubprojectId = financeGroupActiveSubproject(mode);
   const existing = groupId ? lines.filter(line => (
@@ -5298,25 +5308,59 @@ function financeRenderLineGroupResults() {
   root.classList.toggle('open', Boolean(financeLineGroupState.results?.length));
 }
 
-async function financeSearchLineGroupCatalog(value) {
+function financeRunLineGroupCatalogSearch(query, requestSeq) {
+  if (requestSeq !== financeLineGroupState.searchRequestSeq) return;
+  if (financeLineGroupState.searchInFlight) {
+    financeLineGroupState.queuedSearch = { query, requestSeq };
+    return;
+  }
+  financeLineGroupState.searchInFlight = true;
+  const controller = new AbortController();
+  financeLineGroupState.searchAbortController = controller;
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  (async () => {
+    try {
+      const response = await fetch(`/api/finance/catalog?query=${encodeURIComponent(query)}`, {
+        credentials: 'same-origin',
+        signal: controller.signal
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Search failed');
+      if (requestSeq !== financeLineGroupState.searchRequestSeq) return;
+      financeLineGroupState.results = financeGroupEquivalentContainers(payload.data || []);
+    } catch {
+      if (requestSeq !== financeLineGroupState.searchRequestSeq) return;
+      financeLineGroupState.results = [];
+    } finally {
+      clearTimeout(timeout);
+      if (financeLineGroupState.searchAbortController === controller) {
+        financeLineGroupState.searchAbortController = null;
+      }
+      financeLineGroupState.searchInFlight = false;
+      const queued = financeLineGroupState.queuedSearch;
+      financeLineGroupState.queuedSearch = null;
+      if (queued?.requestSeq === financeLineGroupState.searchRequestSeq) {
+        financeRunLineGroupCatalogSearch(queued.query, queued.requestSeq);
+      }
+    }
+    if (requestSeq !== financeLineGroupState.searchRequestSeq) return;
+    financeRenderLineGroupResults();
+  })();
+}
+
+function financeSearchLineGroupCatalog(value) {
   clearTimeout(financeLineGroupState.searchTimer);
+  const requestSeq = ++financeLineGroupState.searchRequestSeq;
+  financeLineGroupState.queuedSearch = null;
   const query = String(value || '').trim();
   if (query.length < 2) {
     financeLineGroupState.results = [];
     financeRenderLineGroupResults();
     return;
   }
-  financeLineGroupState.searchTimer = setTimeout(async () => {
-    try {
-      const response = await fetch(`/api/finance/catalog?query=${encodeURIComponent(query)}`, { credentials: 'same-origin' });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Search failed');
-      financeLineGroupState.results = financeGroupEquivalentContainers(payload.data || []);
-    } catch {
-      financeLineGroupState.results = [];
-    }
-    financeRenderLineGroupResults();
-  }, 150);
+  financeLineGroupState.searchTimer = setTimeout(() => {
+    financeRunLineGroupCatalogSearch(query, requestSeq);
+  }, 300);
 }
 
 function financeLineGroupResultKey(row) {
@@ -8505,6 +8549,54 @@ async function financeFlushPendingSave() {
   return hasUnsavedChanges() ? null : financeState.current;
 }
 
+function financeRunCatalogSearch(clean, cacheKey, requestSeq) {
+  if (requestSeq !== financeState.catalogRequestSeq) return;
+  if (financeState.catalogInFlight) {
+    financeState.catalogQueuedSearch = { clean, cacheKey, requestSeq };
+    return;
+  }
+  financeState.catalogInFlight = true;
+  const controller = new AbortController();
+  financeState.catalogAbortController = controller;
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  (async () => {
+    try {
+      const response = await fetch(`/api/finance/catalog?query=${encodeURIComponent(clean)}`, {
+        credentials: 'same-origin',
+        signal: controller.signal,
+        headers: {
+          "X-Client-Id": typeof REALTIME_CLIENT_ID !== 'undefined' ? REALTIME_CLIENT_ID : ''
+        }
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Failed to search items');
+      if (requestSeq !== financeState.catalogRequestSeq) return;
+      financeState.catalog = financeGroupEquivalentContainers(
+        financeSortCatalogSuggestions(payload.data || [])
+      );
+      financeState.catalogCache[cacheKey] = financeState.catalog;
+      financeState.catalogQuery = cacheKey;
+    } catch {
+      if (requestSeq !== financeState.catalogRequestSeq) return;
+      financeState.catalog = [];
+      financeState.catalogQuery = cacheKey;
+    } finally {
+      clearTimeout(timeout);
+      if (financeState.catalogAbortController === controller) {
+        financeState.catalogAbortController = null;
+      }
+      financeState.catalogInFlight = false;
+      const queued = financeState.catalogQueuedSearch;
+      financeState.catalogQueuedSearch = null;
+      if (queued?.requestSeq === financeState.catalogRequestSeq) {
+        financeRunCatalogSearch(queued.clean, queued.cacheKey, queued.requestSeq);
+      }
+    }
+    if (requestSeq !== financeState.catalogRequestSeq) return;
+    financeRenderCatalog();
+  })();
+}
+
 function financeSearchCatalog(query) {
   clearTimeout(financeState.catalogTimer);
   financeState.pendingCatalogSelection = null;
@@ -8512,7 +8604,7 @@ function financeSearchCatalog(query) {
   const clean = String(query || '').trim();
   const cacheKey = clean.toLowerCase();
   const requestSeq = ++financeState.catalogRequestSeq;
-  financeState.catalogAbortController?.abort?.();
+  financeState.catalogQueuedSearch = null;
   if (!clean) {
     financeState.catalog = [];
     financeState.catalogQuery = '';
@@ -8548,40 +8640,9 @@ function financeSearchCatalog(query) {
     if (!cachedPrefix) results.innerHTML = '<div class="finance-suggestion-empty">Searching... You can press Add now to create this as a custom item.</div>';
     results.classList.add('open');
   }
-  const runSearch = async () => {
-    const controller = new AbortController();
-    financeState.catalogAbortController = controller;
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-      const response = await fetch(`/api/finance/catalog?query=${encodeURIComponent(clean)}`, {
-        credentials: 'same-origin',
-        signal: controller.signal,
-        headers: {
-          "X-Client-Id": typeof REALTIME_CLIENT_ID !== 'undefined' ? REALTIME_CLIENT_ID : ''
-        }
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Failed to search items');
-      if (requestSeq !== financeState.catalogRequestSeq) return;
-      financeState.catalog = financeGroupEquivalentContainers(
-        financeSortCatalogSuggestions(payload.data || [])
-      );
-      financeState.catalogCache[cacheKey] = financeState.catalog;
-      financeState.catalogQuery = cacheKey;
-    } catch {
-      if (requestSeq !== financeState.catalogRequestSeq) return;
-      financeState.catalog = [];
-      financeState.catalogQuery = cacheKey;
-    } finally {
-      clearTimeout(timeout);
-      if (financeState.catalogAbortController === controller) {
-        financeState.catalogAbortController = null;
-      }
-    }
-    if (requestSeq !== financeState.catalogRequestSeq) return;
-    financeRenderCatalog();
-  };
-  financeState.catalogTimer = setTimeout(runSearch, 60);
+  financeState.catalogTimer = setTimeout(() => {
+    financeRunCatalogSearch(clean, cacheKey, requestSeq);
+  }, 300);
 }
 
 function financeCatalogMatchesQuery(row, query) {

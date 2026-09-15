@@ -24119,6 +24119,25 @@ def get_event(event_id):
             else:
                 prepared_assets.append(bulk_info)
 
+        # Deployment changes an asset's workflow status to "prepared", but its
+        # underlying degraded condition must still reach the Prepare cards.
+        def degraded_for_event_ref(ref):
+            marker = _parse_bulk_marker(ref)
+            inventory_id = marker['bulkId'] if marker else ref
+            inventory_asset = data_manager.inventory.get(inventory_id)
+            return _is_degraded(inventory_asset) if inventory_asset else False
+
+        for model_group in model_groups.values():
+            for assigned in model_group.get('assignedAssets', []) or []:
+                assigned['isDegraded'] = degraded_for_event_ref(
+                    assigned.get('bulkId') or assigned.get('id')
+                )
+        for department_assets in assets_by_department.values():
+            for asset_info in department_assets:
+                asset_info['isDegraded'] = degraded_for_event_ref(
+                    asset_info.get('bulkId') or asset_info.get('id')
+                )
+
         # Re-sort departments after adding bulk markers.
         sorted_departments = {}
         for dept in sorted(assets_by_department.keys()):
@@ -38091,9 +38110,56 @@ def _costing_line_from_quotation_line(quote_line):
     })
 
 
+def _finance_inventory_link_is_same(previous, current):
+    """Match a linked product even when live inventory changes its catalog key."""
+    previous = previous if isinstance(previous, dict) else {}
+    current = current if isinstance(current, dict) else {}
+    previous_key = str(previous.get('catalogKey') or '').strip().casefold()
+    current_key = str(current.get('catalogKey') or '').strip().casefold()
+    if previous_key and current_key and previous_key == current_key:
+        return True
+    previous_ids = {
+        str(asset_id or '').strip().casefold()
+        for asset_id in previous.get('sourceAssetIds') or []
+        if str(asset_id or '').strip()
+    }
+    current_ids = {
+        str(asset_id or '').strip().casefold()
+        for asset_id in current.get('sourceAssetIds') or []
+        if str(asset_id or '').strip()
+    }
+    return bool(previous_ids & current_ids)
+
+
 def _quotation_line_from_costing_line(costing_line, existing=None):
     costing_line = _normalise_costing_line(costing_line)
     existing = copy.deepcopy(existing) if isinstance(existing, dict) else {}
+    linked_inventory = bool(
+        costing_line.get('catalogKey') or costing_line.get('sourceAssetIds')
+    )
+    same_inventory_link = (
+        linked_inventory and _finance_inventory_link_is_same(existing, costing_line)
+    )
+    quotation_name_mode = str(existing.get('inventoryNameMode') or '').strip().lower()
+    quotation_description = str(existing.get('description') or '').strip()
+    costing_description = str(costing_line.get('description') or '').strip()
+    preserve_quotation_name = same_inventory_link and bool(
+        quotation_description
+    ) and (
+        quotation_name_mode == 'custom'
+        or (
+            quotation_description.startswith(f'{costing_description} (')
+            and quotation_description.endswith(')')
+        )
+    )
+    costing_uses_custom_name = (
+        linked_inventory and costing_line.get('inventoryNameMode') == 'costing'
+    )
+    next_inventory_name_mode = (
+        'custom'
+        if preserve_quotation_name or costing_uses_custom_name
+        else 'inventory' if linked_inventory else quotation_name_mode
+    )
     quantity = max(0, _safe_float(costing_line.get('quantity'), 1))
     is_group = bool(costing_line.get('groupId'))
     commercial_quantity = (
@@ -38150,7 +38216,11 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'sourceAssetIds': list(costing_line.get('sourceAssetIds') or []),
         'brand': costing_line.get('brand') or '',
         'model': costing_line.get('model') or '',
-        'description': costing_line.get('description') or '',
+        'description': (
+            quotation_description if preserve_quotation_name
+            else costing_line.get('description') or ''
+        ),
+        'inventoryNameMode': next_inventory_name_mode,
         'department': underlying_department,
         'departmentCode': costing_line.get('departmentCode') or '',
         'costingInventoryNameMode': costing_line.get('inventoryNameMode') or 'inventory',
@@ -38381,23 +38451,47 @@ def _costing_grouped_quotation_lines(costing, quotation):
         line = raw_line
         identity = _costing_line_quote_identity(line)
         linked_id = str(line.get('quotationLineId') or '').strip()
-        quote_id = existing_by_identity.get(identity)
-        if not quote_id and linked_id in existing_lines:
-            quote_id = linked_id
-        group = groups_by_identity.get(identity)
-        if group is None and quote_id:
+        has_valid_link = linked_id in existing_lines
+        # A costing projection may display the inventory name while two
+        # quotation rows use distinct client-facing annotations. Their stable
+        # quotationLineIds take precedence over a matching costing name.
+        quote_id = (
+            linked_id if has_valid_link else existing_by_identity.get(identity)
+        )
+        group = None
+        if quote_id:
             linked_group = groups_by_id.get(quote_id)
             if linked_group and linked_group.get('identity') == identity:
                 group = linked_group
             elif linked_group:
                 quote_id = ''
                 linked_id = ''
+                has_valid_link = False
+        if group is None:
+            identity_group = groups_by_identity.get(identity)
+            public_name = (
+                str(existing_lines[linked_id].get('description') or '').strip().casefold()
+                if has_valid_link else ''
+            )
+            grouped_name = (
+                str(
+                    (existing_lines.get(identity_group['id']) or {})
+                    .get('description') or ''
+                ).strip().casefold()
+                if identity_group else ''
+            )
+            if identity_group and (
+                not has_valid_link or public_name == grouped_name
+            ):
+                # Explicitly relinked same-name vendor allocations may merge,
+                # but differently annotated quotation items may not.
+                group = identity_group
         if group is None:
             quote_id = quote_id or linked_id or str(line.get('id') or new_id('line'))
             group = {'id': quote_id, 'identity': identity, 'lines': []}
             groups.append(group)
             groups_by_id[quote_id] = group
-            groups_by_identity[identity] = group
+            groups_by_identity.setdefault(identity, group)
         group['lines'].append(line)
 
     quote_lines = []
@@ -46355,17 +46449,58 @@ def _finance_get_update_delete(document_id, document_type):
         return jsonify({'success': True, 'data': updated})
 
 
+def _finance_catalog_price_book():
+    """Read search pricing without hydrating every linked finance line."""
+    manager = _current_data_manager_object()
+    try:
+        if manager is not None and hasattr(
+            manager, 'load_company_document_with_version'
+        ):
+            stored, _storage_version = manager.load_company_document_with_version(
+                'finance', None
+            )
+        elif manager is not None and hasattr(manager, 'load_company_document'):
+            stored = manager.load_company_document('finance', None)
+        else:
+            filepath = _finance_path()
+            if not os.path.isfile(filepath):
+                return None
+            with open(filepath, 'r', encoding='utf-8') as finance_file:
+                stored = json.load(finance_file)
+    except Exception:
+        return None
+    if not isinstance(stored, dict) or _safe_int(stored.get('version'), 0) < FINANCE_VERSION:
+        # Older files still need the normal migration/backfill path.
+        return None
+    price_book = stored.get('priceBook')
+    return copy.deepcopy(price_book) if isinstance(price_book, dict) else {}
+
+
 @app.route('/api/finance/catalog', methods=['GET'])
 @require_sales
 def finance_catalog():
     query = str(request.args.get('query') or '').strip().lower()
     with _finance_lock:
-        finance_data = _load_finance_data()
+        search_price_book = _finance_catalog_price_book()
+        finance_data = (
+            {'priceBook': search_price_book}
+            if search_price_book is not None else _load_finance_data()
+        )
         rate_card_rows = _finance_rate_card_rows(finance_data)
-        if _finance_prune_unavailable_inventory_products(
+        removed = _finance_prune_unavailable_inventory_products(
             finance_data, rate_card_rows
-        ):
+        )
+        if removed and search_price_book is not None:
+            # Pruning is rare, but it must still persist through the validated
+            # finance save path rather than writing a search-only projection.
+            finance_data = _load_finance_data()
+            rate_card_rows = _finance_rate_card_rows(finance_data)
+            removed = _finance_prune_unavailable_inventory_products(
+                finance_data, rate_card_rows
+            )
+        if removed:
             _save_finance_data(finance_data)
+            rate_card_rows = _finance_rate_card_rows(finance_data)
         price_book = finance_data.get('priceBook') or {}
         products_by_catalog_key = {
             str(row.get('catalogKey') or '').casefold(): row
@@ -46431,10 +46566,12 @@ def finance_catalog():
         container_id = str(getattr(container, 'container_id', '') or '').strip()
         if not container_id:
             continue
+        container_key = f"container:{container_id.lower()}"
+        if container_key not in visible_catalog_keys:
+            continue
         serial_number = _container_serial_number(container)
-        container_items = {}
         container_product = (
-            products_by_catalog_key.get(f"container:{container_id.lower()}")
+            products_by_catalog_key.get(container_key)
             or {}
         )
         container_product_label = str(
@@ -46447,6 +46584,24 @@ def finance_catalog():
             container_id, serial_number, container_product_label,
             container_product_category,
         ]
+        if query_tokens and not matches_query(*haystack_parts):
+            # Container searches match metadata or asset tags, not the child
+            # description. Avoid expanding/pricing every nonmatching case.
+            for asset_id in getattr(container, 'asset_ids', []) or []:
+                asset = data_manager.inventory.get(asset_id)
+                if asset and not _is_disposed(asset):
+                    haystack_parts.extend(
+                        normalize_asset_tags(getattr(asset, 'tags', []))
+                    )
+            for asset_id in _container_bulk_item_map(container):
+                asset = data_manager.inventory.get(asset_id)
+                if asset and not _is_disposed(asset):
+                    haystack_parts.extend(
+                        normalize_asset_tags(getattr(asset, 'tags', []))
+                    )
+            if not matches_query(*haystack_parts):
+                continue
+        container_items = {}
         for asset_id in getattr(container, 'asset_ids', []) or []:
             asset = data_manager.inventory.get(asset_id)
             if not asset or _is_disposed(asset):
@@ -46457,7 +46612,6 @@ def finance_catalog():
             model = str(getattr(asset, 'model_number', '') or '').strip()
             description = str(getattr(asset, 'description', '') or '').strip()
             display = _finance_display_description(brand, model, description) or model or description or asset_id
-            haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
             catalog_key = _finance_catalog_key(
                 department_code, brand, model, description
             )
@@ -46511,7 +46665,6 @@ def finance_catalog():
                 _finance_display_description(brand, model, description)
                 or model or description or 'Bulk item'
             )
-            haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
             catalog_key = _finance_catalog_key(
                 department_code, brand, model, description
             )
@@ -46548,10 +46701,6 @@ def finance_catalog():
 
         if not container_items:
             continue
-        if f"container:{container_id.lower()}" not in visible_catalog_keys:
-            continue
-        if not matches_query(*haystack_parts):
-            continue
         item_rows = sorted(
             container_items.values(),
             key=lambda row: (row['department'], row['description'].lower()),
@@ -46564,8 +46713,8 @@ def finance_catalog():
             )
             row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
             row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'sets', 'pax', 'lot', 'sqm') else 'units'
-        grouped[f"container:{container_id.lower()}"] = {
-            'productId': f"container:{container_id.lower()}",
+        grouped[container_key] = {
+            'productId': container_key,
             'productKey': f"container:{container_id}",
             'catalogKey': f"container:{container_id}",
             'description': f"Container {container_id}",

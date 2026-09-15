@@ -583,6 +583,7 @@ function prepareNewDirectAssetCard(asset, encodedPanelKey = '') {
   const label = asset?.label || id || 'Assigned asset';
   const detail = asset?.serial || (asset?.isBulk ? `Qty: ${Number(asset?.quantity || 1)}` : 'No serial');
   const status = String(asset?.status || 'pending');
+  const degraded = !!asset?.isDegraded;
   let badge = prepareNewStatusBadge('pending', 'Pending');
   let action = `
     <button type="button" class="plan-button plan-button-small prepare-new-asset-action"
@@ -604,11 +605,12 @@ function prepareNewDirectAssetCard(asset, encodedPanelKey = '') {
     { kind: 'asset', assetRef: id }
   );
   return `
-    <div class="prepare-new-asset-card ${status === 'packed' ? 'assigned' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
+    <div class="prepare-new-asset-card ${status === 'packed' ? 'assigned' : ''} ${degraded ? 'degraded' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
          ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
       <div title="${escapeHtmlAttr(label)}">
         <strong>${escapeHtml(label)}</strong>
         <small>${escapeHtml(detail)}</small>
+        ${degraded ? `<div class="prepare-new-asset-flags">${prepareNewStatusBadge('degraded', 'Degraded')}</div>` : ''}
       </div>
       <div>${action || badge}</div>
     </div>
@@ -1352,6 +1354,7 @@ function prepareNewRestoreViewState(state) {
 async function loadPrepareNewPage() {
   const root = document.getElementById('prepare-new-page-root');
   if (!root || prepareNewPageState.loading) return;
+  setPrepareQuickAddEnabled(false);
   prepareNewPageState.loading = true;
   root.innerHTML = '<div class="loading">Loading preparation workspace...</div>';
   try {

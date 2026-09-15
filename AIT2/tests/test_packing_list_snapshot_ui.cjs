@@ -36,7 +36,7 @@ test('packing-list snapshot keeps a returned extra in historical export totals',
     totalExtraAssets: 0, totalExtraPrepared: 1,
     actuallyPrepared: [], returnedItems: ['A-001', 'A-002'], extraAssets: ['A-002'],
     assetsByDepartment: { AX: [
-      { id: 'A-001', brand: 'Test', model: 'Speaker', description: 'Speaker', department: 'AX', status: 'returned' },
+      { id: 'A-001', brand: 'Test', model: 'Speaker', description: 'Speaker', department: 'AX', status: 'returned', isDegraded: true },
       { id: 'A-002', brand: 'Test', model: 'Speaker', description: 'Speaker', department: 'AX', status: 'returned', isExtra: true }
     ] },
     modelGroups: { speaker: {
@@ -45,7 +45,7 @@ test('packing-list snapshot keeps a returned extra in historical export totals',
       countableReturnedQuantity: 1, countablePreparedEverQuantity: 1,
       extraPreparedQuantity: 0, extraPreparedEverQuantity: 1,
       assignedAssets: [
-        { id: 'A-001', status: 'returned' },
+        { id: 'A-001', status: 'returned', isDegraded: true },
         { id: 'A-002', status: 'returned', isExtra: true }
       ]
     } },
@@ -55,6 +55,7 @@ test('packing-list snapshot keeps a returned extra in historical export totals',
   assert.equal(run('snapshot.totals.prepared'), 1);
   assert.equal(run('snapshot.totals.extras'), 1);
   assert.equal(run('snapshot.rows[0].extraPrepared'), 1);
+  assert.equal(run('snapshot.rows[0].assets[0].isDegraded'), true);
   assert.equal(run('snapshot.extras[0].status'), 'returned');
   assert.match(run('packingListTableHead()'), />Extra</);
   assert.match(run("packingListModelRowHtml(snapshot.rows[0], '')"), />1<\/td>/);

@@ -85,3 +85,12 @@ unlabelled invoice layouts receive OCR fallback; date-only fallback preserves a
 stronger native amount. Currency OCR repairs are limited to specific patterns
 such as `$O.65` and `SS11.30`. Explicit foreign-currency totals require the actual
 SGD charge instead of treating the foreign number as SGD.
+
+Extractor version 3 also handles invoices whose single amount-column table ends
+with an unlabelled printed total. For these PDFs, it checks visual reading order
+and confirms that the printed summary equals the dated line items to the cent.
+This check runs even when a repeated item price scored High in the original text.
+It requires one readable amount per row and a unique matching printed summary;
+it does not infer a missing total, hard-code a vendor, or use past invoice values.
+Training and runtime share this routing, and version-2 candidate caches are
+invalidated on the next explicitly requested calibration.

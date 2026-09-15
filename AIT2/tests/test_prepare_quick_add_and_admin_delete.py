@@ -182,6 +182,38 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('returnableCount', option)
         self.assertNotIn('returnableTotalCount', option)
 
+    def test_assigned_degraded_assets_keep_condition_in_prepare_payload(self):
+        event = self.make_event(
+            event_id=150,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=['A#01', 'A#02'],
+            extra=['A#02'],
+        )
+        self.data_manager.inventory['A#01'].is_degraded = True
+        self.data_manager.inventory['A#02'].is_degraded = True
+        self.login_as('normal')
+
+        response = self.client.get(f'/api/events/{event.event_id}?view=prepare')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        data = response.get_json()['data']
+        assigned = {
+            asset['id']: asset
+            for group in data['modelGroups'].values()
+            for asset in group['assignedAssets']
+        }
+        self.assertEqual(assigned['A#01']['status'], 'prepared')
+        self.assertTrue(assigned['A#01']['isDegraded'])
+        self.assertTrue(assigned['A#02']['isExtra'])
+        self.assertTrue(assigned['A#02']['isDegraded'])
+        department_assets = {
+            asset['id']: asset
+            for assets in data['assetsByDepartment'].values()
+            for asset in assets
+        }
+        self.assertTrue(department_assets['A#01']['isDegraded'])
+        self.assertTrue(department_assets['A#02']['isDegraded'])
+
     def test_quick_add_disabled_tracks_surplus_as_extra(self):
         event = self.make_event()
 

@@ -642,12 +642,38 @@ function openWorkforceScheduleRateEditor(event, assignmentId, date) {
     data-kind="rate" data-assignment-id="${wfAttr(assignmentId)}" data-date="${wfAttr(date)}" role="dialog" aria-label="Change daily rate">
     <form class="wf-schedule-role-editor" onsubmit="saveWorkforceScheduleRate(event)">
       <div class="wf-schedule-role-context"><strong>Change rate for this day</strong><span>${wfEscape(wfScheduleSubject(assignment).name)} · ${wfEscape(wfScheduleDateLabel(date))}</span></div>
-      <label><span>${assignment.subjectType === 'vendor' ? 'Rate per pax / day ($)' : 'Daily rate ($)'}</span>
-        <input id="wfScheduleRateInput" type="number" min="0" step="0.01" required value="${wfAttr(rate ?? '')}"></label>
+      <div class="wf-schedule-rate-field">
+        <label for="wfScheduleRateInput"><span>${assignment.subjectType === 'vendor' ? 'Rate per pax / day ($)' : 'Daily rate ($)'}</span></label>
+        <div class="wf-schedule-rate-control">
+          <input id="wfScheduleRateInput" type="number" min="0" step="0.01" required value="${wfAttr(rate ?? '')}"
+            onkeydown="handleWorkforceScheduleRateArrow(event)">
+          <span class="wf-schedule-rate-arrows">
+            <button type="button" aria-label="Increase rate by $10" title="Increase by $10" onclick="adjustWorkforceScheduleRate(1)">&#9650;</button>
+            <button type="button" aria-label="Decrease rate by $10" title="Decrease by $10" onclick="adjustWorkforceScheduleRate(-1)">&#9660;</button>
+          </span>
+        </div>
+      </div>
       <div class="wf-schedule-role-actions"><button type="button" onclick="closeWorkforceScheduleTagMenu(true)">Cancel</button><button type="submit" class="primary">Save</button></div>
     </form></div>`);
   positionWorkforceScheduleTagMenu(event.currentTarget);
   document.getElementById('wfScheduleRateInput')?.focus();
+}
+
+function adjustWorkforceScheduleRate(direction) {
+  const input = document.getElementById('wfScheduleRateInput');
+  if (!input) return;
+  const current = Number(input.value || 0);
+  if (!Number.isFinite(current)) return;
+  const cents = Math.round(current * 100);
+  const nextCents = Math.max(0, cents + (direction > 0 ? 1000 : -1000));
+  input.value = String(nextCents / 100);
+  input.focus();
+}
+
+function handleWorkforceScheduleRateArrow(event) {
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+  event.preventDefault();
+  adjustWorkforceScheduleRate(event.key === 'ArrowUp' ? 1 : -1);
 }
 
 async function saveWorkforceScheduleRate(event) {

@@ -917,6 +917,65 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--schedule-green) 15%, transparent);
 }
 
+.wf-schedule-rate-field {
+  display: grid;
+  gap: 4px;
+}
+
+.wf-schedule-rate-control {
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+}
+
+.wf-schedule-rate-control #wfScheduleRateInput {
+  min-width: 0;
+  flex: 1 1 auto;
+  border-radius: 5px 0 0 5px;
+  appearance: textfield;
+}
+
+.wf-schedule-rate-control #wfScheduleRateInput::-webkit-inner-spin-button,
+.wf-schedule-rate-control #wfScheduleRateInput::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.wf-schedule-rate-arrows {
+  display: grid;
+  width: 27px;
+  flex: 0 0 27px;
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.wf-schedule-rate-arrows button {
+  border: 1px solid #c7d3dc;
+  border-left: 0;
+  background: #f8fafc;
+  color: #33465b;
+  padding: 0;
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.wf-schedule-rate-arrows button:first-child {
+  border-radius: 0 5px 0 0;
+}
+
+.wf-schedule-rate-arrows button:last-child {
+  border-top: 0;
+  border-radius: 0 0 5px 0;
+}
+
+.wf-schedule-rate-arrows button:hover,
+.wf-schedule-rate-arrows button:focus-visible {
+  border-color: var(--schedule-green);
+  outline: 0;
+  background: #eff8f5;
+  color: var(--schedule-green-dark);
+}
+
 .wf-schedule-role-suggestions {
   display: flex;
   flex-wrap: wrap;

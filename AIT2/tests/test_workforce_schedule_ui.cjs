@@ -49,6 +49,43 @@ test('schedule rates are clickable for the specific assignment date and show ful
   assert.match(html, /280\.00/);
 });
 
+test('day rate arrows change the exact rate by ten dollars without losing cents', () => {
+  const context = setup();
+  const inserted = [];
+  const input = { value: '280.25', focus() {} };
+  context.document.body = { insertAdjacentHTML(_position, html) { inserted.push(html); } };
+  context.document.getElementById = id => id === 'wfScheduleRateInput' ? input : null;
+  context.document.querySelectorAll = () => [];
+  vm.runInContext(`
+    wfScheduleRows = () => [{id:'a1', subjectType:'worker', dailyRate:280.25}];
+    wfScheduleSubject = () => ({name:'Crew'});
+    wfScheduleDateLabel = () => '5 September 2026';
+    positionWorkforceScheduleTagMenu = () => {};
+  `, context);
+
+  vm.runInContext(`openWorkforceScheduleRateEditor({
+    preventDefault() {}, stopPropagation() {}, currentTarget: {}
+  }, 'a1', '2026-09-05')`, context);
+  assert.match(inserted[0], /id="wfScheduleRateInput"[^>]*step="0\.01"/);
+  assert.match(inserted[0], /Increase rate by \$10/);
+  assert.match(inserted[0], /Decrease rate by \$10/);
+
+  vm.runInContext('adjustWorkforceScheduleRate(1)', context);
+  assert.equal(input.value, '290.25');
+  vm.runInContext('adjustWorkforceScheduleRate(-1)', context);
+  assert.equal(input.value, '280.25');
+  input.value = '5.5';
+  vm.runInContext('adjustWorkforceScheduleRate(-1)', context);
+  assert.equal(input.value, '0');
+
+  input.value = '35.01';
+  let prevented = false;
+  context.rateKeyEvent = { key: 'ArrowUp', preventDefault() { prevented = true; } };
+  vm.runInContext('handleWorkforceScheduleRateArrow(rateKeyEvent)', context);
+  assert.equal(prevented, true);
+  assert.equal(input.value, '45.01');
+});
+
 test('Transport category appears automatically only when the event has bookings', () => {
   const context = setup();
   assert.equal(vm.runInContext('wfCrewTransportCategoryHtml()', context), '');

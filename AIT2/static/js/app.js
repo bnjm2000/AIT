@@ -1146,21 +1146,15 @@ function getEventExtraQuantity(event) {
   return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
 }
 
-const PREPARE_QUICK_ADD_STORAGE_KEY = 'showbase.prepare.quickAddEnabled';
+var prepareQuickAddEnabled = false;
 
 function getPrepareQuickAddEnabled() {
-  try {
-    return localStorage.getItem(PREPARE_QUICK_ADD_STORAGE_KEY) === 'true';
-  } catch (error) {
-    return false;
-  }
+  return prepareQuickAddEnabled;
 }
 
 function setPrepareQuickAddEnabled(enabled) {
   const isEnabled = !!enabled;
-  try {
-    localStorage.setItem(PREPARE_QUICK_ADD_STORAGE_KEY, isEnabled ? 'true' : 'false');
-  } catch (error) {}
+  prepareQuickAddEnabled = isEnabled;
 
   const toggle = document.getElementById('prepareQuickAddToggle');
   const state = document.getElementById('prepareQuickAddToggleState');
@@ -12082,6 +12076,7 @@ async function openPrepareEventModal(eventId) {
     try {
         window.currentPrepareEventId = eventId;
         ensurePrepareQuickAddToggleStyles();
+        setPrepareQuickAddEnabled(false);
         const [eventResponse, availableAssetsResponse] = await Promise.all([
             apiCall(`/api/events/${eventId}`),
             apiCall(`/api/assets/available-for-event/${eventId}`)

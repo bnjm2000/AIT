@@ -2379,6 +2379,33 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(restored_product['unitPrice'], 0)
 
+    def test_catalog_search_skips_full_finance_hydration_for_current_data(self):
+        self.create_quote('Fast Asset Search')
+        with patch.object(
+            app_module, '_load_finance_data',
+            side_effect=AssertionError('Catalog search hydrated all finance lines'),
+        ):
+            response = self.client.get(
+                '/api/finance/catalog', query_string={'query': 'SB18'},
+            )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = next(
+            row for row in response.get_json()['data']
+            if row.get('model') == 'SB18 III'
+        )
+        self.assertEqual(asset['sourceAssetIds'], ['AX#01'])
+
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        self.assertIn('financeRunCatalogSearch(clean, cacheKey, requestSeq)', source)
+        self.assertIn('catalogInFlight: false', source)
+        self.assertIn('catalogQueuedSearch: null', source)
+        self.assertIn('catalogQueuedSearch = { clean, cacheKey, requestSeq }', source)
+        self.assertIn('searchInFlight: false', source)
+        self.assertIn('queuedSearch = { query, requestSeq }', source)
+        self.assertIn('}, 300)', source)
+        self.assertIn('searchRequestSeq: 0', source)
+        self.assertIn('signal: controller.signal', source)
+
     def test_product_price_changes_only_apply_to_future_quotation_additions(self):
         original_product = next(
             row for row in self.client.get('/api/finance/products').get_json()['data']
@@ -3146,7 +3173,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('function financeCatalogProductDetails(', source)
         self.assertIn('function financeCatalogMatchesQuery(', source)
         self.assertIn('const requestSeq = ++financeState.catalogRequestSeq;', source)
-        self.assertIn('setTimeout(runSearch, 60)', source)
+        self.assertIn('financeRunCatalogSearch(clean, cacheKey, requestSeq)', source)
+        self.assertIn('catalogQueuedSearch = { clean, cacheKey, requestSeq }', source)
         update_price = source.split('async function productCatalogUpdatePrice', 1)[1].split(
             'async function productCatalogUpdateField', 1,
         )[0]
@@ -3357,6 +3385,135 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(inventory_asset.brand, 'L-Acoustics')
         self.assertEqual(inventory_asset.model_number, 'SB18 III')
         self.assertEqual(inventory_asset.description, 'Subwoofer')
+
+    def test_custom_inventory_description_survives_costing_save_and_reload(self):
+        catalog_line = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        quotation = self.create_quote('Custom Inventory Wording')
+        quotation['lineItems'] = [{
+            **catalog_line,
+            'id': 'speaker-for-dsm',
+            'days': 1,
+            'quantity': 1,
+            'unitPrice': 100,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        line = saved['lineItems'][0]
+        custom_description = f"{line['description']} (for DSM)"
+        line['description'] = custom_description
+        line['inventoryNameMode'] = 'custom'
+        edited = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=saved,
+        ).get_json()['data']
+        self.assertEqual(edited['lineItems'][0]['description'], custom_description)
+
+        costing = self.client.get(
+            f"/api/costings/{edited['sourceCostingId']}"
+        ).get_json()['data']
+        costing['lineItems'][0]['itemCost'] = 25
+        costing_save = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            costing_save.status_code, 200,
+            costing_save.get_data(as_text=True),
+        )
+
+        reloaded = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']['lineItems'][0]
+        self.assertEqual(reloaded['description'], custom_description)
+        self.assertEqual(reloaded['inventoryNameMode'], 'custom')
+        self.assertEqual(reloaded['catalogKey'], line['catalogKey'])
+        self.assertEqual(reloaded['sourceAssetIds'], line['sourceAssetIds'])
+        self.assertEqual(reloaded['brand'], line['brand'])
+        self.assertEqual(reloaded['model'], line['model'])
+        self.assertEqual(
+            app_module._finance_inventory_group_from_line(reloaded),
+            {
+                'department': 'AX',
+                'brand': 'L-Acoustics',
+                'model': 'SB18 III',
+                'description': 'Subwoofer',
+            },
+        )
+
+        # A real relink to another asset must use that asset's name rather than
+        # carrying the old quotation-only annotation to the new item.
+        costing = self.client.get(
+            f"/api/costings/{edited['sourceCostingId']}"
+        ).get_json()['data']
+        costing['lineItems'][0].update({
+            'catalogKey': 'inventory:lx|robe|spiider',
+            'sourceAssetIds': ['LX#01'],
+            'inventoryNameMode': 'inventory',
+            'departmentCode': 'LX',
+            'category': 'Lighting System',
+        })
+        relinked = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(
+            relinked.status_code, 200, relinked.get_data(as_text=True),
+        )
+        new_quotation_line = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']['lineItems'][0]
+        self.assertEqual(new_quotation_line['sourceAssetIds'], ['LX#01'])
+        self.assertEqual(new_quotation_line['inventoryNameMode'], 'inventory')
+        self.assertIn('Spiider', new_quotation_line['description'])
+        self.assertNotIn('(for DSM)', new_quotation_line['description'])
+
+    def test_distinct_custom_inventory_lines_do_not_merge_on_costing_save(self):
+        catalog_line = self.client.get(
+            '/api/finance/catalog?query=SB18'
+        ).get_json()['data'][0]
+        quotation = self.create_quote('Two Speaker Purposes')
+        quotation['lineItems'] = [{
+            **catalog_line,
+            'id': f'speaker-{purpose}',
+            'description': f"{catalog_line['description']} (for {purpose})",
+            'inventoryNameMode': 'custom',
+            'quantity': 1,
+            'days': 1,
+            'unitPrice': 100,
+        } for purpose in ('DSM', 'front fills')]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        original_lines = saved['lineItems']
+        self.assertEqual(len(original_lines), 2)
+
+        costing = self.client.get(
+            f"/api/costings/{saved['sourceCostingId']}"
+        ).get_json()['data']
+        self.assertEqual(len(costing['lineItems']), 2)
+        costing['lineItems'][0]['itemCost'] = 25
+        response = self.client.put(
+            f"/api/costings/{costing['id']}", json=costing,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        reloaded = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']['lineItems']
+        self.assertEqual(len(reloaded), 2)
+        self.assertEqual(
+            [line['id'] for line in reloaded],
+            [line['id'] for line in original_lines],
+        )
+        self.assertEqual(
+            [line['description'] for line in reloaded],
+            [line['description'] for line in original_lines],
+        )
+        self.assertTrue(all(
+            line['catalogKey'] == catalog_line['catalogKey']
+            and line['sourceAssetIds'] == catalog_line['sourceAssetIds']
+            for line in reloaded
+        ))
 
     def test_new_inventory_line_reuses_visual_category_without_changing_identity(self):
         quotation = self.create_quote('Reusable Category Name')
@@ -5072,6 +5229,55 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('[[terms_details]]', pdf_source)
         self.assertIn('colWidths=[doc.width]', pdf_source)
         self.assertNotIn('bottom_left_details.extend(terms_details)', pdf_source)
+
+    def test_quotation_pdf_stacks_notes_with_gap_and_matching_left_edge(self):
+        from quotation_pdf import build_finance_pdf
+
+        document = {
+            'type': 'quotation',
+            'number': 'QT-TERMS-NOTES-LAYOUT',
+            'projectName': 'Terms and notes layout',
+            'terms': 'Terms end here.',
+            'notes': 'Notes start here.',
+            'lineItems': [{
+                'id': 'layout-line', 'description': 'Production services',
+                'department': 'Production', 'days': 1, 'quantity': 1,
+                'unitPrice': 100,
+            }],
+        }
+        pdf = build_finance_pdf(document, {
+            'companyName': 'Terms Layout Company',
+            'themeColor': '#0F766E',
+        })
+        headings = {}
+
+        def capture(text, current_matrix, text_matrix, *_args):
+            content = text.strip()
+            if content in {'TERMS AND CONDITIONS', 'Terms end here.', 'NOTES'}:
+                headings[content] = (
+                    current_matrix[4] + text_matrix[4],
+                    current_matrix[5] + text_matrix[5],
+                )
+
+        last_page = PdfReader(io.BytesIO(pdf)).pages[-1]
+        page_text = last_page.extract_text(visitor_text=capture) or ''
+        self.assertIn('Notes start here.', page_text)
+        self.assertIn('Terms end here.', page_text)
+        self.assertEqual(
+            set(headings), {'TERMS AND CONDITIONS', 'Terms end here.', 'NOTES'},
+        )
+        self.assertAlmostEqual(
+            headings['TERMS AND CONDITIONS'][0], headings['NOTES'][0],
+            delta=1,
+        )
+        self.assertGreater(
+            headings['TERMS AND CONDITIONS'][1] - headings['NOTES'][1],
+            35,
+        )
+        self.assertGreater(
+            headings['Terms end here.'][1] - headings['NOTES'][1],
+            25,
+        )
 
     def test_incomplete_draft_default_departments_and_permissions(self):
         blank = self.create_quote(project='')

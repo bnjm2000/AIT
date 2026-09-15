@@ -91,7 +91,8 @@ function packingListAssetRecord(asset, event, department = 'UN') {
     status,
     department: normalizeDepartmentCode(custom?.department || department || 'UN'),
     isBulk: !!asset?.isBulk,
-    isExtra: !!asset?.isExtra
+    isExtra: !!asset?.isExtra,
+    isDegraded: !!asset?.isDegraded
   };
 }
 

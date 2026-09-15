@@ -16,6 +16,7 @@ function setup() {
     escapeHtmlAttr: value => String(value),
     getPreparedQuantity: group => Number(group?.preparedQuantity || 0),
     getExtraPreparedQuantity: group => Number(group?.extraPreparedQuantity || 0),
+    eventSubprojectDragPayload: () => '',
   });
   for (const file of ['plan.js', 'prepare.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/js', file), 'utf8'), context);
@@ -96,6 +97,39 @@ test('returned extras remain visible in prepare totals and model rows', () => {
   assert.equal(run('prepareNewEventTotals().extra'), 1);
   assert.match(run('renderPrepareNewOverallProgressCard()'), /1 extra item prepared/);
   assert.match(run('prepareNewModelSection(fixture.modelGroups.speaker)'), /1 spare/);
+});
+
+test('assigned assets retain their degraded badge alongside prepared or extra status', () => {
+  const { run } = setup();
+  run('prepareNewPageState.eventId = 42; fixture.returnedItems = []');
+  const prepared = run("prepareNewAssetCard({ id: 'A#01', status: 'prepared', isDegraded: true }, { assigned: true })");
+  assert.match(prepared, /prepare-new-asset-card assigned[^\"]*degraded/);
+  assert.match(prepared, /prepare-new-status-degraded[^>]*>Degraded<\/span>/);
+  assert.match(prepared, />Unassign<\/button>/);
+  const extra = run("prepareNewAssetCard({ id: 'A#02', status: 'prepared', isDegraded: true }, { assigned: true, extra: true })");
+  assert.match(extra, /prepare-new-status-degraded[^>]*>Degraded<\/span>/);
+  assert.match(extra, /prepare-new-status-extra[^>]*>Extra<\/span>/);
+  const direct = run("prepareNewDirectAssetCard({ id: 'A#03', status: 'packed', isDegraded: true })");
+  assert.match(direct, /prepare-new-asset-card assigned degraded/);
+  assert.match(direct, /prepare-new-status-degraded[^>]*>Degraded<\/span>/);
+});
+
+test('Quick-add starts off, can be enabled, and resets on entering Prepare', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../static/js/app.js'), 'utf8');
+  const quickAddSource = source.slice(
+    source.indexOf('var prepareQuickAddEnabled = false;'),
+    source.indexOf('function ensurePrepareQuickAddToggleStyles()')
+  );
+  const context = vm.createContext({
+    document: { getElementById: () => null },
+    localStorage: { getItem: () => 'true' }
+  });
+  vm.runInContext(quickAddSource, context);
+  assert.equal(vm.runInContext('getPrepareQuickAddEnabled()', context), false);
+  vm.runInContext('setPrepareQuickAddEnabled(true)', context);
+  assert.equal(vm.runInContext('getPrepareQuickAddEnabled()', context), true);
+  assert.match(fs.readFileSync(path.join(__dirname, '../static/js/prepare.js'), 'utf8'),
+    /async function loadPrepareNewPage\(\) \{[\s\S]*?setPrepareQuickAddEnabled\(false\);/);
 });
 
 test('Events uses warehouse preparation counts and retains the old-payload fallback', () => {
