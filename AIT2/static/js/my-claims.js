@@ -1,6 +1,7 @@
 const MY_CLAIMS_TRANSIENT_UPLOAD_STATUSES = new Set(['Uploading', 'Queueing']);
 const MY_CLAIMS_PROCESSING_STATES = new Set(['Queued', 'Processing']);
 const MY_CLAIMS_EDITABLE_STATUSES = new Set(['Pending Review', 'Denied']);
+const MY_CLAIMS_CATEGORIES = ['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other'];
 
 let myClaimsData = null;
 let myClaimsSelectedEventId = '';
@@ -27,6 +28,18 @@ function myClaimsEscape(value) {
 function myClaimsMoney(value) {
   const amount = Number(value);
   return Number.isFinite(amount) ? `S$${amount.toFixed(2)}` : 'Processing';
+}
+
+function myClaimsCategory(value) {
+  const category = String(value || '').trim();
+  return ['transport', 'crew transport', 'staff transport', 'cab', 'taxi', 'grab'].includes(category.toLowerCase())
+    ? 'Crew Transport'
+    : category;
+}
+
+function myClaimsCategoryChoice(value) {
+  const category = myClaimsCategory(value);
+  return MY_CLAIMS_CATEGORIES.includes(category) ? category : (category ? 'Other' : '');
 }
 
 function myClaimsEvent() {
@@ -156,7 +169,7 @@ function myClaimsSection(event, kind) {
               ${editable
                 ? `<button type="button" data-edit-my-submission="${row.id}" data-kind="${kind}">${name}</button>`
                 : `<strong>${name}</strong>`}
-              <small>${myClaimsEscape(date)}${row.category ? ` · ${myClaimsEscape(row.category)}` : ''}</small>
+              <small>${myClaimsEscape(date)}${row.category ? ` · ${myClaimsEscape(myClaimsCategory(row.category))}` : ''}</small>
             </div>
           </div>
           <b>${myClaimsMoney(row.amount)}</b>
@@ -359,10 +372,15 @@ function ensureMyClaimsDetailsModal() {
                 <select name="category">
                   <option value="">Choose category</option>
                   <option>Meal</option>
-                  <option>Transport</option>
+                  <option>Crew Transport</option>
+                  <option>Equipment Transport</option>
                   <option>Purchase</option>
                   <option>Other</option>
                 </select>
+              </label>
+              <label data-claim-detail data-my-claims-other-category hidden>
+                <span>Other category *</span>
+                <input name="otherCategory">
               </label>
               <label class="full"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
             </div>
@@ -377,7 +395,19 @@ function ensureMyClaimsDetailsModal() {
   document.querySelectorAll('[data-close-my-details]').forEach(node => {
     node.addEventListener('click', closeMyClaimsDetails);
   });
-  document.getElementById('myClaimsDetailsForm').addEventListener('submit', saveMyClaimsDetails);
+  const detailsForm = document.getElementById('myClaimsDetailsForm');
+  detailsForm.addEventListener('submit', saveMyClaimsDetails);
+  detailsForm.elements.category.addEventListener('change', syncMyClaimsOtherCategory);
+}
+
+function syncMyClaimsOtherCategory() {
+  const form = document.getElementById('myClaimsDetailsForm');
+  if (!form) return;
+  const field = form.querySelector('[data-my-claims-other-category]');
+  const show = myClaimsEditKind === 'claim' && form.elements.category.value === 'Other';
+  field.hidden = !show;
+  form.elements.otherCategory.required = show;
+  if (!show) form.elements.otherCategory.value = '';
 }
 
 function findMyClaimsSubmission(id) {
@@ -400,13 +430,18 @@ function openMyClaimsDetails(id, kind) {
   const form = document.getElementById('myClaimsDetailsForm');
   form.elements.amount.value = found.row.amount ?? '';
   form.elements.claimDate.value = found.row.claimDate || '';
-  form.elements.category.value = found.row.category || '';
+  const existingCategory = myClaimsCategory(found.row.category);
+  form.elements.category.value = myClaimsCategoryChoice(existingCategory);
+  form.elements.otherCategory.value = form.elements.category.value === 'Other'
+    ? (existingCategory === 'Other' ? '' : existingCategory)
+    : '';
   form.elements.notes.value = found.row.notes || '';
   document.querySelectorAll('[data-claim-detail]').forEach(node => {
     node.hidden = kind !== 'claim';
   });
   form.elements.claimDate.required = kind === 'claim';
   form.elements.category.required = kind === 'claim';
+  syncMyClaimsOtherCategory();
   document.getElementById('myClaimsDetailsTitle').textContent = `${kind === 'invoice' ? 'Invoice' : 'Claim'} details`;
 
   const preview = document.getElementById('myClaimsPreview');
@@ -449,6 +484,7 @@ async function saveMyClaimsDetails(event) {
       amount: form.elements.amount.value,
       claimDate: form.elements.claimDate.value,
       category: form.elements.category.value,
+      otherCategory: form.elements.otherCategory.value,
       notes: form.elements.notes.value
     });
     myClaimsData = response.data;

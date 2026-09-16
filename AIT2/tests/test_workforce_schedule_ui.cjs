@@ -35,6 +35,21 @@ test('department claims display category and date in chronological order, missin
   assert.match(html, /Not provided/);
 });
 
+test('legacy Transport claims use the Crew Transport review option and badge', () => {
+  const context = setup();
+  const badge = vm.runInContext("wfClaimCategoryBadge({ category: 'Transport' })", context);
+  const review = vm.runInContext("wfReviewClaimCategoryFields({ category: 'Transport' }, false)", context);
+  assert.match(badge, />Crew Transport<\/span>/);
+  assert.match(review, /<option value="Crew Transport" selected>/);
+  assert.doesNotMatch(review, /<option value="Transport"/);
+  assert.match(review, /<option value="Equipment Transport"/);
+  assert.doesNotMatch(review, /<option value="Parking"/);
+  const orderedCategories = ['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other'];
+  for (let index = 1; index < orderedCategories.length; index += 1) {
+    assert.ok(review.indexOf(`>${orderedCategories[index - 1]}</option>`) < review.indexOf(`>${orderedCategories[index]}</option>`));
+  }
+});
+
 test('schedule rates are clickable for the specific assignment date and show full department name', () => {
   const context = setup();
   vm.runInContext(`

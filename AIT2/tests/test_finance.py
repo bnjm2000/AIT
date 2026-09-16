@@ -5468,8 +5468,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn("title.textContent = isReview ? 'Review Expense'", source)
         self.assertIn('id="profitLossExpenseOtherCategoryField" hidden', source)
         self.assertIn("profitLossChooseExpenseCategory('${category}')", source)
-        for category in ('Meal', 'Crew Transport', 'Equipment Transport', 'Other', 'Purchase'):
+        categories = ('Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other')
+        for category in categories:
             self.assertIn(category, source)
+        self.assertIn(
+            "['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other']",
+            source,
+        )
         self.assertIn('.pnl-expense-modal.has-preview', css)
         self.assertIn('grid-template-columns: minmax(0, 1.3fr) minmax(330px, .7fr)', css)
         self.assertIn('.pnl-expense-fields .finance-field[hidden]', css)
@@ -6572,6 +6577,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(summary['vendorServiceCost'], 275)
         self.assertEqual(summary['directCosts'], 170)
         self.assertEqual(summary['otherExpenses'], 275)
+        self.assertEqual(
+            [(row['label'], row['amount']) for row in payload['otherExpenseCategories']],
+            [('Service', 275)],
+        )
         self.assertEqual(summary['beforeCommission'], 555)
         self.assertEqual(summary['commissionBase'], 555)
         self.assertEqual(summary['commission'], 55.5)
@@ -6917,9 +6926,9 @@ class FinanceFeatureTests(unittest.TestCase):
         payload = self.client.get('/api/finance/profit-loss/136').get_json()['data']
         summary = payload['summary']
         self.assertEqual(payload['quotation']['id'], accepted_quote['id'])
-        self.assertEqual(summary['manpowerCost'], 770)
-        self.assertEqual(summary['manpowerCardCost'], 770)
-        self.assertEqual(summary['crewVendorInvoiceCost'], 770)
+        self.assertEqual(summary['manpowerCost'], 850)
+        self.assertEqual(summary['manpowerCardCost'], 850)
+        self.assertEqual(summary['crewVendorInvoiceCost'], 850)
         self.assertEqual(summary['mealCost'], 30)
         self.assertEqual(summary['crewTransportClaimsCost'], 50)
         self.assertEqual(summary['transportBookingCost'], 100)
@@ -6928,9 +6937,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(summary['manualEquipmentTransportExpenses'], 60)
         self.assertEqual(summary['ownFleetEquipmentClaimsCost'], 15)
         self.assertEqual(summary['manualExpensesTotal'], 195)
-        self.assertEqual(summary['otherExpenses'], 165)
+        self.assertEqual(summary['otherExpenses'], 85)
         self.assertEqual(summary['manpowerBudget'], 4860)
-        self.assertEqual(summary['manpowerBudgetVariance'], 4090)
+        self.assertEqual(summary['manpowerBudgetVariance'], 4010)
         self.assertEqual(summary['transportBudget'], 450)
         self.assertEqual(summary['transportBudgetVariance'], 275)
 
@@ -6951,21 +6960,21 @@ class FinanceFeatureTests(unittest.TestCase):
             for row in payload['profitChart']
         ))
         self.assertIn(
-            {'group': 'transport', 'amount': 175},
+            {'group': 'transport', 'amount': 150},
             [
                 {'group': row['group'], 'amount': row['amount']}
                 for row in payload['profitChart']
             ],
         )
         self.assertIn(
-            {'group': 'meal', 'amount': 30},
+            {'group': 'meal', 'amount': 70},
             [
                 {'group': row['group'], 'amount': row['amount']}
                 for row in payload['profitChart']
             ],
         )
         self.assertIn(
-            {'group': 'crew-transport', 'label': 'Crew Transport', 'amount': 50},
+            {'group': 'crew-transport', 'label': 'Crew Transport', 'amount': 70},
             [
                 {
                     'group': row['group'],
@@ -6974,6 +6983,144 @@ class FinanceFeatureTests(unittest.TestCase):
                 }
                 for row in payload['profitChart']
             ],
+        )
+        self.assertIn(
+            {'group': 'equipment-transport', 'label': 'Equipment Transport', 'amount': 75},
+            [
+                {'group': row['group'], 'label': row['label'], 'amount': row['amount']}
+                for row in payload['profitChart']
+            ],
+        )
+        self.assertEqual(
+            [row['amount'] for row in payload['profitChart'] if row['label'] == 'Consumables'],
+            [45],
+        )
+        self.assertEqual(
+            [(row['label'], row['amount']) for row in payload['otherExpenseCategories']],
+            [('Consumables', 45), ('Meal', 40)],
+        )
+
+    def test_profit_loss_combines_added_expenses_and_claims_by_category(self):
+        self.login('sales-admin')
+        self.data_manager.events[146] = Event(
+            event_id=146, name='Shared Expense Categories', location='Studio',
+            start_date='20260826', end_date='20260826', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['freelancers'] = [{
+            'id': 'worker-category', 'name': 'Category Worker', 'active': True,
+        }]
+        workforce['submissions'] = {'146': {'worker-category': {
+            'invoices': [],
+            'claims': [
+                {
+                    'id': f'claim-{index}', 'category': category, 'amount': amount,
+                    'status': 'Approved', 'detailsComplete': True,
+                }
+                for index, (category, amount) in enumerate((
+                    ('Crew Transport', 30), ('Purchase', 12), ('Meal', 7),
+                    ('Equipment Transport', 9), ('Other', 5),
+                ))
+            ],
+        }}}
+        save_workforce(app_module._workforce_folder(), workforce)
+        for category, amount in (
+            ('Crew Transport', 40), ('purchase', 18), ('Meal', 13),
+            ('Equipment Transport', 11), ('Other', 6),
+        ):
+            response = self.client.post('/api/finance/profit-loss/146/expenses', json={
+                'description': f'Added {category}', 'category': category, 'amount': amount,
+            })
+            self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+
+        payload = self.client.get('/api/finance/profit-loss/146').get_json()['data']
+        category_rows = [
+            row for row in payload['profitChart']
+            if row['group'] not in {'profit', 'commission'}
+        ]
+        chart = {row['label']: row for row in category_rows}
+        self.assertEqual(len(category_rows), 5)
+        self.assertEqual(len(chart), 5)
+        self.assertEqual(
+            {label: (chart[label]['group'], chart[label]['amount']) for label in chart},
+            {
+                'Crew Transport': ('crew-transport', 70),
+                'Purchase': ('other', 30),
+                'Meals': ('meal', 20),
+                'Equipment Transport': ('equipment-transport', 20),
+                'Other': ('other', 11),
+            },
+        )
+        self.assertFalse(any('Added Expense' in row['label'] for row in chart.values()))
+        self.assertEqual(
+            sum(row['amount'] for row in chart.values()),
+            payload['summary']['directCosts'] + payload['summary']['otherExpenses'],
+        )
+        self.assertEqual(
+            [(row['label'], row['amount']) for row in payload['expenseCategories']],
+            [('Purchase', 30), ('Other', 11)],
+        )
+        self.assertEqual(payload['summary']['manpowerCost'], 77)
+        self.assertEqual(payload['summary']['transportCost'], 11)
+        self.assertEqual(payload['summary']['otherExpenses'], 63)
+        self.assertEqual(payload['summary']['netProfit'], -151)
+        self.assertEqual(
+            [(row['label'], row['amount']) for row in payload['otherExpenseCategories']],
+            [('Purchase', 30), ('Meal', 13), ('Other', 11), ('Equipment Transport', 9)],
+        )
+
+    def test_profit_loss_invoice_expenses_include_department_allocation_amounts(self):
+        self.login('sales-admin')
+        self.data_manager.events[147] = Event(
+            event_id=147, name='Split Department Invoice', location='Studio',
+            start_date='20260827', end_date='20260827', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['sales-admin'],
+        )
+        workforce = app_module.load_workforce(app_module._workforce_folder())
+        workforce['freelancers'] = [{
+            'id': 'split-worker', 'name': 'Split Worker', 'active': True,
+        }]
+        workforce['assignments'] = {'147': [
+            {
+                'id': 'split-audio', 'freelancerId': 'split-worker',
+                'department': 'AX', 'dailyRate': 300, 'days': 1,
+            },
+            {
+                'id': 'split-lighting', 'freelancerId': 'split-worker',
+                'department': 'LX', 'dailyRate': 100, 'days': 1,
+            },
+        ]}
+        workforce['submissions'] = {'147': {'split-worker': {
+            'invoices': [{
+                'id': 'split-invoice', 'amount': 400, 'status': 'Approved',
+                'allocations': [
+                    {'department': 'AX', 'amount': 300},
+                    {'department': 'LX', 'amount': 100},
+                ],
+            }],
+            'claims': [],
+        }}}
+        save_workforce(app_module._workforce_folder(), workforce)
+
+        response = self.client.get('/api/finance/profit-loss/147')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        invoice = next(
+            row for row in payload['expenses']
+            if row.get('sourceId') == 'split-invoice'
+        )
+        self.assertEqual(invoice['department'], 'AX, LX')
+        self.assertEqual(invoice['departmentAllocations'], [
+            {'department': 'AX', 'amount': 300.0},
+            {'department': 'LX', 'amount': 100.0},
+        ])
+        self.assertEqual(
+            {row['department']: row['amount'] for row in payload['manpowerDepartments']},
+            {'AX': 300.0, 'LX': 100.0},
         )
 
     def test_profit_loss_resolves_full_time_app_user_names(self):

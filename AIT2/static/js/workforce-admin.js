@@ -1325,8 +1325,15 @@ function wfClaimDate(record) {
   return wfEscape(wfReviewDateLabel(record.claimDate) || 'Not provided');
 }
 
+function wfClaimCategory(record) {
+  const category = String(record?.category || '').trim();
+  return ['transport', 'crew transport', 'staff transport', 'cab', 'taxi', 'grab'].includes(category.toLowerCase())
+    ? 'Crew Transport'
+    : category;
+}
+
 function wfClaimCategoryBadge(record) {
-  return `<span class="wf-document-claim-category">${wfEscape(record.category || 'Claim')}</span>`;
+  return `<span class="wf-document-claim-category">${wfEscape(wfClaimCategory(record) || 'Claim')}</span>`;
 }
 
 function wfSubmissionRow(record, kind) {
@@ -5090,10 +5097,10 @@ function selectWorkforceReviewStatus(event, status) {
 }
 
 function wfReviewClaimCategoryFields(record, verified) {
-  const rawCategory = String(record.category || '');
-  const category = rawCategory === 'Cab'
-    ? 'Crew Transport'
-    : (['Transport', 'Crew Transport', 'Equipment Transport', 'Parking', 'Meal', 'Purchase'].includes(rawCategory) ? rawCategory : (rawCategory ? 'Other' : ''));
+  const rawCategory = wfClaimCategory(record);
+  const category = ['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase'].includes(rawCategory)
+    ? rawCategory
+    : (rawCategory ? 'Other' : '');
   const otherValue = category === 'Other' ? rawCategory : '';
   return `<label class="wf-field"><span>Claim date *</span>
       <input id="wfReviewClaimDate" type="date" value="${wfAttr(record.claimDate || '')}" required ${verified ? 'disabled' : ''}>
@@ -5102,13 +5109,11 @@ function wfReviewClaimCategoryFields(record, verified) {
       <select id="wfReviewClaimCategory" required ${verified ? 'disabled' : ''}
         onchange="syncWorkforceReviewClaimCategory()">
         <option value="" ${category ? '' : 'selected'} disabled>Select category</option>
-        <option value="Transport" ${category === 'Transport' ? 'selected' : ''}>Transport</option>
+        <option value="Meal" ${category === 'Meal' ? 'selected' : ''}>Meal</option>
         <option value="Crew Transport" ${category === 'Crew Transport' ? 'selected' : ''}>Crew Transport</option>
         <option value="Equipment Transport" ${category === 'Equipment Transport' ? 'selected' : ''}>Equipment Transport</option>
-        <option value="Parking" ${category === 'Parking' ? 'selected' : ''}>Parking</option>
-        <option value="Meal" ${category === 'Meal' ? 'selected' : ''}>Meal</option>
-        <option value="Other" ${category === 'Other' ? 'selected' : ''}>Other</option>
         <option value="Purchase" ${category === 'Purchase' ? 'selected' : ''}>Purchase</option>
+        <option value="Other" ${category === 'Other' ? 'selected' : ''}>Other</option>
       </select>
     </label>
     <label class="wf-field full" id="wfReviewOtherCategoryField" ${category === 'Other' ? '' : 'hidden'}>

@@ -4136,6 +4136,11 @@ function workflowApplyRememberedEvent(sectionName, preferredEventId = null) {
       returnPageState.event = null;
       returnPageState.loaded = false;
     }
+  } else if (sectionName === 'profit-loss' && typeof profitLossState !== 'undefined') {
+    if (Number(profitLossState.eventId) !== eventId) {
+      profitLossState.eventId = eventId;
+      profitLossState.data = null;
+    }
   } else if (
     ['workforce', 'transport'].includes(sectionName) &&
     typeof workforcePageState !== 'undefined' &&
@@ -7505,6 +7510,12 @@ function inventoryStatusHistoryRecord(asset, status) {
       && String(source.bulkStatus || '').toLowerCase() === cleanStatus
     ) return record;
   }
+  const summaryDetail = asset.conditionDetails && typeof asset.conditionDetails === 'object'
+    ? asset.conditionDetails[cleanStatus]
+    : null;
+  if (summaryDetail && typeof summaryDetail === 'object') {
+    return normalizeMaintenanceLogRecord(summaryDetail);
+  }
   return null;
 }
 
@@ -7568,7 +7579,11 @@ function inventoryShowStatusHistoryTooltip(event, target, encodedAssetId, status
   tooltip.innerHTML = '<i aria-hidden="true"></i><div><strong></strong><span></span><em></em></div>';
   const statusMeta = INVENTORY_CONDITION_META[status] || { label: inventoryStatusText(status), color: '#334155' };
   tooltip.querySelector('strong').textContent = `Marked ${statusMeta.label}`;
-  tooltip.querySelector('span').textContent = `${maintenanceLogUserLabel(record) || 'Unknown person'} · ${inventoryMaintenanceDateText(record)}`;
+  const detailMeta = [
+    maintenanceLogUserLabel(record),
+    record.date ? inventoryMaintenanceDateText(record) : '',
+  ].filter(Boolean).join(' · ');
+  tooltip.querySelector('span').textContent = detailMeta || 'Status details';
   const description = record.description || 'No description recorded.';
   tooltip.querySelector('em').innerHTML = maintenanceDescriptionHtml(
     description,
@@ -7780,7 +7795,8 @@ function ensureInventoryAvailabilityCalendarModal() {
   modal.innerHTML = `
     <div class="modal-content inventory-availability-shell">
       <div class="modal-header inventory-availability-modal-header">
-        <div><h3 class="modal-title">Inventory Availability Calendar</h3><p id="inventoryAvailabilitySubtitle"></p></div>
+        <div class="inventory-availability-modal-copy"><h3 class="modal-title">Inventory Availability Calendar</h3><p id="inventoryAvailabilitySubtitle"></p></div>
+        <div id="inventoryAvailabilityConditionStats" class="inventory-availability-condition-stats" aria-label="Asset condition totals" hidden></div>
         <button type="button" class="close-btn" aria-label="Close availability calendar" onclick="closeModal('inventoryAvailabilityCalendarModal')">&times;</button>
       </div>
       <div id="inventoryAvailabilityCalendarContent" class="inventory-availability-content" aria-live="polite"></div>
@@ -7812,6 +7828,11 @@ async function openInventoryAvailabilityCalendar(encodedAssetId) {
   });
   document.getElementById('inventoryAvailabilitySubtitle').textContent =
     `${asset.brand || ''} ${asset.model || ''} · ${asset.description || 'Asset availability'}`;
+  const conditionStats = document.getElementById('inventoryAvailabilityConditionStats');
+  if (conditionStats) {
+    conditionStats.hidden = true;
+    conditionStats.innerHTML = '';
+  }
   openModal('inventoryAvailabilityCalendarModal');
   await loadInventoryAvailabilityCalendar();
 }
@@ -7899,15 +7920,19 @@ function inventoryAvailabilityEventHtml(event, index = 0) {
     : `<div class="inventory-availability-event" style="--event-accent:#94a3b8">${body}</div>`;
 }
 
-function inventoryAvailabilityConditionHtml(item) {
-  const encodedId = encodeURIComponent(item.assetId || '');
-  const label = item.isBulk ? `Bulk stock · ${item.assetId}` : item.assetId;
-  return `
-    <button type="button" class="inventory-availability-condition-row is-${item.status}" onclick="closeModal('inventoryAvailabilityCalendarModal');openAssetDetailsModal('${escapeHtmlAttr(encodedId)}')" aria-label="View ${escapeHtmlAttr(label)}, ${item.quantity} ${item.status}">
-      <span><strong>${escapeHtml(label)}</strong>${item.reason ? `<small>${escapeHtml(item.reason)}</small>` : ''}</span>
-      <span class="inventory-availability-condition-badge">${item.quantity} ${item.status === 'ooc' ? 'OOC' : 'degraded'}</span>
-    </button>
-  `;
+function inventoryAvailabilityConditionTooltip(status, data) {
+  const affected = (data.conditionAssets || []).filter(item => item.status === status);
+  const statusLabel = status === 'ooc' ? 'OOC' : 'Degraded';
+  const rows = affected.length
+    ? affected.map(item => {
+        const label = item.isBulk ? `Bulk stock · ${item.assetId}` : item.assetId;
+        const reasons = Array.isArray(item.reasons) && item.reasons.length
+          ? item.reasons
+          : (item.reason ? [item.reason] : []);
+        return `<span class="inventory-availability-condition-tooltip-row"><b>${escapeHtml(label)} (${Number(item.quantity) || 0})</b><span>${escapeHtml(reasons.join('; ') || 'No reason recorded')}</span></span>`;
+      }).join('')
+    : '<span class="inventory-availability-condition-tooltip-empty">No reason recorded</span>';
+  return `<span class="inventory-availability-condition-tooltip" role="tooltip"><strong>${statusLabel} reasons</strong>${rows}</span>`;
 }
 
 function renderInventoryAvailabilityCalendar() {
@@ -7942,6 +7967,15 @@ function renderInventoryAvailabilityCalendar() {
   const selectedEvents = selected?.events || [];
   const range = data.range;
   const rangeDates = range ? `${inventoryAvailabilityDateLabel(range.start)} – ${inventoryAvailabilityDateLabel(range.end)}` : '';
+  const conditionStats = document.getElementById('inventoryAvailabilityConditionStats');
+  if (conditionStats) {
+    conditionStats.innerHTML = `
+      <div><span>Healthy usable</span><strong>${data.healthy || 0}</strong></div>
+      <div class="is-degraded has-tooltip" tabindex="0" aria-label="Degraded usable: ${data.degraded || 0}. Hover or focus to view reasons."><span>Degraded usable</span><strong>${data.degraded || 0}</strong>${inventoryAvailabilityConditionTooltip('degraded', data)}</div>
+      <div class="is-ooc has-tooltip" tabindex="0" aria-label="OOC excluded: ${data.ooc || 0}. Hover or focus to view reasons."><span>OOC excluded</span><strong>${data.ooc || 0}</strong>${inventoryAvailabilityConditionTooltip('ooc', data)}</div>
+    `;
+    conditionStats.hidden = false;
+  }
 
   content.innerHTML = `
     <section class="inventory-availability-panel inventory-availability-calendar-panel">
@@ -7964,16 +7998,6 @@ function renderInventoryAvailabilityCalendar() {
         <div class="inventory-availability-events">${selectedEvents.length ? selectedEvents.map(inventoryAvailabilityEventHtml).join('') : '<div class="inventory-availability-empty">No event reservations on this date.</div>'}</div>
         <div class="inventory-availability-summary">${inventoryIcon('box')}<div><strong>${selected?.available || 0} available on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate))}</strong><span>At least ${selected?.healthyAvailable || 0} healthy · up to ${selected?.degradedAvailable || 0} degraded · ${data.ooc || 0} OOC excluded</span></div></div>
       </section>
-      <section class="inventory-availability-panel inventory-availability-condition-panel">
-        <div class="inventory-availability-heading-title">${inventoryIcon('alert')}<div><strong>Current asset condition</strong><span>These conditions are applied to all dates in the calendar.</span></div></div>
-        <div class="inventory-availability-condition-stats">
-          <div><span>Healthy usable</span><strong>${data.healthy || 0}</strong></div>
-          <div class="is-degraded"><span>Degraded usable</span><strong>${data.degraded || 0}</strong></div>
-          <div class="is-ooc"><span>OOC excluded</span><strong>${data.ooc || 0}</strong></div>
-        </div>
-        ${(data.conditionAssets || []).length ? `<div class="inventory-availability-condition-list">${data.conditionAssets.map(inventoryAvailabilityConditionHtml).join('')}</div>` : '<div class="inventory-availability-empty">No degraded or OOC assets in this item.</div>'}
-        ${data.missing ? `<small class="inventory-availability-condition-note">${data.missing} missing unit${data.missing === 1 ? '' : 's'} also excluded from availability.</small>` : ''}
-      </section>
       <section class="inventory-availability-panel inventory-availability-range-panel">
         <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Check Availability for a Date Range</strong><span>See overlapping events and the lowest available quantity.</span></div></div>
         <div class="inventory-availability-range-fields">
@@ -7986,11 +8010,9 @@ function renderInventoryAvailabilityCalendar() {
             <strong>Results for ${escapeHtml(rangeDates)}</strong>
             <div class="inventory-availability-result-cards">
               <div><span>Total stock</span><strong>${data.total}</strong></div>
-              <div><span>Lowest available</span><strong class="is-green">${range.available}</strong></div>
+              <div><span>Available for this date range</span><strong class="is-green">${range.available}</strong>${range.degradedAvailable ? `<small>incl ${range.degradedAvailable} degraded</small>` : ''}</div>
               <div><span>Peak allocated</span><strong class="is-red">${range.allocated}</strong></div>
-              <div><span>At least healthy</span><strong class="is-green">${range.healthyAvailable}</strong></div>
-              <div><span>Up to degraded</span><strong class="is-amber">${range.degradedAvailable}</strong></div>
-              <div><span>OOC excluded</span><strong class="is-red">${data.ooc || 0}</strong></div>
+              <div><span>Number of OOC</span><strong class="is-red">${data.ooc || 0}</strong></div>
             </div>
             <span class="inventory-availability-result-caption">Current usable stock: ${data.usable}. Availability is the minimum across this period. Reservations are conservatively applied to healthy stock first.</span>
             <strong>Events in this period</strong>

@@ -1707,6 +1707,7 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(payload['degraded'], 0)
         self.assertEqual(payload['conditionAssets'], [{
             'assetId': 'A#02', 'isBulk': False, 'status': 'ooc', 'quantity': 1,
+            'reason': '', 'reasons': [],
         }])
         self.assertTrue(all(day['available'] == 1 for day in payload['days']))
 
@@ -1717,8 +1718,19 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
 
     def test_availability_calendar_shows_degraded_and_ooc_assets_separately(self):
         self.login_admin()
-        self.data_manager.inventory['A#01'].is_degraded = True
-        self.data_manager.inventory['A#02'].is_ooc = True
+        for asset_id, status, reason in [
+            ('A#01', 'degraded', 'Wireless audio cuts out intermittently'),
+            ('A#02', 'ooc', 'Power input has failed'),
+        ]:
+            response = self.client.post(
+                f'/api/assets/{asset_id.replace("#", "%23")}/maintain',
+                json={
+                    'logEntry': reason,
+                    'maintenanceDate': '2026-10-01',
+                    'assetStatus': status,
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
 
         response = self.client.get(
             '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-17&end=2026-10-19'
@@ -1732,6 +1744,13 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
              for item in payload['conditionAssets']],
             [('A#01', 'degraded', 1), ('A#02', 'ooc', 1)],
         )
+        self.assertEqual(
+            {item['status']: item['reasons'] for item in payload['conditionAssets']},
+            {
+                'degraded': ['Wireless audio cuts out intermittently'],
+                'ooc': ['Power input has failed'],
+            },
+        )
         day = next(row for row in payload['days'] if row['date'] == '2026-10-17')
         self.assertEqual((day['available'], day['healthyAvailable'],
                           day['degradedAvailable']), (1, 0, 1))
@@ -1740,6 +1759,23 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             (payload['range']['available'], payload['range']['healthyAvailable'],
              payload['range']['degradedAvailable']),
             (1, 0, 1),
+        )
+
+        summary = self.client.get('/api/assets?view=summary').get_json()['data']
+        by_id = {item['internalId']: item for item in summary}
+        self.assertNotIn('maintenanceLogRecords', by_id['A#01'])
+        self.assertNotIn('maintenanceLogRecords', by_id['A#02'])
+        self.assertEqual(
+            by_id['A#01']['conditionDetails']['degraded']['description'],
+            'Wireless audio cuts out intermittently',
+        )
+        self.assertEqual(
+            by_id['A#02']['conditionDetails']['ooc']['description'],
+            'Power input has failed',
+        )
+        self.assertEqual(
+            by_id['A#02']['conditionDetails']['ooc']['date'],
+            '2026/10/01',
         )
 
     def test_availability_calendar_reservations_lower_healthy_stock_first(self):
@@ -1788,6 +1824,13 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
              for item in payload['conditionAssets']],
             [('BULK-0001', 'degraded', 2), ('BULK-0001', 'ooc', 2)],
         )
+        self.assertEqual(
+            {item['status']: item['reasons'] for item in payload['conditionAssets']},
+            {
+                'degraded': ['2 units are degraded'],
+                'ooc': ['2 units are ooc'],
+            },
+        )
         self.assertTrue(all(
             (day['available'], day['healthyAvailable'], day['degradedAvailable'])
             == (4, 2, 2) for day in payload['days']
@@ -1796,6 +1839,16 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
             (payload['range']['available'], payload['range']['healthyAvailable'],
              payload['range']['degradedAvailable']),
             (4, 2, 2),
+        )
+        summary = self.client.get('/api/assets?view=summary').get_json()['data']
+        bulk = next(item for item in summary if item['internalId'] == 'BULK-0001')
+        self.assertEqual(
+            bulk['conditionDetails']['ooc']['description'],
+            '2 units are ooc',
+        )
+        self.assertEqual(
+            bulk['conditionDetails']['degraded']['description'],
+            '2 units are degraded',
         )
 
     def test_availability_range_uses_peak_daily_reservations_not_sum_of_events(self):

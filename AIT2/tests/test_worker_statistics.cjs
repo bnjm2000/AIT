@@ -31,6 +31,18 @@ test('combines companies without grouping earnings by company; keeps reimburseme
   assert.equal(model.companies, undefined);
 });
 
+test('legacy Transport and new Crew Transport claims share one category total', () => {
+  const model = stats.build([{ code: 'A', events: [event(1, [], [
+    row('legacy', 12, 'Approved', { category: 'Transport' }),
+    row('new', 8.50, 'Paid', { category: 'Crew Transport' }),
+    row('equipment', 5, 'Approved', { category: 'Equipment Transport' })
+  ])] }], year);
+  assert.equal(model.categories.length, 2);
+  assert.equal(model.categories.find(item => item.label === 'Crew Transport').cents, 2050);
+  assert.equal(model.categories.find(item => item.label === 'Crew Transport').count, 2);
+  assert.equal(model.categories.find(item => item.label === 'Equipment Transport').cents, 500);
+});
+
 test('review, denied, and incomplete amounts do not inflate approved earnings', () => {
   const model = stats.build([{ code: 'A', events: [event(1, [
     row('review', 100, 'Pending Review'), row('denied', 250, 'Denied'),

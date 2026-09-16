@@ -792,14 +792,41 @@ def test_inventory_group_has_availability_calendar_button_and_date_range_popup()
     assert 'function renderInventoryAvailabilityCalendar()' in script
     assert 'function checkInventoryAvailabilityRange()' in script
     assert '/availability-calendar?' in script
-    assert 'Current asset condition' in script
-    assert 'inventory-availability-condition-list' in script
-    assert 'data.conditionAssets.map(inventoryAvailabilityConditionHtml)' in script
+    assert 'Current asset condition' not in script
+    assert 'inventory-availability-condition-list' not in script
+    header_source = script.split('class="modal-header inventory-availability-modal-header"', 1)[1].split(
+        '<div id="inventoryAvailabilityCalendarContent"', 1
+    )[0]
+    assert header_source.index('Inventory Availability Calendar') < header_source.index(
+        'inventoryAvailabilityConditionStats'
+    ) < header_source.index('close-btn')
+    assert 'inventory-availability-calendar-heading' not in script
+    assert '<span>Healthy usable</span>' in script
+    assert '<span>Degraded usable</span>' in script
+    assert '<span>OOC excluded</span>' in script
+    assert 'function inventoryAvailabilityConditionTooltip(status, data)' in script
+    assert "inventoryAvailabilityConditionTooltip('degraded', data)" in script
+    assert "inventoryAvailabilityConditionTooltip('ooc', data)" in script
+    assert 'Hover or focus to view reasons.' in script
+    assert 'asset.conditionDetails[cleanStatus]' in script
+    assert "detailMeta || 'Status details'" in script
+    assert '<span>Available for this date range</span>' in script
+    assert '<span>Number of OOC</span>' in script
+    assert '<span>Number of degraded</span>' not in script
+    assert 'range.degradedAvailable ? `<small>incl ${range.degradedAvailable} degraded</small>`' in script
+    assert '<span>At least healthy</span>' not in script
+    assert '<span>Up to degraded</span>' not in script
     assert 'day.healthyAvailable' in script
     assert 'day.degradedAvailable' in script
     assert '.inventory-availability-content' in template
     assert '.inventory-availability-grid' in template
-    assert '.inventory-availability-condition-row.is-ooc' in template
+    assert '.inventory-availability-condition-tooltip' in template
+    assert '>div.has-tooltip:hover .inventory-availability-condition-tooltip' in template
+    assert 'align-self:stretch;margin-left:auto;flex:0 1 300px' in template
+    assert 'background:#fff5e7;color:#a65b0a' in template
+    assert 'background:#fff0f0;color:#c13e48' in template
+    assert '.inventory-availability-range-ooc-card' not in template
+    assert 'grid-template-columns:repeat(4,minmax(0,1fr))' in template
 
 
 def test_inventory_selection_can_open_bulk_maintenance_workflow():

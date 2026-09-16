@@ -11549,7 +11549,10 @@
               .inventory-icon-button:hover { border-color:var(--inventory-green);background:var(--inventory-green-soft); }
               .inventory-icon-button svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
               #inventoryAvailabilityCalendarModal .inventory-availability-shell { width:min(1180px,calc(var(--scaled-vw, 100vw) - 30px));max-width:1180px;max-height:calc(var(--scaled-dvh, 100dvh) - 30px);padding:0;overflow:hidden;background:#edf4fb; }
-              .inventory-availability-modal-header { margin:0!important;padding:12px 16px!important;background:#fff;border-bottom:1px solid #dce7ef; }
+              .inventory-availability-modal-header { position:relative;z-index:10;margin:0!important;padding:12px 16px!important;gap:12px;background:#fff;border-bottom:1px solid #dce7ef; }
+              .inventory-availability-modal-copy { min-width:190px;flex:none; }
+              .inventory-availability-modal-header .inventory-availability-condition-stats { align-self:stretch;margin-left:auto;flex:0 1 300px; }
+              .inventory-availability-modal-header .close-btn { flex:none;margin-left:2px; }
               .inventory-availability-modal-header h3 { color:#172b3a;font-size:16px; }
               .inventory-availability-modal-header p { margin:2px 0 0;color:#64748b;font-size:11px; }
               .inventory-availability-content { max-height:calc(var(--scaled-dvh, 100dvh) - 100px);padding:10px;overflow:auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.95fr);gap:10px;color:#23354b;font-size:11px; }
@@ -11599,25 +11602,25 @@
               .inventory-availability-summary svg { width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2; }
               .inventory-availability-summary strong,.inventory-availability-summary span { display:block; }
               .inventory-availability-summary span { margin-top:3px;color:#61778a;font-size:9px; }
-              .inventory-availability-condition-panel>.inventory-availability-heading-title { margin-bottom:10px; }
-              .inventory-availability-condition-stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px; }
-              .inventory-availability-condition-stats>div { min-width:0;padding:8px;border-radius:5px;background:#edf9f2;color:#117746; }
+              .inventory-availability-condition-stats { min-width:235px;max-width:300px;flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px; }
+              .inventory-availability-condition-stats[hidden] { display:none; }
+              .inventory-availability-condition-stats>div { min-width:0;padding:5px 7px;border-radius:5px;background:#edf9f2;color:#117746;display:flex;flex-direction:column;justify-content:center; }
               .inventory-availability-condition-stats>div.is-degraded { background:#fff5e7;color:#a65b0a; }
               .inventory-availability-condition-stats>div.is-ooc { background:#fff0f0;color:#c13e48; }
               .inventory-availability-condition-stats span,.inventory-availability-condition-stats strong { display:block; }
-              .inventory-availability-condition-stats span { font-size:9px;line-height:1.25; }
-              .inventory-availability-condition-stats strong { margin-top:3px;font-size:16px; }
-              .inventory-availability-condition-list { max-height:150px;margin-top:9px;overflow:auto;display:grid;gap:5px; }
-              .inventory-availability-condition-row { width:100%;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid #e0e9f3;border-left:3px solid #e79d30;border-radius:5px;background:#fff;color:#273a55;text-align:left;font:inherit;cursor:pointer; }
-              .inventory-availability-condition-row.is-ooc { border-left-color:#e85e64; }
-              .inventory-availability-condition-row:hover { background:#f7fbff;border-color:#bdd5e5; }
-              .inventory-availability-condition-row>span:first-child { min-width:0; }
-              .inventory-availability-condition-row strong,.inventory-availability-condition-row small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-              .inventory-availability-condition-row strong { font-size:10px; }
-              .inventory-availability-condition-row small { margin-top:2px;color:#708199;font-size:9px; }
-              .inventory-availability-condition-badge { flex:none;padding:4px 7px;border-radius:99px;background:#fff5e7;color:#a65b0a;font-size:9px;font-weight:800;white-space:nowrap; }
-              .inventory-availability-condition-row.is-ooc .inventory-availability-condition-badge { background:#fff0f0;color:#c13e48; }
-              .inventory-availability-condition-note { display:block;margin-top:8px;color:#708199;font-size:9px; }
+              .inventory-availability-condition-stats span { font-size:9px;line-height:1.2; }
+              .inventory-availability-condition-stats strong { margin-top:2px;font-size:13px;line-height:1.1; }
+              .inventory-availability-condition-stats>div.has-tooltip { position:relative;cursor:help;outline:none; }
+              .inventory-availability-condition-stats>div.has-tooltip:focus-visible { box-shadow:0 0 0 2px #73aee9; }
+              .inventory-availability-condition-tooltip { position:absolute;z-index:30;top:calc(100% + 8px);left:50%;width:280px;padding:9px;border-radius:6px;background:#172b3a;color:#fff;box-shadow:0 8px 24px rgba(15,35,60,.24);opacity:0;visibility:hidden;transform:translate(-50%,-4px);transition:opacity .15s ease,transform .15s ease,visibility .15s ease;pointer-events:none; }
+              .inventory-availability-condition-stats>div.is-ooc .inventory-availability-condition-tooltip { right:0;left:auto;transform:translateY(-4px); }
+              .inventory-availability-condition-stats>div.has-tooltip:hover .inventory-availability-condition-tooltip,.inventory-availability-condition-stats>div.has-tooltip:focus .inventory-availability-condition-tooltip { opacity:1;visibility:visible;transform:translate(-50%,0); }
+              .inventory-availability-condition-stats>div.is-ooc:hover .inventory-availability-condition-tooltip,.inventory-availability-condition-stats>div.is-ooc:focus .inventory-availability-condition-tooltip { transform:translateY(0); }
+              .inventory-availability-condition-tooltip>strong { margin:0 0 6px;color:#fff;font-size:10px; }
+              .inventory-availability-condition-tooltip-row { padding:5px 0;border-top:1px solid rgba(255,255,255,.15); }
+              .inventory-availability-condition-tooltip-row b,.inventory-availability-condition-tooltip-row>span { display:block;overflow-wrap:anywhere; }
+              .inventory-availability-condition-tooltip-row b { color:#fff;font-size:9px; }
+              .inventory-availability-condition-tooltip-row>span,.inventory-availability-condition-tooltip-empty { margin-top:2px;color:#d9e6ee;font-size:9px;line-height:1.35; }
               .inventory-availability-range-panel>.inventory-availability-heading-title { margin-bottom:11px; }
               .inventory-availability-range-fields { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:7px;align-items:end; }
               .inventory-availability-range-fields label { min-width:0;color:#63758e;font-size:9px; }
@@ -11625,11 +11628,12 @@
               .inventory-availability-range-fields button { min-height:35px;padding:5px 8px;font-size:9px;white-space:nowrap; }
               .inventory-availability-results { margin-top:10px;padding:10px;border-radius:5px;background:#f1f6fb; }
               .inventory-availability-results>strong { display:block;margin-bottom:8px;color:#273a55;font-size:10px; }
-              .inventory-availability-result-cards { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px; }
+              .inventory-availability-result-cards { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px; }
               .inventory-availability-result-cards>div { padding:8px;border-radius:5px;background:#fff; }
-              .inventory-availability-result-cards span,.inventory-availability-result-cards strong { display:block; }
+              .inventory-availability-result-cards span,.inventory-availability-result-cards strong,.inventory-availability-result-cards small { display:block; }
               .inventory-availability-result-cards span { color:#667892;font-size:9px; }
               .inventory-availability-result-cards strong { margin-top:2px;color:#273a55;font-size:15px; }
+              .inventory-availability-result-cards small { margin-top:2px;color:#a65b0a;font-size:8px; }
               .inventory-availability-result-cards strong.is-green { color:#0b9b55; }
               .inventory-availability-result-cards strong.is-amber { color:#a65b0a; }
               .inventory-availability-result-cards strong.is-red { color:#e14b58; }
@@ -11640,7 +11644,7 @@
               .inventory-availability-range-events span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
               .inventory-availability-range-events strong { text-align:right; }
               @media(max-width:850px) { .inventory-availability-content { grid-template-columns:1fr; }.inventory-availability-day { min-height:70px; }.inventory-availability-day span { margin-top:12px; } }
-              @media(max-width:520px) { .inventory-availability-panel-heading { align-items:flex-start; }.inventory-availability-month-controls { width:100%; }.inventory-availability-day { min-height:63px;padding:5px 3px; }.inventory-availability-day span,.inventory-availability-day small,.inventory-availability-day em { font-size:7px; }.inventory-availability-range-fields { grid-template-columns:1fr 1fr; }.inventory-availability-range-fields button { grid-column:1/-1; }.inventory-model-calendar-button { right:45px;top:11px; } }
+              @media(max-width:520px) { .inventory-availability-modal-header { flex-wrap:wrap;align-items:center; }.inventory-availability-modal-copy { min-width:0;flex:1; }.inventory-availability-modal-header .inventory-availability-condition-stats { order:3;width:100%;max-width:none;min-width:0;flex-basis:100%; }.inventory-availability-panel-heading { align-items:flex-start; }.inventory-availability-month-controls { width:100%; }.inventory-availability-day { min-height:63px;padding:5px 3px; }.inventory-availability-day span,.inventory-availability-day small,.inventory-availability-day em { font-size:7px; }.inventory-availability-range-fields { grid-template-columns:1fr 1fr; }.inventory-availability-range-fields button { grid-column:1/-1; }.inventory-availability-result-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-model-calendar-button { right:45px;top:11px; } }
               #assetDetailsModal .asset-details-shell { width:min(920px,calc(var(--scaled-vw, 100vw) - 28px));max-width:920px;max-height:calc(var(--scaled-dvh, 100dvh) - 28px);overflow:hidden; }
               #assetDetailsModal .asset-details-body { max-height:calc(var(--scaled-dvh, 100dvh) - 96px);overflow:auto;padding:0 20px 18px; }
               .asset-details-identity { padding:18px 0;border-bottom:1px solid #dce7e3; }

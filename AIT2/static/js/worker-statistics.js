@@ -142,7 +142,10 @@ const WorkerStatistics = (() => {
           model[`${kind}Count`] += 1;
           bucket[kind] += cents;
           if (kind === 'claim') {
-            const category = String(row.category || '').trim() || 'Uncategorised';
+            const rawCategory = String(row.category || '').trim();
+            const category = ['transport', 'crew transport', 'staff transport', 'cab', 'taxi', 'grab'].includes(rawCategory.toLowerCase())
+              ? 'Crew Transport'
+              : (rawCategory || 'Uncategorised');
             const item = categories.get(category) || { label: category, cents: 0, count: 0 };
             item.cents += cents;
             item.count += 1;

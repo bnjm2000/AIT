@@ -697,8 +697,8 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     source_items = [
         ('Manpower', 'Manpower invoices or assignment estimate', breakdown.get('manpowerInvoicesOrEstimate')),
         ('Other', 'Vendor service invoices or assignment estimate', breakdown.get('vendorServices')),
-        ('Other', 'Crew transport claims', breakdown.get('crewTransportClaims')),
-        ('Other', 'Meal claims', breakdown.get('workerMealClaims')),
+        ('Manpower', 'Crew transport claims', breakdown.get('crewTransportClaims')),
+        ('Manpower', 'Meal claims', breakdown.get('workerMealClaims')),
         ('Transport', 'Transport-page bookings', breakdown.get('transportBookings')),
         ('Other', 'Other crew claims', breakdown.get('workerOtherClaims')),
         ('Other', 'Additional meal expenses', breakdown.get('manualMealExpenses')),

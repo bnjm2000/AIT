@@ -4858,37 +4858,98 @@ def _clean_warning_reason(value, max_length=240):
     return reason
 
 
-def _asset_degraded_reasons(asset, limit=3):
+def _asset_condition_reasons(asset, status, limit=3):
     if not asset:
         return []
 
+    target_status = str(status or '').strip().lower()
     active_reason = ''
     for log_entry in getattr(asset, 'maintenance_logs', []) or []:
         record = normalize_maintenance_log(log_entry)
-        if _maintenance_log_marks_status(record, 'degraded', 'marked'):
+        if _maintenance_log_marks_status(record, target_status, 'marked'):
             active_reason = _clean_warning_reason(record.get('description'))
-        if _maintenance_log_marks_status(record, 'degraded', 'cleared'):
+        if _maintenance_log_marks_status(record, target_status, 'cleared'):
             active_reason = ''
 
     return [active_reason] if active_reason else []
 
 
-def _bulk_degraded_reasons(asset, limit=3):
-    reasons = []
+def _asset_degraded_reasons(asset, limit=3):
+    return _asset_condition_reasons(asset, 'degraded', limit=limit)
 
-    if _is_degraded(asset):
-        reasons.extend(_asset_degraded_reasons(asset, limit=limit))
+
+def _bulk_condition_reasons(asset, status, limit=3):
+    reasons = []
+    target_status = str(status or '').strip().lower()
+
+    if _asset_condition_status(asset) == target_status:
+        reasons.extend(_asset_condition_reasons(asset, target_status, limit=limit))
 
     for entry in _bulk_maintenance_open_faults(asset):
-        if entry.get('status') != 'degraded':
+        if entry.get('status') != target_status:
             continue
         reason = _clean_warning_reason((entry.get('fault') or {}).get('description'))
-        if reason:
+        if reason and reason not in reasons:
             reasons.append(reason)
         if len(reasons) >= limit:
             break
 
     return reasons[:limit]
+
+
+def _bulk_degraded_reasons(asset, limit=3):
+    return _bulk_condition_reasons(asset, 'degraded', limit=limit)
+
+
+def _active_asset_condition_detail(asset, status):
+    """Return one compact active OOC/degraded log for inventory summary hovers."""
+    target_status = str(status or '').strip().lower()
+    if target_status not in ('ooc', 'degraded') or not asset:
+        return None
+
+    quantity_active = False
+    candidate_records = []
+    if _is_bulk_asset(asset):
+        quantity_active = _bulk_maintenance_quantity_counts(asset)[target_status] > 0
+        for index, entry in enumerate(_bulk_maintenance_open_faults(asset)):
+            if entry.get('status') == target_status:
+                candidate_records.append((entry.get('fault') or {}, index))
+
+    whole_asset_active = _asset_condition_status(asset) == target_status
+    if whole_asset_active:
+        for index, log_entry in enumerate(getattr(asset, 'maintenance_logs', []) or []):
+            record = normalize_maintenance_log(log_entry)
+            if _maintenance_log_marks_status(record, target_status, 'marked'):
+                candidate_records.append((record, index))
+
+    if not quantity_active and not whole_asset_active:
+        return None
+
+    def recency(candidate):
+        record, index = candidate
+        record = normalize_maintenance_log(record)
+        parsed_date = _parse_any_date(record.get('date'))
+        return (
+            parsed_date.toordinal() if parsed_date else 0,
+            str(record.get('createdAt') or ''),
+            index,
+        )
+
+    if candidate_records:
+        record = normalize_maintenance_log(max(candidate_records, key=recency)[0])
+        return {
+            'date': record.get('date') or '',
+            'user': record.get('user') or '',
+            'userDisplayName': _user_display_name(record.get('user')),
+            'description': record.get('description') or 'No reason recorded.',
+        }
+
+    return {
+        'date': '',
+        'user': '',
+        'userDisplayName': '',
+        'description': 'No reason recorded.',
+    }
 
 
 def _warning_reason_text(reasons):
@@ -8979,6 +9040,16 @@ def _event_date_for_input(value):
     return ''
 
 
+def _normalise_claim_category(value):
+    """Use one canonical label for crew/passenger transport claims."""
+    category = re.sub(r'\s+', ' ', str(value or '').strip())
+    if category.casefold() in {
+        'transport', 'crew transport', 'staff transport', 'cab', 'taxi', 'grab',
+    }:
+        return 'Crew Transport'
+    return category
+
+
 def _public_submission_rows(rows, token):
     result = {'invoices': [], 'claims': []}
     for kind in ('invoices', 'claims'):
@@ -9014,7 +9085,11 @@ def _public_submission_rows(rows, token):
                 'originalName': str(row.get('originalName') or ''),
                 'amount': row.get('amount'),
                 'claimDate': str(row.get('claimDate') or ''),
-                'category': str(row.get('category') or ''),
+                'category': (
+                    _normalise_claim_category(row.get('category'))
+                    if kind == 'claims'
+                    else str(row.get('category') or '')
+                ),
                 'description': str(row.get('description') or ''),
                 'notes': str(row.get('notes') or row.get('description') or ''),
                 'department': str(row.get('department') or ''),
@@ -9608,6 +9683,8 @@ def _admin_file_payload(
     record, event_id, freelancer_id, kind, expectation=None
 ):
     payload = dict(record)
+    if kind == 'claim':
+        payload['category'] = _normalise_claim_category(record.get('category'))
     payload['submittedAt'] = str(
         record.get('submittedAt')
         or record.get('uploadedAt')
@@ -10906,6 +10983,9 @@ def _admin_workforce_payload(event_id, manager=None):
                 continue
             submission_id = quote(str(claim['id']))
             claim_payload = dict(claim)
+            claim_payload['category'] = _normalise_claim_category(
+                claim.get('category')
+            )
             claim_payload['previewUrl'] = (
                 f'/api/workforce/submissions/{submission_id}/file'
             )
@@ -11122,7 +11202,11 @@ def _my_claims_payload(manager=None, workforce=None):
                     'submittedAt': str(row.get('submittedAt') or ''),
                     'amount': row.get('amount'),
                     'claimDate': str(row.get('claimDate') or ''),
-                    'category': str(row.get('category') or ''),
+                    'category': (
+                        _normalise_claim_category(row.get('category'))
+                        if kind == 'claims'
+                        else str(row.get('category') or '')
+                    ),
                     'notes': str(row.get('notes') or row.get('description') or ''),
                     'status': str(row.get('status') or 'Pending Review'),
                     'denialReason': str(row.get('denialReason') or ''),
@@ -11189,6 +11273,7 @@ def submit_my_claim():
     category = str(request.form.get('category') or '').strip()
     if category == 'Other':
         category = str(request.form.get('otherCategory') or '').strip()
+    category = _normalise_claim_category(category)
     notes = str(request.form.get('notes') or '').strip()
     uploaded_files = [
         item for item in (
@@ -11321,6 +11406,7 @@ def update_my_submission(submission_id):
                 category = str(payload.get('category') or '').strip()
                 if category == 'Other':
                     category = str(payload.get('otherCategory') or '').strip()
+                category = _normalise_claim_category(category)
                 if not claim_date or not category:
                     return jsonify({'error': 'Claim date and category are required'}), 400
                 updates.update({
@@ -12427,6 +12513,7 @@ def worker_submission_details(submission_id):
         category = str(payload.get('category') or '').strip()
         if category == 'Other':
             category = str(payload.get('otherCategory') or '').strip()
+        category = _normalise_claim_category(category)
         notes = str(payload.get('notes') or '').strip()
         if amount is None or not claim_date or not category:
             return jsonify({
@@ -12535,6 +12622,7 @@ def worker_upload_submission():
             category = str(request.form.get('category') or '').strip()
             if category == 'Other':
                 category = str(request.form.get('otherCategory') or '').strip()
+            category = _normalise_claim_category(category)
             description = str(
                 request.form.get('notes')
                 or request.form.get('description')
@@ -15172,6 +15260,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
             category = str(request.form.get('category') or '').strip()
             if category == 'Other':
                 category = str(request.form.get('otherCategory') or '').strip()
+            category = _normalise_claim_category(category)
             description = str(
                 request.form.get('notes')
                 or request.form.get('description')
@@ -17188,6 +17277,7 @@ def review_workforce_submission(submission_id):
                 payload.get('category', record.get('category') or '')
                 or ''
             ).strip()
+            category = _normalise_claim_category(category)
             if confirming_review and status != 'Denied' and (
                 not claim_date or not category
             ):
@@ -29997,6 +30087,11 @@ def get_assets():
                 'bulkFaultQuantity': bulk_fault_counts['total'] if is_bulk else 0,
                 'degradedReasons': _asset_degraded_reasons(asset),
                 'bulkDegradedReasons': _bulk_degraded_reasons(asset) if is_bulk else [],
+                'conditionDetails': {
+                    status_name: detail
+                    for status_name in ('ooc', 'degraded')
+                    if (detail := _active_asset_condition_detail(asset, status_name))
+                },
                 # Notes are needed by the inventory editor even in progressive
                 # summary mode; omitting them made a saved note appear to vanish.
                 'notes': getattr(asset, 'notes', ''),
@@ -30120,9 +30215,14 @@ def get_asset_availability_calendar(asset_id):
             continue
         if getattr(item, 'is_ooc', False):
             ooc += quantity
+            reasons = (
+                _bulk_condition_reasons(item, 'ooc') if _is_bulk_asset(item)
+                else _asset_condition_reasons(item, 'ooc')
+            )
             condition_assets.append({
                 'assetId': item.asset_id, 'isBulk': _is_bulk_asset(item),
                 'status': 'ooc', 'quantity': quantity,
+                'reason': reasons[0] if reasons else '', 'reasons': reasons,
             })
             continue
 
@@ -30142,9 +30242,11 @@ def get_asset_availability_calendar(asset_id):
         degraded += item_degraded
         usable += item_usable
         if item_ooc:
+            reasons = _bulk_condition_reasons(item, 'ooc')
             condition_assets.append({
                 'assetId': item.asset_id, 'isBulk': True,
                 'status': 'ooc', 'quantity': item_ooc,
+                'reason': reasons[0] if reasons else '', 'reasons': reasons,
             })
         if item_degraded:
             reasons = (
@@ -30154,7 +30256,7 @@ def get_asset_availability_calendar(asset_id):
             condition_assets.append({
                 'assetId': item.asset_id, 'isBulk': _is_bulk_asset(item),
                 'status': 'degraded', 'quantity': item_degraded,
-                'reason': reasons[0] if reasons else '',
+                'reason': reasons[0] if reasons else '', 'reasons': reasons,
             })
     condition_assets.sort(key=lambda row: (row['status'], row['assetId']))
 
@@ -42733,17 +42835,28 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
                     'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
                 }
-            allocations = [
-                row for row in invoice.get('allocations') or []
-                if isinstance(row, dict) and str(row.get('department') or '').strip()
+            allocation_totals = {}
+            for allocation in invoice.get('allocations') or []:
+                if not isinstance(allocation, dict):
+                    continue
+                department = str(allocation.get('department') or '').strip()
+                allocation_amount = round(
+                    money(allocation.get('amount'), 0.0) or 0.0,
+                    2,
+                )
+                if not department or allocation_amount <= 0:
+                    continue
+                allocation_totals[department] = round(
+                    allocation_totals.get(department, 0) + allocation_amount,
+                    2,
+                )
+            if not allocation_totals:
+                allocation_totals[resolved_department(subject_id)] = round(amount, 2)
+            department_allocations = [
+                {'department': department, 'amount': allocation_amount}
+                for department, allocation_amount in allocation_totals.items()
             ]
-            departments = list(dict.fromkeys(
-                str(row.get('department') or '').strip()
-                for row in allocations
-                if str(row.get('department') or '').strip()
-            ))
-            if not departments:
-                departments = [resolved_department(subject_id)]
+            departments = list(allocation_totals)
             result.append({
                 'id': f'worker-invoice-{subject_id}-{invoice_id}'[:120],
                 'sourceId': invoice_id,
@@ -42756,6 +42869,7 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'categoryKey': 'vendor-service' if is_vendor_service else 'manpower',
                 'categoryLabel': 'Crew & Vendors',
                 'department': ', '.join(departments) or 'Unallocated',
+                'departmentAllocations': department_allocations,
                 'vendor': subject_name,
                 'amount': round(amount, 2),
                 'expenseDate': _finance_normalise_iso_date(
@@ -42795,7 +42909,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
                     'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
                 }
-            category = str(claim.get('category') or 'Other').strip()
+            category = _normalise_claim_category(
+                claim.get('category') or 'Other'
+            )
             category_key = _finance_profit_loss_expense_bucket(category)
             if not str(claim.get('category') or '').strip():
                 claim_label = 'Claim'
@@ -42936,7 +43052,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                         'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
                         'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
                     }
-                category = str(claim.get('category') or 'Other').strip()
+                category = _normalise_claim_category(
+                    claim.get('category') or 'Other'
+                )
                 category_key = _finance_profit_loss_expense_bucket(category)
                 status = str(claim.get('status') or 'Pending Review')
                 details_complete = bool(claim.get('detailsComplete'))
@@ -43107,11 +43225,19 @@ def _finance_profit_loss_payload(event, finance_data):
         _safe_float(row.get('amount'), 0)
         for row in expenses
     ), 2)
-    crew_transport_claims = round(sum(
+    worker_crew_transport_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
-        if row.get('categoryKey') in {'transport', 'crew-transport'}
+        if row.get('categoryKey') == 'crew-transport'
     ), 2)
+    worker_transport_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in worker_claim_expenses
+        if row.get('categoryKey') == 'transport'
+    ), 2)
+    crew_transport_claims = round(
+        worker_crew_transport_claims + worker_transport_claims, 2
+    )
     own_fleet_crew_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in own_fleet_claim_expenses
@@ -43134,10 +43260,15 @@ def _finance_profit_loss_payload(event, finance_data):
         for row in worker_claim_expenses
         if row.get('categoryKey') == 'meal'
     ), 2)
+    worker_equipment_transport_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in worker_claim_expenses
+        if row.get('categoryKey') == 'equipment-transport'
+    ), 2)
     worker_other_claims = round(sum(
         _safe_float(row.get('amount'), 0)
         for row in worker_claim_expenses
-        if row.get('categoryKey') in {'other', 'purchase'}
+        if row.get('categoryKey') in {'other', 'purchase', 'equipment-transport'}
     ), 2)
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
     meal_cost = worker_meal_claims
@@ -43146,12 +43277,14 @@ def _finance_profit_loss_payload(event, finance_data):
     manpower_cost = round(
         workforce_manpower_cost
         + manual_crew_transport_expenses
-        + own_fleet_crew_claims,
+        + own_fleet_crew_claims
+        + crew_transport_claims
+        + worker_meal_claims,
         2,
     )
     manpower_card_cost = manpower_cost
-    # Manual crew transport belongs to the crew/manpower budget, while equipment
-    # transport belongs to the event transport budget. Both remain direct costs.
+    # Crew transport and meal claims from workers use the manpower budget;
+    # equipment transport remains with the event transport budget.
     transport_cost = round(
         workforce_costs['transportCost'] + manual_equipment_transport_expenses,
         2,
@@ -43166,7 +43299,7 @@ def _finance_profit_loss_payload(event, finance_data):
     )
     other_expenses = round(
         vendor_service_cost
-        + worker_claims_cost
+        + worker_other_claims
         + manual_expenses_total
         - manual_transport_expenses,
         2,
@@ -43188,45 +43321,51 @@ def _finance_profit_loss_payload(event, finance_data):
     net_profit = round(before_commission - commission, 2)
     profit_margin = round((net_profit / revenue * 100) if revenue else 0, 2)
     expense_category_totals = {}
+    other_expense_category_totals = {}
 
-    def add_expense_category(row):
+    def add_expense_category(row, target):
         amount = round(_safe_float(row.get('amount'), 0), 2)
         if amount <= 0:
             return
-        key = str(row.get('categoryLabel') or row.get('category') or 'Other Expenses')
-        entry = expense_category_totals.setdefault(key, {
-            'label': key,
+        label = str(row.get('categoryLabel') or row.get('category') or 'Other Expenses')
+        key = label.casefold()
+        entry = target.setdefault(key, {
+            'label': label,
             'amount': 0.0,
             'source': row.get('source') or 'manual',
         })
         entry['amount'] = round(entry['amount'] + amount, 2)
 
+    add_expense_category({
+        'categoryLabel': 'Service', 'amount': vendor_service_cost,
+    }, other_expense_category_totals)
     for row in worker_claim_expenses:
         if row.get('categoryKey') in {'other', 'purchase'}:
-            add_expense_category(row)
+            add_expense_category(row, expense_category_totals)
+        if row.get('categoryKey') in {'other', 'purchase', 'equipment-transport'}:
+            add_expense_category(row, other_expense_category_totals)
     for row in own_fleet_claim_expenses:
         if row.get('categoryKey') not in {
             'crew-transport', 'equipment-transport', 'transport'
         }:
-            add_expense_category(row)
+            add_expense_category(row, other_expense_category_totals)
+            if row.get('categoryKey') != 'meal':
+                add_expense_category(row, expense_category_totals)
     for row in expenses:
-        if _finance_profit_loss_expense_bucket(row.get('category')) in {
-            'crew-transport', 'equipment-transport', 'transport'
-        }:
+        category_key = _finance_profit_loss_expense_bucket(row.get('category'))
+        if category_key in {'crew-transport', 'equipment-transport', 'transport'}:
             continue
         payload_row = _profit_loss_expense_payload(row)
-        manual_category = str(
-            payload_row.get('categoryLabel')
-            or payload_row.get('category')
-            or 'Other'
-        )
-        add_expense_category({
-            **payload_row,
-            'categoryLabel': f'Added Expense - {manual_category}',
-        })
+        add_expense_category(payload_row, other_expense_category_totals)
+        if category_key != 'meal':
+            add_expense_category(payload_row, expense_category_totals)
 
     expense_categories = sorted(
         expense_category_totals.values(),
+        key=lambda row: (-_safe_float(row.get('amount'), 0), str(row.get('label') or '')),
+    )
+    other_expense_categories = sorted(
+        other_expense_category_totals.values(),
         key=lambda row: (-_safe_float(row.get('amount'), 0), str(row.get('label') or '')),
     )
     quotation_budgets = _finance_profit_loss_quotation_budgets(quotation)
@@ -43272,18 +43411,6 @@ def _finance_profit_loss_payload(event, finance_data):
             'label': f"Manpower - {row['label']}",
             'amount': row['amount'],
         })
-    crew_budget_transport = round(
-        manual_crew_transport_expenses + own_fleet_crew_claims,
-        2,
-    )
-    if crew_budget_transport > 0:
-        profit_chart.append({
-            'key': 'manpower-crew-transport',
-            'group': 'manpower',
-            'department': '',
-            'label': 'Crew Transport',
-            'amount': crew_budget_transport,
-        })
     vendor_service_department_rows = []
     for department, amount in sorted(
         (workforce_costs.get('vendorServiceDepartments') or {}).items(),
@@ -43312,26 +43439,62 @@ def _finance_profit_loss_payload(event, finance_data):
             'label': row['label'],
             'amount': row['amount'],
         })
-    if meal_cost > 0:
+    # The pie groups expenses by category across sources; the budget/card
+    # allocation above remains unchanged (for example, added crew transport
+    # still contributes to the manpower budget).
+    chart_meals = round(
+        meal_cost + manual_meal_expenses + sum(
+            _safe_float(row.get('amount'), 0)
+            for row in own_fleet_claim_expenses
+            if row.get('categoryKey') == 'meal'
+        ),
+        2,
+    )
+    if chart_meals > 0:
         profit_chart.append({
             'key': 'meals',
             'group': 'meal',
             'label': 'Meals',
-            'amount': meal_cost,
+            'amount': chart_meals,
         })
-    if crew_transport_claims > 0:
+    chart_crew_transport = round(
+        worker_crew_transport_claims
+        + manual_crew_transport_expenses
+        + own_fleet_crew_claims,
+        2,
+    )
+    if chart_crew_transport > 0:
         profit_chart.append({
             'key': 'crew-transport',
             'group': 'crew-transport',
             'label': 'Crew Transport',
-            'amount': crew_transport_claims,
+            'amount': chart_crew_transport,
         })
-    if transport_cost > 0:
+    transport_budget_equipment = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses + own_fleet_claim_expenses
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'equipment-transport'
+    ), 2)
+    chart_equipment_transport = round(
+        transport_budget_equipment + worker_equipment_transport_claims, 2
+    )
+    if chart_equipment_transport > 0:
+        profit_chart.append({
+            'key': 'equipment-transport',
+            'group': 'equipment-transport',
+            'label': 'Equipment Transport',
+            'amount': chart_equipment_transport,
+        })
+    chart_transport = round(
+        transport_cost - transport_budget_equipment + worker_transport_claims,
+        2,
+    )
+    if chart_transport > 0:
         profit_chart.append({
             'key': 'transport',
             'group': 'transport',
             'label': 'Transport',
-            'amount': transport_cost,
+            'amount': chart_transport,
         })
     for row in expense_categories:
         category_key = re.sub(
@@ -43418,8 +43581,8 @@ def _finance_profit_loss_payload(event, finance_data):
             'directCosts': direct_costs,
             'manpowerCost': manpower_cost,
             'manpowerCardCost': manpower_card_cost,
-            # Legacy response key retained for older clients; it now represents
-            # manpower invoices/estimates only.
+            # Legacy response key retained for older clients; it mirrors the
+            # manpower card total, including crew and meal claims.
             'crewVendorInvoiceCost': manpower_cost,
             'manpowerInvoicesOrEstimateCost': manpower_cost,
             'mealCost': meal_cost,
@@ -43473,6 +43636,7 @@ def _finance_profit_loss_payload(event, finance_data):
         'expenses': expense_rows,
         'commissions': commissions,
         'expenseCategories': expense_categories,
+        'otherExpenseCategories': other_expense_categories,
         'profitChart': profit_chart,
         'activity': _event_activity_logs_for_response(event)[-8:][::-1],
     }

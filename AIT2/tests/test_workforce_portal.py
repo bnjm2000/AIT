@@ -2698,6 +2698,71 @@ class WorkforcePortalTests(unittest.TestCase):
         saved_claim = saved["submissions"]["143"][freelancer_id]["claims"][0]
         self.assertTrue(saved_claim["detailsComplete"])
 
+    def test_legacy_transport_claims_share_crew_transport_category(self):
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['freelancers'] = [{'id': 'worker-1', 'name': 'Alex'}]
+            workforce['submissions'] = {'143': {'worker-1': {
+                'invoices': [],
+                'claims': [
+                    {
+                        'id': claim_id, 'category': category, 'amount': amount,
+                        'claimDate': '2026-07-10', 'status': 'Approved',
+                        'detailsComplete': True,
+                    }
+                    for claim_id, category, amount in (
+                        ('legacy', 'Transport', 12),
+                        ('new', 'Crew Transport', 8),
+                        ('equipment', 'Equipment Transport', 5),
+                    )
+                ],
+            }}}
+
+        self.login('admin', True)
+        queue = self.client.get(
+            '/api/workforce/submissions?status=all&kind=claim'
+        ).get_json()['data']['rows']
+        displayed_claims = queue[0]['claims']
+        self.assertEqual(
+            [row['category'] for row in displayed_claims],
+            ['Crew Transport', 'Crew Transport', 'Equipment Transport'],
+        )
+        costs = app_module._finance_profit_loss_worker_submission_expenses(
+            load_workforce(self.manager.data_folder), 143
+        )
+        by_source_id = {row['sourceId']: row for row in costs}
+        self.assertEqual(by_source_id['legacy']['categoryKey'], 'crew-transport')
+        self.assertEqual(by_source_id['legacy']['categoryLabel'], 'Crew Transport')
+        self.assertEqual(by_source_id['new']['categoryKey'], 'crew-transport')
+        self.assertEqual(by_source_id['equipment']['categoryKey'], 'equipment-transport')
+        self.assertEqual(
+            load_workforce(self.manager.data_folder)['submissions']['143']
+            ['worker-1']['claims'][0]['category'],
+            'Transport',
+        )
+
+    def test_worker_claim_forms_offer_categories_in_the_same_order(self):
+        root = Path(app_module.__file__).parent
+        worker_form = (root / 'templates' / 'worker.html').read_text(
+            encoding='utf-8'
+        )
+        my_claims = (root / 'static' / 'js' / 'my-claims.js').read_text(
+            encoding='utf-8'
+        )
+        categories = (
+            'Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other',
+        )
+        for source in (worker_form, my_claims):
+            option_positions = [
+                source.index(f'<option>{category}</option>')
+                for category in categories
+            ]
+            self.assertEqual(option_positions, sorted(option_positions))
+            self.assertNotIn('<option>Transport</option>', source)
+            self.assertNotIn('<option>Parking</option>', source)
+        self.assertIn('myClaimsCategory(found.row.category)', my_claims)
+        self.assertIn('myClaimsCategoryChoice(existingCategory)', my_claims)
+        self.assertIn('otherCategory: form.elements.otherCategory.value', my_claims)
+
     def test_admin_can_complete_and_review_claim_details_for_worker(self):
         freelancer_id = self.create_worker_assignment()
         with mutate_workforce(self.tempdir.name) as workforce:
@@ -2760,7 +2825,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertTrue(claim["detailsComplete"])
         self.assertEqual(claim["submissionStage"], "Submitted")
         self.assertEqual(claim["claimDate"], "2026-07-10")
-        self.assertEqual(claim["category"], "Transport")
+        self.assertEqual(claim["category"], "Crew Transport")
         self.assertEqual(claim["notes"], "Taxi to the event venue")
         self.assertEqual(claim["detailsCompletedByAdmin"], "admin")
         self.assertEqual(payload["totals"]["claims"], 18.75)
@@ -2887,7 +2952,7 @@ class WorkforcePortalTests(unittest.TestCase):
         ][0]
         verified_at = approved["verifiedAt"]
         self.assertEqual(approved["claimDate"], "2026-07-11")
-        self.assertEqual(approved["category"], "Transport")
+        self.assertEqual(approved["category"], "Crew Transport")
 
         response = self.client.put(
             f"/api/workforce/submissions/{claim['id']}",
@@ -5260,7 +5325,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(submitted.status_code, 200, submitted.get_data(as_text=True))
         claim = submitted.get_json()["data"]["events"][0]["claims"][0]
         self.assertEqual(claim["amount"], 24.5)
-        self.assertEqual(claim["category"], "Transport")
+        self.assertEqual(claim["category"], "Crew Transport")
 
         with patch.object(app_module, "_queue_worker_submission_processing") as queue:
             multiple = self.client.post(

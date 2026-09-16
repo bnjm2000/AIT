@@ -9328,13 +9328,17 @@ async function loadProfitLoss(options = {}) {
   profitLossState.loading = true;
   if (!options.preserve) root.innerHTML = '<div class="loading">Loading Profit & Loss...</div>';
   try {
+    if (!profitLossState.eventId && typeof workflowRememberedEventId === 'function') {
+      profitLossState.eventId = workflowRememberedEventId();
+    }
     await financeLoadProgressiveEvents(
       profitLossState,
       profitLossState.eventId,
       'profit-loss'
     );
-    if (!profitLossState.eventId) {
+    if (!profitLossState.events.some(event => Number(event.id) === Number(profitLossState.eventId))) {
       profitLossState.eventId = Number(profitLossState.events[0]?.id || 0);
+      profitLossState.data = null;
     }
     if (!profitLossState.eventId) {
       root.innerHTML = '<div class="finance-empty">Create an event before reviewing Profit & Loss.</div>';
@@ -9352,6 +9356,9 @@ async function selectProfitLossEvent(eventId, options = {}) {
   const id = Number(eventId || 0);
   if (!id) return;
   profitLossState.eventId = id;
+  if (options.remember !== false && typeof workflowRememberEvent === 'function') {
+    workflowRememberEvent(id);
+  }
   const root = profitLossRoot();
   if (options.renderLoading !== false && root) {
     root.innerHTML = '<div class="loading">Loading event Profit & Loss...</div>';
@@ -9367,7 +9374,7 @@ async function selectProfitLossEvent(eventId, options = {}) {
 
 async function refreshProfitLossForRealtime(eventId) {
   if (Number(profitLossState.eventId) !== Number(eventId)) return;
-  await selectProfitLossEvent(eventId, { renderLoading: false });
+  await selectProfitLossEvent(eventId, { renderLoading: false, remember: false });
 }
 
 function profitLossOpenQuotation(quotationId) {
@@ -9607,9 +9614,7 @@ function profitLossExpenseChartSegments(expense, chartSegments = []) {
     expense?.categoryLabel || expense?.category || 'Other'
   ).trim();
   let group = 'other';
-  let label = source === 'manual'
-    ? `Added Expense - ${categoryLabel}`
-    : categoryLabel;
+  let label = categoryLabel;
 
   if (categoryKey === 'vendor-service') {
     group = 'vendor';
@@ -9620,22 +9625,16 @@ function profitLossExpenseChartSegments(expense, chartSegments = []) {
   } else if (source === 'worker-invoice') {
     group = 'manpower';
     label = '';
-  } else if (source === 'worker-claim' && categoryKey === 'meal') {
+  } else if (categoryKey === 'meal') {
     group = 'meal';
     label = '';
-  } else if (source === 'worker-claim' && ['transport', 'crew-transport'].includes(categoryKey)) {
+  } else if (categoryKey === 'crew-transport') {
     group = 'crew-transport';
     label = '';
-  } else if (source === 'manual' && categoryKey === 'crew-transport') {
-    group = 'manpower';
-    label = 'Crew Transport';
-  } else if (source === 'manual' && ['transport', 'equipment-transport'].includes(categoryKey)) {
-    group = 'transport';
+  } else if (categoryKey === 'equipment-transport') {
+    group = 'equipment-transport';
     label = '';
-  } else if (source === 'transport-claim' && categoryKey === 'crew-transport') {
-    group = 'manpower';
-    label = 'Crew Transport';
-  } else if (source === 'transport-claim' && ['transport', 'equipment-transport'].includes(categoryKey)) {
+  } else if (categoryKey === 'transport') {
     group = 'transport';
     label = '';
   }
@@ -9665,6 +9664,44 @@ function profitLossExpenseChartColours(expense, chartSegments = []) {
   return [...new Set(matches.map(row => String(row?.colour || '')).filter(
     colour => /^#[0-9a-f]{6}$/i.test(colour)
   ))];
+}
+
+function profitLossExpenseChartBands(expense, chartSegments = []) {
+  const matches = profitLossExpenseChartSegments(expense, chartSegments)
+    .filter(row => /^#[0-9a-f]{6}$/i.test(String(row?.colour || '')));
+  const allocations = new Map();
+  (Array.isArray(expense?.departmentAllocations) ? expense.departmentAllocations : [])
+    .forEach(row => {
+      const department = String(row?.department || '').trim().toLowerCase();
+      const amount = Math.max(0, financeNumber(row?.amount));
+      if (!department || amount <= 0) return;
+      allocations.set(department, (allocations.get(department) || 0) + amount);
+    });
+  const weighted = matches.map(row => ({
+    colour: String(row.colour),
+    amount: allocations.get(String(row?.department || '').trim().toLowerCase()) || 0,
+  })).filter(row => row.amount > 0);
+  if (weighted.length && weighted.reduce((sum, row) => sum + row.amount, 0) > 0) {
+    return weighted;
+  }
+  return matches.map(row => ({ colour: String(row.colour), amount: 1 }));
+}
+
+function profitLossExpenseCategoryBackground(bands) {
+  const rows = (Array.isArray(bands) ? bands : []).filter(row => (
+    /^#[0-9a-f]{6}$/i.test(String(row?.colour || '')) && financeNumber(row?.amount) > 0
+  ));
+  if (!rows.length) return '';
+  if (rows.length === 1) return rows[0].colour;
+  const total = rows.reduce((sum, row) => sum + financeNumber(row.amount), 0);
+  let offset = 0;
+  const stops = rows.map(row => {
+    const start = offset;
+    offset += financeNumber(row.amount) / total * 100;
+    const end = offset;
+    return `${row.colour} ${Number(start.toFixed(4))}%, ${row.colour} ${Number(end.toFixed(4))}%`;
+  });
+  return `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
 function profitLossHighlightExpenseSlices(badge, active) {
@@ -9707,16 +9744,11 @@ function profitLossExpenseCategoryMarkup(expense, chartSegments = []) {
   const departmentMeta = profitLossDepartmentMeta(department);
   const departmentCode = String(departmentMeta?.code || '');
   const matchingChartSegments = profitLossExpenseChartSegments(expense, chartSegments);
-  const chartColours = profitLossExpenseChartColours(expense, matchingChartSegments);
+  const chartBands = profitLossExpenseChartBands(expense, matchingChartSegments);
+  const chartColours = chartBands.map(row => row.colour);
   const chartKeys = [...new Set(matchingChartSegments.map(row => String(row?.key || '')).filter(Boolean))];
   const categoryColour = chartColours[0] || '';
-  const categoryBackground = chartColours.length > 1
-    ? `linear-gradient(90deg, ${chartColours.map((colour, index) => {
-      const start = index / chartColours.length * 100;
-      const end = (index + 1) / chartColours.length * 100;
-      return `${colour} ${start}%, ${colour} ${end}%`;
-    }).join(', ')})`
-    : categoryColour;
+  const categoryBackground = profitLossExpenseCategoryBackground(chartBands);
 
   const suffix = department && source !== 'transport-invoice'
     ? ` - ${departmentCode || department}`
@@ -9843,6 +9875,7 @@ function profitLossChartColour(group, index, row = {}) {
     vendor: ['#0f766e', '#14b8a6', '#0d9488', '#115e59'],
     meal: ['#ec4899'],
     'crew-transport': ['#14b8a6'],
+    'equipment-transport': ['#d97706'],
     transport: ['#f59e0b'],
     other: ['#64748b', '#ef4444', '#14b8a6', '#ec4899', '#84cc16'],
     commission: ['#8b5cf6'],
@@ -10002,6 +10035,13 @@ function profitLossKpi(title, value, note, extraClass = '', action = '') {
   `;
 }
 
+function profitLossOtherExpenseNote(categories) {
+  const parts = (Array.isArray(categories) ? categories : [])
+    .filter(row => financeNumber(row?.amount) > 0 && String(row?.label || '').trim())
+    .map(row => `${String(row.label).trim()} ${financeSgd(row.amount)}`);
+  return parts.join(' · ') || 'No other expenses';
+}
+
 function profitLossRenderCensored(root, data) {
   const event = data.event || {};
   const selectedEvent = profitLossState.events.find(
@@ -10106,11 +10146,7 @@ function renderProfitLossPage() {
     manpowerInvoiceCost > 0 ? `Invoices ${financeSgd(manpowerInvoiceCost)}` : '',
     manpowerFallbackEstimate > 0 ? `Pending estimates ${financeSgd(manpowerFallbackEstimate)}` : ''
   ].filter(Boolean);
-  const otherNoteParts = [
-    financeNumber(summary.vendorServiceCost) > 0 ? `Vendor services ${financeSgd(summary.vendorServiceCost)}` : '',
-    financeNumber(summary.workerClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerClaimsCost)}` : '',
-    financeNumber(summary.manualExpensesTotal) > 0 ? `Added here ${financeSgd(summary.manualExpensesTotal)}` : ''
-  ].filter(Boolean);
+  const otherExpenseNote = profitLossOtherExpenseNote(data.otherExpenseCategories);
   const revenueSource = data.revenueSource || (quote ? 'quotation' : 'none');
   const invoiceDiscount = financeNumber(summary.invoiceDiscount);
   const revenueTitle = revenueSource === 'manual'
@@ -10199,7 +10235,7 @@ function renderProfitLossPage() {
       ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
       ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCardCost ?? summary.manpowerCost), manpowerNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNote, 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
-      ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' · ') || 'No other expenses')}
+      ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherExpenseNote)}
       ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
       ${profitLossKpi('Net Profit', financeSignedSgd(summary.netProfit), '')}
       ${profitLossKpi('Profit Margin', financePercentDisplay(summary.profitMargin), 'of revenue')}
@@ -10337,7 +10373,7 @@ function financeEnsureProfitLossExpenseModal() {
                     <span id="profitLossExpenseCategoryLabel">Select category</span><span aria-hidden="true">⌄</span>
                   </button>
                   <div class="finance-custom-menu" id="profit-loss-expense-category-menu" role="menu">
-                    ${['Meal', 'Crew Transport', 'Equipment Transport', 'Other', 'Purchase'].map(category => `
+                    ${['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase', 'Other'].map(category => `
                       <button type="button" data-expense-category="${category}" onclick="profitLossChooseExpenseCategory('${category}')">${category}</button>
                     `).join('')}
                   </div>

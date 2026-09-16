@@ -660,8 +660,11 @@ function openClaimModal(company, event, row) {
   byId('claimContext').textContent = `${company.name} - ${event.name} - ${row.originalName}`;
   byId('claimAmount').value = row.amount == null ? '' : Number(row.amount).toFixed(2);
   byId('claimDate').value = row.claimDate || '';
-  const normalizedCategory = row.category === 'Cab' ? 'Transport' : row.category;
-  byId('claimCategory').value = ['Meal', 'Transport', 'Purchase'].includes(normalizedCategory) ? normalizedCategory : (normalizedCategory ? 'Other' : '');
+  const rawCategory = String(row.category || '');
+  const normalizedCategory = ['transport', 'crew transport', 'staff transport', 'cab', 'taxi', 'grab'].includes(rawCategory.toLowerCase())
+    ? 'Crew Transport'
+    : rawCategory;
+  byId('claimCategory').value = ['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase'].includes(normalizedCategory) ? normalizedCategory : (normalizedCategory ? 'Other' : '');
   byId('otherCategoryField').hidden = byId('claimCategory').value !== 'Other';
   byId('otherCategory').required = byId('claimCategory').value === 'Other';
   byId('otherCategory').value = byId('claimCategory').value === 'Other' ? normalizedCategory : '';
