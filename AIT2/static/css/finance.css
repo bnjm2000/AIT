@@ -1917,6 +1917,13 @@
   white-space: nowrap;
 }
 
+.finance-event-cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 .finance-event-cell-action {
   max-width: 100%;
   padding: 4px 6px;
@@ -2736,9 +2743,16 @@
   line-height: 1.45;
 }
 
-.finance-unpair-event {
-  width: 100%;
+.finance-event-linked-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 10px;
+}
+
+.finance-event-linked-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .finance-client-option {

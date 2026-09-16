@@ -139,6 +139,87 @@ class FinanceFeatureTests(unittest.TestCase):
             quotation = response.get_json()['data']
         return quotation
 
+    def test_plan_can_link_unpaired_quotation_without_changing_event_plan(self):
+        first = self.create_quote('First Project')
+        second = self.create_quote('Second Project')
+        event = Event(
+            event_id=321,
+            name='Existing Plan',
+            location='Existing Hall',
+            start_date='20260920',
+            end_date='20260920',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Existing|Model|2|Keep this plan'],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'no-sales'],
+        )
+        self.data_manager.events[321] = event
+
+        self.login('no-sales')
+        self.assertEqual(
+            self.client.get('/api/events/321/quotation-link').status_code, 403,
+        )
+
+        self.login('review-admin')  # Admin without the Sales flag.
+        options = self.client.get('/api/events/321/quotation-link?query=First')
+        self.assertEqual(options.status_code, 200, options.get_data(as_text=True))
+        self.assertEqual([row['id'] for row in options.get_json()['data']], [first['id']])
+        linked = self.client.put('/api/events/321/quotation-link', json={
+            'quotationId': first['id'],
+            'documentVersion': first['documentVersion'],
+        })
+        self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        self.assertEqual(event.prepared_items, ['[MODEL]AX|Existing|Model|2|Keep this plan'])
+        self.assertEqual(event.name, 'Existing Plan')
+        self.assertEqual(
+            self.client.get('/api/events/321?view=plan').get_json()['data']['quotationId'],
+            first['id'],
+        )
+        available_ids = {
+            row['id'] for row in self.client.get('/api/events/321/quotation-link').get_json()['data']
+        }
+        self.assertNotIn(first['id'], available_ids)
+        self.assertIn(second['id'], available_ids)
+
+        duplicate = self.client.put('/api/events/321/quotation-link', json={
+            'quotationId': second['id'],
+            'documentVersion': second['documentVersion'],
+        })
+        self.assertEqual(duplicate.status_code, 409)
+
+        self.login('alice')  # Assigned Sales user can use the same picker.
+        sales_options = self.client.get('/api/events/321/quotation-link')
+        self.assertEqual(sales_options.status_code, 200)
+        self.assertIn(second['id'], {
+            row['id'] for row in sales_options.get_json()['data']
+        })
+        second_event = Event(
+            event_id=322,
+            name='Sales Event',
+            location='Hall B',
+            start_date='20260921',
+            end_date='20260921',
+            asset_models=[],
+            prepared_items=[],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+        )
+        self.data_manager.events[322] = second_event
+        stale = self.client.put('/api/events/322/quotation-link', json={
+            'quotationId': second['id'],
+            'documentVersion': second['documentVersion'] + 1,
+        })
+        self.assertEqual(stale.status_code, 409)
+        sales_link = self.client.put('/api/events/322/quotation-link', json={
+            'quotationId': second['id'],
+            'documentVersion': second['documentVersion'],
+        })
+        self.assertEqual(sales_link.status_code, 200, sales_link.get_data(as_text=True))
+
     def test_stale_quotation_save_is_rejected_with_latest_document(self):
         quotation = self.create_quote('Concurrent Quotation')
         stale_copy = copy.deepcopy(quotation)
@@ -7356,9 +7437,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('Profit-Loss-Event-138', response.headers['Content-Disposition'])
         self.assertIn('no-store', response.headers['Cache-Control'])
         reader = PdfReader(io.BytesIO(response.data))
+        self.assertTrue(all(
+            float(page.mediabox.width) < float(page.mediabox.height)
+            for page in reader.pages
+        ))
         report_text = '\n'.join(page.extract_text() or '' for page in reader.pages)
         for expected in (
-            'PROJECT PROFIT & LOSS',
+            'PROJECT PROFIT AND LOSS',
             'P&L Export Event',
             quotation_number,
             'PROFIT CALCULATION',
@@ -7372,6 +7457,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'Page 1 of',
         ):
             self.assertIn(expected, report_text)
+        self.assertNotIn('Recent Event Activity', report_text)
 
     def test_profit_loss_requires_sales_then_applies_financial_permissions(self):
         event = Event(

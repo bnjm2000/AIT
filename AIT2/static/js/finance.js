@@ -68,6 +68,7 @@ const financeState = {
   automaticDraftDateRefresh: false,
   statusTargetId: '',
   eventPairTargetId: '',
+  eventCreatingIds: new Set(),
   eventOptionsRequestSeq: 0,
   contextDocumentId: '',
   contextSubprojectId: '',
@@ -4325,7 +4326,10 @@ function financePairedEventStatus(document) {
   const eventId = Number(document?.eventId || 0);
   const pairTargetId = financeEscapeAttr(document?.id || '');
   if (!eventId) {
-    return `<button type="button" class="finance-event-cell-action is-unpaired" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',0)">Pair event</button>`;
+    return `<div class="finance-event-cell-actions">
+      <button type="button" class="finance-event-cell-action is-unpaired" title="Link an existing event" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',0)">Link</button>
+      <button type="button" class="finance-event-cell-action is-unpaired" title="Create and link an event" onclick="financeCreateEventFromList(event,'${pairTargetId}')">Create</button>
+    </div>`;
   }
   if (document.eventMissing) {
     return `<button type="button" class="finance-event-cell-action is-missing" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',0)">Event #${eventId} unavailable</button>`;
@@ -4348,6 +4352,46 @@ function financeHandleQuotationEventClick(domEvent, documentId, eventId) {
     return;
   }
   if (typeof viewEvent === 'function') viewEvent(id, { updateHistory: false });
+}
+
+async function financeCreateEventFromList(domEvent, documentId) {
+  domEvent?.stopPropagation();
+  const id = String(documentId || '');
+  const quotation = financeState.documents.find(row => String(row.id) === id);
+  if (!quotation || quotation.eventId || financeState.eventCreatingIds.has(id)) return;
+  const confirmed = await showAppConfirm({
+    title: 'Create event from quotation?',
+    message: 'This creates and links an event now so planning can begin. The quotation status will remain unchanged.',
+    confirmText: 'Create Event',
+    cancelText: 'Cancel'
+  });
+  if (!confirmed || financeState.eventCreatingIds.has(id)) return;
+  financeState.eventCreatingIds.add(id);
+  try {
+    const response = await apiCall(
+      `/api/quotations/${encodeURIComponent(id)}/create-event`, 'POST', {}
+    );
+    const event = typeof registerCreatedEventInClient === 'function'
+      ? await registerCreatedEventInClient(response.eventId).catch(() => null)
+      : null;
+    financeUpdateListRow({
+      id,
+      eventId: response.eventId,
+      eventMissing: false,
+      eventName: event?.name || quotation.projectName || '',
+      eventState: event?.state || 'New',
+      documentVersion: response.data?.documentVersion || quotation.documentVersion,
+      updatedAt: response.data?.updatedAt || quotation.updatedAt,
+      status: response.data?.status || quotation.status
+    });
+    showNotification('success', response.alreadyCreated
+      ? `Quotation already linked to Event #${response.eventId}`
+      : `Event #${response.eventId} created and linked`);
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to create event. Check the quotation project, location and schedule.');
+  } finally {
+    financeState.eventCreatingIds.delete(id);
+  }
 }
 
 function financeRenderListRow(document, showSalesperson = financeListShowsSalesperson()) {
@@ -4857,6 +4901,21 @@ function financeUnpairEvent() {
   financeState.current.eventId = null;
   financeQueueSave();
   financeRenderEditor();
+}
+
+async function financeGoToLinkedEventPlan() {
+  if (typeof isAdminUser !== 'function' || !isAdminUser()) return;
+  try {
+    const saved = await financeFlushPendingSave();
+    const eventId = Number(saved?.eventId || 0);
+    if (!eventId) return;
+    if (typeof openEventPlanning !== 'function') {
+      throw new Error('Plan is unavailable right now');
+    }
+    await openEventPlanning(eventId);
+  } catch (error) {
+    showNotification('error', error.message || 'Unable to open the event plan');
+  }
 }
 
 function financeEventCreationIssue(document = financeState.current) {
@@ -7857,21 +7916,24 @@ function financeRenderEditor() {
         </section>
         <section class="finance-card finance-section finance-event-pairing-card">
           <h3>Event pairing</h3>
-          <p class="finance-side-note">Pair this quotation to an existing event if the event has already been created. Accepted paired quotations will not create another event.</p>
+          <p class="finance-side-note">Pair this quotation to an existing event.</p>
           <div class="finance-event-search-wrap finance-event-actions">
             <button type="button" id="financeEventSearch" class="finance-picker-button" onclick="financeOpenEventPicker()">
-              <span>${financeEscape(financeEventDisplay(document.eventId) || 'Pair existing event')}</span>
+              <span>${financeEscape(financeEventDisplay(document.eventId) || 'Link')}</span>
               <small>${document.eventId ? 'Linked event' : 'No event paired'}</small>
             </button>
             ${document.eventId && typeof isAdminUser === 'function' && isAdminUser() ? `
               <button type="button" class="btn btn-secondary finance-compare-event" onclick="financeOpenComparePage()">Compare</button>
             ` : ''}
             ${!document.eventId ? `
-              <button type="button" id="financeCreateEventButton" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()" ${eventCreationIssue ? 'disabled' : ''} title="${financeEscapeAttr(eventCreationIssue || 'Create and pair a planning event')}">Create event</button>
+              <button type="button" id="financeCreateEventButton" class="btn btn-primary finance-create-event" onclick="financeCreateEventFromQuotation()" ${eventCreationIssue ? 'disabled' : ''} title="${financeEscapeAttr(eventCreationIssue || 'Create and pair a planning event')}">Create</button>
             ` : ''}
           </div>
           ${!document.eventId ? `<p id="financeEventCreationNote" class="finance-side-note" ${eventCreationIssue ? '' : 'hidden'}>${financeEscape(eventCreationIssue)}</p>` : ''}
-          ${document.eventId ? `<button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>` : ''}
+          ${document.eventId ? `<div class="finance-event-linked-actions">
+            <button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>
+            <button type="button" class="btn btn-secondary finance-go-event-plan" onclick="financeGoToLinkedEventPlan()" ${typeof isAdminUser === 'function' && isAdminUser() ? '' : 'disabled title="Plan requires admin access"'}>Go to Plan</button>
+          </div>` : ''}
         </section>
         <section class="finance-card finance-section">
           <h3>Version</h3>

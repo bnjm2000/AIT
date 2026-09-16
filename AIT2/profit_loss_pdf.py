@@ -83,12 +83,89 @@ def _department_colour(payload, department):
     )
 
 
+def _solid_colour(value, fallback='#2563EB'):
+    """Match the saturation/lightness adjustment used by the P&L web chart."""
+    value = str(value or '').strip()
+    if len(value) != 7 or not value.startswith('#'):
+        return fallback
+    try:
+        channels = [int(value[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    except ValueError:
+        return fallback
+    red, green, blue = channels
+    maximum = max(channels)
+    minimum = min(channels)
+    delta = maximum - minimum
+    hue = 0.0
+    if delta:
+        if maximum == red:
+            hue = ((green - blue) / delta) % 6
+        elif maximum == green:
+            hue = ((blue - red) / delta) + 2
+        else:
+            hue = ((red - green) / delta) + 4
+        hue = ((hue * 60) + 360) % 360
+    lightness = (maximum + minimum) / 2
+    saturation = delta / (1 - abs(2 * lightness - 1)) if delta else 0
+    if saturation < 0.08:
+        lightness = min(max(lightness, 0.34), 0.5)
+    else:
+        saturation = max(saturation, 0.68)
+        lightness = min(max(lightness, 0.4), 0.52)
+
+    chroma = (1 - abs(2 * lightness - 1)) * saturation
+    secondary = chroma * (1 - abs((hue / 60) % 2 - 1))
+    offset = lightness - chroma / 2
+    if hue < 60:
+        rgb = [chroma, secondary, 0]
+    elif hue < 120:
+        rgb = [secondary, chroma, 0]
+    elif hue < 180:
+        rgb = [0, chroma, secondary]
+    elif hue < 240:
+        rgb = [0, secondary, chroma]
+    elif hue < 300:
+        rgb = [secondary, 0, chroma]
+    else:
+        rgb = [chroma, 0, secondary]
+    return '#' + ''.join(
+        f'{round((channel + offset) * 255):02x}' for channel in rgb
+    )
+
+
+def _contrast_colour(value):
+    value = str(value or '').replace('#', '')
+    if len(value) != 6:
+        return '#FFFFFF'
+    try:
+        red, green, blue = [int(value[index:index + 2], 16) for index in (0, 2, 4)]
+    except ValueError:
+        return '#FFFFFF'
+    luminance = (red * 299 + green * 587 + blue * 114) / 255000
+    return '#172033' if luminance > 0.58 else '#FFFFFF'
+
+
+def _header_colour(value):
+    """Keep the configured brand hue while ensuring white header text is legible."""
+    solid = _solid_colour(value, '#0F4C5C')
+    try:
+        channels = [int(solid[index:index + 2], 16) for index in (1, 3, 5)]
+    except (TypeError, ValueError):
+        return '#0F4C5C'
+    luminance = (channels[0] * 299 + channels[1] * 587 + channels[2] * 114) / 255000
+    if luminance <= 0.4:
+        return solid
+    factor = 0.4 / luminance
+    return '#' + ''.join(f'{round(channel * factor):02x}' for channel in channels)
+
+
 def _profit_chart_rows(payload):
     fallback_palettes = {
         'manpower': ['#2563EB', '#0EA5E9', '#06B6D4', '#6366F1', '#0284C7'],
         'vendor': ['#0F766E', '#14B8A6', '#0D9488', '#115E59'],
         'meal': ['#EC4899'],
         'crew-transport': ['#14B8A6'],
+        'equipment-transport': ['#D97706'],
         'transport': ['#F59E0B'],
         'other': ['#64748B', '#EF4444', '#14B8A6', '#EC4899', '#84CC16'],
         'commission': ['#8B5CF6'],
@@ -107,21 +184,21 @@ def _profit_chart_rows(payload):
             _department_colour(payload, raw.get('department'))
             if group == 'manpower'
             else ''
-        ) or palette[index % len(palette)]
+        )
+        colour = (
+            _solid_colour(colour)
+            if colour
+            else palette[index % len(palette)]
+        )
         rows.append({
+            'key': str(raw.get('key') or ''),
+            'group': group,
+            'department': str(raw.get('department') or ''),
             'label': str(raw.get('label') or 'Other'),
             'amount': round(_number(raw.get('amount')), 2),
             'colour': colour,
         })
 
-    rows.sort(key=lambda row: row['amount'], reverse=True)
-    if len(rows) > 9:
-        remainder = rows[8:]
-        rows = rows[:8] + [{
-            'label': f'Other categories ({len(remainder)})',
-            'amount': round(sum(row['amount'] for row in remainder), 2),
-            'colour': '#94A3B8',
-        }]
     total = sum(row['amount'] for row in rows)
     for row in rows:
         row['percent'] = (row['amount'] / total * 100) if total else 0
@@ -142,12 +219,18 @@ def _expense_category(expense):
         category = 'Manpower'
     elif category_key == 'meal':
         category = 'Meal'
+    elif category_key == 'crew-transport':
+        category = 'Crew Transport'
+    elif category_key == 'equipment-transport':
+        category = 'Equipment Transport'
     elif category_key == 'transport':
         category = 'Transport'
     elif category_key == 'purchase':
         category = 'Purchase'
     department = str(expense.get('department') or '').strip()
-    return f'{category} - {department}' if department else category
+    if department and source != 'transport-invoice':
+        return f'{category} - {department}'
+    return category
 
 
 def _expense_sort_key(expense):
@@ -172,7 +255,7 @@ def _expense_sort_key(expense):
 def _expense_category_colour(payload, expense):
     department_colour = _department_colour(payload, expense.get('department'))
     if department_colour:
-        return department_colour
+        return _solid_colour(department_colour)
     category = _expense_category(expense).casefold()
     if category.startswith('manpower'):
         return '#2563EB'
@@ -181,29 +264,132 @@ def _expense_category_colour(payload, expense):
     return '#64748B'
 
 
+def _expense_chart_rows(expense, chart_rows):
+    source = str(expense.get('source') or 'manual')
+    category_key = str(expense.get('categoryKey') or '')
+    category_label = str(
+        expense.get('categoryLabel')
+        or expense.get('category')
+        or 'Other'
+    ).strip()
+    group = 'other'
+    label = category_label
+    if category_key == 'vendor-service':
+        group, label = 'vendor', ''
+    elif source == 'transport-invoice':
+        group, label = 'transport', ''
+    elif source == 'worker-invoice':
+        group, label = 'manpower', ''
+    elif category_key == 'meal':
+        group, label = 'meal', ''
+    elif category_key == 'crew-transport':
+        group, label = 'crew-transport', ''
+    elif category_key == 'equipment-transport':
+        group, label = 'equipment-transport', ''
+    elif category_key == 'transport':
+        group, label = 'transport', ''
+
+    matches = [row for row in chart_rows if row.get('group') == group]
+    if label:
+        matches = [
+            row for row in matches
+            if str(row.get('label') or '').strip().casefold() == label.casefold()
+        ]
+    if group in {'manpower', 'vendor'}:
+        departments = {
+            value.strip().casefold()
+            for value in str(expense.get('department') or '').split(',')
+            if value.strip()
+        }
+        if departments:
+            matches = [
+                row for row in matches
+                if str(row.get('department') or '').strip().casefold() in departments
+            ]
+    return matches
+
+
+def _expense_chart_bands(expense, chart_rows):
+    matches = _expense_chart_rows(expense, chart_rows)
+    allocations = {}
+    for row in expense.get('departmentAllocations') or []:
+        if not isinstance(row, dict):
+            continue
+        department = str(row.get('department') or '').strip().casefold()
+        amount = max(0, _number(row.get('amount')))
+        if department and amount > 0:
+            allocations[department] = allocations.get(department, 0) + amount
+    weighted = [
+        {
+            'colour': row['colour'],
+            'amount': allocations.get(
+                str(row.get('department') or '').strip().casefold(), 0
+            ),
+        }
+        for row in matches
+    ]
+    weighted = [row for row in weighted if row['amount'] > 0]
+    if weighted and sum(row['amount'] for row in weighted) > 0:
+        return weighted
+    return [{'colour': row['colour'], 'amount': 1} for row in matches]
+
+
+def _expense_status(expense):
+    processing_state = str(expense.get('processingState') or '').strip().casefold()
+    if processing_state == 'queued':
+        return 'Queued'
+    if processing_state == 'processing':
+        return 'Processing'
+    return str(expense.get('status') or '-').strip() or '-'
+
+
 def _status_palette(status):
     status = str(status or '').strip().casefold()
-    if any(value in status for value in ('approved', 'paid', 'confirmed')):
+    if status == 'queued':
+        return '#E0F2FE', '#0369A1'
+    if status == 'processing':
+        return '#EDE9FE', '#6D28D9'
+    if status == 'needs review':
+        return '#FFF7ED', '#C2410C'
+    if status == 'paid':
+        return '#DBEAFE', '#1E40AF'
+    if status in {'payment confirmed', 'confirmed'}:
+        return '#F0EDFF', '#5B3FC6'
+    if status == 'approved':
         return '#DCFCE7', '#166534'
     if any(value in status for value in ('denied', 'rejected', 'cancelled')):
         return '#FEE2E2', '#991B1B'
     if any(value in status for value in ('review', 'pending')):
-        return '#FFEDD5', '#9A3412'
+        return '#FFF7ED', '#C2410C'
     if any(value in status for value in ('upload', 'invoice')):
         return '#DBEAFE', '#1D4ED8'
     return '#F1F5F9', '#475569'
 
 
+def _chart_wedge_angles(rows):
+    """Return clockwise wedge angles matching the SVG chart in the web app."""
+    total = sum(_number(row.get('amount')) for row in rows)
+    angle = 90.0
+    wedges = []
+    for row in rows:
+        extent = (_number(row.get('amount')) / total * 360) if total else 0
+        wedges.append((angle, -extent))
+        angle -= extent
+    return wedges
+
+
 def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
-    """Return a landscape A4 project P&L report as PDF bytes."""
+    """Return a portrait A4 project P&L report as PDF bytes."""
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import (
+        CondPageBreak,
         Flowable,
         HRFlowable,
         LongTable,
@@ -215,7 +401,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
 
     font_regular, font_bold = pdf_font_names(company)
     buffer = BytesIO()
-    page_width, page_height = landscape(A4)
+    page_width, page_height = A4
     margin = 11 * mm
     footer_height = 14 * mm
     event = payload.get('event') or {}
@@ -235,29 +421,29 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     )
 
     styles = getSampleStyleSheet()
-    ink = colors.HexColor('#172033')
-    muted = colors.HexColor('#64748B')
-    rule = colors.HexColor('#CBD5E1')
-    soft_rule = colors.HexColor('#E2E8F0')
-    panel = colors.HexColor('#F8FAFC')
-    accent = _hex_colour(company.get('themeColor'), '#0F766E')
+    ink = colors.HexColor('#0F172A')
+    muted = colors.HexColor('#334155')
+    rule = colors.HexColor('#94A3B8')
+    soft_rule = colors.HexColor('#CBD5E1')
+    panel = colors.HexColor('#F1F5F9')
+    accent = _hex_colour(_header_colour(company.get('themeColor')), '#0F4C5C')
     green = colors.HexColor('#07823A')
     red = colors.HexColor('#C32727')
     orange = colors.HexColor('#B56A00')
 
     body = ParagraphStyle(
         'PnlBody', parent=styles['BodyText'], fontName=font_regular,
-        fontSize=7, leading=8.5, textColor=ink,
+        fontSize=8, leading=9.7, textColor=ink,
     )
     small = ParagraphStyle(
-        'PnlSmall', parent=body, fontSize=6.2, leading=7.4, textColor=muted,
+        'PnlSmall', parent=body, fontSize=7, leading=8.4, textColor=muted,
     )
     tiny = ParagraphStyle(
-        'PnlTiny', parent=body, fontSize=5.4, leading=6.5, textColor=muted,
+        'PnlTiny', parent=body, fontSize=6.2, leading=7.4, textColor=muted,
     )
     title_style = ParagraphStyle(
         'PnlTitle', parent=body, fontName=font_bold,
-        fontSize=18, leading=21, textColor=ink,
+        fontSize=14.5, leading=17, textColor=ink,
     )
     project_style = ParagraphStyle(
         'PnlProject', parent=body, fontName=font_bold,
@@ -265,7 +451,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     )
     section_style = ParagraphStyle(
         'PnlSection', parent=body, fontName=font_bold,
-        fontSize=9, leading=11, textColor=ink, spaceBefore=2, spaceAfter=4,
+        fontSize=10, leading=12, textColor=ink, spaceBefore=3, spaceAfter=5,
     )
     label_style = ParagraphStyle(
         'PnlLabel', parent=small, fontName=font_bold, textColor=muted,
@@ -410,9 +596,10 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
             Canvas.save(self)
 
     class DonutChart(Flowable):
-        def __init__(self, rows, width=58 * mm, height=43 * mm):
+        def __init__(self, rows, chart_summary, width=56 * mm, height=48 * mm):
             super().__init__()
             self.rows = rows
+            self.chart_summary = chart_summary
             self.width = width
             self.height = height
 
@@ -421,29 +608,78 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
             radius = min(self.width, self.height) * 0.43
             centre_x = self.width / 2
             centre_y = self.height / 2
-            angle = 90
             total = sum(row['amount'] for row in self.rows)
             if total <= 0:
                 canvas.setFillColor(colors.HexColor('#E2E8F0'))
                 canvas.circle(centre_x, centre_y, radius, stroke=0, fill=1)
             else:
-                for row in self.rows:
-                    extent = row['amount'] / total * 360
+                for row, (start_angle, extent) in zip(
+                    self.rows, _chart_wedge_angles(self.rows)
+                ):
                     canvas.setFillColor(_hex_colour(row['colour'], '#64748B'))
                     canvas.wedge(
                         centre_x - radius, centre_y - radius,
                         centre_x + radius, centre_y + radius,
-                        angle, extent, stroke=0, fill=1,
+                        start_angle, extent, stroke=0, fill=1,
                     )
-                    angle += extent
             canvas.setFillColor(colors.white)
             canvas.circle(centre_x, centre_y, radius * 0.57, stroke=0, fill=1)
-            canvas.setFillColor(ink)
-            canvas.setFont(font_bold, 9)
-            canvas.drawCentredString(centre_x, centre_y + 1.2 * mm, _money(total))
             canvas.setFillColor(muted)
-            canvas.setFont(font_regular, 5.5)
-            canvas.drawCentredString(centre_x, centre_y - 2.5 * mm, 'costs + net profit')
+            canvas.setFont(font_bold, 5.7)
+            canvas.drawCentredString(centre_x, centre_y + 4.2 * mm, 'Net Profit')
+            canvas.setFillColor(ink)
+            canvas.setFont(font_bold, 8.2)
+            canvas.drawCentredString(
+                centre_x, centre_y + 0.5 * mm,
+                _money(self.chart_summary.get('netProfit'), signed=True),
+            )
+            canvas.setFillColor(muted)
+            canvas.setFont(font_bold, 5.7)
+            canvas.drawCentredString(
+                centre_x, centre_y - 3.2 * mm,
+                _percent(self.chart_summary.get('profitMargin')),
+            )
+
+    class CategoryBadge(Flowable):
+        def __init__(self, label, bands, fallback_colour):
+            super().__init__()
+            self.label = str(label or '')
+            self.bands = [
+                row for row in (bands or [])
+                if _number(row.get('amount')) > 0
+            ] or [{'colour': fallback_colour, 'amount': 1}]
+            self.width = 1
+            self.height = 6.2 * mm
+
+        def wrap(self, available_width, _available_height):
+            self.width = available_width
+            return self.width, self.height
+
+        def draw(self):
+            canvas = self.canv
+            total = sum(_number(row.get('amount')) for row in self.bands) or 1
+            offset = 0
+            for row in self.bands:
+                width = self.width * (_number(row.get('amount')) / total)
+                canvas.setFillColor(_hex_colour(row.get('colour'), '#64748B'))
+                canvas.rect(offset, 0, width + 0.15, self.height, stroke=0, fill=1)
+                offset += width
+            canvas.setStrokeColor(colors.HexColor('#64748B'))
+            canvas.setLineWidth(0.35)
+            canvas.rect(0, 0, self.width, self.height, stroke=1, fill=0)
+            text_colour = _contrast_colour(self.bands[0].get('colour'))
+            canvas.setFillColor(colors.HexColor(text_colour))
+            font_size = 6.2
+            while font_size > 4.5 and stringWidth(
+                self.label, font_bold, font_size
+            ) > self.width - 4:
+                font_size -= 0.25
+            canvas.setFont(font_bold, font_size)
+            canvas.drawCentredString(
+                self.width / 2,
+                (self.height - font_size) / 2 + 1.2,
+                self.label,
+            )
 
     generated_at = datetime.now().strftime('%d %B %Y, %H:%Mhrs')
     client = quotation.get('client') or {}
@@ -461,10 +697,10 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     story = [
         Table(
             [[
-                _paragraph('PROJECT PROFIT & LOSS', title_style),
+                _paragraph('PROJECT PROFIT AND LOSS', title_style),
                 _paragraph(project_name, project_style),
             ]],
-            colWidths=[doc.width * 0.42, doc.width * 0.58],
+            colWidths=[doc.width * 0.55, doc.width * 0.45],
             style=TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -488,7 +724,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     story.extend([
         Table(
             metadata_rows,
-            colWidths=[27 * mm, 102 * mm, 27 * mm, doc.width - 156 * mm],
+            colWidths=[23 * mm, (doc.width / 2) - 23 * mm] * 2,
             style=TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), panel),
                 ('BOX', (0, 0), (-1, -1), 0.45, soft_rule),
@@ -516,30 +752,31 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         ('NET PROFIT', _money(net_profit), '#ECFDF3' if net_profit >= 0 else '#FFF1F2', '#07823A' if net_profit >= 0 else '#C32727'),
         ('PROFIT MARGIN', _percent(summary.get('profitMargin')), '#F2F0FF', '#5B43A6'),
     ]
+    kpi_cells = [
+        Table(
+            [[_paragraph(label, label_style)], [_paragraph(value, value_style)]],
+            colWidths=[doc.width / 2 - 5 * mm],
+            style=TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(background)),
+                ('TEXTCOLOR', (0, 1), (0, 1), colors.HexColor(foreground)),
+                ('LEFTPADDING', (0, 0), (-1, -1), 7),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+                ('TOPPADDING', (0, 0), (-1, 0), 4),
+                ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
+            ]),
+        )
+        for label, value, background, foreground in kpis
+    ]
     story.extend([
         Table(
-            [[
-                Table(
-                    [[_paragraph(label, label_style)], [_paragraph(value, value_style)]],
-                    colWidths=[doc.width / 4 - 4 * mm],
-                    style=TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(background)),
-                        ('TEXTCOLOR', (0, 1), (0, 1), colors.HexColor(foreground)),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 7),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 7),
-                        ('TOPPADDING', (0, 0), (-1, 0), 4),
-                        ('BOTTOMPADDING', (0, 1), (-1, 1), 5),
-                    ]),
-                )
-                for label, value, background, foreground in kpis
-            ]],
-            colWidths=[doc.width / 4] * 4,
+            [kpi_cells[:2], kpi_cells[2:]],
+            colWidths=[doc.width / 2] * 2,
             style=TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
                 ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]),
         ),
         Spacer(1, 4 * mm),
@@ -574,7 +811,7 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         ])
     calculation_table = Table(
         calculation_data,
-        colWidths=[76 * mm, 36 * mm],
+        colWidths=[doc.width - 40 * mm, 40 * mm],
         style=TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), accent),
             ('GRID', (0, 0), (-1, -1), 0.35, soft_rule),
@@ -611,16 +848,18 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
             'BACKGROUND', (0, index), (0, index),
             _hex_colour(row['colour'], '#64748B'),
         ))
+    chart_visual_width = 59 * mm
+    legend_width = doc.width - chart_visual_width - 8 * mm
     chart_panel = Table(
         [[
-            DonutChart(chart_rows),
+            DonutChart(chart_rows, summary),
             Table(
                 legend_rows,
-                colWidths=[3 * mm, 47 * mm, 25 * mm, 17 * mm],
+                colWidths=[3 * mm, legend_width - 52 * mm, 31 * mm, 18 * mm],
                 style=TableStyle(legend_style),
             ),
         ]],
-        colWidths=[61 * mm, 96 * mm],
+        colWidths=[chart_visual_width, doc.width - chart_visual_width],
         style=TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), panel),
             ('BOX', (0, 0), (-1, -1), 0.45, soft_rule),
@@ -632,19 +871,11 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         ]),
     )
     story.extend([
-        Table(
-            [[calculation_table, chart_panel]],
-            colWidths=[116 * mm, doc.width - 116 * mm],
-            style=TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (0, 0), 0),
-                ('RIGHTPADDING', (0, 0), (0, 0), 4),
-                ('LEFTPADDING', (1, 0), (1, 0), 4),
-                ('RIGHTPADDING', (1, 0), (1, 0), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-            ]),
-        ),
+        _paragraph('Profit Calculation', section_style),
+        calculation_table,
+        Spacer(1, 3 * mm),
+        _paragraph('Profit Summary', section_style),
+        chart_panel,
         Spacer(1, 4 * mm),
     ])
 
@@ -680,10 +911,11 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
                 ('TEXTCOLOR', (4, index), (4, index), green if under else orange),
             ])
         story.extend([
+            CondPageBreak(30 * mm),
             _paragraph('Budget Performance', section_style),
             Table(
                 budget_rows,
-                colWidths=[55 * mm, 50 * mm, 50 * mm, 42 * mm, doc.width - 197 * mm],
+                colWidths=[32 * mm, 38 * mm, 38 * mm, 34 * mm, doc.width - 142 * mm],
                 style=TableStyle(budget_styles),
             ),
             Spacer(1, 4 * mm),
@@ -728,10 +960,11 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     if len(source_rows) == 2 and not source_rows[1][1]:
         source_style.append(('SPAN', (0, 1), (-1, 1)))
     story.extend([
+        CondPageBreak(35 * mm),
         _paragraph('Cost Sources', section_style),
         LongTable(
             source_rows,
-            colWidths=[55 * mm, doc.width - 97 * mm, 42 * mm],
+            colWidths=[33 * mm, doc.width - 68 * mm, 35 * mm],
             repeatRows=1,
             splitByRow=1,
             style=TableStyle(source_style),
@@ -754,10 +987,11 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
                 _paragraph(_money(row.get('amount')), table_right_bold),
             ])
         story.extend([
+            CondPageBreak(30 * mm),
             _paragraph('Commission Recipients', section_style),
             Table(
                 commission_rows,
-                colWidths=[65 * mm, doc.width - 150 * mm, 35 * mm, 50 * mm],
+                colWidths=[38 * mm, doc.width - 105 * mm, 28 * mm, 39 * mm],
                 style=TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8B5CF6')),
                     ('GRID', (0, 0), (-1, -1), 0.35, soft_rule),
@@ -791,27 +1025,27 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
     ]
     for expense in expenses:
         attachment = expense.get('attachment') if isinstance(expense.get('attachment'), dict) else {}
-        status = str(expense.get('status') or '-').strip() or '-'
+        status = _expense_status(expense)
         status_background, status_text = _status_palette(status)
         status_style = ParagraphStyle(
             f"PnlStatus{len(expense_rows)}", parent=table_center,
             textColor=colors.HexColor(status_text),
         )
+        category_label = _expense_category(expense)
+        category_colour = _expense_category_colour(payload, expense)
+        category_bands = _expense_chart_bands(expense, chart_rows)
         expense_rows.append([
             _paragraph(_format_date(expense.get('expenseDate')), table_center),
             _paragraph(expense.get('description') or '-', table_left_bold),
-            _paragraph(expense.get('sourceLabel') or ('Claim' if expense.get('readOnly') else 'Added expense'), table_center),
-            _paragraph(_expense_category(expense), table_left_inverse),
+            _paragraph(expense.get('sourceLabel') or ('Claim' if expense.get('readOnly') else 'Added'), table_center),
+            CategoryBadge(category_label, category_bands, category_colour),
             _paragraph(expense.get('vendor') or '-', table_left),
             _paragraph(status, status_style),
             _paragraph(attachment.get('originalName') or '-', tiny),
             _paragraph(_money(expense.get('amount')), table_right_bold),
         ])
         row_index = len(expense_rows) - 1
-        category_colour = _expense_category_colour(payload, expense)
         expense_styles.extend([
-            ('BACKGROUND', (3, row_index), (3, row_index), _hex_colour(category_colour, '#64748B')),
-            ('TEXTCOLOR', (3, row_index), (3, row_index), colors.white),
             ('BACKGROUND', (5, row_index), (5, row_index), colors.HexColor(status_background)),
             ('TEXTCOLOR', (5, row_index), (5, row_index), colors.HexColor(status_text)),
         ])
@@ -830,46 +1064,17 @@ def build_profit_loss_pdf(payload, company, logo_path='', generated_by=''):
         ('LINEABOVE', (0, total_index), (-1, total_index), 0.7, accent),
     ])
     story.extend([
+        CondPageBreak(40 * mm),
         _paragraph('Invoices, Claims & Expenses', section_style),
         LongTable(
             expense_rows,
-            colWidths=[25 * mm, 57 * mm, 25 * mm, 40 * mm, 38 * mm, 29 * mm, doc.width - 246 * mm, 32 * mm],
+            colWidths=[19 * mm, 38 * mm, 18 * mm, 32 * mm, 22 * mm, 21 * mm, 18 * mm, doc.width - 168 * mm],
             repeatRows=1,
             splitByRow=1,
             style=TableStyle(expense_styles),
         ),
         Spacer(1, 4 * mm),
     ])
-
-    activity = [row for row in payload.get('activity') or [] if isinstance(row, dict)]
-    if activity:
-        activity_rows = [[
-            _paragraph(value, table_header)
-            for value in ('DATE & TIME', 'USER', 'ACTIVITY')
-        ]]
-        for row in activity:
-            activity_rows.append([
-                _paragraph(_format_datetime(row.get('timestamp') or row.get('date')), table_left),
-                _paragraph(row.get('user') or 'System', table_left),
-                _paragraph(row.get('action') or '-', table_left),
-            ])
-        story.extend([
-            _paragraph('Recent Event Activity', section_style),
-            LongTable(
-                activity_rows,
-                colWidths=[47 * mm, 42 * mm, doc.width - 89 * mm],
-                repeatRows=1,
-                style=TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), accent),
-                    ('GRID', (0, 0), (-1, -1), 0.35, soft_rule),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 5),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-                    ('TOPPADDING', (0, 0), (-1, -1), 3),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                ]),
-            ),
-        ])
 
     doc.build(
         story,

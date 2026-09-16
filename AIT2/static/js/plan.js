@@ -23,6 +23,17 @@ var planQuantitySaveTimers = new Map();
 var planQuantitySaveChains = new Map();
 var planCustomQuantityAssetIds = new Map();
 var planRealtimeSuppressedUntil = 0;
+var planQuotationPickerState = {
+  eventId: null,
+  rows: [],
+  query: '',
+  nextOffset: 0,
+  hasMore: false,
+  requestSeq: 0,
+  loading: false,
+  linking: false,
+  searchTimer: null
+};
 
 function eventSubprojects(event) {
   return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
@@ -1565,6 +1576,15 @@ function planAvailableModelSearchText(group) {
     .toLowerCase();
 }
 
+function planAvailableSearchQuery(value) {
+  const search = String(value || '').trim();
+  const containerOnly = /^container(?:\s|$)/i.test(search);
+  const terms = inventorySearchTerms(
+    containerOnly ? search.replace(/^container(?:\s+|$)/i, '') : search
+  );
+  return { containerOnly, terms };
+}
+
 function planAvailabilityFor(group) {
   const entry = (planPageState.availability || []).find(item =>
     modelGroupMatchesEditGroup(
@@ -1764,17 +1784,19 @@ function renderPlanAvailableResults() {
   const results = document.getElementById('planAvailableResults');
   if (!results) return;
 
-  const search = String(planPageState.search || '').trim().toLowerCase();
+  const search = String(planPageState.search || '').trim();
+  const searchQuery = planAvailableSearchQuery(search);
   const department = planPageState.department || 'ALL';
-  const models = planAvailableModelGroups().filter(group => {
+  const models = searchQuery.containerOnly ? [] : planAvailableModelGroups().filter(group => {
     if (
       department !== 'ALL' &&
       normalizeDepartmentCode(group.department) !== department
     ) {
       return false;
     }
-    if (!search) return true;
-    return planAvailableModelSearchText(group).includes(search);
+    return inventorySearchTextMatches(
+      planAvailableModelSearchText(group), searchQuery.terms
+    );
   });
 
   const rows = models.slice(0, 80).map((group, index) => {
@@ -1809,16 +1831,16 @@ function renderPlanAvailableResults() {
     `;
   });
 
-  if (planPageState.showContainers && search.length >= 2) {
+  if ((planPageState.showContainers || searchQuery.containerOnly) && search.length >= 2) {
     const assetLookup = buildEditAvailableAssetLookup(planPageState.assets || []);
     const matching = (planPageState.containers || [])
       .map(container => ({
         container,
         summary: buildContainerAvailableModelSummary(container, assetLookup)
       }))
-      .filter(item =>
-        editContainerSearchText(item.container, item.summary).includes(search)
-      )
+      .filter(item => inventorySearchTextMatches(
+        editContainerSearchText(item.container, item.summary), searchQuery.terms
+      ))
       .slice(0, 30);
 
     if (matching.length) {
@@ -1912,7 +1934,8 @@ function renderPlanAvailableCard() {
           <input type="search" class="plan-search-input" id="planAssetSearch"
                  value="${escapeHtmlAttr(planPageState.search)}"
                  autocomplete="off" spellcheck="false"
-                 placeholder="Search brand, model, description, or container..."
+                 placeholder="Search brand, model, description; container [name]..."
+                 title="Combine words to narrow results. Use + for alternatives, or start with container to show cases."
                  oninput="planPageState.search=this.value;renderPlanAvailableResults();">
           <label class="plan-toggle">
             <input type="checkbox" ${planPageState.showContainers ? 'checked' : ''}
@@ -2949,6 +2972,10 @@ async function planFlushNotesSave() {
 function renderPlanMetrics() {
   const event = planPageState.event || {};
   const totals = planTotals();
+  const canLinkQuotation = (
+    (typeof isAdminUser === 'function' && isAdminUser())
+    || (typeof currentUserHasSalesAccess === 'function' && currentUserHasSalesAccess())
+  );
   return `
     <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
     <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
@@ -2959,8 +2986,156 @@ function renderPlanMetrics() {
         <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
         <div><strong>Compare</strong><span>To Quotation</span></div>
       </button>
+    ` : canLinkQuotation ? `
+      <button type="button" class="plan-metric plan-compare-launch"
+              onclick="planOpenQuotationPicker()">
+        <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
+        <div><strong>Link</strong><span>To Quotation</span></div>
+      </button>
     ` : ''}
   `;
+}
+
+function planEnsureQuotationPickerModal() {
+  let modal = document.getElementById('planQuotationPickerModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planQuotationPickerModal';
+  modal.className = 'modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="modal-content finance-picker-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Link to Quotation</h3>
+        <button type="button" class="close-btn" aria-label="Close quotation picker"
+                onclick="closeModal('planQuotationPickerModal')">&times;</button>
+      </div>
+      <input type="search" id="planQuotationPickerSearch" class="finance-input"
+             placeholder="Search unlinked quotations by number, project, or client..."
+             oninput="planQuotationPickerSearchChanged(this.value)">
+      <div id="planQuotationPickerResults" class="finance-picker-results" aria-live="polite"></div>
+      <div class="modal-actions finance-picker-actions">
+        <button type="button" id="planQuotationPickerMore" class="btn btn-secondary"
+                onclick="planLoadQuotationOptions(true)" hidden>Load more</button>
+        <button type="button" class="btn btn-secondary"
+                onclick="closeModal('planQuotationPickerModal')">Cancel</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('planQuotationPickerModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function planRenderQuotationPicker() {
+  const results = document.getElementById('planQuotationPickerResults');
+  const more = document.getElementById('planQuotationPickerMore');
+  if (!results || !more) return;
+  const state = planQuotationPickerState;
+  results.innerHTML = state.rows.map(row => `
+    <button type="button" class="finance-picker-option"
+            ${state.linking ? 'disabled' : ''}
+            onclick="planLinkQuotation('${escapeHtmlAttr(escapeJs(String(row.id)))}')">
+      <strong>${escapeHtml(row.number || 'Quotation')} · ${escapeHtml(row.projectName || 'Untitled project')}</strong>
+      <span>${escapeHtml([row.clientName, row.status].filter(Boolean).join(' · '))}</span>
+    </button>
+  `).join('') || `<div class="finance-suggestion-empty">${state.loading ? 'Loading quotations...' : 'No unlinked quotations found.'}</div>`;
+  more.hidden = !state.hasMore;
+  more.style.display = state.hasMore ? '' : 'none';
+  more.disabled = state.loading || state.linking;
+  more.textContent = state.loading ? 'Loading...' : 'Load more';
+}
+
+async function planLoadQuotationOptions(append = false) {
+  const state = planQuotationPickerState;
+  if (state.loading && append) return;
+  const requestSeq = ++state.requestSeq;
+  const eventId = state.eventId;
+  state.loading = true;
+  if (!append) {
+    state.rows = [];
+    state.nextOffset = 0;
+    state.hasMore = false;
+  }
+  planRenderQuotationPicker();
+  try {
+    const params = new URLSearchParams({
+      query: state.query,
+      offset: String(append ? state.nextOffset : 0),
+      limit: '40'
+    });
+    const response = await apiCall(`/api/events/${eventId}/quotation-link?${params}`);
+    if (requestSeq !== state.requestSeq || eventId !== state.eventId) return;
+    state.rows = append ? [...state.rows, ...(response.data || [])] : response.data || [];
+    state.nextOffset = Number(response.meta?.nextOffset || state.rows.length);
+    state.hasMore = response.meta?.hasMore === true;
+  } catch (error) {
+    if (requestSeq !== state.requestSeq || eventId !== state.eventId) return;
+    showNotification('error', error.message || 'Unable to load quotations');
+  } finally {
+    if (requestSeq === state.requestSeq && eventId === state.eventId) {
+      state.loading = false;
+      planRenderQuotationPicker();
+    }
+  }
+}
+
+function planQuotationPickerSearchChanged(value) {
+  const state = planQuotationPickerState;
+  state.query = String(value || '').trim();
+  clearTimeout(state.searchTimer);
+  state.searchTimer = setTimeout(() => planLoadQuotationOptions(), 250);
+}
+
+function planOpenQuotationPicker() {
+  const event = planPageState.event;
+  if (!event || event.quotationId || !Number(event.id)) return;
+  if (!(isAdminUser() || currentUserHasSalesAccess())) return;
+  const state = planQuotationPickerState;
+  state.eventId = Number(event.id);
+  state.query = '';
+  state.rows = [];
+  state.hasMore = false;
+  state.linking = false;
+  const modal = planEnsureQuotationPickerModal();
+  modal.querySelector('#planQuotationPickerSearch').value = '';
+  openModal('planQuotationPickerModal');
+  planLoadQuotationOptions();
+  setTimeout(() => modal.querySelector('#planQuotationPickerSearch')?.focus(), 50);
+}
+
+async function planLinkQuotation(quotationId) {
+  const state = planQuotationPickerState;
+  const row = state.rows.find(item => String(item.id) === String(quotationId));
+  if (!row || state.linking || Number(planPageState.eventId) !== state.eventId) return;
+  if (!(isAdminUser() || currentUserHasSalesAccess())) return;
+  state.linking = true;
+  planRenderQuotationPicker();
+  try {
+    await planFlushNotesSave();
+    const response = await apiCall(`/api/events/${state.eventId}/quotation-link`, 'PUT', {
+      quotationId: row.id,
+      documentVersion: row.documentVersion
+    });
+    closeModal('planQuotationPickerModal');
+    if (Number(planPageState.eventId) === state.eventId && planPageState.event) {
+      planPageState.event.quotationId = response.data?.quotationId || row.id;
+      planPageState.event.quotationNumber = response.data?.quotationNumber || row.number;
+      const metrics = document.getElementById('planMetrics');
+      if (metrics) metrics.innerHTML = renderPlanMetrics();
+      refreshPlanSelectedEvent().catch(error => {
+        showNotification('warning', error.message || 'Quotation linked, but the plan could not refresh');
+      });
+    }
+    showNotification('success', `Quotation ${row.number || ''} linked to Event #${state.eventId}`);
+  } catch (error) {
+    showNotification('error', error.message || 'Unable to link quotation');
+  } finally {
+    state.linking = false;
+    planRenderQuotationPicker();
+  }
 }
 
 function planSetDepartmentOpen(encodedDepartment, open, detailsElement = null) {

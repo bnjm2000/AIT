@@ -213,9 +213,12 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('function planAvailableModelSearchText(group)', script)
         self.assertIn("String(asset?.description || '').trim()", script)
         self.assertIn(
-            'planAvailableModelSearchText(group).includes(search)',
+            'planAvailableModelSearchText(group), searchQuery.terms',
             script,
         )
+        self.assertIn('inventorySearchTerms(', script)
+        self.assertIn('searchQuery.containerOnly', script)
+        self.assertIn('editContainerSearchText(item.container, item.summary), searchQuery.terms', script)
         self.assertNotIn(
             'max="${Math.max(1, availability.physical)}"',
             script,

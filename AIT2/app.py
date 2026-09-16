@@ -49173,6 +49173,119 @@ def quotation_item(document_id):
     return _finance_get_update_delete(document_id, 'quotation')
 
 
+@app.route('/api/events/<int:event_id>/quotation-link', methods=['GET', 'PUT'])
+@require_auth
+@require_event_access
+def event_quotation_link(event_id):
+    """Find and pair an unlinked quotation without changing the event plan."""
+    is_admin = _current_user_effective_is_admin()
+    if not (is_admin or _current_user_has_sales_access()):
+        return jsonify({'error': 'Admin or Sales access required'}), 403
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotations = [
+            row for row in finance_data.get('documents') or []
+            if isinstance(row, dict)
+            and row.get('type') == 'quotation'
+            and (is_admin or _finance_user_can_access(row))
+        ]
+
+        if request.method == 'GET':
+            query = str(request.args.get('query') or '').strip().casefold()[:200]
+            available = []
+            for row in quotations:
+                if _safe_int(row.get('eventId'), 0):
+                    continue
+                client = row.get('client') or {}
+                client_name = str(client.get('name') or client.get('company') or '') if isinstance(client, dict) else ''
+                project_name = str(row.get('projectName') or row.get('title') or '')
+                if query and query not in ' '.join((
+                    str(row.get('number') or ''), project_name, client_name,
+                )).casefold():
+                    continue
+                available.append({
+                    'id': str(row.get('id') or ''),
+                    'number': str(row.get('number') or ''),
+                    'projectName': project_name,
+                    'clientName': client_name,
+                    'status': str(row.get('status') or 'draft'),
+                    'documentVersion': max(1, _safe_int(row.get('documentVersion'), 1)),
+                    'updatedAt': str(row.get('updatedAt') or ''),
+                })
+            available.sort(
+                key=lambda row: (row['updatedAt'], row['number']), reverse=True,
+            )
+            offset = max(0, request.args.get('offset', type=int) or 0)
+            limit = min(max(1, request.args.get('limit', type=int) or 40), 100)
+            page = available[offset:offset + limit]
+            next_offset = offset + len(page)
+            for row in page:
+                row.pop('updatedAt', None)
+            return jsonify({
+                'success': True,
+                'data': page,
+                'meta': {
+                    'hasMore': next_offset < len(available),
+                    'nextOffset': next_offset,
+                    'total': len(available),
+                },
+            })
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            payload = {}
+        quotation_id = str(payload.get('quotationId') or '').strip()
+        quotation = next(
+            (row for row in quotations if str(row.get('id') or '') == quotation_id),
+            None,
+        )
+        if not quotation:
+            return jsonify({'error': 'Quotation not found'}), 404
+        if any(
+            str(row.get('id') or '') != quotation_id
+            and _safe_int(row.get('eventId'), 0) == event_id
+            for row in finance_data.get('documents') or []
+            if isinstance(row, dict) and row.get('type') == 'quotation'
+        ):
+            return jsonify({'error': 'This event is already linked to a quotation'}), 409
+        if _safe_int(quotation.get('eventId'), 0):
+            return jsonify({'error': 'This quotation is already linked to an event'}), 409
+        current_version = max(1, _safe_int(quotation.get('documentVersion'), 1))
+        if _safe_int(payload.get('documentVersion'), 0) != current_version:
+            return jsonify({'error': 'This quotation changed. Search again before linking.'}), 409
+
+        updated = copy.deepcopy(quotation)
+        updated['eventId'] = event_id
+        updated['eventManagedByQuotation'] = False
+        updated['eventSyncFingerprint'] = ''
+        updated['documentVersion'] = current_version + 1
+        updated['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        updated['updatedBy'] = _finance_current_username()
+        updated['updatedByName'] = _user_display_name(updated['updatedBy'])
+        _sync_costing_from_quotation(finance_data, updated)
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id') or '') == quotation_id:
+                finance_data['documents'][index] = updated
+                break
+        _save_finance_data(finance_data)
+
+    log_action(
+        f"Paired quotation {updated.get('number') or quotation_id} "
+        f"to event #{event_id}"
+    )
+    mark_realtime_change('finance', {
+        'action': 'quotation-updated',
+        'quotationId': quotation_id,
+        'eventId': event_id,
+    })
+    return jsonify({'success': True, 'data': {
+        'quotationId': quotation_id,
+        'quotationNumber': str(updated.get('number') or ''),
+        'documentVersion': updated['documentVersion'],
+    }})
+
+
 @app.route('/api/quotations/<document_id>/create-event', methods=['POST'])
 @require_sales
 def create_event_from_quotation(document_id):
