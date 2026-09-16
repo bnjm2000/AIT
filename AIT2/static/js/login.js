@@ -1,5 +1,7 @@
 const loginById = id => document.getElementById(id);
 let workerAccessMode = 'lookup';
+let accessRevealTimer;
+let accessFocusTimer;
 
 function loginMessage(id, message, type = 'error') {
   const node = loginById(id);
@@ -28,6 +30,9 @@ function focusAccessControl(control) {
 }
 
 function revealAccessPanel(panel, control) {
+  window.clearTimeout(accessRevealTimer);
+  window.clearTimeout(accessFocusTimer);
+
   const compactView = window.matchMedia('(max-width: 820px)').matches;
   if (!compactView) {
     focusAccessControl(control);
@@ -36,12 +41,22 @@ function revealAccessPanel(panel, control) {
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   requestAnimationFrame(() => {
-    panel.scrollIntoView({
-      block: 'start',
-      inline: 'nearest',
-      behavior: reduceMotion ? 'auto' : 'smooth'
-    });
-    window.setTimeout(() => focusAccessControl(control), reduceMotion ? 0 : 180);
+    // Wait for the expanding panel to add its height to the page. Scrolling on
+    // the first animation frame can hit the old page limit and leave the form
+    // below the mobile viewport.
+    accessRevealTimer = window.setTimeout(() => {
+      if (panel.hidden || !panel.classList.contains('is-visible')) return;
+      panel.scrollIntoView({
+        block: 'start',
+        inline: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth'
+      });
+      accessFocusTimer = window.setTimeout(() => {
+        if (!panel.hidden && panel.classList.contains('is-visible')) {
+          focusAccessControl(control);
+        }
+      }, reduceMotion ? 0 : 260);
+    }, reduceMotion ? 0 : 230);
   });
 }
 

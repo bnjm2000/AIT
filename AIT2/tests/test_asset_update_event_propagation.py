@@ -1702,12 +1702,101 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         payload = response.get_json()['data']
         self.assertEqual(payload['total'], 2)
         self.assertEqual(payload['usable'], 1)
+        self.assertEqual(payload['ooc'], 1)
+        self.assertEqual(payload['healthy'], 1)
+        self.assertEqual(payload['degraded'], 0)
+        self.assertEqual(payload['conditionAssets'], [{
+            'assetId': 'A#02', 'isBulk': False, 'status': 'ooc', 'quantity': 1,
+        }])
         self.assertTrue(all(day['available'] == 1 for day in payload['days']))
 
         invalid = self.client.get(
             '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-19&end=2026-10-17'
         )
         self.assertEqual(invalid.status_code, 400)
+
+    def test_availability_calendar_shows_degraded_and_ooc_assets_separately(self):
+        self.login_admin()
+        self.data_manager.inventory['A#01'].is_degraded = True
+        self.data_manager.inventory['A#02'].is_ooc = True
+
+        response = self.client.get(
+            '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-17&end=2026-10-19'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual((payload['total'], payload['usable'], payload['healthy'],
+                          payload['degraded'], payload['ooc']), (2, 1, 0, 1, 1))
+        self.assertEqual(
+            [(item['assetId'], item['status'], item['quantity'])
+             for item in payload['conditionAssets']],
+            [('A#01', 'degraded', 1), ('A#02', 'ooc', 1)],
+        )
+        day = next(row for row in payload['days'] if row['date'] == '2026-10-17')
+        self.assertEqual((day['available'], day['healthyAvailable'],
+                          day['degradedAvailable']), (1, 0, 1))
+        self.assertEqual(day['status'], 'low')
+        self.assertEqual(
+            (payload['range']['available'], payload['range']['healthyAvailable'],
+             payload['range']['degradedAvailable']),
+            (1, 0, 1),
+        )
+
+    def test_availability_calendar_reservations_lower_healthy_stock_first(self):
+        self.login_admin()
+        self.data_manager.inventory['A#01'].is_degraded = True
+        booking = self.make_event(
+            307, prepared=['[MODEL]AX|TestBrand|OldModel|1|Old desc']
+        )
+        booking.start_date = booking.end_date = '20261017'
+
+        response = self.client.get(
+            '/api/assets/A%2301/availability-calendar?month=2026-10&start=2026-10-17&end=2026-10-17'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        day = next(row for row in payload['days'] if row['date'] == '2026-10-17')
+        self.assertEqual((day['available'], day['healthyAvailable'],
+                          day['degradedAvailable']), (1, 0, 1))
+        self.assertEqual(day['status'], 'low')
+        self.assertEqual(
+            (payload['range']['available'], payload['range']['healthyAvailable'],
+             payload['range']['degradedAvailable']),
+            (1, 0, 1),
+        )
+
+    def test_availability_calendar_counts_bulk_fault_quantities(self):
+        self.login_admin()
+        for status, quantity in [('ooc', 2), ('degraded', 2)]:
+            response = self.client.post('/api/assets/BULK-0001/maintain', json={
+                'affectedQuantity': quantity,
+                'logEntry': f'{quantity} units are {status}',
+                'maintenanceDate': '2026-10-01',
+                'assetStatus': status,
+            })
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        response = self.client.get(
+            '/api/assets/BULK-0001/availability-calendar?month=2026-10&start=2026-10-17&end=2026-10-19'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual((payload['total'], payload['usable'], payload['healthy'],
+                          payload['degraded'], payload['ooc']), (6, 4, 2, 2, 2))
+        self.assertEqual(
+            [(item['assetId'], item['status'], item['quantity'])
+             for item in payload['conditionAssets']],
+            [('BULK-0001', 'degraded', 2), ('BULK-0001', 'ooc', 2)],
+        )
+        self.assertTrue(all(
+            (day['available'], day['healthyAvailable'], day['degradedAvailable'])
+            == (4, 2, 2) for day in payload['days']
+        ))
+        self.assertEqual(
+            (payload['range']['available'], payload['range']['healthyAvailable'],
+             payload['range']['degradedAvailable']),
+            (4, 2, 2),
+        )
 
     def test_availability_range_uses_peak_daily_reservations_not_sum_of_events(self):
         self.login_admin()

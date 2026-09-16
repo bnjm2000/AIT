@@ -7899,6 +7899,17 @@ function inventoryAvailabilityEventHtml(event, index = 0) {
     : `<div class="inventory-availability-event" style="--event-accent:#94a3b8">${body}</div>`;
 }
 
+function inventoryAvailabilityConditionHtml(item) {
+  const encodedId = encodeURIComponent(item.assetId || '');
+  const label = item.isBulk ? `Bulk stock · ${item.assetId}` : item.assetId;
+  return `
+    <button type="button" class="inventory-availability-condition-row is-${item.status}" onclick="closeModal('inventoryAvailabilityCalendarModal');openAssetDetailsModal('${escapeHtmlAttr(encodedId)}')" aria-label="View ${escapeHtmlAttr(label)}, ${item.quantity} ${item.status}">
+      <span><strong>${escapeHtml(label)}</strong>${item.reason ? `<small>${escapeHtml(item.reason)}</small>` : ''}</span>
+      <span class="inventory-availability-condition-badge">${item.quantity} ${item.status === 'ooc' ? 'OOC' : 'degraded'}</span>
+    </button>
+  `;
+}
+
 function renderInventoryAvailabilityCalendar() {
   const state = inventoryAvailabilityCalendarState;
   const data = state.data;
@@ -7919,10 +7930,11 @@ function renderInventoryAvailabilityCalendar() {
     const day = byDate.get(iso);
     if (!day) return `<div class="inventory-availability-day is-outside"><span>${date.getDate()}</span></div>`;
     return `
-      <button type="button" class="inventory-availability-day ${iso === state.selectedDate ? 'is-selected' : ''}" onclick="selectInventoryAvailabilityDate('${iso}')" aria-label="${escapeHtmlAttr(inventoryAvailabilityDateLabel(iso))}: ${day.available} available, ${day.eventCount} events">
+      <button type="button" class="inventory-availability-day ${iso === state.selectedDate ? 'is-selected' : ''}" onclick="selectInventoryAvailabilityDate('${iso}')" aria-label="${escapeHtmlAttr(inventoryAvailabilityDateLabel(iso))}: ${day.available} available, at least ${day.healthyAvailable} healthy, up to ${day.degradedAvailable} degraded, ${day.eventCount} events">
         <strong>${date.getDate()}</strong>
         <span>${day.available} available</span>
         <small><i class="inventory-availability-dot is-${day.status}"></i>${day.eventCount} event${day.eventCount === 1 ? '' : 's'}</small>
+        ${day.degradedAvailable ? `<em>Up to ${day.degradedAvailable} degraded</em>` : ''}
       </button>
     `;
   }).join('');
@@ -7944,13 +7956,23 @@ function renderInventoryAvailabilityCalendar() {
       </div>
       <div class="inventory-availability-weekdays">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(name => `<span>${name}</span>`).join('')}</div>
       <div class="inventory-availability-grid">${grid}</div>
-      <div class="inventory-availability-legend"><span><i class="inventory-availability-dot is-high"></i>High (≥80%)</span><span><i class="inventory-availability-dot is-medium"></i>Medium (50–79%)</span><span><i class="inventory-availability-dot is-low"></i>Low (&lt;50%)</span><span><i class="inventory-availability-selected-key"></i>Selected date</span></div>
+      <div class="inventory-availability-legend"><span>At least healthy stock:</span><span><i class="inventory-availability-dot is-high"></i>High (≥80%)</span><span><i class="inventory-availability-dot is-medium"></i>Medium (50–79%)</span><span><i class="inventory-availability-dot is-low"></i>Low (&lt;50%)</span><span><i class="inventory-availability-selected-key"></i>Selected date</span></div>
     </section>
     <div class="inventory-availability-sidebar">
       <section class="inventory-availability-panel inventory-availability-events-panel">
         <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Events on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</strong><span>${selected?.eventCount || 0} event${selected?.eventCount === 1 ? '' : 's'} · ${selected?.allocated || 0} reserved</span></div></div>
         <div class="inventory-availability-events">${selectedEvents.length ? selectedEvents.map(inventoryAvailabilityEventHtml).join('') : '<div class="inventory-availability-empty">No event reservations on this date.</div>'}</div>
-        <div class="inventory-availability-summary">${inventoryIcon('box')}<div><strong>${selected?.available || 0} available on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate))}</strong><span>${data.usable ? Math.round((selected.available / data.usable) * 100) : 0}% of current usable stock</span></div></div>
+        <div class="inventory-availability-summary">${inventoryIcon('box')}<div><strong>${selected?.available || 0} available on ${escapeHtml(inventoryAvailabilityDateLabel(state.selectedDate))}</strong><span>At least ${selected?.healthyAvailable || 0} healthy · up to ${selected?.degradedAvailable || 0} degraded · ${data.ooc || 0} OOC excluded</span></div></div>
+      </section>
+      <section class="inventory-availability-panel inventory-availability-condition-panel">
+        <div class="inventory-availability-heading-title">${inventoryIcon('alert')}<div><strong>Current asset condition</strong><span>These conditions are applied to all dates in the calendar.</span></div></div>
+        <div class="inventory-availability-condition-stats">
+          <div><span>Healthy usable</span><strong>${data.healthy || 0}</strong></div>
+          <div class="is-degraded"><span>Degraded usable</span><strong>${data.degraded || 0}</strong></div>
+          <div class="is-ooc"><span>OOC excluded</span><strong>${data.ooc || 0}</strong></div>
+        </div>
+        ${(data.conditionAssets || []).length ? `<div class="inventory-availability-condition-list">${data.conditionAssets.map(inventoryAvailabilityConditionHtml).join('')}</div>` : '<div class="inventory-availability-empty">No degraded or OOC assets in this item.</div>'}
+        ${data.missing ? `<small class="inventory-availability-condition-note">${data.missing} missing unit${data.missing === 1 ? '' : 's'} also excluded from availability.</small>` : ''}
       </section>
       <section class="inventory-availability-panel inventory-availability-range-panel">
         <div class="inventory-availability-heading-title">${inventoryIcon('calendar')}<div><strong>Check Availability for a Date Range</strong><span>See overlapping events and the lowest available quantity.</span></div></div>
@@ -7966,8 +7988,11 @@ function renderInventoryAvailabilityCalendar() {
               <div><span>Total stock</span><strong>${data.total}</strong></div>
               <div><span>Lowest available</span><strong class="is-green">${range.available}</strong></div>
               <div><span>Peak allocated</span><strong class="is-red">${range.allocated}</strong></div>
+              <div><span>At least healthy</span><strong class="is-green">${range.healthyAvailable}</strong></div>
+              <div><span>Up to degraded</span><strong class="is-amber">${range.degradedAvailable}</strong></div>
+              <div><span>OOC excluded</span><strong class="is-red">${data.ooc || 0}</strong></div>
             </div>
-            <span class="inventory-availability-result-caption">Current usable stock: ${data.usable}. Availability is the minimum across this period.</span>
+            <span class="inventory-availability-result-caption">Current usable stock: ${data.usable}. Availability is the minimum across this period. Reservations are conservatively applied to healthy stock first.</span>
             <strong>Events in this period</strong>
             <div class="inventory-availability-range-events">
               ${range.events.length ? range.events.map((event, index) => `

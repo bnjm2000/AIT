@@ -18,12 +18,14 @@ function inventorySearchTerms(searchTerm) {
   return String(searchTerm || '')
     .toLowerCase()
     .split('+')
-    .map(term => term.trim())
-    .filter(Boolean);
+    .map(term => term.trim().split(/\s+/).filter(Boolean))
+    .filter(words => words.length);
 }
 
 function inventorySearchTextMatches(searchableText, searchTerms) {
-  return !searchTerms.length || searchTerms.some(term => searchableText.includes(term));
+  return !searchTerms.length || searchTerms.some(words =>
+    words.every(word => searchableText.includes(word))
+  );
 }
 
 function getInventoryFilterState() {

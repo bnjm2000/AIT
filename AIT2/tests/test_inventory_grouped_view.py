@@ -792,8 +792,14 @@ def test_inventory_group_has_availability_calendar_button_and_date_range_popup()
     assert 'function renderInventoryAvailabilityCalendar()' in script
     assert 'function checkInventoryAvailabilityRange()' in script
     assert '/availability-calendar?' in script
+    assert 'Current asset condition' in script
+    assert 'inventory-availability-condition-list' in script
+    assert 'data.conditionAssets.map(inventoryAvailabilityConditionHtml)' in script
+    assert 'day.healthyAvailable' in script
+    assert 'day.degradedAvailable' in script
     assert '.inventory-availability-content' in template
     assert '.inventory-availability-grid' in template
+    assert '.inventory-availability-condition-row.is-ooc' in template
 
 
 def test_inventory_selection_can_open_bulk_maintenance_workflow():
@@ -904,6 +910,8 @@ def test_inventory_search_supports_plus_separated_or_terms():
     assert "Use + to search multiple items" in template
     assert "function inventorySearchTerms(searchTerm)" in script
     assert ".split('+')" in search_parser
+    assert ".split(/\\s+/)" in search_parser
     assert ".split(',')" not in search_parser
-    assert "searchTerms.some(term => searchableText.includes(term))" in script
+    assert "searchTerms.some(words =>" in script
+    assert "words.every(word => searchableText.includes(word))" in script
     assert "inventorySearchTextMatches(searchableText, filters.searchTerms)" in script

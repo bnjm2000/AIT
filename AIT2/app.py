@@ -29851,7 +29851,7 @@ def get_assets():
     try:
         summary_view = request.args.get('view', '').strip().lower() == 'summary'
         query = request.args.get('query', '').strip().lower()
-        query_terms = [term.strip() for term in query.split('+') if term.strip()]
+        query_groups = [term.split() for term in query.split('+') if term.strip()]
         department_filter = request.args.get('department', '').strip().lower()
         status_filter = request.args.get('status', '').strip().lower()
         offset = max(0, request.args.get('offset', type=int) or 0)
@@ -29863,24 +29863,26 @@ def get_assets():
         departments = _load_departments()
 
         inventory_rows = list(data_manager.inventory.values())
-        if query_terms:
-            inventory_rows = [
-                asset for asset in inventory_rows
+        if query_groups:
+            matching_rows = []
+            for asset in inventory_rows:
+                searchable_text = ' '.join(str(value or '').lower() for value in (
+                    '' if _is_bulk_asset(asset) else asset.asset_id,
+                    asset.asset_id,
+                    asset.brand,
+                    asset.model_number,
+                    getattr(asset, 'version', ''),
+                    asset.serial_number,
+                    getattr(asset, 'secondary_serial_number', ''),
+                    asset.description,
+                    ' '.join(normalize_asset_tags(getattr(asset, 'tags', []))),
+                ))
                 if any(
-                    term in ' '.join(str(value or '').lower() for value in (
-                        '' if _is_bulk_asset(asset) else asset.asset_id,
-                        asset.asset_id,
-                        asset.brand,
-                        asset.model_number,
-                        getattr(asset, 'version', ''),
-                        asset.serial_number,
-                        getattr(asset, 'secondary_serial_number', ''),
-                        asset.description,
-                        ' '.join(normalize_asset_tags(getattr(asset, 'tags', []))),
-                    ))
-                    for term in query_terms
-                )
-            ]
+                    all(word in searchable_text for word in words)
+                    for words in query_groups
+                ):
+                    matching_rows.append(asset)
+            inventory_rows = matching_rows
         if department_filter:
             inventory_rows = [
                 asset for asset in inventory_rows
@@ -30105,14 +30107,56 @@ def get_asset_availability_calendar(asset_id):
     ]
     total = sum(_asset_inventory_quantity(item) for item in matching_assets)
     usable = 0
+    ooc = 0
+    missing = 0
+    degraded = 0
+    condition_assets = []
     for item in matching_assets:
-        if _is_disposed(item) or getattr(item, 'is_missing', False) or getattr(item, 'is_ooc', False):
-            continue
         quantity = _asset_inventory_quantity(item)
+        if quantity <= 0:
+            continue
+        if getattr(item, 'is_missing', False):
+            missing += quantity
+            continue
+        if getattr(item, 'is_ooc', False):
+            ooc += quantity
+            condition_assets.append({
+                'assetId': item.asset_id, 'isBulk': _is_bulk_asset(item),
+                'status': 'ooc', 'quantity': quantity,
+            })
+            continue
+
+        item_ooc = item_missing = item_degraded = 0
         if _is_bulk_asset(item):
             faults = _bulk_maintenance_quantity_counts(item)
-            quantity = max(0, quantity - faults['ooc'] - faults['missing'])
-        usable += quantity
+            item_ooc = faults['ooc']
+            item_missing = faults['missing']
+            item_degraded = faults['degraded']
+        item_usable = max(0, quantity - item_ooc - item_missing)
+        if _is_degraded(item):
+            item_degraded = item_usable
+        item_degraded = min(item_degraded, item_usable)
+
+        ooc += item_ooc
+        missing += item_missing
+        degraded += item_degraded
+        usable += item_usable
+        if item_ooc:
+            condition_assets.append({
+                'assetId': item.asset_id, 'isBulk': True,
+                'status': 'ooc', 'quantity': item_ooc,
+            })
+        if item_degraded:
+            reasons = (
+                _bulk_degraded_reasons(item) if _is_bulk_asset(item)
+                else _asset_degraded_reasons(item)
+            )
+            condition_assets.append({
+                'assetId': item.asset_id, 'isBulk': _is_bulk_asset(item),
+                'status': 'degraded', 'quantity': item_degraded,
+                'reason': reasons[0] if reasons else '',
+            })
+    condition_assets.sort(key=lambda row: (row['status'], row['assetId']))
 
     window_start = min(month_start, range_start) if range_start else month_start
     window_end = max(month_end, range_end) if range_end else month_end
@@ -30149,10 +30193,18 @@ def get_asset_availability_calendar(asset_id):
         active = [row for row in bookings if row['_start'] <= day <= row['_end']]
         allocated = sum(row['quantity'] for row in active)
         available = max(0, usable - allocated)
-        ratio = available / usable if usable else 0
+        # Group-level reservations do not identify which physical condition was
+        # booked. Apply them to healthy stock first for a conservative minimum.
+        healthy_available = max(0, available - degraded)
+        degraded_available = available - healthy_available
+        # The indicator reflects condition-adjusted stock, including OOC units
+        # in the denominator rather than labelling degraded-only stock as high.
+        ratio = healthy_available / total if total else 0
         return {
             'date': day.isoformat(),
             'available': available,
+            'healthyAvailable': healthy_available,
+            'degradedAvailable': degraded_available,
             'allocated': allocated,
             'eventCount': len(active),
             'status': 'high' if ratio >= .8 else 'medium' if ratio >= .5 else 'low',
@@ -30172,6 +30224,7 @@ def get_asset_availability_calendar(asset_id):
         while day <= range_end:
             range_days.append(availability_on(day))
             day += timedelta(days=1)
+        lowest_day = min(range_days, key=lambda row: row['available'])
         overlapping = [
             booking_payload(row) for row in bookings
             if row['_start'] <= range_end and row['_end'] >= range_start
@@ -30179,7 +30232,9 @@ def get_asset_availability_calendar(asset_id):
         range_result = {
             'start': range_start.isoformat(),
             'end': range_end.isoformat(),
-            'available': min(row['available'] for row in range_days),
+            'available': lowest_day['available'],
+            'healthyAvailable': lowest_day['healthyAvailable'],
+            'degradedAvailable': lowest_day['degradedAvailable'],
             'allocated': max(row['allocated'] for row in range_days),
             'eventCount': len(overlapping),
             'events': overlapping,
@@ -30191,6 +30246,11 @@ def get_asset_availability_calendar(asset_id):
         'month': month_value,
         'total': total,
         'usable': usable,
+        'ooc': ooc,
+        'missing': missing,
+        'degraded': degraded,
+        'healthy': max(0, usable - degraded),
+        'conditionAssets': condition_assets,
         'days': days,
         'range': range_result,
     }})

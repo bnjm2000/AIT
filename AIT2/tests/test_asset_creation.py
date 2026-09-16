@@ -83,6 +83,33 @@ class AssetCreationTests(unittest.TestCase):
         self.assertEqual(response.get_json()['error'], 'Admin privileges required')
         self.assertEqual(self.data_manager.inventory, {})
 
+    def test_inventory_query_matches_words_across_fields_and_preserves_plus_or(self):
+        self.login()
+        self.add_existing_asset('SHURE#01', 'Shure', 'ULXD2', 'Handheld Microphone')
+        self.add_existing_asset('SHURE#02', 'Shure', 'ULXD1', 'Beltpack Transmitter')
+        self.add_existing_asset('YAMAHA#01', 'Yamaha', 'P1', 'Beltpack Receiver')
+
+        response = self.client.get('/api/assets?query=Shure%20handheld')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            [row['internalId'] for row in response.get_json()['data']],
+            ['SHURE#01'],
+        )
+
+        reversed_words = self.client.get('/api/assets?query=handheld%20shure')
+        self.assertEqual(
+            [row['internalId'] for row in reversed_words.get_json()['data']],
+            ['SHURE#01'],
+        )
+
+        or_response = self.client.get(
+            '/api/assets?query=Shure%20handheld%2BYamaha%20beltpack'
+        )
+        self.assertEqual(
+            {row['internalId'] for row in or_response.get_json()['data']},
+            {'SHURE#01', 'YAMAHA#01'},
+        )
+
     def test_batch_add_existing_brand_model_continues_numbering(self):
         self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wired IEM beltpack')
         self.add_existing_asset('P1#02', 'Behringher', 'P1', 'Wired IEM beltpack')
