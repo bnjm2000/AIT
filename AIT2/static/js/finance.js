@@ -5384,10 +5384,15 @@ function financeEditLineGroup(event, mode, groupId) {
 function financeRenderLineGroupResults() {
   const root = document.getElementById('financeLineGroupResults');
   if (!root) return;
-  root.innerHTML = (financeLineGroupState.results || []).map((row, index) => `
-    <button type="button" onclick="financeAddLineGroupResult(${index})">
-      <span><strong>${financeCatalogDescription(row)}</strong><small>${financeEscape(row.department || 'General')}${row.isContainer ? ' &middot; container' : ''}</small></span><b>+</b>
-    </button>`).join('');
+  root.innerHTML = (financeLineGroupState.results || []).map((row, index) => {
+    const category = row.isContainer && financeLineGroupState.mode === 'finance'
+      ? financeContainerMajorityCategory(row)
+      : row.department || 'General';
+    return `
+      <button type="button" onclick="financeAddLineGroupResult(${index})">
+        <span><strong>${financeCatalogDescription(row)}</strong><small>${financeEscape(category)}${row.isContainer ? ' &middot; container' : ''}</small></span><b>+</b>
+      </button>`;
+  }).join('');
   root.classList.toggle('open', Boolean(financeLineGroupState.results?.length));
 }
 
@@ -5464,6 +5469,17 @@ function financeLineGroupResultKey(row) {
 function financeAddLineGroupResult(index) {
   const selected = financeLineGroupState.results[index];
   if (!selected) return;
+  if (
+    selected.isContainer
+    && financeLineGroupState.mode === 'finance'
+    && !financeLineGroupState.selected.length
+    && !financeLineGroupState.commercialHeader
+  ) {
+    const categoryInput = document.getElementById('financeLineGroupCategory');
+    if (categoryInput && categoryInput.value === financeLineGroupState.category) {
+      categoryInput.value = financeContainerMajorityCategory(selected);
+    }
+  }
   const rows = selected.isContainer ? (selected.containerItems || []).map(item => ({
     ...item,
     quantityOverride: item.containerQuantity || item.availableQuantity || 1
@@ -6442,7 +6458,7 @@ async function financeAddRateCardItemToQuotation(index) {
         row.isContainer && String(row.containerId || '').toLowerCase() === String(item.containerId || '').toLowerCase()
       ));
       if (!container) throw new Error('Container contents are unavailable');
-      financeAddContainerAsGroup(container);
+      financeAddContainerAsGroup(container, '');
     } catch (error) {
       showNotification('error', error.message || 'Unable to add container');
       return;
@@ -8799,18 +8815,17 @@ function financeCatalogAvailability(row) {
   return `${financeNumber(row?.availableQuantity)} ${row?.isContainer ? 'per container' : 'available'}`;
 }
 
-function financeContainerMajorityDepartment(container) {
+function financeContainerMajorityCategory(container) {
   const totals = new Map();
   (container?.containerItems || []).forEach((item, index) => {
-    const department = String(item?.department || '').trim() || 'General';
-    const key = department.toLocaleLowerCase();
+    const category = financeCatalogCategory(item);
+    const key = category.toLocaleLowerCase();
     const quantity = Math.max(0, financeNumber(
       item?.containerQuantity ?? item?.availableQuantity ?? 1,
       1
     ));
     const current = totals.get(key) || {
-      department,
-      departmentCode: String(item?.departmentCode || '').trim(),
+      category,
       quantity: 0,
       firstIndex: index
     };
@@ -8819,7 +8834,7 @@ function financeContainerMajorityDepartment(container) {
   });
   return [...totals.values()].sort((left, right) => (
     right.quantity - left.quantity || left.firstIndex - right.firstIndex
-  ))[0] || { department: 'General', departmentCode: '' };
+  ))[0]?.category || 'General';
 }
 
 function financeRenderCatalog() {
@@ -8827,7 +8842,7 @@ function financeRenderCatalog() {
   if (!results) return;
   results.innerHTML = financeState.catalog.map((row, index) => `
     <button type="button" class="finance-catalog-option" onkeydown="financeCatalogSuggestionKeydown(event,${index})" onclick="financeSelectCatalog(${index})">
-      <span><strong>${financeCatalogDescription(row)}</strong><small>${financeEscape(financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
+      <span><strong>${financeCatalogDescription(row)}</strong><small>${financeEscape(row.isContainer ? financeContainerMajorityCategory(row) : financeLineSystem(row))} &middot; ${financeCatalogAvailability(row)}</small></span>
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">Press Add to create a custom item</div>';
@@ -8870,17 +8885,14 @@ function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOver
   return line;
 }
 
-function financeAddContainerAsGroup(selected) {
+function financeAddContainerAsGroup(selected, categoryOverride = financeAddDepartmentOverride()) {
   const containerId = String(selected?.containerId || '').trim();
   const containerItems = Array.isArray(selected?.containerItems)
     ? selected.containerItems
     : [];
   if (!containerId || !containerItems.length) return [];
 
-  const containerCategory = financeCatalogCategory(
-    selected,
-    financeAddDepartmentOverride()
-  );
+  const containerCategory = categoryOverride || financeContainerMajorityCategory(selected);
   const groupId = `container_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const subprojectId = financeCurrentSubprojectId();
   const grouped = containerItems.map(item => ({
@@ -8937,10 +8949,9 @@ function financeStageCatalogSelection(index) {
   financeState.pendingCatalogSelection = selected;
   const descriptionInput = document.getElementById('financeAddItemInput');
   if (descriptionInput) descriptionInput.value = selected.description || '';
-  const departmentSource = selected.isContainer
-    ? financeContainerMajorityDepartment(selected)
-    : selected;
-  const category = financeCatalogCategory(departmentSource);
+  const category = selected.isContainer
+    ? financeContainerMajorityCategory(selected)
+    : financeCatalogCategory(selected);
   financeState.addDepartment = category;
   const departmentInput = document.getElementById('financeAddDepartmentInput');
   if (departmentInput) departmentInput.value = category;
