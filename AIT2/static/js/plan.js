@@ -23,10 +23,16 @@ var planQuantitySaveTimers = new Map();
 var planQuantitySaveChains = new Map();
 var planCustomQuantityAssetIds = new Map();
 var planRealtimeSuppressedUntil = 0;
+var PLAN_QUOTATION_PICKER_STATUSES = [
+  'draft', 'sent', 'accepted', 'invoiced', 'overdue', 'paid', 'expired', 'cancelled'
+];
 var planQuotationPickerState = {
   eventId: null,
   rows: [],
   query: '',
+  status: 'all',
+  statusCounts: {},
+  statusTotal: 0,
   nextOffset: 0,
   hasMore: false,
   requestSeq: 0,
@@ -3013,6 +3019,8 @@ function planEnsureQuotationPickerModal() {
       <input type="search" id="planQuotationPickerSearch" class="finance-input"
              placeholder="Search unlinked quotations by number, project, or client..."
              oninput="planQuotationPickerSearchChanged(this.value)">
+      <div id="planQuotationPickerFilters" class="plan-event-chooser-filters"
+           aria-label="Filter quotation statuses"></div>
       <div id="planQuotationPickerResults" class="finance-picker-results" aria-live="polite"></div>
       <div class="modal-actions finance-picker-actions">
         <button type="button" id="planQuotationPickerMore" class="btn btn-secondary"
@@ -3029,19 +3037,48 @@ function planEnsureQuotationPickerModal() {
   return modal;
 }
 
+function planRenderQuotationPickerFilters() {
+  const filters = document.getElementById('planQuotationPickerFilters');
+  if (!filters) return;
+  const state = planQuotationPickerState;
+  const scrollLeft = filters.scrollLeft;
+  const choices = ['all', ...PLAN_QUOTATION_PICKER_STATUSES.filter(status =>
+    Number(state.statusCounts[status] || 0) > 0 || state.status === status
+  )];
+  filters.innerHTML = choices.map(status => {
+    const active = state.status === status;
+    const label = status === 'all' ? 'All' : status[0].toUpperCase() + status.slice(1);
+    const count = status === 'all' ? state.statusTotal : Number(state.statusCounts[status] || 0);
+    return `
+      <button type="button" class="plan-event-chooser-filter ${active ? 'active' : ''}"
+              aria-pressed="${active ? 'true' : 'false'}"
+              onclick="planSetQuotationPickerStatus('${status}')">
+        ${label}<span class="plan-event-chooser-count">${count}</span>
+      </button>
+    `;
+  }).join('');
+  filters.scrollLeft = scrollLeft;
+}
+
 function planRenderQuotationPicker() {
   const results = document.getElementById('planQuotationPickerResults');
   const more = document.getElementById('planQuotationPickerMore');
   if (!results || !more) return;
   const state = planQuotationPickerState;
+  planRenderQuotationPickerFilters();
   results.innerHTML = state.rows.map(row => `
-    <button type="button" class="finance-picker-option"
+    <button type="button" class="finance-picker-option plan-quotation-picker-option"
             ${state.linking ? 'disabled' : ''}
             onclick="planLinkQuotation('${escapeHtmlAttr(escapeJs(String(row.id)))}')">
-      <strong>${escapeHtml(row.number || 'Quotation')} · ${escapeHtml(row.projectName || 'Untitled project')}</strong>
-      <span>${escapeHtml([row.clientName, row.status].filter(Boolean).join(' · '))}</span>
+      <span class="plan-quotation-picker-option-main">
+        <strong>${escapeHtml(row.number || 'Quotation')} · ${escapeHtml(row.projectName || 'Untitled project')}</strong>
+        <small>${escapeHtml(row.clientName || 'Client not set')}</small>
+      </span>
+      <span class="finance-status" data-status="${escapeHtmlAttr(row.status || 'draft')}">
+        ${escapeHtml((row.status || 'draft').replace(/^./, letter => letter.toUpperCase()))}
+      </span>
     </button>
-  `).join('') || `<div class="finance-suggestion-empty">${state.loading ? 'Loading quotations...' : 'No unlinked quotations found.'}</div>`;
+  `).join('') || `<div class="finance-suggestion-empty">${state.loading ? 'Loading quotations...' : 'No unlinked quotations match this search or status.'}</div>`;
   more.hidden = !state.hasMore;
   more.style.display = state.hasMore ? '' : 'none';
   more.disabled = state.loading || state.linking;
@@ -3063,6 +3100,7 @@ async function planLoadQuotationOptions(append = false) {
   try {
     const params = new URLSearchParams({
       query: state.query,
+      status: state.status,
       offset: String(append ? state.nextOffset : 0),
       limit: '40'
     });
@@ -3071,6 +3109,8 @@ async function planLoadQuotationOptions(append = false) {
     state.rows = append ? [...state.rows, ...(response.data || [])] : response.data || [];
     state.nextOffset = Number(response.meta?.nextOffset || state.rows.length);
     state.hasMore = response.meta?.hasMore === true;
+    state.statusCounts = response.meta?.statusCounts || {};
+    state.statusTotal = Number(response.meta?.statusTotal || 0);
   } catch (error) {
     if (requestSeq !== state.requestSeq || eventId !== state.eventId) return;
     showNotification('error', error.message || 'Unable to load quotations');
@@ -3089,6 +3129,15 @@ function planQuotationPickerSearchChanged(value) {
   state.searchTimer = setTimeout(() => planLoadQuotationOptions(), 250);
 }
 
+function planSetQuotationPickerStatus(status) {
+  const state = planQuotationPickerState;
+  if (status !== 'all' && !PLAN_QUOTATION_PICKER_STATUSES.includes(status)) return;
+  if (state.status === status) return;
+  state.status = status;
+  clearTimeout(state.searchTimer);
+  return planLoadQuotationOptions();
+}
+
 function planOpenQuotationPicker() {
   const event = planPageState.event;
   if (!event || event.quotationId || !Number(event.id)) return;
@@ -3096,6 +3145,9 @@ function planOpenQuotationPicker() {
   const state = planQuotationPickerState;
   state.eventId = Number(event.id);
   state.query = '';
+  state.status = 'all';
+  state.statusCounts = {};
+  state.statusTotal = 0;
   state.rows = [];
   state.hasMore = false;
   state.linking = false;

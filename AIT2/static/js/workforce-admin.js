@@ -2385,8 +2385,12 @@ function ensureWorkforceModals() {
       <div class="wf-form-grid">
         <label class="wf-field wf-room-field full"><span>Room / Sub-project *</span><select id="wfTransportSubproject"></select></label>
         <div class="wf-form-grid wf-single-driver-fields full" id="wfSingleDriverFields">
-          <label class="wf-field"><span>Driver</span><input id="wfTransportDriver" placeholder="Driver name"></label>
-          <label class="wf-field"><span>Driver phone</span><input id="wfTransportDriverContact" type="tel" placeholder="+65 9123 4567"></label>
+          <label class="wf-field"><span>Driver</span><span class="wf-location-combobox wf-driver-combobox" onfocusout="wfTransportDriverFocusOut(event)">
+            <input id="wfTransportDriver" placeholder="Driver name" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="wfTransportDriverSuggestions"
+              onfocus="wfShowTransportDriverSuggestions(this)" oninput="wfTransportDriverInput(this)" onkeydown="wfTransportDriverSuggestionKeydown(event)">
+            <span class="wf-location-suggestions wf-driver-suggestions" id="wfTransportDriverSuggestions" role="listbox"></span>
+          </span></label>
+          <label class="wf-field"><span>Driver phone</span><input id="wfTransportDriverContact" type="tel" placeholder="+65 9123 4567" oninput="wfTransportDriverPhoneInput(this)"></label>
         </div>
         <label class="wf-field"><span>Trip Date *</span><input id="wfDepartDate" type="date" required oninput="syncTransportUsageDate()"></label>
         <label class="wf-field"><span>Depart Time *</span><input id="wfDepartTime" type="time" required oninput="scheduleTransportAvailability()"></label>
@@ -2519,6 +2523,12 @@ function wfUpdatePendingUploadProgress(row) {
 function openWorkforceModal(id) {
   ensureWorkforceModals();
   const modal = document.getElementById(id);
+  const openModals = [...document.querySelectorAll('.wf-modal.open')]
+    .filter(row => row !== modal);
+  const topLayer = Math.max(2000, ...openModals.map(row =>
+    Number(row.style.zIndex) || 2000
+  ));
+  modal.style.zIndex = openModals.length ? String(topLayer + 1) : '';
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -2539,6 +2549,7 @@ function closeWorkforceModal(id) {
   if (modal) {
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
+    modal.style.zIndex = '';
   }
   if (!document.querySelector('.wf-modal.open')) document.body.style.overflow = '';
   if (returnToHistory) {
@@ -4335,6 +4346,134 @@ function updateTransportVehicleDriver(encodedKey, field, value) {
   workforcePageState.transportDriverDetails.set(key, details);
 }
 
+function wfRememberTransportDriver(encodedKey, field, value) {
+  let key = encodedKey;
+  if (!key) {
+    const selections = wfSelectedTransportVehicles();
+    if (selections.length !== 1) return;
+    key = encodeURIComponent(wfTransportSelectionKey(
+      selections[0].sourceType, selections[0].id
+    ));
+  }
+  updateTransportVehicleDriver(key, field, value);
+}
+
+function wfTransportDriverSuggestionsRoot(input) {
+  return input?.closest('.wf-driver-combobox') || null;
+}
+
+function wfShowTransportDriverSuggestions(input) {
+  const root = wfTransportDriverSuggestionsRoot(input);
+  const results = root?.querySelector('.wf-driver-suggestions');
+  if (!results) return;
+  const query = String(input.value || '').trim().toLocaleLowerCase();
+  const users = (workforcePageState.data?.appUsers || [])
+    .filter(row => [row.name, row.username, row.phone].some(value =>
+      String(value || '').toLocaleLowerCase().includes(query)
+    ))
+    .slice(0, 8);
+  results.innerHTML = users.map(row => {
+    const name = row.name || row.username || 'App user';
+    return `<button type="button" role="option" data-username="${wfAttr(row.username)}"
+      onmousedown="event.preventDefault()" onclick="wfChooseTransportDriver(this)"
+      onkeydown="wfTransportDriverOptionKeydown(event)">
+      <span class="wf-driver-suggestion-avatar" aria-hidden="true">${wfEscape(wfInitials(name))}</span>
+      <span><strong>${wfEscape(name)}</strong>
+        <small>${wfEscape(row.username)}${row.phone ? ` · ${wfEscape(wfFormatPhone(row.phone))}` : ''}</small></span>
+    </button>`;
+  }).join('');
+  results.classList.toggle('open', users.length > 0);
+  const inputBounds = input.getBoundingClientRect?.();
+  const bodyBounds = input.closest('.wf-modal-body')?.getBoundingClientRect?.();
+  results.classList.toggle(
+    'open-upward',
+    Boolean(inputBounds && bodyBounds &&
+      bodyBounds.bottom - inputBounds.bottom < 220 &&
+      inputBounds.top - bodyBounds.top > bodyBounds.bottom - inputBounds.bottom)
+  );
+  input.setAttribute('aria-expanded', users.length ? 'true' : 'false');
+}
+
+function wfCloseTransportDriverSuggestions(root) {
+  if (!root) return;
+  root.querySelector('.wf-driver-suggestions')?.classList.remove('open');
+  root.querySelector('input[role="combobox"]')?.setAttribute('aria-expanded', 'false');
+}
+
+function wfTransportDriverFocusOut(event) {
+  const root = event.currentTarget;
+  if (!root.contains(event.relatedTarget)) wfCloseTransportDriverSuggestions(root);
+}
+
+function wfTransportDriverInput(input) {
+  const root = wfTransportDriverSuggestionsRoot(input);
+  const encodedKey = root?.dataset.driverKey || '';
+  if (root?.dataset.selectedUsername) {
+    const selected = wfFindAppUser(root.dataset.selectedUsername);
+    if (input.value !== (selected?.name || selected?.username || '')) {
+      const phone = encodedKey
+        ? root.closest('.wf-booking-driver-row')?.querySelector('[data-driver-contact]')
+        : document.getElementById('wfTransportDriverContact');
+      if (phone) phone.value = '';
+      wfRememberTransportDriver(encodedKey, 'contact', '');
+      root.dataset.selectedUsername = '';
+    }
+  }
+  wfRememberTransportDriver(encodedKey, 'driver', input.value);
+  wfShowTransportDriverSuggestions(input);
+}
+
+function wfTransportDriverPhoneInput(input) {
+  wfRememberTransportDriver(input.dataset.driverKey || '', 'contact', input.value);
+}
+
+function wfChooseTransportDriver(option) {
+  const user = wfFindAppUser(option.dataset.username);
+  const root = option.closest('.wf-driver-combobox');
+  const input = root?.querySelector('input[role="combobox"]');
+  if (!user || !input) return;
+  const encodedKey = root.dataset.driverKey || '';
+  const phone = encodedKey
+    ? root.closest('.wf-booking-driver-row')?.querySelector('[data-driver-contact]')
+    : document.getElementById('wfTransportDriverContact');
+  input.value = user.name || user.username;
+  if (phone) phone.value = user.phone || '';
+  root.dataset.selectedUsername = user.username;
+  wfRememberTransportDriver(encodedKey, 'driver', input.value);
+  wfRememberTransportDriver(encodedKey, 'contact', user.phone || '');
+  wfCloseTransportDriverSuggestions(root);
+  input.focus();
+}
+
+function wfTransportDriverSuggestionKeydown(event) {
+  const root = wfTransportDriverSuggestionsRoot(event.currentTarget);
+  if (event.key === 'Escape') {
+    wfCloseTransportDriverSuggestions(root);
+    return;
+  }
+  if (event.key !== 'ArrowDown') return;
+  const first = root?.querySelector('.wf-driver-suggestions.open button');
+  if (!first) return;
+  event.preventDefault();
+  first.focus();
+}
+
+function wfTransportDriverOptionKeydown(event) {
+  const root = event.currentTarget.closest('.wf-driver-combobox');
+  if (event.key === 'Escape') {
+    wfCloseTransportDriverSuggestions(root);
+    root?.querySelector('input[role="combobox"]')?.focus();
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+  const buttons = [...(root?.querySelectorAll('.wf-driver-suggestions button') || [])];
+  const index = buttons.indexOf(event.currentTarget);
+  const next = buttons[index + (event.key === 'ArrowDown' ? 1 : -1)];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+}
+
 function renderTransportVehicleDrivers() {
   const root = document.getElementById('wfBookingDrivers');
   const singleFields = document.getElementById('wfSingleDriverFields');
@@ -4358,15 +4497,19 @@ function renderTransportVehicleDrivers() {
     return;
   }
   root.innerHTML = `<div class="wf-booking-drivers-heading"><h5>Drivers</h5><p>Assign a different driver to each selected vehicle.</p></div>
-    <div class="wf-booking-driver-list">${selections.map(selection => {
+    <div class="wf-booking-driver-list">${selections.map((selection, index) => {
       const key = wfTransportSelectionKey(selection.sourceType, selection.id);
       const details = workforcePageState.transportDriverDetails.get(key) || {};
       const label = wfTransportSelectionLabel(selection);
       const encodedKey = encodeURIComponent(key);
       return `<article class="wf-booking-driver-row">
         <div><strong>${wfEscape(label.title)}</strong><small>${wfEscape(label.subtitle)}</small></div>
-        <label class="wf-field"><span>Driver *</span><input required value="${wfAttr(details.driver || '')}" placeholder="Driver name" oninput="updateTransportVehicleDriver('${wfAttr(encodedKey)}','driver',this.value)"></label>
-        <label class="wf-field"><span>Driver phone</span><input type="tel" value="${wfAttr(details.contact || '')}" placeholder="+65 9123 4567" oninput="updateTransportVehicleDriver('${wfAttr(encodedKey)}','contact',this.value)"></label>
+        <label class="wf-field"><span>Driver *</span><span class="wf-location-combobox wf-driver-combobox" data-driver-key="${wfAttr(encodedKey)}" onfocusout="wfTransportDriverFocusOut(event)">
+          <input required value="${wfAttr(details.driver || '')}" placeholder="Driver name" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="wfTransportDriverSuggestions-${index}"
+            onfocus="wfShowTransportDriverSuggestions(this)" oninput="wfTransportDriverInput(this)" onkeydown="wfTransportDriverSuggestionKeydown(event)">
+          <span class="wf-location-suggestions wf-driver-suggestions" id="wfTransportDriverSuggestions-${index}" role="listbox"></span>
+        </span></label>
+        <label class="wf-field"><span>Driver phone</span><input type="tel" data-driver-contact data-driver-key="${wfAttr(encodedKey)}" value="${wfAttr(details.contact || '')}" placeholder="+65 9123 4567" oninput="wfTransportDriverPhoneInput(this)"></label>
       </article>`;
     }).join('')}</div>`;
 }
@@ -4479,6 +4622,10 @@ function openTransportBooking(profileId = '', bookingId = '', preferredSource = 
   document.getElementById('wfTransportDriver').value = booking?.driver || '';
   document.getElementById('wfTransportDriverContact').value =
     booking?.driverContact || booking?.contactNumber || '';
+  const driverCombobox = document.getElementById('wfTransportDriver')
+    .closest('.wf-driver-combobox');
+  driverCombobox.dataset.selectedUsername = '';
+  wfCloseTransportDriverSuggestions(driverCombobox);
   const fromLocation = wfLocationParts(booking?.locationFromName || booking?.locationFrom, booking?.locationFromAddress);
   const toLocation = wfLocationParts(booking?.locationToName || booking?.locationTo, booking?.locationToAddress);
   document.getElementById('wfLocationFrom').value = fromLocation.name;
@@ -4593,6 +4740,8 @@ function selectTransportVehicle(source, id) {
         Number(profile.lastCost || 0).toFixed(2);
     }
   }
+  document.getElementById('wfTransportDriver')
+    .closest('.wf-driver-combobox').dataset.selectedUsername = '';
   setTransportBookingSource(source);
   if (document.getElementById('wfTransportTripType')?.value === 'return') {
     applyTransportReturnDefaults();

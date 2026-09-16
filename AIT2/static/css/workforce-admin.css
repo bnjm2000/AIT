@@ -4119,6 +4119,23 @@ button.wf-calendar-day.selected.has-conflict:hover {
   font-weight: 500;
 }
 
+.wf-driver-suggestion-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e6f4ef;
+  color: #15665a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.wf-driver-suggestions.open-upward {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .wf-location-suggestion-icon {
   display: grid;
   width: 30px;

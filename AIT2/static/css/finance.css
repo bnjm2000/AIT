@@ -2590,6 +2590,28 @@
   font-size: 12px;
 }
 
+.plan-quotation-picker-option {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.plan-quotation-picker-option-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.plan-quotation-picker-option-main strong {
+  color: var(--finance-ink);
+}
+
+.plan-quotation-picker-option .finance-status {
+  justify-self: end;
+  cursor: inherit;
+}
+
 .finance-picker-actions {
   display: flex;
   justify-content: flex-end;
@@ -2753,6 +2775,17 @@
   flex: 1 1 0;
   min-width: 0;
   white-space: nowrap;
+}
+
+.finance-event-linked-actions .finance-go-event-plan {
+  border: 1px solid var(--brand-main, #0f766e);
+  color: #fff;
+  background: var(--brand-main, #0f766e);
+}
+
+.finance-event-linked-actions .finance-go-event-plan:hover:not(:disabled),
+.finance-event-linked-actions .finance-go-event-plan:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--brand-main, #0f766e) 85%, #000);
 }
 
 .finance-client-option {

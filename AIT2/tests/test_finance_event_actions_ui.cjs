@@ -106,6 +106,12 @@ test('event pairing card has concise text and adjacent linked-event actions', ()
   assert.match(source, /onclick="financeGoToLinkedEventPlan\(\)"[^>]*>Go to Plan<\/button>/);
   assert.match(source, /Plan requires admin access/);
   assert.match(styles, /\.finance-event-linked-actions\s*\{[^}]*display:\s*flex/s);
+  const linkedActions = source.split('<div class="finance-event-linked-actions">', 2)[1];
+  assert.ok(linkedActions.indexOf('Go to Plan') < linkedActions.indexOf('Unpair event'));
+  assert.match(
+    styles,
+    /\.finance-event-linked-actions \.finance-go-event-plan\s*\{[^}]*background:\s*var\(--brand-main/s
+  );
 });
 
 test('Go to Plan saves quotation edits and opens its linked event for admins', async () => {

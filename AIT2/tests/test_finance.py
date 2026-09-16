@@ -220,6 +220,67 @@ class FinanceFeatureTests(unittest.TestCase):
         })
         self.assertEqual(sales_link.status_code, 200, sales_link.get_data(as_text=True))
 
+    def test_plan_quotation_picker_scopes_owners_and_filters_status(self):
+        first = self.create_quote('Alice Draft')
+        second = self.create_quote('Alice Cancelled')
+        cancelled_response = self.client.put(
+            f"/api/quotations/{second['id']}",
+            json={'status': 'cancelled', 'documentVersion': second['documentVersion']},
+        )
+        self.assertEqual(cancelled_response.status_code, 200)
+        second = cancelled_response.get_json()['data']
+
+        self.login('bob')
+        third = self.create_quote('Bob Draft')
+        self.data_manager.events[323] = Event(
+            event_id=323,
+            name='Picker Event',
+            location='Hall C',
+            start_date='20260922',
+            end_date='20260922',
+            asset_models=[],
+            prepared_items=[],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'bob'],
+        )
+        endpoint = '/api/events/323/quotation-link'
+
+        self.login('alice')
+        alice_options = self.client.get(endpoint).get_json()
+        self.assertEqual(
+            {row['id'] for row in alice_options['data']},
+            {first['id'], second['id']},
+        )
+        self.assertEqual(alice_options['meta']['statusTotal'], 2)
+        self.assertEqual(alice_options['meta']['statusCounts']['draft'], 1)
+        self.assertEqual(alice_options['meta']['statusCounts']['cancelled'], 1)
+        filtered = self.client.get(f'{endpoint}?status=cancelled').get_json()
+        self.assertEqual([row['id'] for row in filtered['data']], [second['id']])
+        self.assertEqual(filtered['meta']['statusTotal'], 2)
+        self.assertEqual(self.client.get(f'{endpoint}?status=invalid').status_code, 400)
+        self.assertEqual(self.client.put(endpoint, json={
+            'quotationId': third['id'],
+            'documentVersion': third['documentVersion'],
+        }).status_code, 404)
+
+        self.login('bob')
+        bob_options = self.client.get(endpoint).get_json()
+        self.assertEqual([row['id'] for row in bob_options['data']], [third['id']])
+
+        self.login('manager-no-sales')
+        manager_options = self.client.get(endpoint).get_json()
+        self.assertEqual(manager_options['data'], [])
+
+        for admin_username in ('review-admin', 'bnjm2000'):
+            self.login(admin_username)
+            admin_options = self.client.get(endpoint).get_json()
+            self.assertEqual(
+                {row['id'] for row in admin_options['data']},
+                {first['id'], second['id'], third['id']},
+            )
+
     def test_stale_quotation_save_is_rejected_with_latest_document(self):
         quotation = self.create_quote('Concurrent Quotation')
         stale_copy = copy.deepcopy(quotation)

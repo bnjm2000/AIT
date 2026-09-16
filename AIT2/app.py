@@ -49178,21 +49178,29 @@ def quotation_item(document_id):
 @require_event_access
 def event_quotation_link(event_id):
     """Find and pair an unlinked quotation without changing the event plan."""
-    is_admin = _current_user_effective_is_admin()
-    if not (is_admin or _current_user_has_sales_access()):
+    can_view_all = _current_user_can_manage_roles()
+    if not (_current_user_effective_is_admin() or _current_user_has_sales_access()):
         return jsonify({'error': 'Admin or Sales access required'}), 403
 
     with _finance_lock:
         finance_data = _load_finance_data()
+        current_username = _finance_current_username().casefold()
         quotations = [
             row for row in finance_data.get('documents') or []
             if isinstance(row, dict)
             and row.get('type') == 'quotation'
-            and (is_admin or _finance_user_can_access(row))
+            and (
+                can_view_all
+                or _finance_document_owner_username(row).casefold()
+                == current_username
+            )
         ]
 
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().casefold()[:200]
+            status = str(request.args.get('status') or 'all').strip().lower()
+            if status != 'all' and status not in FINANCE_QUOTATION_STATUSES:
+                return jsonify({'error': 'Invalid quotation status filter'}), 400
             available = []
             for row in quotations:
                 if _safe_int(row.get('eventId'), 0):
@@ -49213,6 +49221,13 @@ def event_quotation_link(event_id):
                     'documentVersion': max(1, _safe_int(row.get('documentVersion'), 1)),
                     'updatedAt': str(row.get('updatedAt') or ''),
                 })
+            status_counts = {
+                value: sum(1 for row in available if row['status'] == value)
+                for value in FINANCE_QUOTATION_STATUSES
+            }
+            status_total = len(available)
+            if status != 'all':
+                available = [row for row in available if row['status'] == status]
             available.sort(
                 key=lambda row: (row['updatedAt'], row['number']), reverse=True,
             )
@@ -49229,6 +49244,8 @@ def event_quotation_link(event_id):
                     'hasMore': next_offset < len(available),
                     'nextOffset': next_offset,
                     'total': len(available),
+                    'statusTotal': status_total,
+                    'statusCounts': status_counts,
                 },
             })
 

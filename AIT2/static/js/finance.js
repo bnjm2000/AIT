@@ -7931,8 +7931,8 @@ function financeRenderEditor() {
           </div>
           ${!document.eventId ? `<p id="financeEventCreationNote" class="finance-side-note" ${eventCreationIssue ? '' : 'hidden'}>${financeEscape(eventCreationIssue)}</p>` : ''}
           ${document.eventId ? `<div class="finance-event-linked-actions">
+            <button type="button" class="btn finance-go-event-plan" onclick="financeGoToLinkedEventPlan()" ${typeof isAdminUser === 'function' && isAdminUser() ? '' : 'disabled title="Plan requires admin access"'}>Go to Plan</button>
             <button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>
-            <button type="button" class="btn btn-secondary finance-go-event-plan" onclick="financeGoToLinkedEventPlan()" ${typeof isAdminUser === 'function' && isAdminUser() ? '' : 'disabled title="Plan requires admin access"'}>Go to Plan</button>
           </div>` : ''}
         </section>
         <section class="finance-card finance-section">
