@@ -11781,18 +11781,8 @@ function maintenanceReportDateForDisplay(dateText) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function maintenanceReportAssetLocation(asset) {
-  return String(
-    asset?.location ||
-    asset?.currentLocation ||
-    asset?.defaultLocation ||
-    'Store'
-  ).trim() || 'Store';
-}
-
-function maintenanceReportRowLocation(asset, log) {
-  const logLocation = getMaintenanceChangeValue(log, 'location');
-  return String(logLocation || maintenanceReportAssetLocation(asset)).trim() || 'Store';
+function maintenanceReportRowLocation(log) {
+  return String(getMaintenanceChangeValue(log, 'location') || '').trim();
 }
 
 function getAllMaintenanceReportRows() {
@@ -11809,7 +11799,7 @@ function getAllMaintenanceReportRows() {
         dateObj,
         dateSort: dateObj ? dateObj.getTime() : 0,
         type: normalizeMaintenanceLogType(log.type),
-        location: maintenanceReportRowLocation(asset, log),
+        location: maintenanceReportRowLocation(log),
         changes: getMaintenanceChangeLabels(log.changes)
       };
     });

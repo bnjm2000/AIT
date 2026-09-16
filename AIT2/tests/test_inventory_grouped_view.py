@@ -527,6 +527,20 @@ def test_maintenance_report_pdf_uses_only_committed_assets_and_generated_timesta
     assert "const endLabel = end ? maintenanceReportDateForDisplay(end) : 'Now';" in script
 
 
+def test_maintenance_report_only_shows_locations_changed_by_each_log():
+    script = APP_BUNDLE_SOURCE
+    location_start = script.index("function maintenanceReportRowLocation(log)")
+    location_end = script.index("function getAllMaintenanceReportRows()", location_start)
+    location_script = script[location_start:location_end]
+
+    assert "getMaintenanceChangeValue(log, 'location')" in location_script
+    assert "asset?.location" not in location_script
+    assert "currentLocation" not in location_script
+    assert "defaultLocation" not in location_script
+    assert "location: maintenanceReportRowLocation(log)" in script
+    assert "function maintenanceReportAssetLocation" not in script
+
+
 def test_inventory_summary_pdf_uses_generated_timestamp_and_asset_count():
     script = APP_BUNDLE_SOURCE
     pdf_start = script.index("function buildInventoryPdfPages")

@@ -2443,10 +2443,34 @@ function financeSyncDocumentDepartments(document = financeState.current) {
   });
   const departments = [...new Set((document.lineItems || []).map(line => financeLineSystem(line)))];
   document.departments = departments;
-  const active = new Set((document.lineItems || []).map(line => `${line.subprojectId || 'main'}::${financeLineSystem(line)}`));
+  const activeBySubproject = new Map();
+  (document.lineItems || []).forEach(line => {
+    const subprojectId = String(line.subprojectId || 'main');
+    if (!activeBySubproject.has(subprojectId)) {
+      activeBySubproject.set(subprojectId, []);
+    }
+    const category = financeLineSystem(line);
+    if (!activeBySubproject.get(subprojectId).includes(category)) {
+      activeBySubproject.get(subprojectId).push(category);
+    }
+  });
+  (document.adjustments || []).forEach(row => {
+    if (row.scope !== 'department') return;
+    const candidates = activeBySubproject.get(String(row.subprojectId || 'main')) || [];
+    const exact = candidates.find(category => (
+      category.toLocaleLowerCase() === String(row.department || '').trim().toLocaleLowerCase()
+    ));
+    const equivalent = candidates.filter(category => (
+      financeNormalisedDepartmentName(category)
+      === financeNormalisedDepartmentName(row.department)
+    ));
+    const match = exact || (equivalent.length === 1 ? equivalent[0] : '');
+    if (match) row.department = match;
+  });
   document.adjustments = (document.adjustments || []).filter(row => (
     row.scope !== 'department'
-    || active.has(`${row.subprojectId || 'main'}::${row.department}`)
+    || (activeBySubproject.get(String(row.subprojectId || 'main')) || [])
+      .includes(row.department)
   ));
   return departments;
 }

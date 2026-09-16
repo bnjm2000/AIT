@@ -6378,6 +6378,47 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertEqual(percent_mode['adjustments'][0]['amount'], -300)
 
+    def test_category_discount_survives_other_edits_with_legacy_category_suffix(self):
+        quotation = self.create_quote('Persistent Category Discount')
+        quotation['lineItems'] = [{
+            'id': 'audio', 'catalogKey': '', 'description': 'Audio package',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'systemName': 'Audio Department',
+            'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 1000,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        quotation['adjustments'] = [{
+            'id': 'persistent-category-discount', 'scope': 'department',
+            'department': 'Audio Department', 'label': 'Discount',
+            'amount': -100, 'percent': 10, 'kind': 'discount',
+            'calculationMode': 'percent', 'subprojectId': 'main',
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+        self.assertEqual(len(saved['adjustments']), 1)
+        self.assertEqual(
+            saved['adjustments'][0]['department'], 'Audio Department',
+        )
+
+        saved['lineItems'][0]['description'] = 'Updated audio package'
+        edited = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=saved,
+        ).get_json()['data']
+        self.assertEqual(len(edited['adjustments']), 1)
+        self.assertEqual(edited['adjustments'][0]['percent'], 10)
+        self.assertEqual(edited['adjustments'][0]['amount'], -100)
+        self.assertEqual(
+            edited['adjustments'][0]['department'], 'Audio Department',
+        )
+
+        source = Path('static/js/finance.js').read_text(encoding='utf-8')
+        sync_source = source.split(
+            'function financeSyncDocumentDepartments', 1,
+        )[1].split('function financeLineGroupMembers', 1)[0]
+        self.assertIn('financeNormalisedDepartmentName(category)', sync_source)
+        self.assertIn('if (match) row.department = match;', sync_source)
+
     def test_category_discount_defaults_to_discount_and_pdf_shows_percentage(self):
         quotation = self.create_quote('Default Discount Label')
         quotation.update({

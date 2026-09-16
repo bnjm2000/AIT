@@ -34989,6 +34989,39 @@ def _finance_adjustment_system_name(value):
     return name[:200]
 
 
+def _finance_category_name_identity(value):
+    """Match legacy Department/System labels without changing the saved label."""
+    name = re.sub(r'\s+', ' ', str(value or '').strip())
+    return re.sub(
+        r'\s+(?:department|system)$',
+        '',
+        name,
+        flags=re.IGNORECASE,
+    ).strip().casefold()
+
+
+def _finance_match_active_category(value, active_categories):
+    """Return the exact active category represented by an adjustment label."""
+    categories = [
+        re.sub(r'\s+', ' ', str(category or '').strip())
+        for category in active_categories or []
+        if str(category or '').strip()
+    ]
+    raw = re.sub(r'\s+', ' ', str(value or '').strip())
+    exact = next(
+        (category for category in categories if category.casefold() == raw.casefold()),
+        '',
+    )
+    if exact:
+        return exact
+    identity = _finance_category_name_identity(raw)
+    matches = [
+        category for category in categories
+        if _finance_category_name_identity(category) == identity
+    ]
+    return matches[0] if len(matches) == 1 else ''
+
+
 def _finance_format_number(prefix, year, sequence, revision):
     return f"{prefix}-{year}-{max(1, int(sequence)):03d}-{min(99, max(1, int(revision))):02d}"
 
@@ -35441,6 +35474,17 @@ def _migrate_finance_data(data):
         if document.get('subprojects') != normalised_subprojects:
             document['subprojects'] = normalised_subprojects
             changed = True
+        categories_by_subproject = {}
+        for line in document.get('lineItems') or []:
+            if not isinstance(line, dict):
+                continue
+            subproject_id = str(line.get('subprojectId') or normalised_subprojects[0]['id'])
+            category = _finance_system_name(
+                line.get('department'), line.get('systemName')
+            )
+            categories_by_subproject.setdefault(subproject_id, [])
+            if category not in categories_by_subproject[subproject_id]:
+                categories_by_subproject[subproject_id].append(category)
         for adjustment in document.get('adjustments') or []:
             if not isinstance(adjustment, dict):
                 continue
@@ -35448,10 +35492,16 @@ def _migrate_finance_data(data):
                 adjustment['subprojectId'] = normalised_subprojects[0]['id']
                 changed = True
             if adjustment.get('scope') == 'department':
-                system_name = _finance_adjustment_system_name(
-                    adjustment.get('department')
+                system_name = _finance_match_active_category(
+                    adjustment.get('department'),
+                    categories_by_subproject.get(
+                        str(adjustment.get('subprojectId') or normalised_subprojects[0]['id']),
+                        [],
+                    ),
+                ) or _finance_match_active_category(
+                    adjustment.get('department'), department_names
                 )
-                if adjustment.get('department') != system_name:
+                if system_name and adjustment.get('department') != system_name:
                     adjustment['department'] = system_name
                     changed = True
 
@@ -37271,10 +37321,29 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         else existing.get('projectName') or existing.get('title') or ''
     ).strip()[:500]
     departments = _finance_active_departments(lines)
+    active_departments = {}
+    for line in lines:
+        subproject_id = str(line.get('subprojectId') or fallback_subproject_id)
+        category = _finance_system_name(
+            line.get('department'), line.get('systemName')
+        )
+        active_departments.setdefault(subproject_id, [])
+        if category not in active_departments[subproject_id]:
+            active_departments[subproject_id].append(category)
+    for row in adjustments:
+        if row.get('scope') != 'department':
+            continue
+        subproject_id = str(row.get('subprojectId') or fallback_subproject_id)
+        matched_category = _finance_match_active_category(
+            row.get('department'), active_departments.get(subproject_id, [])
+        ) or _finance_match_active_category(row.get('department'), departments)
+        if matched_category:
+            row['department'] = matched_category
     active_department_names = set(departments)
     adjustments = [
         row for row in adjustments
-        if row.get('scope') != 'department' or row.get('department') in active_department_names
+        if row.get('scope') != 'department'
+        or row.get('department') in active_department_names
     ]
     total_locked = bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False))
     locked_raw = (

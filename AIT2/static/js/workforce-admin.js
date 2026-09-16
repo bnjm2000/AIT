@@ -516,18 +516,22 @@ function openEventWorkforce(eventId, focus = '') {
     return;
   }
   const id = Number(eventId);
+  const focusTarget = String(focus || '');
   workforcePageState.eventId = id;
   workforcePageState.data = null;
   workforcePageState.activeSubprojectId = 'all';
   if (focus !== 'transport') {
-    workforcePageState.viewMode = focus === 'department'
+    workforcePageState.viewMode = (
+      focus === 'department'
+      || focusTarget.startsWith('review-claim:')
+    )
       ? 'assignments'
       : 'schedule';
   }
   if (typeof resetWorkforceScheduleFilters === 'function') {
     resetWorkforceScheduleFilters();
   }
-  workforcePageState.focusTarget = String(focus || '');
+  workforcePageState.focusTarget = focusTarget;
   if (id && typeof workflowRememberEvent === 'function') workflowRememberEvent(id);
   showSection(focus === 'transport' ? 'transport' : 'workforce', { eventId: id });
 }

@@ -19,6 +19,35 @@ function setup() {
   return context;
 }
 
+test('P&L invoice and claim review links open the department view before the dialog', () => {
+  const context = setup();
+  const result = vm.runInContext(`
+    isAdminUser = () => true;
+    resetWorkforceScheduleFilters = () => {};
+    workflowRememberEvent = id => { capturedRememberedEvent = id; };
+    showSection = (section, options) => {
+      capturedSection = section;
+      capturedSectionEvent = options.eventId;
+    };
+    openEventWorkforceReview(42, 'submission-7');
+    ({
+      eventId: workforcePageState.eventId,
+      viewMode: workforcePageState.viewMode,
+      focusTarget: workforcePageState.focusTarget,
+      rememberedEvent: capturedRememberedEvent,
+      section: capturedSection,
+      sectionEvent: capturedSectionEvent,
+    });
+  `, context);
+
+  assert.equal(result.eventId, 42);
+  assert.equal(result.viewMode, 'assignments');
+  assert.equal(result.focusTarget, 'review-claim:submission-7');
+  assert.equal(result.rememberedEvent, 42);
+  assert.equal(result.section, 'workforce');
+  assert.equal(result.sectionEvent, 42);
+});
+
 test('department claims display category and date in chronological order, missing dates last', () => {
   const context = setup();
   const html = vm.runInContext(`wfSubmissionRowsMarkup([
