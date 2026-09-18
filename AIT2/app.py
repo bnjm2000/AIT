@@ -6885,6 +6885,106 @@ def _event_subproject_returned_prepared_quantity(subproject, group):
     )
 
 
+def _event_prepared_slot_totals(event, list_name):
+    """Return countable anonymous prepared quantities grouped by model.
+
+    The event-level ``[PREPARED]`` markers are the durable source of truth.
+    Room ``preparedQuantity`` fields only allocate those markers between rooms,
+    so they must never outlive or exceed the corresponding event marker.
+    """
+    extras = set(getattr(event, 'extra_assets', []) or [])
+    totals = defaultdict(int)
+    for ref in getattr(event, list_name, []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker or ref in extras:
+            continue
+        key = _model_key_from_parts(
+            marker['department'],
+            marker['brand'],
+            marker['model'],
+            marker.get('description'),
+        )
+        totals[key] += max(1, _safe_int(marker.get('quantity'), 1))
+    return totals
+
+
+def _reconcile_event_subproject_prepared_slots(event):
+    """Keep room anonymous counters aligned with event-level markers.
+
+    Consolidated preparation and exact-ID replacement can update an aggregate
+    marker without naming a room. Preserve valid room allocations where
+    possible, trim stale counters, then distribute any unallocated markers into
+    remaining room capacity. Returned slots are allocated before active slots
+    because they represent completed historical preparation.
+    """
+    rooms = [
+        room for room in (getattr(event, 'subprojects', []) or [])
+        if isinstance(room, dict)
+    ]
+    if not rooms:
+        return False
+
+    items_by_key = defaultdict(list)
+    for room in rooms:
+        for item in room.get('items') or []:
+            group = _event_subproject_item_group(item)
+            if group:
+                items_by_key[_event_model_group_key(group)].append(item)
+
+    active_totals = _event_prepared_slot_totals(event, 'actually_prepared')
+    returned_totals = _event_prepared_slot_totals(event, 'returned_items')
+    changed = False
+
+    for key, items in items_by_key.items():
+        capacities = [
+            max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+            for item in items
+        ]
+        used = [0] * len(items)
+
+        def allocate(field, requested):
+            nonlocal changed
+            remaining = min(
+                max(0, _safe_int(requested, 0)),
+                sum(max(0, capacity - used[index]) for index, capacity in enumerate(capacities)),
+            )
+            allocations = [0] * len(items)
+
+            # Keep existing room ownership first so room-specific actions do
+            # not jump between rooms after every save.
+            for index, item in enumerate(items):
+                current = max(0, _safe_int(item.get(field), 0))
+                retained = min(
+                    current,
+                    max(0, capacities[index] - used[index]),
+                    remaining,
+                )
+                allocations[index] = retained
+                used[index] += retained
+                remaining -= retained
+
+            # Aggregate actions have no room ID. Allocate their remaining
+            # markers deterministically into the first open room requirements.
+            for index, capacity in enumerate(capacities):
+                if remaining <= 0:
+                    break
+                added = min(max(0, capacity - used[index]), remaining)
+                allocations[index] += added
+                used[index] += added
+                remaining -= added
+
+            for item, quantity in zip(items, allocations):
+                previous = max(0, _safe_int(item.get(field), 0))
+                if previous != quantity or (quantity > 0 and field not in item):
+                    item[field] = quantity
+                    changed = True
+
+        allocate('returnedPreparedQuantity', returned_totals.get(key, 0))
+        allocate('preparedQuantity', active_totals.get(key, 0))
+
+    return changed
+
+
 def _event_subproject_prepared_quantity(event, subproject, group):
     total = _event_subproject_anonymous_prepared_quantity(subproject, group)
     returned = set(getattr(event, 'returned_items', []) or [])
@@ -6948,6 +7048,20 @@ def _reconcile_event_subproject_extras(event, inventory=None):
     original_rooms = copy.deepcopy(rooms)
     original_extras = list(event.extra_assets)
     original_prepared_items = list(event.prepared_items)
+    _reconcile_event_subproject_prepared_slots(event)
+
+    # Consolidated scans do not carry a room ID. Once aggregate slot counters
+    # are aligned, attach any such exact IDs to the matching open room before
+    # deciding which references are true extras.
+    inventory_source = (
+        inventory
+        if inventory is not None
+        else (data_manager.inventory if data_manager else {})
+    )
+    _link_unowned_event_asset_refs_to_subprojects(
+        event,
+        inventory_source,
+    )
     active_physical = set(getattr(event, 'actually_prepared', []) or [])
     active_physical.update(getattr(event, 'returned_items', []) or [])
     valid_refs = set(active_physical)
@@ -27478,6 +27592,8 @@ def return_event_prepared_quantity(event_id):
         if subproject:
             _event_subproject_adjust_prepared(subproject, group, -quantity)
             _event_subproject_adjust_returned_prepared(subproject, group, quantity)
+        if getattr(event, 'subprojects', []) or []:
+            _reconcile_event_subproject_extras(event)
 
         update_event_state(event)
         data_manager.save_event(event)
@@ -27545,6 +27661,8 @@ def unreturn_event_prepared_quantity(event_id):
         if subproject:
             _event_subproject_adjust_returned_prepared(subproject, group, -quantity)
             _event_subproject_adjust_prepared(subproject, group, quantity)
+        if getattr(event, 'subprojects', []) or []:
+            _reconcile_event_subproject_extras(event)
 
         update_event_state(event)
         data_manager.save_event(event)
@@ -27921,6 +28039,9 @@ def return_department_assets(event_id):
                 _event_asset_log_item(quantity=removed, group=group)
             )
 
+        if getattr(event, 'subprojects', []) or []:
+            _reconcile_event_subproject_extras(event)
+
         # Persist
         data_manager.save_inventory()
         update_event_state(event)
@@ -28164,6 +28285,7 @@ def assign_specific_asset_to_model(event_id):
                     returned_slot_quantity,
                     _event_subproject_returned_prepared_quantity(subproject, asset_group),
                 )
+            replaces_prepared_slot = active_slot_quantity > 0
             reconciles_returned_slot = bool(
                 not add_scanned_assets_to_event
                 and active_slot_quantity <= 0
@@ -28211,14 +28333,21 @@ def assign_specific_asset_to_model(event_id):
                 }), 400
 
             if add_scanned_assets_to_event:
-                # Quick-add prepares are allowed to raise the requirement so the
-                # scanned asset becomes part of the event packing list.
-                added_requirement_units = _ensure_quick_add_model_requirement(
-                    event,
-                    subproject,
-                    asset,
-                    1,
-                )
+                # An anonymous prepared slot is a temporary placeholder for an
+                # exact asset ID. Identifying that asset must consume the slot
+                # even when Quick-add is enabled; otherwise the scan grows the
+                # requirement and leaves the placeholder behind as a phantom
+                # prepared unit in the room.
+                added_requirement_units = 0
+                if not replaces_prepared_slot:
+                    # With no placeholder to replace, Quick-add may raise the
+                    # requirement so a genuine surplus scan becomes demand.
+                    added_requirement_units = _ensure_quick_add_model_requirement(
+                        event,
+                        subproject,
+                        asset,
+                        1,
+                    )
                 fills_existing_requirement = True
 
                 if added_requirement_units:
@@ -28266,7 +28395,7 @@ def assign_specific_asset_to_model(event_id):
             )
             
             if fills_existing_requirement:
-                if not add_scanned_assets_to_event:
+                if not add_scanned_assets_to_event or replaces_prepared_slot:
                     consumed_prepared_slot = bool(
                         _decrement_prepared_model_slot(event, asset_group, 1)
                     )
@@ -28336,6 +28465,10 @@ def assign_specific_asset_to_model(event_id):
                     assigned_group,
                     -1,
                 )
+            _reconcile_event_subproject_extras(event)
+        elif getattr(event, 'subprojects', []) or []:
+            # All-requirements scans have no room ID. Reconcile the aggregate
+            # slot change and attach the exact ID to the newly opened room slot.
             _reconcile_event_subproject_extras(event)
 
         # Update event state
@@ -28477,6 +28610,9 @@ def prepare_event_model_quantity(event_id):
                         prepared_now,
                     )
 
+            if getattr(event, 'subprojects', []) or []:
+                _reconcile_event_subproject_extras(event)
+
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -28557,6 +28693,9 @@ def prepare_event_model_quantity(event_id):
                         ref for ref in item.get('assetRefs') or []
                         if ref in active_refs
                     ]
+
+            if getattr(event, 'subprojects', []) or []:
+                _reconcile_event_subproject_extras(event)
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -41971,13 +42110,13 @@ def _finance_rate_card_rows(finance_data):
             or 'Unknown Department'
         ).strip()[:240] or 'Unknown Department'
         line = _normalise_finance_line(source)
-        if not line.get('description'):
-            return
         key_hint = str(key_hint or '').strip()
         catalog_key = str(line.get('catalogKey') or '').strip()
         if not catalog_key and key_hint and not key_hint.startswith('custom:'):
             catalog_key = key_hint
         catalog_key, canonical = resolve_inventory(line, catalog_key)
+        if not canonical and not line.get('description'):
+            return
         if canonical:
             line.update(canonical)
         identity = catalog_key.lower() or (
@@ -47281,8 +47420,6 @@ def finance_rate_card():
         department, department_code = _finance_department_details(
             payload.get('department'), payload.get('departmentCode')
         )
-        if not description:
-            return jsonify({'error': 'Description is required'}), 400
         catalog_key = str(
             payload.get('catalogKey') or payload.get('productKey') or ''
         ).strip()[:500]
@@ -47325,6 +47462,8 @@ def finance_rate_card():
                 payload['model'],
                 description,
             )
+        if not description and not matched_assets:
+            return jsonify({'error': 'Description is required'}), 400
         owner = _finance_current_username().lower()
         price_book = finance_data.setdefault('priceBook', {})
         # Products are company-wide. Legacy remembered rates retain their old

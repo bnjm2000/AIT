@@ -735,7 +735,9 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(len(self.event.subprojects), 1)
         main_item = self.event.subprojects[0]['items'][0]
         self.assertEqual(main_item['quantity'], 3)
-        self.assertEqual(main_item['preparedQuantity'], 1)
+        # The exact asset ID is the prepared unit. A room-only anonymous count
+        # without a matching event [PREPARED] marker would double-count it.
+        self.assertEqual(main_item['preparedQuantity'], 0)
         self.assertEqual(main_item['assetRefs'], ['A#01'])
         self.assertIn('A#01', self.event.actually_prepared)
 

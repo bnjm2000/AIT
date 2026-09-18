@@ -239,6 +239,128 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|2|Matching item', event.prepared_items)
 
+    def test_quick_add_exact_id_replaces_anonymous_room_slot(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Matching item',
+        }
+        prepared_slot = app_module._prepared_model_marker(group, 1)
+        event = self.make_event(
+            event_id=127,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[prepared_slot],
+            extra=[],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_main',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+                'preparedQuantity': 1,
+                'isCustom': False,
+                'assetRefs': [],
+            }],
+            'extraRefs': [],
+        }]
+
+        response = self.post_assign(
+            event.event_id,
+            asset_id='A#01',
+            quickAdd=True,
+            fromContainer=True,
+            source='container',
+            subprojectId='main',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['addedRequirementUnits'], 0)
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+        )
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertEqual(event.extra_assets, [])
+        room_item = event.subprojects[0]['items'][0]
+        self.assertEqual(room_item['preparedQuantity'], 0)
+        self.assertEqual(room_item['assetRefs'], ['A#01'])
+
+    def test_consolidated_scans_replace_room_slots_without_phantom_extras(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Matching item',
+        }
+        prepared_slot = app_module._prepared_model_marker(group, 2)
+        event = self.make_event(
+            event_id=128,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=[prepared_slot],
+            extra=[],
+        )
+        event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Room 1',
+                'items': [{
+                    'lineId': 'plan_room_1',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'TestModel',
+                    'description': 'Matching item',
+                    'quantity': 1,
+                    'preparedQuantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+                'extraRefs': [],
+            },
+            {
+                'id': 'room-2',
+                'name': 'Room 2',
+                'items': [{
+                    'lineId': 'plan_room_2',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'TestModel',
+                    'description': 'Matching item',
+                    'quantity': 1,
+                    'preparedQuantity': 1,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+                'extraRefs': [],
+            },
+        ]
+
+        first = self.post_assign(event.event_id, asset_id='A#01', quickAdd=True)
+        second = self.post_assign(event.event_id, asset_id='A#02', quickAdd=True)
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+        )
+        self.assertEqual(set(event.actually_prepared), {'A#01', 'A#02'})
+        self.assertEqual(event.extra_assets, [])
+        room_items = [room['items'][0] for room in event.subprojects]
+        self.assertEqual(sum(item['preparedQuantity'] for item in room_items), 0)
+        self.assertEqual(
+            {ref for item in room_items for ref in item['assetRefs']},
+            {'A#01', 'A#02'},
+        )
+
     def test_scanned_assignment_persists_event_and_audit_log_in_one_write(self):
         event = self.make_event(event_id=126, actual=[])
 
@@ -1282,6 +1404,41 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(event.subprojects[0]['extraRefs'], [])
         self.assertEqual(event.extra_assets, [])
         self.assertNotIn('A#02', event.prepared_items)
+
+    def test_room_reconciliation_clears_orphaned_anonymous_slots(self):
+        event = self.make_event(
+            event_id=129,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=['A#01', 'A#02', 'A#03'],
+            extra=['A#02', 'A#03'],
+        )
+        event.subprojects = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': [{
+                'lineId': 'plan_1',
+                'department': 'AX',
+                'departmentCode': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 2,
+                # This stale room counter has no corresponding event-level
+                # [PREPARED] marker and must not keep A#02 classified as extra.
+                'preparedQuantity': 1,
+                'assetRefs': ['A#01'],
+            }],
+            'extraRefs': ['A#02', 'A#03'],
+        }]
+
+        result = app_module._reconcile_event_subproject_extras(event)
+
+        self.assertTrue(result['changed'])
+        room = event.subprojects[0]
+        self.assertEqual(room['items'][0]['preparedQuantity'], 0)
+        self.assertEqual(room['items'][0]['assetRefs'], ['A#01', 'A#02'])
+        self.assertEqual(room['extraRefs'], ['A#03'])
+        self.assertEqual(event.extra_assets, ['A#03'])
 
     def test_partial_bulk_room_surplus_stays_attached_and_rebalances(self):
         self.data_manager.inventory['BULK-0001'] = self.make_asset(

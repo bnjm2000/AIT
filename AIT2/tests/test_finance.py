@@ -2465,6 +2465,37 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(self.client.get('/products').status_code, 302)
 
+    def test_inventory_product_without_description_can_change_category(self):
+        self.data_manager.inventory['LX#02'] = InventoryItem(
+            asset_id='LX#02',
+            brand='Robe',
+            model_number='T1 Profile',
+            serial_number='T1-SN-1',
+            description='',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='LX',
+        )
+        self.data_manager.save_inventory()
+        product = next(
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('model') == 'T1 Profile'
+        )
+        self.assertEqual(product['description'], '')
+
+        updated = self.client.post('/api/finance/products', json={
+            **product,
+            'productCategory': 'Moving Lights',
+        })
+
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        saved = next(
+            row for row in updated.get_json()['data']
+            if row.get('model') == 'T1 Profile'
+        )
+        self.assertEqual(saved['productCategory'], 'Moving Lights')
+        self.assertEqual(saved['productLabel'], 'Robe T1 Profile')
+
     def test_zero_inventory_products_are_not_listed_or_suggested(self):
         finance_data = app_module._load_finance_data()
         stored_product = {
