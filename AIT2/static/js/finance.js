@@ -3462,7 +3462,7 @@ function setupFinanceNavigation() {
     <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
     ` : ''}
     ${canUseClients ? '<button type="button" class="nav-item nav-item-inline" data-section="clients">Clients</button>' : ''}
-    ${canUseAccounting ? '<button type="button" class="nav-item nav-item-inline accounting-access-only" data-section="accounting">Accounting</button>' : ''}
+    ${canUseAccounting ? '<button type="button" class="nav-item nav-item-inline accounting-access-only" data-section="accounting">Accounting <span class="accounting-beta-badge accounting-beta-badge-nav">Beta</span></button>' : ''}
   `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
   const settings = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Settings');

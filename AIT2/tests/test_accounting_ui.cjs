@@ -25,6 +25,8 @@ assert(supplier.includes('<span>Supplier</span>'));
 assert(supplier.includes('format=xlsx'));
 const controls=vm.runInContext('acSettings()',context);
 assert(controls.includes('data-gst-revenue="4000"'));
+const accountingHeading=vm.runInContext('accountingHeader()',context);
+assert(accountingHeading.includes('Accounting <span class="accounting-beta-badge">Beta</span>'));
 assert(!vm.runInContext("acCellRef({ref:{journalIds:['wrong-period']},cellRefs:{period0:null}},'period0')",context));
 assert(!vm.runInContext("acCellRef({ref:{journalIds:['wrong-period']}},'period1')",context));
 assert.equal(vm.runInContext("acCellRef({ref:{journalIds:['all']},cellRefs:{variance:{journalIds:['current','previous']}}},'variance').journalIds.length",context),2);
@@ -66,6 +68,7 @@ for(const [sales,owner,role,expected] of [[false,false,'admin',true],[true,false
   const navContext=vm.createContext({ensureFinanceSections(){},currentUserHasSalesAccess:()=>sales,isPlatformAdminUser:()=>owner,canCurrentUserManageRoles:()=>owner||role==='admin',currentUser:{role},document:{getElementById:()=>sidebar,createElement:()=>({dataset:{}})}});
   vm.runInContext(navigationSource+';setupFinanceNavigation();',navContext);
   assert.equal((inserted?.innerHTML.match(/data-section="accounting"/g)||[]).length,expected?1:0);
+  if(expected)assert(inserted.innerHTML.includes('accounting-beta-badge-nav'));
   if(expected)assert(legacyRemoved);
   if(!sales)assert(!inserted?.innerHTML.includes('data-section="costing"'));
 }

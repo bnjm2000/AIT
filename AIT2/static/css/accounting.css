@@ -66,8 +66,35 @@
   padding-bottom: 16px;
 }
 
-.accounting-header h2 { margin: 0; font-size: 1.72rem; letter-spacing: 0; }
+.accounting-header h2 { display:flex;align-items:center;gap:9px;margin:0;font-size:1.72rem;letter-spacing:0; }
 .accounting-header p { margin: 4px 0 0; color: var(--accounting-muted); }
+
+.accounting-beta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 3px 7px;
+  border: 1px solid #d8b4fe;
+  border-radius: 999px;
+  background: #f3e8ff;
+  color: #7e22ce;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.accounting-beta-badge-nav { margin-left:auto;min-height:18px;padding:3px 6px;font-size:8px; }
+.nav-item.active .accounting-beta-badge-nav,
+.nav-item[aria-current="page"] .accounting-beta-badge-nav {
+  border-color: rgba(255,255,255,.42);
+  background: rgba(255,255,255,.17);
+  color: #fff;
+}
 
 .accounting-header-actions,
 .accounting-tools {

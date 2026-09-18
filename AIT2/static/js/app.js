@@ -3955,7 +3955,10 @@ function applySidebarWireIcons(sidebar) {
     item.removeAttribute('data-mark');
     item.removeAttribute('data-label');
     item.classList.toggle('nav-item-text-only', textOnly);
-    item.innerHTML = `${textOnly ? '' : navWireIconSvg(section)}<span class="nav-label">${escapeHtml(label)}</span>`;
+    const betaBadge = section === 'accounting'
+      ? '<span class="accounting-beta-badge accounting-beta-badge-nav">Beta</span>'
+      : '';
+    item.innerHTML = `${textOnly ? '' : navWireIconSvg(section)}<span class="nav-label">${escapeHtml(label)}</span>${betaBadge}`;
     if (counter && section === 'return') item.appendChild(counter);
   });
 }

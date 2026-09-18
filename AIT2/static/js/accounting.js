@@ -101,7 +101,7 @@ function accountingHeader() {
   return `
     <header class="accounting-header">
       <div>
-        <h2>Accounting</h2>
+        <h2>Accounting <span class="accounting-beta-badge">Beta</span></h2>
         <p>Singapore company books <span class="ac-base-currency">SGD</span></p>
       </div>
       <div class="accounting-header-actions">
