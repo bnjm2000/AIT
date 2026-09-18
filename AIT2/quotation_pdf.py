@@ -2052,6 +2052,13 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph(discount_label, body),
                 _paragraph(_money(-invoice_discount_amount, currency), right),
             ])
+        summary_rows.extend([
+            [
+                _paragraph(f"Amount paid on {_date_long(row.get('date'))}", body),
+                _paragraph(_money(-float(row.get('amount') or 0), currency), right),
+            ]
+            for row in received_payments
+        ])
         summary_rows.append([
             _paragraph('Grand Total', body),
             _paragraph(_money(adjusted_total, currency), right_bold),
@@ -2061,13 +2068,6 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph(f"{tax_label} amount included ({tax_rate:g}%)", body),
                 _paragraph(_money(adjusted_tax, currency), right),
             ])
-        summary_rows.extend([
-            [
-                _paragraph(f"Amount paid on {_date_long(row.get('date'))}", body),
-                _paragraph(_money(-float(row.get('amount') or 0), currency), right),
-            ]
-            for row in received_payments
-        ])
         if received_payments:
             summary_rows.append([
                 _paragraph('Balance remaining', ParagraphStyle('InvoiceBalanceLabel', parent=body, fontName=font_bold)),

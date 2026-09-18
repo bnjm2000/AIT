@@ -11370,6 +11370,13 @@ class FinanceFeatureTests(unittest.TestCase):
             page.extract_text() or ''
             for page in PdfReader(io.BytesIO(pdf_response.data)).pages
         )
+        payment_label = 'Amount paid on 21 August 2026'
+        self.assertIn(payment_label, pdf_text)
+        pdf_lines = [line.strip() for line in pdf_text.splitlines()]
+        self.assertLess(
+            pdf_lines.index(payment_label),
+            pdf_lines.index('Grand Total'),
+        )
         self.assertIn('Balance remaining', pdf_text)
         self.assertIn('AMOUNT DUE', pdf_text)
         self.assertGreater(expected_balance, 0)
