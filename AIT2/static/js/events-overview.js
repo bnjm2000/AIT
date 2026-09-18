@@ -268,6 +268,9 @@ function renderProgressCell(done, total) {
 let allEventsStateFilter = 'Active';
 let allEventsTypeFilter = 'all';
 let eventOverviewDocumentHandlersBound = false;
+let allEventsOverviewStateCounts = null;
+let allEventsOverviewStateCountsByTag = null;
+let allEventsLoadedScope = 'none';
 
 function overviewDisplayState(event) {
   return eventStateDisplayLabel(event?.state || 'New');
@@ -371,7 +374,24 @@ function setEventStateFilter(state) {
   document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
     button.classList.toggle('active', button.dataset.eventState === allEventsStateFilter);
   });
+  if (
+    getActiveAllEventsTab() !== 'calendar'
+    && overviewStateFilterNeedsFullSet()
+    && allEventsLoadedScope !== 'all'
+  ) {
+    loadAllEvents({ scope: 'all' });
+    return;
+  }
   renderAllEventsList(events);
+}
+
+function overviewStateFilterNeedsFullSet() {
+  return ['All', 'Closed', 'Pending Closure'].includes(allEventsStateFilter);
+}
+
+function requestedAllEventsScope() {
+  if (overviewStateFilterNeedsFullSet() || allEventsLoadedScope === 'all') return 'all';
+  return 'active';
 }
 
 function eventMatchesOverviewStateFilter(event, stateFilter = allEventsStateFilter) {
@@ -387,10 +407,19 @@ function updateEventStateFilterCounts(list, preferCalendarTotals = false) {
     && calendarStateCounts
     && typeof calendarStateCounts === 'object'
   );
-  if (useCalendarTotals) {
+  const useOverviewTotals = (
+    !preferCalendarTotals
+    && allEventsOverviewStateCounts
+    && typeof allEventsOverviewStateCounts === 'object'
+  );
+  if (useCalendarTotals || useOverviewTotals) {
+    const totals = useCalendarTotals ? calendarStateCounts : allEventsOverviewStateCounts;
+    const totalsByTag = useCalendarTotals
+      ? calendarStateCountsByTag
+      : allEventsOverviewStateCountsByTag;
     const sourceCounts = allEventsTypeFilter === 'all'
-      ? calendarStateCounts
-      : (calendarStateCountsByTag?.[allEventsTypeFilter] || {});
+      ? totals
+      : (totalsByTag?.[allEventsTypeFilter] || {});
     const counts = { ...sourceCounts };
     counts.All = Object.values(sourceCounts).reduce((sum, value) => sum + Number(value || 0), 0);
     counts.Active = Math.max(
@@ -402,9 +431,17 @@ function updateEventStateFilterCounts(list, preferCalendarTotals = false) {
       const count = Number(counts[state] || 0);
       const span = button.querySelector('span');
       if (span) span.textContent = String(count);
-      button.hidden = state !== 'All' && count === 0;
+      button.hidden = (
+        state !== 'All'
+        && state !== allEventsStateFilter
+        && count === 0
+      );
     });
-    if (allEventsStateFilter !== 'All' && !Number(counts[allEventsStateFilter] || 0)) {
+    if (
+      (useCalendarTotals || allEventsLoadedScope === 'all')
+      && allEventsStateFilter !== 'All'
+      && !Number(counts[allEventsStateFilter] || 0)
+    ) {
       allEventsStateFilter = 'All';
       document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
         button.classList.toggle('active', button.dataset.eventState === 'All');
@@ -1109,7 +1146,6 @@ function renderAllEventsList(eventsToRender = null) {
 }
 
 function showAllEventsProgress(loaded, total) {
-  if (!Number.isFinite(total) || loaded >= total) return;
   const active = getActiveAllEventsTab();
   const target = active === 'event-list'
     ? document.getElementById('all-events-table-container')
@@ -1117,6 +1153,8 @@ function showAllEventsProgress(loaded, total) {
       ? document.getElementById('calendar-container')
       : document.getElementById('all-events');
   if (!target) return;
+  target.querySelector('.events-progressive-loading')?.remove();
+  if (!Number.isFinite(total) || loaded >= total) return;
 
   const indicator = document.createElement('div');
   indicator.className = 'loading events-progressive-loading';
@@ -1125,10 +1163,13 @@ function showAllEventsProgress(loaded, total) {
   target.appendChild(indicator);
 }
 
-async function loadAllEvents() {
+async function loadAllEvents({ scope = requestedAllEventsScope() } = {}) {
   const loadVersion = ++__allEventsLoadVersion;
+  const requestedScope = scope === 'all' ? 'all' : 'active';
   __allEventsProgressiveLoading = true;
   let statsPromise = null;
+  let fullyLoaded = false;
+  let renderedEventCount = -1;
 
   try {
     ensureAllEventsViewTabs();
@@ -1138,14 +1179,18 @@ async function loadAllEvents() {
       return;
     }
     events = [];
+    allEventsLoadedScope = 'none';
     let offset = 0;
     let total = Number.POSITIVE_INFINITY;
 
     while (offset < total) {
       const response = await apiCall(
-        `/api/events?view=summary&limit=${EVENT_OVERVIEW_PAGE_SIZE}&offset=${offset}`
+        `/api/events?view=summary&scope=${requestedScope}&limit=${EVENT_OVERVIEW_PAGE_SIZE}&offset=${offset}`
       );
       if (loadVersion !== __allEventsLoadVersion) return;
+
+      allEventsOverviewStateCounts = response.meta?.stateCounts || null;
+      allEventsOverviewStateCountsByTag = response.meta?.stateCountsByTag || null;
 
       const page = response.data || [];
       const byId = new Map(events.map(event => [Number(event.id), event]));
@@ -1155,11 +1200,17 @@ async function loadAllEvents() {
       offset = Number(response.meta?.nextOffset ?? total);
 
       updateOverdueCounter(countOverdueEvents(events));
-      renderAllEventsList(events);
+      if (renderedEventCount < 0) {
+        renderAllEventsList(events);
+        renderedEventCount = events.length;
+      }
       showAllEventsProgress(events.length, total);
       if (!statsPromise) statsPromise = loadStatsCards();
 
-      if (!page.length || !response.meta?.hasMore) break;
+      if (!page.length || !response.meta?.hasMore) {
+        fullyLoaded = true;
+        break;
+      }
       await new Promise(resolve => requestAnimationFrame(resolve));
       if (getActiveSectionId() !== 'events') break;
     }
@@ -1176,8 +1227,11 @@ async function loadAllEvents() {
   } finally {
     await (statsPromise || loadStatsCards());
     if (loadVersion === __allEventsLoadVersion) {
+      if (fullyLoaded) allEventsLoadedScope = requestedScope;
       __allEventsProgressiveLoading = false;
-      if (getActiveSectionId() === 'events') renderAllEventsList(events);
+      if (getActiveSectionId() === 'events' && renderedEventCount !== events.length) {
+        renderAllEventsList(events);
+      }
     }
   }
 }

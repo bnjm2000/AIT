@@ -569,12 +569,45 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertEqual(payload['meta']['total'], 2)
         self.assertTrue(payload['meta']['hasMore'])
         self.assertEqual(payload['meta']['nextOffset'], 1)
-        self.assertEqual(files.call_count, 1)
+        self.assertEqual(files.call_count, 0)
+        self.assertNotIn('fileCount', payload['data'][0])
 
         second = self.client.get('/api/events?view=summary&limit=1&offset=1')
         self.assertEqual([event['id'] for event in second.get_json()['data']], [1])
         self.assertFalse(second.get_json()['meta']['hasMore'])
         self.assertIsNone(second.get_json()['meta']['nextOffset'])
+
+    def test_event_summary_active_scope_keeps_complete_filter_counts(self):
+        self.login('admin')
+        self.data_manager.events[1].state = 'Closed'
+        self.data_manager.events[2].state = 'Ongoing'
+
+        with patch.object(app_module, 'refresh_event_states_for_read', return_value=[]):
+            response = self.client.get('/api/events?view=summary&scope=active')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual([event['id'] for event in payload['data']], [2])
+        self.assertEqual(payload['meta']['total'], 1)
+        self.assertEqual(payload['meta']['scope'], 'active')
+        self.assertEqual(payload['meta']['stateCounts']['Closed'], 1)
+        self.assertEqual(payload['meta']['stateCounts']['Ongoing'], 1)
+        self.assertEqual(
+            payload['meta']['stateCountsByTag']['events']['Closed'],
+            1,
+        )
+
+    def test_event_summary_skips_model_group_inventory_display_metadata(self):
+        self.login('admin')
+        self.data_manager.events[1].prepared_items = [
+            '[MODEL]AX|TestBrand|TestModel|1|Test asset'
+        ]
+
+        with patch.object(app_module, '_event_group_is_bulk_quantity') as is_bulk:
+            response = self.client.get('/api/events?view=summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        is_bulk.assert_not_called()
 
     def test_event_options_are_lightweight_and_sortable(self):
         self.login('admin')

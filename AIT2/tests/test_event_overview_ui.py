@@ -211,6 +211,22 @@ def test_all_events_title_uses_the_company_theme():
     assert 'color: var(--theme-primary, var(--brand-main, #0f766e));' in TEMPLATE
 
 
+def test_all_events_loads_active_cards_first_and_fetches_closed_on_demand():
+    state_filter = function_source('setEventStateFilter', 'overviewStateFilterNeedsFullSet')
+    loader = function_source('loadAllEvents', 'ensureEventPageToolbar')
+
+    assert "let allEventsStateFilter = 'Active';" in SCRIPT
+    assert 'const EVENT_OVERVIEW_PAGE_SIZE = 500;' in SCRIPT
+    assert "loadAllEvents({ scope: 'all' })" in state_filter
+    assert "['All', 'Closed', 'Pending Closure']" in SCRIPT
+    assert (
+        '/api/events?view=summary&scope=${requestedScope}'
+        '&limit=${EVENT_OVERVIEW_PAGE_SIZE}&offset=${offset}'
+    ) in loader
+    assert 'allEventsOverviewStateCounts = response.meta?.stateCounts' in loader
+    assert 'allEventsOverviewStateCountsByTag = response.meta?.stateCountsByTag' in loader
+
+
 def test_event_overview_includes_a_single_or_legacy_main_room():
     room_rows = function_source('eventOverviewSubprojectRows', 'eventOverviewSubprojects')
     overview = function_source('viewEvent', 'toggleViewSection')

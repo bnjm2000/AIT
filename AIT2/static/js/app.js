@@ -65,7 +65,7 @@ let __realtimeReconnectTimer = null;
 let __realtimeLastEventId = "";
 let __eventAssetRefreshTimer = null;
 const __eventAssetRefreshIds = new Set();
-const EVENT_OVERVIEW_PAGE_SIZE = 30;
+const EVENT_OVERVIEW_PAGE_SIZE = 500;
 const EVENT_OPTIONS_PAGE_SIZE = 100;
 const PDF_FONT_OPTIONS = Object.freeze([
   ['App Default', "'Century Gothic', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif"],

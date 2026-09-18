@@ -7383,18 +7383,41 @@ def _increment_returned_prepared_model_slot(event, group, quantity):
 
 def _matching_bulk_assets_for_group(group):
     group_key = _event_model_group_key(group)
-    return [
-        asset for asset in (data_manager.inventory.values() if data_manager else [])
-        if asset and _is_bulk_asset(asset) and _event_asset_group_key(asset) == group_key
-    ]
+    return _event_group_inventory_index()['bulk'].get(group_key, [])
 
 
 def _matching_specific_assets_for_group(group):
     group_key = _event_model_group_key(group)
-    return [
-        asset for asset in (data_manager.inventory.values() if data_manager else [])
-        if asset and not _is_bulk_asset(asset) and _event_asset_group_key(asset) == group_key
-    ]
+    return _event_group_inventory_index()['specific'].get(group_key, [])
+
+
+def _event_group_inventory_index():
+    """Index inventory once for event model-group lookups.
+
+    Event overview generation used to scan the complete inventory twice for
+    every model group.  The manager cache is already invalidated whenever
+    inventory changes, so it is a safe home for this derived lookup.
+    """
+    cache = _current_manager_cache()
+    cached = cache.get('event_group_inventory_index')
+    if isinstance(cached, dict):
+        return cached
+
+    bulk = defaultdict(list)
+    specific = defaultdict(list)
+    inventory = data_manager.inventory.values() if data_manager else []
+    for asset in inventory:
+        if not asset:
+            continue
+        target = bulk if _is_bulk_asset(asset) else specific
+        target[_event_asset_group_key(asset)].append(asset)
+
+    cached = {
+        'bulk': dict(bulk),
+        'specific': dict(specific),
+    }
+    cache['event_group_inventory_index'] = cached
+    return cached
 
 
 def _event_group_is_bulk_quantity(group):
@@ -8092,7 +8115,7 @@ def _sum_extra_prepared_quantity(model_group):
     return total
 
 
-def _refresh_model_group_statuses(model_groups):
+def _refresh_model_group_statuses(model_groups, include_inventory_metadata=True):
     for group in (model_groups or {}).values():
         required = max(0, _safe_int(group.get('requiredQuantity', 0), 0))
         prepared_slots = max(0, _safe_int(group.get('preparedSlotQuantity', 0), 0))
@@ -8148,7 +8171,10 @@ def _refresh_model_group_statuses(model_groups):
         group['returnedPreparedSlotQuantity'] = returned_prepared_slots
         group['extraPreparedSlotQuantity'] = extra_prepared_slots
         group['extraReturnedPreparedSlotQuantity'] = extra_returned_prepared_slots
-        group['isBulkQuantity'] = _event_group_is_bulk_quantity(group)
+        # Summary cards do not return modelGroups, so determining this display
+        # field would be pure work for that endpoint.
+        if include_inventory_metadata:
+            group['isBulkQuantity'] = _event_group_is_bulk_quantity(group)
         group['returnedQuantity'] = returned
         group['preparedQuantity'] = prepared
         group['preparedEverQuantity'] = assigned
@@ -8182,7 +8208,11 @@ def _refresh_model_group_statuses(model_groups):
             group['status'] = 'pending'
 
 
-def _append_bulk_assignments_to_model_groups(model_groups, event):
+def _append_bulk_assignments_to_model_groups(
+    model_groups,
+    event,
+    include_asset_details=True,
+):
     if model_groups is None:
         return
 
@@ -8216,19 +8246,23 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
             continue
         seen.add(unique_key)
 
-        model_groups[group_key]['assignedAssets'].append({
+        assignment = {
             'id': value,
-            'bulkId': marker['bulkId'],
-            'serial': '',
             'status': 'returned' if value in returned_values else 'prepared',
-            'location': bulk_asset.current_location or bulk_asset.default_location or '',
-            'tags': normalize_asset_tags(getattr(bulk_asset, 'tags', [])),
             'quantity': marker['quantity'],
-            'isBulk': True,
             'isExtra': value in extra_values,
-            'displayId': '',
-            'name': f"{bulk_asset.brand} {bulk_asset.model_number} {bulk_asset.description}".strip()
-        })
+        }
+        if include_asset_details:
+            assignment.update({
+                'bulkId': marker['bulkId'],
+                'serial': '',
+                'location': bulk_asset.current_location or bulk_asset.default_location or '',
+                'tags': normalize_asset_tags(getattr(bulk_asset, 'tags', [])),
+                'isBulk': True,
+                'displayId': '',
+                'name': f"{bulk_asset.brand} {bulk_asset.model_number} {bulk_asset.description}".strip(),
+            })
+        model_groups[group_key]['assignedAssets'].append(assignment)
 
 
 def _append_prepared_slots_to_model_groups(model_groups, event):
@@ -8278,7 +8312,11 @@ def _append_prepared_slots_to_model_groups(model_groups, event):
             )
 
 
-def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
+def _append_orphan_extra_assignments_to_model_groups(
+    model_groups,
+    event,
+    include_asset_details=True,
+):
     """Show manual extra assets in the model requirement area.
 
     Manual extras should not raise the event's required quantity, but they should
@@ -8334,16 +8372,20 @@ def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
                 'status': 'pending'
             }
 
-        model_groups[model_key]['assignedAssets'].append({
+        assignment = {
             'id': asset_id,
-            'serial': asset.serial_number,
-            'serial2': getattr(asset, 'secondary_serial_number', ''),
-            'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
             'status': 'returned' if asset_id in returned_values else 'prepared',
-            'location': asset.current_location,
             'quantity': 1,
-            'isExtra': True
-        })
+            'isExtra': True,
+        }
+        if include_asset_details:
+            assignment.update({
+                'serial': asset.serial_number,
+                'serial2': getattr(asset, 'secondary_serial_number', ''),
+                'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
+                'location': asset.current_location,
+            })
+        model_groups[model_key]['assignedAssets'].append(assignment)
 
 
 def _bulk_remaining_for_event_group(event, bulk_asset):
@@ -19956,7 +19998,12 @@ def _refresh_event_vendor_management_mirror(event, finance_data):
     return True
 
 
-def refresh_event_states_for_read(events_to_check=None, sync_vendor_management=True):
+def refresh_event_states_for_read(
+    events_to_check=None,
+    sync_vendor_management=True,
+    workforce=None,
+    finance_data=None,
+):
     """Keep automatically calculated event states current before read responses."""
     manager = _current_data_manager_object()
     if manager is None:
@@ -19970,11 +20017,17 @@ def refresh_event_states_for_read(events_to_check=None, sync_vendor_management=T
             manager,
             events_to_check=events_to_check,
             sync_vendor_management=sync_vendor_management,
+            workforce=workforce,
+            finance_data=finance_data,
         )
 
 
 def _refresh_event_states_for_read_locked(
-    manager, events_to_check=None, sync_vendor_management=True
+    manager,
+    events_to_check=None,
+    sync_vendor_management=True,
+    workforce=None,
+    finance_data=None,
 ):
     """Refresh event states while the manager's reload lock is held."""
 
@@ -19998,9 +20051,12 @@ def _refresh_event_states_for_read_locked(
     if not source_events:
         return []
 
-    closure_workforce = load_workforce(_workforce_folder(manager))
-    finance_data = None
-    if sync_vendor_management:
+    closure_workforce = (
+        workforce
+        if isinstance(workforce, dict)
+        else load_workforce(_workforce_folder(manager))
+    )
+    if sync_vendor_management and not isinstance(finance_data, dict):
         try:
             finance_data = _load_finance_data()
         except Exception as finance_error:
@@ -23684,18 +23740,27 @@ def get_events():
         state_filter = request.args.get('state', '').strip().lower()
         tag_filter = request.args.get('tag', '').strip().lower()
         event_id_filter = request.args.get('eventId', type=int)
+        overview_scope = request.args.get('scope', '').strip().lower()
+        active_scope = overview_scope == 'active'
 
         state_counts = {}
         state_counts_by_tag = {}
         for event in visible_events:
             state = str(getattr(event, 'state', '') or 'New')
             state_counts[state] = state_counts.get(state, 0) + 1
-            event_tag = str(getattr(event, 'tag', 'events') or 'events').strip().lower()
+            raw_event_tag = str(
+                getattr(event, 'tag', 'events') or 'events'
+            ).strip().lower()
+            event_tag = 'dry hire' if raw_event_tag == 'dry hire' else 'events'
             tag_counts = state_counts_by_tag.setdefault(event_tag, {})
             tag_counts[state] = tag_counts.get(state, 0) + 1
 
         filtered_events = []
         for event in visible_events:
+            if active_scope and str(
+                getattr(event, 'state', '') or 'New'
+            ).strip().lower() in {'closed', 'pending closure'}:
+                continue
             if calendar_view and range_start and range_end and not _ranges_overlap(
                 getattr(event, 'start_date', ''),
                 getattr(event, 'end_date', ''),
@@ -23745,9 +23810,34 @@ def get_events():
         page_events = filtered_events[
             offset:offset + limit if limit is not None else None
         ] if (offset or limit is not None) else filtered_events
+
+        # Summary/full cards need the same workforce and finance documents for
+        # both automatic state refresh and workflow badges. Load each once per
+        # request and pass it through instead of reading the files twice.
+        workflow_workforce = None
+        workflow_finance = None
+        if not options_view and not calendar_view:
+            try:
+                workflow_workforce = load_workforce(_workforce_folder())
+            except Exception as workforce_error:
+                logger.warning(
+                    "Unable to load event workflow progress: %s",
+                    workforce_error,
+                )
+                workflow_workforce = {}
+            try:
+                workflow_finance = _load_finance_data()
+            except Exception as finance_error:
+                logger.warning(
+                    "Unable to load event finance progress: %s",
+                    finance_error,
+                )
+                workflow_finance = {}
         refresh_event_states_for_read(
             page_events,
             sync_vendor_management=not options_view,
+            workforce=workflow_workforce,
+            finance_data=workflow_finance,
         )
 
         if calendar_view:
@@ -23785,23 +23875,8 @@ def get_events():
             })
 
         events_data = []
-        workflow_workforce = {}
-        workflow_finance = {}
-        if not options_view:
-            try:
-                workflow_workforce = load_workforce(_workforce_folder())
-            except Exception as workforce_error:
-                logger.warning(
-                    "Unable to load event workflow progress: %s",
-                    workforce_error,
-                )
-            try:
-                workflow_finance = _load_finance_data()
-            except Exception as finance_error:
-                logger.warning(
-                    "Unable to load event finance progress: %s",
-                    finance_error,
-                )
+        workflow_workforce = workflow_workforce or {}
+        workflow_finance = workflow_finance or {}
         for event in page_events:
             # Initialize actually_prepared if missing
             if not hasattr(event, 'actually_prepared'):
@@ -23880,16 +23955,20 @@ def get_events():
                                     
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
                                     
-                                    model_groups[model_key]['assignedAssets'].append({
+                                    assignment = {
                                         'id': specific_asset_id,
-                                        'serial': specific_asset.serial_number,
-                                        'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
-                                        'tags': normalize_asset_tags(getattr(specific_asset, 'tags', [])),
                                         'status': asset_status,
-                                        'location': specific_asset.current_location,
                                         'quantity': 1,
-                                        'isExtra': is_extra_asset
-                                    })
+                                        'isExtra': is_extra_asset,
+                                    }
+                                    if not summary_view:
+                                        assignment.update({
+                                            'serial': specific_asset.serial_number,
+                                            'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
+                                            'tags': normalize_asset_tags(getattr(specific_asset, 'tags', [])),
+                                            'location': specific_asset.current_location,
+                                        })
+                                    model_groups[model_key]['assignedAssets'].append(assignment)
                             
                             # Determine overall model status - FIXED LOGIC
                             assigned_count = len(model_groups[model_key]['assignedAssets'])
@@ -23908,10 +23987,21 @@ def get_events():
                         logger.error(f"Error parsing model assignment {asset_id}: {e}")
                         continue
 
-            _append_bulk_assignments_to_model_groups(model_groups, event)
+            _append_bulk_assignments_to_model_groups(
+                model_groups,
+                event,
+                include_asset_details=not summary_view,
+            )
             _append_prepared_slots_to_model_groups(model_groups, event)
-            _append_orphan_extra_assignments_to_model_groups(model_groups, event)
-            _refresh_model_group_statuses(model_groups)
+            _append_orphan_extra_assignments_to_model_groups(
+                model_groups,
+                event,
+                include_asset_details=not summary_view,
+            )
+            _refresh_model_group_statuses(
+                model_groups,
+                include_inventory_metadata=not summary_view,
+            )
 
             # Calculate totals including custom item quantities.
             custom_counts = _custom_counts_for_event(event)
@@ -23962,7 +24052,6 @@ def get_events():
                 'hasModelAssignments': has_model_assignments,  # Flag to know which logic to use
                 'forceStateOverride': getattr(event, 'force_state_override', False),
                 'hasNotes': bool((getattr(event, 'notes', '') or '').strip()),
-                'fileCount': len(_event_files_for_response(event.event_id)),
                 'assignedUsernames': _event_assigned_usernames_for_response(event),
                 'assignedUsers': _event_assignee_payloads(event),
                 'departmentProgress': _event_department_progress_payload(
@@ -23987,6 +24076,7 @@ def get_events():
             }
             if not summary_view:
                 event_payload.update({
+                    'fileCount': len(_event_files_for_response(event.event_id)),
                     'assetModels': event.asset_models,
                     'preparedItems': event.prepared_items,
                     'actuallyPrepared': event.actually_prepared,
@@ -24008,6 +24098,8 @@ def get_events():
                 'hasMore': offset + len(events_data) < total,
                 'nextOffset': offset + len(events_data) if offset + len(events_data) < total else None,
                 'stateCounts': state_counts,
+                'stateCountsByTag': state_counts_by_tag,
+                'scope': 'active' if active_scope else 'all',
                 'view': view_mode if summary_view else 'full',
             },
         })
