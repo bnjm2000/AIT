@@ -9285,12 +9285,6 @@ def _worker_upload_limits(workforce, event_id, freelancer_id):
         if isinstance(row, dict) and row.get('status') != 'Denied'
     ]
     active_claim_rows = active_claims(rows)
-    is_app_user = any(
-        _workforce_assignment_subject_id(row) == str(freelancer_id)
-        and str(row.get('subjectType') or '').lower() == 'app-user'
-        for row in event_assignments(workforce, event_id)
-        if isinstance(row, dict)
-    )
     invoice_limit = 1 + extra_invoices
     claim_limit = 5 + extra_claims
     return {
@@ -10925,14 +10919,24 @@ def _workforce_subject_is_hidden_owner(subject_id):
 
 
 def _workforce_subject_is_full_time(subject_id, assignments):
-    """Return whether a workforce subject is an internal Showbase app user."""
+    """Return whether a workforce subject is internal full-time staff."""
     clean_subject_id = str(subject_id or '').strip()
     if clean_subject_id.startswith('user:'):
         return True
+
+    def is_full_time_department(value):
+        department = re.sub(
+            r'[\s_-]+', '', str(value or '').strip()
+        ).casefold()
+        return department in {'ft', 'fulltime'}
+
     return any(
         isinstance(row, dict)
         and _workforce_assignment_subject_id(row) == clean_subject_id
-        and str(row.get('subjectType') or '').strip().lower() == 'app-user'
+        and (
+            str(row.get('subjectType') or '').strip().lower() == 'app-user'
+            or is_full_time_department(row.get('department'))
+        )
         for row in (assignments or [])
     )
 

@@ -1326,6 +1326,81 @@ class WorkforcePortalTests(unittest.TestCase):
         app_module.update_event_state(event)
         self.assertEqual(event.state, "Closed")
 
+    def test_full_time_only_event_closes_without_an_invoice(self):
+        event = self.manager.events[143]
+        event.prepared_items = []
+        event.actually_prepared = []
+        event.returned_items = []
+        event.extra_assets = []
+        event.start_date = "20260701"
+        event.end_date = "20260702"
+        event.state = "Pending Closure"
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["assignments"] = {
+                "143": [{
+                    "id": "assignment-ft",
+                    "subjectType": "app-user",
+                    "userUsername": "normal",
+                    "department": "FT",
+                    "roleName": "Operations",
+                    "workDates": ["2026-07-01", "2026-07-02"],
+                }],
+            }
+            workforce["submissions"] = {
+                "143": {
+                    "user:normal": {"invoices": [], "claims": []},
+                },
+            }
+
+        workforce = load_workforce(self.manager.data_folder)
+        limits = app_module._worker_upload_limits(
+            workforce, 143, "user:normal"
+        )
+        self.assertEqual(limits["invoiceLimit"], 1)
+        self.assertEqual(limits["invoiceSlotsRemaining"], 1)
+        self.assertTrue(app_module._workforce_financial_closure_complete(
+            143,
+            manager=self.manager,
+            event=event,
+            workforce=workforce,
+        ))
+
+        app_module.update_event_state(event, workforce=workforce)
+        self.assertEqual(event.state, "Closed")
+
+    def test_fulltime_department_label_does_not_require_an_invoice(self):
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["assignments"] = {
+                "143": [{
+                    "id": "legacy-fulltime",
+                    "freelancerId": "legacy-staff",
+                    "department": "Fulltime",
+                    "workDates": ["2026-07-10"],
+                }],
+            }
+
+        workforce = load_workforce(self.manager.data_folder)
+        self.assertTrue(app_module._workforce_subject_is_full_time(
+            "legacy-staff", workforce["assignments"]["143"]
+        ))
+        event = self.manager.events[143]
+        event.prepared_items = []
+        event.actually_prepared = []
+        event.returned_items = []
+        event.extra_assets = []
+        event.start_date = "20260701"
+        event.end_date = "20260702"
+        event.state = "Pending Closure"
+        self.assertTrue(app_module._workforce_financial_closure_complete(
+            143,
+            manager=self.manager,
+            event=event,
+            workforce=workforce,
+        ))
+        app_module.update_event_state(event, workforce=workforce)
+        self.assertEqual(event.state, "Closed")
+
     def test_detached_event_fails_financial_closure_safely(self):
         freelancer_id = self.create_worker_assignment()
         with mutate_workforce(self.manager.data_folder) as workforce:
