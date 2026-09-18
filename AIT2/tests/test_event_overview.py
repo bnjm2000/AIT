@@ -105,6 +105,32 @@ class EventLocationTests(unittest.TestCase):
                 persisted_row = next(csv.DictReader(persisted))
             self.assertEqual(persisted_row['State'], 'New')
 
+    def test_legacy_last_day_state_is_migrated_and_persisted_as_ongoing(self):
+        with tempfile.TemporaryDirectory() as root:
+            manager = DataManager(root)
+            manager.setup_data_folder()
+            manager.check_and_initialize_files()
+            event = Event(1, 'Legacy', '20260701', '20260701', [])
+            manager.events[1] = event
+            manager.save_event(event)
+
+            filepath = os.path.join(manager.events_folder, manager.event_file_map[1])
+            with open(filepath, newline='', encoding='utf-8') as source:
+                row = next(csv.DictReader(source))
+            row['State'] = 'Last Day'
+            with open(filepath, 'w', newline='', encoding='utf-8') as destination:
+                writer = csv.DictWriter(destination, fieldnames=EVENT_FIELDNAMES)
+                writer.writeheader()
+                writer.writerow(row)
+
+            reloaded = DataManager(root)
+            reloaded.load_all_data()
+
+            self.assertEqual(reloaded.events[1].state, 'Ongoing')
+            with open(filepath, newline='', encoding='utf-8') as persisted:
+                persisted_row = next(csv.DictReader(persisted))
+            self.assertEqual(persisted_row['State'], 'Ongoing')
+
 
 class AssetsDeployedTests(unittest.TestCase):
     def test_counts_prepared_physical_and_bulk_but_not_custom_or_returned(self):

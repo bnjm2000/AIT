@@ -1058,7 +1058,7 @@ class PlanningTemplateTests(unittest.TestCase):
         )[1].split('function planSetEventChooserFilter', 1)[0]
         self.assertIn("event.key !== 'Enter'", option_handler)
         self.assertIn('planChooseEvent(eventId)', option_handler)
-        self.assertIn("['ongoing', 'last-day'].includes(state)", relative_date)
+        self.assertIn("state === 'ongoing'", relative_date)
         self.assertIn('day${daysLeft === 1', relative_date)
 
     def test_return_inventory_rows_offer_fault_logging_but_custom_rows_do_not(self):

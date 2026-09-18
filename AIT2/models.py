@@ -358,7 +358,11 @@ def split_legacy_event_name_location(name, location=''):
 def normalize_event_state(state):
     """Return the canonical persisted event state."""
     value = str(state or 'New').strip() or 'New'
-    return 'New' if value == 'Added' else value
+    legacy_states = {
+        'Added': 'New',
+        'Last Day': 'Ongoing',
+    }
+    return legacy_states.get(value, value)
 
 
 class Event:

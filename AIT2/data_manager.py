@@ -1346,12 +1346,12 @@ class DataManager:
         return migrated
 
     def migrate_legacy_event_states(self):
-        """Persist the canonical New state for legacy Added event records."""
+        """Persist canonical replacements for legacy event state values."""
         migrated = 0
         for event in list(self.events.values()):
             if not getattr(event, '_legacy_state_migrated', False):
                 continue
-            event.state = 'New'
+            event.state = normalize_event_state(getattr(event, 'state', 'New'))
             snapshots = getattr(self, '_event_snapshots', None)
             if isinstance(snapshots, dict):
                 snapshots.pop(int(event.event_id), None)

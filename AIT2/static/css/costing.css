@@ -48,7 +48,6 @@
 .costing-status.is-event.is-closed { background: #ecfdf3; color: #047857; }
 .costing-status.is-event.is-preparing,
 .costing-status.is-event.is-returning,
-.costing-status.is-event.is-last-day,
 .costing-status.is-event.is-pending-closure { background: #fff7ed; color: #c2410c; }
 .costing-status.is-quotation.is-cancelled,
 .costing-status.is-event.is-overdue { background: #fef2f2; color: #b91c1c; }

@@ -5787,7 +5787,6 @@ function showForceStateModal(eventId, currentState) {
                                 <option value="Preparing">Preparing</option>
                                 <option value="Ready">Ready</option>
                                 <option value="Ongoing">Ongoing</option>
-                                <option value="Last Day">Last Day</option>
                                 <option value="Returning">Returning</option>
                                 <option value="Closed">Closed</option>
                                 <option value="Overdue">Overdue</option>

@@ -150,3 +150,22 @@ test('Events uses warehouse preparation counts and retains the old-payload fallb
   assert.deepEqual({ done: ongoing.done, total: ongoing.total, label: ongoing.label },
     { done: 374, total: 374, label: 'Prepared' });
 });
+
+test('an ongoing event shows last day as card copy instead of a separate state', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../static/js/events-overview.js'), 'utf8');
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(source.indexOf('function parseEventOverviewDate('),
+    source.indexOf('function eventTagBadgeHtml(')), context);
+  vm.runInContext(source.slice(source.indexOf('function eventOverviewNotice('),
+    source.indexOf('function getEventPrimaryAction(')), context);
+
+  const now = new Date();
+  const endDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')].join('-');
+  const event = { state: 'Ongoing', endDate };
+
+  assert.equal(context.isEventLastDay(event, now), true);
+  assert.equal(context.eventOverviewNotice(event, { done: 1, total: 1 }), 'In progress. Last day');
+  assert.equal(context.isEventLastDay({ ...event, isLastDay: false }, now), false);
+  assert.equal(event.state, 'Ongoing');
+});

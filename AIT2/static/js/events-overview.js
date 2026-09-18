@@ -90,8 +90,7 @@ function ensureEventListViewStyles() {
       --event-state: #16a34a;
       --event-soft: #edf9f0;
     }
-    #return-section :is(.event-card, .event-state, .event-list-table tr).state-ongoing,
-    #return-section :is(.event-card, .event-state, .event-list-table tr).state-last-day {
+    #return-section :is(.event-card, .event-state, .event-list-table tr).state-ongoing {
       --event-state: #0b97a4;
       --event-soft: #edfafa;
     }
@@ -220,6 +219,16 @@ function parseEventOverviewDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isEventLastDay(event, today = new Date()) {
+  if (event?.state !== 'Ongoing') return false;
+  if (typeof event.isLastDay === 'boolean') return event.isLastDay;
+  const end = parseEventOverviewDate(event.endDate);
+  if (!end || !Number.isFinite(today?.getTime?.())) return false;
+  return end.getFullYear() === today.getFullYear()
+    && end.getMonth() === today.getMonth()
+    && end.getDate() === today.getDate();
+}
+
 function eventTagBadgeHtml(event) {
   const type = overviewEventType(event);
   return `<span class="event-type-badge ${type === 'dry hire' ? 'dry-hire' : ''}">${type === 'dry hire' ? 'Dry Hire' : 'Events'}</span>`;
@@ -232,7 +241,6 @@ function getEventWorkflowPalette(state) {
     Preparing: { main: '#0877e8', soft: '#edf6ff' },
     Ready: { main: '#16a34a', soft: '#edf9f0' },
     Ongoing: { main: '#0b97a4', soft: '#edfafa' },
-    'Last Day': { main: '#0b97a4', soft: '#edfafa' },
     Returning: { main: '#f97316', soft: '#fff5ea' },
     'Pending Closure': { main: '#334155', soft: '#e2e8f0' },
     Overdue: { main: '#ef3340', soft: '#fff0f1' },
@@ -262,7 +270,7 @@ let allEventsTypeFilter = 'all';
 let eventOverviewDocumentHandlersBound = false;
 
 function overviewDisplayState(event) {
-  return event?.state === 'Last Day' ? 'Ongoing' : eventStateDisplayLabel(event?.state || 'New');
+  return eventStateDisplayLabel(event?.state || 'New');
 }
 
 function overviewEventType(event) {
@@ -471,7 +479,7 @@ function eventOverviewProgress(event) {
     const total = Math.max(done, Number(event.assetCount || 0));
     return { done, total, label: 'Returned' };
   }
-  if (state === 'Ongoing' || state === 'Last Day') {
+  if (state === 'Ongoing') {
     // Keep the event-card progress tied to preparation requirements. Physical
     // returnables include prepared extras, while assetCount also includes
     // vendor-delivered loans; combining those values produces misleading
@@ -496,7 +504,7 @@ function eventDepartmentProgress(event) {
   }
 
   const phaseUsesReturns = ['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(event.state);
-  const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
+  const phaseUsesOut = event.state === 'Ongoing';
   const totals = new Map();
 
   const addProgress = (department, done, total) => {
@@ -605,8 +613,8 @@ function eventOverviewNotice(event, progress) {
     case 'Planning': return `${progress.total} asset requirements planned`;
     case 'Preparing': return `${remaining} item${remaining === 1 ? '' : 's'} left to pack`;
     case 'Ready': return 'All items ready';
-    case 'Last Day': return 'In progress  ·  Last Day!';
     case 'Ongoing': {
+      if (isEventLastDay(event)) return 'In progress. Last day';
       const end = parseEventOverviewDate(event.endDate);
       if (!end) return 'In progress';
       const today = new Date();
@@ -642,7 +650,7 @@ function getEventPrimaryAction(event) {
   }
   if (event.state === 'Preparing') return { label: 'Continue Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
   if (event.state === 'Ready') return { label: 'Generate DO', onclick: `openDeliveryOrderTab(${event.id})` };
-  if (['Ongoing', 'Last Day'].includes(event.state)) return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
+  if (event.state === 'Ongoing') return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
   if (event.state === 'Returning') return { label: 'Continue Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
   if (event.state === 'Overdue') return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
   return { label: 'View', onclick: `viewEvent(${event.id})` };
@@ -654,8 +662,7 @@ function eventNextActionText(event) {
     case 'Planning': return 'Prepare the planned requirements.';
     case 'Preparing': return 'Continue packing remaining items.';
     case 'Ready': return 'Generate delivery order and dispatch.';
-    case 'Ongoing':
-    case 'Last Day': return event.state === 'Last Day' ? 'Prioritise return today.' : 'Monitor event and provide on-site support.';
+    case 'Ongoing': return isEventLastDay(event) ? 'Prioritise return today.' : 'Monitor event and provide on-site support.';
     case 'Returning': return 'Continue returning outstanding items.';
     case 'Overdue': return 'Resolve overdue returns immediately.';
     case 'Closed': return 'Review completed event details.';

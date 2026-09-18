@@ -90,14 +90,39 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'Preparing')
 
-    def test_ready_event_on_end_date_is_last_day(self):
+    def test_ready_event_on_end_date_is_ongoing(self):
         event = self.make_event(['A', 'B'], ['A', 'B'], [])
 
         app_module.update_event_state(event)
 
-        self.assertEqual(event.state, 'Last Day')
+        self.assertEqual(event.state, 'Ongoing')
+        self.assertTrue(app_module._event_is_last_day(event))
 
-    def test_returned_asset_takes_priority_over_last_day(self):
+    def test_last_day_does_not_create_a_daily_state_change_notification(self):
+        event = self.make_event(['A', 'B'], ['A', 'B'], [])
+        event.state = 'Ongoing'
+
+        with patch.object(
+            app_module, '_queue_event_state_notification'
+        ) as queue_state:
+            app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Ongoing')
+        queue_state.assert_not_called()
+
+    def test_legacy_last_day_state_is_normalized_to_ongoing(self):
+        event = self.make_event(['A'], ['A'], [])
+        event.state = 'Last Day'
+
+        with patch.object(
+            app_module, '_queue_event_state_notification'
+        ) as queue_state:
+            app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Ongoing')
+        queue_state.assert_not_called()
+
+    def test_returned_asset_takes_priority_over_ongoing(self):
         event = self.make_event(['A', 'B'], ['B'], ['A'])
 
         app_module.update_event_state(event)

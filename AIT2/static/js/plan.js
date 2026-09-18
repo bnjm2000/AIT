@@ -1090,7 +1090,7 @@ function planEventChooserFilterKey(event) {
   const state = planStateSlug(event?.state);
   if (['new', 'added', 'planning'].includes(state)) return 'PLANNING';
   if (['preparing', 'ready'].includes(state)) return 'PREPARING';
-  if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
+  if (state === 'ongoing') return 'ONGOING';
   if (state === 'returning') return 'RETURNING';
   if (state === 'overdue') return 'OVERDUE';
   if (['pending-closure', 'closed', 'completed'].includes(state)) return 'COMPLETED';
@@ -1162,7 +1162,7 @@ function planEventChooserRelativeDate(event) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
   const state = planStateSlug(event?.state);
-  if (['ongoing', 'last-day'].includes(state)) {
+  if (state === 'ongoing') {
     const endValue = planEventChooserDateValue(event?.endDate || event?.startDate);
     if (!Number.isFinite(endValue)) return '';
     const daysLeft = Math.max(0, Math.round((endValue - today.valueOf()) / 86400000) + 1);

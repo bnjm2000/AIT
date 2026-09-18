@@ -400,8 +400,7 @@
   --vehicle-booking-color: #16a34a;
 }
 
-.vehicle-booking.event-status-ongoing,
-.vehicle-booking.event-status-last-day {
+.vehicle-booking.event-status-ongoing {
   --vehicle-booking-color: #0b97a4;
 }
 

@@ -6106,7 +6106,7 @@ def _event_department_progress_payload(event, model_groups, has_model_assignment
     _ensure_event_custom_lists(event)
     state = str(getattr(event, 'state', '') or '')
     uses_returns = state in ('Returning', 'Overdue', 'Pending Closure', 'Closed')
-    uses_out = state in ('Ongoing', 'Last Day')
+    uses_out = state == 'Ongoing'
     totals = {}
 
     def add(department, required, prepared=0, returned=0):
@@ -19646,9 +19646,19 @@ def get_assigned_assets():
         logger.error(f"get_assigned_assets traceback: {traceback.format_exc()}")
         return set()  # Return empty set on error
 
+def _event_is_last_day(event, current_date=None):
+    """Return display-only final-day context without creating another state."""
+    today = str(current_date or datetime.now().strftime('%Y%m%d'))
+    return (
+        normalize_event_state(getattr(event, 'state', 'New')) == 'Ongoing'
+        and str(getattr(event, 'end_date', '') or '') == today
+    )
+
+
 def update_event_state(event, workforce=None, changed_by=''):
     """Update the state of an event based on model, bulk, regular, and custom preparation."""
     previous_state = normalize_event_state(getattr(event, 'state', 'New'))
+    event.state = previous_state
     state_update_succeeded = True
     try:
         if getattr(event, 'force_state_override', False):
@@ -19658,8 +19668,6 @@ def update_event_state(event, workforce=None, changed_by=''):
         _ensure_event_custom_lists(event)
 
         current_date = datetime.now().strftime('%Y%m%d')
-        is_last_day = str(getattr(event, 'end_date', '')) == current_date
-
         has_model_assignments = any(
             isinstance(item, str) and item.startswith('[MODEL]')
             for item in event.prepared_items
@@ -19808,15 +19816,11 @@ def update_event_state(event, workforce=None, changed_by=''):
         elif returned_any:
             event.state = 'Returning'
 
-        # 3. Last Day is only the final-day version of an otherwise ongoing event.
-        elif is_last_day and is_active_event_day and is_ready:
-            event.state = 'Last Day'
-
-        # 4. Overdue: event ended with prepared, unreturned items.
+        # 3. Overdue: event ended with prepared, unreturned items.
         elif prepared_ever_total > returned_total and current_date > event.end_date:
             event.state = 'Overdue'
 
-        # 5. Manpower-only events enter financial closure after the event ends.
+        # 4. Manpower-only events enter financial closure after the event ends.
         elif (
             required_total == 0
             and not has_active_prepared_item
@@ -19833,20 +19837,20 @@ def update_event_state(event, workforce=None, changed_by=''):
                 else 'Pending Closure'
             )
 
-        # 6. No requirements at all. A prepared extra still starts preparation,
+        # 5. No requirements at all. A prepared extra still starts preparation,
         # without counting towards completion of any requirement.
         elif required_total == 0:
             event.state = 'Preparing' if has_active_prepared_item else 'New'
 
-        # 7. Requirements exist, but nothing has been collected/prepared yet.
+        # 6. Requirements exist, but nothing has been collected/prepared yet.
         elif started_total == 0 and not has_active_prepared_item:
             event.state = 'Planning'
 
-        # 8. Some collection/preparation happened, but requirements are not fully prepared.
+        # 7. Some collection/preparation happened, but requirements are not fully prepared.
         elif prepared_active_total < required_total and returned_total == 0:
             event.state = 'Preparing'
 
-        # 9. Required quantity is fully prepared and none returned yet.
+        # 8. Required quantity is fully prepared and none returned yet.
         elif is_ready and returned_total == 0:
             if is_active_event_day:
                 event.state = 'Ongoing'
@@ -23944,6 +23948,7 @@ def get_events():
                 'startDate': format_date_output(event.start_date),
                 'endDate': format_date_output(event.end_date),
                 'state': event.state,  # Keep original state, don't force update
+                'isLastDay': _event_is_last_day(event),
                 'tag': getattr(event, 'tag', 'events'), 
                 'assetCount': total_required,
                 'preparedCount': total_prepared,
@@ -34647,7 +34652,7 @@ def force_event_state(event_id):
         
         # Validate state
         valid_states = [
-            'New', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day',
+            'New', 'Planning', 'Preparing', 'Ready', 'Ongoing',
             'Returning', 'Pending Closure', 'Closed', 'Overdue',
         ]
         if new_state not in valid_states:
