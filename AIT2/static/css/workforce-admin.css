@@ -725,6 +725,28 @@
   white-space: nowrap;
 }
 
+.wf-document-submitted .wf-document-timing,
+.wf-document-claim-item .wf-document-timing,
+.wf-document-claim-group-head .wf-document-timing {
+  color: #0f766e;
+  font-weight: 750;
+}
+
+.wf-document-submitted .wf-document-timing.is-due-soon {
+  color: #b45309;
+}
+
+.wf-document-submitted .wf-document-timing.is-overdue {
+  color: #b42318;
+}
+
+.wf-document-submitted .wf-document-timing.is-age,
+.wf-document-claim-item .wf-document-timing.is-age,
+.wf-document-claim-group-head .wf-document-timing.is-age {
+  color: var(--wf-muted);
+  font-weight: 650;
+}
+
 .wf-document-row small {
   overflow: hidden;
   margin-top: 3px;
@@ -1520,9 +1542,24 @@
 }
 
 .wf-file-amount {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
   color: #334155;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.wf-invoice-due-date {
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.wf-invoice-due-date.is-age {
+  color: #64748b;
+  font-weight: 650;
 }
 
 .wf-status-select {
@@ -2046,6 +2083,13 @@ button.wf-calendar-day.selected.has-conflict:hover {
 
 .wf-history-file .wf-status-control {
   min-width: 0;
+}
+
+.wf-history-file-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 700;
 }
 
 .wf-history-file-name {
@@ -2622,7 +2666,7 @@ button.wf-calendar-day.selected.has-conflict:hover {
 
 .wf-amount-check-values {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 8px;
   align-items: center;
 }
@@ -2651,6 +2695,14 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-amount-check-values > div > strong {
   color: #172033;
   font-size: 14px;
+}
+
+.wf-invoice-due-review small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.3;
 }
 
 .wf-claim-date-check .wf-amount-check-values > div > span {

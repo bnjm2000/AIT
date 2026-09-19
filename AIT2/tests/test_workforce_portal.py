@@ -21,6 +21,7 @@ from workforce import (
     load_workforce,
     mutate_workforce,
     now_iso,
+    worker_submissions,
 )
 from workforce_schedule import build_workforce_schedule_pdf
 
@@ -899,6 +900,12 @@ class WorkforcePortalTests(unittest.TestCase):
                 "confidence": "High",
                 "source": "Scanned document OCR",
                 "matchedText": "TOTAL AMOUNT DUE SGD 1,388.40",
+                "dueDate": "2026-07-01",
+                "dueDateSource": "30 days from invoice date",
+                "dueDateReferenceDate": "2026-06-01",
+                "dueDateMatchedText": "Payment terms: 30 Days",
+                "invoiceDateMatchedText": "Invoice Date 01 Jun 2026",
+                "dueInDays": 30,
                 "ocrUsed": True,
             },
         ):
@@ -910,14 +917,57 @@ class WorkforcePortalTests(unittest.TestCase):
             "invoices"
         ][0]
         self.assertEqual(rescanned["amount"], 1388.40)
+        self.assertEqual(rescanned["dueDate"], "2026-07-01")
+        self.assertEqual(rescanned["dueDateSource"], "30 days from invoice date")
+        self.assertEqual(rescanned["dueInDays"], 30)
+        self.assertTrue(rescanned["dueDateScannedAt"])
         self.assertTrue(rescanned["ocrRetriedAt"])
+
+        corrected = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={
+                "amount": 1388.40,
+                "dueDate": "2026-07-15",
+                "status": "Pending Review",
+                "confirmReview": True,
+                "allocations": [],
+            },
+        )
+        self.assertEqual(corrected.status_code, 200, corrected.get_data(as_text=True))
+        corrected_invoice = corrected.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(corrected_invoice["dueDate"], "2026-07-15")
+        self.assertEqual(corrected_invoice["dueDateSource"], "Corrected during review")
+        self.assertTrue(corrected_invoice["dueDateCorrectedAt"])
+
+        with patch.object(
+            app_module,
+            "extract_invoice_amount",
+            return_value={
+                "amount": 999,
+                "dueDate": "2026-08-01",
+                "dueDateSource": "Explicit due date",
+            },
+        ):
+            due_only = self.client.post(
+                f"/api/workforce/submissions/{invoice['id']}/extract?dueOnly=1"
+            )
+        protected = due_only.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(protected["amount"], 1388.40)
+        self.assertEqual(protected["dueDate"], "2026-07-15")
 
     def test_background_ocr_does_not_hold_the_workforce_store_lock(self):
         freelancer_id = self.create_worker_assignment()
         store_was_readable = []
 
-        def extraction_while_checking_store(_path, *, data_folder=None):
+        def extraction_while_checking_store(
+            _path, *, data_folder=None, submitted_at=''
+        ):
             self.assertEqual(data_folder, app_module._workforce_folder())
+            self.assertTrue(submitted_at)
             finished = threading.Event()
 
             def read_store():
@@ -1817,7 +1867,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(invoices[-1]["contentType"], "application/vnd.ms-excel")
 
     def test_worker_invoice_upload_accepts_photo_files(self):
-        self.create_worker_assignment()
+        freelancer_id = self.create_worker_assignment()
         token = self.worker_token()
 
         with patch.object(
@@ -1828,6 +1878,8 @@ class WorkforcePortalTests(unittest.TestCase):
                 "confidence": "High",
                 "source": "Receipt image OCR",
                 "matchedText": "TOTAL 245.50",
+                "dueDate": "2026-08-31",
+                "dueDateSource": "Explicit due date",
                 "ocrUsed": True,
             },
         ):
@@ -1851,6 +1903,13 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(invoice["contentType"], "image/png")
         self.assertEqual(invoice["amount"], 245.5)
         self.assertEqual(invoice["processingState"], "Complete")
+        self.assertNotIn("dueDate", invoice)
+        self.assertNotIn("dueDateSource", invoice)
+        stored = worker_submissions(
+            load_workforce(self.manager.data_folder), 143, freelancer_id
+        )["invoices"][0]
+        self.assertEqual(stored["dueDate"], "2026-08-31")
+        self.assertEqual(stored["dueDateSource"], "Explicit due date")
 
     def test_excel_invoice_previews_are_authorized_escaped_and_downloadable(self):
         from tests.test_spreadsheet_preview import invoice_xlsx_bytes

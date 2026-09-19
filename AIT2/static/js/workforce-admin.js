@@ -889,7 +889,7 @@ function wfDocumentRow(record) {
         ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
     </button>
     ${fileCell}
-    <div class="wf-document-submitted" data-label="Submitted"><strong>${awaitingUpload ? 'Not uploaded' : wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong></div>
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${awaitingUpload ? 'Not uploaded' : wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong>${awaitingUpload ? '' : wfDocumentTimingMarkup(record)}</div>
     <div class="wf-document-amount" data-label="Amount"><strong>${awaitingUpload ? '-' : (record.amount == null ? 'To verify' : wfMoney(record.amount))}</strong></div>
     <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
     <div class="wf-document-download" data-label="Download">${downloadCell}</div>
@@ -902,6 +902,63 @@ function wfDocumentEntry(record) {
 
 function wfDocumentSubmittedAt(record) {
   return String(record?.submittedAt || record?.uploadedAt || record?.createdAt || '');
+}
+
+function wfTimestampDayNumber(value) {
+  const isoDay = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoDay) return wfIsoDayNumber(isoDay[1]);
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()) / 86400000;
+}
+
+function wfTodayDayNumber() {
+  const today = new Date();
+  return Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000;
+}
+
+function wfUploadAgeLabel(record) {
+  const submittedDay = wfTimestampDayNumber(wfDocumentSubmittedAt(record));
+  if (submittedDay === null) return '';
+  const age = Math.max(0, wfTodayDayNumber() - submittedDay);
+  return `${age} day${age === 1 ? '' : 's'} since uploaded`;
+}
+
+function wfDueCountdownLabel(value) {
+  const dueDay = wfIsoDayNumber(value);
+  if (dueDay === null) return '';
+  const difference = dueDay - wfTodayDayNumber();
+  if (difference === 0) return 'Due today';
+  if (difference > 0) return `${difference} day${difference === 1 ? '' : 's'} left`;
+  const overdue = Math.abs(difference);
+  return `${overdue} day${overdue === 1 ? '' : 's'} overdue`;
+}
+
+function wfDocumentTimingMarkup(record) {
+  const dueDate = String(record?.dueDate || '');
+  if (dueDate) {
+    const dueDay = wfIsoDayNumber(dueDate);
+    const difference = dueDay === null ? null : dueDay - wfTodayDayNumber();
+    const timingClass = difference === null
+      ? ''
+      : (difference < 0 ? ' is-overdue' : (difference <= 7 ? ' is-due-soon' : ''));
+    return `<small class="wf-document-timing${timingClass}">Due ${wfEscape(wfReviewDateLabel(dueDate))}${wfDueCountdownLabel(dueDate) ? ` &middot; ${wfEscape(wfDueCountdownLabel(dueDate))}` : ''}</small>`;
+  }
+  const ageLabel = wfUploadAgeLabel(record);
+  return ageLabel
+    ? `<small class="wf-document-timing is-age">${wfEscape(ageLabel)}</small>`
+    : '';
+}
+
+function wfInvoiceDueDateMarkup(record) {
+  const dueDate = String(record?.dueDate || '');
+  if (dueDate) {
+    return `<span class="wf-invoice-due-date">Due ${wfEscape(wfReviewDateLabel(dueDate))}</span>`;
+  }
+  const ageLabel = wfUploadAgeLabel(record);
+  return ageLabel
+    ? `<span class="wf-invoice-due-date is-age">${wfEscape(ageLabel)}</span>`
+    : '';
 }
 
 function wfDocumentDepartmentRoles(departmentDetails = []) {
@@ -923,7 +980,7 @@ function wfDocumentClaimGroupItem(record, index) {
       <span><span class="wf-file-title"><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || 'Claim upload')}</strong>${wfClaimCategoryBadge(record)}</span>
         <small class="wf-claim-date">${wfClaimDate(record)}</small></span>
     </button>
-    <div class="wf-document-submitted" data-label="Submitted"><strong>${wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong></div>
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${wfEscape(wfDateTime(wfDocumentSubmittedAt(record)) || 'Unknown')}</strong>${wfDocumentTimingMarkup(record)}</div>
     <div class="wf-document-amount" data-label="Amount"><strong>${record.amount == null ? 'To verify' : wfMoney(record.amount)}</strong></div>
     <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
     <div class="wf-document-download" data-label="Download"><a class="wf-icon-button" href="${wfAttr(record.downloadUrl)}" download
@@ -972,7 +1029,7 @@ function wfDocumentClaimGroup(group) {
         <span class="wf-document-type is-claim">CLM</span>
         <span><strong>${claims.length} claims</strong><small>${reviewedCount} of ${claims.length} reviewed</small></span>
       </button>
-      <div class="wf-document-submitted"><strong>${wfEscape(wfDateTime(submittedAt) || 'Unknown')}</strong><small>Latest submission</small></div>
+      <div class="wf-document-submitted"><strong>${wfEscape(wfDateTime(submittedAt) || 'Unknown')}</strong>${wfDocumentTimingMarkup({submittedAt})}</div>
       <div class="wf-document-amount"><strong>${totalLabel}</strong><small>Claim total</small></div>
       <div class="wf-document-status">${wfClaimGroupStatusControl(claims, event.id, subject.id, 'documents')}</div>
       <button class="wf-icon-button wf-document-claim-expand" type="button"
@@ -1341,7 +1398,7 @@ function wfSubmissionRow(record, kind) {
       : `<button class="wf-file-name" type="button" onclick="openWorkforceReview('${wfAttr(record.id)}')"
           title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${kind} upload`)}</button>`}
     ${kind === 'claim' ? wfClaimCategoryBadge(record) : ''}</div>
-    <span class="wf-file-amount">${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}${kind === 'claim' ? `<span class="wf-claim-date">${wfClaimDate(record)}</span>` : ''}</span>
+    <span class="wf-file-amount"><span>${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}</span>${kind === 'claim' ? `<span class="wf-claim-date">${wfClaimDate(record)}</span>` : wfInvoiceDueDateMarkup(record)}</span>
     ${wfStatusMenu(record)}
     ${record.clientOnly
       ? (record.status === 'Failed' ? `<button class="wf-icon-button danger" type="button" title="Dismiss failed upload" onclick="wfDismissPendingUpload('${wfAttr(record.id)}')">&times;</button>` : '<span></span>')
@@ -2935,7 +2992,7 @@ function wfHistorySubmissionRows(event, freelancerId, rows, kind, returnFreelanc
         onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">
         ${wfEscape(record.originalName || `${kind} upload`)}
       </button>
-      <span>${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}</span>
+      <span class="wf-history-file-amount"><span>${record.amount == null ? 'Amount to verify' : wfMoney(record.amount)}</span>${kind === 'invoice' ? wfInvoiceDueDateMarkup(record) : ''}</span>
       ${wfHistoryStatusControl(event, freelancerId, record, returnFreelancerId)}
       <button type="button" class="wf-icon-button danger" title="Delete upload"
         onclick="deleteFreelancerHistorySubmission('${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">&times;</button>
@@ -5226,6 +5283,8 @@ function wfReviewExpectedAmountHtml(record) {
     <div class="wf-amount-check-values">
       <div><span>${record.isTransportInvoice ? 'Expected transport cost' : 'Expected from role'}</span><strong>${hasExpected ? wfMoney(expected) : 'Not available'}</strong></div>
       <div><span>Detected / entered</span><strong id="wfReviewDetectedAmount">${record.amount == null ? 'Not detected' : wfMoney(record.amount)}</strong></div>
+      <div class="wf-invoice-due-review"><span>Invoice due date</span><strong id="wfReviewDueDateValue">${record.dueDate ? wfEscape(wfReviewDateLabel(record.dueDate)) : 'Not provided'}</strong>
+        ${record.dueDateSource || wfUploadAgeLabel(record) ? `<small>${wfEscape(record.dueDateSource || wfUploadAgeLabel(record))}</small>` : ''}</div>
       <span class="wf-amount-match" id="wfReviewAmountMatch">${hasExpected ? 'Checking' : 'No role estimate'}</span>
     </div>
     ${breakdown ? `<div class="wf-amount-breakdown">${breakdown}</div>` : '<small class="wf-amount-no-role">No rated role is assigned to this worker or vendor for the event.</small>'}
@@ -5435,21 +5494,26 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   }
   if (
     found.kind === 'invoice' &&
-    found.record.amount == null &&
-    !found.record.ocrRetriedAt &&
+    (
+      (found.record.amount == null && !found.record.ocrRetriedAt) ||
+      !found.record.dueDateScannedAt
+    ) &&
     !skipOcrRetry
   ) {
-    showNotification('info', 'Scanning the invoice for its total amount...');
+    const dueOnly = found.record.amount != null && !found.record.dueDateScannedAt;
+    showNotification('info', dueOnly
+      ? 'Scanning the invoice for its due date...'
+      : 'Scanning the invoice for its total and due date...');
     try {
       const response = await apiCall(
-        `/api/workforce/submissions/${encodeURIComponent(id)}/extract`,
+        `/api/workforce/submissions/${encodeURIComponent(id)}/extract${dueOnly ? '?dueOnly=1' : ''}`,
         'POST'
       );
       workforcePageState.data = response.data;
       if (documentRecord) await wfLoadDocumentEvent(documentRecord);
       found = wfFindSubmission(id);
     } catch (error) {
-      showNotification('error', `Invoice scan could not determine the total: ${error.message}`);
+      showNotification('error', `Invoice scan could not read the invoice details: ${error.message}`);
     }
   }
   if (!found) return;
@@ -5490,6 +5554,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
       ${verified ? `<div class="wf-verified-note">Last reviewed on ${wfEscape(wfDateTime(record.verifiedAt))}. The details remain editable.</div>` : ''}
       <div class="wf-form-grid">
         <label class="wf-field"><span>Verified amount ($) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required></label>
+        ${kind === 'invoice' ? `<label class="wf-field"><span>Due date (optional)</span><input id="wfReviewDueDate" type="date" value="${wfAttr(record.dueDate || '')}"></label>` : ''}
         ${kind === 'claim' ? wfReviewClaimCategoryFields(record, false) : ''}
         ${kind === 'claim' ? `<label class="wf-field full"><span>Notes</span>
           <textarea id="wfReviewClaimNotes" placeholder="Add a description or note for this claim">${wfEscape(record.notes || record.description || '')}</textarea>
@@ -5517,6 +5582,10 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
     updateAllocationProgress();
     updateWorkforceExpectedComparison();
   });
+  document.getElementById('wfReviewDueDate')?.addEventListener('input', event => {
+    const valueNode = document.getElementById('wfReviewDueDateValue');
+    if (valueNode) valueNode.textContent = wfReviewDateLabel(event.currentTarget.value) || 'Not provided';
+  });
   document.getElementById('wfReviewClaimDate')?.addEventListener('input', updateWorkforceClaimDateComparison);
   syncWorkforceReviewClaimCategory();
   updateAllocationProgress();
@@ -5542,7 +5611,7 @@ function denyWorkforceReview() {
 }
 
 function wfReviewDetailsChanged(
-  record, amount, allocations, claimDate, category, notes
+  record, amount, allocations, claimDate, category, notes, dueDate
 ) {
   const originalAmount = record.amount === null || record.amount === undefined
     ? null
@@ -5557,6 +5626,7 @@ function wfReviewDetailsChanged(
     .join('|');
   if (normalizeAllocations(record.allocations) !== normalizeAllocations(allocations)) return true;
   if (String(record.claimDate || '') !== String(claimDate || '')) return true;
+  if (String(record.dueDate || '') !== String(dueDate || '')) return true;
   if (String(record.category || '') !== String(category || '')) return true;
   return String(record.notes || record.description || '') !== String(notes || '');
 }
@@ -5574,9 +5644,10 @@ async function submitWorkforceReview(status, denialReason = '') {
     }
     const amount = document.getElementById('wfReviewAmount').value;
     const claimDate = document.getElementById('wfReviewClaimDate')?.value || '';
+    const dueDate = document.getElementById('wfReviewDueDate')?.value || '';
     const notes = document.getElementById('wfReviewClaimNotes')?.value || '';
     const detailsChanged = wfReviewDetailsChanged(
-      found.record, amount, allocations, claimDate, category, notes
+      found.record, amount, allocations, claimDate, category, notes, dueDate
     );
     const response = await apiCall(`/api/workforce/submissions/${encodeURIComponent(found.record.id)}`, 'PUT', {
       amount,
@@ -5584,6 +5655,7 @@ async function submitWorkforceReview(status, denialReason = '') {
       denialReason: denialReason || (status === 'Denied' ? found.record.denialReason || '' : ''),
       allocations,
       claimDate,
+      dueDate,
       category,
       notes,
       confirmReview: true,

@@ -6,8 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from document_learning import CACHE_FILENAME, MODEL_FILENAME, VERSION, atomic_json, submission_records, train_snapshot
-from workforce import (_amount_from_text, _date_from_text, _unlabelled_invoice_table_total,
-                       extract_claim_amount, extract_invoice_amount, money)
+from workforce import (_amount_from_text, _date_from_text, _invoice_due_date_from_text,
+                       _unlabelled_invoice_table_total, extract_claim_amount,
+                       extract_invoice_amount, money)
 
 
 class DocumentDetectionTests(unittest.TestCase):
@@ -72,6 +73,79 @@ class DocumentDetectionTests(unittest.TestCase):
         self.assertEqual(result['amount'], 125)
         self.assertEqual(result['date'], '2026-09-04')
         self.assertEqual(result['source'], 'PDF text')
+
+    def test_invoice_due_date_supports_explicit_dates_and_payment_terms(self):
+        explicit = _invoice_due_date_from_text(
+            'Invoice Date 01 Jun 2026\nDue Date 01 Jul 2026',
+            '2026-09-19T10:00:00+08:00',
+        )
+        self.assertEqual(explicit['dueDate'], '2026-07-01')
+        self.assertEqual(explicit['dueDateSource'], 'Explicit due date')
+
+        cases = {
+            'Payment terms: 30 Days': ('2026-07-01', 30),
+            'TERM: 14 days from invoice date': ('2026-06-15', 14),
+            'Terms Net 30': ('2026-07-01', 30),
+            'Payment is due within 30 days of the invoice date.': ('2026-07-01', 30),
+        }
+        for term, expected in cases.items():
+            with self.subTest(term=term):
+                result = _invoice_due_date_from_text(
+                    f'Invoice Date 01 Jun 2026\n{term}',
+                    '2026-09-19T10:00:00+08:00',
+                )
+                self.assertEqual(result['dueDate'], expected[0])
+                self.assertEqual(result['dueInDays'], expected[1])
+                self.assertIn('invoice date', result['dueDateSource'])
+
+        submitted = _invoice_due_date_from_text(
+            'Submitted Date: 05/06/2026\nDue in 10 days',
+            '2026-09-19T10:00:00+08:00',
+        )
+        self.assertEqual(submitted['dueDate'], '2026-06-15')
+        self.assertEqual(submitted['dueDateReferenceDate'], '2026-06-05')
+
+        split_term = _invoice_due_date_from_text(
+            'Invoice Date: 05/06/2026\nPayment Terms:\nWithin 30 days',
+            '2026-09-19T10:00:00+08:00',
+        )
+        self.assertEqual(split_term['dueDate'], '2026-07-05')
+
+    def test_invoice_due_term_uses_upload_date_only_when_document_date_is_missing(self):
+        result = _invoice_due_date_from_text(
+            'Invoice\nPayment Due : 30 days',
+            '2026-09-19T23:45:00+08:00',
+        )
+        self.assertEqual(result['dueDate'], '2026-10-19')
+        self.assertEqual(result['dueDateReferenceDate'], '2026-09-19')
+        self.assertIn('Showbase upload date', result['dueDateSource'])
+
+    def test_invoice_without_due_date_or_term_stays_empty(self):
+        result = _invoice_due_date_from_text(
+            'Invoice Date 01 Jun 2026\nAmount Due SGD 400.00\nPayment via bank transfer',
+            '2026-09-19T10:00:00+08:00',
+        )
+        self.assertEqual(result['dueDate'], '')
+        self.assertEqual(result['dueDateSource'], '')
+        self.assertIsNone(result['dueInDays'])
+
+        legal_text = _invoice_due_date_from_text(
+            'Late payment after invoice due date attracts interest after 3 months.',
+            '2026-09-19T10:00:00+08:00',
+        )
+        self.assertEqual(legal_text['dueDate'], '')
+
+    def test_invoice_photo_ocr_extracts_due_date_with_total(self):
+        with patch(
+            'workforce._ocr_image',
+            return_value='Invoice Date 13/3/2026\nPayment Due: May 30, 2026\nTotal $125.00',
+        ):
+            result = extract_invoice_amount(
+                'invoice.jpg', submitted_at='2026-03-14T09:00:00+08:00'
+            )
+        self.assertEqual(result['amount'], 125)
+        self.assertEqual(result['dueDate'], '2026-05-30')
+        self.assertEqual(result['dueDateSource'], 'Explicit due date')
 
     def test_character_spaced_pdf_uses_readable_ocr_instead_of_partial_digits(self):
         native = ('I n v o i c e D e s c r i p t i o n A m o u n t\n' * 4

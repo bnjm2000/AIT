@@ -11,7 +11,7 @@ import secrets
 import threading
 import zipfile
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 
@@ -961,6 +961,262 @@ _DATE_PATTERNS = (
     ),
 )
 
+_INVOICE_DUE_DATE_LABEL = re.compile(
+    r"\b(?:due\s+date|date\s+due|payment\s+due|payment\s+deadline|"
+    r"payable\s+(?:by|on)|pay\s+by|due\s+by)\b",
+    re.IGNORECASE,
+)
+_INVOICE_REFERENCE_DATE_LABEL = re.compile(
+    r"\b(?:invoice\s+date|date\s+of\s+invoice|date\s+issued|issued\s+date|"
+    r"issue\s+date|submitted\s+date|submission\s+date)\b",
+    re.IGNORECASE,
+)
+_INVOICE_EVENT_DATE_LABEL = re.compile(
+    r"\b(?:event|service|job)\s+date\b",
+    re.IGNORECASE,
+)
+_INVOICE_TERM_PATTERNS = (
+    re.compile(
+        r"\b(?:payment\s+)?(?:is\s+)?due\s*(?:in|within|:)?\s*"
+        r"(?P<value>\d{1,3})\s*(?P<unit>days?|weeks?|months?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bpayment\s+(?:terms?|term\s+is)\s*(?:is|:|-)?\s*"
+        r"(?:within\s+)?(?P<value>\d{1,3})\s*"
+        r"(?P<unit>days?|weeks?|months?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bterms?\s*(?:is|:|-)?\s*net\s*(?P<value>\d{1,3})\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bterm\s*(?:is|:|-)?\s*(?P<value>\d{1,3})\s*"
+        r"(?P<unit>days?|weeks?|months?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bpayment\s+is\s+to\s+be\s+made\s+within\s+"
+        r"(?P<value>\d{1,3})\s*(?P<unit>days?|weeks?|months?)\b",
+        re.IGNORECASE,
+    ),
+)
+
+
+def _date_match_value(match):
+    try:
+        year = int(match.group("year"))
+        if year < 100:
+            year += 2000 if year <= 79 else 1900
+        month_name = match.groupdict().get("month_name")
+        month = (
+            _MONTH_NUMBERS.get(month_name.lower())
+            if month_name
+            else int(match.group("month"))
+        )
+        day = int(match.group("day"))
+        # Only use month/day order when day/month is impossible;
+        # ambiguous local documents remain day-first.
+        if not month_name and month > 12 and day <= 12:
+            day, month = month, day
+        value = datetime(year, int(month), day)
+    except (TypeError, ValueError):
+        return None
+    return value if 1990 <= value.year <= 2100 else None
+
+
+def _line_date_matches(line):
+    matches = []
+    for pattern in _DATE_PATTERNS:
+        for match in pattern.finditer(line):
+            value = _date_match_value(match)
+            if value is not None:
+                matches.append((match.start(), value))
+    return sorted(matches, key=lambda row: row[0])
+
+
+def _labelled_invoice_date(lines, label_pattern):
+    """Read a date on a labelled line or immediately after a lone label."""
+    candidates = []
+    for line_index, line in enumerate(lines):
+        label = label_pattern.search(line)
+        if not label:
+            continue
+        same_line = _line_date_matches(line)
+        following = [row for row in same_line if row[0] >= label.end()]
+        if following:
+            # The closest following date belongs to this label when invoice
+            # and due dates share a serialized table row.
+            _position, value = min(following, key=lambda row: row[0])
+            candidates.append((200, -line_index, value, line))
+        elif same_line:
+            # Some PDF tables serialize the value before its column label.
+            _position, value = max(same_line, key=lambda row: row[0])
+            candidates.append((150, -line_index, value, line))
+        if same_line:
+            continue
+        for next_index in range(line_index + 1, min(len(lines), line_index + 3)):
+            next_line = lines[next_index]
+            if (
+                _INVOICE_DUE_DATE_LABEL.search(next_line)
+                or _INVOICE_REFERENCE_DATE_LABEL.search(next_line)
+                or _INVOICE_EVENT_DATE_LABEL.search(next_line)
+            ):
+                break
+            following = _line_date_matches(next_line)
+            if following:
+                candidates.append((130 - (next_index - line_index) * 10,
+                                   -next_index, following[0][1], next_line))
+                break
+            if re.search(r"[A-Za-z]{3,}", next_line):
+                break
+    if not candidates:
+        return {"date": "", "matchedText": ""}
+    _score, _position, value, line = max(candidates)
+    return {
+        "date": value.strftime("%Y-%m-%d"),
+        "matchedText": line[:240],
+    }
+
+
+def _invoice_term_from_text(text):
+    # OCR often emits "three(3) months". The printed number is the reliable
+    # part and lets the same patterns handle that form without word guessing.
+    normalized = re.sub(
+        r"\b[A-Za-z]+\s*\(\s*(\d{1,3})\s*\)",
+        r"\1",
+        str(text or ""),
+    )
+    lines = [
+        re.sub(r"\s+", " ", line).strip()
+        for line in normalized.splitlines()
+        if line.strip()
+    ]
+    for index, line in enumerate(lines):
+        candidates = [line]
+        if (
+            index + 1 < len(lines)
+            and re.fullmatch(
+                r"(?:payment\s+due|payment\s+terms?|terms?)\s*:?\s*",
+                line,
+                re.IGNORECASE,
+            )
+        ):
+            candidates.insert(0, f"{line} {lines[index + 1]}")
+        for candidate in candidates:
+            lowered = candidate.casefold()
+            if any(phrase in lowered for phrase in (
+                "late fee", "late payment", "overdue", "interest", "no payment",
+            )):
+                continue
+            for pattern in _INVOICE_TERM_PATTERNS:
+                match = pattern.search(candidate)
+                if not match:
+                    continue
+                value = int(match.group("value"))
+                if value > 730:
+                    continue
+                unit = str(match.groupdict().get("unit") or "days").lower()
+                return {
+                    "value": value,
+                    "unit": "month" if unit.startswith("month") else (
+                        "week" if unit.startswith("week") else "day"
+                    ),
+                    "matchedText": candidate[:240],
+                }
+    return {}
+
+
+def _invoice_reference_date(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        pass
+    for format_string in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(raw[:10], format_string)
+        except ValueError:
+            continue
+    return None
+
+
+def _add_invoice_term(reference, value, unit):
+    if unit == "week":
+        return reference + timedelta(days=value * 7)
+    if unit != "month":
+        return reference + timedelta(days=value)
+    month_index = reference.month - 1 + value
+    year = reference.year + month_index // 12
+    month = month_index % 12 + 1
+    if month == 12:
+        next_month = datetime(year + 1, 1, 1)
+    else:
+        next_month = datetime(year, month + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return reference.replace(year=year, month=month, day=min(reference.day, last_day))
+
+
+def _invoice_due_date_from_text(text: str, submitted_at="") -> dict:
+    """Extract an explicit invoice due date or resolve a printed payment term.
+
+    No default term is invented. The Showbase submission timestamp is only a
+    fallback reference when the document prints a term but no invoice/submitted
+    date of its own.
+    """
+    lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines() if line.strip()]
+    explicit = _labelled_invoice_date(lines, _INVOICE_DUE_DATE_LABEL)
+    invoice_date = _labelled_invoice_date(lines, _INVOICE_REFERENCE_DATE_LABEL)
+    if explicit["date"]:
+        return {
+            "dueDate": explicit["date"],
+            "dueDateSource": "Explicit due date",
+            "dueDateMatchedText": explicit["matchedText"],
+            "dueDateReferenceDate": invoice_date["date"],
+            "invoiceDateMatchedText": invoice_date["matchedText"],
+            "dueInDays": None,
+        }
+
+    term = _invoice_term_from_text(text)
+    if not term:
+        return {
+            "dueDate": "",
+            "dueDateSource": "",
+            "dueDateMatchedText": "",
+            "dueDateReferenceDate": invoice_date["date"],
+            "invoiceDateMatchedText": invoice_date["matchedText"],
+            "dueInDays": None,
+        }
+
+    reference_label = "invoice date"
+    reference_value = invoice_date["date"]
+    if re.search(r"\b(?:event|service|job)\s+date\b", term["matchedText"], re.IGNORECASE):
+        event_date = _labelled_invoice_date(lines, _INVOICE_EVENT_DATE_LABEL)
+        if event_date["date"]:
+            reference_value = event_date["date"]
+            reference_label = "event date"
+    reference = _invoice_reference_date(reference_value)
+    if reference is None:
+        reference = _invoice_reference_date(submitted_at)
+        reference_label = "Showbase upload date"
+        reference_value = reference.strftime("%Y-%m-%d") if reference else ""
+    due_date = _add_invoice_term(reference, term["value"], term["unit"]) if reference else None
+    unit_label = term["unit"] + ("" if term["value"] == 1 else "s")
+    return {
+        "dueDate": due_date.strftime("%Y-%m-%d") if due_date else "",
+        "dueDateSource": (
+            f"{term['value']} {unit_label} from {reference_label}"
+            if due_date else "Printed payment term; reference date unavailable"
+        ),
+        "dueDateMatchedText": term["matchedText"],
+        "dueDateReferenceDate": reference_value,
+        "invoiceDateMatchedText": invoice_date["matchedText"],
+        "dueInDays": term["value"] if term["unit"] == "day" else None,
+    }
+
 
 def _date_from_text(text: str) -> dict:
     candidates = []
@@ -1197,20 +1453,45 @@ def _document_extraction_text(path: str, kind: str, content_type: str = "") -> d
     return result
 
 
-def extract_invoice_amount(path: str, *, data_folder=None) -> dict:
+def _spreadsheet_invoice_text(path: str) -> str:
+    try:
+        from spreadsheet_preview import read_spreadsheet_preview
+
+        workbook = read_spreadsheet_preview(path)
+        return "\n".join(
+            " ".join(
+                str(cell.get("text") or "").strip()
+                for cell in row
+                if isinstance(cell, dict) and str(cell.get("text") or "").strip()
+            )
+            for sheet in workbook.get("sheets", [])
+            if isinstance(sheet, dict)
+            for row in sheet.get("rows", [])
+            if isinstance(row, list)
+        )
+    except (OSError, ValueError, TypeError):
+        return ""
+
+
+def extract_invoice_amount(path: str, *, data_folder=None, submitted_at="") -> dict:
     from document_learning import load_amount_profile
 
     profile = load_amount_profile(data_folder, 'invoice')
     if Path(path).suffix.lower() in INVOICE_SPREADSHEET_EXTENSIONS:
-        return {
+        result = {
             "amount": None,
             "confidence": "Low",
             "source": "Spreadsheet - manual review",
             "matchedText": "",
             "ocrUsed": False,
         }
+        result.update(_invoice_due_date_from_text(
+            _spreadsheet_invoice_text(path), submitted_at
+        ))
+        return result
     document = _document_extraction_text(path, 'invoice')
     result = _amount_from_text(document['text'], profile)
+    result.update(_invoice_due_date_from_text(document['text'], submitted_at))
     result.update(source=document['source'], ocrUsed=document['ocrUsed'])
     return _local_submission_amount(result)
 

@@ -12565,7 +12565,16 @@ def _process_worker_submission_upload(
             original_name = record.get('originalName', '')
 
         extraction = (
-            extract_invoice_amount(path, data_folder=data_folder)
+            extract_invoice_amount(
+                path,
+                data_folder=data_folder,
+                submitted_at=(
+                    record.get('submittedAt')
+                    or record.get('uploadedAt')
+                    or record.get('createdAt')
+                    or ''
+                ),
+            )
             if kind in {'invoice', 'transport'}
             else extract_claim_amount(
                 path,
@@ -12595,10 +12604,29 @@ def _process_worker_submission_upload(
                 and not record.get('claimDate')
             ):
                 record['claimDate'] = extraction.get('date')
+            invoice_due_update = (
+                {
+                    'dueDate': extraction.get('dueDate', ''),
+                    'dueDateSource': extraction.get('dueDateSource', ''),
+                    'dueDateReferenceDate': extraction.get(
+                        'dueDateReferenceDate', ''
+                    ),
+                    'dueInDays': extraction.get('dueInDays'),
+                    'ocrDueDateMatchedText': extraction.get(
+                        'dueDateMatchedText', ''
+                    ),
+                    'ocrInvoiceDateMatchedText': extraction.get(
+                        'invoiceDateMatchedText', ''
+                    ),
+                    'dueDateScannedAt': now_iso(),
+                }
+                if kind in {'invoice', 'transport'} else {}
+            )
             record.update({
                 'ocrConfidence': extraction.get('confidence', 'Low'),
                 'ocrSource': extraction.get('source', ''),
                 'ocrMatchedText': extraction.get('matchedText', ''),
+                **invoice_due_update,
                 'ocrDateMatchedText': extraction.get(
                     'dateMatchedText', ''
                 ),
@@ -17147,6 +17175,9 @@ def list_workforce_submissions():
 )
 @require_admin
 def reextract_workforce_invoice_amount(submission_id):
+    due_only = str(request.args.get('dueOnly') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
     with mutate_workforce(_workforce_folder()) as workforce:
         found = _find_submission_record(workforce, submission_id)
         if not found:
@@ -17159,15 +17190,43 @@ def reextract_workforce_invoice_amount(submission_id):
         )
         if not path or not os.path.isfile(path):
             return jsonify({'error': 'Invoice file not found'}), 404
-        extraction = extract_invoice_amount(path, data_folder=_workforce_folder())
+        extraction = extract_invoice_amount(
+            path,
+            data_folder=_workforce_folder(),
+            submitted_at=(
+                record.get('submittedAt')
+                or record.get('uploadedAt')
+                or record.get('createdAt')
+                or ''
+            ),
+        )
         detected_amount = extraction.get('amount')
-        if detected_amount is not None:
+        if detected_amount is not None and not due_only:
             record['amount'] = detected_amount
-        record.update({
+        due_date_update = {} if record.get('dueDateCorrectedAt') else {
+            'dueDate': extraction.get('dueDate', ''),
+            'dueDateSource': extraction.get('dueDateSource', ''),
+            'dueDateReferenceDate': extraction.get(
+                'dueDateReferenceDate', ''
+            ),
+            'dueInDays': extraction.get('dueInDays'),
+            'ocrDueDateMatchedText': extraction.get(
+                'dueDateMatchedText', ''
+            ),
+            'ocrInvoiceDateMatchedText': extraction.get(
+                'invoiceDateMatchedText', ''
+            ),
+        }
+        amount_update = {} if due_only else {
             'ocrConfidence': extraction.get('confidence', 'Low'),
             'ocrSource': extraction.get('source', ''),
             'ocrMatchedText': extraction.get('matchedText', ''),
             'ocrUsed': bool(extraction.get('ocrUsed')),
+        }
+        record.update({
+            **amount_update,
+            **due_date_update,
+            'dueDateScannedAt': now_iso(),
             'ocrRetriedAt': now_iso(),
         })
         event_id = found['eventId']
@@ -17409,6 +17468,24 @@ def review_workforce_submission(submission_id):
                     'error': 'Department allocations must equal the invoice amount'
                 }), 400
             record['allocations'] = clean_allocations
+            if can_edit_details and payload.get('dueDate') is not None:
+                due_date = str(payload.get('dueDate') or '').strip()
+                if due_date:
+                    try:
+                        due_date = datetime.strptime(
+                            due_date, '%Y-%m-%d'
+                        ).strftime('%Y-%m-%d')
+                    except ValueError:
+                        return jsonify({
+                            'error': 'Enter a valid invoice due date'
+                        }), 400
+                if due_date != str(record.get('dueDate') or ''):
+                    record['dueDate'] = due_date
+                    record['dueDateSource'] = (
+                        'Corrected during review' if due_date else ''
+                    )
+                    record['dueDateCorrectedAt'] = now_iso()
+                    record['dueDateCorrectedBy'] = session.get('user', '')
         if (
             submission_kind == 'claim'
             and can_edit_details

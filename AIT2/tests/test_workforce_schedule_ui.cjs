@@ -100,6 +100,49 @@ test('crew and vendor submissions reuse the worker portal status and progress tr
   assert.match(approved, /class="wf-status-button status-badge status-approved"/);
 });
 
+test('invoice due dates appear for admins with countdown and upload-age fallback', () => {
+  const context = setup();
+  vm.runInContext(`
+    wfTodayDayNumber = () => Date.UTC(2026, 8, 19) / 86400000;
+  `, context);
+
+  const crewRow = vm.runInContext(`wfSubmissionRow({
+    id:'invoice-1', originalName:'invoice.pdf', amount:250, dueDate:'2026-10-01'
+  }, 'invoice')`, context);
+  assert.match(crewRow, /\$250\.00/);
+  assert.match(crewRow, /Due 1 October 2026/);
+
+  const dueTiming = vm.runInContext(`wfDocumentTimingMarkup({
+    dueDate:'2026-10-01', submittedAt:'2026-09-10T10:00:00+08:00'
+  })`, context);
+  assert.match(dueTiming, /Due 1 October 2026/);
+  assert.match(dueTiming, /12 days left/);
+
+  const ageTiming = vm.runInContext(`wfDocumentTimingMarkup({
+    submittedAt:'2026-09-10T10:00:00+08:00'
+  })`, context);
+  assert.match(ageTiming, /9 days since uploaded/);
+
+  const crewAge = vm.runInContext(`wfSubmissionRow({
+    id:'invoice-2', originalName:'no-due-date.pdf', amount:100,
+    submittedAt:'2026-09-10T10:00:00+08:00'
+  }, 'invoice')`, context);
+  assert.match(crewAge, /9 days since uploaded/);
+
+  const overdueTiming = vm.runInContext(`wfDocumentTimingMarkup({
+    dueDate:'2026-09-17', submittedAt:'2026-09-01T10:00:00+08:00'
+  })`, context);
+  assert.match(overdueTiming, /2 days overdue/);
+
+  const review = vm.runInContext(`wfReviewExpectedAmountHtml({
+    amount:250, expectedAmount:250, dueDate:'2026-10-01',
+    dueDateSource:'30 days from invoice date', expectedAmountBreakdown:[]
+  })`, context);
+  assert.match(review, /Invoice due date/);
+  assert.match(review, /1 October 2026/);
+  assert.match(review, /30 days from invoice date/);
+});
+
 test('schedule rates are clickable for the specific assignment date and show full department name', () => {
   const context = setup();
   vm.runInContext(`
