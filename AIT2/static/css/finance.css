@@ -1170,7 +1170,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #b42318;
+  color: #334155;
   font: inherit;
   font-size: 11px;
   font-weight: 800;
@@ -1180,8 +1180,17 @@
 
 .finance-product-category-menu button:hover,
 .finance-product-category-menu button:focus-visible {
-  background: #fff1f0;
+  background: #f1f5f9;
   outline: none;
+}
+
+.finance-product-category-menu button.delete {
+  color: #b42318;
+}
+
+.finance-product-category-menu button.delete:hover,
+.finance-product-category-menu button.delete:focus-visible {
+  background: #fff1f0;
 }
 
 .finance-product-form-grid {

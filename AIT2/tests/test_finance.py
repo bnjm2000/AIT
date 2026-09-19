@@ -2552,6 +2552,110 @@ class FinanceFeatureTests(unittest.TestCase):
         )
         self.assertEqual(restored_product['unitPrice'], 0)
 
+    def test_zero_price_custom_product_is_backfilled_from_quotation_history(self):
+        created = self.client.post('/api/finance/products', json={
+            'productLabel': 'Historical show operator',
+            'description': 'Historical show operator',
+            'productCategory': 'Manpower',
+            'department': 'Manpower',
+            'unitPrice': 0,
+            'uom': 'pax',
+            'isCustom': True,
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        product = next(
+            row for row in created.get_json()['data']
+            if row.get('productLabel') == 'Historical show operator'
+        )
+        quotation = self.create_quote('Historical Product Price')
+        quotation['lineItems'] = [{
+            **product,
+            'id': 'historical-product-price',
+            'systemName': 'Manpower',
+            'days': 1,
+            'quantity': 1,
+            'unitPrice': 375,
+            'discountPercent': 0,
+            'isCustom': True,
+            'productPricePending': True,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        saved_line = saved.get_json()['data']['lineItems'][0]
+        self.assertEqual(saved_line['productKey'], product['productKey'])
+        self.assertTrue(saved_line['productPricePending'])
+
+        products = self.client.get('/api/finance/products').get_json()['data']
+        backfilled = next(
+            row for row in products
+            if row.get('productLabel') == 'Historical show operator'
+        )
+        self.assertEqual(backfilled['unitPrice'], 375)
+        stored = app_module._load_finance_data()['priceBook'][
+            'product::custom:historical show operator'
+        ]
+        self.assertEqual(stored['unitPrice'], 375)
+        self.assertTrue(stored.get('priceBackfilledAt'))
+
+    def test_category_rename_merges_and_applies_to_future_inventory(self):
+        for label, category in (
+            ('Existing system service', 'Audio System'),
+            ('Department service', 'Audio Department'),
+        ):
+            created = self.client.post('/api/finance/products', json={
+                'productLabel': label,
+                'description': label,
+                'productCategory': category,
+                'department': category,
+                'unitPrice': 0,
+                'uom': 'units',
+                'isCustom': True,
+            })
+            self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+
+        renamed = self.client.patch('/api/finance/products/category', json={
+            'category': 'Audio Department',
+            'newCategory': 'Audio System',
+        })
+
+        self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
+        self.assertTrue(renamed.get_json()['merged'])
+        audio_rows = [
+            row for row in renamed.get_json()['data']
+            if row.get('model') == 'SB18 III'
+            or row.get('productLabel') in {
+                'Existing system service', 'Department service',
+            }
+        ]
+        self.assertEqual(len(audio_rows), 3)
+        self.assertTrue(all(
+            row.get('productCategory') == 'Audio System' for row in audio_rows
+        ))
+
+        self.data_manager.inventory['AX#02'] = InventoryItem(
+            asset_id='AX#02',
+            brand='Shure',
+            model_number='ULXD4Q',
+            serial_number='ULXD4Q-SN-1',
+            description='Digital wireless receiver',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='AX',
+        )
+        self.data_manager.save_inventory()
+        future_product = next(
+            row for row in self.client.get('/api/finance/products').get_json()['data']
+            if row.get('model') == 'ULXD4Q'
+        )
+        self.assertEqual(future_product['department'], 'Audio Department')
+        self.assertEqual(future_product['productCategory'], 'Audio System')
+        self.assertIn(
+            'product-category:ax',
+            app_module._load_finance_data()['priceBook'],
+        )
+
     def test_catalog_search_skips_full_finance_hydration_for_current_data(self):
         self.create_quote('Fast Asset Search')
         with patch.object(
@@ -3362,10 +3466,14 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('productCatalogRender()', update_field)
         self.assertIn('aria-label="Product categories"', source)
         self.assertIn('function productCatalogOpenCategoryMenu(', source)
+        self.assertIn('function productCatalogRenameCategory(', source)
         self.assertIn('function productCatalogDeleteCategory(', source)
+        self.assertIn("'/api/finance/products/category', 'PATCH'", source)
         self.assertIn("'/api/finance/products/category', 'DELETE'", source)
         self.assertIn("title: 'Add this as a product?'", source)
         self.assertIn("title: 'Update the product price?'", source)
+        self.assertIn('if (line.productPricePending)', source)
+        self.assertIn('currentLine.productPricePending =', source)
         self.assertIn('function financeOpenRateCard()', source)
         self.assertIn('function financeDeleteRateCardItem(index)', source)
         self.assertIn('financeRateCardBrand', source)

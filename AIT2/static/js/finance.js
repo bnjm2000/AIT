@@ -3748,7 +3748,7 @@ function productCatalogEnsureCategoryMenu() {
   menu.id = 'financeProductCategoryMenu';
   menu.className = 'finance-product-category-menu';
   menu.setAttribute('role', 'menu');
-  menu.innerHTML = '<button type="button" role="menuitem" onclick="productCatalogDeleteCategory()">Delete category</button>';
+  menu.innerHTML = '<button type="button" class="rename" role="menuitem" onclick="productCatalogRenameCategory()">Rename category</button><button type="button" class="delete" role="menuitem" onclick="productCatalogDeleteCategory()">Delete category</button>';
   document.body.appendChild(menu);
   document.addEventListener('pointerdown', event => {
     if (!menu.contains(event.target)) productCatalogCloseCategoryMenu();
@@ -3776,10 +3776,53 @@ function productCatalogOpenCategoryMenu(event, encodedCategory) {
   menu.dataset.category = category;
   menu.classList.add('open');
   const width = 172;
-  const height = 40;
+  const height = 76;
   menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8))}px`;
   menu.querySelector('button')?.focus();
+}
+
+async function productCatalogRenameCategory() {
+  const menu = document.getElementById('financeProductCategoryMenu');
+  const category = String(menu?.dataset.category || '').trim();
+  productCatalogCloseCategoryMenu();
+  if (!category) return;
+  const requested = await showAppPrompt({
+    title: 'Rename product category',
+    message: 'Inventory added later from this department will use the renamed category too.',
+    inputLabel: 'Category name',
+    defaultValue: category,
+    confirmText: 'Rename',
+    cancelText: 'Cancel',
+    required: true
+  });
+  const nextCategory = String(requested || '').trim();
+  if (!nextCategory || nextCategory.toLocaleLowerCase() === category.toLocaleLowerCase()) return;
+  const existing = productCatalogCategories().find(value => (
+    value.toLocaleLowerCase() === nextCategory.toLocaleLowerCase()
+  ));
+  if (existing) {
+    const merge = await showAppConfirm({
+      title: 'Merge product categories?',
+      message: `${existing} already exists. All products in ${category} will be merged into it. Existing quotation items will not change.`,
+      confirmText: 'Merge Categories',
+      cancelText: 'Cancel'
+    });
+    if (!merge) return;
+  }
+  try {
+    const response = await apiCall('/api/finance/products/category', 'PATCH', {
+      category,
+      newCategory: existing || nextCategory
+    });
+    financeApplyProductRows(response.data || []);
+    productCatalogState.category = existing || nextCategory;
+    productCatalogRender();
+    showNotification(
+      'success',
+      response.merged ? 'Product categories merged' : 'Product category renamed'
+    );
+  } catch (error) {}
 }
 
 async function productCatalogDeleteCategory() {
@@ -8084,6 +8127,20 @@ function financeSetClientAddress(value) {
   financeQueueSave();
 }
 
+async function financePersistLineProductPrice(line, nextPrice) {
+  const rows = await financePersistProduct({ ...line, unitPrice: nextPrice });
+  const product = rows.find(row => (
+    (line.productId && (row.productId || row.id) === line.productId)
+    || (line.productKey && row.productKey === line.productKey)
+    || (line.catalogKey && row.catalogKey === line.catalogKey)
+  ));
+  if (product) {
+    if (!line.productId) line.productId = product.productId || product.id || '';
+    if (!line.productKey) line.productKey = product.productKey || product.catalogKey || '';
+  }
+  return product;
+}
+
 async function financeOfferProductPriceUpdate(line, previousPrice) {
   const nextPrice = financeNumber(line?.unitPrice);
   if (!line || line.groupId || nextPrice === financeNumber(previousPrice)) return;
@@ -8094,6 +8151,15 @@ async function financeOfferProductPriceUpdate(line, previousPrice) {
     || (line.sourceAssetIds || []).length
   );
   if (!isLinkedProduct) return;
+  if (line.productPricePending) {
+    try {
+      await financePersistLineProductPrice(line, nextPrice);
+      line.productPricePending = false;
+      financeQueueSave();
+      showNotification('success', 'Initial product price saved for future additions');
+    } catch (error) {}
+    return;
+  }
   const title = [line.brand, line.model].filter(Boolean).join(' ') || line.description || 'this product';
   const confirmed = await showAppConfirm({
     title: 'Update the product price?',
@@ -8103,16 +8169,7 @@ async function financeOfferProductPriceUpdate(line, previousPrice) {
   });
   if (!confirmed) return;
   try {
-    const rows = await financePersistProduct({ ...line, unitPrice: nextPrice });
-    const product = rows.find(row => (
-      (line.productId && (row.productId || row.id) === line.productId)
-      || (line.productKey && row.productKey === line.productKey)
-      || (line.catalogKey && row.catalogKey === line.catalogKey)
-    ));
-    if (product) {
-      if (!line.productId) line.productId = product.productId || product.id || '';
-      if (!line.productKey) line.productKey = product.productKey || product.catalogKey || '';
-    }
+    await financePersistLineProductPrice(line, nextPrice);
     showNotification('success', 'Product price updated for future additions');
   } catch (error) {}
 }
@@ -9001,6 +9058,7 @@ async function financeAddCustomItem() {
           if (savedProduct) {
             currentLine.productId = savedProduct.productId || savedProduct.id || '';
             currentLine.productKey = savedProduct.productKey || savedProduct.catalogKey || '';
+            currentLine.productPricePending = financeNumber(savedProduct.unitPrice) <= 0;
           }
           financeQueueSave();
           showNotification('success', 'Product added for future quotations');

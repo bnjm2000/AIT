@@ -36488,6 +36488,9 @@ def _normalise_finance_line(value):
         'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
         **({'linkedItemId': linked_item_id} if linked_item_id else {}),
         'catalogKey': catalog_key,
+        'productId': str(value.get('productId') or '').strip()[:500],
+        'productKey': str(value.get('productKey') or '').strip()[:500],
+        'productPricePending': bool(value.get('productPricePending')),
         'sourceAssetIds': source_asset_ids,
         'brand': brand[:240],
         'model': model[:240],
@@ -42051,9 +42054,26 @@ def _finance_price_book_key_is_visible(key):
     return raw.split('::', 1)[0].strip().lower() == _finance_current_username().lower()
 
 
+def _finance_product_category_mappings(finance_data):
+    mappings = {}
+    for stored_key, payload in (finance_data.get('priceBook') or {}).items():
+        key = str(stored_key or '').strip().casefold()
+        if not key.startswith('product-category:') or not isinstance(payload, dict):
+            continue
+        department_code = _normalise_department_code(
+            payload.get('departmentCode')
+            or key.removeprefix('product-category:')
+        )
+        category = str(payload.get('productCategory') or '').strip()[:240]
+        if department_code and category:
+            mappings[department_code] = category
+    return mappings
+
+
 def _finance_rate_card_rows(finance_data):
     rows = {}
     inventory_rows = {}
+    category_mappings = _finance_product_category_mappings(finance_data)
 
     for asset_id, asset in (data_manager.inventory.items() if data_manager else []):
         if not asset or _is_disposed(asset):
@@ -42076,7 +42096,7 @@ def _finance_rate_card_rows(finance_data):
             ) or description,
             'department': department,
             'departmentCode': department_code,
-            'productCategory': department,
+            'productCategory': category_mappings.get(department_code, department),
             'sourceAssetIds': [],
             'searchTags': [],
             'availableQuantity': 0,
@@ -42220,7 +42240,10 @@ def _finance_rate_card_rows(finance_data):
         if not _finance_price_book_key_is_visible(stored_key):
             continue
         base_key = str(stored_key).split('::', 1)[-1]
-        if base_key.startswith('asset:') or not isinstance(payload, dict):
+        if (
+            base_key.startswith(('asset:', 'product-category:'))
+            or not isinstance(payload, dict)
+        ):
             continue
         catalog_key = '' if base_key.startswith('custom:') else base_key
         tombstone_line = _normalise_finance_line({
@@ -42346,7 +42369,9 @@ def _finance_prune_unavailable_inventory_products(finance_data, rows):
             continue
         base_key = str(stored_key or '').split('::', 1)[-1].strip()
         normalized_key = base_key.casefold()
-        if normalized_key.startswith(('custom:', 'container:')):
+        if normalized_key.startswith((
+            'custom:', 'container:', 'product-category:',
+        )):
             continue
         if normalized_key.startswith('asset:'):
             if normalized_key.removeprefix('asset:') not in active_asset_ids:
@@ -42374,6 +42399,73 @@ def _finance_prune_unavailable_inventory_products(finance_data, rows):
             price_book.pop(stored_key, None)
             removed += 1
     return removed
+
+
+def _finance_backfill_custom_product_prices(finance_data):
+    """Fill a zero-priced custom product from its latest priced quotation use."""
+    price_book = finance_data.get('priceBook')
+    if not isinstance(price_book, dict):
+        return 0
+
+    latest_prices = {}
+    documents = [
+        document for document in (finance_data.get('documents') or [])
+        if isinstance(document, dict) and document.get('type') == 'quotation'
+    ]
+    documents.sort(key=lambda document: (
+        str(document.get('updatedAt') or document.get('createdAt') or ''),
+        str(document.get('id') or ''),
+    ))
+    for document in documents:
+        timestamp = str(document.get('updatedAt') or document.get('createdAt') or '')
+        for index, line in enumerate(document.get('lineItems') or []):
+            if not isinstance(line, dict) or not line.get('isCustom'):
+                continue
+            grouped = bool(line.get('groupId'))
+            unit_price = max(0, _safe_float(
+                line.get('groupItemUnitPrice') if grouped else line.get('unitPrice'),
+                0,
+            ))
+            if unit_price <= 0:
+                continue
+            description = str(
+                line.get('productLabel') or line.get('description') or ''
+            ).strip()
+            keys = {
+                str(line.get('productKey') or '').strip().casefold(),
+                str(line.get('catalogKey') or '').strip().casefold(),
+                _finance_custom_price_key(description).casefold(),
+            }
+            keys.discard('')
+            candidate = (timestamp, index, round(unit_price, 2))
+            for key in keys:
+                if key.startswith('custom:'):
+                    latest_prices[key] = max(
+                        latest_prices.get(key, ('', -1, 0)), candidate
+                    )
+
+    updated = 0
+    for stored_key, payload in price_book.items():
+        if not isinstance(payload, dict) or payload.get('hidden') or payload.get('deleted'):
+            continue
+        base_key = str(stored_key or '').split('::', 1)[-1].strip().casefold()
+        if (
+            not base_key.startswith('custom:')
+            or _safe_float(payload.get('unitPrice'), 0) > 0
+            or payload.get('priceBackfillCheckedAt')
+        ):
+            continue
+        description_key = _finance_custom_price_key(
+            payload.get('productLabel') or payload.get('description')
+        ).casefold()
+        remembered = latest_prices.get(base_key) or latest_prices.get(description_key)
+        checked_at = datetime.now().isoformat(timespec='seconds')
+        payload['priceBackfillCheckedAt'] = checked_at
+        if remembered:
+            payload['unitPrice'] = remembered[2]
+            payload['priceBackfilledAt'] = checked_at
+        updated += 1
+    return updated
 
 
 def _finance_remembered_price(price_book, catalog_key, asset_ids):
@@ -47125,6 +47217,19 @@ def finance_catalog():
             {'priceBook': search_price_book}
             if search_price_book is not None else _load_finance_data()
         )
+        needs_price_backfill = any(
+            isinstance(payload, dict)
+            and str(stored_key or '').split('::', 1)[-1].casefold().startswith('custom:')
+            and _safe_float(payload.get('unitPrice'), 0) <= 0
+            and not payload.get('priceBackfillCheckedAt')
+            for stored_key, payload in (finance_data.get('priceBook') or {}).items()
+        )
+        if needs_price_backfill and search_price_book is not None:
+            finance_data = _load_finance_data()
+        backfilled = (
+            _finance_backfill_custom_product_prices(finance_data)
+            if needs_price_backfill else 0
+        )
         rate_card_rows = _finance_rate_card_rows(finance_data)
         removed = _finance_prune_unavailable_inventory_products(
             finance_data, rate_card_rows
@@ -47137,7 +47242,7 @@ def finance_catalog():
             removed = _finance_prune_unavailable_inventory_products(
                 finance_data, rate_card_rows
             )
-        if removed:
+        if removed or backfilled:
             _save_finance_data(finance_data)
             rate_card_rows = _finance_rate_card_rows(finance_data)
         price_book = finance_data.get('priceBook') or {}
@@ -47459,8 +47564,12 @@ def finance_catalog():
 def finance_rate_card():
     with _finance_lock:
         finance_data = _load_finance_data()
+        backfilled = _finance_backfill_custom_product_prices(finance_data)
         rows = _finance_rate_card_rows(finance_data)
-        if _finance_prune_unavailable_inventory_products(finance_data, rows):
+        if (
+            _finance_prune_unavailable_inventory_products(finance_data, rows)
+            or backfilled
+        ):
             _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().casefold()
@@ -47606,7 +47715,7 @@ def finance_rate_card():
     return jsonify({'success': True, 'data': rows})
 
 
-@app.route('/api/finance/products/category', methods=['DELETE'])
+@app.route('/api/finance/products/category', methods=['DELETE', 'PATCH'])
 @require_client_access
 def finance_delete_product_category():
     payload = request.get_json(silent=True) or {}
@@ -47616,14 +47725,81 @@ def finance_delete_product_category():
 
     with _finance_lock:
         finance_data = _load_finance_data()
+        all_rows = _finance_rate_card_rows(finance_data)
         targets = [
-            row for row in _finance_rate_card_rows(finance_data)
+            row for row in all_rows
             if str(
                 row.get('productCategory') or row.get('department') or ''
             ).strip().casefold() == category.casefold()
         ]
         if not targets:
             return jsonify({'error': 'Product category not found'}), 404
+
+        if request.method == 'PATCH':
+            new_category = str(
+                payload.get('newCategory') or payload.get('name') or ''
+            ).strip()[:240]
+            if not new_category:
+                return jsonify({'error': 'New category name is required'}), 400
+            if new_category.casefold() == category.casefold():
+                return jsonify({'success': True, 'data': all_rows, 'merged': False})
+
+            existing_categories = {
+                str(
+                    row.get('productCategory') or row.get('department') or ''
+                ).strip().casefold()
+                for row in all_rows
+            }
+            merged = new_category.casefold() in existing_categories
+            price_book = finance_data.setdefault('priceBook', {})
+            category_mappings = _finance_product_category_mappings(finance_data)
+            now = datetime.now().isoformat(timespec='seconds')
+
+            # Move explicit product overrides and custom products together.
+            for stored_key, stored in price_book.items():
+                if not isinstance(stored, dict):
+                    continue
+                if str(stored.get('productCategory') or '').strip().casefold() == category.casefold():
+                    stored['productCategory'] = new_category
+                    stored['updatedAt'] = now
+
+            # A mapping is kept per inventory department so newly added assets
+            # inherit the renamed category without rewriting inventory data.
+            mapped_codes = set()
+            for row in targets:
+                if row.get('isCustom') or row.get('isContainer'):
+                    continue
+                department_code = _normalise_department_code(
+                    row.get('departmentCode') or row.get('department')
+                )
+                if not department_code or department_code in mapped_codes:
+                    continue
+                effective_default = category_mappings.get(
+                    department_code,
+                    str(row.get('department') or '').strip(),
+                )
+                if effective_default.casefold() != category.casefold():
+                    continue
+                mapped_codes.add(department_code)
+                price_book[f'product-category:{department_code.lower()}'] = {
+                    'departmentCode': department_code,
+                    'productCategory': new_category,
+                    'updatedAt': now,
+                    'updatedBy': _finance_current_username(),
+                }
+
+            _save_finance_data(finance_data)
+            rows = _finance_rate_card_rows(finance_data)
+            log_action(
+                f"Renamed product category {category} to {new_category}"
+            )
+            return jsonify({
+                'success': True,
+                'data': rows,
+                'renamedCount': len(targets),
+                'merged': merged,
+            })
+
         deletable = [row for row in targets if row.get('isCustom')]
         retained_count = len(targets) - len(deletable)
         if not deletable:
