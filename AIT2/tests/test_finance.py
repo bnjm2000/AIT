@@ -9996,6 +9996,74 @@ class FinanceFeatureTests(unittest.TestCase):
             expected_due_date,
         )
 
+    def test_fifty_fifty_invoice_plan_assigns_odd_cent_to_final_balance(self):
+        quotation = self.create_quote('Odd Cent Installments')
+        quotation.update({
+            'taxRate': 0,
+            'lineItems': [{
+                'id': 'odd-cent-line',
+                'description': 'Production package',
+                'department': 'Production',
+                'days': 1,
+                'quantity': 1,
+                'unitPrice': 199.99,
+                'discountPercent': 0,
+                'subprojectId': 'main',
+            }],
+        })
+        accepted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={**quotation, 'status': 'accepted'},
+        ).get_json()['data']
+        self.assertEqual(accepted['totals']['total'], 199.99)
+
+        plan_response = self.client.put(
+            f"/api/invoice-plans/{accepted['id']}",
+            json={
+                'strategy': 'deposit',
+                'strategyLabel': '50% deposit / 50% balance',
+                'installments': [
+                    {
+                        'id': 'odd-deposit', 'label': '50% deposit',
+                        'mode': 'percentage', 'value': 50,
+                    },
+                    {
+                        'id': 'odd-balance', 'label': 'Balance after show',
+                        'mode': 'percentage', 'value': 50,
+                    },
+                ],
+            },
+        )
+        self.assertEqual(
+            plan_response.status_code, 200,
+            plan_response.get_data(as_text=True),
+        )
+        plan = plan_response.get_json()['data']['plan']
+        self.assertEqual(
+            [row['amount'] for row in plan['installments']],
+            [100, 99.99],
+        )
+        self.assertEqual(plan['summary']['planned'], 199.99)
+
+        deposit = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/odd-deposit/export",
+            json={'expectedAmount': 100},
+        )
+        self.assertEqual(deposit.status_code, 201, deposit.get_data(as_text=True))
+        self.assertEqual(deposit.get_json()['data']['invoiceAmount'], 100)
+        balance = self.client.post(
+            f"/api/invoice-plans/{accepted['id']}/installments/odd-balance/export",
+            json={'expectedAmount': 99.99},
+        )
+        self.assertEqual(balance.status_code, 201, balance.get_data(as_text=True))
+        self.assertEqual(balance.get_json()['data']['invoiceAmount'], 99.99)
+
+        invoice_source = Path('static/js/invoices.js').read_text(encoding='utf-8')
+        self.assertIn(
+            'invoiceReconcileInstallmentRounding(installments, adjustedTotal)',
+            invoice_source,
+        )
+
     def test_invoice_page_removes_plans_when_quotation_is_no_longer_ready(self):
         quotation = self.create_quote('Invoice Eligibility')
         quotation['lineItems'] = [{

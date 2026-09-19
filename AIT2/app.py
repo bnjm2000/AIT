@@ -50239,6 +50239,48 @@ def _normalise_invoice_plan_installment(value, quotation_total, existing=None):
     }
 
 
+def _reconcile_invoice_plan_installment_rounding(installments, billing_total):
+    """Put percentage-rounding cents into the final editable installment."""
+    active = [
+        row for row in installments or []
+        if isinstance(row, dict)
+        and row.get('status') not in {'cancelled', 'void'}
+    ]
+    if (
+        not active
+        or any(row.get('mode') != 'percentage' for row in active)
+        or round(sum(_safe_float(row.get('value'), 0) for row in active), 4)
+        != 100
+    ):
+        return
+
+    target_cents = int(round(round(max(0, billing_total), 2) * 100))
+    planned_cents = sum(
+        int(round(_safe_float(row.get('amount'), 0) * 100))
+        for row in active
+    )
+    difference_cents = target_cents - planned_cents
+    if not difference_cents or abs(difference_cents) > max(1, len(active)):
+        return
+
+    adjustable = next((
+        row for row in reversed(active)
+        if not row.get('invoiceId')
+        or (
+            str(row.get('status') or 'draft').strip().lower() == 'draft'
+            and not row.get('invoiceFrozen')
+        )
+    ), None)
+    if not adjustable:
+        return
+    adjusted_cents = max(
+        0,
+        int(round(_safe_float(adjustable.get('amount'), 0) * 100))
+        + difference_cents,
+    )
+    adjustable['amount'] = round(adjusted_cents / 100, 2)
+
+
 def _normalise_invoice_plan_payment(value, existing=None):
     value = value if isinstance(value, dict) else {}
     existing = existing if isinstance(existing, dict) else {}
@@ -50510,6 +50552,7 @@ def _normalise_invoice_plan(value, quotation, existing=None):
             billing_total,
             existing_installment,
         ))
+    _reconcile_invoice_plan_installment_rounding(installments, billing_total)
     existing_payments = {
         str(row.get('id') or ''): row
         for row in existing.get('payments') or []

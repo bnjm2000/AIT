@@ -334,6 +334,19 @@ function invoiceDateLabel(value) {
     : date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function invoiceReconcileInstallmentRounding(installments, adjustedTotal) {
+  const active = (installments || []).filter(row => !['cancelled', 'void'].includes(row.status));
+  const percentageTotal = active.reduce((sum, row) => sum + Number(row.value || 0), 0);
+  if (!active.length || active.some(row => row.mode !== 'percentage') || Math.abs(percentageTotal - 100) > 0.0001) return;
+  const targetCents = Math.round(Math.max(0, Number(adjustedTotal || 0)) * 100);
+  const plannedCents = active.reduce((sum, row) => sum + Math.round(Number(row.amount || 0) * 100), 0);
+  const differenceCents = targetCents - plannedCents;
+  if (!differenceCents || Math.abs(differenceCents) > Math.max(1, active.length)) return;
+  const adjustable = [...active].reverse().find(row => !invoiceInstallmentIsFrozen(row));
+  if (!adjustable) return;
+  adjustable.amount = Math.max(0, Math.round(Number(adjustable.amount || 0) * 100) + differenceCents) / 100;
+}
+
 function invoiceLocalSummary(plan, quotation) {
   const total = Number(quotation?.totals?.total || 0);
   const taxRate = Math.max(0, Number(quotation?.taxRate || 0));
@@ -357,6 +370,7 @@ function invoiceLocalSummary(plan, quotation) {
     ? Math.round(adjustedTotal * Number(row.value || 0)) / 100
     : Number(row.value || 0);
   installments.forEach(row => { row.amount = Math.round(amountFor(row) * 100) / 100; });
+  invoiceReconcileInstallmentRounding(installments, adjustedTotal);
   const active = installments.filter(row => !['cancelled', 'void'].includes(row.status));
   const planned = active.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const invoiced = active.filter(row => row.invoiceId).reduce((sum, row) => sum + Number(row.amount || 0), 0);
