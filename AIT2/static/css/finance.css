@@ -3742,6 +3742,26 @@
   border-bottom: 2px solid #eef0f4;
 }
 
+.finance-rate-card-row.has-quantity {
+  grid-template-columns: minmax(240px, 1fr) 140px 82px auto 34px;
+}
+
+.finance-rate-card-quantity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  color: var(--finance-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.finance-rate-card-quantity input {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
 .finance-rate-card-delete {
   width: 34px;
   height: 34px;
@@ -3804,6 +3824,14 @@
 
   .finance-rate-card-row {
     gap: 8px;
+  }
+
+  .finance-rate-card-row.has-quantity {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-rate-card-quantity {
+    grid-template-columns: 32px minmax(0, 100px);
   }
 }
 

@@ -6339,10 +6339,14 @@ function financeRenderRateCard() {
           const index = financeState.rateCard.indexOf(row);
           const title = [row.brand, row.model].filter(Boolean).join(' ') || row.description;
           const detail = [row.brand || row.model ? row.description : '', financeUomLabel(row.uom)].filter(Boolean).join(' · ');
+          const quotationQuantity = financeState.rateCardTarget === 'quotation'
+            ? `<label class="finance-rate-card-quantity"><span>Qty</span><input id="financeRateCardQuantity-${index}" class="finance-input" type="number" min="1" step="1" value="1" aria-label="Quantity for ${financeEscapeAttr(title)}"></label>`
+            : '';
           return `
-            <div class="finance-rate-card-row">
+            <div class="finance-rate-card-row ${quotationQuantity ? 'has-quantity' : ''}">
               <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
               <label class="finance-money-input"><span>$</span><input type="text" inputmode="decimal" value="${financeNumber(row.unitPrice) ? financeEscapeAttr(financeMoneyInputValue(row.unitPrice)) : ''}" placeholder="Not set" aria-label="Rate for ${financeEscapeAttr(title)}" onblur="if(this.value) financeFormatMoneyInput(this)" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
+              ${quotationQuantity}
               <button type="button" class="btn btn-secondary" onclick="${financeState.rateCardTarget === 'costing' ? 'costingAddRateCardItem' : 'financeAddRateCardItemToQuotation'}(${index})">Add</button>
               ${row.isCustom ? `<button type="button" class="finance-rate-card-delete" title="Delete product" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>` : '<span></span>'}
             </div>
@@ -6452,9 +6456,15 @@ async function financeDeleteRateCardItem(index) {
   } catch (error) {}
 }
 
+function financeRateCardQuantity(index) {
+  const input = document.getElementById(`financeRateCardQuantity-${index}`);
+  return Math.max(1, financeNumber(input?.value, 1));
+}
+
 async function financeAddRateCardItemToQuotation(index) {
   const item = financeState.rateCard[index];
   if (!item || financeState.snapshotMode) return;
+  const quantity = financeRateCardQuantity(index);
   if (item.isContainer) {
     try {
       const response = await apiCall(`/api/finance/catalog?query=${encodeURIComponent(item.containerId || item.description)}`);
@@ -6462,13 +6472,13 @@ async function financeAddRateCardItemToQuotation(index) {
         row.isContainer && String(row.containerId || '').toLowerCase() === String(item.containerId || '').toLowerCase()
       ));
       if (!container) throw new Error('Container contents are unavailable');
-      financeAddContainerAsGroup(container, '');
+      financeAddContainerAsGroup(container, '', quantity);
     } catch (error) {
       showNotification('error', error.message || 'Unable to add container');
       return;
     }
   } else {
-    financeAddLineFromCatalog(item);
+    financeAddLineFromCatalog(item, '', quantity);
   }
   financeSyncDocumentDepartments();
   financeQueueSave();
@@ -8895,7 +8905,11 @@ function financeAddLineFromCatalog(selected, categoryOverride = '', quantityOver
   return line;
 }
 
-function financeAddContainerAsGroup(selected, categoryOverride = financeAddDepartmentOverride()) {
+function financeAddContainerAsGroup(
+  selected,
+  categoryOverride = financeAddDepartmentOverride(),
+  quantity = 1
+) {
   const containerId = String(selected?.containerId || '').trim();
   const containerItems = Array.isArray(selected?.containerItems)
     ? selected.containerItems
@@ -8905,6 +8919,7 @@ function financeAddContainerAsGroup(selected, categoryOverride = financeAddDepar
   const containerCategory = categoryOverride || financeContainerMajorityCategory(selected);
   const groupId = `container_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const subprojectId = financeCurrentSubprojectId();
+  const groupQuantity = Math.max(1, financeNumber(quantity, 1));
   const grouped = containerItems.map(item => ({
     ...financeNewGroupedQuotationLine({
       ...item,
@@ -8916,6 +8931,28 @@ function financeAddContainerAsGroup(selected, categoryOverride = financeAddDepar
     groupDisplayFields: ['brand', 'model', 'description'],
     groupCustomText: false
   }));
+  if (groupQuantity !== 1) {
+    grouped.forEach(line => {
+      financeCaptureGroupItemCommercial(line);
+      line.groupItemPriceContribution = Math.max(0, financeLineTotal(line));
+    });
+    const headerUnitPrice = Math.round(grouped.reduce(
+      (sum, line) => sum + financeGroupItemPriceContribution(line),
+      0
+    ) * 100) / 100;
+    grouped.forEach((line, index) => Object.assign(line, {
+      days: 1,
+      quantity: groupQuantity,
+      uom: 'sets',
+      unitPrice: headerUnitPrice,
+      discountPercent: 0,
+      totalMode: 'amount',
+      total: index === 0 ? headerUnitPrice * groupQuantity : 0,
+      groupLeader: index === 0,
+      groupHeaderQuantity: groupQuantity,
+      groupPricingMode: 'items'
+    }));
+  }
   financeState.current.lineItems.push(...grouped);
   return grouped;
 }
