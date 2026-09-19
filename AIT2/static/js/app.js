@@ -162,243 +162,6 @@ let __allEventsProgressiveLoading = false;
 let assetLookupSource = null;
 let assetLookupById = new Map();
 
-const VIRTUAL_TABLE_OVERSCAN = 8;
-const virtualTableStates = new Map();
-
-function ensureVirtualTableStyles() {
-  if (document.getElementById('virtual-table-styles')) return;
-
-  const style = document.createElement('style');
-  style.id = 'virtual-table-styles';
-  style.textContent = `
-    .virtual-table-scroll {
-      max-height: none;
-      overflow: auto;
-      position: relative;
-      overscroll-behavior: contain;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .virtual-table-scroll thead th {
-      background: #f8f9fa;
-      position: sticky;
-      top: 0;
-      z-index: 4;
-    }
-
-    .virtual-table-scroll .virtual-table-spacer,
-    .virtual-table-scroll .virtual-table-spacer:hover {
-      background: transparent !important;
-      box-shadow: none !important;
-      pointer-events: none;
-    }
-
-    .virtual-table-scroll .virtual-table-spacer td {
-      border: 0 !important;
-      box-sizing: border-box;
-      padding: 0 !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function destroyVirtualTable(stateKey) {
-  const previous = virtualTableStates.get(stateKey);
-  if (!previous) return;
-
-  if (previous.resizeObserver) previous.resizeObserver.disconnect();
-  if (previous.animationFrame) cancelAnimationFrame(previous.animationFrame);
-  if (previous.resizeHandler) {
-    window.removeEventListener('resize', previous.resizeHandler);
-  }
-  virtualTableStates.delete(stateKey);
-}
-
-function virtualTableIndexAtOffset(prefixHeights, offset) {
-  let low = 0;
-  let high = Math.max(0, prefixHeights.length - 1);
-
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if (prefixHeights[middle] <= offset) low = middle + 1;
-    else high = middle;
-  }
-
-  return Math.max(0, low - 1);
-}
-
-function renderVirtualTable({
-  stateKey,
-  container,
-  items,
-  columnCount,
-  headerHtml,
-  rowHtml,
-  tableClass = 'table',
-  estimatedRowHeight = 58
-}) {
-  if (!container) return;
-
-  ensureVirtualTableStyles();
-  destroyVirtualTable(stateKey);
-
-  const safeItems = Array.isArray(items) ? items : [];
-  const heights = new Array(safeItems.length).fill(estimatedRowHeight);
-
-  container.innerHTML = `
-    <div class="responsive-table-wrap virtual-table-scroll" data-virtual-table="${escapeHtmlAttr(stateKey)}">
-      <table class="${escapeHtmlAttr(tableClass)}" aria-rowcount="${safeItems.length + 1}">
-        <thead>${headerHtml}</thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  `;
-
-  const scrollContainer = container.querySelector('.virtual-table-scroll');
-  const tableBody = scrollContainer?.querySelector('tbody');
-  if (!scrollContainer || !tableBody) return;
-
-  const state = {
-    animationFrame: null,
-    endIndex: -1,
-    heights,
-    resizeObserver: null,
-    resizeHandler: null,
-    startIndex: -1
-  };
-
-  const fitScrollContainerToViewport = () => {
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const containerTop = Math.max(0, containerRect.top);
-    const visualScale = scrollContainer.offsetWidth > 0
-      ? Math.max(0.1, containerRect.width / scrollContainer.offsetWidth)
-      : 1;
-    const availableHeight = Math.floor(
-      (viewportHeight - containerTop - 20) / visualScale
-    );
-    const minimumHeight = Math.min(
-      240,
-      Math.max(160, (viewportHeight - 40) / visualScale)
-    );
-    const targetHeight = Math.max(minimumHeight, availableHeight);
-
-    if (Math.abs(scrollContainer.clientHeight - targetHeight) > 1) {
-      scrollContainer.style.height = `${targetHeight}px`;
-    }
-  };
-
-  const scheduleRender = (force = false) => {
-    if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
-    state.animationFrame = requestAnimationFrame(() => {
-      state.animationFrame = null;
-      renderWindow(force);
-    });
-  };
-
-  const measureRenderedRows = () => {
-    let changed = false;
-
-    tableBody.querySelectorAll('tr[data-virtual-index]').forEach(row => {
-      const index = Number(row.dataset.virtualIndex);
-      const measuredHeight = row.getBoundingClientRect().height;
-      if (
-        Number.isInteger(index) &&
-        index >= 0 &&
-        index < state.heights.length &&
-        measuredHeight > 0 &&
-        Math.abs(state.heights[index] - measuredHeight) > 0.5
-      ) {
-        state.heights[index] = measuredHeight;
-        changed = true;
-      }
-    });
-
-    if (changed) scheduleRender(true);
-    return changed;
-  };
-
-  function renderWindow(force = false) {
-    if (!safeItems.length) {
-      tableBody.innerHTML = '';
-      return;
-    }
-
-    const prefixHeights = new Array(state.heights.length + 1);
-    prefixHeights[0] = 0;
-    for (let index = 0; index < state.heights.length; index += 1) {
-      prefixHeights[index + 1] = prefixHeights[index] + state.heights[index];
-    }
-
-    const viewportHeight = Math.max(scrollContainer.clientHeight, 480);
-    const startIndex = Math.max(
-      0,
-      virtualTableIndexAtOffset(prefixHeights, scrollContainer.scrollTop) - VIRTUAL_TABLE_OVERSCAN
-    );
-    const endIndex = Math.min(
-      safeItems.length,
-      virtualTableIndexAtOffset(
-        prefixHeights,
-        scrollContainer.scrollTop + viewportHeight
-      ) + VIRTUAL_TABLE_OVERSCAN + 1
-    );
-
-    if (!force && startIndex === state.startIndex && endIndex === state.endIndex) {
-      return;
-    }
-
-    state.startIndex = startIndex;
-    state.endIndex = endIndex;
-
-    const topHeight = prefixHeights[startIndex];
-    const bottomHeight = prefixHeights[safeItems.length] - prefixHeights[endIndex];
-    const renderedRows = [];
-
-    for (let index = startIndex; index < endIndex; index += 1) {
-      const markup = rowHtml(safeItems[index], index);
-      renderedRows.push(
-        markup.replace(
-          /<tr\b/,
-          `<tr data-virtual-index="${index}" aria-rowindex="${index + 2}"`
-        )
-      );
-    }
-
-    tableBody.innerHTML = `
-      <tr class="virtual-table-spacer" aria-hidden="true">
-        <td colspan="${columnCount}" style="height:${topHeight}px"></td>
-      </tr>
-      ${renderedRows.join('')}
-      <tr class="virtual-table-spacer" aria-hidden="true">
-        <td colspan="${columnCount}" style="height:${bottomHeight}px"></td>
-      </tr>
-    `;
-
-    requestAnimationFrame(measureRenderedRows);
-  }
-
-  scrollContainer.addEventListener('scroll', () => scheduleRender(false), { passive: true });
-  state.resizeHandler = () => {
-    fitScrollContainerToViewport();
-    scheduleRender(true);
-  };
-  window.addEventListener('resize', state.resizeHandler, { passive: true });
-
-  if (typeof ResizeObserver === 'function') {
-    state.resizeObserver = new ResizeObserver(() => {
-      fitScrollContainerToViewport();
-      const rowHeightsChanged = measureRenderedRows();
-      if (!rowHeightsChanged) scheduleRender(false);
-    });
-    state.resizeObserver.observe(scrollContainer);
-    state.resizeObserver.observe(tableBody);
-  }
-
-  virtualTableStates.set(stateKey, state);
-  fitScrollContainerToViewport();
-  renderWindow(true);
-  requestAnimationFrame(() => scheduleRender(true));
-}
 
 const REALTIME_CLIENT_ID = (() => {
   // Keep the origin identifier page-specific. Browsers may copy sessionStorage
@@ -655,91 +418,6 @@ function roleBadgeMarkup(role, extraClass = '') {
     ? String(role || '').toLowerCase()
     : 'user';
   return `<span class="user-role-badge user-role-badge-${safeRole} ${extraClass}">${escapeHtml(userRoleLabel(safeRole))}</span>`;
-}
-
-function ensureSidebarUserMenuStyles() {
-  if (document.getElementById('sidebar-user-menu-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'sidebar-user-menu-styles';
-  style.textContent = `
-    .sidebar-user-menu {
-      display: grid;
-      grid-template-columns: 38px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      margin: 4px 0 12px;
-      padding: 10px;
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      color: #fff;
-    }
-
-    .sidebar-user-avatar {
-      width: 38px;
-      height: 38px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      background: rgba(255,255,255,0.18);
-      font-weight: 800;
-      letter-spacing: 0;
-    }
-
-    .sidebar-user-main {
-      min-width: 0;
-    }
-
-    .sidebar-user-name {
-      display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-weight: 750;
-      line-height: 1.2;
-    }
-
-    .sidebar-user-meta {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-top: 5px;
-      font-size: 11px;
-      color: rgba(255,255,255,0.78);
-    }
-
-    .user-role-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 22px;
-      padding: 3px 8px;
-      border: 1px solid #d0d5dd;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 750;
-      line-height: 1;
-      white-space: nowrap;
-      background: #f8fafc;
-      color: #344054;
-    }
-
-    .user-role-badge-owner { background: #fff7e6; color: #8a4b08; border-color: #f2c879; }
-    .user-role-badge-admin { background: #eef4ff; color: #3538cd; border-color: #c7d7fe; }
-    .user-role-badge-manager { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
-    .user-role-badge-user { background: #f8fafc; color: #475467; border-color: #d0d5dd; }
-    .user-role-badge-sales { background: #fdf2fa; color: #c11574; border-color: #fcceee; }
-  `;
-  document.head.appendChild(style);
-}
-
-function refreshSidebarUserMenu() {
-  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
-    .find(section => section.querySelector('h3')?.textContent.trim() === 'Settings');
-  if (!settingsSection) return;
-
-  settingsSection.querySelector('[data-sidebar-user-menu="true"]')?.remove();
 }
 
 function applyPermissionUi() {
@@ -1125,16 +803,6 @@ function getCountablePreparedQuantity(modelGroup) {
   return required > 0 ? Math.min(prepared, required) : prepared;
 }
 
-function getExtraPreparedQuantity(modelGroup) {
-  if (!modelGroup) return 0;
-  if (typeof modelGroup.extraPreparedQuantity !== 'undefined') {
-    return Number(modelGroup.extraPreparedQuantity || 0);
-  }
-  return (modelGroup.assignedAssets || [])
-    .filter(asset => asset.isExtra && asset.status !== 'returned')
-    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
-}
-
 function getEventExtraQuantity(event) {
   if (!event) return 0;
   if (typeof event.totalExtraAssets !== 'undefined') {
@@ -1424,10 +1092,6 @@ function assetChangeHistoryHtml(asset) {
       `;
     })
     .join('');
-}
-
-function isAssetDisposed(asset) {
-  return !!(asset && (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned'));
 }
 
 function assetStatusClass(status) {
@@ -5925,17 +5589,6 @@ function confirmForceState() {
     forceEventState(eventId, newState);
 }
 
-function getModelStatusIcon(status) {
-    switch(status) {
-        case 'returned': return '↩️';
-        case 'ready': return '✅';
-        case 'ongoing': return '🔴';
-        case 'partial': return '🔄';
-        case 'pending': return '📋';
-        default: return '📋';
-    }
-}
-
 async function loadInventory() {
   const loadGeneration = ++assetPageLoadGeneration;
   try {
@@ -6302,184 +5955,6 @@ function clearFilters() {
   document.getElementById("sort-select").value = "brand";
   document.getElementById("sort-descending").checked = false;
   displayFilteredInventory();
-}
-
-function ensureInventoryTableStyles() {
-  if (document.getElementById('inventory-compact-table-styles')) return;
-
-  const style = document.createElement('style');
-  style.id = 'inventory-compact-table-styles';
-
-  style.textContent = `
-    .inventory-compact-table {
-      table-layout: auto;
-      width: 100%;
-      min-width: 1120px;
-    }
-
-    .inventory-compact-table th,
-    .inventory-compact-table td {
-      padding: 8px 10px;
-      vertical-align: top;
-      height: auto;
-      line-height: 1.25;
-    }
-
-    .inventory-compact-table tbody tr {
-      height: auto;
-    }
-
-    .inventory-compact-table .asset-id-cell {
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .inventory-compact-table .asset-id-link {
-      border: 0;
-      background: none;
-      color: #667eea;
-      cursor: pointer;
-      font: inherit;
-      font-weight: 700;
-      padding: 0;
-      text-align: left;
-      text-decoration: underline;
-    }
-
-    .inventory-compact-table .asset-id-link:hover,
-    .inventory-compact-table .asset-id-link:focus {
-      color: #4c63c7;
-    }
-
-    .inventory-compact-table .inventory-select-cell {
-      width: 38px;
-      min-width: 38px;
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    .inventory-compact-table .inventory-select-cell input {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
-    .inventory-compact-table .asset-description-cell {
-      max-width: 420px;
-      white-space: normal;
-      word-break: normal;
-      overflow-wrap: anywhere;
-    }
-
-    .inventory-compact-table .asset-description-text {
-      display: inline;
-      line-height: 1.3;
-    }
-
-    .inventory-compact-table .asset-description-empty {
-      color: #aaa;
-    }
-
-    .inventory-compact-table .bulk-quantity-cell {
-      min-width: 130px;
-    }
-
-    .inventory-compact-table .asset-purchase-date-cell {
-      white-space: nowrap;
-      color: #495057;
-    }
-
-    .inventory-compact-table .asset-audit-date-cell {
-      white-space: nowrap;
-      color: #495057;
-      font-size: 12px;
-    }
-
-    .bulk-deployment-details {
-      margin-top: 5px;
-      font-size: 12px;
-      line-height: 1.25;
-    }
-
-    .bulk-deployment-details summary {
-      cursor: pointer;
-      color: #0f5f78;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .bulk-deployment-menu {
-      margin-top: 6px;
-      min-width: 220px;
-      max-width: 300px;
-      padding: 7px 8px;
-      border: 1px solid #d5e3ea;
-      border-radius: 6px;
-      background: #f8fafc;
-      color: #1f2937;
-      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
-    }
-
-    .bulk-deployment-row + .bulk-deployment-row {
-      margin-top: 7px;
-      padding-top: 7px;
-      border-top: 1px solid #e5e7eb;
-    }
-
-    .bulk-deployment-main,
-    .bulk-deployment-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .bulk-deployment-event {
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .bulk-deployment-event-id,
-    .bulk-deployment-dates {
-      color: #64748b;
-    }
-
-    .bulk-deployment-qty {
-      color: #78350f;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .inventory-actions-cell {
-      white-space: nowrap;
-      display: flex;
-      gap: 6px;
-      flex-wrap: nowrap;
-      align-items: flex-start;
-    }
-
-    .inventory-compact-table .btn-sm {
-      padding: 5px 9px;
-      font-size: 12px;
-    }
-
-    .responsive-table-wrap {
-      max-width: 100%;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    @media (max-width: 768px) {
-      .inventory-compact-table {
-        min-width: 1040px;
-      }
-
-      .inventory-actions-cell {
-        flex-wrap: wrap;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
 }
 
 function bulkDeploymentDateText(deployment) {
@@ -7166,63 +6641,6 @@ async function openAssetDetailsModal(encodedAssetId, requestedBulkQuantity = nul
   loadAssetUsageDays(apiId);
 }
 
-function inventoryVirtualRowHtml(asset, isAdmin) {
-  const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
-  const assetIdentifier = inventoryAssetIdentifier(asset);
-  const description = asset.description || "";
-  const quantityHtml = asset.isBulk
-    ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
-    : '';
-  const selectionCellHtml = isAdmin
-    ? `<td class="inventory-select-cell">
-         <input
-           type="checkbox"
-           class="inventory-row-select"
-           data-asset-id="${escapeHtmlAttr(assetIdentifier)}"
-           ${selectedInventoryAssetIds.has(assetIdentifier) ? 'checked' : ''}
-           onclick="toggleInventoryAssetSelection(this.dataset.assetId, this.checked, event)"
-           aria-label="Select ${escapeHtmlAttr(assetIdentifier || 'asset')}"
-         >
-       </td>`
-    : '';
-
-  return `
-    <tr>
-      ${selectionCellHtml}
-      <td class="asset-id-cell">
-        <button type="button" class="asset-id-link" onclick="openAssetDetailsModal('${encodedAssetId}')" title="View asset details">
-          ${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}
-        </button>
-      </td>
-      <td>${escapeHtml(asset.brand || "-")}</td>
-      <td>${escapeHtml(asset.model || "-")}</td>
-      <td class="asset-description-cell">
-        ${description
-          ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
-          : `<span class="asset-description-empty">-</span>`}
-      </td>
-      <td>${asset.isBulk ? '-' : ([asset.serial, asset.serial2].filter(Boolean).map(escapeHtml).join('<br>') || '-')}</td>
-      <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
-      <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
-      <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
-      <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateModified || ''))}</td>
-      <td>${departmentBadgeHtml(asset.department)}</td>
-      <td>${statusBadgeHtml(asset.status || 'available')}</td>
-      <td>${escapeHtml(asset.location || "Store")}</td>
-      <td>${assetFlagBadgesHtml(asset)}</td>
-      <td class="inventory-actions-cell">
-        <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
-          View Log
-        </button>
-        ${isAdmin
-          ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">Edit</button>
-             <button class="btn btn-danger btn-sm" onclick="openDeleteAssetModal('${encodedAssetId}')" title="Delete asset">Delete</button>`
-          : ''}
-      </td>
-    </tr>
-  `;
-}
-
 const INVENTORY_CONDITION_META = {
   available: { label: 'OK', color: '#159f6a' },
   untagged: { label: 'Untagged', color: '#0e7490' },
@@ -7395,29 +6813,6 @@ function inventoryAvailabilityChartHtml(counts, compact = false) {
       ${visible.map(([status, meta]) => `
         <div class="inventory-condition-key" style="--key-color:${meta.color}">
           <i></i><span>${meta.label}</span><strong>${segmentsByStatus[status]}</strong>
-        </div>
-      `).join('') || '<span style="color:#64748b;font-size:11px">No assets</span>'}
-    </div>
-  `;
-}
-
-function inventoryConditionChartHtml(counts, compact = false) {
-  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  let cursor = 0;
-  const segments = Object.entries(INVENTORY_CONDITION_META).map(([status, meta]) => {
-    const start = cursor;
-    cursor += total ? (counts[status] / total) * 100 : 0;
-    return `${meta.color} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
-  }).join(', ');
-  const visible = Object.entries(INVENTORY_CONDITION_META).filter(([status]) => counts[status] > 0);
-  return `
-    <div class="inventory-donut" style="--donut-background:${total ? `conic-gradient(${segments})` : '#e5ece9'}">
-      <div class="inventory-donut-centre"><strong>${total}</strong>${compact ? 'assets' : 'total'}</div>
-    </div>
-    <div class="inventory-condition-legend">
-      ${visible.map(([status, meta]) => `
-        <div class="inventory-condition-key" style="--key-color:${meta.color}">
-          <i></i><span>${meta.label}</span><strong>${counts[status]}</strong>
         </div>
       `).join('') || '<span style="color:#64748b;font-size:11px">No assets</span>'}
     </div>
@@ -8065,7 +7460,6 @@ function displayInventoryTable(assetsToShow) {
   if (!container) return;
 
   if (assetsToShow.length === 0) {
-    destroyVirtualTable('inventory');
     container.innerHTML = isAdminUser() ? `
       <div class="inventory-onboarding-empty">
         <div class="inventory-empty">
@@ -8078,8 +7472,6 @@ function displayInventoryTable(assetsToShow) {
     updateInventorySelectionUi([]);
     return;
   }
-
-  destroyVirtualTable('inventory');
   const isAdmin = !!(currentUser && currentUser.isAdmin);
   const groups = groupInventoryAssets(assetsToShow);
   container.innerHTML = `
@@ -14014,247 +13406,6 @@ async function assignAndPrepareAsset(eventId, assetId) {
     }
 }
 
-function updateEventSummary(event) {
-    // Update the event summary numbers
-    const requiredEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(1) .stat-number');
-    const preparedEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(2) .stat-number');
-    const extraEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(3) .stat-number');
-
-    if (requiredEl) requiredEl.textContent = event.totalAssets;
-    if (preparedEl) preparedEl.textContent = event.totalPrepared;
-    if (extraEl) extraEl.textContent = getEventExtraQuantity(event);
-}
-
-function updateModelGroupsSection(event, eventId) {
-    // Find all model requirement sections and update their status
-    const modelSections = document.querySelectorAll('.model-prep-section');
-
-    modelSections.forEach(section => {
-        // Extract model info from the section
-        const titleElement = section.querySelector('h5');
-        if (!titleElement) return;
-
-        const titleText = titleElement.textContent;
-        const match = titleText.match(/(\d+)x (.+)/);
-        if (!match) return;
-
-        const requiredQty = parseInt(match[1]);
-        const modelName = match[2];
-
-        // Find matching model group in event data
-        if (event.modelGroups) {
-            Object.values(event.modelGroups).forEach(modelGroup => {
-                const groupModelName = `${modelGroup.brand} ${modelGroup.model}`;
-                if (groupModelName === modelName) {
-                    updateModelSection(section, modelGroup, eventId);
-                }
-            });
-        }
-    });
-}
-
-function updateModelSection(section, modelGroup, eventId) {
-    const assignedCount = getPreparedQuantity(modelGroup);
-    const requiredQty = modelGroup.requiredQuantity;
-    const countableAssignedCount = getCountablePreparedQuantity(modelGroup);
-    const extraAssignedCount = getExtraPreparedQuantity(modelGroup);
-    const progressPercent = requiredQty > 0 ? Math.round((assignedCount / requiredQty) * 100) : 0;
-
-    // Update the progress info
-    const statusDiv = section.querySelector('div[style*="text-align: right"] div:first-child');
-    if (statusDiv) {
-        const color = countableAssignedCount >= requiredQty ? '#28a745' : '#ffc107';
-        statusDiv.innerHTML = `
-            <div style="font-size: 14px; font-weight: 500; color: ${color};">
-                ${assignedCount}/${requiredQty} assigned
-                ${extraAssignedCount > 0 ? ` (+${extraAssignedCount} extra)` : ''}
-            </div>
-        `;
-    }
-
-    // Update the progress bar
-    const progressBar = section.querySelector('div[style*="background: #e9ecef"] div');
-    if (progressBar) {
-        const color = countableAssignedCount >= requiredQty ? '#28a745' : '#ffc107';
-        progressBar.style.background = color;
-        progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
-    }
-
-    // Update assigned assets list
-    const assignedContainer = section.querySelector('div[style*="background: #d4edda"]');
-    if (assignedContainer && modelGroup.assignedAssets.length > 0) {
-        let content = '';
-        const assignedAssetsForDisplay = [...(modelGroup.assignedAssets || [])].sort((a, b) => {
-            if (!!a.isExtra !== !!b.isExtra) return a.isExtra ? 1 : -1;
-            return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true, sensitivity: 'base' });
-        });
-        assignedAssetsForDisplay.forEach((asset, index) => {
-            const isExtra = !!asset.isExtra || index >= requiredQty;
-            const bgColor = isExtra ? '#fff3cd' : '#d4edda';
-            const textColor = isExtra ? '#856404' : '#155724';
-
-            content += `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
-                    <span style="color: ${textColor};">
-                        ${isExtra ? '➕' : '✅'} ${asset.id} (SN: ${asset.serial || 'N/A'})
-                        ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
-                    </span>
-                    <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${asset.id}', '${modelGroup.brand}', '${modelGroup.model}')">Unprepare</button>
-                </div>
-            `;
-        });
-        assignedContainer.innerHTML = content;
-    }
-}
-
-function updateAllAssetsSection(event, eventId) {
-  // This container DOES exist in your modal markup:
-  // <div id="all-assigned-assets" ...></div>
-  const container = document.getElementById("all-assigned-assets");
-  if (!container) return;
-
-  let content = "";
-
-  // Rebuild the “All Assets Assigned to Event” inner list (header stays outside this div)
-  if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-    Object.keys(event.assetsByDepartment).forEach((dept) => {
-      const deptAssets = event.assetsByDepartment[dept] || [];
-
-      // Only show real assets here (ignore [MODEL] rows)
-      const deliveredVendors = eventDeliveredVendorKeys(event);
-      const nonModelAssets = deptAssets
-        .filter((a) => a && a.id && !a.id.startsWith("[MODEL]"))
-        .filter(asset => !eventAssetShouldBeHiddenAsDelivered(event, asset, deliveredVendors))
-        .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
-
-      if (nonModelAssets.length > 0) {
-        content += `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f1f3f4;border-bottom:1px solid #e9ecef;cursor:pointer;"
-               onclick="togglePrepareSection('assigned-dept-${dept}')">
-            <div style="font-weight:500;font-size:13px;">${dept} Department (${nonModelAssets.length} assets)</div>
-            <span class="toggle-icon" style="font-size:14px;font-weight:bold;color:#666;">▼</span>
-          </div>
-          <div id="assigned-dept-${dept}" style="display:block;">
-        `;
-      }
-
-      nonModelAssets.forEach((asset) => {
-        const assetId = asset.id;
-        const custom = parseCustomAsset(assetId, asset);
-        const isBulk = !!asset.isBulk;
-
-        const isPrepared = Array.isArray(event.actuallyPrepared) && event.actuallyPrepared.includes(assetId);
-        const isReturned = Array.isArray(event.returnedItems) && event.returnedItems.includes(assetId);
-        const isCollected = custom && custom.type === 'LOAN' && Array.isArray(event.customCollected) && event.customCollected.includes(assetId);
-        const isExtra = Array.isArray(event.extraAssets) && event.extraAssets.includes(assetId);
-
-        const statusIcon = isReturned ? "↩️" : (isPrepared ? "✅" : (isCollected ? "" : "⏳"));
-        const statusColor = isReturned ? "#dc3545" : (isPrepared ? "#28a745" : (isCollected ? "#17a2b8" : "#ffc107"));
-        const statusText = isReturned ? "Returned" : (isPrepared ? "Prepared" : (isCollected ? "Collected" : "Pending"));
-
-        const extraBadge = isExtra
-          ? '<span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:10px;margin-left:10px;">EXTRA</span>'
-          : "";
-
-        const safeAssetId = encodeURIComponent(assetId);
-        const safeEncodedId = escapeHtmlAttr(safeAssetId);
-        const displayName = custom
-          ? customAssetDisplayName(custom)
-          : (isBulk ? (asset.name || `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk quantity item') : assetId);
-        const detailText = custom
-          ? (custom.type === 'LOAN' ? custom.company : '')
-          : (isBulk ? (asset.description || `Qty: ${asset.quantity || 1}`) : (asset.name || ""));
-        const typeBadge = custom ? customAssetTypeBadge(custom) : '';
-        const prefix = custom || isBulk ? '' : `${statusIcon} `;
-
-        let actionButton = "";
-        if (isReturned) {
-          actionButton = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
-        } else if (custom && custom.type === 'LOAN') {
-          if (isPrepared) {
-            actionButton = `
-              <button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px;font-size:11px;">Unprepare</button>
-            `;
-          } else if (isCollected) {
-            actionButton = `
-              <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Uncollect</button>
-              <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>
-            `;
-          } else {
-            actionButton = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Collect</button>`;
-          }
-        } else if (custom) {
-          actionButton = isPrepared
-            ? `<button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px;font-size:11px;">Unprepare</button>`
-            : `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>`;
-        } else if (isPrepared || isBulk) {
-          actionButton = `
-            <button class="btn btn-warning asset-action-btn"
-                    data-event-id="${eventId}"
-                    data-asset-id="${safeEncodedId}"
-                    data-action="unprepare"
-                    style="padding:4px 8px;font-size:11px;">Unprepare</button>
-          `;
-        } else {
-          actionButton = `
-            <button class="btn btn-success asset-action-btn"
-                    data-event-id="${eventId}"
-                    data-asset-id="${safeEncodedId}"
-                    data-action="prepare"
-                    style="padding:4px 8px;font-size:11px;">Prepare</button>
-          `;
-        }
-
-        content += `
-          <div style="padding:8px 12px;border-bottom:1px solid #f1f1f1;display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <span style="font-weight:500;">${prefix}${escapeHtml(displayName)} ${typeBadge}</span>
-              <span style="color:#666;font-size:12px;margin-left:10px;">${escapeHtml(detailText || "")}</span>
-              ${extraBadge}
-              <div style="color:${statusColor};font-size:11px;margin-top:2px;">${statusText}</div>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${actionButton}</div>
-          </div>
-        `;
-      });
-
-      if (nonModelAssets.length > 0) {
-        content += `</div>`;
-      }
-    });
-  } else {
-    content =
-      '<p style="text-align:center;color:#666;padding:20px;">No individual assets assigned to this event.</p>';
-  }
-
-  container.innerHTML = content;
-}
-
-async function updateAssetListSection(eventId) {
-    try {
-        const response = await apiCall(`/api/events/${eventId}`);
-        const event = response.data;
-
-        // Update Event Summary
-        updateEventSummary(event);
-
-        // Update Model Groups sections
-        updateModelGroupsSection(event, eventId);
-
-        // Update the "All Assets Assigned to Event" section
-        updateAllAssetsSection(event, eventId);
-
-        // Ensure the input stays focused
-        const input = document.getElementById('universalAssetInput');
-        if (input) {
-            setTimeout(() => input.focus(), 100);
-        }
-
-    } catch (error) {
-        console.error('Error updating asset list section:', error);
-    }
-}
-
 
 function showFeedback(feedbackDiv, type, message) {
     const colors = {
@@ -14291,11 +13442,6 @@ function clearUniversalInput() {
     input.value = '';
     feedbackDiv.innerHTML = '';
     input.focus();
-}
-
-function clearUniversalFeedback() {
-    const feedbackDiv = document.getElementById('universal-asset-feedback');
-    feedbackDiv.innerHTML = '';
 }
 
 function refreshPrepareUiAfterAssetChange(eventId, delay = 800) {
@@ -14437,12 +13583,6 @@ function returnPageEventDateText(event) {
     : [event.startDate, event.endDate].filter(Boolean).join(' – ');
 }
 
-function returnPageEventOptionLabel(event) {
-  const outstanding = getEventReturnableCount(event);
-  const state = eventStateDisplayLabel(event?.state || 'New');
-  return `#${event.id} ${event.name || `Event ${event.id}`} · ${state} · ${outstanding} outstanding`;
-}
-
 function returnPageUpsertEventSummary(event) {
   if (!event?.id) return;
   const index = returnPageState.events.findIndex(item => Number(item.id) === Number(event.id));
@@ -14537,10 +13677,6 @@ function returnSubprojectNeedsAttention(room, event = returnPageState.event) {
   if (!room || !event) return false;
   const roomState = { ...returnPageState, activeSubprojectId: String(room.id || '') };
   return returnPageAssets(event, roomState).some(asset => !asset.isReturned);
-}
-
-function returnPageHasAssignedAssets(event = returnPageState.event) {
-  return returnPageAssets(event).length > 0;
 }
 
 function returnPageAssetTitle(asset) {
@@ -15084,116 +14220,6 @@ function eventActivityTimestamp(value) {
   if (!raw) return 'Time not recorded';
   const match = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(.+)$/);
   return match ? `${match[3]}/${match[2]}/${match[1]} ${match[4]}` : raw;
-}
-
-function ensureEventActivityModal() {
-  let modal = document.getElementById('eventActivityModal');
-  if (modal) return modal;
-
-  modal = document.createElement('div');
-  modal.id = 'eventActivityModal';
-  modal.className = 'modal event-activity-modal';
-  modal.innerHTML = `
-    <div class="modal-content event-activity-modal-content">
-      <div class="modal-header">
-        <div>
-          <h2 id="eventActivityTitle">Event Activity</h2>
-          <p id="eventActivitySubtitle" class="event-activity-subtitle"></p>
-        </div>
-        <button type="button" class="close-btn"
-                aria-label="Close event activity"
-                onclick="closeModal('eventActivityModal')">&times;</button>
-      </div>
-      <div class="event-activity-legend" id="eventActivityLegend"></div>
-      <div class="modal-body event-activity-list" id="eventActivityList"></div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function renderEventActivityLog(event) {
-  const list = document.getElementById('eventActivityList');
-  const legend = document.getElementById('eventActivityLegend');
-  const subtitle = document.getElementById('eventActivitySubtitle');
-  if (!list || !legend || !subtitle) return;
-
-  subtitle.textContent = `#${event.id} · ${event.name || 'Untitled event'}`;
-  const visibleCategories = isAdminUser()
-    ? ['details', 'prepare', 'return', 'manpower']
-    : ['details', 'prepare', 'return'];
-  legend.innerHTML = visibleCategories.map(category => {
-    const meta = eventActivityCategoryMeta(category);
-    return `
-      <span class="event-activity-legend-item event-activity-${category}">
-        <i></i>${escapeHtml(meta.label)}
-      </span>
-    `;
-  }).join('');
-
-  const logs = (event.eventLogs || [])
-    .map(log => ({ ...log, category: eventActivityCategory(log) }))
-    .filter(log => isAdminUser() || log.category !== 'manpower')
-    .sort((a, b) =>
-      String(b.timestamp || b.date || '').localeCompare(
-        String(a.timestamp || a.date || '')
-      )
-    );
-
-  if (!logs.length) {
-    list.innerHTML = `
-      <div class="event-activity-empty">
-        No activity has been recorded for this event yet.
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = logs.map(log => {
-    const meta = eventActivityCategoryMeta(log.category);
-    return `
-      <article class="event-activity-row event-activity-${log.category}">
-        <div class="event-activity-row-icon" aria-hidden="true">${meta.icon}</div>
-        <div class="event-activity-row-content">
-          <div class="event-activity-row-meta">
-            <span class="event-activity-category">${escapeHtml(meta.label)}</span>
-            <span>${escapeHtml(log.user || 'system')}</span>
-            <span aria-hidden="true">·</span>
-            <time>${escapeHtml(eventActivityTimestamp(log.timestamp || log.date))}</time>
-          </div>
-          <p>${escapeHtml(log.action || '')}</p>
-        </div>
-      </article>
-    `;
-  }).join('');
-}
-
-async function openEventActivityLog(eventId) {
-  if (!canCurrentUserManageRoles()) return;
-  const modal = ensureEventActivityModal();
-  const list = modal.querySelector('#eventActivityList');
-  const subtitle = modal.querySelector('#eventActivitySubtitle');
-  if (subtitle) subtitle.textContent = `Event #${Number(eventId)}`;
-  if (list) list.innerHTML = '<div class="loading">Loading event activity...</div>';
-  openModal('eventActivityModal');
-
-  try {
-    const response = await apiCall(`/api/events/${Number(eventId)}/logs`);
-    const payload = response.data || {};
-    renderEventActivityLog({
-      id: payload.eventId,
-      name: payload.eventName,
-      eventLogs: payload.logs || [],
-    });
-  } catch (error) {
-    if (list) {
-      list.innerHTML = `
-        <div class="event-activity-empty event-activity-error">
-          Failed to load event activity.
-        </div>
-      `;
-    }
-  }
 }
 
 function returnPageEventDetailsHtml(event) {
@@ -16026,15 +15052,6 @@ async function loadTransferHistory() {
 
 
 
-async function openManualTransferModal() {
-  if (!transferOptionsCache) {
-    const response = await apiCall('/api/transfers/options');
-    transferOptionsCache = response.data || { sourceEvents: [], targetEvents: [] };
-  }
-  populateTransferDropdowns(transferOptionsCache);
-  openModal('transferModal');
-}
-
 function eventOverviewIcon(kind) {
   const paths = {
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path>',
@@ -16517,40 +15534,6 @@ async function viewEvent(eventId, options = {}) {
   } catch (error) {
     if (contentRoot) contentRoot.innerHTML = `<div class="event-overview-empty">Unable to load this event overview.</div>`;
     showNotification('error', error.message || 'Failed to load event details');
-  }
-}
-
-function toggleViewSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
-
-    if (section && toggleIcon) {
-        if (section.style.display === 'none') {
-            section.style.display = 'block';
-            toggleIcon.textContent = '▼';
-        } else {
-            section.style.display = 'none';
-            toggleIcon.textContent = '▶';
-        }
-    }
-}
-
-function toggleModelDetailsInView(modelId) {
-  const detailsDiv = document.getElementById(modelId);
-  const toggleIcon = document.querySelector(`[data-model-id="${modelId}"].toggle-icon`);
-
-  if (detailsDiv && toggleIcon) {
-    if (detailsDiv.style.display === "none" || detailsDiv.style.display === "") {
-      detailsDiv.style.display = "block";
-      toggleIcon.textContent = "▲";
-    } else {
-      detailsDiv.style.display = "none";
-      toggleIcon.textContent = "▼";
-    }
-  } else {
-    console.warn(`Could not find elements for modelId: ${modelId}`);
-    console.warn(`DetailsDiv:`, detailsDiv);
-    console.warn(`ToggleIcon:`, toggleIcon);
   }
 }
 
@@ -17743,12 +16726,9 @@ function displayMaintenanceAssets(assetsToShow, options = {}) {
   });
 
   if (activityEntries.length === 0) {
-    destroyVirtualTable('maintenance-all');
     container.innerHTML = '<div class="maintenance-empty">No maintenance activity matches this search.</div>';
     return;
   }
-
-  destroyVirtualTable('maintenance-all');
   const visibleEntries = activityEntries.slice(0, 250);
   container.innerHTML = `
     <div class="maintenance-list-header"><span>Asset</span><span>Maintenance log</span><span>Condition</span><span>Date / location</span><span></span></div>
@@ -17916,152 +16896,6 @@ async function openEventLogs(eventId, eventName = '') {
   } catch (error) {
     const body = document.querySelector('#eventLogsModal .event-logs-body');
     if (body) body.innerHTML = `<div class="event-logs-empty">Unable to load event logs.<div style="margin-top:5px">${escapeHtml(error.message || '')}</div></div>`;
-  }
-}
-
-function toggleEventLogSection(sectionId) {
-  const section = document.getElementById(sectionId);
-  const toggleIcon = document.getElementById(sectionId + '-toggle');
-
-  if (section && toggleIcon) {
-    if (section.style.display === 'none') {
-      section.style.display = 'block';
-      toggleIcon.textContent = '▼';
-    } else {
-      section.style.display = 'none';
-      toggleIcon.textContent = '▶';
-    }
-  }
-}
-
-async function createEventLogViewer(eventId, eventName, eventLogs = []) {
-  try {
-    const logs = Array.isArray(eventLogs) ? eventLogs : [];
-    const relevantLogs = logs
-      .filter(log => log && log.action)
-      .map(log => ({
-        date: log.timestamp || log.date || '',
-        user: log.user || 'system',
-        action: log.action || '',
-        sortValue: String(log.timestamp || log.date || '')
-      }))
-      .sort((a, b) => b.sortValue.localeCompare(a.sortValue));
-
-    // Helper functions
-    const getActionIcon = (actionType) => {
-      switch (actionType) {
-        case 'prepared': return '📦';
-        case 'returned': return '🔄';
-        case 'assigned': return '📋';
-        case 'unprepared': return '❌';
-        default: return '📝';
-      }
-    };
-
-    const getActionColor = (actionType) => {
-      switch (actionType) {
-        case 'prepared': return 'color: #28a745; background: #d4edda; border-left-color: #28a745;';
-        case 'returned': return 'color: #007bff; background: #cce5ff; border-left-color: #007bff;';
-        case 'assigned': return 'color: #ffc107; background: #fff3cd; border-left-color: #ffc107;';
-        case 'unprepared': return 'color: #dc3545; background: #f8d7da; border-left-color: #dc3545;';
-        default: return 'color: #6c757d; background: #e2e3e5; border-left-color: #6c757d;';
-      }
-    };
-
-    const getActionType = (action) => {
-      const actionLower = action.toLowerCase();
-      if (actionLower.includes('unprepared')) return 'unprepared';
-      if (actionLower.includes('returned')) return 'returned';
-      if (actionLower.includes('assigned')) return 'assigned';
-      if (actionLower.includes('prepared')) return 'prepared';
-      return 'other';
-    };
-
-    const extractAssetId = (action) => {
-      const match = action.match(/asset\s+([A-Z0-9#]+(?:\[[^\]]+\])?[^;\s]*)/i);
-      return match ? match[1] : null;
-    };
-
-    // Generate unique ID for this event's log section
-    const logSectionId = `event-log-${eventId}`;
-
-    // Generate HTML with collapsible header
-    let logHTML = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleEventLogSection('${logSectionId}')">
-          <h3 style="margin: 0; color: #333; font-size: 18px; display: flex; align-items: center; gap: 10px;">
-            📋 Event Activity Log
-            <span style="font-size: 14px; color: #666; font-weight: normal;">(${escapeHtml(eventName)})</span>
-            ${relevantLogs.length > 0 ? `<span style="background: #007bff; color: white; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: bold;">${relevantLogs.length}</span>` : ''}
-          </h3>
-          <span id="${logSectionId}-toggle" style="font-size: 18px; color: #666; font-weight: bold;">▶</span>
-        </div>
-        <div id="${logSectionId}" style="display: none; margin-top: 20px;">
-    `;
-
-    if (relevantLogs.length === 0) {
-      logHTML += `
-        <div style="text-align: center; padding: 40px 0; color: #666;">
-          <div style="font-size: 48px; margin-bottom: 10px;">📋</div>
-          <p>No activity recorded for this event yet.</p>
-        </div>
-      `;
-    } else {
-      logHTML += `<div style="max-height: 400px; overflow-y: auto;">`;
-
-      relevantLogs.forEach(log => {
-        const actionType = getActionType(log.action);
-        const assetId = extractAssetId(log.action);
-
-        logHTML += `
-          <div style="padding: 15px; border-radius: 8px; border-left: 4px solid; margin-bottom: 12px; ${getActionColor(actionType)}">
-            <div style="display: flex; align-items: start; gap: 12px;">
-              <span style="font-size: 18px; line-height: 1;">${getActionIcon(actionType)}</span>
-              <div style="flex: 1;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                  <span style="font-weight: bold; color: #333;">${escapeHtml(maintenanceLogUserLabel(log))}</span>
-                  <span style="color: #999; font-size: 12px;">•</span>
-                  <span style="color: #666; font-size: 13px;">${escapeHtml(log.date)}</span>
-                </div>
-                ${assetId ? `
-                  <div style="margin: 6px 0;">
-                    <span style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 3px 6px; border-radius: 3px; font-size: 12px; color: #495057;">
-                      ${escapeHtml(assetId)}
-                    </span>
-                  </div>
-                ` : ''}
-                <p style="margin: 6px 0 0 0; color: #555; font-size: 13px; line-height: 1.4;">${escapeHtml(log.action)}</p>
-              </div>
-            </div>
-          </div>
-        `;
-      });
-
-      logHTML += `</div>`;
-
-      logHTML += `
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef; text-align: center; color: #666; font-size: 12px;">
-          Showing ${relevantLogs.length} activity record(s)
-        </div>
-      `;
-    }
-
-    logHTML += `
-        </div>
-      </div>
-    `;
-
-    return logHTML;
-  } catch (error) {
-    console.error('Error loading event logs:', error);
-    return `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px;">
-        <h3 style="margin: 0 0 20px 0; color: #333;">📋 Event Activity Log</h3>
-        <div style="text-align: center; padding: 20px; color: #dc3545;">
-          Error loading activity log. Please try again.
-        </div>
-      </div>
-    `;
   }
 }
 
@@ -18770,15 +17604,6 @@ async function removeAssetFromEvent(eventId, assetId) {
   }
 }
 
-function modelAvailabilityLabel(available, requested, physical, overlap) {
-  const availableQty = Math.max(0, Number(available || 0));
-  const physicalQty = Math.max(0, Number(physical || 0));
-
-  // Availability describes the inventory pool, not the quantity currently
-  // typed into the Add field. Keep values such as 7/9 stable while editing.
-  return `${availableQty}/${physicalQty || availableQty} available`;
-}
-
 function modelAvailabilityReasonTooltip(available, physical, reasons = {}) {
   const availableQty = Math.max(0, Number(available || 0));
   const physicalQty = Math.max(0, Number(physical || 0));
@@ -19433,21 +18258,6 @@ function filterAvailableModels(searchTerm) {
 
 
 // Toggle model details in edit interface
-function toggleModelDetailsInEdit(modelId) {
-  const detailsDiv = document.getElementById(modelId);
-  const toggleIcon = document.querySelector(`[onclick*="${modelId}"] .toggle-icon`);
-
-  if (detailsDiv && toggleIcon) {
-    if (detailsDiv.style.display === "none") {
-      detailsDiv.style.display = "block";
-      toggleIcon.textContent = "▲";
-    } else {
-      detailsDiv.style.display = "none";
-      toggleIcon.textContent = "▼";
-    }
-  }
-}
-
 async function deleteEvent(eventId) {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges required');
@@ -21902,49 +20712,6 @@ async function loadOOCAssets() {
   }
 }
 
-function flaggedMaintenanceVirtualRowHtml(asset) {
-  const assetId = getAssetIdentifierForApi(asset);
-  const displayId = assetMaintenanceDisplayId(asset);
-  const statusHtml = assetFlagBadgesHtml(asset);
-  const lastMaintenance = getLastAddedMaintenanceLog(asset);
-  const lastFlagged = getLastFlaggedMaintenanceLog(asset);
-  const lastFlaggedStatus = lastFlagged?.status
-    ? lastFlagged.status.toUpperCase()
-    : '';
-
-  return `
-    <tr
-      class="ooc-asset-item"
-      data-asset-id="${escapeHtmlAttr(assetId)}"
-      role="button"
-      tabindex="0"
-      title="View maintenance log"
-      onclick="viewMaintenanceLog('${escapeJs(assetId)}')"
-      onkeydown="if(event.target === this && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}');}"
-      style="cursor:pointer;"
-    >
-      <td style="font-weight:600;">
-        ${escapeHtml(displayId)}
-        ${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}
-      </td>
-      <td>${escapeHtml(`${asset.brand || ''} ${asset.model || ''}`.trim())}</td>
-      <td>${statusHtml}</td>
-      <td>${escapeHtml(asset.location || 'Store')}</td>
-      <td>${escapeHtml(lastMaintenance?.date || 'Never')}</td>
-      <td style="max-width:300px;white-space:normal;overflow-wrap:anywhere;">
-        ${lastFlagged
-          ? `${escapeHtml(lastFlagged.record.description || 'No reason provided')} <span style="color:#666;font-size:11px;">(${escapeHtml(lastFlaggedStatus)})</span>`
-          : '—'}
-      </td>
-      <td>
-        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
-          Add Log
-        </button>
-      </td>
-    </tr>
-  `;
-}
-
 function maintenanceFlagColour(asset) {
   if (asset.isOOC || asset.status === 'ooc' || Number(asset.bulkOOCQuantity || 0) > 0) return '#d84b52';
   if (asset.isMissing || asset.status === 'missing' || Number(asset.bulkMissingQuantity || 0) > 0) return '#64748b';
@@ -21974,15 +20741,12 @@ function displayOOCAssets(oocAssets) {
   if (!container) return;
 
   if (oocAssets.length === 0) {
-    destroyVirtualTable('maintenance-flagged');
     const hasSearch = !!document.getElementById('ooc-search')?.value.trim();
     container.innerHTML = hasSearch
       ? '<div class="maintenance-empty">No assets needing attention match this search.</div>'
       : '<div class="maintenance-empty">No assets are currently OOC, missing, untagged, degraded or decommissioned.</div>';
     return;
   }
-
-  destroyVirtualTable('maintenance-flagged');
   const sortedAssets = sortAssetsByLastAddedMaintenanceLog([...oocAssets]);
   container.innerHTML = `<div class="maintenance-flagged-grid">${sortedAssets.map(flaggedMaintenanceCardHtml).join('')}</div>`;
 }
@@ -22852,72 +21616,6 @@ function showMaintenanceLogModal(asset) {
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   setTimeout(() => loadAssetEventHistoryCards(safeAssetId, eventHistoryContainerId), 0);
-}
-
-async function loadAssetEventHistory(assetId, containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  container.innerHTML = `<div style="padding: 12px; color: #6c757d; font-style: italic;">Loading…</div>`;
-
-  try {
-    const resp = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/event-history`);
-    const rows = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
-
-    if (rows.length === 0) {
-      container.innerHTML = `<div style="padding: 12px; color: #6c757d; font-style: italic;">No prepared event/dry hire history found for this asset.</div>`;
-      return;
-    }
-
-    const bodyRows = rows.map(ev => {
-      const tag = ev.tag || 'events';
-      const tagStyle = getTagStyle(tag);
-      const tagLabel = getTagDisplay(tag);
-
-      const dateRange =
-        (ev.startDate && ev.endDate && ev.startDate !== ev.endDate)
-          ? `${ev.startDate} → ${ev.endDate}`
-          : (ev.startDate || ev.endDate || '');
-
-      const statusBadge = ev.returned
-        ? statusBadgeHtml('available', 'Returned')
-        : statusBadgeHtml('deployed', 'Out');
-
-      return `
-        <tr style="border-bottom: 1px solid #f1f1f1;">
-          <td style="padding: 10px; width: 90px; white-space: nowrap;">
-            <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${tagStyle}">
-              ${tagLabel}
-            </span>
-          </td>
-          <td style="padding: 10px; width: 70px; font-weight: 600;">${ev.id}</td>
-          <td style="padding: 10px;">${escapeHtml(ev.name || '')}</td>
-          <td style="padding: 10px;">${escapeHtml(ev.location || '—')}</td>
-          <td style="padding: 10px; width: 160px; white-space: nowrap; font-size: 13px;">${escapeHtml(dateRange)}</td>
-          <td style="padding: 10px; width: 110px; text-align: center;">${statusBadge}</td>
-        </tr>
-      `;
-    }).join('');
-
-    container.innerHTML = `
-      <table class="asset-event-history-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
-        <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 5;">
-          <tr>
-            <th style="padding: 10px; text-align: left; width: 90px; border-bottom: 2px solid #e9ecef;">Type</th>
-            <th style="padding: 10px; text-align: left; width: 70px; border-bottom: 2px solid #e9ecef;">ID</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e9ecef;">Name</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e9ecef;">Location</th>
-            <th style="padding: 10px; text-align: left; width: 160px; border-bottom: 2px solid #e9ecef;">Dates</th>
-            <th style="padding: 10px; text-align: center; width: 110px; border-bottom: 2px solid #e9ecef;">Status</th>
-          </tr>
-        </thead>
-        <tbody>${bodyRows}</tbody>
-      </table>
-    `;
-  } catch (err) {
-    console.error('Failed to load asset event history:', err);
-    container.innerHTML = `<div style="padding: 12px; color: #dc3545;">Failed to load event/dry hire history.</div>`;
-  }
 }
 
 async function loadAssetEventHistoryCards(assetId, containerId) {

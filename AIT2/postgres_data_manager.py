@@ -1489,17 +1489,6 @@ class PostgresDataManager(DataManager):
             ).fetchone()
         return row[0] if row else None
 
-    def company_document_count(self):
-        with self._connection() as connection:
-            row = connection.execute(
-                """
-                SELECT COUNT(*) FROM aim_company_documents
-                WHERE company_code = %s
-                """,
-                (self.company_code,),
-            ).fetchone()
-        return int(row[0])
-
     def replace_company_documents(self, documents):
         """Atomically replace all structured JSON documents for this company."""
         normalized = {

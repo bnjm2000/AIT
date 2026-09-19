@@ -435,7 +435,7 @@ class EventAssignmentAccessTests(unittest.TestCase):
             self.assertEqual(progress['transport']['status'], 'orange')
             self.assertEqual(progress['prepare']['status'], 'orange')
             self.assertEqual(progress['return']['status'], 'orange')
-            self.assertEqual(progress['finance']['status'], 'red')
+            self.assertEqual(progress['finance']['status'], 'blue')
 
             workforce['transportBookings']['91'].append({
                 'id': 'return-1', 'tripType': 'return', 'status': 'Approved'
@@ -450,11 +450,17 @@ class EventAssignmentAccessTests(unittest.TestCase):
             self.assertEqual(progress['return']['status'], 'green')
             self.assertEqual(progress['finance']['status'], 'orange')
 
+            invoice['status'] = 'Approved'
+            progress = app_module._event_workflow_progress_payload(
+                event, 4, 4, 4, workforce, finance
+            )
+            self.assertEqual(progress['finance']['status'], 'red')
+
             invoice['status'] = 'Paid'
             progress = app_module._event_workflow_progress_payload(
                 event, 4, 4, 4, workforce, finance
             )
-            self.assertEqual(progress['finance']['status'], 'blue')
+            self.assertEqual(progress['finance']['status'], 'green')
 
             invoice['paymentConfirmedAt'] = '2026-08-22T10:00:00'
             progress = app_module._event_workflow_progress_payload(
@@ -508,6 +514,57 @@ class EventAssignmentAccessTests(unittest.TestCase):
                 event=event,
                 workforce=full_time_workforce,
             ))
+
+    def test_finance_indicator_uses_next_unpaid_invoice_or_claim(self):
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y%m%d')
+        event = Event(92, 'Mixed submissions', tomorrow, tomorrow, [])
+        paid_invoice = {'id': 'paid-invoice', 'status': 'Paid'}
+        workforce = {
+            'assignments': {'92': [
+                {'freelancerId': 'worker-1', 'department': 'AX'},
+                {'freelancerId': 'worker-2', 'department': 'AX'},
+            ]},
+            'transportBookings': {},
+            'submissions': {'92': {
+                'worker-1': {'invoices': [paid_invoice], 'claims': []},
+                'worker-2': {'invoices': [], 'claims': []},
+            }},
+            'uploadAllowances': {},
+        }
+        self.data_manager.events[event.event_id] = event
+
+        with app_module.app.test_request_context('/'):
+            app_module.session['user'] = 'admin'
+
+            def finance_progress():
+                return app_module._event_workflow_progress_payload(
+                    event, 0, 0, 0, workforce, {}
+                )['finance']
+
+            self.assertEqual(finance_progress()['status'], 'blue')
+
+            next_invoice = {'id': 'next-invoice', 'status': 'Pending Review'}
+            workforce['submissions']['92']['worker-2']['invoices'] = [next_invoice]
+            self.assertEqual(finance_progress()['status'], 'orange')
+
+            next_invoice['status'] = 'Approved'
+            self.assertEqual(finance_progress()['status'], 'red')
+
+            next_invoice['status'] = 'Paid'
+            self.assertEqual(finance_progress()['status'], 'green')
+
+            claim = {'id': 'claim-1', 'status': 'Approved'}
+            workforce['submissions']['92']['worker-1']['claims'] = [claim]
+            self.assertEqual(finance_progress()['status'], 'red')
+
+            next_invoice['status'] = 'Pending Review'
+            self.assertEqual(finance_progress()['status'], 'red')
+
+            claim['status'] = 'Paid'
+            self.assertEqual(finance_progress()['status'], 'orange')
+
+            next_invoice['status'] = 'Paid'
+            self.assertEqual(finance_progress()['status'], 'green')
 
     def test_plan_workflow_icon_distinguishes_shortage_and_degraded_capacity(self):
         event = self.data_manager.events[1]

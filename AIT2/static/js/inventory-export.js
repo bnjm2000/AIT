@@ -150,11 +150,6 @@ function inventoryDepartmentPdfBadgeHtml(code) {
   });
 }
 
-function inventoryExportQuantity(asset, statusFilter = '') {
-  return Object.values(inventoryExportStatusCounts(asset, statusFilter))
-    .reduce((sum, quantity) => sum + quantity, 0);
-}
-
 function inventoryExportStatusCounts(asset, statusFilter = '') {
   if (!asset) return {};
 
@@ -227,24 +222,6 @@ function inventoryExportStatusCounts(asset, statusFilter = '') {
   return normalizedFilter
     ? (counts[normalizedFilter] ? { [normalizedFilter]: counts[normalizedFilter] } : {})
     : counts;
-}
-
-function inventoryAssetFlagsText(asset) {
-  const flags = [];
-  if (asset?.isMissing) flags.push('Missing');
-  if (asset?.isOOC) flags.push('OOC');
-  if (asset?.isUntagged) flags.push('Untagged');
-  if (asset?.isDegraded) flags.push('Degraded');
-  if (asset?.isBulk) {
-    const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
-    const missingQty = Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0);
-    const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
-    if (!asset?.isOOC && oocQty > 0) flags.push(`${oocQty} OOC`);
-    if (!asset?.isMissing && missingQty > 0) flags.push(`${missingQty} Missing`);
-    if (!asset?.isDegraded && degradedQty > 0) flags.push(`${degradedQty} Degraded`);
-  }
-  if (asset?.isDisposed || asset?.isDecommissioned) flags.push('Decommissioned');
-  return flags.length ? flags.join(', ') : 'OK';
 }
 
 function inventoryAssetFlagsPdfHtml(asset) {
@@ -342,13 +319,6 @@ function groupInventoryAssetsForExport(filteredAssets, filters) {
   });
 }
 
-function inventoryStatusSummaryText(statusCounts) {
-  return Object.entries(statusCounts || {})
-    .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)))
-    .map(([status, count]) => `${inventoryStatusText(status)}: ${count}`)
-    .join(', ');
-}
-
 function inventoryStatusSummaryPdfHtml(statusCounts) {
   const entries = Object.entries(statusCounts || {})
     .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)));
@@ -379,10 +349,6 @@ function inventoryGroupedRowRecords(filteredAssets, filters) {
       height: 0
     };
   });
-}
-
-function inventoryGroupedRowsHtml(filteredAssets, filters) {
-  return inventoryGroupedRowRecords(filteredAssets, filters).map(record => record.html).join('');
 }
 
 function inventoryIndividualRowRecords(filteredAssets) {
@@ -416,10 +382,6 @@ function inventoryIndividualRowRecords(filteredAssets) {
       height: 0
     };
   });
-}
-
-function inventoryIndividualRowsHtml(filteredAssets) {
-  return inventoryIndividualRowRecords(filteredAssets).map(record => record.html).join('');
 }
 
 function inventoryPdfPageConfig(showIndividual) {
@@ -515,24 +477,6 @@ function inventoryPdfTableHead(showIndividual) {
         <th>Status Counts</th>
       </tr>
     </thead>
-  `;
-}
-
-function inventoryPdfTableHtml(filteredAssets, filters, showIndividual) {
-  if (showIndividual) {
-    return `
-      <table class="inventory-table detail-table">
-        ${inventoryPdfTableHead(true)}
-        <tbody>${inventoryIndividualRowsHtml(filteredAssets)}</tbody>
-      </table>
-    `;
-  }
-
-  return `
-    <table class="inventory-table grouped-table">
-      ${inventoryPdfTableHead(false)}
-      <tbody>${inventoryGroupedRowsHtml(filteredAssets, filters)}</tbody>
-    </table>
   `;
 }
 

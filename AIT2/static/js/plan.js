@@ -6,12 +6,10 @@ var planPageState = {
   assets: [],
   availability: [],
   containers: [],
-  templates: [],
   search: '',
   department: 'ALL',
   showContainers: true,
   loading: false,
-  templateDraft: null,
   activeSubprojectId: '',
   editingCustomAssetId: '',
   departmentOpenState: new Map(),
@@ -1001,33 +999,6 @@ function planModelGroups(eventData = planPageState.event) {
     ));
 }
 
-function planEventSnapshot() {
-  return {
-    models: planModelGroups().map(group => ({
-      department: normalizeDepartmentCode(group.department || 'UN'),
-      brand: String(group.brand || ''),
-      model: String(group.model || ''),
-      description: String(group.description || ''),
-      quantity: Math.max(1, Number(group.requiredQuantity || 1))
-    })),
-    customAssets: planCustomAssets().map(custom => ({
-      type: normalizeCustomType(custom.type),
-      name: String(custom.name || ''),
-      quantity: Math.max(1, Number(custom.quantity || 1)),
-      department: normalizeDepartmentCode(custom.department || 'UN'),
-      company: String(custom.company || ''),
-      description: String(custom.description || '')
-    }))
-  };
-}
-
-function planEventHasRequirements() {
-  if (planModelGroups().length || planCustomAssets().length) return true;
-  return (planPageState.event?.preparedItems || []).some(ref =>
-    typeof ref === 'string' && ref.trim()
-  );
-}
-
 function planTotals() {
   const models = planModelGroups();
   const customAssets = planCustomAssets();
@@ -1046,8 +1017,7 @@ function planTotals() {
   return {
     lineCount: models.length + customAssets.length,
     totalQuantity,
-    departmentCount: departmentsInUse.size,
-    templateCount: planPageState.templates.length
+    departmentCount: departmentsInUse.size
   };
 }
 
@@ -2827,50 +2797,6 @@ async function planSetVendorManagement(encodedKey, mode) {
   }
 }
 
-function renderPlanTemplatesCard() {
-  const templates = planPageState.templates || [];
-  const rows = templates.map(template => {
-    const quantity = (template.models || []).reduce(
-      (sum, row) => sum + Number(row.quantity || 0),
-      0
-    ) + (template.customAssets || []).reduce(
-      (sum, row) => sum + Number(row.quantity || 0),
-      0
-    );
-    return `
-      <div class="plan-template-row">
-        <div>
-          <strong>${escapeHtml(template.name)}</strong>
-          <span>${template.models.length} models · ${template.customAssets.length} custom · ${quantity} total</span>
-        </div>
-        <button type="button" class="plan-button plan-button-small"
-                onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
-        <button type="button" class="plan-button plan-button-small"
-                title="Edit template"
-                onclick="planOpenTemplateEditor('${planEncode(template.id)}')">&#9998;</button>
-      </div>
-    `;
-  }).join('');
-
-  return `
-    <section class="plan-card" id="planTemplatesCard">
-      <div class="plan-card-header"><h3>Templates</h3></div>
-      <div class="plan-aside-body">
-        <div class="plan-template-actions">
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="planOpenTemplateChooser()">Apply Template</button>
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="planOpenTemplateManager()">Manage Templates</button>
-        </div>
-        <div class="plan-template-list">
-          ${rows || '<div class="plan-item-meta">No templates created yet.</div>'}
-          <button type="button" class="plan-button" onclick="planOpenTemplateEditor()">Save Template</button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
 function renderPlanCustomItemCard() {
   return `
     <section class="plan-card plan-custom-card">
@@ -3387,9 +3313,6 @@ async function loadPlanPage() {
       }).catch(error => console.warn('Unable to load more event options:', error));
     };
 
-    void apiCall('/api/planning-templates').then(response => {
-      planPageState.templates = response.data || [];
-    }).catch(error => console.warn('Unable to load planning templates:', error));
     void refreshContainersCache(false).then(containerCache => {
       planPageState.containers = Object.values(containerCache || {});
       if (document.getElementById('planAvailableResults')) renderPlanAvailableResults();
@@ -3470,15 +3393,13 @@ async function selectPlanEvent(eventId, options = {}) {
 
 async function refreshPlanSelectedEvent(options = {}) {
   if (!planPageState.eventId) return;
-  const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
+  const [eventResponse, availabilityResponse] = await Promise.all([
     apiCall(`/api/events/${planPageState.eventId}?view=plan`),
-    apiCall(`/api/events/${planPageState.eventId}/availability?view=plan`),
-    options.templates ? apiCall('/api/planning-templates') : Promise.resolve(null)
+    apiCall(`/api/events/${planPageState.eventId}/availability?view=plan`)
   ]);
   const viewState = planCaptureViewState();
   planPageState.event = eventResponse.data;
   planPageState.availability = availabilityResponse.data || [];
-  if (templatesResponse) planPageState.templates = templatesResponse.data || [];
   renderPlanPage();
   if (options.customDepartment) {
     planRestoreCustomDepartment(options.customDepartment);
@@ -3893,302 +3814,6 @@ async function planRemoveCustomAsset(encodedAssetId) {
     );
     await refreshPlanSelectedEvent();
   } catch (error) {}
-}
-
-function planTemplateDraftRows() {
-  const draft = planPageState.templateDraft || { models: [], customAssets: [] };
-  return [
-    ...(draft.models || []).map((row, index) => ({ kind: 'models', index, row })),
-    ...(draft.customAssets || []).map((row, index) => ({ kind: 'customAssets', index, row }))
-  ];
-}
-
-function ensurePlanTemplateEditorModal() {
-  let modal = document.getElementById('planTemplateEditorModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateEditorModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:720px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="planTemplateEditorTitle">Save Template</h3>
-        <button type="button" class="close-btn" onclick="closeModal('planTemplateEditorModal')">&times;</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="planTemplateName">Template Name</label>
-        <input class="form-input" id="planTemplateName" maxlength="120">
-      </div>
-      <div class="plan-inline-actions">
-        <button type="button" class="plan-button plan-button-small" onclick="planUseCurrentEventForTemplate()">
-          Use Current Event Assets
-        </button>
-        <span class="plan-item-meta">This replaces the template editor list, not the event.</span>
-      </div>
-      <div class="plan-template-editor-list" id="planTemplateEditorRows"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-danger" id="planDeleteTemplateButton" onclick="planDeleteTemplate()">Delete</button>
-        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateEditorModal')">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="planSaveTemplate()">Save Template</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function renderPlanTemplateEditorRows() {
-  const container = document.getElementById('planTemplateEditorRows');
-  if (!container) return;
-  const rows = planTemplateDraftRows();
-  container.innerHTML = rows.length ? rows.map(({ kind, index, row }) => {
-    const isModel = kind === 'models';
-    const title = isModel
-      ? [row.brand, row.model].filter(Boolean).join(' ')
-      : row.name;
-    const description = isModel
-      ? (row.description || 'No description')
-      : (row.type === 'LOAN' ? (row.company || 'Loan / rental') : 'Misc item');
-    return `
-      <div class="plan-template-editor-row">
-        <div>
-          <div class="plan-item-name">${escapeHtml(title)}</div>
-          <div class="plan-item-description">${escapeHtml(description)} · ${escapeHtml(planDepartmentLabel(row.department))}</div>
-        </div>
-        <input class="form-input" type="number" min="1" value="${Math.max(1, Number(row.quantity || 1))}"
-               onchange="planUpdateTemplateDraftQuantity('${kind}',${index},this.value)">
-        <button type="button" class="plan-button plan-button-danger plan-button-small"
-                onclick="planRemoveTemplateDraftRow('${kind}',${index})">&#128465;</button>
-      </div>
-    `;
-  }).join('') : '<div class="plan-empty">This template has no assets. Use the current event to populate it.</div>';
-}
-
-function planOpenTemplateEditor(encodedTemplateId = '') {
-  const templateId = planDecode(encodedTemplateId);
-  const existing = (planPageState.templates || []).find(item => item.id === templateId);
-  const snapshot = planEventSnapshot();
-  planPageState.templateDraft = existing
-    ? JSON.parse(JSON.stringify(existing))
-    : {
-        id: '',
-        name: '',
-        models: snapshot.models,
-        customAssets: snapshot.customAssets
-      };
-
-  ensurePlanTemplateEditorModal();
-  document.getElementById('planTemplateEditorTitle').textContent =
-    existing ? 'Edit Template' : 'Save Template';
-  document.getElementById('planTemplateName').value =
-    planPageState.templateDraft.name || '';
-  document.getElementById('planDeleteTemplateButton').style.display =
-    existing ? 'inline-flex' : 'none';
-  renderPlanTemplateEditorRows();
-  openModal('planTemplateEditorModal');
-}
-
-function planUseCurrentEventForTemplate() {
-  if (!planPageState.templateDraft) return;
-  const snapshot = planEventSnapshot();
-  planPageState.templateDraft.models = snapshot.models;
-  planPageState.templateDraft.customAssets = snapshot.customAssets;
-  renderPlanTemplateEditorRows();
-}
-
-function planUpdateTemplateDraftQuantity(kind, index, quantity) {
-  const rows = planPageState.templateDraft?.[kind];
-  if (!rows?.[index]) return;
-  rows[index].quantity = Math.max(1, Number(quantity || 1));
-}
-
-function planRemoveTemplateDraftRow(kind, index) {
-  const rows = planPageState.templateDraft?.[kind];
-  if (!rows) return;
-  rows.splice(index, 1);
-  renderPlanTemplateEditorRows();
-}
-
-async function planSaveTemplate() {
-  const draft = planPageState.templateDraft;
-  if (!draft) return;
-  const name = document.getElementById('planTemplateName')?.value.trim();
-  if (!name) {
-    showNotification('warning', 'Please enter a template name');
-    return;
-  }
-  const payload = {
-    name,
-    models: draft.models || [],
-    customAssets: draft.customAssets || []
-  };
-
-  try {
-    if (draft.id) {
-      await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'PUT', payload);
-    } else {
-      await apiCall('/api/planning-templates', 'POST', payload);
-    }
-    closeModal('planTemplateEditorModal');
-    showNotification('success', 'Template saved');
-    await refreshPlanSelectedEvent({ templates: true });
-  } catch (error) {}
-}
-
-async function planDeleteTemplate() {
-  const draft = planPageState.templateDraft;
-  if (!draft?.id) return;
-  const confirmed = await showAppConfirm({
-    title: 'Delete Template',
-    message: `Delete "${draft.name}" for everyone in this company?`,
-    confirmText: 'Delete',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-  if (!confirmed) return;
-
-  try {
-    await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'DELETE');
-    closeModal('planTemplateEditorModal');
-    showNotification('success', 'Template deleted');
-    await refreshPlanSelectedEvent({ templates: true });
-  } catch (error) {}
-}
-
-var planTemplateModeResolver = null;
-
-function ensurePlanTemplateModeModal() {
-  let modal = document.getElementById('planTemplateModeModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateModeModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="planTemplateChooserTitle">Apply Template</h3>
-        <button type="button" class="close-btn" onclick="planResolveTemplateMode('')">&times;</button>
-      </div>
-      <p id="planTemplateModeMessage"></p>
-      <div style="display:grid;gap:10px;margin:16px 0;">
-        <button type="button" class="plan-button" onclick="planResolveTemplateMode('merge')">
-          <span><strong>Merge</strong><br><small>Add template quantities to the existing plan.</small></span>
-        </button>
-        <button type="button" class="plan-button plan-button-danger" onclick="planResolveTemplateMode('replace')">
-          <span><strong>Replace</strong><br><small>Replace model and custom requirements. Prepared physical assets remain attached.</small></span>
-        </button>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="planResolveTemplateMode('')">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planChooseTemplateMode(templateName) {
-  ensurePlanTemplateModeModal();
-  document.getElementById('planTemplateModeMessage').textContent =
-    `"${templateName}" can be merged with or replace the current requirements.`;
-  openModal('planTemplateModeModal');
-  return new Promise(resolve => {
-    planTemplateModeResolver = resolve;
-  });
-}
-
-function planResolveTemplateMode(mode) {
-  closeModal('planTemplateModeModal');
-  if (planTemplateModeResolver) {
-    const resolve = planTemplateModeResolver;
-    planTemplateModeResolver = null;
-    resolve(mode);
-  }
-}
-
-async function planApplyTemplate(encodedTemplateId) {
-  const templateId = planDecode(encodedTemplateId);
-  const template = planPageState.templates.find(item => item.id === templateId);
-  if (!template) return;
-  const mode = planEventHasRequirements()
-    ? await planChooseTemplateMode(template.name)
-    : 'merge';
-  if (!mode) return;
-
-  try {
-    await apiCall(
-      `/api/events/${planPageState.eventId}/apply-planning-template`,
-      'POST',
-      {
-        templateId,
-        mode,
-        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
-      }
-    );
-    closeModal('planTemplateChooserModal');
-    showNotification('success', `Template ${mode === 'merge' ? 'merged' : 'applied'}`);
-    await refreshPlanSelectedEvent();
-  } catch (error) {}
-}
-
-function ensurePlanTemplateChooserModal() {
-  let modal = document.getElementById('planTemplateChooserModal');
-  if (modal) return modal;
-  modal = document.createElement('div');
-  modal.id = 'planTemplateChooserModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:620px;">
-      <div class="modal-header">
-        <h3 class="modal-title">Apply Template</h3>
-        <button type="button" class="close-btn" onclick="closeModal('planTemplateChooserModal')">&times;</button>
-      </div>
-      <div class="plan-template-list" id="planTemplateChooserRows"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateChooserModal')">Cancel</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  return modal;
-}
-
-function planOpenTemplateChooser(mode = 'apply') {
-  ensurePlanTemplateChooserModal();
-  const manageMode = mode === 'manage';
-  const title = document.getElementById('planTemplateChooserTitle');
-  if (title) title.textContent = manageMode ? 'Manage Templates' : 'Apply Template';
-  const rows = document.getElementById('planTemplateChooserRows');
-  rows.innerHTML = planPageState.templates.length
-    ? planPageState.templates.map(template => `
-        <div class="plan-template-row">
-          <div>
-            <strong>${escapeHtml(template.name)}</strong>
-            <span>${template.models.length} models · ${template.customAssets.length} custom assets</span>
-          </div>
-          ${manageMode ? '' : `
-            <button type="button" class="plan-button plan-button-small"
-                    onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
-          `}
-          <button type="button" class="plan-button plan-button-small"
-                  onclick="closeModal('planTemplateChooserModal');planOpenTemplateEditor('${planEncode(template.id)}')">
-            ${manageMode ? 'Edit' : '&#9998;'}
-          </button>
-        </div>
-      `).join('')
-    : '<div class="plan-empty">No templates yet. Save one from the current event.</div>';
-  openModal('planTemplateChooserModal');
-}
-
-function planOpenTemplateManager() {
-  planOpenTemplateChooser('manage');
-}
-
-function planScrollToTemplates() {
-  document.getElementById('planTemplatesCard')?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center'
-  });
 }
 
 function planProceedToPrepare() {

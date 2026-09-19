@@ -309,11 +309,6 @@ function wfStatusClass(status) {
   return `status-${String(status || 'Pending Review').toLowerCase().replace(/\s+/g, '-')}`;
 }
 
-function wfStatusOptions(current) {
-  return ['Pending Review', 'Approved', 'Denied', 'Paid']
-    .map(status => `<option ${status === current ? 'selected' : ''}>${status}</option>`).join('');
-}
-
 function wfDirectorySubjects() {
   if (document.getElementById('freelancer-workspace-section')?.classList.contains('active')) {
     return workforcePageState.freelancerWorkspaceData?.subjects || [];
@@ -341,14 +336,6 @@ function wfFindFreelancer(id) {
 
 function wfFindVendor(id) {
   return wfDirectoryVendors().find(row => String(row.id) === String(id));
-}
-
-function wfWorkerVendorMemberships(workerId) {
-  const workerKey = String(workerId || '');
-  if (!workerKey) return [];
-  return wfDirectoryVendors().filter(vendor =>
-    (vendor.memberIds || []).some(memberId => String(memberId) === workerKey)
-  );
 }
 
 function wfFindAppUser(username) {
@@ -3892,14 +3879,6 @@ function openAdminWorkforceUpload(freelancerId, kind) {
   openWorkforceModal('wfAdminUploadModal');
 }
 
-function syncAdminClaimCategory() {
-  const other = document.getElementById('wfAdminClaimCategory')?.value === 'Other';
-  const field = document.getElementById('wfAdminOtherCategoryField');
-  if (!field) return;
-  field.hidden = !other;
-  document.getElementById('wfAdminOtherCategory').required = other && !document.getElementById('wfAdminOtherCategory').disabled;
-}
-
 async function submitAdminWorkforceUpload(event) {
   event.preventDefault();
   if (workforcePageState.uploadActive) return;
@@ -4985,20 +4964,6 @@ async function deleteTransportBooking(id) {
   renderWorkforcePage();
 }
 
-async function uploadTransportInvoice(id, input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  const form = new FormData();
-  form.append('file', file);
-  try {
-    const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}/invoice`, 'POST', form);
-    workforcePageState.data = response.data;
-    renderWorkforcePage();
-  } finally {
-    input.value = '';
-  }
-}
-
 function wfTransportInvoiceDragOver(event) {
   event.preventDefault();
   event.currentTarget.classList.add('is-file-dragging');
@@ -5007,14 +4972,6 @@ function wfTransportInvoiceDragOver(event) {
 function wfTransportInvoiceDragLeave(event) {
   if (event.currentTarget.contains(event.relatedTarget)) return;
   event.currentTarget.classList.remove('is-file-dragging');
-}
-
-async function wfTransportInvoiceDrop(event, id) {
-  event.preventDefault();
-  event.currentTarget.classList.remove('is-file-dragging');
-  const file = event.dataTransfer?.files?.[0];
-  if (!file) return;
-  await uploadTransportInvoice(id, { files: [file], value: '' });
 }
 
 function closeWorkforceStatusMenus(except = null) {
@@ -5208,45 +5165,6 @@ function applyDefaultReviewAllocations() {
     input.value = values[input.dataset.department] ?? '';
   });
   updateAllocationProgress();
-}
-
-function syncWorkforceReviewDenialField() {
-  const field = document.getElementById('wfReviewDenialReasonField');
-  if (!field) return;
-  field.hidden = document.getElementById('wfReviewStatus')?.value !== 'Denied';
-}
-
-function wfReviewStatusPicker(current = '') {
-  const label = current || 'Select status';
-  return `<div class="wf-status-control wf-review-status-control">
-    <input id="wfReviewStatus" type="hidden" value="${wfAttr(current)}">
-    <button id="wfReviewStatusButton" class="wf-status-button ${current ? wfStatusClass(current) : 'status-unselected'}"
-      type="button" onclick="toggleWorkforceReviewStatusMenu(event)">
-      ${wfEscape(label)} <span>&#9662;</span>
-    </button>
-    <div class="wf-status-menu" id="wfReviewStatusMenu">
-      ${['Pending Review', 'Approved', 'Denied'].map(status =>
-        `<button class="${wfStatusClass(status)}" type="button"
-          onclick="selectWorkforceReviewStatus(event,'${status}')">${status}</button>`
-      ).join('')}
-    </div>
-  </div>`;
-}
-
-function toggleWorkforceReviewStatusMenu(event) {
-  event.stopPropagation();
-  document.getElementById('wfReviewStatusMenu')?.classList.toggle('open');
-}
-
-function selectWorkforceReviewStatus(event, status) {
-  event.stopPropagation();
-  const input = document.getElementById('wfReviewStatus');
-  const button = document.getElementById('wfReviewStatusButton');
-  input.value = status;
-  button.className = `wf-status-button ${wfStatusClass(status)}`;
-  button.innerHTML = `${wfEscape(status)} <span>&#9662;</span>`;
-  document.getElementById('wfReviewStatusMenu')?.classList.remove('open');
-  syncWorkforceReviewDenialField();
 }
 
 function wfReviewClaimCategoryFields(record, verified) {

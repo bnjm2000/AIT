@@ -2462,16 +2462,8 @@ function costingSubprojectSlotDragLeave(event) {
   costingSubprojectWorkspace.slotDragLeave(event);
 }
 
-function costingReorderSubprojectAtIndex(sourceId, targetIndex) {
-  return costingSubprojectWorkspace.reorderAtIndex(sourceId, targetIndex);
-}
-
 function costingSubprojectDropAtIndex(event, targetIndex) {
   costingSubprojectWorkspace.dropAtIndex(event, targetIndex);
-}
-
-function costingReorderSubproject(sourceId, targetId, position = 'before') {
-  return costingSubprojectWorkspace.reorder(sourceId, targetId, position);
 }
 
 function costingSubprojectDrop(event, targetId) {
@@ -3358,15 +3350,6 @@ async function costingFlushSave() {
   if (costingState.activeSave) await costingState.activeSave.catch(() => {});
   if (costingState.saveTimer) await costingSave(false);
   return costingState.current;
-}
-
-async function costingSaveDraft() {
-  try {
-    await costingFlushSave();
-    showNotification('success', 'Costing saved');
-  } catch (error) {
-    showNotification('error', error.message || 'Failed to save costing');
-  }
 }
 
 async function costingExportPdf(button) {

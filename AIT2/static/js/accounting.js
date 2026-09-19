@@ -278,55 +278,6 @@ function accountingRenderAccounts() {
   `;
 }
 
-const ACCOUNTING_GST_LABELS = {
-  1: 'Standard-rated supplies', 2: 'Zero-rated supplies', 3: 'Exempt supplies', 4: 'Total supplies',
-  5: 'Taxable purchases', 6: 'Output tax due', 7: 'Input tax claimed', 8: 'Net GST payable / (claimable)',
-  9: 'Imports under approved schemes', 10: 'Tourist refunds claimed', 11: 'Bad debt / reverse-charge refunds',
-  12: 'Pre-registration claims', 13: 'Revenue', 14: 'Reverse-charge imports', 15: 'Marketplace remote services',
-  16: 'Marketplace / redeliverer LVG', 17: 'Imported low-value goods'
-};
-
-function accountingRenderGst() {
-  const data = accountingState.data || {};
-  const gst = data.gst || {};
-  return `
-    <section class="accounting-gst-heading">
-      <div><h3>GST return working</h3><p>${accountingDate(data.period?.from)} to ${accountingDate(data.period?.to)} · SGD</p></div>
-      <a class="btn btn-secondary accounting-action" href="${accountingExportUrl('gst')}">${accountingSvg('export')} Export schedule</a>
-    </section>
-    ${!data.settings?.gstRegistered ? '<div class="accounting-notice warning"><strong>GST is not enabled for this company.</strong><span>Enable it in Accounting Settings before using this schedule for filing work.</span></div>' : `<div class="accounting-notice"><strong>${accountingEscape(data.settings.gstRegistrationNumber || 'GST registration number not entered')}</strong><span>Configured rate: ${Number(data.settings.gstRate || 0)}%</span></div>`}
-    <section class="accounting-gst-grid">${Array.from({ length: 17 }, (_, index) => index + 1).map(number => `
-      <div class="accounting-gst-box ${number === 8 ? 'total' : ''}"><span>Box ${number}</span><p>${accountingEscape(ACCOUNTING_GST_LABELS[number])}</p><strong>${accountingMoney(gst[`box${number}`])}</strong>${number > 9 && number !== 13 ? '<small>Special declaration</small>' : ''}</div>
-    `).join('')}</section>
-    <div class="accounting-notice neutral"><strong>Review before filing</strong><span>This is a GST F5 working schedule from posted tax codes. Validate tax invoices, blocked input tax, reverse charge, schemes and special declarations before filing in myTax Portal.</span></div>
-  `;
-}
-
-function accountingReportTable(title, rows, total, exportName) {
-  return `<section class="accounting-panel accounting-report"><div class="accounting-panel-heading"><h3>${accountingEscape(title)}</h3><a class="accounting-link" href="${accountingExportUrl(exportName)}">Export CSV</a></div><div class="accounting-report-rows">${rows.map(row => `<div><span>${accountingEscape([row.code, row.name].filter(Boolean).join(' · '))}</span><strong>${accountingMoney(row.amount)}</strong></div>`).join('') || '<div><span>No balances</span><strong>$0.00</strong></div>'}<div class="total"><span>Total</span><strong>${accountingMoney(total)}</strong></div></div></section>`;
-}
-
-function accountingRenderReports() {
-  const data = accountingState.data || {};
-  const pnl = data.profitLoss || {};
-  const sheet = data.balanceSheet || {};
-  const assets = (sheet.assets || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const liabilities = (sheet.liabilities || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const equity = (sheet.equity || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  return `
-    <div class="accounting-reports-grid">
-      ${accountingReportTable('Profit & Loss', pnl.rows || [], pnl.netProfit || 0, 'profit-loss')}
-      ${accountingReportTable('Assets', sheet.assets || [], assets, 'balance-sheet')}
-      ${accountingReportTable('Liabilities', sheet.liabilities || [], liabilities, 'balance-sheet')}
-      ${accountingReportTable('Equity', sheet.equity || [], equity, 'balance-sheet')}
-    </div>
-    <section class="accounting-panel accounting-table-panel">
-      <div class="accounting-panel-heading"><div><h3>Trial balance</h3><p>As at ${accountingDate(data.period?.to)}</p></div><a class="accounting-link" href="${accountingExportUrl('trial-balance')}">Export CSV</a></div>
-      <div class="accounting-table-scroll"><table class="accounting-table dense"><thead><tr><th>Account</th><th>Type</th><th class="money">Debit</th><th class="money">Credit</th></tr></thead><tbody>${(data.trialBalance || []).map(row => `<tr><td><strong>${accountingEscape(row.code)}</strong> ${accountingEscape(row.name)}</td><td>${accountingEscape(row.type)}</td><td class="money">${row.debit ? accountingMoney(row.debit) : '-'}</td><td class="money">${row.credit ? accountingMoney(row.credit) : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="accounting-empty">No posted balances.</td></tr>'}</tbody></table></div>
-    </section>
-  `;
-}
-
 function accountingAccountOptions(selected = '', types = []) {
   return (accountingState.data?.accounts || []).filter(row => (row.active !== false || row.code === selected) && (!types.length || types.includes(row.type))).map(row => `<option value="${accountingAttr(row.code)}" ${String(row.code) === String(selected) ? 'selected' : ''}>${accountingEscape(row.code)} · ${accountingEscape(row.name)}</option>`).join('');
 }

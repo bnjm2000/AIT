@@ -5,7 +5,7 @@ import calendar
 from datetime import date, timedelta
 
 from services.accounting_workspace import (
-    CREDITS, OPEN_ITEMS, carrying_value, closing_rate, day, dec,
+    CREDITS, carrying_value, closing_rate, day, dec,
     depreciation_target, money, outstanding, stock_position,
 )
 

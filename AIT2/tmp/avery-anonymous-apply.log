@@ -1,0 +1,80 @@
+INFO:app:Event 1 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 1 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 2 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 3 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 3 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 4 state refreshed for read: Pending Closure -> Closed
+INFO:app:Event 4 state refreshed for read: Pending Closure -> Closed
+{
+  "applied": true,
+  "changedEvents": 3,
+  "removedAssetLinks": 100,
+  "backup": "C:\\Users\\AVECp\\Documents\\AIT\\AIT2\\output\\avery-anonymous-returns-backup-20260919-110238.json",
+  "verification": [
+    {
+      "eventId": 1,
+      "name": "SAF CAO COC 2026 Parade",
+      "removedAssetLinks": 53,
+      "verified": true,
+      "totalAssets": 142,
+      "totalPrepared": 142,
+      "totalReturned": 142,
+      "totalExtraAssets": 0,
+      "totalExtraPrepared": 0,
+      "returnableCount": 0,
+      "returnableTotalCount": 142
+    },
+    {
+      "eventId": 2,
+      "name": "Datadog Conference Visual Support",
+      "removedAssetLinks": 0,
+      "verified": true,
+      "totalAssets": 13,
+      "totalPrepared": 13,
+      "totalReturned": 13,
+      "totalExtraAssets": 0,
+      "totalExtraPrepared": 0,
+      "returnableCount": 0,
+      "returnableTotalCount": 13
+    },
+    {
+      "eventId": 3,
+      "name": "SIFAS Academy Day 2026",
+      "removedAssetLinks": 46,
+      "verified": true,
+      "totalAssets": 174,
+      "totalPrepared": 174,
+      "totalReturned": 174,
+      "totalExtraAssets": 0,
+      "totalExtraPrepared": 0,
+      "returnableCount": 0,
+      "returnableTotalCount": 174
+    },
+    {
+      "eventId": 4,
+      "name": "Databricks World Tour 2026",
+      "removedAssetLinks": 1,
+      "verified": true,
+      "totalAssets": 11,
+      "totalPrepared": 11,
+      "totalReturned": 11,
+      "totalExtraAssets": 0,
+      "totalExtraPrepared": 1,
+      "returnableCount": 0,
+      "returnableTotalCount": 12
+    },
+    {
+      "eventId": 5,
+      "name": "Re-inKarnation Super Sing-Along",
+      "removedAssetLinks": 0,
+      "verified": true,
+      "totalAssets": 1,
+      "totalPrepared": 1,
+      "totalReturned": 1,
+      "totalExtraAssets": 0,
+      "totalExtraPrepared": 0,
+      "returnableCount": 0,
+      "returnableTotalCount": 1
+    }
+  ]
+}

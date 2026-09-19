@@ -5877,7 +5877,7 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("wfScheduleExportPhones", source)
         self.assertIn("wfScheduleExportRates", source)
         self.assertIn("showPhones", source)
-        self.assertIn("wfWorkerVendorMemberships", admin_source)
+        self.assertIn("wfFreelancerWorkspaceVendorMemberships(data)", admin_source)
         self.assertIn("wfWorkerScheduleIncludeVendor", admin_source)
         self.assertIn("params.set('showVendor', '1')", admin_source)
         self.assertIn("vendorMemberships", admin_source)

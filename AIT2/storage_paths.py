@@ -30,16 +30,8 @@ def normalise_company_code(value: object, fallback: str = "") -> str:
     return code or fallback
 
 
-def config_root() -> str:
-    return os.path.join(storage_root(), "config")
-
-
 def companies_root() -> str:
     return os.path.join(storage_root(), "companies")
-
-
-def runtime_root() -> str:
-    return os.path.join(storage_root(), "runtime")
 
 
 @dataclass(frozen=True)
@@ -67,19 +59,6 @@ def company_storage_paths(company_code: object) -> CompanyStoragePaths:
         branding=os.path.join(root, "branding"),
         exports=os.path.join(root, "exports"),
     )
-
-
-def ensure_company_storage(company_code: object) -> CompanyStoragePaths:
-    paths = company_storage_paths(company_code)
-    for folder in (
-        paths.data,
-        paths.documents,
-        paths.media,
-        paths.branding,
-        paths.exports,
-    ):
-        os.makedirs(folder, exist_ok=True)
-    return paths
 
 
 def _is_within(candidate: str, root: str) -> bool:
@@ -110,8 +89,3 @@ def company_area_for_data_folder(data_folder: str, area: str) -> str:
 
 def documents_root_for_data_folder(data_folder: str) -> str:
     return company_area_for_data_folder(data_folder, "documents")
-
-
-def media_root_for_data_folder(data_folder: str) -> str:
-    return company_area_for_data_folder(data_folder, "media")
-

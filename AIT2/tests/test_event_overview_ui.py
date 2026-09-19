@@ -15,7 +15,7 @@ def function_source(name, next_name):
 
 
 def test_planning_primary_action_opens_prepare_and_plan_is_in_progress_icons():
-    primary_action = function_source('getEventPrimaryAction', 'eventNextActionText')
+    primary_action = function_source('getEventPrimaryAction', 'eventAssigneeSummaryHtml')
     planning_branch = primary_action.split("if (event.state === 'Planning')", 1)[1].split(
         "if (event.state === 'Preparing')", 1
     )[0]
@@ -117,7 +117,7 @@ def test_event_card_next_action_and_compact_button_share_one_footer_row():
 
 
 def test_event_overview_reuses_progress_icons_and_keeps_documents_below():
-    overview = function_source('viewEvent', 'toggleViewSection')
+    overview = function_source('viewEvent', 'normalizeMaintenanceChange')
     navigation = function_source('eventOverviewNavigate', 'exportEventOverviewPdf')
 
     assert "eventWorkflowProgressHtml(event, 'event-overview-workflow-icons', true)" in overview
@@ -213,7 +213,7 @@ def test_all_events_title_uses_the_company_theme():
 
 def test_all_events_loads_active_cards_first_and_fetches_closed_on_demand():
     state_filter = function_source('setEventStateFilter', 'overviewStateFilterNeedsFullSet')
-    loader = function_source('loadAllEvents', 'ensureEventPageToolbar')
+    loader = function_source('loadAllEvents', 'loadReturnEvents')
 
     assert "let allEventsStateFilter = 'Active';" in SCRIPT
     assert 'const EVENT_OVERVIEW_PAGE_SIZE = 500;' in SCRIPT
@@ -225,11 +225,17 @@ def test_all_events_loads_active_cards_first_and_fetches_closed_on_demand():
     ) in loader
     assert 'allEventsOverviewStateCounts = response.meta?.stateCounts' in loader
     assert 'allEventsOverviewStateCountsByTag = response.meta?.stateCountsByTag' in loader
+    fallback = loader.split("requestedScope === 'active'", 1)[1].split('const page =', 1)[0]
+    assert "allEventsStateFilter === 'Active'" in fallback
+    assert 'Number(response.meta?.total ?? response.data?.length ?? 0) === 0' in fallback
+    assert "allEventsStateFilter = 'All';" in fallback
+    assert "requestedScope = 'all';" in fallback
+    assert 'continue;' in fallback
 
 
 def test_event_overview_includes_a_single_or_legacy_main_room():
     room_rows = function_source('eventOverviewSubprojectRows', 'eventOverviewSubprojects')
-    overview = function_source('viewEvent', 'toggleViewSection')
+    overview = function_source('viewEvent', 'normalizeMaintenanceChange')
 
     assert "name: 'Main Room'" in room_rows
     assert 'Object.values(event?.modelGroups || {})' in room_rows

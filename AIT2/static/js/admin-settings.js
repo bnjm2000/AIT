@@ -1283,10 +1283,6 @@ async function continueCompanyOnboardingIfReady() {
   }
 }
 
-async function savePdfSettingsFooter() {
-  return saveCompanyDetails();
-}
-
 async function resetPdfSettingsFooter() {
   const editor = companyRichTextEditor('footer');
   if (editor) editor.innerHTML = plainTextToCompanyRichHtml(DEFAULT_PDF_FOOTER_TEXT);
@@ -1703,10 +1699,6 @@ function populateEditCompanyFields() {
   if (input) input.value = company?.name || '';
 }
 
-function populateEditCompanyName() {
-  populateEditCompanyFields();
-}
-
 async function openEditCompanyModal() {
   ensureCompanyActionModals();
   await fetchCompanies(true);
@@ -2048,117 +2040,6 @@ async function switchCompanyAdmin() {
     setTimeout(() => window.location.reload(), 400);
   } catch (error) {
     showNotification('error', `Failed to switch company: ${error.message}`);
-  }
-}
-
-function ensureCompanyBrandingPromptModal() {
-  if (document.getElementById('companyBrandingSetupModal')) return;
-
-  const modal = document.createElement('div');
-  modal.id = 'companyBrandingSetupModal';
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content" style="max-width:720px;">
-      <div class="modal-header">
-        <h3>Company Branding</h3>
-      </div>
-      <div class="modal-body">
-        <p style="margin-bottom:16px;color:#495057;">
-          Add a logo and footer for <strong id="companyBrandingName"></strong>, or leave them blank for now.
-        </p>
-        <div style="display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;align-items:start;">
-          <div class="form-group">
-            <label class="form-label" for="companyBrandingLogoInput">Logo</label>
-            <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;background:#fff;min-height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-              <img id="companyBrandingLogoPreview" alt="Company Logo" style="max-width:220px;max-height:80px;object-fit:contain;">
-              <span id="companyBrandingLogoPlaceholder" style="color:#64748b;font-size:12px;font-weight:700;">No logo uploaded</span>
-            </div>
-            <input id="companyBrandingLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="companyBrandingFooterText">Footer</label>
-            <textarea id="companyBrandingFooterText" class="form-input" rows="6" maxlength="2000"></textarea>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="completeCompanyBrandingSetup(true)">Skip for Now</button>
-        <button type="button" class="btn btn-primary" onclick="completeCompanyBrandingSetup(false)">Save Branding</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-}
-
-async function showCompanyBrandingPromptIfNeeded() {
-  if (!currentUser || !currentUser.isAdmin || !currentUser.company?.brandingSetupRequired) return;
-
-  await loadPdfSettings(true);
-  ensureCompanyBrandingPromptModal();
-
-  const name = document.getElementById('companyBrandingName');
-  const preview = document.getElementById('companyBrandingLogoPreview');
-  const placeholder = document.getElementById('companyBrandingLogoPlaceholder');
-  const footer = document.getElementById('companyBrandingFooterText');
-  const fileInput = document.getElementById('companyBrandingLogoInput');
-  const logoUrl = getPdfLogoUrl();
-
-  if (name) name.textContent = currentUser.company.name || currentUser.company.code || 'this company';
-  if (preview) {
-    if (logoUrl) {
-      preview.src = logoUrl;
-      preview.hidden = false;
-    } else {
-      preview.removeAttribute('src');
-      preview.hidden = true;
-    }
-  }
-  if (placeholder) placeholder.hidden = !!logoUrl;
-  if (footer) footer.value = getPdfFooterText();
-  if (fileInput) fileInput.value = '';
-
-  openModal('companyBrandingSetupModal');
-}
-
-async function completeCompanyBrandingSetup(useDefaults = false) {
-  try {
-    if (useDefaults) {
-      await apiCall('/api/company/branding-setup-complete', 'POST', {});
-    } else {
-      const input = document.getElementById('companyBrandingLogoInput');
-      const file = input && input.files ? input.files[0] : null;
-      const footerText = document.getElementById('companyBrandingFooterText')?.value || DEFAULT_PDF_FOOTER_TEXT;
-
-      if (file) {
-        const formData = new FormData();
-        formData.append('logo', file);
-        const response = await fetch('/api/pdf-settings/logo', {
-          method: 'POST',
-          headers: {
-            "X-Client-Id": REALTIME_CLIENT_ID,
-          },
-          body: formData
-        });
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to upload logo');
-        }
-        pdfSettings = normalisePdfSettings(result.data || {});
-      }
-
-      const res = await apiCall('/api/pdf-settings', 'PUT', { footerText });
-      pdfSettings = normalisePdfSettings(res.data || pdfSettings);
-    }
-
-    const currentUserRes = await apiCall('/api/current-user');
-    currentUser = currentUserRes.data;
-    await loadPdfSettings(true);
-    applyPdfSettingsToApp();
-    closeModal('companyBrandingSetupModal');
-    showNotification('success', 'Company branding saved');
-  } catch (error) {
-    showNotification('error', `Failed to save company branding: ${error.message}`);
   }
 }
 
@@ -2582,7 +2463,6 @@ async function setupChangePasswordTab() {
     currentUser = res.data;
   }
 
-  refreshSidebarUserMenu();
   ensureChangePasswordNavItem();
   ensureChangePasswordSection();
 }
@@ -3318,7 +3198,6 @@ function applyUserAdminSavedData(row, endpointUsername, submittedPayload, respon
     && String(currentUser.company?.code || currentUser.companyCode || '').toUpperCase() === sourceCompanyCode
   ) {
     currentUser = { ...currentUser, ...saved, username: savedUsername };
-    refreshSidebarUserMenu();
   }
 }
 

@@ -95,10 +95,6 @@ function applyWorkforceRealtimeScheduleUpdates(payload) {
   return true;
 }
 
-function applyWorkforceRealtimeCallTimes(payload) {
-  return applyWorkforceRealtimeScheduleUpdates(payload);
-}
-
 function wfScheduleDates() {
   const dates = new Set(
     typeof wfEventDateOptions === 'function' ? wfEventDateOptions() : []

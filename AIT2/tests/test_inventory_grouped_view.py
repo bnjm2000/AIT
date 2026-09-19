@@ -422,7 +422,7 @@ def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
     assert 'class="asset-details-section asset-details-history"' in script
     details_source = script[
         script.index("function openAssetDetailsModal"):
-        script.index("function inventoryVirtualRowHtml")
+        script.index("const INVENTORY_CONDITION_META")
     ]
     assert 'class="asset-details-identity-label"' in details_source
     assert "departmentBadgeHtml(asset.department)" in details_source
@@ -431,8 +431,8 @@ def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
     assert "asset-details-product-heading\"><strong>${escapeHtml([asset.brand, asset.model]" in details_source
     assert 'class="asset-details-grid asset-details-operational-grid"' in details_source
     assert "<h4>Maintenance</h4>" not in details_source
-    assert "const bulkStockHtml = asset.isBulk" in script
-    assert ": '';" in script[script.index("function inventoryVirtualRowHtml"):script.index("const INVENTORY_CONDITION_META")]
+    assert "const bulkStockHtml = asset.isBulk" in details_source
+    assert ": '';" in details_source
     assert "editAssetChangeHistory" not in script
 
 

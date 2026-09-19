@@ -62,28 +62,8 @@ def hash_password(password, salt):
     return hashlib.sha256((salt + password).encode()).hexdigest()
 
 
-def get_current_date():
-    return datetime.datetime.now().strftime(DATE_FORMAT)
-
-
-def parse_date_input(date_str):
-    try:
-        date_obj = datetime.datetime.strptime(date_str.strip(), DATE_FORMAT)
-        return date_obj.strftime(STORAGE_DATE_FORMAT)
-    except ValueError:
-        return None
-
-
 def format_date_output(date_str):
     return datetime.datetime.strptime(date_str, STORAGE_DATE_FORMAT).strftime(DATE_FORMAT)
-
-
-def dates_overlap(start1, end1, start2, end2):
-    start1 = datetime.datetime.strptime(start1, STORAGE_DATE_FORMAT)
-    end1 = datetime.datetime.strptime(end1, STORAGE_DATE_FORMAT)
-    start2 = datetime.datetime.strptime(start2, STORAGE_DATE_FORMAT)
-    end2 = datetime.datetime.strptime(end2, STORAGE_DATE_FORMAT)
-    return max(start1, start2) <= min(end1, end2)
 
 
 class User:

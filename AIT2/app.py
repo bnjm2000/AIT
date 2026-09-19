@@ -129,13 +129,11 @@ from services.notification_settings import (
     update_worker_telegram_preferences,
     worker_telegram_destinations,
 )
-from services.telegram_action_store import (
-    create_telegram_payment_action,
-    telegram_payment_action_record,
-)
-from services.telegram_link_store import (
+from services.telegram_tokens import (
     create_telegram_link,
+    create_telegram_payment_action,
     telegram_link_record,
+    telegram_payment_action_record,
 )
 from services.telegram_notifications import (
     answer_telegram_callback,
@@ -3864,7 +3862,7 @@ def _parse_asset_import_rows(rows):
     return {'rows': parsed_rows, 'rejected': rejected}
 
 
-def _parse_asset_import_workbook(file_bytes, extension='.xlsx'):
+def _parse_asset_import_workbook(file_bytes):
     if load_workbook is None:
         raise RuntimeError('Excel import support is not installed')
     try:
@@ -3889,11 +3887,6 @@ def _decode_asset_import_csv(file_bytes):
         except UnicodeDecodeError:
             continue
     raise ValueError('The CSV file must use UTF-8, UTF-16, or Windows-1252 text encoding')
-
-
-def _parse_asset_import_csv(file_bytes):
-    text = _decode_asset_import_csv(file_bytes)
-    return _parse_asset_import_rows(csv.reader(io.StringIO(text, newline='')))
 
 
 def _parse_asset_import_legacy_excel(file_bytes):
@@ -3921,9 +3914,10 @@ def _parse_asset_import_legacy_excel(file_bytes):
 def _parse_asset_import_file(file_bytes, filename):
     extension = os.path.splitext(str(filename or ''))[1].lower()
     if extension == '.csv':
-        return _parse_asset_import_csv(file_bytes)
+        text = _decode_asset_import_csv(file_bytes)
+        return _parse_asset_import_rows(csv.reader(io.StringIO(text, newline='')))
     if extension in ('.xlsx', '.xlsm'):
-        return _parse_asset_import_workbook(file_bytes, extension)
+        return _parse_asset_import_workbook(file_bytes)
     if extension == '.xls':
         return _parse_asset_import_legacy_excel(file_bytes)
     raise ValueError('Upload a CSV or Excel file (.csv, .xlsx, .xlsm, or .xls)')
@@ -4693,16 +4687,6 @@ def _asset_condition_status(asset):
     return 'ok'
 
 
-def _bulk_maintenance_log_key(record, index):
-    log_id = str((record or {}).get('id') or '').strip()
-    return log_id or f'index:{index}'
-
-
-def _bulk_maintenance_source_kind(record):
-    source = (record or {}).get('source') or {}
-    return str(source.get('kind') or '').strip()
-
-
 def _bulk_maintenance_fault_entries(asset):
     """Return paired bulk maintenance fault/resolution entries for one bulk row."""
     faults = []
@@ -4711,14 +4695,14 @@ def _bulk_maintenance_fault_entries(asset):
     for index, log_entry in enumerate(getattr(asset, 'maintenance_logs', []) or []):
         record = normalize_maintenance_log(log_entry)
         source = record.get('source') or {}
-        kind = _bulk_maintenance_source_kind(record)
+        kind = str(source.get('kind') or '').strip()
 
         if kind == BULK_MAINTENANCE_FAULT_SOURCE:
             status = str(source.get('bulkStatus') or '').strip().lower()
             if status not in BULK_MAINTENANCE_STATUSES:
                 continue
 
-            key = _bulk_maintenance_log_key(record, index)
+            key = str(record.get('id') or '').strip() or f'index:{index}'
             log_number = max(1, _safe_int(source.get('bulkLogNumber'), len(faults) + 1))
             quantity = max(1, _safe_int(source.get('bulkQuantity'), 1))
             entry = {
@@ -4986,11 +4970,6 @@ def _apply_exclusive_asset_status(asset, target_status):
         asset.is_degraded = True
     elif target_status in ('disposed', 'decommissioned'):
         asset.is_disposed = True
-
-
-def _normalise_asset_status_flags(asset):
-    """Repair any legacy/conflicting flags to one status only."""
-    _apply_exclusive_asset_status(asset, _asset_condition_status(asset))
 
 
 def _status_changes_for_request(data, current_status=None):
@@ -5297,6 +5276,32 @@ def _parse_bulk_marker(value):
 PREPARED_MODEL_PREFIX = '[PREPARED]'
 
 
+def _parse_model_marker(value, prefix='[MODEL]'):
+    """Decode a group reference; callers choose how to interpret its quantity."""
+    if not isinstance(value, str) or not value.startswith(prefix):
+        return None
+    parts = value[len(prefix):].split('|')
+    if len(parts) < 4:
+        return None
+    return {
+        'department': parts[0].strip().upper(),
+        'brand': parts[1].strip(),
+        'model': parts[2].strip(),
+        'quantity': parts[3].strip(),
+        'description': '|'.join(parts[4:]).strip(),
+    }
+
+
+def _make_model_marker(group, quantity):
+    return (
+        f"[MODEL]{group['department']}|"
+        f"{group['brand']}|"
+        f"{group['model']}|"
+        f"{quantity}|"
+        f"{group['description']}"
+    )
+
+
 def _prepared_model_marker(group, quantity):
     return (
         f"{PREPARED_MODEL_PREFIX}{group['department']}|"
@@ -5308,20 +5313,10 @@ def _prepared_model_marker(group, quantity):
 
 
 def _parse_prepared_model_marker(value):
-    if not isinstance(value, str) or not value.startswith(PREPARED_MODEL_PREFIX):
-        return None
-
-    parts = value[len(PREPARED_MODEL_PREFIX):].split('|')
-    if len(parts) < 4:
-        return None
-
-    return {
-        'department': parts[0].strip().upper(),
-        'brand': parts[1].strip(),
-        'model': parts[2].strip(),
-        'quantity': max(1, _safe_int(parts[3], 1)),
-        'description': '|'.join(parts[4:]).strip() if len(parts) > 4 else '',
-    }
+    marker = _parse_model_marker(value, PREPARED_MODEL_PREFIX)
+    if marker is not None:
+        marker['quantity'] = max(1, _safe_int(marker['quantity'], 1))
+    return marker
 
 
 CUSTOM_ASSET_PREFIX = '[CUSTOM]'
@@ -7426,7 +7421,12 @@ def _event_group_is_bulk_quantity(group):
     return bool(bulk_assets) and not specific_assets
 
 
-def _specific_prepare_capacity_for_event(event, group):
+def _event_prepare_capacity_for_group(event, group):
+    if _event_group_is_bulk_quantity(group):
+        return sum(
+            _bulk_available_quantity_for_event(asset, event)
+            for asset in _matching_bulk_assets_for_group(group)
+        )
     total = 0
     for asset in _matching_specific_assets_for_group(group):
         if _is_disposed(asset) or getattr(asset, 'is_ooc', False) or getattr(asset, 'is_missing', False):
@@ -7435,19 +7435,6 @@ def _specific_prepare_capacity_for_event(event, group):
             continue
         total += 1
     return total
-
-
-def _bulk_prepare_capacity_for_event(event, group):
-    return sum(
-        _bulk_available_quantity_for_event(asset, event)
-        for asset in _matching_bulk_assets_for_group(group)
-    )
-
-
-def _event_prepare_capacity_for_group(event, group):
-    if _event_group_is_bulk_quantity(group):
-        return _bulk_prepare_capacity_for_event(event, group)
-    return _specific_prepare_capacity_for_event(event, group)
 
 
 def _active_bulk_quantity_for_asset(event, bulk_id, subproject_id=None):
@@ -17608,11 +17595,6 @@ def download_event_workforce_files(event_id, kind):
     )
 
 
-def _parse_maintenance_log_date(log_entry):
-    """Parse the date at the start of a maintenance log entry."""
-    return parse_maintenance_log_date(log_entry)
-
-
 def _maintenance_log_permission(asset, log_index, allow_admin=True):
     """Return (allowed, message) for editing/deleting a maintenance log.
 
@@ -17641,7 +17623,7 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
     if original_user != username:
         return False, 'You can only modify maintenance logs that you wrote'
 
-    log_date = _parse_maintenance_log_date(original_log)
+    log_date = parse_maintenance_log_date(original_log)
     if not log_date:
         return False, 'This maintenance log has an invalid date and cannot be modified by a normal user'
 
@@ -18111,10 +18093,6 @@ def _asset_matches_group(asset, group):
     )
 
 
-def _event_asset_matches_group(asset, group):
-    return _asset_matches_group(asset, group)
-
-
 def _is_real_asset_ref(value):
     if not isinstance(value, str):
         return False
@@ -18211,34 +18189,6 @@ def _replace_asset_ids_in_event(event, asset_id_mapping):
                 asset_id_mapping,
             )
     return changed
-
-
-def _parse_model_marker(value):
-    if not isinstance(value, str) or not value.startswith('[MODEL]'):
-        return None
-
-    parts = value[7:].split('|')
-
-    if len(parts) < 4:
-        return None
-
-    return {
-        'department': parts[0].strip().upper(),
-        'brand': parts[1].strip(),
-        'model': parts[2].strip(),
-        'quantity': parts[3].strip(),
-        'description': '|'.join(parts[4:]).strip() if len(parts) > 4 else ''
-    }
-
-
-def _make_model_marker(group, quantity):
-    return (
-        f"[MODEL]{group['department']}|"
-        f"{group['brand']}|"
-        f"{group['model']}|"
-        f"{quantity}|"
-        f"{group['description']}"
-    )
 
 
 def _display_model_description(group):
@@ -19170,7 +19120,7 @@ def _event_has_specific_group_asset_reference(event, group):
             else:
                 asset = data_manager.inventory.get(value) if data_manager else None
 
-            if asset and _event_asset_matches_group(asset, group):
+            if asset and _asset_matches_group(asset, group):
                 return True
 
     return False
@@ -19288,7 +19238,7 @@ def _event_real_asset_count_for_group(event, group):
             if asset_id in seen:
                 continue
             asset = data_manager.inventory.get(asset_id) if data_manager else None
-            if asset and _event_asset_matches_group(asset, group):
+            if asset and _asset_matches_group(asset, group):
                 seen.add(asset_id)
 
     return len(seen)
@@ -23670,8 +23620,10 @@ def _event_workflow_progress_payload(
         payable_rows.extend(invoices)
         payable_rows.extend(claims)
 
-    event_end = _parse_any_date(getattr(event, 'end_date', ''))
-    event_is_over = bool(event_end and event_end < datetime.now().date())
+    needs_payment = [
+        row for row in payable_rows
+        if str(row.get('status') or '') == 'Approved'
+    ]
     needs_review = [
         row for row in payable_rows
         if str(row.get('status') or 'Pending Review') == 'Pending Review'
@@ -23679,27 +23631,29 @@ def _event_workflow_progress_payload(
     all_paid = bool(payable_rows) and all(
         str(row.get('status') or '') == 'Paid' for row in payable_rows
     )
-    all_confirmed = all_paid and all(
-        bool(row.get('paymentConfirmedAt')) for row in payable_rows
-    )
-    if event_is_over and awaiting_invoice_count:
+    if needs_payment:
         finance_status = 'red'
         finance_label = (
-            f'Finance: {awaiting_invoice_count} invoice'
-            f'{"s" if awaiting_invoice_count != 1 else ""} awaiting upload'
+            f'Finance: {len(needs_payment)} '
+            f'{"invoice or claim" if len(needs_payment) == 1 else "invoices or claims"} '
+            f'{"needs" if len(needs_payment) == 1 else "need"} payment'
         )
     elif needs_review:
         finance_status = 'orange'
         finance_label = (
-            f'Finance: {len(needs_review)} invoice or claim '
+            f'Finance: {len(needs_review)} '
+            f'{"invoice or claim" if len(needs_review) == 1 else "invoices or claims"} '
             f'{"needs" if len(needs_review) == 1 else "need"} review'
         )
-    elif all_confirmed:
-        finance_status = 'green'
-        finance_label = 'Finance: all invoice and claim payments confirmed'
-    elif all_paid:
+    elif awaiting_invoice_count:
         finance_status = 'blue'
-        finance_label = 'Finance: paid and awaiting confirmation'
+        finance_label = (
+            f'Finance: {awaiting_invoice_count} invoice'
+            f'{"s" if awaiting_invoice_count != 1 else ""} awaiting upload'
+        )
+    elif all_paid:
+        finance_status = 'green'
+        finance_label = 'Finance: all invoices and claims paid'
     else:
         finance_status = 'neutral'
         finance_label = 'Finance: open invoices and claims'
@@ -32369,7 +32323,7 @@ def update_asset(asset_id):
         if 'isDisposed' in data or 'isDecommissioned' in data:
             asset.is_disposed = bool(data.get('isDisposed') or data.get('isDecommissioned'))
 
-        _normalise_asset_status_flags(asset)
+        _apply_exclusive_asset_status(asset, _asset_condition_status(asset))
 
         if _is_bulk_asset(asset) and 'purchaseBatches' in data:
             asset.purchase_batches = normalized_purchase_batches

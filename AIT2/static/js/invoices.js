@@ -459,10 +459,6 @@ async function loadInvoices(query = '', options = {}) {
   }
 }
 
-function invoiceNumberSortValue(value) {
-  return String(value || '').trim().toUpperCase();
-}
-
 function invoiceSetView(view) {
   if (!['plans', 'issued'].includes(view) || invoiceState.view === view) return;
   invoiceState.view = view;

@@ -14,7 +14,7 @@ function acCan(permission) { return (acData().permissions || []).includes(permis
 function acToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function acDateIso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function acNum(n) { return n == null ? '—' : (Math.abs(Number(n)) < 0.005 ? 0 : Number(n)).toLocaleString('en-SG', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
-function acKey(s) { return encodeURIComponent(String(s)).replace(/'/g, '%27'); }
+
 function acUrl(path) { const p = accountingState.data?.period || {}; return path + (path.includes('?') ? '&' : '?') + new URLSearchParams({ from: p.from || '', to: p.to || '' }); }
 function acButton(label, action, permission = '', primary = false) { return permission && !acCan(permission) ? '' : `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} compact" onclick="${accountingAttr(action)}">${accountingEscape(label)}</button>`; }
 function acStatus(status) { return `<span class="accounting-status ${['posted','approved','complete','clear','reviewed','filed externally'].includes(status) ? 'posted' : ['void','not-required'].includes(status) ? 'inactive' : 'draft'}">${accountingEscape(status)}</span>`; }

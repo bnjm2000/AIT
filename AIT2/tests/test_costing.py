@@ -686,7 +686,7 @@ class CostingFeatureTests(unittest.TestCase):
         app_source = APP_BUNDLE_SOURCE
         vendor_management_source = app_source[
             app_source.index('function renderPlanVendorManagementCard()'):
-            app_source.index('function renderPlanTemplatesCard()')
+            app_source.index('function renderPlanCustomItemCard()')
         ]
         self.assertIn('>Self Pickup</button>', vendor_management_source)
         self.assertIn('>Delivered</button>', vendor_management_source)

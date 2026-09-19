@@ -592,31 +592,6 @@ function updateTransferSummaryAfterMove(direction, responseData = null) {
   }
 }
 
-async function transferDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'transfer')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    const response = await apiCall('/api/transfers/execute', 'POST', {
-      fromEventId: Number(fromEventId),
-      toEventId: Number(toEventId),
-      toSubprojectId: transferSelectedTargetSubproject()?.id || '',
-      assetIds: [assetId]
-    });
-    setTransferCachedItemState(assetId, 'transferred');
-    adjustTransferCandidateRequirement(assetId, -1, 1);
-    updateTransferSummaryAfterMove(1, response.data);
-    showNotification('success', `${assetId} transferred`);
-  } catch (error) {
-    showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
 async function undoTransferDropdownAsset(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId);
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
@@ -631,24 +606,6 @@ async function undoTransferDropdownAsset(encodedAssetId) {
     showNotification('success', `${assetId} transfer undone`);
   } catch (error) {
     showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
-  } finally {
-    endTransferPendingAction(assetId);
-    renderTransferCandidatesInPlace();
-  }
-}
-
-async function returnOfficeDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId || !beginTransferPendingAction(assetId, 'returnOffice')) return;
-  renderTransferCandidatesInPlace();
-  try {
-    await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    setTransferCachedItemState(assetId, 'returnedOffice');
-    updateTransferSummaryAfterMove(1);
-    showNotification('success', `${assetId} marked to return to office`);
-  } catch (error) {
-    showNotification('error', `Failed to return ${assetId}: ${error.message}`);
   } finally {
     endTransferPendingAction(assetId);
     renderTransferCandidatesInPlace();

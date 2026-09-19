@@ -2912,45 +2912,6 @@ function financeDaysLeft(validUntil) {
   return Math.ceil((until - today) / 86400000);
 }
 
-function financePaymentTermDays(value, fallback = 30) {
-  const text = String(value || '').trim().toLowerCase();
-  if (/(due on receipt|on receipt|immediate|\bcod\b)/.test(text)) return 0;
-  const match = text.match(/\b(\d{1,4})\b/);
-  if (!match) return Math.max(0, financeNumber(fallback, 30));
-  const amount = Math.max(0, Math.min(3650, financeNumber(match[1], fallback)));
-  if (text.includes('week')) return Math.min(3650, amount * 7);
-  if (text.includes('month')) return Math.min(3650, amount * 30);
-  return amount;
-}
-
-function financePaymentTermSummary(value, days) {
-  const text = String(value || '').trim().toLowerCase();
-  if (/(due on receipt|on receipt|immediate|\bcod\b)/.test(text)) return 'Due on receipt';
-  const match = text.match(/\b(\d{1,4})\b/);
-  if (!match) return `${days} day${days === 1 ? '' : 's'}`;
-  const amount = Math.max(0, financeNumber(match[1], 0));
-  const unit = text.includes('month') ? 'month' : text.includes('week') ? 'week' : 'day';
-  const term = `${amount} ${unit}${amount === 1 ? '' : 's'}`;
-  return unit === 'day' ? term : `${term} (${days} days)`;
-}
-
-function financePaymentDueDisplay(sentDate, days) {
-  const match = String(sentDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return '';
-  const due = new Date(Date.UTC(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]) + days
-  ));
-  if (Number.isNaN(due.getTime())) return '';
-  return new Intl.DateTimeFormat('en-SG', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC'
-  }).format(due);
-}
-
 function financePaymentCountdownText(document) {
   const status = String(document?.status || '').toLowerCase();
   if (!['invoiced', 'overdue'].includes(status)) return '';
@@ -6992,16 +6953,8 @@ function financeSubprojectSlotDragLeave(event) {
   financeSubprojectWorkspace.slotDragLeave(event);
 }
 
-function financeReorderSubprojectAtIndex(sourceId, targetIndex) {
-  return financeSubprojectWorkspace.reorderAtIndex(sourceId, targetIndex);
-}
-
 function financeSubprojectDropAtIndex(event, targetIndex) {
   financeSubprojectWorkspace.dropAtIndex(event, targetIndex);
-}
-
-function financeReorderSubproject(sourceId, targetId, position = 'before') {
-  return financeSubprojectWorkspace.reorder(sourceId, targetId, position);
 }
 
 function financeSubprojectDrop(event, targetId) {
@@ -9754,13 +9707,6 @@ function profitLossExpenseChartSegments(expense, chartSegments = []) {
     }
   }
   return matches;
-}
-
-function profitLossExpenseChartColours(expense, chartSegments = []) {
-  const matches = profitLossExpenseChartSegments(expense, chartSegments);
-  return [...new Set(matches.map(row => String(row?.colour || '')).filter(
-    colour => /^#[0-9a-f]{6}$/i.test(colour)
-  ))];
 }
 
 function profitLossExpenseChartBands(expense, chartSegments = []) {

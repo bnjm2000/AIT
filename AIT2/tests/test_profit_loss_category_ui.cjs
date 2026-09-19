@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../static/js/finance.js'), 'utf8');
 const start = source.indexOf('function profitLossExpenseChartSegments(');
-const end = source.indexOf('\nfunction profitLossExpenseChartColours(', start);
+const end = source.indexOf('\nfunction profitLossExpenseChartBands(', start);
 assert(start >= 0 && end > start);
 const context = vm.createContext({});
 context.financeNumber = value => Number(value) || 0;

@@ -935,7 +935,7 @@ class PlanningTemplateTests(unittest.TestCase):
             actions.index('event-detail-icon-logs'),
         )
         self.assertIn('.event-detail-icon-view {', template)
-        self.assertIn('async function openEventActivityLog(eventId)', script)
+        self.assertIn('onclick="openEventLogs(${id})"', actions)
         for category in ('details', 'prepare', 'return', 'manpower'):
             self.assertIn(f'.event-activity-{category}', template)
 

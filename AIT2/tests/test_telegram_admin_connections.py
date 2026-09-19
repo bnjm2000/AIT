@@ -11,7 +11,7 @@ from services.notification_settings import (
     connect_admin_telegram,
     public_worker_telegram_profile,
 )
-from services.telegram_link_store import clear_telegram_links
+from services.telegram_tokens import clear_telegram_links
 from workforce import mutate_workforce
 
 

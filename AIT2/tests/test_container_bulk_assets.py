@@ -184,7 +184,7 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertIn('for (const item of containerBulkItems(container))', container_handler)
         inventory_status_counter = script[
             script.index('function inventoryExportStatusCounts'):
-            script.index('function inventoryAssetFlagsText')
+            script.index('function inventoryAssetFlagsPdfHtml')
         ]
         self.assertNotIn('containerBulkItems(container)', inventory_status_counter)
         self.assertIn(

@@ -340,10 +340,6 @@ function setAllEventsOverviewView(view, shouldRender = true) {
   }
 }
 
-function switchAllEventsTab(tabName) {
-  setAllEventsOverviewView(tabName === 'list' ? 'card' : tabName);
-}
-
 function toggleEventTypeFilterMenu(event) {
   event?.stopPropagation();
   const menu = document.getElementById('eventTypeFilterMenu');
@@ -691,20 +687,6 @@ function getEventPrimaryAction(event) {
   if (event.state === 'Returning') return { label: 'Continue Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
   if (event.state === 'Overdue') return { label: 'Start Return', onclick: `openReturnWorkspaceForEvent(${event.id})` };
   return { label: 'View', onclick: `viewEvent(${event.id})` };
-}
-
-function eventNextActionText(event) {
-  switch (event.state) {
-    case 'New': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
-    case 'Planning': return 'Prepare the planned requirements.';
-    case 'Preparing': return 'Continue packing remaining items.';
-    case 'Ready': return 'Generate delivery order and dispatch.';
-    case 'Ongoing': return isEventLastDay(event) ? 'Prioritise return today.' : 'Monitor event and provide on-site support.';
-    case 'Returning': return 'Continue returning outstanding items.';
-    case 'Overdue': return 'Resolve overdue returns immediately.';
-    case 'Closed': return 'Review completed event details.';
-    default: return 'Review event details.';
-  }
 }
 
 function eventAssigneeSummaryHtml(event) {
@@ -1165,7 +1147,7 @@ function showAllEventsProgress(loaded, total) {
 
 async function loadAllEvents({ scope = requestedAllEventsScope() } = {}) {
   const loadVersion = ++__allEventsLoadVersion;
-  const requestedScope = scope === 'all' ? 'all' : 'active';
+  let requestedScope = scope === 'all' ? 'all' : 'active';
   __allEventsProgressiveLoading = true;
   let statsPromise = null;
   let fullyLoaded = false;
@@ -1191,6 +1173,21 @@ async function loadAllEvents({ scope = requestedAllEventsScope() } = {}) {
 
       allEventsOverviewStateCounts = response.meta?.stateCounts || null;
       allEventsOverviewStateCountsByTag = response.meta?.stateCountsByTag || null;
+
+      // If nothing is active, switch straight to All before painting an empty
+      // Active view. Reuse this load so there is no competing request or flash.
+      if (
+        requestedScope === 'active'
+        && allEventsStateFilter === 'Active'
+        && Number(response.meta?.total ?? response.data?.length ?? 0) === 0
+      ) {
+        allEventsStateFilter = 'All';
+        document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+          button.classList.toggle('active', button.dataset.eventState === 'All');
+        });
+        requestedScope = 'all';
+        continue;
+      }
 
       const page = response.data || [];
       const byId = new Map(events.map(event => [Number(event.id), event]));
@@ -1234,48 +1231,6 @@ async function loadAllEvents({ scope = requestedAllEventsScope() } = {}) {
       }
     }
   }
-}
-
-function ensureEventPageToolbar(scope) {
-  ensureEventListViewStyles();
-  const containerId = scope === 'prepare' ? 'prepare-events' : 'return-events';
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const toolbarId = `${scope}-events-toolbar`;
-  if (document.getElementById(toolbarId)) return;
-
-  const toolbar = document.createElement('div');
-  toolbar.id = toolbarId;
-  toolbar.className = 'event-view-toolbar';
-  toolbar.innerHTML = `
-    <div class="event-view-toggle">
-      <button class="btn btn-secondary active" id="${scope}CardViewBtn" onclick="setEventPageView('${scope}', 'card')">▦ Card View</button>
-      <button class="btn btn-secondary" id="${scope}ListViewBtn" onclick="setEventPageView('${scope}', 'list')">☰ List View</button>
-    </div>
-    <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;">
-      Sort by
-      <select id="${scope}EventsSortSelect" class="form-input" style="width:auto;min-width:160px;" onchange="${scope === 'prepare' ? 'loadPrepareEvents()' : 'loadReturnEvents()'}">
-        <option value="startDate">Start Date</option>
-        <option value="eventId">Event ID</option>
-      </select>
-    </label>
-  `;
-  container.parentNode.insertBefore(toolbar, container);
-}
-
-function getEventPageView(scope) {
-  return localStorage.getItem(`${scope}EventsView`) || 'card';
-}
-
-function setEventPageView(scope, view) {
-  localStorage.setItem(`${scope}EventsView`, view);
-  if (scope === 'return') loadReturnEvents();
-}
-
-function updateEventPageToolbarState(scope) {
-  const view = getEventPageView(scope);
-  document.getElementById(`${scope}CardViewBtn`)?.classList.toggle('active', view === 'card');
-  document.getElementById(`${scope}ListViewBtn`)?.classList.toggle('active', view === 'list');
 }
 
 async function loadReturnEvents(options = {}) {
