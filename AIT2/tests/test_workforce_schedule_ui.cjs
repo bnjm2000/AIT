@@ -79,6 +79,27 @@ test('legacy Transport claims use the Crew Transport review option and badge', (
   }
 });
 
+test('crew and vendor submissions reuse the worker portal status and progress treatment', () => {
+  const context = setup();
+  const source = fs.readFileSync(path.join(__dirname, '../static/js/workforce-admin.js'), 'utf8');
+  const start = source.indexOf('function wfStatusMenu(');
+  const end = source.indexOf('\nfunction wfClaimTotalMarkup(', start);
+  vm.runInContext(source.slice(start, end), context);
+
+  const queued = vm.runInContext("wfStatusMenu({id:'queued', processingState:'Queued'})", context);
+  assert.match(queued, /class="upload-status"/);
+  assert.match(queued, /class="wf-status-button status-badge status-queued"/);
+  assert.match(queued, /class="upload-progress-track processing"/);
+  assert.match(queued, />Waiting</);
+
+  const processing = vm.runInContext("wfStatusMenu({id:'processing', processingState:'Processing'})", context);
+  assert.match(processing, /status-processing/);
+  assert.match(processing, />Analysing</);
+
+  const approved = vm.runInContext("wfStatusMenu({id:'approved', status:'Approved'})", context);
+  assert.match(approved, /class="wf-status-button status-badge status-approved"/);
+});
+
 test('schedule rates are clickable for the specific assignment date and show full department name', () => {
   const context = setup();
   vm.runInContext(`

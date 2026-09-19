@@ -5627,7 +5627,12 @@ class FinanceFeatureTests(unittest.TestCase):
         with open(os.path.join(static_folder, 'css', 'finance.css'), encoding='utf-8') as css_file:
             css = css_file.read()
 
-        self.assertIn('class="pnl-review-pill" onclick="${action}"', source)
+        self.assertIn(
+            'class="pnl-review-pill status-badge ${financeEscapeAttr(statusClass)}"',
+            source,
+        )
+        self.assertIn('class="pnl-submission-status upload-status"', source)
+        self.assertIn('class="upload-progress-track processing"', source)
         self.assertIn("`profitLossOpenExpenseModal('${financeEscapeAttr(expense.id)}')`", source)
         self.assertIn('class="pnl-expense-edit" onclick="profitLossOpenExpenseModal', source)
         self.assertIn('id="profitLossExpensePreviewPanel"', source)

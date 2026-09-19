@@ -43120,12 +43120,17 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 for department, allocation_amount in allocation_totals.items()
             ]
             departments = list(allocation_totals)
+            status = str(invoice.get('status') or 'Pending Review')
             result.append({
                 'id': f'worker-invoice-{subject_id}-{invoice_id}'[:120],
                 'sourceId': invoice_id,
                 'source': 'worker-invoice',
                 'sourceLabel': 'Vendor invoice' if is_vendor_service else 'Invoice',
                 'readOnly': True,
+                'needsReview': status == 'Pending Review',
+                'processingState': str(invoice.get('processingState') or ''),
+                'processingError': str(invoice.get('processingError') or ''),
+                'submissionStage': str(invoice.get('submissionStage') or ''),
                 'eventId': int(event_id),
                 'description': f'{subject_name} - Invoice'[:300],
                 'category': 'Vendor service' if is_vendor_service else 'Manpower',
@@ -43141,7 +43146,10 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     or invoice.get('submittedAt')
                 ),
                 'attachment': attachment,
-                'status': str(invoice.get('status') or 'Pending Review'),
+                'status': status,
+                'paymentConfirmedAt': str(
+                    invoice.get('paymentConfirmedAt') or ''
+                ),
                 'createdAt': str(invoice.get('submittedAt') or ''),
                 'createdBy': subject_name,
                 'updatedAt': str(
@@ -43218,6 +43226,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'expenseDate': _finance_normalise_iso_date(claim.get('claimDate') or claim.get('date')),
                 'attachment': attachment,
                 'status': status,
+                'paymentConfirmedAt': str(
+                    claim.get('paymentConfirmedAt') or ''
+                ),
                 'createdAt': str(claim.get('submittedAt') or ''),
                 'createdBy': subject_name,
                 'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
@@ -43286,6 +43297,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 ),
                 'attachment': attachment,
                 'status': status,
+                'paymentConfirmedAt': str(
+                    invoice.get('paymentConfirmedAt') or ''
+                ),
                 'createdAt': str(invoice.get('submittedAt') or ''),
                 'createdBy': company,
                 'updatedAt': str(
@@ -43354,6 +43368,9 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     ),
                     'attachment': attachment,
                     'status': status,
+                    'paymentConfirmedAt': str(
+                        claim.get('paymentConfirmedAt') or ''
+                    ),
                     'createdAt': str(claim.get('submittedAt') or ''),
                     'createdBy': company,
                     'updatedAt': str(

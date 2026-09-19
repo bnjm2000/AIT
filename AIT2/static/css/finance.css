@@ -5439,10 +5439,9 @@ button.pnl-kpi:focus-visible {
 
 .pnl-review-pill:hover,
 .pnl-review-pill:focus-visible {
-  background: #ffedd5;
-  color: #9a3412;
   outline: 2px solid rgba(234, 88, 12, .22);
   outline-offset: 1px;
+  filter: brightness(.97);
 }
 
 .pnl-drop-hint {
@@ -5451,78 +5450,18 @@ button.pnl-kpi:focus-visible {
   font-weight: 600;
 }
 
-.pnl-upload-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.pnl-submission-status {
   margin: 5px 0 0 7px;
-  border-radius: 999px;
-  padding: 2px 7px;
-  font-size: 10px;
-  font-weight: 800;
-  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.pnl-upload-state.is-queued,
-.pnl-upload-state.is-queueing {
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.pnl-upload-state.is-uploading {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.pnl-upload-state.is-processing {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-
-.pnl-upload-state.is-processing i {
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: finance-spin .75s linear infinite;
-}
-
-.pnl-upload-state.is-failed {
-  background: #fef2f2;
-  color: #b91c1c;
+.pnl-submission-status.upload-status {
+  display: inline-grid;
+  min-width: 96px;
 }
 
 .pnl-upload-row td {
   background: #f8fafc;
-}
-
-.pnl-file-progress {
-  display: grid;
-  min-width: 110px;
-  gap: 4px;
-}
-
-.pnl-file-progress > span {
-  display: block;
-  height: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-
-.pnl-file-progress i {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #f59e0b, #ea580c);
-  transition: width .12s linear;
-}
-
-.pnl-file-progress small {
-  color: var(--finance-muted);
-  font-size: 9px;
 }
 
 .pnl-calculation h3,

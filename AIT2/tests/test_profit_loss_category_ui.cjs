@@ -20,6 +20,16 @@ const noteEnd = source.indexOf('\nfunction profitLossRenderCensored(', noteStart
 assert(noteStart >= 0 && noteEnd > noteStart);
 context.financeSgd = value => `$${Number(value).toFixed(2)}`;
 vm.runInContext(source.slice(noteStart, noteEnd), context);
+const statusStart = source.indexOf('function profitLossExpenseProcessingMarkup(');
+const statusEnd = source.indexOf('\nfunction profitLossOpenClaimReview(', statusStart);
+assert(statusStart >= 0 && statusEnd > statusStart);
+context.financeEscape = value => String(value ?? '');
+context.financeEscapeAttr = value => String(value ?? '');
+vm.runInContext(source.slice(statusStart, statusEnd), context);
+const uploadStatusStart = source.indexOf('function profitLossUploadStateLabel(');
+const uploadStatusEnd = source.indexOf('\nfunction profitLossPendingExpenseRowsMarkup(', uploadStatusStart);
+assert(uploadStatusStart >= 0 && uploadStatusEnd > uploadStatusStart);
+vm.runInContext(source.slice(uploadStatusStart, uploadStatusEnd), context);
 
 const segments = [
   { key: 'crew-transport', group: 'crew-transport', label: 'Crew Transport' },
@@ -104,4 +114,32 @@ test('Other Expenses note names cost categories, not their submission sources', 
     { label: 'Crew Transport', amount: 0 },
   ]), 'Purchase $30.00 · Meal $13.00');
   assert.equal(context.profitLossOtherExpenseNote([]), 'No other expenses');
+});
+
+test('P&L submission rows reuse worker portal badges and processing bars', () => {
+  const queued = context.profitLossExpenseProcessingMarkup({
+    source: 'worker-invoice', processingState: 'Queued', status: 'Pending Review',
+  });
+  assert.match(queued, /class="pnl-submission-status upload-status"/);
+  assert.match(queued, /class="status-badge status-queued"/);
+  assert.match(queued, /class="upload-progress-track processing"/);
+  assert.match(queued, />Waiting</);
+
+  const approved = context.profitLossExpenseProcessingMarkup({
+    source: 'worker-claim', status: 'Approved',
+  });
+  assert.match(approved, /class="status-badge status-approved"/);
+
+  const confirmed = context.profitLossExpenseProcessingMarkup({
+    source: 'worker-claim', status: 'Paid', paymentConfirmedAt: '2026-09-19T10:00:00+08:00',
+  });
+  assert.match(confirmed, /status-payment-confirmed/);
+  assert.match(confirmed, />Payment Confirmed</);
+
+  const uploading = context.profitLossPendingExpenseStatusMarkup({
+    status: 'uploading', progress: 42,
+  });
+  assert.match(uploading, /status-uploading/);
+  assert.match(uploading, /style="width:42%"/);
+  assert.match(uploading, />42%</);
 });

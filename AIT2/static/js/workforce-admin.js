@@ -674,23 +674,27 @@ function wfDocumentStatusKeyFromRecord(record) {
 function wfDocumentStatusMenu(record) {
   const statusKey = record.statusKey || wfDocumentStatusKeyFromRecord(record);
   if (statusKey === 'awaiting-upload') {
-    return '<span class="wf-status-button status-awaiting-upload">Awaiting upload</span>';
+    return '<span class="wf-status-button status-badge status-awaiting-upload">Awaiting upload</span>';
   }
   const displayStatus = record.paymentConfirmedAt
     ? 'Payment Confirmed'
     : (record.status || 'Pending Review');
   if (['queued', 'processing', 'details-required'].includes(statusKey)) {
     const label = WF_DOCUMENT_STATUS_FILTERS.find(row => row[0] === statusKey)?.[1] || record.statusLabel;
-    return `<span class="wf-status-button ${wfStatusClass(label)}">${wfEscape(label)}</span>`;
+    if (statusKey === 'queued' || statusKey === 'processing') {
+      return `<span class="upload-status"><span class="wf-status-button status-badge ${wfStatusClass(label)}">${wfEscape(label)}</span>
+        <span class="upload-progress-track processing"><span></span></span><small>${statusKey === 'queued' ? 'Waiting' : 'Analysing'}</small></span>`;
+    }
+    return `<span class="wf-status-button status-badge ${wfStatusClass(label)}">${wfEscape(label)}</span>`;
   }
   if (displayStatus === 'Pending Review') {
-    return `<button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+    return `<button class="wf-status-button status-badge ${wfStatusClass(displayStatus)}" type="button"
       onclick="event.stopPropagation();openWorkforceDocumentSubmission('${wfAttr(record.id)}')">
       Pending Review
     </button>`;
   }
   return `<div class="wf-status-control wf-document-status-control">
-    <button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+    <button class="wf-status-button status-badge ${wfStatusClass(displayStatus)}" type="button"
       aria-haspopup="menu" aria-expanded="false"
       onclick="toggleWorkforceDocumentStatusMenu(event,'${wfAttr(record.id)}')">
       ${wfEscape(displayStatus)} <span aria-hidden="true">&#9662;</span>
@@ -1204,27 +1208,29 @@ function queueWorkforceDocumentsRealtimeRefresh() {
 
 function wfStatusMenu(record) {
   if (record.status === 'Uploading') {
-    return `<span class="wf-admin-upload-status"><span class="wf-status-button status-uploading">Uploading</span>
-      <span class="wf-admin-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:${Number(record.uploadProgress || 0)}%"></span></span>
+    return `<span class="upload-status"><span class="wf-status-button status-badge status-uploading">Uploading</span>
+      <span class="upload-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:${Number(record.uploadProgress || 0)}%"></span></span>
       <small data-wf-upload-label="${wfAttr(record.id)}">${Math.round(Number(record.uploadProgress || 0))}%</small></span>`;
   }
   if (record.status === 'Queueing') {
-    return `<span class="wf-admin-upload-status"><span class="wf-status-button status-queueing">Queueing</span>
-      <span class="wf-admin-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:100%"></span></span>
+    return `<span class="upload-status"><span class="wf-status-button status-badge status-queueing">Queueing</span>
+      <span class="upload-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:100%"></span></span>
       <small data-wf-upload-label="${wfAttr(record.id)}">Queueing</small></span>`;
   }
   if (record.status === 'Failed') {
-    return `<span class="wf-admin-upload-status"><span class="wf-status-button status-failed" title="${wfAttr(record.processingError || 'Upload failed')}">Failed</span>
+    return `<span class="upload-status"><span class="wf-status-button status-badge status-failed" title="${wfAttr(record.processingError || 'Upload failed')}">Failed</span>
       <small>${wfEscape(record.processingError || 'Upload failed')}</small></span>`;
   }
   if (record.processingState === 'Queued' || record.submissionStage === 'Queued') {
-    return `<span class="wf-status-button ${wfStatusClass('Queued')}">Queued</span>`;
+    return `<span class="upload-status"><span class="wf-status-button status-badge ${wfStatusClass('Queued')}">Queued</span>
+      <span class="upload-progress-track processing"><span></span></span><small>Waiting</small></span>`;
   }
   if (record.processingState === 'Processing') {
-    return `<span class="wf-status-button ${wfStatusClass('Processing')}">Processing</span>`;
+    return `<span class="upload-status"><span class="wf-status-button status-badge ${wfStatusClass('Processing')}">Processing</span>
+      <span class="upload-progress-track processing"><span></span></span><small>Analysing</small></span>`;
   }
   if (record.submissionStage === 'Details Required') {
-    return `<button class="wf-status-button ${wfStatusClass('Details Required')}" type="button"
+    return `<button class="wf-status-button status-badge ${wfStatusClass('Details Required')}" type="button"
       onclick="event.stopPropagation();openWorkforceReview('${wfAttr(record.id)}')">
       Details required
     </button>`;
@@ -1233,13 +1239,13 @@ function wfStatusMenu(record) {
     ? 'Payment Confirmed'
     : (record.status || 'Pending Review');
   if (displayStatus === 'Pending Review') {
-    return `<button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+    return `<button class="wf-status-button status-badge ${wfStatusClass(displayStatus)}" type="button"
       onclick="event.stopPropagation();openWorkforceReview('${wfAttr(record.id)}')">
       Pending Review
     </button>`;
   }
   return `<div class="wf-status-control">
-    <button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+    <button class="wf-status-button status-badge ${wfStatusClass(displayStatus)}" type="button"
       onclick="toggleWorkforceStatusMenu(event,'${wfAttr(record.id)}')">
       ${wfEscape(displayStatus)} <span>&#9662;</span>
     </button>
@@ -1279,7 +1285,7 @@ function wfSubmissionStatusBadges(records) {
   return ['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed']
     .filter(status => Number(stateCounts[status] || 0) > 0)
     .map(status =>
-      `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
+      `<span class="status-badge ${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
     ).join('');
 }
 
@@ -1298,7 +1304,7 @@ function wfClaimGroupStatusControl(claims, eventId, subjectId, controlKey = '') 
     ? (commonStatus ? `All: ${commonStatus}` : 'Update all')
     : 'Review individually';
   return `<div class="wf-status-control wf-claim-group-status">
-    <button class="wf-status-button ${commonStatus ? wfStatusClass(commonStatus) : 'status-mixed'}" type="button"
+    <button class="wf-status-button status-badge ${commonStatus ? wfStatusClass(commonStatus) : 'status-mixed'}" type="button"
       ${reviewed ? `onclick="toggleWorkforceStatusMenu(event,'${wfAttr(menuId)}')"` : 'disabled'}
       title="${reviewed ? 'Update every claim in this group' : 'Review every claim individually before updating them together'}">
       ${wfEscape(buttonLabel)}${reviewed ? ' <span>&#9662;</span>' : ''}
@@ -2897,14 +2903,18 @@ function wfHistorySubmissionSummary(rows) {
 
 function wfHistoryStatusControl(event, freelancerId, record, returnFreelancerId = freelancerId) {
   const status = wfHistoryDisplayStatus(record);
+  if (['Queued', 'Processing'].includes(status)) {
+    return `<span class="upload-status"><span class="wf-status-button status-badge ${wfStatusClass(status)}">${wfEscape(status)}</span>
+      <span class="upload-progress-track processing"><span></span></span><small>${status === 'Queued' ? 'Waiting' : 'Analysing'}</small></span>`;
+  }
   if (['Processing', 'Details Required'].includes(status) || !record.verifiedAt) {
-    return `<button type="button" class="wf-status-button ${wfStatusClass(status)}"
+    return `<button type="button" class="wf-status-button status-badge ${wfStatusClass(status)}"
       onclick="openFreelancerHistorySubmission(${Number(event.id)},'${wfAttr(freelancerId)}','${wfAttr(record.id)}','${wfAttr(returnFreelancerId)}')">
       ${wfEscape(status)}
     </button>`;
   }
   return `<div class="wf-status-control">
-    <button type="button" class="wf-status-button ${wfStatusClass(status)}"
+    <button type="button" class="wf-status-button status-badge ${wfStatusClass(status)}"
       onclick="toggleWorkforceStatusMenu(event,'history-${wfAttr(record.id)}')">
       ${wfEscape(status)} <span>&#9662;</span>
     </button>
@@ -2961,9 +2971,9 @@ function wfHistoryEventCard(event, freelancerId, subjectType = 'worker', returnF
         ${subjectType === 'vendor' && sourceName ? `<span class="wf-history-vendor-source">Vendor submission · ${wfEscape(sourceName)}</span>` : ''}</div>
       <div class="wf-history-event-date"><strong>${wfEscape(dates)}</strong><span class="wf-worker-role-list">${wfHistoryRoleRows(event, freelancerId, subjectType, returnFreelancerId)}</span></div>
       <div><span>Invoice</span><strong>${event.invoices.length}/${event.invoiceLimit}</strong>
-        <em class="wf-status-button ${wfStatusClass(invoiceStatus)}">${wfEscape(invoiceStatus)}</em></div>
+        <em class="wf-status-button status-badge ${wfStatusClass(invoiceStatus)}">${wfEscape(invoiceStatus)}</em></div>
       <div><span>Claims</span><strong>${event.claims.length}/${event.claimLimit}</strong>
-        <em class="wf-status-button ${wfStatusClass(claimStatus)}">${wfEscape(claimStatus)}</em></div>
+        <em class="wf-status-button status-badge ${wfStatusClass(claimStatus)}">${wfEscape(claimStatus)}</em></div>
       <div class="wf-history-event-total"><span>Total</span><strong>${wfMoney(Number(event.invoiceTotal || 0) + Number(event.claimTotal || 0))}</strong></div>
       <b class="wf-history-chevron">⌄</b>
     </summary>

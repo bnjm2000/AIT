@@ -9835,16 +9835,32 @@ function profitLossCompareExpenses(left, right) {
 function profitLossExpenseProcessingMarkup(expense) {
   const state = String(expense?.processingState || '').trim().toLowerCase();
   if (state === 'queued') {
-    return '<span class="pnl-upload-state is-queued">Queued</span>';
+    return `<span class="pnl-submission-status upload-status"><em class="status-badge status-queued">Queued</em>
+      <span class="upload-progress-track processing"><span></span></span><small>Waiting</small></span>`;
   }
   if (state === 'processing') {
-    return '<span class="pnl-upload-state is-processing"><i></i>Processing</span>';
+    return `<span class="pnl-submission-status upload-status"><em class="status-badge status-processing">Processing</em>
+      <span class="upload-progress-track processing"><span></span></span><small>Analysing</small></span>`;
   }
-  if (!expense?.needsReview) return '';
+  const source = String(expense?.source || 'manual');
+  const isSubmission = ['worker-claim', 'worker-invoice', 'transport-invoice', 'transport-claim'].includes(source);
+  const status = expense?.paymentConfirmedAt
+    ? 'Payment Confirmed'
+    : String(expense?.status || '').trim();
+  const stage = String(expense?.submissionStage || '').trim();
+  const displayStatus = stage === 'Details Required'
+    ? 'Details Required'
+    : (status || (expense?.needsReview ? 'Needs Review' : ''));
+  if (!displayStatus || (!isSubmission && !expense?.needsReview)) return '';
   const action = ['worker-claim', 'worker-invoice', 'transport-invoice', 'transport-claim'].includes(expense.source)
     ? `profitLossOpenClaimReview('${financeEscapeAttr(expense.sourceId)}')`
     : `profitLossOpenExpenseModal('${financeEscapeAttr(expense.id)}')`;
-  return `<button type="button" class="pnl-review-pill" onclick="${action}">Needs review</button>`;
+  const classStatus = displayStatus === 'Needs Review' ? 'Pending Review' : displayStatus;
+  const statusClass = `status-${classStatus.toLowerCase().replace(/\s+/g, '-')}`;
+  if (expense?.needsReview) {
+    return `<button type="button" class="pnl-review-pill status-badge ${financeEscapeAttr(statusClass)}" onclick="${action}">${financeEscape(displayStatus)}</button>`;
+  }
+  return `<span class="pnl-submission-status"><em class="status-badge ${financeEscapeAttr(statusClass)}">${financeEscape(displayStatus)}</em></span>`;
 }
 
 function profitLossOpenClaimReview(submissionId) {
@@ -9865,19 +9881,45 @@ function profitLossPendingExpenseUploads(eventId = profitLossState.eventId) {
 function profitLossUploadStateLabel(row) {
   return {
     queued: 'Queued',
-    uploading: `${Math.round(Number(row.progress || 0))}%`,
+    uploading: 'Uploading',
     queueing: 'Queueing',
     failed: 'Failed'
   }[row.status] || 'Queued';
 }
 
+function profitLossUploadDetailLabel(row) {
+  return {
+    queued: 'Waiting',
+    uploading: `${Math.round(Number(row.progress || 0))}%`,
+    queueing: 'Queueing',
+    failed: row.error || 'Upload failed'
+  }[row.status] || 'Waiting';
+}
+
+function profitLossPendingExpenseStatusMarkup(row) {
+  const status = String(row.status || 'queued');
+  const progress = status === 'queueing'
+    ? 100
+    : Math.max(0, Math.min(100, Number(row.progress || 0)));
+  const processing = status === 'queued';
+  const failed = status === 'failed';
+  return `<span class="pnl-submission-status upload-status">
+    <em class="status-badge status-${financeEscapeAttr(status)}" data-pnl-upload-state
+      ${row.error ? `title="${financeEscapeAttr(row.error)}"` : ''}>${financeEscape(profitLossUploadStateLabel(row))}</em>
+    <span class="upload-progress-track ${processing ? 'processing' : ''}" data-pnl-upload-track ${failed ? 'hidden' : ''}>
+      <span data-pnl-upload-progress${processing ? '' : ` style="width:${progress}%"`}></span>
+    </span>
+    <small data-pnl-upload-label>${financeEscape(profitLossUploadDetailLabel(row))}</small>
+  </span>`;
+}
+
 function profitLossPendingExpenseRowsMarkup() {
   return profitLossPendingExpenseUploads().map(row => `
     <tr class="pnl-upload-row" data-pnl-upload-id="${financeEscapeAttr(row.id)}">
-      <td><strong>${financeEscape(row.name)}</strong><span class="pnl-upload-state is-${financeEscapeAttr(row.status)}" data-pnl-upload-state>${financeEscape(profitLossUploadStateLabel(row))}</span></td>
+      <td><strong>${financeEscape(row.name)}</strong></td>
       <td><span class="pnl-source-pill pnl-source-manual">Uploading</span></td>
       <td>Pending extraction</td><td>-</td><td>-</td><td>-</td>
-      <td><span class="pnl-file-progress"><span><i data-pnl-upload-progress style="width:${Math.max(0, Math.min(100, Number(row.progress || 0)))}%"></i></span><small data-pnl-upload-label>${financeEscape(profitLossUploadStateLabel(row))}</small></span></td>
+      <td>${profitLossPendingExpenseStatusMarkup(row)}</td>
       <td>${row.status === 'failed' ? `<button type="button" class="finance-delete-line" onclick="profitLossDismissExpenseUpload('${financeEscapeAttr(row.id)}')" aria-label="Dismiss failed upload">&times;</button>` : ''}</td>
     </tr>
   `).join('');
@@ -9889,13 +9931,22 @@ function profitLossUpdateExpenseUploadRow(uploadId) {
   if (!row || !element) return;
   const progress = Math.max(0, Math.min(100, Number(row.progress || 0)));
   const label = profitLossUploadStateLabel(row);
+  const detail = profitLossUploadDetailLabel(row);
   const bar = element.querySelector('[data-pnl-upload-progress]');
+  const track = element.querySelector('[data-pnl-upload-track]');
   const progressLabel = element.querySelector('[data-pnl-upload-label]');
   const state = element.querySelector('[data-pnl-upload-state]');
-  if (bar) bar.style.width = `${progress}%`;
-  if (progressLabel) progressLabel.textContent = label;
+  if (bar) {
+    if (row.status === 'queued') bar.style.removeProperty('width');
+    else bar.style.width = `${row.status === 'queueing' ? 100 : progress}%`;
+  }
+  if (track) {
+    track.hidden = row.status === 'failed';
+    track.classList.toggle('processing', row.status === 'queued');
+  }
+  if (progressLabel) progressLabel.textContent = detail;
   if (state) {
-    state.className = `pnl-upload-state is-${row.status}`;
+    state.className = `status-badge status-${row.status}`;
     state.textContent = label;
     if (row.error) state.title = row.error;
   }

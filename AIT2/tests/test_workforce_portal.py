@@ -5027,6 +5027,9 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('async function processWorkerUploadQueue()', worker_source)
         self.assertIn("form.append('files', row.file, row.file.name)", worker_source)
         self.assertIn('data-upload-progress', worker_source)
+        self.assertIn('class="upload-status"', admin_source)
+        self.assertIn('class="upload-progress-track processing"', admin_source)
+        self.assertIn('status-badge', admin_source)
         self.assertIn(".xlsx", worker_source)
         self.assertIn(".xls", worker_source)
 

@@ -13,3 +13,73 @@
 :is(.wf-status-button,.wf-status-menu,.wf-status-pill,.wf-status-select,.wf-readonly-status,.wf-document-filter,.wf-dept-status-summary) .status-payment-confirmed,:is(.wf-status-button,.wf-status-pill,.wf-status-select,.wf-readonly-status,.wf-document-filter).status-payment-confirmed{border-color:var(--submission-confirmed-border);background:var(--submission-confirmed-bg);color:var(--submission-confirmed-text)}
 .wf-status-button:is(.status-queueing,.status-queued),.wf-document-filter.status-queued{border-color:var(--submission-queued-border);background:var(--submission-queued-bg);color:var(--submission-queued-text)}
 .wf-status-button:is(.status-uploading,.status-processing),.wf-document-filter.status-processing{border-color:var(--submission-process-border);background:var(--submission-process-bg);color:var(--submission-process-text)}
+
+/* Shared invoice and claim status treatment. The worker portal is the visual
+   source of truth; admin and finance use these same classes. */
+.status-badge {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 0;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.status-badge.status-not-submitted { background: #f1f5f9; color: #64748b; }
+.status-badge:is(.status-submitted, .status-pending-review, .status-details-required) { background: #fffbeb; color: #b45309; }
+.status-badge.status-approved { background: #ecfdf5; color: #047857; }
+.status-badge:is(.status-denied, .status-failed) { background: #fff1f2; color: #be123c; }
+.status-badge.status-paid { background: #eff6ff; color: #1d4ed8; }
+.status-badge.status-payment-confirmed { background: #eef2ff; color: #4338ca; }
+.status-badge:is(.status-queued, .status-queueing, .status-awaiting-confirmation, .status-processing, .status-uploading) {
+  background: #ecfeff;
+  color: #0e7490;
+}
+
+.upload-status {
+  display: grid;
+  min-width: 82px;
+  gap: 3px;
+}
+
+.upload-progress-track {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.upload-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand, var(--wf-brand, #0f766e)), #0ea5e9);
+  transition: width .15s linear;
+}
+
+.upload-progress-track.processing > span {
+  width: 42%;
+  min-width: 32px;
+  animation: submissionProcessingSweep 1.05s ease-in-out infinite alternate;
+}
+
+@keyframes submissionProcessingSweep {
+  from { transform: translateX(0); opacity: .72; }
+  to { transform: translateX(135%); opacity: 1; }
+}
+
+.upload-status small {
+  color: var(--muted, var(--wf-muted, var(--finance-muted, #64748b)));
+  font-size: 8px;
+  line-height: 1.25;
+  text-align: right;
+}
