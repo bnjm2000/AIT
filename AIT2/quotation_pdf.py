@@ -437,6 +437,7 @@ def _schedule_time_label(value):
 def _schedule_date_summary(rows):
     parsed = []
     unparsed = []
+    undated_labels = []
     seen = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -444,9 +445,14 @@ def _schedule_date_summary(rows):
         raw = str(row.get('date') or '').strip()
         time_value = str(row.get('time') or '').strip()
         identity = (raw, time_value.casefold())
-        if not raw or identity in seen:
+        if identity in seen:
             continue
         seen.add(identity)
+        if not raw:
+            time_label = _schedule_time_label(time_value)
+            if time_label == 'TBC' and time_label not in undated_labels:
+                undated_labels.append(time_label)
+            continue
         try:
             parsed.append((datetime.strptime(raw, '%Y-%m-%d').date(), time_value))
         except ValueError:
@@ -497,7 +503,11 @@ def _schedule_date_summary(rows):
         f"{date_label}{f', {_schedule_time_label(time_value)}' if time_value else ''}"
         for date_label, time_value in unparsed
     ]
-    return '; '.join([*(format_group(group) for group in groups), *unparsed_labels])
+    return '; '.join([
+        *undated_labels,
+        *(format_group(group) for group in groups),
+        *unparsed_labels,
+    ])
 
 
 def _schedule_identity(date_value, time_value=''):
@@ -653,10 +663,12 @@ def _schedule_rows_summary(document, rows, kind):
 
 def _schedule_document_summary(document, date_key, time_key, additional_key, kind):
     rows = []
-    if document.get(date_key):
+    primary_date = document.get(date_key)
+    primary_time = document.get(time_key)
+    if primary_date or _schedule_time_label(primary_time) == 'TBC':
         rows.append({
-            'date': document.get(date_key),
-            'time': document.get(time_key),
+            'date': primary_date,
+            'time': primary_time,
             'batchId': '',
         })
     if additional_key:

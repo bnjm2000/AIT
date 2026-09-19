@@ -888,9 +888,14 @@ function financeScheduleTokenLabel(token, document = financeState.current) {
 function financeScheduleTokenHasDate(token, document = financeState.current) {
   if (FINANCE_SCHEDULE_KEYS[token]) {
     return Boolean(document?.[`${token}Date`])
-      || financeAdditionalScheduleRows(token, document).some(row => Boolean(row?.date));
+      || financeScheduleTimeIsTbc(document?.[`${token}Time`])
+      || financeAdditionalScheduleRows(token, document).some(row => (
+        Boolean(row?.date) || financeScheduleTimeIsTbc(row?.time)
+      ));
   }
-  return financeScheduleRowsForKind(token, document).some(row => Boolean(row?.date));
+  return financeScheduleRowsForKind(token, document).some(row => (
+    Boolean(row?.date) || financeScheduleTimeIsTbc(row?.time)
+  ));
 }
 
 function financeScheduleOrderPreview(document = financeState.current) {

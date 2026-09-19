@@ -63,3 +63,17 @@ test('standard schedule times can toggle TBC and return to a clock time', () => 
   assert.match(additionalMarkup, /finance-schedule-tbc selected/);
   assert.match(additionalMarkup, /financeToggleAdditionalScheduleTimeTbc\('setup',0\)/);
 });
+
+test('an undated TBC schedule remains present in the PDF order preview', () => {
+  const context = setup();
+  vm.runInContext(`
+    financeState.current.setupDate = '';
+    financeState.current.setupTime = 'TBC';
+    financeState.current.additionalSetups = [];
+  `, context);
+
+  assert.equal(
+    vm.runInContext("financeScheduleTokenHasDate('setup')", context),
+    true,
+  );
+});

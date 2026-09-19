@@ -5812,10 +5812,12 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(event.end_date, '20260805')
 
     def test_schedule_tbc_time_is_preserved_and_rendered_without_hours_suffix(self):
-        from quotation_pdf import _schedule_date_summary
+        from quotation_pdf import _schedule_date_summary, _schedule_document_summary
 
         quotation = self.create_quote('TBC Schedule')
         quotation.update({
+            'setupDate': '',
+            'setupTime': 'TBC',
             'showDate': '2026-08-03',
             'showTime': 'TBC',
             'additionalShows': [
@@ -5826,6 +5828,7 @@ class FinanceFeatureTests(unittest.TestCase):
             f"/api/quotations/{quotation['id']}", json=quotation,
         ).get_json()['data']
 
+        self.assertEqual(saved['setupTime'], 'TBC')
         self.assertEqual(saved['showTime'], 'TBC')
         self.assertEqual(saved['additionalShows'][0]['time'], 'TBC')
         self.assertEqual(
@@ -5835,11 +5838,22 @@ class FinanceFeatureTests(unittest.TestCase):
             ]),
             '3 - 4 August 2026, TBC',
         )
+        self.assertEqual(
+            _schedule_document_summary(
+                {'setupDate': '', 'setupTime': 'TBC'},
+                'setupDate',
+                'setupTime',
+                'additionalSetups',
+                'setup',
+            ),
+            'TBC',
+        )
 
         pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
         text = '\n'.join(
             page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages
         )
+        self.assertIn('Set-up:', text)
         self.assertIn('TBC', text)
         self.assertNotIn('TBChrs', text)
 
