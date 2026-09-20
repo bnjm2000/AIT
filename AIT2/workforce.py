@@ -992,7 +992,7 @@ _INVOICE_TERM_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\bterm\s*(?:is|:|-)?\s*(?P<value>\d{1,3})\s*"
+        r"\bterms?\s*(?:is|:|-)?\s*(?:within\s+)?(?P<value>\d{1,3})\s*"
         r"(?P<unit>days?|weeks?|months?)\b",
         re.IGNORECASE,
     ),
@@ -1128,6 +1128,52 @@ def _invoice_term_from_text(text):
     return {}
 
 
+def _invoice_date_from_lines(lines):
+    labelled = _labelled_invoice_date(lines, _INVOICE_REFERENCE_DATE_LABEL)
+    if labelled["date"]:
+        return labelled
+
+    # Many invoice templates use just "Date" in the header. OCR may merge
+    # that field with the recipient's address in the column to its left.
+    # Restrict this fallback to header fields, never dated service rows.
+    candidates = []
+    for index, line in enumerate(lines):
+        if len(re.findall(
+            r"\b(?:description|qty|quantity|rate|amount|unit\s+price)\b",
+            line, re.IGNORECASE,
+        )) >= 2:
+            break
+        for label in re.finditer(r"\bdate\b", line, re.IGNORECASE):
+            if re.search(
+                r"\b(?:due|event|service|job|delivery|payment|transaction|"
+                r"order|booking|receipt|work|start|end|supply)\s*$",
+                line[:label.start()], re.IGNORECASE,
+            ):
+                continue
+            following = line[label.end():].lstrip(" :-")
+            matches = _line_date_matches(following)
+            matched_text = line
+            if not following and index + 1 < len(lines):
+                next_line = lines[index + 1]
+                # A separate value must be only a date, not a table row or
+                # another field that happens to contain a date.
+                matches = [
+                    (0, value) for pattern in _DATE_PATTERNS
+                    if (match := pattern.fullmatch(next_line))
+                    and (value := _date_match_value(match)) is not None
+                ]
+                matched_text = f"{line} {next_line}"
+            if matches and matches[0][0] == 0:
+                candidates.append({
+                    "date": matches[0][1].strftime("%Y-%m-%d"),
+                    "matchedText": matched_text[:240],
+                })
+    # Conflicting generic dates do not establish an invoice date.
+    if len({candidate["date"] for candidate in candidates}) == 1:
+        return candidates[0]
+    return labelled
+
+
 def _invoice_reference_date(value):
     raw = str(value or "").strip()
     if not raw:
@@ -1169,7 +1215,7 @@ def _invoice_due_date_from_text(text: str, submitted_at="") -> dict:
     """
     lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines() if line.strip()]
     explicit = _labelled_invoice_date(lines, _INVOICE_DUE_DATE_LABEL)
-    invoice_date = _labelled_invoice_date(lines, _INVOICE_REFERENCE_DATE_LABEL)
+    invoice_date = _invoice_date_from_lines(lines)
     if explicit["date"]:
         return {
             "dueDate": explicit["date"],

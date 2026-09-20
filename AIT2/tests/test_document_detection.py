@@ -147,6 +147,75 @@ class DocumentDetectionTests(unittest.TestCase):
         self.assertEqual(result['dueDate'], '2026-05-30')
         self.assertEqual(result['dueDateSource'], 'Explicit due date')
 
+    def test_invoice_photo_short_header_labels_use_printed_date_and_terms(self):
+        # OCR joins the recipient's address and header fields, and misses
+        # the printed Due Date label. The remaining evidence is sufficient.
+        with patch('workforce._ocr_image', return_value=(
+            'INVOICE\nBill to Customer Invoice # 042\n'
+            'Example Events Pte Ltd Date 09/17/2026\n'
+            '1 Example Road #05-06 Terms 30 days\n'
+            'Singapore 123456 10/17/2026\n'
+            'Description Quantity Rate Amount\n'
+            'Camera work 2 $350.00 $700.00\nTotal $700.00'
+        )):
+            result = extract_invoice_amount(
+                'invoice.jpg', submitted_at='2026-09-20T14:49:36+08:00'
+            )
+        self.assertEqual(result['amount'], 700)
+        self.assertEqual(result['dueDate'], '2026-10-17')
+        self.assertEqual(result['dueDateReferenceDate'], '2026-09-17')
+        self.assertEqual(result['dueInDays'], 30)
+        self.assertEqual(result['dueDateSource'], '30 days from invoice date')
+        self.assertIn('Date 09/17/2026', result['invoiceDateMatchedText'])
+        self.assertIn('Terms 30 days', result['dueDateMatchedText'])
+
+    def test_short_invoice_date_and_terms_support_split_fields_and_calendar_rollover(self):
+        cases = (
+            ('Date: 17/09/2026\nTerms: 30 days', '2026-10-17'),
+            ('Date\n20 Dec 2026\nTerms\n30 days', '2027-01-19'),
+            ('Date 31/01/2028\nTerms: within 1 month', '2028-02-29'),
+            ('Date 29/02/2028\nTerms: 2 weeks', '2028-03-14'),
+        )
+        for text, expected in cases:
+            with self.subTest(text=text):
+                result = _invoice_due_date_from_text(text, '2026-09-20')
+                self.assertEqual(result['dueDate'], expected)
+                self.assertIn('invoice date', result['dueDateSource'])
+
+    def test_short_invoice_date_does_not_use_other_date_fields_or_service_rows(self):
+        cases = [
+            f'{label} Date: 17/09/2026' for label in (
+                'Due', 'Event', 'Service', 'Job', 'Delivery', 'Payment',
+                'Transaction', 'Order', 'Booking', 'Receipt', 'Work', 'Start', 'End',
+            ) if label != 'Due'
+        ] + [
+            'Date Description Amount\n17/09/2026 Camera work $700.00',
+            'Description Quantity Rate Amount\nDate 17/09/2026 Work 1 $700.00',
+            'Date\n17/09/2026 Camera work $700.00',
+            'Date of service 17/09/2026',
+            'Date 17/09/2026\nDate 18/09/2026',
+            'Date: 31/09/2026',
+        ]
+        for header in cases:
+            with self.subTest(header=header):
+                result = _invoice_due_date_from_text(
+                    f'Invoice\n{header}\nTerms: 30 days', '2026-09-20'
+                )
+                self.assertEqual(result['dueDate'], '2026-10-20')
+                self.assertEqual(result['invoiceDateMatchedText'], '')
+                self.assertIn('Showbase upload date', result['dueDateSource'])
+
+    def test_explicit_due_and_invoice_dates_take_precedence_over_short_labels(self):
+        result = _invoice_due_date_from_text(
+            'Date 18/09/2026\nInvoice Date 17/09/2026\n'
+            'Terms 30 days\nDue Date 31/10/2026', '2026-09-20'
+        )
+        self.assertEqual(result['dueDate'], '2026-10-31')
+        self.assertEqual(result['dueDateReferenceDate'], '2026-09-17')
+        self.assertEqual(result['dueDateSource'], 'Explicit due date')
+        no_terms = _invoice_due_date_from_text('Invoice\nDate 17/09/2026\nTotal $700')
+        self.assertEqual(no_terms['dueDate'], '')
+
     def test_character_spaced_pdf_uses_readable_ocr_instead_of_partial_digits(self):
         native = ('I n v o i c e D e s c r i p t i o n A m o u n t\n' * 4
                   + 'T o t a l\n$ 3 3 0 . 0 0')
