@@ -10,9 +10,9 @@ const COMPANY_TYPOGRAPHY_FIELDS = Object.freeze({
 
 const companyRichTextSelections = new Map();
 
-function plainTextToCompanyRichHtml(value, boldFirstLine = false) {
+function plainTextToCompanyRichHtml(value, boldFirstLine = false, recogniseLists = false) {
   let firstContent = true;
-  return String(value || '').replace(/\r\n?/g, '\n').split('\n').map(line => {
+  const html = String(value || '').replace(/\r\n?/g, '\n').split('\n').map(line => {
     let content = escapeHtml(line) || '<br>';
     if (boldFirstLine && firstContent && line.trim()) {
       content = `<strong>${content}</strong>`;
@@ -22,6 +22,64 @@ function plainTextToCompanyRichHtml(value, boldFirstLine = false) {
     }
     return `<div>${content}</div>`;
   }).join('');
+  return recogniseLists ? normaliseCompanyTermsListsHtml(html) : html;
+}
+
+function removeCompanyListMarkerPrefix(element, length) {
+  let remaining = Math.max(0, Number(length || 0));
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node && remaining > 0) {
+    const consumed = Math.min(remaining, node.data.length);
+    node.data = node.data.slice(consumed);
+    remaining -= consumed;
+    node = walker.nextNode();
+  }
+}
+
+function normaliseCompanyTermsListsHtml(value) {
+  const template = document.createElement('template');
+  template.innerHTML = String(value || '');
+  const output = document.createElement('div');
+  let activeList = null;
+  let expectedNumber = null;
+  [...template.content.childNodes].forEach(originalNode => {
+    const node = originalNode.cloneNode(true);
+    const isBlock = node.nodeType === Node.ELEMENT_NODE && ['DIV', 'P'].includes(node.tagName);
+    const match = isBlock
+      ? String(node.textContent || '').match(/^\s*(?:(\d{1,3})[.)]|([-*\u2022\u25aa\u25e6\u2023]))\s+(\S[\s\S]*)$/)
+      : null;
+    const nodeText = isBlock ? String(node.textContent || '') : '';
+    const isContinuation = !match && activeList && /^\s{2,}\S/.test(nodeText);
+    if (isContinuation) {
+      removeCompanyListMarkerPrefix(node, nodeText.length - nodeText.trimStart().length);
+      const item = activeList.lastElementChild;
+      if (!item) return;
+      item.appendChild(document.createElement('br'));
+      while (node.firstChild) item.appendChild(node.firstChild);
+      return;
+    }
+    if (!match) {
+      activeList = null;
+      expectedNumber = null;
+      output.appendChild(node);
+      return;
+    }
+    const ordered = Boolean(match[1]);
+    const number = ordered ? Number(match[1]) : null;
+    const tagName = ordered ? 'OL' : 'UL';
+    if (!activeList || activeList.tagName !== tagName || (ordered && number !== expectedNumber)) {
+      activeList = document.createElement(ordered ? 'ol' : 'ul');
+      if (ordered && number !== 1) activeList.start = number;
+      output.appendChild(activeList);
+    }
+    removeCompanyListMarkerPrefix(node, match[0].length - match[3].length);
+    const item = document.createElement('li');
+    while (node.firstChild) item.appendChild(node.firstChild);
+    activeList.appendChild(item);
+    expectedNumber = ordered ? number + 1 : null;
+  });
+  return output.innerHTML;
 }
 
 function normaliseCompanyTypography(value = {}) {
@@ -249,6 +307,9 @@ function companyTypographyEditorHtml(key, label, fieldId, rows, options = {}) {
     ? ` data-placeholder="${escapeHtmlAttr(options.placeholder)}"`
     : '';
   const maxlength = options.maxlength ? ` data-maxlength="${Number(options.maxlength)}"` : '';
+  const listButtons = key === 'terms' ? `
+          <button id="companyTypography${key}Bullets" type="button" aria-pressed="false" title="Bulleted list" onmousedown="event.preventDefault()" onclick="applyCompanyListStyle('${escapeHtmlAttr(key)}','unordered')">&bull;</button>
+          <button id="companyTypography${key}Numbering" type="button" aria-pressed="false" title="Numbered list" onmousedown="event.preventDefault()" onclick="applyCompanyListStyle('${escapeHtmlAttr(key)}','ordered')">1.</button>` : '';
   return `
     <div class="form-group company-details-wide company-typography-editor" data-typography-key="${escapeHtmlAttr(key)}">
       <div class="company-letterhead-heading">
@@ -266,6 +327,7 @@ function companyTypographyEditorHtml(key, label, fieldId, rows, options = {}) {
           <button id="companyTypography${key}Bold" type="button" aria-pressed="false" title="Bold selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','bold')"><strong>B</strong></button>
           <button id="companyTypography${key}Italic" type="button" aria-pressed="false" title="Italicise selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','italic')"><em>I</em></button>
           <button id="companyTypography${key}Underline" type="button" aria-pressed="false" title="Underline selected text" onmousedown="event.preventDefault()" onclick="applyCompanyRichTextStyle('${escapeHtmlAttr(key)}','underline')"><u>U</u></button>
+          ${listButtons}
         </div>
       </div>
       <div id="${escapeHtmlAttr(fieldId)}" class="form-input company-typography-textarea" contenteditable="true" role="textbox" aria-multiline="true" style="--editor-rows:${Number(rows)}"${maxlength}${placeholder}
@@ -572,7 +634,7 @@ function renderPdfSettingsForm() {
     }
     const richHtml = renderPdfRichHtml(
       pdfSettings[meta.htmlSetting]
-      || plainTextToCompanyRichHtml(plainText, key === 'letterhead')
+      || plainTextToCompanyRichHtml(plainText, key === 'letterhead', key === 'terms')
     );
     if (editor && editor.innerHTML !== richHtml) editor.innerHTML = richHtml;
     const font = document.getElementById(`companyTypography${key}Font`);
@@ -625,6 +687,16 @@ function updateCompanyRichTextToolbarState(key) {
     button.setAttribute('aria-pressed', String(active));
     button.classList.toggle('active', active);
   }
+  if (key === 'terms') {
+    for (const [suffix, command] of Object.entries({ Bullets: 'insertUnorderedList', Numbering: 'insertOrderedList' })) {
+      const button = document.getElementById(`companyTypography${key}${suffix}`);
+      if (!button) continue;
+      let active = false;
+      try { active = document.queryCommandState(command); } catch (_error) { active = false; }
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('active', active);
+    }
+  }
 }
 
 function applyCompanyRichTextStyle(key, style, value = '') {
@@ -658,6 +730,20 @@ function applyCompanyRichTextStyle(key, style, value = '') {
     selection.removeAllRanges();
     selection.addRange(range);
   }
+  rememberCompanyRichTextSelection(key);
+  companyRichTextChanged(key, { preserveSelection: true });
+}
+
+function applyCompanyListStyle(key, listType) {
+  const editor = companyRichTextEditor(key);
+  const range = restoreCompanyRichTextSelection(key);
+  if (!editor || !range) {
+    showNotification('warning', 'Place the cursor in the terms text first');
+    editor?.focus();
+    return;
+  }
+  editor.focus();
+  document.execCommand(listType === 'ordered' ? 'insertOrderedList' : 'insertUnorderedList', false);
   rememberCompanyRichTextSelection(key);
   companyRichTextChanged(key, { preserveSelection: true });
 }
@@ -1179,7 +1265,10 @@ function syncCompanyThemeColor(value) {
 
 function collectCompanyDetailsPayload() {
   const value = id => document.getElementById(id)?.value || '';
-  const richHtml = key => companyRichTextEditor(key)?.innerHTML || '';
+  const richHtml = key => {
+    const html = companyRichTextEditor(key)?.innerHTML || '';
+    return key === 'terms' ? normaliseCompanyTermsListsHtml(html) : html;
+  };
   const richText = key => companyRichTextPlainText(key);
   const payload = {
     footerText: richText('footer'),

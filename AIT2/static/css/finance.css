@@ -389,6 +389,17 @@
   transition: font-size 120ms ease, background 120ms ease;
 }
 
+.company-typography-textarea ul,
+.company-typography-textarea ol {
+  margin: 0.35em 0;
+  padding-left: 1.8em;
+  white-space: normal;
+}
+
+.company-typography-textarea li {
+  padding-left: 0.2em;
+}
+
 .company-typography-textarea:empty::before {
   color: #98a2b3;
   content: attr(data-placeholder);

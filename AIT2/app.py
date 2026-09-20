@@ -170,6 +170,7 @@ from services.telegram_notifications import (
 from event_report import build_event_report_pdf
 from pdf_fonts import normalise_pdf_font_family
 from pdf_rich_text import (
+    normalise_pdf_terms_html,
     plain_text_to_rich_html,
     rich_text_to_plain_text,
     sanitise_pdf_rich_text,
@@ -2964,16 +2965,20 @@ def _normalise_pdf_settings(settings, company_code=None):
         merged['themeColor'] = DEFAULT_PDF_THEME_COLOR
     merged['fontFamily'] = normalise_pdf_font_family(merged.get('fontFamily'))
     rich_text_fields = (
-        ('letterheadHtml', 'letterheadText', True),
-        ('footerHtml', 'footerText', False),
-        ('defaultTermsHtml', 'defaultTerms', False),
-        ('paymentDetailsHtml', 'paymentDetailsText', False),
+        ('letterheadHtml', 'letterheadText', True, False),
+        ('footerHtml', 'footerText', False, False),
+        ('defaultTermsHtml', 'defaultTerms', False, True),
+        ('paymentDetailsHtml', 'paymentDetailsText', False, False),
     )
-    for html_key, text_key, bold_first_line in rich_text_fields:
+    for html_key, text_key, bold_first_line, recognise_lists in rich_text_fields:
         rich_html = sanitise_pdf_rich_text(merged.get(html_key))
+        if recognise_lists:
+            rich_html = normalise_pdf_terms_html(rich_html)
         if not rich_text_to_plain_text(rich_html) and merged.get(text_key):
             rich_html = plain_text_to_rich_html(
-                merged.get(text_key), bold_first_line=bold_first_line
+                merged.get(text_key),
+                bold_first_line=bold_first_line,
+                recognise_lists=recognise_lists,
             )
         merged[html_key] = rich_html
         merged[text_key] = rich_text_to_plain_text(rich_html)

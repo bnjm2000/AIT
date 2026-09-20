@@ -9,7 +9,10 @@ from costing_pdf import build_costing_pdf
 from event_report import build_event_report_pdf
 from pdf_fonts import pdf_font_names
 from pdf_rich_text import (
+    normalise_pdf_terms_html,
+    plain_text_to_rich_html,
     rich_text_to_plain_text,
+    rich_text_to_reportlab_flowables,
     rich_text_to_reportlab_markup,
     sanitise_pdf_rich_text,
 )
@@ -158,6 +161,10 @@ def test_company_details_exposes_font_previews_formatting_and_pdf_preview():
     assert 'option.dataset.fontPreview' in select_source
     assert 'contenteditable="true"' in settings_source
     assert 'applyCompanyRichTextStyle' in settings_source
+    assert 'applyCompanyListStyle' in settings_source
+    assert 'normaliseCompanyTermsListsHtml' in settings_source
+    assert 'Bulleted list' in settings_source
+    assert 'Numbered list' in settings_source
     assert "'color',this.value" in settings_source
     assert 'range.extractContents()' in settings_source
 
@@ -189,6 +196,101 @@ def test_legacy_letterhead_is_upgraded_with_a_bold_first_row():
         '<div><strong>Example Company Pte Ltd</strong></div>'
     )
     assert rich_text_to_plain_text(settings['letterheadHtml']) == settings['letterheadText']
+
+
+def test_terms_recognise_typed_numbered_and_bulleted_lines():
+    html = normalise_pdf_terms_html(
+        '<div>1. First numbered clause</div>'
+        '<div>2) <strong>Second clause</strong> with detail</div>'
+        '<div>Ordinary paragraph</div>'
+        '<div>- First bullet with a long continuation</div>'
+        '<div>\u2022 Second bullet</div>'
+    )
+    assert html == (
+        '<ol><li>First numbered clause</li>'
+        '<li><strong>Second clause</strong> with detail</li></ol>'
+        '<div>Ordinary paragraph</div>'
+        '<ul><li>First bullet with a long continuation</li>'
+        '<li>Second bullet</li></ul>'
+    )
+    assert rich_text_to_plain_text(html) == (
+        '1. First numbered clause\n'
+        '2. Second clause with detail\n'
+        'Ordinary paragraph\n'
+        '- First bullet with a long continuation\n'
+        '- Second bullet'
+    )
+    assert plain_text_to_rich_html(
+        '3. Starts at three\n4. Continues at four', recognise_lists=True
+    ) == '<ol start="3"><li>Starts at three</li><li>Continues at four</li></ol>'
+
+
+def test_terms_attach_manually_wrapped_indented_lines_to_the_list_item():
+    html = normalise_pdf_terms_html(
+        '<div>3. Balance is due within 14 days from the date of </div>'
+        '<div>     the invoice.</div>'
+        '<div>4. All items are for indoor use.</div>'
+        '<div>6. T/T to OCBC Bank Limited.</div>'
+        '<div>     Account Number: 601-546195-001.</div>'
+    )
+    assert html == (
+        '<ol start="3">'
+        '<li>Balance is due within 14 days from the date of <br>the invoice.</li>'
+        '<li>All items are for indoor use.</li>'
+        '</ol>'
+        '<ol start="6">'
+        '<li>T/T to OCBC Bank Limited.<br>Account Number: 601-546195-001.</li>'
+        '</ol>'
+    )
+    assert sanitise_pdf_rich_text(html) == html
+    assert rich_text_to_plain_text(html) == (
+        '3. Balance is due within 14 days from the date of \n'
+        'the invoice.\n'
+        '4. All items are for indoor use.\n'
+        '6. T/T to OCBC Bank Limited.\n'
+        'Account Number: 601-546195-001.'
+    )
+
+
+def test_terms_reportlab_flowables_use_hanging_indents_for_lists():
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.styles import ParagraphStyle
+
+    style = ParagraphStyle(
+        'TermsListTest', fontName='Helvetica', fontSize=8,
+        leading=10, alignment=TA_LEFT, textColor=colors.HexColor('#334455'),
+    )
+    flowables = rich_text_to_reportlab_flowables(
+        '<div>9. A numbered clause that can wrap onto another line.</div>'
+        '<div>10. The next numbered clause also wraps cleanly.</div>'
+        '<div>- A bullet point that can wrap cleanly.</div>',
+        style,
+        recognise_lists=True,
+    )
+    assert [flowable.bulletText for flowable in flowables] == ['9.', '10.', '\u2022']
+    assert all(flowable.style.alignment == TA_LEFT for flowable in flowables)
+    assert all(flowable.style.bulletIndent > 0 for flowable in flowables)
+    assert all(flowable.style.leftIndent > flowable.style.bulletIndent for flowable in flowables)
+    assert all(flowable.style.bulletFontName == style.fontName for flowable in flowables)
+    assert all(flowable.style.bulletFontSize == style.fontSize for flowable in flowables)
+    assert all(flowable.style.bulletColor == style.textColor for flowable in flowables)
+
+
+def test_pdf_settings_normalise_existing_terms_markers_into_lists():
+    settings = app_module._normalise_pdf_settings({
+        'defaultTermsHtml': (
+            '<div>1. Deposit is required before confirmation.</div>'
+            '<div>2. Balance is due before delivery.</div>'
+            '<div>- Prices exclude additional venue charges.</div>'
+        ),
+    }, 'AVPL')
+    assert settings['defaultTermsHtml'] == (
+        '<ol><li>Deposit is required before confirmation.</li>'
+        '<li>Balance is due before delivery.</li></ol>'
+        '<ul><li>Prices exclude additional venue charges.</li></ul>'
+    )
+    assert settings['defaultTerms'].startswith('1. Deposit is required')
 
 
 def test_finance_pdf_preserves_mixed_selected_text_fonts_weight_and_colour():

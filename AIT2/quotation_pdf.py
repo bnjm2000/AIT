@@ -10,6 +10,7 @@ import threading
 from pdf_fonts import pdf_font_names, pdf_text_typography
 from pdf_rich_text import (
     plain_text_to_rich_html,
+    rich_text_to_reportlab_flowables,
     rich_text_to_reportlab_markup,
     sanitise_pdf_rich_text,
 )
@@ -2156,16 +2157,17 @@ def build_finance_pdf(document, company, logo_path=''):
             default_terms_html
             if terms == _text(company.get('defaultTerms')).strip()
             and default_terms_html
-            else plain_text_to_rich_html(terms)
+            else plain_text_to_rich_html(terms, recognise_lists=True)
         )
-        terms_markup = rich_text_to_reportlab_markup(
-            terms_html, default_family=default_font_family
-        )
-        if terms_typography['underline']:
-            terms_markup = f'<u>{terms_markup}</u>'
         terms_details = [
             _paragraph('TERMS AND CONDITIONS', section_title),
-            Paragraph(_cjk_markup(terms_markup), terms_style),
+            *rich_text_to_reportlab_flowables(
+                terms_html,
+                terms_style,
+                default_family=default_font_family,
+                recognise_lists=True,
+                underline=terms_typography['underline'],
+            ),
         ]
 
     bottom_column_width = doc.width / 2
