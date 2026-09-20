@@ -9,12 +9,14 @@ APP_SCRIPT_FILES = (
     "asset-check.js",
     "plan.js",
     "prepare.js",
+    "return.js",
     "admin-settings.js",
     "packing-list.js",
     "delivery-order.js",
     "events-overview.js",
     "inventory-export.js",
     "transfer.js",
+    "clients.js",
 )
 
 

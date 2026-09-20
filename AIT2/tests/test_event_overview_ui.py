@@ -230,7 +230,7 @@ def test_all_events_title_uses_the_company_theme():
 
 def test_all_events_loads_active_cards_first_and_fetches_closed_on_demand():
     state_filter = function_source('setEventStateFilter', 'overviewStateFilterNeedsFullSet')
-    loader = function_source('loadAllEvents', 'loadReturnEvents')
+    loader = function_source('loadAllEvents', 'prepareButtonsForAsset')
 
     assert "let allEventsStateFilter = 'Active';" in SCRIPT
     assert 'const EVENT_OVERVIEW_PAGE_SIZE = 500;' in SCRIPT

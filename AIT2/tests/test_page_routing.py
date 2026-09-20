@@ -133,6 +133,30 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(root.status_code, 302)
         self.assertTrue(root.headers['Location'].endswith('/events'))
 
+    def test_return_deep_link_loads_the_workspace_after_shared_helpers(self):
+        self.login('owner')
+        page = self.client.get('/return').get_data(as_text=True)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "return"', page)
+        script_paths = ['js/app.js', 'js/plan.js', 'js/return.js', 'js/events-overview.js']
+        positions = [page.index(path) for path in script_paths]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(page.count('js/return.js'), 1)
+        self.assertRegex(page, r'js/return\.js\?v=\d+')
+        self.assertEqual(self.client.get('/static/js/return.js').status_code, 200)
+
+    def test_clients_page_loads_versioned_directory_after_finance(self):
+        self.login('owner')
+        response = self.client.get('/clients')
+        self.assertEqual(response.status_code, 200)
+        page = response.get_data(as_text=True)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "clients"', page)
+        scripts = ['js/app.js', 'js/finance.js', 'js/clients.js', 'js/invoices.js']
+        positions = [page.index(script) for script in scripts]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(page.count('js/clients.js'), 1)
+        self.assertRegex(page, r'js/clients\.js\?v=\d+')
+        self.assertEqual(self.client.get('/static/js/clients.js').status_code, 200)
+
     def test_record_deep_links_restore_authorised_workspaces(self):
         self.login('owner')
         quotation = self.client.get('/quotations/quote-123')

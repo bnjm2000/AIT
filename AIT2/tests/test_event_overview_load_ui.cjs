@@ -9,7 +9,7 @@ const source = fs.readFileSync(
   'utf8',
 );
 const start = source.indexOf('async function loadAllEvents(');
-const end = source.indexOf('async function loadReturnEvents(', start);
+const end = source.indexOf('window.__preparePendingActions', start);
 const loaderSource = source.slice(start, end);
 
 function makeOverview(responses) {

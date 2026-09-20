@@ -90,6 +90,24 @@ class ReturningSourceTransferTests(unittest.TestCase):
             'assetIds': [asset_id],
         })
 
+    def test_transfer_routes_require_authentication(self):
+        with self.client.session_transaction() as session:
+            session.clear()
+        for method, path in (
+            ('GET', '/api/transfers/options'),
+            ('GET', '/api/transfers/candidates?fromEventId=1&toEventId=2'),
+            ('POST', '/api/transfers/execute'),
+            ('POST', '/api/transfers/undo'),
+            ('POST', '/api/transfers/return-office'),
+            ('POST', '/api/transfers/undo-return-office'),
+            ('POST', '/api/events/1/transfer'),
+        ):
+            with self.subTest(path=path):
+                response = self.client.open(path, method=method, json={})
+                self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.data_manager.events[1].actually_prepared, ['TEST#01', 'TEST#02'])
+        self.assertEqual(self.data_manager.events[2].actually_prepared, [])
+
     def test_returning_event_stays_eligible_for_followup_transfers(self):
         first = self.transfer('TEST#01')
         self.assertEqual(first.status_code, 200, first.get_data(as_text=True))

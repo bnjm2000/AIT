@@ -4973,7 +4973,7 @@ class FinanceFeatureTests(unittest.TestCase):
     def test_event_workflow_frontend_uses_progressive_shared_selection(self):
         finance_source = Path('static/js/finance.js').read_text(encoding='utf-8')
         plan_source = Path('static/js/plan.js').read_text(encoding='utf-8')
-        app_source = Path('static/js/app.js').read_text(encoding='utf-8')
+        return_source = Path('static/js/return.js').read_text(encoding='utf-8')
         workforce_source = Path('static/js/workforce-admin.js').read_text(
             encoding='utf-8'
         )
@@ -4983,9 +4983,9 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('financeRefreshEventCreationControls(', finance_source)
         self.assertIn("financePreviewEventField('projectName'", finance_source)
         self.assertIn('financeEventCreationNote', finance_source)
-        self.assertIn("planOpenEventChooser('return')", app_source)
+        self.assertIn("planOpenEventChooser('return')", return_source)
         self.assertIn("planOpenEventChooser('workforce')", workforce_source)
-        self.assertNotIn('returnEventChooserModal', app_source)
+        self.assertNotIn('returnEventChooserModal', return_source)
         self.assertNotIn('workforceEventChooserModal', workforce_source)
         self.assertIn("context === 'return'", plan_source)
         self.assertIn("context === 'workforce'", plan_source)
@@ -6536,21 +6536,22 @@ class FinanceFeatureTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         finance_source = (project_root / 'static' / 'js' / 'finance.js').read_text(encoding='utf-8')
         app_source = (project_root / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+        client_source = (project_root / 'static' / 'js' / 'clients.js').read_text(encoding='utf-8')
         self.assertIn('data-section="clients"', finance_source)
         self.assertIn("['clients-section'", finance_source)
-        self.assertIn('function loadClientsPage(', finance_source)
-        self.assertIn('function clientDirectoryDelete(', finance_source)
-        self.assertIn('will no longer appear in client suggestions', finance_source)
+        self.assertIn('function loadClientsPage(', client_source)
+        self.assertIn('function clientDirectoryDelete(', client_source)
+        self.assertIn('will no longer appear in client suggestions', client_source)
         for field in (
             'name="salutation"', 'name="name"', 'name="company"',
             'name="contactPerson"', 'name="email"', 'name="phone"',
             'name="taxNumber"', 'name="address1"', 'name="address2"',
             'name="address3"', 'name="postalCode"',
         ):
-            self.assertIn(field, finance_source)
+            self.assertIn(field, client_source)
         self.assertIn("clients: '/clients'", app_source)
         self.assertIn("sectionName === 'clients' && !canCurrentUserAccessClients()", app_source)
-        self.assertIn("a3.value = rec.postalCode || rec.address3 || ''", app_source)
+        self.assertIn("a3.value = rec.postalCode || rec.address3 || ''", client_source)
 
     def test_saved_client_address_lines_can_be_cleared(self):
         created = self.client.post('/api/clients', json={
@@ -8422,9 +8423,18 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(item['brand'], 'L-Acoustics')
         self.assertEqual(item['model'], 'SB18 III')
         self.assertEqual(item['description'], 'Subwoofer')
-        requirement = app_module._target_model_requirements(event)[
-            app_module._asset_match_key(self.data_manager.inventory['AX#01'])
-        ]
+        source = Event(207, 'Transfer Source', '20260720', '20260720', [],
+                       assigned_users=['manager-no-sales'])
+        self.data_manager.events[source.event_id] = source
+        response = self.client.get(
+            f'/api/transfers/candidates?fromEventId={source.event_id}&toEventId={event.event_id}'
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        requirement = next(
+            row for row in response.get_json()['data']['destinationRequirements']
+            if (row['department'], row['brand'], row['model'], row['description'])
+            == ('AX', 'L-Acoustics', 'SB18 III', 'Subwoofer')
+        )
         self.assertEqual(requirement['required'], 2)
 
     def test_compare_creates_missing_event_room_for_quotation_items(self):

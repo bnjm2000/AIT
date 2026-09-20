@@ -1,6 +1,89 @@
 // Transfer workspace, actions, and PDF export.
 
-// Event list view controls and transfer state
+let transferOptionsCache = null;
+let transferCandidateCache = [];
+let transferPageState = {
+  sourceEventId: null,
+  targetEventId: null,
+  targetSubprojectId: ''
+};
+
+async function loadTransferHistory() {
+  const container = document.getElementById("transfer-history");
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading">Loading transfer options...</div>';
+
+  try {
+    let offset = 0;
+    let loadedCandidates = false;
+    let rendered = false;
+    transferOptionsCache = { events: [], sourceEvents: [], targetEvents: [] };
+
+    while (true) {
+      const response = await apiCall(
+        `/api/transfers/options?limit=${EVENT_OPTIONS_PAGE_SIZE}&offset=${offset}`
+      );
+      const page = response.data || {};
+      ['events', 'sourceEvents', 'targetEvents'].forEach(key => {
+        transferOptionsCache[key] = mergeEventsById(
+          transferOptionsCache[key],
+          page[key] || []
+        );
+      });
+
+      const selectableEvents = transferSelectableEvents();
+      updateOverdueCounter(selectableEvents.filter(event => event.state === 'Overdue').length);
+      if (!rendered) {
+        renderTransferWorkspace();
+        rendered = true;
+      }
+      populateTransferDropdowns(transferOptionsCache);
+
+      const sourceSelect = document.getElementById('transferSourceSelect');
+      const targetSelect = document.getElementById('transferTargetSelect');
+      if (
+        !loadedCandidates &&
+        sourceSelect?.value &&
+        targetSelect?.value
+      ) {
+        loadedCandidates = true;
+        await loadTransferCandidates();
+      }
+
+      if (!response.meta?.hasMore || !page.events?.length) break;
+      offset = Number(response.meta.nextOffset || 0);
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
+    const availableIds = new Set(
+      transferSelectableEvents().map(event => String(event.id || ''))
+    );
+    let selectionChanged = false;
+    if (transferPageState.sourceEventId && !availableIds.has(String(transferPageState.sourceEventId))) {
+      transferPageState.sourceEventId = null;
+      selectionChanged = true;
+    }
+    if (transferPageState.targetEventId && !availableIds.has(String(transferPageState.targetEventId))) {
+      transferPageState.targetEventId = null;
+      transferPageState.targetSubprojectId = '';
+      selectionChanged = true;
+    }
+    if (selectionChanged) {
+      renderTransferWorkspace();
+      populateTransferDropdowns(transferOptionsCache);
+    }
+  } catch (error) {
+    container.innerHTML = `
+      <div style="padding:30px;text-align:center;color:#a00;">
+        Failed to load transfer options: ${escapeHtml(error.message || String(error))}
+        <br><br>
+        <button class="btn btn-primary" onclick="loadTransferHistory()">Retry</button>
+      </div>
+    `;
+  }
+}
+
 let transferReturnToOfficeCache = [];
 
 // Transfer grouping, actions, and grouped PDFs
@@ -50,21 +133,6 @@ function transferAssetTypeKey(item) {
 function transferAssetTypeName(group) {
   return `${group.brand || ''} ${group.model || ''} ${group.description || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Asset Type';
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 function renderTransferInitialMessage() {
@@ -534,9 +602,6 @@ function toggleTransferGroupSelection(encodedKey, kind) {
   }
   renderTransferCandidatesInPlace();
 }
-
-
-
 
 
 function renderTransferCandidatesInPlace() {

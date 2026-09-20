@@ -1,5 +1,14 @@
 // Event overview, event-page lists, and prepare-page realtime controls.
 
+function getEventPhysicallyReturnedCount(event) {
+  const total = Number(event?.returnableTotalCount);
+  const outstanding = Number(event?.returnableCount);
+  if (Number.isFinite(total) && total >= 0 && Number.isFinite(outstanding)) {
+    return Math.max(0, Math.min(total, total - Math.max(0, outstanding)));
+  }
+  return Math.max(0, Number(event?.returnedCount || 0));
+}
+
 function ensureEventListViewStyles() {
   if (document.getElementById('event-list-view-styles')) return;
   const style = document.createElement('style');
@@ -1231,10 +1240,6 @@ async function loadAllEvents({ scope = requestedAllEventsScope() } = {}) {
       }
     }
   }
-}
-
-async function loadReturnEvents(options = {}) {
-  return loadReturnWorkspace(options);
 }
 
 window.__preparePendingActions = window.__preparePendingActions || {};
