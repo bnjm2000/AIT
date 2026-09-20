@@ -45488,22 +45488,23 @@ def _finance_get_update_delete(document_id, document_type):
                     plan = _normalise_invoice_plan(
                         stored_plan, quotation, stored_plan
                     )
-                    for installment in plan.get('installments') or []:
-                        if str(installment.get('invoiceId') or '') != str(document_id):
-                            continue
-                        installment.update({
-                            'invoiceId': '',
-                            'invoiceNumber': '',
-                            'issuedAt': '',
-                            'status': 'planned',
-                        })
+                    plan['installments'] = [
+                        installment
+                        for installment in plan.get('installments') or []
+                        if str(installment.get('invoiceId') or '')
+                        != str(document_id)
+                    ]
                     plan['payments'] = [
                         payment for payment in plan.get('payments') or []
                         if str(payment.get('invoiceId') or '') != str(document_id)
                     ]
                     plan['history'].append(_invoice_plan_history_entry(
                         'invoice-deleted',
-                        f"Deleted invoice {existing.get('number') or document_id}",
+                        (
+                            f"Deleted invoice "
+                            f"{existing.get('number') or document_id} "
+                            "and its installment"
+                        ),
                     ))
                     plan['summary'] = _invoice_plan_summary(
                         plan, (quotation.get('totals') or {}).get('total', 0)

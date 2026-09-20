@@ -11288,7 +11288,7 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertNotIn('Invoiced to date', pdf_text)
         self.assertIn(f"${accepted['totals']['total']:,.2f}", pdf_text)
 
-    def test_invoice_can_be_renumbered_and_deleted_without_sticking_installment(self):
+    def test_deleting_invoice_also_removes_its_installment(self):
         quotation = self.create_quote('Invoice Actions Project')
         quotation['lineItems'] = [{
             'id': 'invoice-actions-line',
@@ -11326,13 +11326,14 @@ class FinanceFeatureTests(unittest.TestCase):
 
         deleted = self.client.delete(f"/api/invoices/{invoice['id']}")
         self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertEqual(
+            self.client.get(f"/api/invoices/{invoice['id']}").status_code,
+            404,
+        )
         plan = self.client.get(
             f"/api/invoice-plans/{accepted['id']}"
         ).get_json()['data']['plan']
-        installment = plan['installments'][0]
-        self.assertFalse(installment['invoiceId'])
-        self.assertFalse(installment['invoiceNumber'])
-        self.assertEqual(installment['status'], 'planned')
+        self.assertEqual(plan['installments'], [])
 
     def test_statement_of_account_groups_invoices_by_company_not_contact_person(self):
         issued = []

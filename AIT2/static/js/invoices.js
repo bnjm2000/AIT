@@ -817,9 +817,9 @@ async function invoiceDeleteIssued(invoiceId, origin = 'directory') {
   const invoice = invoiceFindDocument(invoiceId);
   if (!invoice) return;
   const confirmed = await showAppConfirm({
-    title: 'Delete invoice?',
-    message: `${invoice.number || 'This invoice'} and its linked payment records will be removed. Its installment will return to a planned state and the invoice number will become available again.`,
-    confirmText: 'Delete invoice',
+    title: 'Delete invoice and installment?',
+    message: `${invoice.number || 'This invoice'}, its entire installment, and any linked payment records will be permanently removed. The invoice number will become available again.`,
+    confirmText: 'Delete both',
     cancelText: 'Keep invoice',
     variant: 'danger'
   });
@@ -828,7 +828,7 @@ async function invoiceDeleteIssued(invoiceId, origin = 'directory') {
     await apiCall(`/api/invoices/${encodeURIComponent(invoiceId)}`, 'DELETE', {
       ...(invoice.documentVersion ? { documentVersion: invoice.documentVersion } : {})
     });
-    showNotification('success', `${invoice.number || 'Invoice'} deleted`);
+    showNotification('success', `${invoice.number || 'Invoice'} and installment deleted`);
     if (origin === 'directory') await loadInvoices(invoiceState.query, { preservePosition: true });
     else await invoiceReloadCurrentPlan();
   } catch (error) {
