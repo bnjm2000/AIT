@@ -47,8 +47,8 @@ def test_new_events_are_registered_in_every_workflow_selector_before_navigation(
     register = function_source('registerCreatedEventInClient', 'formatEventFileSize')
     reset = function_source('resetWorkflowEventOptionCaches', 'registerCreatedEventInClient')
     add_event_handler = SCRIPT.split(
-        '.getElementById("addEventForm")', 1
-    )[1].split("const assetIsBulkToggle", 1)[0]
+        'async function submitAddEventForm(form)', 1
+    )[1].split('// Form handlers', 1)[0]
     finance = (ROOT / 'static' / 'js' / 'finance.js').read_text(encoding='utf-8')
 
     assert 'workflowRememberEvent(id)' in register
@@ -64,6 +64,23 @@ def test_new_events_are_registered_in_every_workflow_selector_before_navigation(
     assert 'const response = await apiCall("/api/events", "POST", eventData)' in add_event_handler
     assert 'await registerCreatedEventInClient(response.eventId)' in add_event_handler
     assert finance.count('await registerCreatedEventInClient(') >= 2
+
+
+def test_create_event_form_locks_immediately_and_sends_an_idempotency_key():
+    submit = SCRIPT.split(
+        'async function submitAddEventForm(form)', 1
+    )[1].split('// Form handlers', 1)[0]
+    form = TEMPLATE.split('<form id="addEventForm">', 1)[1].split('</form>', 1)[0]
+
+    assert "form.dataset.submitting === 'true'" in submit
+    assert "form.dataset.submitting = 'true'" in submit
+    assert "form.setAttribute('aria-busy', 'true')" in submit
+    assert 'submitButton.disabled = true' in submit
+    assert "submitButton.textContent = 'Creating...'" in submit
+    assert 'eventData.clientRequestId = form.dataset.clientRequestId' in submit
+    assert 'form.dataset.clientRequestPayload !== payloadSignature' in submit
+    assert 'submitButton.disabled = false' in submit
+    assert 'data-add-event-submit' in form
 
 
 def test_grid_and_list_show_progress_icons_and_one_compact_next_action():

@@ -19569,6 +19569,11 @@ function assignAllEventAssignees(context) {
 }
 
 async function openAddEventModal() {
+  const form = document.getElementById('addEventForm');
+  if (form?.dataset.submitting !== 'true') {
+    delete form.dataset.clientRequestId;
+    delete form.dataset.clientRequestPayload;
+  }
   addEventAssignedUsers = new Set();
   setAddEventTag(document.getElementById("eventTag")?.value || "events");
   openModal('addEventModal');
@@ -19589,6 +19594,87 @@ function resetAddEventAssignees() {
   renderEventAssigneePicker('add');
 }
 
+function eventCreationRequestId() {
+  return globalThis.crypto?.randomUUID?.()
+    || `event-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function submitAddEventForm(form) {
+  if (!form || form.dataset.submitting === 'true') return;
+
+  if (!isAdminUser()) {
+    showNotification("error", "Admin privileges required to add events");
+    return;
+  }
+
+  const eventData = {
+    name: document.getElementById("eventName").value,
+    location: document.getElementById("eventLocation").value,
+    startDate: document.getElementById("eventStartDate").value,
+    endDate: document.getElementById("eventEndDate").value,
+    tag: document.getElementById("eventTag").value,
+    assignedUsers: Array.from(addEventAssignedUsers),
+  };
+  const payloadSignature = JSON.stringify(eventData);
+  if (
+    !form.dataset.clientRequestId
+    || form.dataset.clientRequestPayload !== payloadSignature
+  ) {
+    form.dataset.clientRequestId = eventCreationRequestId();
+    form.dataset.clientRequestPayload = payloadSignature;
+  }
+  eventData.clientRequestId = form.dataset.clientRequestId;
+
+  const submitButton = form.querySelector('[data-add-event-submit]');
+  const defaultButtonLabel = submitButton?.dataset.defaultLabel
+    || submitButton?.textContent
+    || 'Create Event';
+  form.dataset.submitting = 'true';
+  form.setAttribute('aria-busy', 'true');
+  if (submitButton) {
+    submitButton.dataset.defaultLabel = defaultButtonLabel;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating...';
+  }
+
+  try {
+    const response = await apiCall("/api/events", "POST", eventData);
+    await registerCreatedEventInClient(response.eventId);
+    closeModal("addEventModal");
+    showNotification("success", response.reused
+      ? "Event already created."
+      : "Event added successfully!");
+
+    // Refresh the current view
+    if (
+      document
+        .getElementById("dashboard-section")
+        .classList.contains("active")
+    ) {
+      loadDashboard();
+    } else if (
+      document.getElementById("events-section").classList.contains("active")
+    ) {
+      loadAllEvents();
+    }
+
+    form.reset();
+    delete form.dataset.clientRequestId;
+    delete form.dataset.clientRequestPayload;
+    setAddEventTag("events");
+    resetAddEventAssignees();
+  } catch (error) {
+    showNotification("error", "Failed to add event");
+  } finally {
+    delete form.dataset.submitting;
+    form.removeAttribute('aria-busy');
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = defaultButtonLabel;
+    }
+  }
+}
+
 
 // Form handlers
 document.addEventListener("DOMContentLoaded", function () {
@@ -19598,47 +19684,7 @@ document.addEventListener("DOMContentLoaded", function () {
     .getElementById("addEventForm")
     .addEventListener("submit", async function (e) {
       e.preventDefault();
-
-      if (!isAdminUser()) {
-        showNotification("error", "Admin privileges required to add events");
-        return;
-      }
-
-      const eventData = {
-        name: document.getElementById("eventName").value,
-        location: document.getElementById("eventLocation").value,
-        startDate: document.getElementById("eventStartDate").value,
-        endDate: document.getElementById("eventEndDate").value,
-        tag: document.getElementById("eventTag").value,
-        assignedUsers: Array.from(addEventAssignedUsers),
-      };
-
-      try {
-        const response = await apiCall("/api/events", "POST", eventData);
-        await registerCreatedEventInClient(response.eventId);
-        closeModal("addEventModal");
-        showNotification("success", "Event added successfully!");
-
-        // Refresh the current view
-        if (
-          document
-            .getElementById("dashboard-section")
-            .classList.contains("active")
-        ) {
-          loadDashboard();
-        } else if (
-          document.getElementById("events-section").classList.contains("active")
-        ) {
-          loadAllEvents();
-        }
-
-        // Reset form
-        document.getElementById("addEventForm").reset();
-        setAddEventTag("events");
-        resetAddEventAssignees();
-      } catch (error) {
-        showNotification("error", "Failed to add event");
-      }
+      await submitAddEventForm(this);
     });
 
   const assetIsBulkToggle = document.getElementById('assetIsBulk');

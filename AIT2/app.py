@@ -345,6 +345,8 @@ _inventory_action_lock = _CompanyScopedRLock('inventory action')
 _planning_templates_lock = threading.RLock()
 _finance_lock = _CompanyScopedRLock('finance action')
 _event_creation_lock = threading.RLock()
+_event_creation_requests = {}
+_event_creation_request_ttl_seconds = 10 * 60
 _event_file_action_locks = defaultdict(threading.RLock)
 _upload_processing_executor = ThreadPoolExecutor(
     max_workers=max(1, int(os.environ.get('UPLOAD_PROCESSING_WORKERS', '1'))),
@@ -25089,7 +25091,12 @@ def get_event_model_availability(event_id):
 def create_event():
     """Create a new event"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+        client_request_id = str(data.get('clientRequestId') or '').strip()
+        if client_request_id and not re.fullmatch(
+            r'[A-Za-z0-9._:-]{1,128}', client_request_id
+        ):
+            return jsonify({'error': 'Invalid event creation request ID'}), 400
 
         # Validate input data
         errors = validate_event_data(data, require_location=True)
@@ -25105,6 +25112,14 @@ def create_event():
             data.get('assignedUsers', data.get('assignedUsernames', [])),
             require_known=True,
         )
+        event_signature = json.dumps({
+            'name': data['name'].strip(),
+            'location': str(data.get('location') or '').strip(),
+            'startDate': start_date,
+            'endDate': end_date,
+            'tag': str(data.get('tag') or 'event').strip().lower(),
+            'assignedUsers': assigned_users,
+        }, sort_keys=True, separators=(',', ':'))
 
         def build_event(event_id):
             event = Event(
@@ -25123,7 +25138,47 @@ def create_event():
             event.actually_prepared = []
             return event
 
-        event = _create_event_with_available_id(build_event)
+        manager = _current_data_manager_object()
+        request_key = (
+            id(manager),
+            str(_current_company_code() or '').strip().upper(),
+            str(session.get('user') or '').strip().casefold(),
+            client_request_id,
+        )
+        with _event_creation_lock:
+            if client_request_id:
+                now = time.monotonic()
+                expired_before = now - _event_creation_request_ttl_seconds
+                stale_keys = [
+                    key for key, cached in _event_creation_requests.items()
+                    if cached['createdAt'] < expired_before
+                ]
+                for stale_key in stale_keys:
+                    _event_creation_requests.pop(stale_key, None)
+
+                cached = _event_creation_requests.get(request_key)
+                if cached:
+                    if cached['signature'] != event_signature:
+                        return jsonify({
+                            'error': 'This event creation request was already used with different details'
+                        }), 409
+                    existing = manager.events.get(cached['eventId']) if manager else None
+                    if existing is not None:
+                        return jsonify({
+                            'success': True,
+                            'message': 'Event already created',
+                            'eventId': existing.event_id,
+                            'reused': True,
+                        })
+                    _event_creation_requests.pop(request_key, None)
+
+            event = _create_event_with_available_id(build_event)
+            if client_request_id:
+                _event_creation_requests[request_key] = {
+                    'createdAt': time.monotonic(),
+                    'eventId': event.event_id,
+                    'signature': event_signature,
+                }
         event_id = event.event_id
 
         # Invalidate cache

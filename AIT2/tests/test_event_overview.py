@@ -1027,6 +1027,37 @@ class EventAssignmentAccessTests(unittest.TestCase):
         reloaded.load_events()
         self.assertEqual(reloaded.events[event_id].assigned_users, ['bob'])
 
+    def test_repeated_event_creation_request_reuses_the_first_event(self):
+        self.login('admin')
+        initial_event_count = len(self.data_manager.events)
+        payload = {
+            'name': 'One event only',
+            'location': 'Expo',
+            'startDate': '2026-07-05',
+            'endDate': '2026-07-05',
+            'tag': 'events',
+            'assignedUsers': ['alice'],
+            'clientRequestId': 'create-event-test-request',
+        }
+
+        with patch.object(app_module, '_queue_assigned_event_notification') as queued:
+            first = self.client.post('/api/events', json=payload)
+            repeated = self.client.post('/api/events', json=payload)
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(repeated.status_code, 200, repeated.get_data(as_text=True))
+        self.assertEqual(first.get_json()['eventId'], repeated.get_json()['eventId'])
+        self.assertTrue(repeated.get_json()['reused'])
+        self.assertEqual(len(self.data_manager.events), initial_event_count + 1)
+        queued.assert_called_once()
+
+        changed = self.client.post('/api/events', json={
+            **payload,
+            'name': 'Different event details',
+        })
+        self.assertEqual(changed.status_code, 409, changed.get_data(as_text=True))
+        self.assertEqual(len(self.data_manager.events), initial_event_count + 1)
+
     def test_event_creation_uses_lowest_available_id(self):
         self.login('admin')
         later_event = Event(
