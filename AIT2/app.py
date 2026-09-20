@@ -27946,15 +27946,121 @@ def return_event_asset(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
-        asset_id = data.get('assetId', '').strip()
+        data = request.get_json(silent=True) or {}
+        requested_identifier = str(data.get('assetId') or '').strip()
 
-        if not asset_id:
+        if not requested_identifier:
             return jsonify({'error': 'Asset ID is required'}), 400
 
-        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        asset_id = requested_identifier
+        scanned_asset = _find_inventory_asset_by_identifier(requested_identifier)
         if scanned_asset:
             asset_id = scanned_asset.asset_id
+        else:
+            container = _find_container_by_lookup(requested_identifier)
+            if container:
+                returned_set = set(getattr(event, 'returned_items', []) or [])
+                prepared_refs = list(dict.fromkeys([
+                    *(getattr(event, 'actually_prepared', []) or []),
+                    *(getattr(event, 'prepared_items', []) or []),
+                    *(getattr(event, 'returned_items', []) or []),
+                ]))
+                container_asset_ids = {
+                    str(value or '').strip()
+                    for value in (getattr(container, 'asset_ids', []) or [])
+                    if str(value or '').strip()
+                }
+                matched_refs = []
+                return_targets = []
+
+                for ref in prepared_refs:
+                    if ref not in container_asset_ids:
+                        continue
+                    matched_refs.append(ref)
+                    if ref not in returned_set:
+                        return_targets.append(ref)
+
+                # Bulk inventory is tracked on an event as quantity markers rather
+                # than its inventory ID. Match only as much of each bulk type as
+                # the scanned container holds, preserving event/room marker order.
+                for bulk_id, container_quantity in _container_bulk_item_map(container).items():
+                    remaining = max(0, _safe_int(container_quantity, 0))
+                    if remaining <= 0:
+                        continue
+                    for ref in prepared_refs:
+                        marker = _parse_bulk_marker(ref)
+                        if not marker or marker.get('bulkId') != bulk_id:
+                            continue
+                        marker_quantity = max(1, _safe_int(marker.get('quantity'), 1))
+                        if marker_quantity > remaining:
+                            remaining = 0
+                            break
+                        remaining -= marker_quantity
+                        matched_refs.append(ref)
+                        if ref not in returned_set:
+                            return_targets.append(ref)
+                        if remaining <= 0:
+                            break
+
+                matched_refs = list(dict.fromkeys(matched_refs))
+                return_targets = list(dict.fromkeys(return_targets))
+                if not return_targets:
+                    if matched_refs:
+                        return jsonify({
+                            'error': f'All assets from container {container.container_id} are already returned'
+                        }), 400
+                    return jsonify({
+                        'error': f'No assets from container {container.container_id} are assigned to this event'
+                    }), 400
+
+                inventory_changed = False
+                for ref in return_targets:
+                    event.returned_items.append(ref)
+                    if _is_bulk_ref(ref):
+                        continue
+                    if ref in event.actually_prepared:
+                        event.actually_prepared.remove(ref)
+                    asset = data_manager.inventory.get(ref)
+                    if asset:
+                        asset.current_location = asset.default_location or ''
+                        inventory_changed = True
+
+                if inventory_changed:
+                    data_manager.save_inventory()
+                update_event_state(event)
+                data_manager.save_event(event)
+                invalidate_cache()
+                _log_event_asset_action(
+                    event_id,
+                    'return',
+                    [_event_asset_log_item(ref) for ref in return_targets],
+                )
+                return jsonify({
+                    'success': True,
+                    'message': (
+                        f'Returned {len(return_targets)} asset'
+                        f'{"s" if len(return_targets) != 1 else ""} '
+                        f'from container {container.container_id}'
+                    ),
+                    'data': {
+                        'containerId': container.container_id,
+                        'returned': return_targets,
+                    },
+                })
+
+            event_refs = {
+                *(getattr(event, 'prepared_items', []) or []),
+                *(getattr(event, 'actually_prepared', []) or []),
+                *(getattr(event, 'returned_items', []) or []),
+            }
+            if (
+                not _is_bulk_ref(asset_id)
+                and not _is_custom_ref(asset_id)
+                and asset_id not in event_refs
+            ):
+                return jsonify({
+                    'error': 'Asset ID, container ID, or serial number cannot be found'
+                }), 404
 
         if _is_bulk_ref(asset_id):
             if asset_id not in getattr(event, 'actually_prepared', []) and asset_id not in getattr(event, 'prepared_items', []):

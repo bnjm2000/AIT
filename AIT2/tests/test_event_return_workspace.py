@@ -3,7 +3,8 @@ import unittest
 
 import app as app_module
 from data_manager import DataManager
-from models import Event, InventoryItem, User, hash_password
+from models import Container, Event, InventoryItem, User, hash_password
+from tests.static_source import APP_BUNDLE_SOURCE
 
 
 class EventReturnWorkspaceTests(unittest.TestCase):
@@ -29,9 +30,23 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         self.data_manager.save_logs()
         self.data_manager.inventory = {
             'A-001': self.make_asset('A-001'),
+            'A-002': self.make_asset('A-002'),
             'BULK-001': self.make_asset('BULK-001', is_bulk=True, quantity=10),
         }
+        self.data_manager.containers = {
+            'CASE-001': Container(
+                'CASE-001',
+                ['A-001', 'A-002'],
+                serial_number='CASE-SERIAL-001',
+            ),
+            'BULK-CASE': Container(
+                'BULK-CASE',
+                [],
+                bulk_items={'BULK-001': 3},
+            ),
+        }
         self.data_manager.save_inventory()
+        self.data_manager.save_containers()
 
         app_module.app.config['TESTING'] = True
         app_module.set_data_manager_for_testing(self.data_manager)
@@ -217,6 +232,104 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         event = self.data_manager.events[event.event_id]
         self.assertIn(black_drape, event.returned_items)
         self.assertIn(black_drape, event.actually_prepared)
+
+    def test_quick_return_accepts_container_id_and_returns_only_event_assets(self):
+        event = self.make_event(
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'CASE-001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['containerId'], 'CASE-001')
+        self.assertEqual(response.get_json()['data']['returned'], ['A-001'])
+        event = self.data_manager.events[event.event_id]
+        self.assertIn('A-001', event.returned_items)
+        self.assertNotIn('A-002', event.returned_items)
+
+    def test_quick_return_accepts_container_serial_number(self):
+        event = self.make_event(
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'CASE-SERIAL-001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('A-001', self.data_manager.events[event.event_id].returned_items)
+
+    def test_quick_return_container_returns_its_event_bulk_marker(self):
+        marker = app_module._bulk_marker('BULK-001', 3, 'breakout')
+        event = self.make_event(
+            prepared_items=[marker],
+            actually_prepared=[marker],
+        )
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'BULK-CASE'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['returned'], [marker])
+        self.assertIn(marker, self.data_manager.events[event.event_id].returned_items)
+
+    def test_unknown_quick_return_identifier_has_accurate_not_found_error(self):
+        event = self.make_event(
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'DOES-NOT-EXIST'},
+        )
+
+        self.assertEqual(response.status_code, 404, response.get_data(as_text=True))
+        self.assertEqual(
+            response.get_json()['error'],
+            'Asset ID, container ID, or serial number cannot be found',
+        )
+
+    def test_quick_return_is_event_wide_and_scan_value_survives_room_switches(self):
+        event = self.make_event(
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+        event.subprojects = [
+            {'id': 'main', 'name': 'Main Room', 'items': []},
+            {
+                'id': 'breakout',
+                'name': 'Breakout Room',
+                'items': [{'assetRefs': ['A-001']}],
+            },
+        ]
+        self.data_manager.save_event(event)
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'A-001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('A-001', self.data_manager.events[event.event_id].returned_items)
+        self.assertNotIn('This asset belongs to a different sub-project', APP_BUNDLE_SOURCE)
+        self.assertIn('quickReturnValue', APP_BUNDLE_SOURCE)
+        self.assertIn(
+            'value="${escapeHtmlAttr(returnPageState.quickReturnValue)}"',
+            APP_BUNDLE_SOURCE,
+        )
+        self.assertIn(
+            'const disabled = getEventReturnableCount(event) <= 0',
+            APP_BUNDLE_SOURCE,
+        )
 
     def test_close_return_requires_every_asset_to_be_returned(self):
         event = self.make_event(

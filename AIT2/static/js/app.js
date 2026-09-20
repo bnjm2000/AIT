@@ -3134,7 +3134,7 @@ function scanForReturn() {
 
   openBarcodeScanner({
     title: 'Scan To Return',
-    instructions: 'Scan an asset QR code, barcode, or serial number to return it from the selected event.',
+    instructions: 'Scan an asset ID, barcode, serial number, or container ID to return it from the selected event.',
     onScan: async identifier => {
       const input = document.getElementById('returnQuickAssetInput');
       if (input) input.value = identifier;
@@ -13525,6 +13525,7 @@ const returnPageState = {
   activeSubprojectId: '',
   departmentOpenState: new Map(),
   customGroupOpenState: new Map(),
+  quickReturnValue: '',
 };
 const returnPageAssetCache = new WeakMap();
 
@@ -14296,21 +14297,25 @@ async function returnPageFlushNotesSave() {
   }
 }
 
-function returnPageQuickReturnHtml(metrics) {
-  const disabled = metrics.remaining <= 0 ? 'disabled' : '';
+function returnPageQuickReturnHtml(event = returnPageState.event) {
+  // Room tabs filter the table, but Quick Return always operates on the whole
+  // event. Keep scanning available while any room still has an asset out.
+  const disabled = getEventReturnableCount(event) <= 0 ? 'disabled' : '';
   return `
     <section class="return-surface">
       <div class="return-card-header">
-        <div><h3>Quick Return</h3><p>Scan or enter an asset ID.</p></div>
+        <div><h3>Quick Return</h3><p>Scan or enter an asset ID, container ID, or serial number.</p></div>
       </div>
       <div class="return-aside-body">
-        <label class="return-quick-label" for="returnQuickAssetInput">Asset ID or serial number</label>
+        <label class="return-quick-label" for="returnQuickAssetInput">Asset ID, container ID, or serial number</label>
         <div class="return-quick-row">
           <input class="return-quick-input"
                  id="returnQuickAssetInput"
                  autocomplete="off"
+                 value="${escapeHtmlAttr(returnPageState.quickReturnValue)}"
                  placeholder="e.g. AU-1038"
                  ${disabled}
+                 oninput="returnPageState.quickReturnValue=this.value"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();returnPageManualReturn();}">
           <button type="button"
                   class="return-button"
@@ -14458,7 +14463,7 @@ function renderReturnPage(options = {}) {
     </div>
     <div class="return-layout">
       <aside class="return-left">
-        ${returnPageQuickReturnHtml(metrics)}
+        ${returnPageQuickReturnHtml(event)}
         ${returnPageCustomItemsHtml(event)}
       </aside>
       <div class="return-primary">
@@ -14635,6 +14640,7 @@ async function returnPageSelectEvent(eventId) {
   const version = ++returnPageState.requestVersion;
   returnPageState.department = 'ALL';
   returnPageState.search = '';
+  returnPageState.quickReturnValue = '';
   returnPageState.departmentOpenState.clear();
   returnPageState.customGroupOpenState.clear();
   try {
@@ -14872,12 +14878,13 @@ async function returnPageManualReturn() {
   const submit = document.getElementById('returnQuickSubmit');
   let assetId = normalizeScannedIdentifier(input?.value || '');
   const scannedValue = assetId;
+  returnPageState.quickReturnValue = String(input?.value || '');
   if (!eventId) {
     showNotification('warning', 'Select an event first');
     return;
   }
   if (!assetId) {
-    showNotification('warning', 'Enter an asset ID or serial number');
+    showNotification('warning', 'Enter an asset ID, container ID, or serial number');
     input?.focus();
     return;
   }
@@ -14889,15 +14896,6 @@ async function returnPageManualReturn() {
     console.warn('Could not resolve scanned return identifier locally:', error);
   }
 
-  if (
-    eventSubprojects(returnPageState.event).length > 1 &&
-    !returnPageAssets().some(asset => String(asset.id) === String(assetId))
-  ) {
-    showNotification('warning', 'This asset belongs to a different sub-project');
-    input?.focus();
-    return;
-  }
-
   const key = `return:${assetId}`;
   if (returnPageState.pendingActions.has(key)) return;
   returnPageState.pendingActions.add(key);
@@ -14907,16 +14905,26 @@ async function returnPageManualReturn() {
   }
 
   try {
-    await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+    const response = await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
     const queuedValue = normalizeScannedIdentifier(input?.value || '') !== normalizeScannedIdentifier(scannedValue)
       ? String(input?.value || '')
       : '';
     clearWorkflowScanInput(input, scannedValue);
+    returnPageState.quickReturnValue = queuedValue;
     await returnPageRefreshSelected({ focusId: 'returnQuickAssetInput' });
     const refreshedInput = document.getElementById('returnQuickAssetInput');
     if (queuedValue && refreshedInput && !refreshedInput.value) refreshedInput.value = queuedValue;
     playWorkflowTone('success');
-    showNotification('success', `${customAssetLabelFromId(assetId)} returned successfully`);
+    const returnedContainerId = String(response?.data?.containerId || '');
+    const returnedContainerAssets = Array.isArray(response?.data?.returned)
+      ? response.data.returned.length
+      : 0;
+    showNotification(
+      'success',
+      returnedContainerId
+        ? `${returnedContainerAssets} asset(s) returned from container ${returnedContainerId}`
+        : `${customAssetLabelFromId(assetId)} returned successfully`
+    );
   } catch (error) {
     playWorkflowTone('error');
     showNotification('error', `Return failed: ${error.message}`);
