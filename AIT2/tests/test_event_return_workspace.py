@@ -329,13 +329,6 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         )
         self.assertEqual(returned.status_code, 200, returned.get_data(as_text=True))
 
-        # A later deployment must not prevent recording which asset had already
-        # returned from this event.
-        self.make_event(
-            event_id=2,
-            prepared_items=['A-001'],
-            actually_prepared=['A-001'],
-        )
         available = self.client.get(
             f'/api/assets/available-for-event/{event.event_id}'
         )
@@ -355,6 +348,45 @@ class EventReturnWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.data_manager.inventory['A-001'].current_location, 'Store')
         self.assertEqual(app_module._event_returnable_counts(event)['returnable'], 0)
         self.assertEqual(app_module._event_returnable_counts(event)['returned'], 1)
+
+    def test_returned_slot_cannot_reconcile_with_asset_deployed_elsewhere(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Return test item',
+        }
+        event = self.make_event(
+            prepared_items=['[MODEL]AX|TestBrand|TestModel|1|Return test item'],
+            actually_prepared=[app_module._prepared_model_marker(group, 1)],
+        )
+        returned = self.client.post(
+            f'/api/events/{event.event_id}/return-prepared-quantity',
+            json={**group, 'quantity': 1},
+        )
+        self.assertEqual(returned.status_code, 200, returned.get_data(as_text=True))
+        self.make_event(
+            event_id=2,
+            prepared_items=['A-001'],
+            actually_prepared=['A-001'],
+        )
+
+        available = self.client.get(
+            f'/api/assets/available-for-event/{event.event_id}'
+        )
+        self.assertEqual(available.status_code, 200, available.get_data(as_text=True))
+        self.assertNotIn('A-001', [row['id'] for row in available.get_json()['data']])
+
+        assigned = self.client.post(
+            f'/api/events/{event.event_id}/assign-specific',
+            json={'assetId': 'A-001'},
+        )
+
+        self.assertEqual(assigned.status_code, 400, assigned.get_data(as_text=True))
+        self.assertIn('already assigned to another event 2', assigned.get_json()['error'])
+        event = self.data_manager.events[event.event_id]
+        self.assertEqual(app_module._event_returned_prepared_slot_quantity(event, group), 1)
+        self.assertNotIn('A-001', event.returned_items)
 
 
 if __name__ == '__main__':

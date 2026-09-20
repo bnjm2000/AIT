@@ -99,6 +99,23 @@ test('returned extras remain visible in prepare totals and model rows', () => {
   assert.match(run('prepareNewModelSection(fixture.modelGroups.speaker)'), /1 spare/);
 });
 
+test('completed model rows do not offer another prepare quantity action', () => {
+  const { run } = setup();
+  run(`
+    fixture.modelGroups = { speaker: {
+      department: 'AX', brand: 'Test', model: 'Speaker', description: 'Speaker',
+      requiredQuantity: 1, preparedQuantity: 1, preparedEverQuantity: 1,
+      countablePreparedQuantity: 1, countablePreparedEverQuantity: 1,
+      assignedAssets: [], isBulkQuantity: false
+    } };
+    eventSubprojectModelGroups = event => Object.values(event.modelGroups || {});
+  `);
+  assert.doesNotMatch(
+    run('prepareNewModelSection(fixture.modelGroups.speaker)'),
+    />Prepare qty<\/button>/
+  );
+});
+
 test('assigned assets retain their degraded badge alongside prepared or extra status', () => {
   const { run } = setup();
   run('prepareNewPageState.eventId = 42; fixture.returnedItems = []');

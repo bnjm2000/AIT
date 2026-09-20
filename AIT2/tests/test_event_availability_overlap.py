@@ -568,6 +568,47 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertNotIn('A#02', ids)
         self.assertIn('A#03', ids)
 
+    def test_prepare_quantity_rejects_when_all_matching_assets_are_deployed_elsewhere(self):
+        target = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|1|Regular item'],
+        )
+        self.make_event(
+            101,
+            actual=[f'A#{index:02d}' for index in range(1, 7)],
+        )
+
+        self.login_as()
+        response = self.client.post('/api/events/100/prepare-model-quantity', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 1,
+            'action': 'prepare',
+        })
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertIn('Only 0 more units can be prepared', response.get_json()['error'])
+        self.assertEqual(target.actually_prepared, [])
+
+    def test_specific_assignment_rejects_an_asset_deployed_to_another_event(self):
+        target = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|1|Regular item'],
+        )
+        self.make_event(101, actual=['A#01'])
+
+        self.login_as()
+        response = self.client.post(
+            '/api/events/100/assign-specific',
+            json={'assetId': 'A#01'},
+        )
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertIn('already assigned to another event 101', response.get_json()['error'])
+        self.assertEqual(target.actually_prepared, [])
+
     def test_prepare_dropdown_excludes_missing_and_ooc_but_includes_degraded(self):
         self.make_event(100)
         self.data_manager.inventory['MISS#01'] = self.make_asset('MISS#01', is_missing=True)

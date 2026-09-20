@@ -6999,6 +6999,26 @@ def _event_subproject_prepared_quantity(event, subproject, group):
     return total
 
 
+def _event_subproject_prepared_ever_quantity(event, subproject, group):
+    """Count room preparation history without allowing extras to fill demand."""
+    total = (
+        _event_subproject_anonymous_prepared_quantity(subproject, group)
+        + _event_subproject_returned_prepared_quantity(subproject, group)
+    )
+    assigned = set(getattr(event, 'actually_prepared', []) or [])
+    assigned.update(getattr(event, 'returned_items', []) or [])
+    extra_refs = set(getattr(event, 'extra_assets', []) or [])
+    extra_refs.update(subproject.get('extraRefs') or [])
+    seen = set()
+    for item in _event_subproject_group_items(subproject, group):
+        for ref in item.get('assetRefs') or []:
+            if ref in seen or ref not in assigned or ref in extra_refs:
+                continue
+            seen.add(ref)
+            total += _event_subproject_ref_quantity(ref)
+    return total
+
+
 def _event_subproject_assign_ref(subproject, group, asset_ref, consume_slot=False):
     matches = _event_subproject_group_items(subproject, group)
     if not matches:
@@ -7298,6 +7318,32 @@ def _event_active_prepared_quantity_for_group(event, group, include_extra=True):
     slot_qty = _event_prepared_slot_quantity(event, group)
     specific_qty = _event_specific_asset_quantity(event, group, include_returned=False, include_extra=include_extra)
     bulk_qty = _event_bulk_quantity_for_group(event, group, include_returned=False)
+    return slot_qty + specific_qty + bulk_qty
+
+
+def _event_prepared_ever_quantity_for_group(event, group, include_extra=True):
+    """Quantity already credited to a requirement, including returned units."""
+    slot_qty = (
+        _event_prepared_slot_quantity(event, group)
+        + _event_returned_prepared_slot_quantity(event, group)
+    )
+    specific_qty = _event_specific_asset_quantity(
+        event,
+        group,
+        include_returned=True,
+        include_extra=include_extra,
+    )
+    # Returned bulk markers normally remain in actually_prepared. Deduplicate
+    # exact marker strings so older data that only retained the returned copy
+    # is counted without counting a normal returned marker twice.
+    bulk_values = list(dict.fromkeys(
+        list(getattr(event, 'actually_prepared', []) or [])
+        + list(getattr(event, 'returned_items', []) or [])
+    ))
+    bulk_qty = _bulk_quantity_in_values_for_key(
+        bulk_values,
+        _event_model_group_key(group),
+    )
     return slot_qty + specific_qty + bulk_qty
 
 
@@ -8691,11 +8737,10 @@ def get_available_assets_for_event(event_id):
             if asset_id in current_event_refs:
                 continue
 
-            if (
-                not is_returned_reconciliation_candidate
-                and not is_missing
-                and asset_id in busy_elsewhere
-            ):
+            # Historical returned-slot reconciliation may relax condition
+            # checks, but it must never borrow a unit that is actively deployed
+            # to another event.
+            if asset_id in busy_elsewhere:
                 continue
 
             asset_payload = {
@@ -28513,7 +28558,10 @@ def assign_specific_asset_to_model(event_id):
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            busy_event = None if reconciles_returned_slot else _find_event_using_asset(asset_id, event)
+            # Reconciliation records a historical returned assignment, but the
+            # exact unit must still be free now. Otherwise Prepare appears to
+            # let the same physical asset be selected from two events.
+            busy_event = _find_event_using_asset(asset_id, event)
             if busy_event:
                 return jsonify({
                     'error': f'Asset is already assigned to another event {busy_event.event_id}: {busy_event.name}'
@@ -28734,19 +28782,43 @@ def prepare_event_model_quantity(event_id):
                 include_extra=True,
             )
         )
+        prepared_ever = (
+            _event_subproject_prepared_ever_quantity(event, subproject, group)
+            if subproject
+            else _event_prepared_ever_quantity_for_group(
+                event,
+                group,
+                include_extra=False,
+            )
+        )
 
         if action == 'prepare':
-            quantity = max(0, required - current_prepared) if prepare_all else requested_quantity
-            if quantity <= 0:
+            remaining_required = max(0, required - prepared_ever)
+            if remaining_required <= 0:
+                if not prepare_all:
+                    return jsonify({
+                        'error': 'There are no units left to prepare for this line item'
+                    }), 409
                 return jsonify({
                     'success': True,
                     'message': 'This line item is already prepared',
                     'data': {
-                        'preparedQuantity': current_prepared,
+                        'preparedQuantity': prepared_ever,
                         'requiredQuantity': required,
                         'preparedNow': 0,
                     },
                 })
+
+            quantity = remaining_required if prepare_all else requested_quantity
+            if quantity <= 0:
+                return jsonify({'error': 'Quantity is required'}), 400
+            if quantity > remaining_required:
+                return jsonify({
+                    'error': (
+                        f"Only {remaining_required} unit"
+                        f"{'' if remaining_required == 1 else 's'} are left to prepare"
+                    )
+                }), 400
 
             capacity = _event_prepare_capacity_for_group(event, group)
             capacity_used = _event_active_prepared_quantity_for_group(
@@ -28816,7 +28888,7 @@ def prepare_event_model_quantity(event_id):
                 'data': {
                     'preparedNow': prepared_now,
                     'requiredQuantity': required,
-                    'preparedQuantity': current_prepared + prepared_now,
+                    'preparedQuantity': prepared_ever + prepared_now,
                     'isBulk': is_bulk,
                 },
             })

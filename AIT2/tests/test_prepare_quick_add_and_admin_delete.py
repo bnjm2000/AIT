@@ -217,15 +217,61 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
     def test_quick_add_disabled_tracks_surplus_as_extra(self):
         event = self.make_event()
 
-        prepare_response = self.post_prepare_quantity(event.event_id)
-        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
-
         response = self.post_assign(event.event_id, quickAdd=False)
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertTrue(response.get_json()['data']['isExtra'])
         self.assertIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|1|Matching item', event.prepared_items)
+
+    def test_prepare_quantity_rejects_a_line_with_nothing_left_to_prepare(self):
+        event = self.make_event(event_id=151)
+
+        response = self.post_prepare_quantity(event.event_id)
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertIn('no units left to prepare', response.get_json()['error'])
+        self.assertEqual(event.actually_prepared, ['A#01'])
+        self.assertFalse(any(
+            app_module._is_prepared_model_ref(ref)
+            for ref in event.actually_prepared
+        ))
+
+    def test_prepare_quantity_cannot_exceed_the_outstanding_requirement(self):
+        event = self.make_event(
+            event_id=152,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=[],
+            extra=[],
+        )
+
+        response = self.post_prepare_quantity(event.event_id, quantity=3)
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertIn('Only 2 units are left to prepare', response.get_json()['error'])
+        self.assertEqual(event.actually_prepared, [])
+
+    def test_returned_prepared_quantity_cannot_be_prepared_again(self):
+        group = {
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'description': 'Matching item',
+        }
+        returned_slot = app_module._prepared_model_marker(group, 1)
+        event = self.make_event(
+            event_id=153,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+        event.returned_items = [returned_slot]
+
+        response = self.post_prepare_quantity(event.event_id)
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertEqual(event.actually_prepared, [])
+        self.assertEqual(event.returned_items, [returned_slot])
 
     def test_quick_add_enabled_adds_surplus_into_event_requirement(self):
         event = self.make_event(event_id=101)
@@ -1491,9 +1537,6 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
 
     def test_quick_add_false_overrides_container_auto_add(self):
         event = self.make_event(event_id=104)
-
-        prepare_response = self.post_prepare_quantity(event.event_id)
-        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
 
         response = self.post_assign(event.event_id, quickAdd=False, fromContainer=True, source='container')
 

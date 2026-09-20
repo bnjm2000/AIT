@@ -409,10 +409,19 @@ async function prepareNewPrepareQty(encodedKey) {
   const key = planDecode(encodedKey);
   const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
   if (!group) return;
+  const max = Math.max(
+    0,
+    Number(group.requiredQuantity || 0) - prepareNewCountablePreparedEverQuantity(group)
+  );
+  if (max <= 0) {
+    showNotification('info', 'There are no units left to prepare for this line item');
+    return;
+  }
   const quantity = await prepareNewPromptQuantity({
     title: 'Prepare Qty',
     message: `How many ${[group.brand, group.model].filter(Boolean).join(' ') || 'items'} would you like to prepare?`,
-    confirmText: 'Prepare'
+    confirmText: 'Prepare',
+    max
   });
   if (quantity > 0) await prepareNewChangeModelQuantity(group, 'prepare', quantity);
 }
@@ -518,16 +527,19 @@ function prepareNewModelSection(group) {
                    onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
         : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
                    onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`));
-  const menu = `
+  const menuActions = `
+        ${complete ? '' : `<button type="button" onclick="event.stopPropagation();prepareNewPrepareQty('${encodedKey}')">Prepare qty</button>`}
+        ${(isBulk ? activePreparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
+  `.trim();
+  const menu = menuActions ? `
     <span class="prepare-new-action-wrap">
       <button type="button" class="prepare-new-more-button" aria-label="More prepare actions"
               onclick="prepareNewToggleActionMenu(event, '${encodedKey}')">...</button>
       <span class="prepare-new-action-menu" data-model-key="${escapeHtmlAttr(key)}">
-        <button type="button" onclick="event.stopPropagation();prepareNewPrepareQty('${encodedKey}')">Prepare qty</button>
-        ${(isBulk ? activePreparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
+        ${menuActions}
       </span>
     </span>
-  `;
+  ` : '';
   const spareLabel = extraPrepared > 0
     ? `<span class="prepare-new-spare-label">${extraPrepared} spare</span>`
     : '';
