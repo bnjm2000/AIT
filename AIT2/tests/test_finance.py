@@ -171,6 +171,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'documentVersion': first['documentVersion'],
         })
         self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        self.assertFalse(linked.get_json()['data']['eventContentImported'])
         self.assertEqual(event.prepared_items, ['[MODEL]AX|Existing|Model|2|Keep this plan'])
         self.assertEqual(event.name, 'Existing Plan')
         self.assertEqual(
@@ -219,6 +220,205 @@ class FinanceFeatureTests(unittest.TestCase):
             'documentVersion': second['documentVersion'],
         })
         self.assertEqual(sales_link.status_code, 200, sales_link.get_data(as_text=True))
+
+    def test_plan_link_imports_event_into_blank_new_quotation(self):
+        quotation = self.create_quote('')
+        quotation['client'] = {'name': 'Existing Client'}
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        quotation = response.get_json()['data']
+        event = Event(
+            event_id=329,
+            name='Plan Import Event',
+            location='Hall A',
+            start_date='20260918',
+            end_date='20260920',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Existing|Model|3|Imported item'],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+        )
+        self.data_manager.events[329] = event
+
+        linked = self.client.put('/api/events/329/quotation-link', json={
+            'quotationId': quotation['id'],
+            'documentVersion': quotation['documentVersion'],
+        })
+        self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        self.assertTrue(linked.get_json()['data']['eventContentImported'])
+        imported = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertEqual(imported['client']['name'], 'Existing Client')
+        self.assertEqual(imported['projectName'], 'Plan Import Event')
+        self.assertEqual(imported['eventLocation'], 'Hall A')
+        self.assertEqual(imported['setupDate'], '2026-09-18')
+        self.assertEqual(imported['teardownDate'], '2026-09-20')
+        self.assertEqual(imported['lineItems'][0]['quantity'], 3)
+
+    def test_linking_blank_new_quotation_imports_event_and_keeps_client(self):
+        quotation = self.create_quote('')
+        quotation['client'] = {
+            'name': 'Mr Wesley',
+            'company': 'Client Company',
+            'email': 'wesley@example.com',
+        }
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+        quotation = saved.get_json()['data']
+
+        event = Event(
+            event_id=330,
+            name='Imported Event',
+            location='Orchid Ballroom',
+            start_date='20260920',
+            end_date='20260922',
+            asset_models=[],
+            prepared_items=[],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+            subprojects=[{
+                'id': 'main-stage',
+                'name': 'Main Stage',
+                'items': [{
+                    'lineId': 'event-line-1',
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'L-Acoustics',
+                    'model': 'K2',
+                    'description': 'Line array speaker',
+                    'quantity': 4,
+                    'isCustom': False,
+                    'assetRefs': [],
+                }],
+            }],
+        )
+        self.data_manager.events[330] = event
+
+        linked = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json={
+                'eventId': 330,
+                'documentVersion': quotation['documentVersion'],
+            },
+        )
+        self.assertEqual(linked.status_code, 200, linked.get_data(as_text=True))
+        imported = linked.get_json()['data']
+        self.assertEqual(imported['eventId'], 330)
+        self.assertEqual(imported['projectName'], 'Imported Event')
+        self.assertEqual(imported['eventLocation'], 'Orchid Ballroom')
+        self.assertEqual(imported['setupDate'], '2026-09-20')
+        self.assertEqual(imported['teardownDate'], '2026-09-22')
+        self.assertEqual(imported['client']['name'], 'Mr Wesley')
+        self.assertEqual(imported['client']['company'], 'Client Company')
+        self.assertEqual(imported['subprojects'][0]['id'], 'main-stage')
+        self.assertEqual(imported['subprojects'][0]['name'], 'Main Stage')
+        self.assertEqual(len(imported['lineItems']), 1)
+        line = imported['lineItems'][0]
+        self.assertEqual(line['subprojectId'], 'main-stage')
+        self.assertEqual(line['brand'], 'L-Acoustics')
+        self.assertEqual(line['model'], 'K2')
+        self.assertEqual(line['quantity'], 4)
+        self.assertEqual(line['days'], 3)
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 4)
+
+    def test_link_import_requires_blank_schedule_and_line_items(self):
+        event = Event(
+            event_id=331,
+            name='Should Not Import',
+            location='Other Hall',
+            start_date='20261010',
+            end_date='20261012',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Existing|Model|5|Event inventory'],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+        )
+        self.data_manager.events[331] = event
+
+        scheduled = self.create_quote('')
+        scheduled['setupDate'] = '2026-10-01'
+        response = self.client.put(
+            f"/api/quotations/{scheduled['id']}",
+            json=scheduled,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        scheduled = response.get_json()['data']
+        response = self.client.put(
+            f"/api/quotations/{scheduled['id']}",
+            json={
+                'eventId': 331,
+                'documentVersion': scheduled['documentVersion'],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        linked_schedule = response.get_json()['data']
+        self.assertEqual(linked_schedule['eventId'], 331)
+        self.assertEqual(linked_schedule['setupDate'], '2026-10-01')
+        self.assertEqual(linked_schedule['teardownDate'], '')
+        self.assertEqual(linked_schedule['lineItems'], [])
+
+        event_two = Event(
+            event_id=332,
+            name='Also Should Not Import',
+            location='Third Hall',
+            start_date='20261020',
+            end_date='20261021',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Event|Item|7|Event inventory'],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+        )
+        self.data_manager.events[332] = event_two
+        with_line = self.create_quote('')
+        with_line['lineItems'] = [{
+            'id': 'existing-line',
+            'description': 'Keep this quotation line',
+            'department': 'Audio',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 2,
+            'uom': 'units',
+            'unitPrice': 10,
+            'discountPercent': 0,
+        }]
+        response = self.client.put(
+            f"/api/quotations/{with_line['id']}",
+            json=with_line,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        with_line = response.get_json()['data']
+        response = self.client.put(
+            f"/api/quotations/{with_line['id']}",
+            json={
+                'eventId': 332,
+                'documentVersion': with_line['documentVersion'],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        linked_lines = response.get_json()['data']
+        self.assertEqual(linked_lines['eventId'], 332)
+        self.assertEqual(len(linked_lines['lineItems']), 1)
+        self.assertEqual(
+            linked_lines['lineItems'][0]['description'],
+            'Keep this quotation line',
+        )
+        self.assertEqual(linked_lines['setupDate'], '')
+        self.assertEqual(linked_lines['teardownDate'], '')
 
     def test_plan_quotation_picker_scopes_owners_and_filters_status(self):
         first = self.create_quote('Alice Draft')

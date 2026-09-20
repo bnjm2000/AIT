@@ -46535,6 +46535,168 @@ def _finance_compare_apply_to_quotation(
         quotation.setdefault('lineItems', []).append(new_line)
 
 
+def _finance_quotation_schedule_is_blank(document):
+    document = document if isinstance(document, dict) else {}
+    for kind, additional_key in (
+        ('setup', 'additionalSetups'),
+        ('rehearsal', 'additionalRehearsals'),
+        ('show', 'additionalShows'),
+        ('teardown', 'additionalTeardowns'),
+    ):
+        if str(document.get(f'{kind}Date') or '').strip():
+            return False
+        if str(document.get(f'{kind}Time') or '').strip():
+            return False
+        if any(
+            str((row or {}).get('date') or '').strip()
+            or str((row or {}).get('time') or '').strip()
+            for row in document.get(additional_key) or []
+            if isinstance(row, dict)
+        ):
+            return False
+    if document.get('scheduleBatches'):
+        return False
+    if any(
+        str((group or {}).get('label') or '').strip()
+        or any(
+            str((row or {}).get('date') or '').strip()
+            or str((row or {}).get('time') or '').strip()
+            for row in (group or {}).get('dates') or []
+            if isinstance(row, dict)
+        )
+        for group in document.get('customScheduleGroups') or []
+        if isinstance(group, dict)
+    ):
+        return False
+    return True
+
+
+def _finance_quotation_can_import_linked_event(document):
+    document = document if isinstance(document, dict) else {}
+    subprojects = [
+        row for row in document.get('subprojects') or []
+        if isinstance(row, dict)
+    ]
+    has_custom_subprojects = (
+        len(subprojects) > 1
+        or bool(
+            subprojects
+            and str(subprojects[0].get('name') or 'Main Room').strip()
+            != 'Main Room'
+        )
+    )
+    return bool(
+        str(document.get('status') or 'draft').strip().lower() == 'draft'
+        and max(1, _safe_int(document.get('revision'), 1)) == 1
+        and not (document.get('revisions') or [])
+        and not str(document.get('sentAt') or '').strip()
+        and not str(document.get('acceptedAt') or '').strip()
+        and not str(document.get('invoicedAt') or '').strip()
+        and not any(
+            str(document.get(key) or '').strip()
+            for key in (
+                'projectName', 'title', 'reference', 'eventReference',
+                'eventLocation', 'notes',
+            )
+        )
+        and not (document.get('lineItems') or [])
+        and not (document.get('headerRows') or [])
+        and not (document.get('adjustments') or [])
+        and not has_custom_subprojects
+        and _finance_quotation_schedule_is_blank(document)
+    )
+
+
+def _finance_event_room_item_map(items):
+    result = {}
+    for item in items or []:
+        parsed = _finance_compare_item_from_subproject_item(item)
+        if not parsed:
+            continue
+        identity, quantity, details = parsed
+        _finance_compare_add_item(
+            result,
+            identity,
+            quantity,
+            details,
+            line_id=(item or {}).get('lineId'),
+        )
+    return result
+
+
+def _finance_import_linked_event_into_quotation(document, event, finance_data):
+    """Seed a genuinely new quotation from an existing event exactly once."""
+    if not event or not _finance_quotation_can_import_linked_event(document):
+        return False
+
+    event_name = str(getattr(event, 'name', '') or '').strip()
+    event_location = str(getattr(event, 'location', '') or '').strip()
+    if not str(document.get('projectName') or '').strip() and event_name:
+        document['projectName'] = event_name
+        document['title'] = event_name
+    if not str(document.get('eventLocation') or '').strip() and event_location:
+        document['eventLocation'] = event_location
+
+    event_dates = sorted(filter(None, (
+        _event_date_for_input(getattr(event, 'start_date', '')),
+        _event_date_for_input(getattr(event, 'end_date', '')),
+    )))
+    if event_dates:
+        document['setupDate'] = event_dates[0]
+        document['teardownDate'] = event_dates[-1]
+    document['scheduleMode'] = (
+        'dry-hire'
+        if str(getattr(event, 'tag', '') or '').strip().lower() == 'dry hire'
+        else 'event'
+    )
+
+    event_rooms = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    if event_rooms:
+        room_payloads = [
+            {
+                'id': str(room.get('id') or f'room_{index + 1}'),
+                'name': str(room.get('name') or f'Room {index + 1}'),
+                'items': room.get('items') or [],
+            }
+            for index, room in enumerate(event_rooms)
+        ]
+    else:
+        room_payloads = [{
+            'id': 'main',
+            'name': 'Main Room',
+            'items': _event_initial_subproject_items(event),
+        }]
+
+    document['subprojects'] = [
+        {'id': room['id'], 'name': room['name']}
+        for room in room_payloads
+    ]
+    lines = []
+    for room in room_payloads:
+        event_items = _finance_event_room_item_map(room['items'])
+        for event_item in sorted(event_items.values(), key=lambda row: (
+            str(row.get('departmentCode') or ''),
+            str(row.get('title') or ''),
+        )):
+            display_item = _finance_compare_display_item(event_item)
+            quantity = max(0, _safe_int(display_item.get('quantity'), 0))
+            if quantity <= 0:
+                continue
+            line = _finance_compare_line_from_event_item(
+                display_item,
+                quantity,
+                event,
+                finance_data,
+            )
+            line['subprojectId'] = room['id']
+            lines.append(line)
+    document['lineItems'] = lines
+    return True
+
+
 def _finance_revision_list_summary(revision):
     revision = revision if isinstance(revision, dict) else {}
     snapshot = revision.get('snapshot')
@@ -47088,6 +47250,11 @@ def _finance_get_update_delete(document_id, document_type):
                 )
             )
             missing_link_cleared = False
+            newly_linked_event = (
+                'eventId' in request_data
+                and not _safe_int(existing_normalised.get('eventId'), 0)
+                and bool(_safe_int(updated.get('eventId'), 0))
+            )
             if updated.get('eventId') and ('eventId' in request_data or str(request_data.get('status') or '').strip().lower() == 'accepted'):
                 linked_event = data_manager.events.get(_safe_int(updated.get('eventId'), 0))
                 if not linked_event:
@@ -47095,6 +47262,16 @@ def _finance_get_update_delete(document_id, document_type):
                     missing_link_cleared = True
                 elif not _current_user_can_access_event(linked_event):
                     return jsonify({'error': 'You are not assigned to this event'}), 403
+                elif newly_linked_event and _finance_import_linked_event_into_quotation(
+                    updated,
+                    linked_event,
+                    finance_data,
+                ):
+                    updated = _normalise_finance_document(
+                        updated,
+                        'quotation',
+                        updated,
+                    )
             if (
                 not missing_link_cleared
                 and not status_workflow_only
@@ -49863,10 +50040,25 @@ def event_quotation_link(event_id):
         if _safe_int(payload.get('documentVersion'), 0) != current_version:
             return jsonify({'error': 'This quotation changed. Search again before linking.'}), 409
 
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
         updated = copy.deepcopy(quotation)
         updated['eventId'] = event_id
         updated['eventManagedByQuotation'] = False
         updated['eventSyncFingerprint'] = ''
+        event_content_imported = _finance_import_linked_event_into_quotation(
+            updated,
+            event,
+            finance_data,
+        )
+        if event_content_imported:
+            updated = _normalise_finance_document(
+                updated,
+                'quotation',
+                updated,
+            )
         updated['documentVersion'] = current_version + 1
         updated['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         updated['updatedBy'] = _finance_current_username()
@@ -49891,6 +50083,7 @@ def event_quotation_link(event_id):
         'quotationId': quotation_id,
         'quotationNumber': str(updated.get('number') or ''),
         'documentVersion': updated['documentVersion'],
+        'eventContentImported': event_content_imported,
     }})
 
 

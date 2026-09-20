@@ -4873,15 +4873,23 @@ async function financePairEvent(eventId) {
   const id = Number(eventId || 0);
   const targetId = String(financeState.eventPairTargetId || financeState.current?.id || '');
   if (!targetId || !id) return;
+  const selectedEvent = financeFindEvent(id);
   if (financeState.current?.id === targetId) {
-    financeState.current.eventId = id;
-    closeModal('planEventChooserModal');
-    financeQueueSave();
-    financeRenderEditor();
+    try {
+      financeState.current.eventId = id;
+      closeModal('planEventChooserModal');
+      financeQueueSave();
+      const saved = await financeFlushPendingSave();
+      if (!saved) return;
+      financeState.eventPairTargetId = '';
+      financeRenderEditor();
+      showNotification('success', `Quotation paired to Event #${id}`);
+    } catch (error) {
+      showNotification('error', error.message || 'Failed to pair event');
+    }
     return;
   }
 
-  const selectedEvent = financeFindEvent(id);
   try {
     const response = await apiCall(
       `/api/quotations/${encodeURIComponent(targetId)}`,

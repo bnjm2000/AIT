@@ -70,6 +70,32 @@ test('creating from the quotation summary links the event without changing statu
   assert.equal(notices[0].type, 'success');
 });
 
+test('pairing the open quotation waits for imported event content before rendering', async () => {
+  const { context, notices } = setup();
+  const sequence = [];
+  vm.runInContext(`
+    financeState.current = { id: 'quote-1', eventId: null };
+    financeState.eventPairTargetId = 'quote-1';
+    financeState.events = [];
+  `, context);
+  context.closeModal = () => sequence.push('close');
+  context.financeQueueSave = () => sequence.push('queue');
+  context.financeFlushPendingSave = async () => {
+    sequence.push('flush');
+    return { id: 'quote-1', eventId: 42 };
+  };
+  context.financeRenderEditor = () => sequence.push('render');
+
+  await vm.runInContext('financePairEvent(42)', context);
+
+  assert.deepEqual(sequence, ['close', 'queue', 'flush', 'render']);
+  assert.equal(vm.runInContext('financeState.current.eventId', context), 42);
+  assert.equal(vm.runInContext('financeState.eventPairTargetId', context), '');
+  assert.deepEqual(notices, [
+    { type: 'success', message: 'Quotation paired to Event #42' }
+  ]);
+});
+
 test('linked quotations hide Create and incomplete event details show the server error', async () => {
   const linked = setup({ linked: true });
   const markup = vm.runInContext(
