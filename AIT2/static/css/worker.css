@@ -595,8 +595,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .status-details-required { background: #fffbeb; color: #b45309; }
 .status-approved { background: #ecfdf5; color: #047857; }
 .status-denied { background: #fff1f2; color: #be123c; }
-.status-paid { background: #eff6ff; color: #1d4ed8; }
-.status-payment-confirmed { background: #eef2ff; color: #4338ca; }
+.status-paid { background: #dbeafe; color: #1d4ed8; }
+.status-payment-confirmed { background: #f3e8ff; color: #7e22ce; }
 .status-queued,
 .status-queueing,
 .status-awaiting-confirmation,

@@ -3609,6 +3609,39 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn('PDF, PNG, JPG or Excel', admin_source)
         self.assertIn('PDF, PNG, JPG or Excel', claims_source)
 
+    def test_paid_and_payment_confirmed_use_distinct_shared_colours(self):
+        static_root = Path(app_module.__file__).parent / 'static'
+        shared = (static_root / 'css' / 'submission-status.css').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn('--submission-paid-bg:#dbeafe', shared)
+        self.assertIn('--submission-paid-text:#1d4ed8', shared)
+        self.assertIn('--submission-confirmed-bg:#f3e8ff', shared)
+        self.assertIn('--submission-confirmed-text:#7e22ce', shared)
+
+        for relative in (
+            ('css', 'worker.css'),
+            ('css', 'my-claims.css'),
+            ('css', 'workforce-admin.css'),
+        ):
+            styles = static_root.joinpath(*relative).read_text(encoding='utf-8')
+            self.assertIn('#dbeafe', styles)
+            self.assertIn('#1d4ed8', styles)
+            self.assertIn('#f3e8ff', styles)
+            self.assertIn('#7e22ce', styles)
+
+        finance_styles = (static_root / 'css' / 'finance.css').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn(
+            '.finance-list-filter.active.status-paid { border-color: #93c5fd; background: #dbeafe; color: #1d4ed8; }',
+            finance_styles,
+        )
+        statistics = (static_root / 'js' / 'worker-statistics.js').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn("key: 'received', label: 'Receipt confirmed', colour: '#9333ea'", statistics)
+
     def test_transport_invoices_resolve_through_standard_document_review_ui(self):
         source = (
             Path(app_module.__file__).parent

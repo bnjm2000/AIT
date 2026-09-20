@@ -1,4 +1,4 @@
-:root{--submission-pending-bg:#fef3c7;--submission-pending-text:#92400e;--submission-pending-border:#fde68a;--submission-approved-bg:#dcfce7;--submission-approved-text:#166534;--submission-approved-border:#bbf7d0;--submission-denied-bg:#fee2e2;--submission-denied-text:#991b1b;--submission-denied-border:#fecaca;--submission-paid-bg:#dbeafe;--submission-paid-text:#1e40af;--submission-paid-border:#bfdbfe;--submission-confirmed-bg:#f0edff;--submission-confirmed-text:#5b3fc6;--submission-confirmed-border:#d9d0ff;--submission-queued-bg:#eef2ff;--submission-queued-text:#4338ca;--submission-queued-border:#c7d2fe;--submission-process-bg:#ecfeff;--submission-process-text:#0e7490;--submission-process-border:#a5f3fc}
+:root{--submission-pending-bg:#fef3c7;--submission-pending-text:#92400e;--submission-pending-border:#fde68a;--submission-approved-bg:#dcfce7;--submission-approved-text:#166534;--submission-approved-border:#bbf7d0;--submission-denied-bg:#fee2e2;--submission-denied-text:#991b1b;--submission-denied-border:#fecaca;--submission-paid-bg:#dbeafe;--submission-paid-text:#1d4ed8;--submission-paid-border:#93c5fd;--submission-confirmed-bg:#f3e8ff;--submission-confirmed-text:#7e22ce;--submission-confirmed-border:#d8b4fe;--submission-queued-bg:#eef2ff;--submission-queued-text:#4338ca;--submission-queued-border:#c7d2fe;--submission-process-bg:#ecfeff;--submission-process-text:#0e7490;--submission-process-border:#a5f3fc}
 .worker-app :is(.status-submitted,.status-pending-review,.status-details-required),.my-claims-page :is(.status-submitted,.status-pending-review,.status-details-required){border-color:var(--submission-pending-border);background:var(--submission-pending-bg);color:var(--submission-pending-text)}
 .worker-app .status-approved,.my-claims-page .status-approved{border-color:var(--submission-approved-border);background:var(--submission-approved-bg);color:var(--submission-approved-text)}
 .worker-app :is(.status-denied,.status-failed),.my-claims-page :is(.status-denied,.status-failed){border-color:var(--submission-denied-border);background:var(--submission-denied-bg);color:var(--submission-denied-text)}
@@ -36,8 +36,8 @@
 .status-badge:is(.status-submitted, .status-pending-review, .status-details-required) { background: #fffbeb; color: #b45309; }
 .status-badge.status-approved { background: #ecfdf5; color: #047857; }
 .status-badge:is(.status-denied, .status-failed) { background: #fff1f2; color: #be123c; }
-.status-badge.status-paid { background: #eff6ff; color: #1d4ed8; }
-.status-badge.status-payment-confirmed { background: #eef2ff; color: #4338ca; }
+.status-badge.status-paid { background: var(--submission-paid-bg); color: var(--submission-paid-text); }
+.status-badge.status-payment-confirmed { background: var(--submission-confirmed-bg); color: var(--submission-confirmed-text); }
 .status-badge:is(.status-queued, .status-queueing, .status-awaiting-confirmation, .status-processing, .status-uploading) {
   background: #ecfeff;
   color: #0e7490;

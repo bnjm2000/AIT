@@ -213,7 +213,12 @@
 
 .wf-status-pill.status-paid {
   background: #dbeafe;
-  color: #1e40af;
+  color: #1d4ed8;
+}
+
+.wf-status-pill.status-payment-confirmed {
+  background: #f3e8ff;
+  color: #7e22ce;
 }
 
 .wf-layout {
@@ -590,8 +595,8 @@
 }
 
 .wf-document-filter.status-paid {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: #93c5fd;
+  background: #dbeafe;
   color: #1d4ed8;
 }
 
@@ -604,9 +609,9 @@
 }
 
 .wf-document-filter.status-payment-confirmed {
-  border-color: #d9d0ff;
-  background: #f0edff;
-  color: #5b3fc6;
+  border-color: #d8b4fe;
+  background: #f3e8ff;
+  color: #7e22ce;
 }
 
 .wf-document-filter.status-denied {
@@ -1588,9 +1593,9 @@
 }
 
 .wf-status-select.status-paid {
-  border-color: #bfdbfe;
+  border-color: #93c5fd;
   background: #dbeafe;
-  color: #1e40af;
+  color: #1d4ed8;
 }
 
 .wf-empty {
@@ -3651,8 +3656,8 @@ button.wf-calendar-day.selected.has-conflict:hover {
 .wf-dept-status-summary .status-pending-review { background: #fef3c7; color: #92400e; }
 .wf-dept-status-summary .status-approved { background: #dcfce7; color: #166534; }
 .wf-dept-status-summary .status-denied { background: #fee2e2; color: #991b1b; }
-.wf-dept-status-summary .status-paid { background: #dbeafe; color: #1e40af; }
-.wf-dept-status-summary .status-payment-confirmed { background: #ede9fe; color: #5b3fc6; }
+.wf-dept-status-summary .status-paid { background: #dbeafe; color: #1d4ed8; }
+.wf-dept-status-summary .status-payment-confirmed { background: #f3e8ff; color: #7e22ce; }
 
 .wf-status-control {
   position: relative;
@@ -3692,18 +3697,18 @@ button.wf-calendar-day.selected.has-conflict:hover {
 
 .wf-status-button.status-paid,
 .wf-status-menu .status-paid {
-  border-color: #bfdbfe;
+  border-color: #93c5fd;
   background: #dbeafe;
-  color: #1e40af;
+  color: #1d4ed8;
 }
 
 .wf-status-button.status-payment-confirmed,
 .wf-status-menu .status-payment-confirmed {
   display: inline-flex;
   align-items: center;
-  border-color: #d9d0ff;
-  background: #f0edff;
-  color: #5b3fc6;
+  border-color: #d8b4fe;
+  background: #f3e8ff;
+  color: #7e22ce;
 }
 
 .wf-status-button.status-queued,
@@ -3934,12 +3939,12 @@ button.wf-calendar-day.selected.has-conflict:hover {
 
 .wf-readonly-status.status-paid {
   background: #dbeafe;
-  color: #1e40af;
+  color: #1d4ed8;
 }
 
 .wf-readonly-status.status-payment-confirmed {
-  background: #f0edff;
-  color: #5b3fc6;
+  background: #f3e8ff;
+  color: #7e22ce;
 }
 
 .wf-review-form input:disabled,

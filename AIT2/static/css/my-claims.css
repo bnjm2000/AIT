@@ -210,8 +210,9 @@
   font-weight: 800;
 }
 
-.my-claim-row .status-approved,
-.my-claim-row .status-paid { background: #dcfce7; color: #166534; }
+.my-claim-row .status-approved { background: #dcfce7; color: #166534; }
+.my-claim-row .status-paid { background: #dbeafe; color: #1d4ed8; }
+.my-claim-row .status-payment-confirmed { background: #f3e8ff; color: #7e22ce; }
 
 .my-claim-row .status-denied,
 .my-claim-row .status-failed { background: #fee2e2; color: #991b1b; }

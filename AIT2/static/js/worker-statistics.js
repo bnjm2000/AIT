@@ -4,7 +4,7 @@ const WorkerStatistics = (() => {
   const views = new WeakMap();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const states = [
-    { key: 'received', label: 'Receipt confirmed', colour: '#0f766e' },
+    { key: 'received', label: 'Receipt confirmed', colour: '#9333ea' },
     { key: 'paid', label: 'Paid · confirm receipt', colour: '#3b82f6' },
     { key: 'approved', label: 'Approved · awaiting payment', colour: '#8b5cf6' },
     { key: 'review', label: 'Awaiting review', colour: '#f59e0b' },
