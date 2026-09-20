@@ -100,6 +100,51 @@ test('crew and vendor submissions reuse the worker portal status and progress tr
   assert.match(approved, /class="wf-status-button status-badge status-approved"/);
 });
 
+test('denied claim status overrides a legacy details-required stage', () => {
+  const context = setup();
+  const source = fs.readFileSync(path.join(__dirname, '../static/js/workforce-admin.js'), 'utf8');
+  const menuStart = source.indexOf('function wfStatusMenu(');
+  const menuEnd = source.indexOf('\nfunction wfClaimTotalMarkup(', menuStart);
+  vm.runInContext(source.slice(menuStart, menuEnd), context);
+
+  const claim = {
+    id: 'denied-claim', status: 'Denied', submissionStage: 'Details Required',
+  };
+  const menu = context.wfStatusMenu(claim);
+  assert.match(menu, /status-denied/);
+  assert.match(menu, />Denied/);
+  assert.doesNotMatch(menu, /Details required/);
+  assert.equal(context.wfDocumentStatusKeyFromRecord(claim), 'denied');
+  assert.equal(context.wfHistoryDisplayStatus(claim), 'Denied');
+
+  const fields = context.wfReviewClaimCategoryFields(claim, false);
+  assert.doesNotMatch(fields, /\brequired\b/);
+  assert.doesNotMatch(fields, /Claim date \*/);
+  assert.doesNotMatch(fields, /Category \*/);
+});
+
+test('worker claim pages show denied instead of details required', () => {
+  const workerContext = vm.createContext({});
+  const workerSource = fs.readFileSync(path.join(__dirname, '../static/js/worker.js'), 'utf8');
+  const workerStart = workerSource.indexOf('function displayStatus(');
+  const workerEnd = workerSource.indexOf('\nfunction statusClass(', workerStart);
+  vm.runInContext(workerSource.slice(workerStart, workerEnd), workerContext);
+  assert.equal(workerContext.displayStatus({
+    status: 'Denied', submissionStage: 'Details Required',
+  }), 'Denied');
+
+  const claimsContext = vm.createContext({
+    MY_CLAIMS_PROCESSING_STATES: new Set(['Queued', 'Processing']),
+  });
+  const claimsSource = fs.readFileSync(path.join(__dirname, '../static/js/my-claims.js'), 'utf8');
+  const claimsStart = claimsSource.indexOf('function myClaimsDisplayStatus(');
+  const claimsEnd = claimsSource.indexOf('\nfunction myClaimsStatus(', claimsStart);
+  vm.runInContext(claimsSource.slice(claimsStart, claimsEnd), claimsContext);
+  assert.equal(claimsContext.myClaimsDisplayStatus({
+    status: 'Denied', submissionStage: 'Details Required',
+  }), 'Denied');
+});
+
 test('invoice due dates appear for admins with countdown and upload-age fallback', () => {
   const context = setup();
   vm.runInContext(`

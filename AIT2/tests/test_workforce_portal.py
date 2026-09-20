@@ -2964,6 +2964,69 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(claim["detailsCompletedByAdmin"], "admin")
         self.assertEqual(payload["totals"]["claims"], 18.75)
 
+    def test_denied_claim_does_not_require_category_or_show_details_required(self):
+        freelancer_id = self.create_worker_assignment()
+        with mutate_workforce(self.tempdir.name) as workforce:
+            workforce["submissions"] = {
+                "143": {
+                    freelancer_id: {
+                        "invoices": [],
+                        "claims": [{
+                            "id": "claim-denied-without-details",
+                            "originalName": "unclassified-receipt.png",
+                            "storedPath": "placeholder/unclassified-receipt.png",
+                            "contentType": "image/png",
+                            "submittedAt": now_iso(),
+                            "status": "Pending Review",
+                            "amount": None,
+                            "claimDate": "",
+                            "category": "",
+                            "detailsComplete": False,
+                            "submissionStage": "Details Required",
+                            "processingState": "Complete",
+                            "reviewHistory": [],
+                        }],
+                    }
+                }
+            }
+
+        self.login("admin", True)
+        denied = self.client.put(
+            "/api/workforce/submissions/claim-denied-without-details",
+            json={
+                "status": "Denied",
+                "denialReason": "Not reimbursable",
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(denied.status_code, 200, denied.get_data(as_text=True))
+        claim = denied.get_json()["data"]["submissions"][freelancer_id]["claims"][0]
+        self.assertEqual(claim["status"], "Denied")
+        self.assertEqual(claim["submissionStage"], "Submitted")
+        self.assertEqual(claim.get("category", ""), "")
+
+        documents = self.client.get(
+            "/api/workforce/submissions",
+            query_string={"eventId": 143, "kind": "claim", "status": "all"},
+        )
+        self.assertEqual(documents.status_code, 200)
+        row = next(
+            row for row in documents.get_json()["data"]["rows"]
+            if row["id"] == "claim-denied-without-details"
+        )
+        self.assertEqual(row["statusKey"], "denied")
+        self.assertEqual(row["statusLabel"], "Denied")
+
+        legacy_public_row = app_module._public_submission_rows({
+            "invoices": [],
+            "claims": [{
+                **claim,
+                "submissionStage": "Details Required",
+            }],
+        }, "worker-token")["claims"][0]
+        self.assertEqual(legacy_public_row["status"], "Denied")
+        self.assertFalse(legacy_public_row["needsDetails"])
+
     def test_admin_review_ui_opens_details_required_claims(self):
         source_path = os.path.join(
             os.path.dirname(app_module.__file__),

@@ -141,9 +141,10 @@ function displayStatus(rowOrStatus) {
   const row = rowOrStatus && typeof rowOrStatus === 'object' ? rowOrStatus : null;
   const stage = row ? String(row.submissionStage || '').trim() : '';
   const processing = row ? String(row.processingState || '').trim() : '';
+  const status = row ? row.status : rowOrStatus;
+  if (status === 'Denied') return 'Denied';
   if (['Queued', 'Processing'].includes(processing)) return processing;
   if (['Queued', 'Processing', 'Details Required'].includes(stage)) return stage;
-  const status = row ? row.status : rowOrStatus;
   return status === 'Pending Review' ? 'Submitted' : status;
 }
 

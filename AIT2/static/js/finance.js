@@ -9956,9 +9956,11 @@ function profitLossExpenseProcessingMarkup(expense) {
     ? 'Payment Confirmed'
     : String(expense?.status || '').trim();
   const stage = String(expense?.submissionStage || '').trim();
-  const displayStatus = stage === 'Details Required'
-    ? 'Details Required'
-    : (status || (expense?.needsReview ? 'Needs Review' : ''));
+  const displayStatus = status === 'Denied'
+    ? 'Denied'
+    : (stage === 'Details Required'
+      ? 'Details Required'
+      : (status || (expense?.needsReview ? 'Needs Review' : '')));
   if (!displayStatus || (!isSubmission && !expense?.needsReview)) return '';
   const action = ['worker-claim', 'worker-invoice', 'transport-invoice', 'transport-claim'].includes(expense.source)
     ? `profitLossOpenClaimReview('${financeEscapeAttr(expense.sourceId)}')`

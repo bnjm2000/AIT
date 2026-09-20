@@ -9251,7 +9251,9 @@ def _public_submission_rows(rows, token):
             submission_stage = str(row.get('submissionStage') or 'Submitted')
             payment_confirmed = bool(row.get('paymentConfirmedAt'))
             submission_id = quote(str(row.get('id') or ''))
-            if processing_state == 'Processing':
+            if status == 'Denied':
+                public_status = 'Denied'
+            elif processing_state == 'Processing':
                 public_status = 'Processing'
             elif submission_stage == 'Details Required':
                 public_status = 'Details Required'
@@ -9266,7 +9268,10 @@ def _public_submission_rows(rows, token):
                 'adminStatus': status,
                 'processingState': processing_state,
                 'submissionStage': submission_stage,
-                'needsDetails': submission_stage == 'Details Required',
+                'needsDetails': (
+                    status != 'Denied'
+                    and submission_stage == 'Details Required'
+                ),
                 'denialReason': (
                     str(row.get('denialReason') or '')
                     if status == 'Denied'
@@ -9888,6 +9893,10 @@ def _admin_file_payload(
 
 def _admin_submission_display_status(record):
     """Return the operational status shown in admin submission queues."""
+    status = str(record.get('status') or 'Pending Review')
+    if status == 'Denied':
+        return 'denied', 'Denied'
+
     processing_state = str(record.get('processingState') or '').strip()
     submission_stage = str(record.get('submissionStage') or '').strip()
     if processing_state == 'Queued' or submission_stage == 'Queued':
@@ -9899,7 +9908,6 @@ def _admin_submission_display_status(record):
     if record.get('paymentConfirmedAt'):
         return 'payment-confirmed', 'Payment Confirmed'
 
-    status = str(record.get('status') or 'Pending Review')
     return {
         'Pending Review': ('to-review', 'Pending Review'),
         'Approved': ('to-pay', 'Approved'),
@@ -17568,6 +17576,11 @@ def review_workforce_submission(submission_id):
                 record['submissionStage'] = 'Submitted'
                 record['detailsCompletedAt'] = now_iso()
                 record['detailsCompletedByAdmin'] = session.get('user', '')
+        if submission_kind == 'claim' and status == 'Denied':
+            # A denied claim is final and does not require categorisation.
+            # Normalise new denials while the display helpers below continue
+            # to handle older records that still carry Details Required.
+            record['submissionStage'] = 'Submitted'
         record.update({
             'amount': amount,
             'status': status,
@@ -43500,9 +43513,12 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                 'sourceLabel': 'Claim',
                 'readOnly': True,
                 'needsReview': (
-                    status == 'Pending Review'
-                    or not details_complete
-                    or str(claim.get('submissionStage') or '') == 'Details Required'
+                    status != 'Denied'
+                    and (
+                        status == 'Pending Review'
+                        or not details_complete
+                        or str(claim.get('submissionStage') or '') == 'Details Required'
+                    )
                 ),
                 'countsTowardCosts': details_complete,
                 'processingState': processing_state,
@@ -43638,9 +43654,12 @@ def _finance_profit_loss_worker_submission_expenses(workforce, event_id):
                     'sourceLabel': 'Own-fleet claim',
                     'readOnly': True,
                     'needsReview': (
-                        status == 'Pending Review'
-                        or not details_complete
-                        or str(claim.get('submissionStage') or '') == 'Details Required'
+                        status != 'Denied'
+                        and (
+                            status == 'Pending Review'
+                            or not details_complete
+                            or str(claim.get('submissionStage') or '') == 'Details Required'
+                        )
                     ),
                     'countsTowardCosts': details_complete,
                     'processingState': str(claim.get('processingState') or ''),

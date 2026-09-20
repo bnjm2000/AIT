@@ -659,6 +659,7 @@ function wfDocumentStatusClass(statusKey) {
 
 function wfDocumentStatusKeyFromRecord(record) {
   if (record.isAwaitingUpload) return 'awaiting-upload';
+  if (record.status === 'Denied') return 'denied';
   if (record.processingState === 'Queued' || record.submissionStage === 'Queued') return 'queued';
   if (record.processingState === 'Processing' || record.submissionStage === 'Processing') return 'processing';
   if (record.submissionStage === 'Details Required') return 'details-required';
@@ -1286,7 +1287,7 @@ function wfStatusMenu(record) {
     return `<span class="upload-status"><span class="wf-status-button status-badge ${wfStatusClass('Processing')}">Processing</span>
       <span class="upload-progress-track processing"><span></span></span><small>Analysing</small></span>`;
   }
-  if (record.submissionStage === 'Details Required') {
+  if (record.status !== 'Denied' && record.submissionStage === 'Details Required') {
     return `<button class="wf-status-button status-badge ${wfStatusClass('Details Required')}" type="button"
       onclick="event.stopPropagation();openWorkforceReview('${wfAttr(record.id)}')">
       Details required
@@ -2936,6 +2937,7 @@ async function saveVendorPersonnel(event) {
 }
 
 function wfHistoryDisplayStatus(record) {
+  if (record.status === 'Denied') return 'Denied';
   if (record.processingState === 'Queued' || record.submissionStage === 'Queued') return 'Queued';
   if (record.processingState === 'Processing') return 'Processing';
   if (record.submissionStage === 'Details Required') return 'Details Required';
@@ -5236,15 +5238,16 @@ function applyDefaultReviewAllocations() {
 
 function wfReviewClaimCategoryFields(record, verified) {
   const rawCategory = wfClaimCategory(record);
+  const required = !verified && record.status !== 'Denied';
   const category = ['Meal', 'Crew Transport', 'Equipment Transport', 'Purchase'].includes(rawCategory)
     ? rawCategory
     : (rawCategory ? 'Other' : '');
   const otherValue = category === 'Other' ? rawCategory : '';
-  return `<label class="wf-field"><span>Claim date *</span>
-      <input id="wfReviewClaimDate" type="date" value="${wfAttr(record.claimDate || '')}" required ${verified ? 'disabled' : ''}>
+  return `<label class="wf-field"><span>Claim date${required ? ' *' : ''}</span>
+      <input id="wfReviewClaimDate" type="date" value="${wfAttr(record.claimDate || '')}" ${required ? 'required' : ''} ${verified ? 'disabled' : ''}>
     </label>
-    <label class="wf-field"><span>Category *</span>
-      <select id="wfReviewClaimCategory" required ${verified ? 'disabled' : ''}
+    <label class="wf-field"><span>Category${required ? ' *' : ''}</span>
+      <select id="wfReviewClaimCategory" ${required ? 'required' : ''} ${verified ? 'disabled' : ''}
         onchange="syncWorkforceReviewClaimCategory()">
         <option value="" ${category ? '' : 'selected'} disabled>Select category</option>
         <option value="Meal" ${category === 'Meal' ? 'selected' : ''}>Meal</option>
@@ -5255,8 +5258,8 @@ function wfReviewClaimCategoryFields(record, verified) {
       </select>
     </label>
     <label class="wf-field full" id="wfReviewOtherCategoryField" ${category === 'Other' ? '' : 'hidden'}>
-      <span>Other category *</span>
-      <input id="wfReviewOtherCategory" value="${wfAttr(otherValue)}" ${category === 'Other' && !verified ? 'required' : ''} ${verified ? 'disabled' : ''}>
+      <span>Other category${required ? ' *' : ''}</span>
+      <input id="wfReviewOtherCategory" value="${wfAttr(otherValue)}" ${category === 'Other' && required ? 'required' : ''} ${verified ? 'disabled' : ''}>
     </label>`;
 }
 
@@ -5267,7 +5270,7 @@ function syncWorkforceReviewClaimCategory() {
   if (!select || !field || !input) return;
   const other = select.value === 'Other';
   field.hidden = !other;
-  input.required = other && !input.disabled;
+  input.required = other && select.required && !input.disabled;
 }
 
 function wfReviewExpectedAmountHtml(record) {
@@ -5522,8 +5525,9 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   const transportInvoice = Boolean(
     record.isTransportInvoice || (found.isTransport && kind === 'invoice')
   );
-  const detailsRequired =
-    kind === 'claim' && record.submissionStage === 'Details Required';
+  const detailsRequired = kind === 'claim'
+    && record.status !== 'Denied'
+    && record.submissionStage === 'Details Required';
   const freelancer = wfFindFreelancer(freelancerId) || wfFindVendor(freelancerId) || record.subject || {};
   const departments = transportInvoice ? [] : wfDepartmentsForFreelancer(freelancerId);
   const verified = Boolean(record.verifiedAt);

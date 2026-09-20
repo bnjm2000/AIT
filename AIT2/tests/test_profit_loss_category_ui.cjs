@@ -136,6 +136,13 @@ test('P&L submission rows reuse worker portal badges and processing bars', () =>
   assert.match(confirmed, /status-payment-confirmed/);
   assert.match(confirmed, />Payment Confirmed</);
 
+  const denied = context.profitLossExpenseProcessingMarkup({
+    source: 'worker-claim', status: 'Denied', submissionStage: 'Details Required',
+  });
+  assert.match(denied, /status-denied/);
+  assert.match(denied, />Denied</);
+  assert.doesNotMatch(denied, /Details Required/);
+
   const uploading = context.profitLossPendingExpenseStatusMarkup({
     status: 'uploading', progress: 42,
   });

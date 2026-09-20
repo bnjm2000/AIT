@@ -85,6 +85,7 @@ function myClaimsPicker(event) {
 function myClaimsDisplayStatus(row) {
   const processing = String(row.processingState || '').trim();
   const stage = String(row.submissionStage || '').trim();
+  if (row.status === 'Denied') return 'Denied';
   if (MY_CLAIMS_PROCESSING_STATES.has(processing)) return processing;
   if (MY_CLAIMS_PROCESSING_STATES.has(stage) || stage === 'Details Required') return stage;
   return row.status === 'Pending Review' ? 'Submitted' : (row.status || 'Submitted');
