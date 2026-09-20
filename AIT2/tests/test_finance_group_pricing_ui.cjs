@@ -163,3 +163,34 @@ test('a remembered group price starts a newly added group in manual-total mode',
   assert.equal(vm.runInContext('financeState.current.lineItems[0].groupPricingMode', context), 'total');
   assert.equal(vm.runInContext('financeState.current.lineItems[1].groupItemUnitPrice', context), 30);
 });
+
+test('a quotation group can be saved without assets or custom text', async () => {
+  const { context, apiCalls } = setup();
+  vm.runInContext(`
+    financeState.current.lineItems = [];
+    financeLineGroupState.mode = 'finance';
+    financeLineGroupState.groupId = 'empty-kit';
+    financeLineGroupState.subprojectId = 'main';
+    financeLineGroupState.commercialHeader = null;
+    financeLineGroupState.selected = [];
+  `, context);
+
+  await vm.runInContext('financeSaveLineGroup()', context);
+
+  assert.match(apiCalls[0], /group-price-suggestion\?title=Remembered%20kit/);
+  const line = JSON.parse(vm.runInContext(
+    'JSON.stringify(financeState.current.lineItems[0])', context
+  ));
+  assert.equal(line.groupId, 'empty-kit');
+  assert.equal(line.groupTitle, 'Remembered kit');
+  assert.equal(line.groupPlaceholder, true);
+  assert.equal(line.groupLeader, true);
+  assert.equal(line.groupItemQuantity, 0);
+  assert.equal(line.description, '');
+  assert.equal(line.systemName, 'Audio');
+  assert.equal(line.uom, 'sets');
+
+  const markup = vm.runInContext('financeRenderLineGroups()', context);
+  assert.match(markup, /finance-line-group-header/);
+  assert.doesNotMatch(markup, /finance-group-child-row/);
+});

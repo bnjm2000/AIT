@@ -1840,6 +1840,7 @@ function financeClearLineGroupFields(line) {
   if (!line) return;
   [
     'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
+    'groupPlaceholder',
     'groupItemQuantity', 'groupHeaderQuantity', 'groupLeader',
     'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
     'groupItemDiscountPercent', 'groupItemTotalMode', 'groupItemTotal',
@@ -5294,7 +5295,7 @@ function financeOpenLineGroupEditor(mode = 'finance', groupId = '') {
     ? [...first.groupDisplayFields]
     : ['brand', 'model', 'description'];
   financeLineGroupState.selected = existing
-    .filter(line => !line.groupCustomText)
+    .filter(line => !line.groupCustomText && !line.groupPlaceholder)
     .map(line => ({
       key: financeLineGroupResultKey(line),
       line: JSON.parse(JSON.stringify(line))
@@ -5667,7 +5668,7 @@ function financeRenderLineGroupSelection() {
   root.innerHTML = financeLineGroupState.selected.map((entry, index) => {
     const row = entry.line || entry.catalog || {};
     return `<div class="finance-line-group-selection-row" data-group-selection-index="${index}" ondragover="financeLineGroupSelectionDragOver(event)" ondragleave="financeLineGroupSelectionDragLeave(event)" ondrop="financeLineGroupSelectionDrop(event,${index})"><span class="finance-drag-handle finance-line-group-reorder-handle" role="button" tabindex="0" draggable="true" title="Drag to rearrange" aria-label="Rearrange item" ondragstart="financeLineGroupSelectionDragStart(event,${index})" ondragend="financeLineGroupSelectionDragEnd()" onkeydown="financeLineGroupSelectionHandleKeydown(event,${index})">&#9776;</span><span class="finance-line-group-selection-name"><strong>${financeEscape(financeGroupedLineDisplay({ ...row, groupDisplayFields: financeLineGroupState.displayFields }))}</strong><small>${financeEscape(row.department || row.category || 'General')}</small></span><label class="finance-line-group-quantity"><span>Qty</span><input type="number" min="0" step="1" value="${financeEscapeAttr(financeLineGroupSelectionQuantity(entry))}" aria-label="Child asset quantity" onchange="financeLineGroupSelectionQuantityChange(${index},this.value)"></label><button type="button" class="finance-line-group-remove" aria-label="Remove item" onclick="financeRemoveLineGroupSelection(${index})">&times;</button></div>`;
-  }).join('') || '<p>No assets selected. Add assets above or enter custom text below.</p>';
+  }).join('') || '<p>No contents. You can save this group empty or add assets or custom text.</p>';
 }
 
 function financeNewGroupedQuotationLine(selected, category) {
@@ -5689,6 +5690,52 @@ function financeNewGroupedQuotationLine(selected, category) {
   };
 }
 
+function financeNewEmptyGroupPlaceholder({
+  groupId,
+  title,
+  category,
+  fields,
+  subprojectId,
+  groupQuantity,
+  existingLine = null
+}) {
+  const previous = existingLine || {};
+  return {
+    id: previous.id || `line_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    productId: '', productKey: '', catalogKey: '', sourceAssetIds: [],
+    brand: '', model: '', description: '', inventoryNameMode: '',
+    department: previous.department || category,
+    departmentCode: previous.departmentCode || '',
+    systemName: category,
+    days: 1,
+    quantity: groupQuantity,
+    uom: 'sets',
+    unitPrice: 0,
+    discountPercent: 0,
+    totalMode: 'amount',
+    total: 0,
+    isCustom: true,
+    subprojectId,
+    groupId,
+    groupTitle: title,
+    groupDisplayFields: fields,
+    groupCustomText: false,
+    groupPlaceholder: true,
+    groupItemQuantity: 0,
+    groupHeaderQuantity: groupQuantity,
+    groupLeader: true,
+    groupItemDays: 1,
+    groupItemUom: 'units',
+    groupItemUnitPrice: 0,
+    groupItemDiscountPercent: 0,
+    groupItemTotalMode: 'calculated',
+    groupItemTotal: 0,
+    groupItemPriceContribution: 0,
+    groupItemCommercialStored: true,
+    groupPricingMode: 'items'
+  };
+}
+
 async function financeSaveLineGroup() {
   const mode = financeLineGroupState.mode;
   const title = String(document.getElementById('financeLineGroupTitle')?.value || '').trim();
@@ -5701,7 +5748,9 @@ async function financeSaveLineGroup() {
   const fields = [...document.querySelectorAll('.finance-line-group-fields input:checked')].map(input => input.value);
   if (!title) return showNotification('warning', 'Enter a group header');
   if (!fields.length) return showNotification('warning', 'Choose at least one asset field to show');
-  if (!financeLineGroupState.selected.length && !customText) return showNotification('warning', 'Add an asset or custom text to the group');
+  if (mode !== 'finance' && !financeLineGroupState.selected.length && !customText) {
+    return showNotification('warning', 'Add an asset or custom text to the group');
+  }
 
   const groupId = financeLineGroupState.groupId;
   const groupSubprojectId = String(financeLineGroupState.subprojectId || 'main');
@@ -5747,6 +5796,7 @@ async function financeSaveLineGroup() {
       groupTitle: title,
       groupDisplayFields: fields,
       groupCustomText: false,
+      groupPlaceholder: false,
       groupHeaderQuantity: groupQuantity,
       ...(mode === 'costing' ? { _groupEditorUnitSale: costingUnitSale } : {})
     };
@@ -5767,12 +5817,24 @@ async function financeSaveLineGroup() {
       groupTitle: title,
       groupDisplayFields: fields,
       groupCustomText: true,
+      groupPlaceholder: false,
       isCustom: true,
       groupHeaderQuantity: groupQuantity,
       ...(mode === 'costing' ? {
         _groupEditorUnitSale: costingLineUnitSale(custom)
       } : {})
     });
+  }
+  if (mode === 'finance' && !grouped.length) {
+    grouped.push(financeNewEmptyGroupPlaceholder({
+      groupId,
+      title,
+      category,
+      fields,
+      subprojectId: groupSubprojectId,
+      groupQuantity,
+      existingLine: existingGroupLines.find(line => line.groupPlaceholder) || null
+    }));
   }
   if (mode === 'costing') {
     grouped.forEach((line, index) => {
@@ -5936,7 +5998,10 @@ function financeCategoryColumnHeader(department) {
 
 function financeGroupDisplayBuckets(rows, groupId) {
   const buckets = new Map();
-  rows.filter(row => String(row.line.groupId || '') === String(groupId || '')).forEach(row => {
+  rows.filter(row => (
+    String(row.line.groupId || '') === String(groupId || '')
+    && !row.line.groupPlaceholder
+  )).forEach(row => {
     const description = row.line.groupCustomText
       ? String(row.line.description || 'Item')
       : financeGroupedLineDisplay(row.line);

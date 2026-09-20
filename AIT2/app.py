@@ -36867,6 +36867,7 @@ def _normalise_finance_line(value):
         'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
         'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
         'groupCustomText': bool(value.get('groupCustomText')),
+        'groupPlaceholder': bool(value.get('groupPlaceholder')),
         'groupItemQuantity': round(max(0, _safe_float(
             value.get('groupItemQuantity'), quantity
         )), 4),
@@ -38536,6 +38537,7 @@ def _normalise_costing_line(value):
         'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
         'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
         'groupCustomText': bool(value.get('groupCustomText')),
+        'groupPlaceholder': bool(value.get('groupPlaceholder')),
         'groupItemQuantity': (
             quantity
             if group_id
@@ -38979,6 +38981,7 @@ def _costing_line_from_quotation_line(quote_line):
         'groupTitle': quote_line.get('groupTitle') or '',
         'groupDisplayFields': list(quote_line.get('groupDisplayFields') or []),
         'groupCustomText': bool(quote_line.get('groupCustomText')),
+        'groupPlaceholder': bool(quote_line.get('groupPlaceholder')),
         'groupItemQuantity': quote_line.get(
             'groupItemQuantity', quote_line.get('quantity', 1)
         ),
@@ -39122,6 +39125,7 @@ def _quotation_line_from_costing_line(costing_line, existing=None):
         'groupTitle': costing_line.get('groupTitle') or '',
         'groupDisplayFields': list(costing_line.get('groupDisplayFields') or []),
         'groupCustomText': bool(costing_line.get('groupCustomText')),
+        'groupPlaceholder': bool(costing_line.get('groupPlaceholder')),
         'groupItemQuantity': costing_line.get(
             'groupItemQuantity', costing_line.get('quantity', 1)
         ),
@@ -39530,6 +39534,7 @@ def _sync_costing_from_quotation(finance_data, quotation):
                 'pricingBindingId',
                 'hiddenFromQuotation',
                 'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
+                'groupPlaceholder',
                 'groupItemQuantity', 'groupLeader',
                 'groupHeaderQuantity',
                 'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
@@ -39697,7 +39702,7 @@ def _costing_quote_sync_fingerprint(costing, quotation):
                     'hiddenFromQuotation',
                     'unitPrice', 'discountPercent', 'totalMode', 'total',
                     'isCustom', 'groupId', 'groupTitle',
-                    'groupDisplayFields', 'groupCustomText',
+                    'groupDisplayFields', 'groupCustomText', 'groupPlaceholder',
                     'groupItemQuantity', 'groupHeaderQuantity', 'groupLeader',
                     'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
                     'groupItemDiscountPercent', 'groupItemTotalMode',
@@ -39792,6 +39797,7 @@ def _linked_cost_line_from_record(public_line, allocation):
         'groupTitle': public_line.get('groupTitle') or '',
         'groupDisplayFields': list(public_line.get('groupDisplayFields') or []),
         'groupCustomText': bool(public_line.get('groupCustomText')),
+        'groupPlaceholder': bool(public_line.get('groupPlaceholder')),
         'groupItemQuantity': public_line.get(
             'groupItemQuantity', public_line.get('quantity', 1)
         ),
@@ -39823,6 +39829,7 @@ def _linked_cost_line_from_record(public_line, allocation):
         'groupTitle': str(public_line.get('groupTitle') or ''),
         'groupDisplayFields': list(public_line.get('groupDisplayFields') or []),
         'groupCustomText': bool(public_line.get('groupCustomText')),
+        'groupPlaceholder': bool(public_line.get('groupPlaceholder')),
         'groupItemQuantity': _safe_float(
             public_line.get('groupItemQuantity'), public_line.get('quantity', 1)
         ),

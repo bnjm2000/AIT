@@ -4701,6 +4701,84 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('1x Floor Tom 14x14 Floor tom', text)
         self.assertIn('J120 Guitar Amp', text)
 
+    def test_empty_quotation_group_persists_without_creating_event_demand(self):
+        quotation = self.create_quote('Empty Group')
+        quotation['lineItems'] = [{
+            'id': 'empty-audio-package',
+            'description': '',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'systemName': 'Audio System',
+            'days': 1,
+            'quantity': 2,
+            'uom': 'sets',
+            'unitPrice': 0,
+            'discountPercent': 0,
+            'totalMode': 'amount',
+            'total': 0,
+            'isCustom': True,
+            'subprojectId': 'main',
+            'groupId': 'empty-audio-group',
+            'groupTitle': 'Empty Audio Package',
+            'groupDisplayFields': ['description'],
+            'groupCustomText': False,
+            'groupPlaceholder': True,
+            'groupLeader': True,
+            'groupItemQuantity': 0,
+            'groupHeaderQuantity': 2,
+            'groupItemCommercialStored': True,
+            'groupPricingMode': 'items',
+        }]
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        saved = response.get_json()['data']
+        self.assertEqual(len(saved['lineItems']), 1)
+        placeholder = saved['lineItems'][0]
+        self.assertTrue(placeholder['groupPlaceholder'])
+        self.assertTrue(placeholder['groupLeader'])
+        self.assertEqual(placeholder['groupItemQuantity'], 0)
+        self.assertEqual(placeholder['groupTitle'], 'Empty Audio Package')
+        self.assertEqual(
+            app_module._finance_event_subprojects(saved)[0]['items'],
+            [],
+        )
+
+        costing = self.client.get(
+            f"/api/costings/{saved['sourceCostingId']}"
+        )
+        self.assertEqual(costing.status_code, 200, costing.get_data(as_text=True))
+        costing_document = costing.get_json()['data']
+        costing_line = costing_document['lineItems'][0]
+        self.assertTrue(costing_line['groupPlaceholder'])
+        self.assertEqual(costing_line['groupItemQuantity'], 0)
+
+        costing_save = self.client.put(
+            f"/api/costings/{costing_document['id']}",
+            json=costing_document,
+        )
+        self.assertEqual(
+            costing_save.status_code,
+            200,
+            costing_save.get_data(as_text=True),
+        )
+        quotation_after_costing_save = self.client.get(
+            f"/api/quotations/{quotation['id']}"
+        ).get_json()['data']
+        self.assertTrue(
+            quotation_after_costing_save['lineItems'][0]['groupPlaceholder']
+        )
+
+        pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf")
+        text = '\n'.join(
+            page.extract_text() or ''
+            for page in PdfReader(io.BytesIO(pdf.data)).pages
+        )
+        self.assertIn('Empty Audio Package', text)
+        self.assertNotIn('1x Item', text)
+
     def test_manual_group_price_is_remembered_for_future_groups(self):
         quotation = self.create_quote('Remembered Group Price')
         shared = {

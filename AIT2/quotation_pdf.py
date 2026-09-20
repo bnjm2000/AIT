@@ -177,6 +177,8 @@ def _group_display_entries(lines):
     entries = []
     by_key = {}
     for line in lines or []:
+        if line.get('groupPlaceholder'):
+            continue
         description = _group_line_description(line).strip() or 'Item'
         custom_text = bool(line.get('groupCustomText'))
         key = (custom_text, description.casefold())

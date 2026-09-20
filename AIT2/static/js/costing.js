@@ -1694,7 +1694,9 @@ function costingGroupedLinesMarkup(lines, readOnly, headerLayout = costingHeader
         ondrop="costingDropLine(event,${firstGroupIndex},'${costingAttr(encodeURIComponent(line.category || 'General'))}')"
         ondragend="costingDragEnd()"><td colspan="12"><div class="costing-group-header-content"><div class="costing-group-heading">${readOnly ? '' : `<span class="finance-drag-handle costing-group-drag-handle" draggable="true" title="Drag group to reorder" ondragstart="costingDragLineGroupStart(event,'${costingAttr(groupId)}','${costingAttr(line.subprojectId || 'main')}')" ondragend="costingDragEnd()">&#9776;</span>`}<span>${costingEscape(line.groupTitle || 'Group')}</span>${readOnly ? '' : `<small>Right-click to edit group</small><button type="button" title="Edit group" onclick="financeOpenLineGroupEditor('costing','${costingAttr(groupId)}')">&#9998;</button>`}</div><label class="costing-group-quantity"><span>Group qty</span><input type="number" min="0" step="1" value="${costingAttr(groupQuantity)}" aria-label="Group quantity" ${readOnly ? 'disabled' : ''} oninput="costingSetLineGroupQuantity('${costingAttr(encodedGroupId)}','${costingAttr(encodedSubprojectId)}',this.value)"></label></div></td></tr>`;
     }
-    return customHeaders + header + costingLineMarkup(line, index, readOnly);
+    return customHeaders + header + (
+      line.groupPlaceholder ? '' : costingLineMarkup(line, index, readOnly)
+    );
   }).join('');
 }
 
