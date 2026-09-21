@@ -8,6 +8,24 @@ from models import Client, Container, Event, InventoryItem, LogEntry, User
 
 
 class PostgresEventSerializationUnitTests(unittest.TestCase):
+    def test_container_groups_are_serialized_and_applied(self):
+        from postgres_data_manager import PostgresDataManager
+
+        manager = PostgresDataManager.__new__(PostgresDataManager)
+        manager.events = {}
+        event = Event(161, 'Container Event', '20260801', '20260801', [])
+        event.container_groups = [{
+            'id': 'container_161', 'containerId': 'CASE-161',
+            'quantity': 2, 'subprojectId': 'main',
+            'items': [{'department': 'AX', 'brand': 'Brand', 'model': 'Speaker', 'quantity': 3}],
+        }]
+
+        payload = manager._event_data(event)
+        self.assertEqual(payload['containerGroups'], event.container_groups)
+        restored = Event(161, 'Old Name', '20260801', '20260801', [])
+        manager._apply_event_data(restored, payload)
+        self.assertEqual(restored.container_groups, event.container_groups)
+
     def test_delivery_order_is_part_of_event_serialization_and_apply(self):
         from postgres_data_manager import PostgresDataManager
 
@@ -153,6 +171,13 @@ class PostgresDataManagerTests(unittest.TestCase):
             'documentVersion': 1,
             'document': {'doNumber': 'DO-0001'},
         }
+        event.container_groups = [{
+            'id': 'case_1', 'containerId': 'CASE-1', 'quantity': 1,
+            'subprojectId': 'main', 'items': [{
+                'department': 'AX', 'brand': 'Brand', 'model': 'Model',
+                'description': 'Description', 'quantity': 1,
+            }],
+        }]
         self.manager.events[1] = event
         self.manager.save_event(event)
         self.manager.clients = {
@@ -193,6 +218,7 @@ class PostgresDataManagerTests(unittest.TestCase):
         )
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])
+        self.assertEqual(reloaded.events[1].container_groups, event.container_groups)
         self.assertEqual(
             reloaded.events[1].delivery_order['document']['doNumber'],
             'DO-0001',

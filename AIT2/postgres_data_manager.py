@@ -439,6 +439,9 @@ class PostgresDataManager(DataManager):
             ),
             'assignedUsers': list(getattr(event, 'assigned_users', []) or []),
             'subprojects': list(getattr(event, 'subprojects', []) or []),
+            'containerGroups': copy.deepcopy(
+                list(getattr(event, 'container_groups', []) or [])
+            ),
             'deliveryOrder': copy.deepcopy(
                 dict(getattr(event, 'delivery_order', {}) or {})
             ),
@@ -641,6 +644,7 @@ class PostgresDataManager(DataManager):
                         event_logs=data.get('eventLogs') or [],
                         assigned_users=data.get('assignedUsers') or [],
                         subprojects=data.get('subprojects') or [],
+                        container_groups=data.get('containerGroups') or [],
                         delivery_order=data.get('deliveryOrder') or {},
                         vendor_management=data.get('vendorManagement') or [],
                     )
@@ -1206,6 +1210,9 @@ class PostgresDataManager(DataManager):
         event.event_logs = self.normalize_event_logs(payload.get('eventLogs') or [])
         event.assigned_users = list(payload.get('assignedUsers') or [])
         event.subprojects = list(payload.get('subprojects') or [])
+        event.container_groups = copy.deepcopy(
+            list(payload.get('containerGroups') or [])
+        )
         event.delivery_order = copy.deepcopy(
             dict(payload.get('deliveryOrder') or {})
         )

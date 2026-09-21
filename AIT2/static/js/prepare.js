@@ -16,7 +16,7 @@ var prepareNewPageState = {
   expandedCustomGroups: new Set(),
   suppressRealtimeUntil: 0,
   activeSubprojectId: '',
-  showGroupedContainers: true
+  showGroupedContainers: eventContainerGroupingPreference()
 };
 
 var prepareNewNotesTimer = null;
@@ -153,9 +153,12 @@ function prepareNewIsComplete(event = prepareNewPageState.event) {
 }
 
 function prepareNewUngroupedModelGroups(event = prepareNewPageState.event, state = prepareNewPageState) {
-  const groups = prepareNewPageState.showGroupedContainers
-    ? eventUngroupedModelGroups(event, state)
-    : eventSubprojectModelGroups(event, state);
+  const groups = eventUngroupedModelGroups(event, state);
+  if (!prepareNewPageState.showGroupedContainers) {
+    eventContainerGroupModelGroups(event, state).forEach(container => {
+      groups.push(...container.modelGroups);
+    });
+  }
   return groups
     .filter(group => (
       Number(group?.requiredQuantity || 0) > 0
@@ -246,7 +249,10 @@ function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewP
   const customAssets = prepareNewCustomAssets(event, state);
   const departmentsInUse = new Set(
     [
-      ...groups.map(row => normalizeDepartmentCode(row.department || 'UN')),
+      ...prepareNewUngroupedModelGroups(event, state).map(
+        row => normalizeDepartmentCode(row.department || 'UN')
+      ),
+      ...prepareNewContainerGroups(event, state).map(eventContainerGroupDepartment),
       ...customAssets.map(row => normalizeDepartmentCode(row.parsedCustom?.department || 'UN'))
     ]
   );
@@ -608,7 +614,7 @@ function prepareNewModelSection(group) {
       <summary>
         <span class="prepare-new-model-title">
           <strong>${escapeHtml(modelName)}</strong>
-          <span>${escapeHtml(group.description || '')}</span>
+          <span>${escapeHtml(group.description || '')}${group._containerChild ? ` · In ${escapeHtml(group._containerTitle || 'container')}` : ''}</span>
         </span>
         <span class="prepare-new-model-count"><strong>${required}</strong>Required</span>
         <span class="prepare-new-model-count ${preparedQuantity < required ? 'is-underprepared' : ''}"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
@@ -795,12 +801,12 @@ function prepareNewContainerSection(container) {
   const isOpen = prepareNewPageState.expandedModels.has(panelKey);
   const sets = Math.max(1, Number(container.quantity || 1));
   return `
-    <details class="prepare-new-department prepare-new-container-group" ${isOpen ? 'open' : ''}
+    <details class="prepare-new-model prepare-new-container-group" ${isOpen ? 'open' : ''}
              data-prepare-render-version="${prepareNewPageState.renderVersion}"
              ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
       <summary>
         <span class="prepare-new-department-name">
-          <span class="prepare-container-icon" aria-hidden="true">&#9638;</span>
+          ${navWireIconSvg('containers')}
           ${escapeHtml(container.title || container.containerId || 'Container')}
           <span class="plan-badge">${sets} set${sets === 1 ? '' : 's'}</span>
         </span>
@@ -808,11 +814,7 @@ function prepareNewContainerSection(container) {
           ${prepared} / ${required} prepared
           <span class="prepare-new-progress-track"><span style="width:${percent}%"></span></span>
         </span>
-        <span class="prepare-new-model-actions">
-          <button type="button" class="plan-button plan-button-danger plan-button-small"
-                  onclick="event.preventDefault();event.stopPropagation();prepareNewBreakContainerGroup('${planEncode(container.id)}')">Break group</button>
-          <span aria-hidden="true">⌄</span>
-        </span>
+        <span aria-hidden="true">⌄</span>
       </summary>
       <div class="prepare-container-contents">
         ${(container.modelGroups || []).map(prepareNewModelSection).join('')}
@@ -836,16 +838,33 @@ function renderPrepareNewAssignment() {
   groups.forEach(group => {
     const department = normalizeDepartmentCode(group.department || 'UN');
     if (!byDepartment.has(department)) byDepartment.set(department, []);
-    byDepartment.get(department).push(group);
+    byDepartment.get(department).push({ type: 'model', group });
+  });
+  containers.forEach(container => {
+    const department = eventContainerGroupDepartment(container);
+    if (!byDepartment.has(department)) byDepartment.set(department, []);
+    byDepartment.get(department).push({ type: 'container', container });
   });
 
-  const departments = Array.from(byDepartment.entries()).map(([department, departmentGroups]) => {
-    const required = departmentGroups.reduce(
-      (sum, group) => sum + Number(group.requiredQuantity || 0),
+  const departments = Array.from(byDepartment.entries())
+    .sort(([left], [right]) => left.localeCompare(right, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    }))
+    .map(([department, departmentRows]) => {
+    const rowModelGroups = row => row.type === 'container'
+      ? (row.container.modelGroups || [])
+      : [row.group];
+    const required = departmentRows.reduce(
+      (sum, row) => sum + rowModelGroups(row).reduce(
+        (rowSum, group) => rowSum + Number(group.requiredQuantity || 0), 0
+      ),
       0
     );
-    const assigned = departmentGroups.reduce(
-      (sum, group) => sum + prepareNewCountablePreparedEverQuantity(group),
+    const assigned = departmentRows.reduce(
+      (sum, row) => sum + rowModelGroups(row).reduce(
+        (rowSum, group) => rowSum + prepareNewCountablePreparedEverQuantity(group), 0
+      ),
       0
     );
     const percent = required ? Math.min(100, Math.round((assigned / required) * 100)) : 0;
@@ -859,7 +878,7 @@ function renderPrepareNewAssignment() {
           <span class="prepare-new-department-name">
             <span class="plan-department-dot" style="--department-color:${escapeHtmlAttr(info.color || '#667085')}"></span>
             ${escapeHtml(department)} \u00b7 ${escapeHtml(info.name || department)}
-            <span class="plan-badge">${departmentGroups.length} line${departmentGroups.length === 1 ? '' : 's'}</span>
+            <span class="plan-badge">${departmentRows.length} line${departmentRows.length === 1 ? '' : 's'}</span>
           </span>
           <span class="prepare-new-progress ${assigned < required ? 'prepare-new-pending-count' : ''}">
             ${assigned} / ${required} prepared
@@ -867,35 +886,13 @@ function renderPrepareNewAssignment() {
           </span>
           <span aria-hidden="true">\u2304</span>
         </summary>
-        ${departmentGroups.map(prepareNewModelSection).join('')}
+        ${departmentRows.map(row => row.type === 'container'
+          ? prepareNewContainerSection(row.container)
+          : prepareNewModelSection(row.group)).join('')}
       </details>
     `;
   }).join('');
-  return containers.map(prepareNewContainerSection).join('')
-    + departments
-    + prepareNewExtrasSection();
-}
-
-async function prepareNewBreakContainerGroup(encodedGroupId) {
-  const groupId = planDecode(encodedGroupId);
-  const container = prepareNewContainerGroups().find(group => String(group.id) === groupId);
-  const confirmed = await showAppConfirm({
-    title: 'Break Container Group',
-    message: `Break ${container?.title || container?.containerId || 'this container'} into individual asset requirements? This cannot be undone. To restore the group, remove all of its assets and add the container again.`,
-    confirmText: 'Break Group',
-    cancelText: 'Cancel',
-    variant: 'danger'
-  });
-  if (!confirmed) return;
-  try {
-    await apiCall(
-      `/api/events/${prepareNewPageState.eventId}/container-groups/${encodeURIComponent(groupId)}/break`,
-      'POST',
-      {}
-    );
-    showNotification('success', 'Container group broken into individual requirements');
-    await refreshPrepareNewSelectedEvent({ preserve: true });
-  } catch (error) {}
+  return departments + prepareNewExtrasSection();
 }
 
 function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepareNewPageState) {
@@ -1395,6 +1392,8 @@ function renderPrepareNewPage() {
 
 function prepareNewToggleContainerGrouping(grouped) {
   prepareNewPageState.showGroupedContainers = !!grouped;
+  planPageState.showGroupedContainers = !!grouped;
+  eventSaveContainerGroupingPreference(!!grouped);
   renderPrepareNewPage();
 }
 

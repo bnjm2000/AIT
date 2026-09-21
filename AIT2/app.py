@@ -6101,6 +6101,26 @@ def _normalise_event_container_group(value):
             items.append(item)
     if not container_id or quantity <= 0 or not items:
         return None
+    department_totals = {}
+    department_order = []
+    for item in items:
+        department = item['department']
+        if department not in department_totals:
+            department_totals[department] = 0
+            department_order.append(department)
+        department_totals[department] += item['quantity']
+    dominant_department = sorted(
+        department_order,
+        key=lambda department: (
+            -department_totals[department],
+            department_order.index(department),
+        ),
+    )[0]
+    group_department = (
+        _normalise_department_code(value.get('department'))
+        or dominant_department
+        or 'UN'
+    )
     group_id = re.sub(
         r'[^A-Za-z0-9_-]+', '', str(value.get('id') or '')
     )[:80] or f"container_{secrets.token_hex(8)}"
@@ -6112,6 +6132,7 @@ def _normalise_event_container_group(value):
         'subprojectId': re.sub(
             r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
         )[:80] or 'main',
+        'department': group_department,
         'items': items,
         'source': (
             'quotation'
@@ -6173,6 +6194,144 @@ def _event_append_container_group(
     current.append(group)
     event.container_groups = current
     return group
+
+
+def _event_remove_container_group_requirements(event, container_group):
+    """Remove one intact group and only the requirements contributed by it."""
+    group_quantity = max(0, _safe_int(container_group.get('quantity'), 0))
+    subproject_id = str(container_group.get('subprojectId') or 'main')
+    subprojects = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    room = _event_subproject(event, subproject_id) if subprojects else None
+    if subprojects and not room:
+        raise ValueError('The container sub-project could not be found')
+
+    children = [
+        child for item in container_group.get('items') or []
+        if (child := _normalise_event_container_item(item))
+    ]
+    for child in children:
+        expected = child['quantity'] * group_quantity
+        current = (
+            _event_subproject_required_quantity(room, child)
+            if room else _event_model_required_quantity(event, child)
+        )
+        if current < expected:
+            raise ValueError(
+                'The container contents no longer match the planned quantities. '
+                'Break the group before editing individual requirements.'
+            )
+
+    affected = {}
+    removed_units = 0
+    for child in children:
+        key = _event_model_group_key(child)
+        affected[key] = child
+        requested_reduction = child['quantity'] * group_quantity
+        if room:
+            current = _event_subproject_required_quantity(room, child)
+            updated = max(0, current - requested_reduction)
+            _event_subproject_set_group_quantity(room, child, updated)
+            removed_units += current - updated
+            continue
+
+        current = 0
+        retained = []
+        for ref in getattr(event, 'prepared_items', []) or []:
+            marker = _parse_model_marker(ref)
+            if marker and _event_model_group_key(marker) == key:
+                current += max(0, _safe_int(marker.get('quantity'), 0))
+            else:
+                retained.append(ref)
+        updated = max(0, current - requested_reduction)
+        if updated > 0:
+            retained.append(_make_model_marker(child, updated))
+        event.prepared_items = retained
+        removed_units += current - updated
+
+    if room:
+        _sync_event_model_markers_from_subprojects(event)
+        reconciliation = _reconcile_event_subproject_extras(event)
+    else:
+        reconciliation = {'promoted': [], 'demoted': []}
+
+    extra_units = 0
+    extra_refs = 0
+    for child in affected.values():
+        surplus = _reclassify_event_model_surplus(
+            event,
+            _event_model_group_key(child),
+            _event_model_required_quantity(event, child),
+        )
+        extra_units += surplus['extraUnits']
+        extra_refs += surplus['referencesMarked']
+
+    return {
+        'removedUnits': removed_units,
+        'extraUnits': extra_units,
+        'referencesMarkedExtra': extra_refs,
+        'demotedRefs': reconciliation.get('demoted') or [],
+    }
+
+
+def _event_set_container_group_item_quantity(event, container_group, item, quantity):
+    """Change a container child and the corresponding event requirement together."""
+    old_quantity = max(0, _safe_int(item.get('quantity'), 0))
+    set_count = max(1, _safe_int(container_group.get('quantity'), 1))
+    delta = (quantity - old_quantity) * set_count
+    room_id = str(container_group.get('subprojectId') or 'main')
+    rooms = [
+        row for row in (getattr(event, 'subprojects', []) or [])
+        if isinstance(row, dict)
+    ]
+    room = _event_subproject(event, room_id) if rooms else None
+    if rooms and not room:
+        raise ValueError('The container sub-project could not be found')
+    current = (
+        _event_subproject_required_quantity(room, item)
+        if room else _event_model_required_quantity(event, item)
+    )
+    if current < old_quantity * set_count:
+        raise ValueError(
+            'The container contents no longer match the planned quantities. '
+            'Break the group before editing individual requirements.'
+        )
+    updated = current + delta
+    if updated < 0:
+        raise ValueError('Container item quantity cannot exceed the planned quantity')
+
+    if room:
+        _event_subproject_set_group_quantity(room, item, updated)
+        _sync_event_model_markers_from_subprojects(event)
+        reconciliation = _reconcile_event_subproject_extras(event)
+    else:
+        key = _event_model_group_key(item)
+        retained = [
+            ref for ref in getattr(event, 'prepared_items', []) or []
+            if not (
+                (marker := _parse_model_marker(ref))
+                and _event_model_group_key(marker) == key
+            )
+        ]
+        if updated > 0:
+            retained.append(_make_model_marker(item, updated))
+        event.prepared_items = retained
+        reconciliation = {'demoted': []}
+
+    surplus = _reclassify_event_model_surplus(
+        event,
+        _event_model_group_key(item),
+        _event_model_required_quantity(event, item),
+    )
+    return {
+        'oldQuantity': old_quantity,
+        'newQuantity': quantity,
+        'requirementDelta': delta,
+        'extraUnits': surplus['extraUnits'],
+        'demotedRefs': reconciliation.get('demoted') or [],
+    }
 
 
 def _event_subproject_adjust_prepared(subproject, group, delta):
@@ -26573,6 +26732,176 @@ def break_event_container_group(event_id, group_id):
         'message': 'Container group broken into individual requirements',
         'data': {'groupId': clean_group_id},
     })
+
+
+@app.route('/api/events/<int:event_id>/container-groups/<group_id>', methods=['DELETE'])
+@require_admin
+@with_prepare_action_lock
+def remove_event_container_group(event_id, group_id):
+    """Remove an intact container group and its contributed requirements."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        clean_group_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(group_id or '')
+        )[:80]
+        groups = _event_container_groups(event)
+        removed = next(
+            (row for row in groups if row['id'] == clean_group_id),
+            None,
+        )
+        if not removed:
+            return jsonify({'error': 'Container group not found'}), 404
+
+        result = _event_remove_container_group_requirements(event, removed)
+        event.container_groups = [
+            row for row in groups if row['id'] != clean_group_id
+        ]
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        _finance_detach_managed_event_documents(event_id)
+        log_action(
+            f"Removed container group {removed['containerId']} and "
+            f"{result['removedUnits']} requirement unit(s) from event {event_id}"
+        )
+        mark_realtime_change(
+            'event-assets',
+            {'eventId': event_id, 'action': 'remove-container-group'},
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Container group and its requirements removed',
+            'data': {
+                'groupId': clean_group_id,
+                **result,
+            },
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error(
+            'Failed to remove container group %s from event %s: %s',
+            group_id,
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to remove container group'}), 500
+
+
+@app.route('/api/events/<int:event_id>/container-groups/<group_id>/items', methods=['PUT', 'DELETE'])
+@require_admin
+@with_prepare_action_lock
+def manage_event_container_group_item(event_id, group_id):
+    """Edit or remove one child model while keeping the container intact."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        groups = _event_container_groups(event)
+        clean_group_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(group_id or '')
+        )[:80]
+        container_group = next(
+            (row for row in groups if row['id'] == clean_group_id),
+            None,
+        )
+        if not container_group:
+            return jsonify({'error': 'Container group not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        requested_item = _normalise_event_container_item({
+            **data,
+            'quantity': 1,
+        })
+        if not requested_item:
+            return jsonify({
+                'error': 'Department, brand and model are required'
+            }), 400
+        item_key = _event_model_group_key(requested_item)
+        item = next(
+            (row for row in container_group['items']
+             if _event_model_group_key(row) == item_key),
+            None,
+        )
+        if not item:
+            return jsonify({'error': 'Container item not found'}), 404
+
+        if request.method == 'DELETE':
+            quantity = 0
+        else:
+            raw_quantity = data.get('quantity')
+            if (
+                isinstance(raw_quantity, bool)
+                or not re.fullmatch(r'[0-9]+', str(raw_quantity or '').strip())
+            ):
+                return jsonify({'error': 'Enter a whole item quantity'}), 400
+            quantity = int(raw_quantity)
+            if quantity < 1 or quantity > 100000:
+                return jsonify({'error': 'Item quantity must be between 1 and 100000'}), 400
+        result = _event_set_container_group_item_quantity(
+            event, container_group, item, quantity
+        )
+        if quantity:
+            item['quantity'] = quantity
+        else:
+            container_group['items'] = [
+                row for row in container_group['items']
+                if _event_model_group_key(row) != item_key
+            ]
+        if container_group['items']:
+            # The displayed department follows the remaining contents.
+            container_group.pop('department', None)
+            container_group = _normalise_event_container_group(container_group)
+            event.container_groups = [
+                container_group if row['id'] == clean_group_id else row
+                for row in groups
+            ]
+        else:
+            event.container_groups = [
+                row for row in groups if row['id'] != clean_group_id
+            ]
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        _finance_detach_managed_event_documents(event_id)
+        log_action(
+            f"Updated item {item['brand']} {item['model']} in container "
+            f"{container_group['containerId']} for event {event_id}: "
+            f"{result['oldQuantity']} -> {quantity} per set"
+        )
+        mark_realtime_change(
+            'event-assets',
+            {'eventId': event_id, 'action': 'update-container-group-item'},
+        )
+        return jsonify({
+            'success': True,
+            'message': (
+                'Container item removed' if not quantity
+                else 'Container item quantity updated'
+            ),
+            'data': {
+                **result,
+                'groupId': clean_group_id,
+                'groupRemoved': not bool(container_group['items']),
+                'containerGroup': (
+                    container_group if container_group['items'] else None
+                ),
+            },
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error(
+            'Failed to update container item %s for event %s: %s',
+            group_id,
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to update container item'}), 500
 
 
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])

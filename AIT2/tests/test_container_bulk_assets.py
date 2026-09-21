@@ -162,6 +162,7 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertEqual(len(event.container_groups), 1)
         group = event.container_groups[0]
         self.assertEqual(group['containerId'], 'PLAN-CASE')
+        self.assertEqual(group['department'], 'AX')
         self.assertEqual(group['quantity'], 1)
         self.assertEqual(group['items'][0]['quantity'], 4)
 
@@ -237,6 +238,275 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertFalse(linked_document['eventManagedByQuotation'])
         self.assertEqual(linked_document['eventSyncFingerprint'], '')
         self.assertEqual(event.container_groups, [])
+
+    def test_removing_container_group_removes_only_its_requirements(self):
+        self.assertEqual(self.create_container('REMOVE-CASE', 3).status_code, 201)
+        event = Event(
+            event_id=507,
+            name='Remove Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Showbase|Bulk Cable|2|Cable stock'],
+            assigned_users=['admin'],
+            subprojects=[{
+                'id': 'stage',
+                'name': 'Stage',
+                'items': [{
+                    'department': 'AX',
+                    'departmentCode': 'AX',
+                    'brand': 'Showbase',
+                    'model': 'Bulk Cable',
+                    'description': 'Cable stock',
+                    'quantity': 2,
+                    'isCustom': False,
+                }],
+            }],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'REMOVE-CASE', 'subprojectId': 'stage'},
+        )
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
+        group_id = added.get_json()['data']['containerGroup']['id']
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 5)
+
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/container-groups/{group_id}'
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['removedUnits'], 3)
+        self.assertEqual(event.container_groups, [])
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 2)
+        marker = next(
+            app_module._parse_model_marker(item)
+            for item in event.prepared_items
+            if app_module._parse_model_marker(item)
+        )
+        self.assertEqual(int(marker['quantity']), 2)
+
+    def test_removing_legacy_container_group_keeps_other_model_quantities(self):
+        self.assertEqual(self.create_container('LEGACY-REMOVE', 3).status_code, 201)
+        event = Event(
+            event_id=508,
+            name='Legacy Remove Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Showbase|Bulk Cable|2|Cable stock'],
+            assigned_users=['admin'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'LEGACY-REMOVE'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/container-groups/{group_id}'
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['removedUnits'], 3)
+        self.assertEqual(event.container_groups, [])
+        marker = app_module._parse_model_marker(event.prepared_items[0])
+        self.assertEqual(int(marker['quantity']), 2)
+
+    def test_container_child_quantity_and_removal_preserve_other_children(self):
+        self.assertEqual(self.create_container('EDIT-CASE', 3, ['A#01']).status_code, 201)
+        event = Event(
+            event_id=512, name='Edit Container Event',
+            start_date='20260810', end_date='20260810', asset_models=[],
+            prepared_items=[], assigned_users=['admin'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'EDIT-CASE'},
+        )
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
+        group_id = added.get_json()['data']['containerGroup']['id']
+        path = f'/api/events/{event.event_id}/container-groups/{group_id}/items'
+        cable = {'department': 'AX', 'brand': 'Showbase', 'model': 'Bulk Cable',
+                 'description': 'Cable stock'}
+        speaker = {'department': 'AX', 'brand': 'Showbase', 'model': 'Speaker',
+                   'description': 'Test speaker'}
+
+        invalid = self.client.put(path, json={**cable, 'quantity': 1.5})
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(
+            next(item['quantity'] for item in event.container_groups[0]['items']
+                 if item['model'] == 'Bulk Cable'),
+            3,
+        )
+
+        updated = self.client.put(path, json={**cable, 'quantity': 5})
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(updated.get_json()['data']['requirementDelta'], 2)
+        self.assertEqual(app_module._event_model_required_quantity(event, cable), 5)
+
+        removed = self.client.delete(path, json=speaker)
+        self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
+        self.assertFalse(removed.get_json()['data']['groupRemoved'])
+        self.assertEqual(app_module._event_model_required_quantity(event, speaker), 0)
+        self.assertEqual(event.container_groups[0]['items'][0]['model'], 'Bulk Cable')
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_events()
+        self.assertEqual(reloaded.events[event.event_id].container_groups[0]['id'], group_id)
+        self.assertEqual(reloaded.events[event.event_id].container_groups[0]['items'][0]['quantity'], 5)
+
+        last_removed = self.client.delete(path, json=cable)
+        self.assertEqual(last_removed.status_code, 200, last_removed.get_data(as_text=True))
+        self.assertTrue(last_removed.get_json()['data']['groupRemoved'])
+        self.assertEqual(event.container_groups, [])
+
+    def test_non_admin_cannot_edit_container_child(self):
+        self.assertEqual(self.create_container('EDIT-PROTECTED', 2).status_code, 201)
+        event = Event(513, 'Protected Child', '20260810', '20260810', [],
+                      assigned_users=['admin', 'normal'])
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'EDIT-PROTECTED'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        self.login('normal')
+        response = self.client.put(
+            f'/api/events/{event.event_id}/container-groups/{group_id}/items',
+            json={'department': 'AX', 'brand': 'Showbase', 'model': 'Bulk Cable',
+                  'description': 'Cable stock', 'quantity': 4},
+        )
+        self.assertIn(response.status_code, (401, 403))
+        self.assertEqual(event.container_groups[0]['items'][0]['quantity'], 2)
+
+    def test_editing_container_child_updates_its_room_without_losing_loose_quantity(self):
+        self.assertEqual(self.create_container('ROOM-EDIT-CASE', 3).status_code, 201)
+        event = Event(
+            514, 'Room Container', '20260810', '20260810', [],
+            prepared_items=['[MODEL]AX|Showbase|Bulk Cable|2|Cable stock'],
+            assigned_users=['admin'],
+            subprojects=[{'id': 'stage', 'name': 'Stage', 'items': [{
+                'department': 'AX', 'departmentCode': 'AX', 'brand': 'Showbase',
+                'model': 'Bulk Cable', 'description': 'Cable stock',
+                'quantity': 2, 'isCustom': False,
+            }]}],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'ROOM-EDIT-CASE', 'subprojectId': 'stage'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        path = f'/api/events/{event.event_id}/container-groups/{group_id}/items'
+        item = {'department': 'AX', 'brand': 'Showbase', 'model': 'Bulk Cable',
+                'description': 'Cable stock'}
+
+        updated = self.client.put(path, json={**item, 'quantity': 4})
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 6)
+        removed = self.client.delete(path, json=item)
+        self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
+        self.assertEqual(event.subprojects[0]['items'][0]['quantity'], 2)
+        self.assertEqual(app_module._event_model_required_quantity(event, item), 2)
+
+    def test_non_admin_cannot_remove_container_group(self):
+        self.assertEqual(self.create_container('PROTECTED-CASE', 2).status_code, 201)
+        event = Event(
+            event_id=509,
+            name='Protected Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[],
+            assigned_users=['admin', 'normal'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'PROTECTED-CASE'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        self.login('normal')
+
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/container-groups/{group_id}'
+        )
+
+        self.assertIn(response.status_code, (401, 403))
+        self.assertEqual(len(event.container_groups), 1)
+
+    def test_removal_rejects_drifted_requirements_without_changing_event(self):
+        self.assertEqual(self.create_container('DRIFT-CASE', 3).status_code, 201)
+        event = Event(
+            event_id=510,
+            name='Drifted Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[],
+            assigned_users=['admin'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'DRIFT-CASE'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        event.prepared_items = ['[MODEL]AX|Showbase|Bulk Cable|2|Cable stock']
+
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/container-groups/{group_id}'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('no longer match', response.get_json()['error'])
+        self.assertEqual(len(event.container_groups), 1)
+        self.assertEqual(event.prepared_items, [
+            '[MODEL]AX|Showbase|Bulk Cable|2|Cable stock'
+        ])
+
+    def test_removing_group_keeps_prepared_asset_as_extra(self):
+        self.assertEqual(
+            self.create_container('PREPARED-CASE', 1, ['A#01']).status_code,
+            201,
+        )
+        event = Event(
+            event_id=511,
+            name='Prepared Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[],
+            assigned_users=['admin'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'PREPARED-CASE'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        event.actually_prepared = ['A#01']
+
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/container-groups/{group_id}'
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.prepared_items, [])
+        self.assertIn('A#01', event.actually_prepared)
+        self.assertIn('A#01', event.extra_assets)
 
     def test_quotation_container_metadata_round_trips_to_event_group(self):
         document = {

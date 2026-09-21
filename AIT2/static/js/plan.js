@@ -1,4 +1,23 @@
 // ---------------- Plan workspace ----------------
+function eventContainerGroupingPreference() {
+  try {
+    return typeof window === 'undefined'
+      || window.localStorage?.getItem('eventContainerGrouping') !== 'individual';
+  } catch (error) {
+    return true;
+  }
+}
+
+function eventSaveContainerGroupingPreference(grouped) {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage?.setItem('eventContainerGrouping', grouped ? 'grouped' : 'individual');
+    }
+  } catch (error) {
+    // Storage can be disabled; the in-memory choice still works.
+  }
+}
+
 var planPageState = {
   events: [],
   event: null,
@@ -9,7 +28,7 @@ var planPageState = {
   search: '',
   department: 'ALL',
   showContainers: true,
-  showGroupedContainers: true,
+  showGroupedContainers: eventContainerGroupingPreference(),
   loading: false,
   activeSubprojectId: '',
   editingCustomAssetId: '',
@@ -1002,6 +1021,30 @@ function eventContainerGroupsForState(eventData, state) {
   ));
 }
 
+function eventContainerGroupDepartment(container) {
+  const storedDepartment = normalizeDepartmentCode(container?.department || '');
+  if (storedDepartment && storedDepartment !== 'UN') return storedDepartment;
+  const totals = new Map();
+  const items = Array.isArray(container?.modelGroups) && container.modelGroups.length
+    ? container.modelGroups
+    : (container?.items || []);
+  items.forEach((item, index) => {
+    const department = normalizeDepartmentCode(
+      item?.departmentCode || item?.department || 'UN'
+    );
+    const quantity = Math.max(
+      0,
+      Number(item?.requiredQuantity ?? item?.quantity ?? 0)
+    );
+    const current = totals.get(department) || { department, quantity: 0, index };
+    current.quantity += quantity;
+    totals.set(department, current);
+  });
+  return [...totals.values()].sort((left, right) => (
+    right.quantity - left.quantity || left.index - right.index
+  ))[0]?.department || 'UN';
+}
+
 function eventContainerCoverage(eventData, state) {
   const coverage = new Map();
   eventContainerGroupsForState(eventData, state).forEach(container => {
@@ -1123,7 +1166,10 @@ function eventContainerGroupModelGroups(eventData, state) {
         ),
         assignedAssets: [],
         _containerChild: true,
-        _containerGroupId: container.id
+        _containerGroupId: container.id,
+        _containerTitle: container.title || container.containerId,
+        _containerItemQuantity: Number(item.quantity || 0),
+        _containerSetQuantity: Number(container.quantity || 1)
       };
     })
   }));
@@ -1136,18 +1182,12 @@ function planContainerGroups(eventData = planPageState.event) {
 }
 
 function planModelGroups(eventData = planPageState.event) {
-  const groups = planPageState.showGroupedContainers
-    ? eventUngroupedModelGroups(eventData, planPageState)
-    : (() => {
-        const coverage = eventContainerCoverage(eventData, planPageState);
-        return eventSubprojectModelGroups(eventData, planPageState).map(group => ({
-          ...group,
-          _containerCoveredQuantity: Math.min(
-            Math.max(0, Number(group?.requiredQuantity || 0)),
-            Math.max(0, Number(coverage.get(eventSubprojectGroupKey(group)) || 0))
-          )
-        }));
-      })();
+  const groups = eventUngroupedModelGroups(eventData, planPageState);
+  if (!planPageState.showGroupedContainers) {
+    eventContainerGroupModelGroups(eventData, planPageState).forEach(container => {
+      groups.push(...container.modelGroups);
+    });
+  }
   return groups
     .filter(group => Number(group?.requiredQuantity || 0) > 0)
     .sort((a, b) => (
@@ -1172,9 +1212,9 @@ function planTotals() {
     departmentsInUse.add(normalizeDepartmentCode(custom.department || 'UN'));
   });
   containers.forEach(container => {
+    departmentsInUse.add(eventContainerGroupDepartment(container));
     (container.modelGroups || []).forEach(group => {
       totalQuantity += Math.max(0, Number(group.requiredQuantity || 0));
-      departmentsInUse.add(normalizeDepartmentCode(group.department || 'UN'));
     });
   });
 
@@ -2108,6 +2148,7 @@ function planSetDepartmentFilter(encodedDepartment) {
 }
 
 function planRequirementQuantityControl(group) {
+  if (group._containerChild) return planContainerItemQuantityControl(group);
   const quantity = Math.max(1, Number(group.requiredQuantity || 1));
   const minimum = Math.max(1, Number(group._containerCoveredQuantity || 0));
   if (eventIsConsolidated(planPageState, planPageState.event)) {
@@ -2686,38 +2727,58 @@ async function planConvertRequirementToLoan(event) {
   }
 }
 
-function renderPlanContainerGroups() {
-  return planContainerGroups().map(container => {
-    const setQuantity = Math.max(1, Number(container.quantity || 1));
-    const assetQuantity = (container.modelGroups || []).reduce(
-      (sum, group) => sum + Math.max(0, Number(group.requiredQuantity || 0)),
-      0
-    );
-    const contents = (container.modelGroups || []).map(group => `
-      <div class="plan-container-child">
-        <span><strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model')}</strong><small>${escapeHtml(group.description || 'No description')}</small></span>
-        ${planDepartmentCodeBadgeHtml(group.department)}
-        <strong class="plan-container-child-quantity">${Math.max(0, Number(group.requiredQuantity || 0))}</strong>
-      </div>
-    `).join('');
-    return `
-      <details class="plan-container-group" open>
-        <summary>
-          <span class="plan-container-group-title">
-            <span class="plan-container-icon" aria-hidden="true">&#9638;</span>
-            <span><strong>${escapeHtml(container.title || container.containerId || 'Container')}</strong><small>Container group · ${assetQuantity} asset${assetQuantity === 1 ? '' : 's'}</small></span>
-          </span>
-          <span class="plan-badge">${setQuantity} set${setQuantity === 1 ? '' : 's'}</span>
+function renderPlanContainerGroup(container) {
+  const setQuantity = Math.max(1, Number(container.quantity || 1));
+  const assetQuantity = (container.modelGroups || []).reduce(
+    (sum, group) => sum + Math.max(0, Number(group.requiredQuantity || 0)),
+    0
+  );
+  const contents = (container.modelGroups || []).map(group => `
+    <div class="plan-container-child">
+      <span><strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model')}</strong><small>${escapeHtml(group.description || 'No description')}</small></span>
+      ${planDepartmentCodeBadgeHtml(group.department)}
+      <span class="plan-container-child-total">${Math.max(0, Number(group.requiredQuantity || 0))} total</span>
+      ${planContainerItemQuantityControl(group)}
+      <button type="button" class="plan-button plan-button-danger plan-button-small" title="Remove container item"
+              onclick="planRemoveContainerItem('${planEncode(group._containerGroupId)}','${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">&#128465;</button>
+    </div>
+  `).join('');
+  return `
+    <details class="plan-container-group" open>
+      <summary>
+        <span class="plan-container-group-title">
+          ${navWireIconSvg('containers')}
+          <span><strong>${escapeHtml(container.title || container.containerId || 'Container')}</strong><small>Container group · ${assetQuantity} asset${assetQuantity === 1 ? '' : 's'}</small></span>
+        </span>
+        <span class="plan-badge">${setQuantity} set${setQuantity === 1 ? '' : 's'}</span>
+        <span class="plan-container-actions">
+          <button type="button" class="plan-button plan-button-small"
+                  onclick="event.preventDefault();event.stopPropagation();planBreakContainerGroup('${planEncode(container.id)}')">Break group</button>
           <button type="button" class="plan-button plan-button-danger plan-button-small"
-                  onclick="event.preventDefault();event.stopPropagation();planBreakContainerGroup('${planEncode(container.id)}')">
-            Break group
-          </button>
-          <span aria-hidden="true">⌄</span>
-        </summary>
-        <div class="plan-container-children">${contents}</div>
-      </details>
-    `;
-  }).join('');
+                  onclick="event.preventDefault();event.stopPropagation();planRemoveContainerGroup('${planEncode(container.id)}')">Remove</button>
+        </span>
+        <span aria-hidden="true">⌄</span>
+      </summary>
+      <div class="plan-container-children">${contents}</div>
+    </details>
+  `;
+}
+
+function planContainerItemQuantityControl(group) {
+  const quantity = Math.max(1, Number(group._containerItemQuantity || 1));
+  const args = [group._containerGroupId, group.department, group.brand, group.model, group.description || '']
+    .map(value => `'${planEncode(value)}'`).join(',');
+  return `<div class="plan-qty-control" aria-label="Quantity per container set">
+    <button type="button" ${quantity <= 1 ? 'disabled' : ''}
+            onclick="planAdjustContainerItemQuantity(${args},-1,this)">−</button>
+    <input type="number" min="1" step="1" value="${quantity}"
+           aria-label="Quantity per set" onchange="planSetContainerItemQuantity(${args},this.value,this)">
+    <button type="button" onclick="planAdjustContainerItemQuantity(${args},1,this)">+</button>
+  </div>`;
+}
+
+function renderPlanContainerGroups(containers = planContainerGroups()) {
+  return containers.map(renderPlanContainerGroup).join('');
 }
 
 function renderPlanRequirementsCard() {
@@ -2732,24 +2793,39 @@ function renderPlanRequirementsCard() {
     if (!byDepartment.has(code)) byDepartment.set(code, []);
     byDepartment.get(code).push({ type: 'custom', custom });
   });
+  planContainerGroups().forEach(container => {
+    const code = eventContainerGroupDepartment(container);
+    if (!byDepartment.has(code)) byDepartment.set(code, []);
+    byDepartment.get(code).push({ type: 'container', container });
+  });
 
   const departmentsHtml = Array.from(byDepartment.entries())
     .sort(([a], [b]) => compareByDisplayName(a, b))
     .map(([code, rows]) => {
-      const departmentQuantity = rows.reduce((total, row) => (
-        total + Math.max(
+      const departmentQuantity = rows.reduce((total, row) => {
+        if (row.type === 'container') {
+          return total + (row.container.modelGroups || []).reduce(
+            (sum, group) => sum + Math.max(0, Number(group.requiredQuantity || 0)),
+            0
+          );
+        }
+        return total + Math.max(
           1,
           Number(row.type === 'model'
             ? row.group.requiredQuantity
             : row.custom.quantity) || 1
-        )
-      ), 0);
+        );
+      }, 0);
       const collapseForMobile = window.matchMedia?.('(max-width: 840px)').matches;
       const rememberedOpen = planPageState.departmentOpenState.get(code);
       const departmentOpen = typeof rememberedOpen === 'boolean'
         ? rememberedOpen
         : !collapseForMobile;
-      const rowHtml = rows.map(row => {
+      const containerHtml = renderPlanContainerGroups(
+        rows.filter(row => row.type === 'container').map(row => row.container)
+      );
+      const standardRows = rows.filter(row => row.type !== 'container');
+      const rowHtml = standardRows.map(row => {
         if (row.type === 'model') {
           const group = row.group;
           const warning = planRequirementWarning(group);
@@ -2780,16 +2856,18 @@ function renderPlanRequirementsCard() {
                 ` : ''}
                 ${planDepartmentCodeBadgeHtml(group.department)}
               </div>
-              <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
+              <div class="plan-item-description">${escapeHtml(group.description || 'No description')}${group._containerChild ? `<small class="plan-container-origin">In ${escapeHtml(group._containerTitle || 'container')} · ${Math.max(1, Number(group._containerSetQuantity || 1))} set(s)</small>` : ''}</div>
               <div class="plan-replace-slot">
-                ${warning && !group._containerCoveredQuantity ? `
+                ${warning && !group._containerChild ? `
                   <button type="button" class="plan-button plan-button-small plan-swap-button ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
                           onclick="planOpenResolution('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Resolve</button>
-                ` : (group._containerCoveredQuantity ? '<span class="plan-container-locked">Grouped</span>' : '')}
+                ` : (group._containerChild ? '<span class="plan-container-locked">Grouped</span>' : '')}
               </div>
               ${planRequirementQuantityControl(group)}
               <div class="plan-row-actions">
-                ${group._containerCoveredQuantity ? '' : `<button type="button" class="plan-button plan-button-danger plan-button-small"
+                ${group._containerChild ? `<button type="button" class="plan-button plan-button-danger plan-button-small"
+                        title="Remove container item"
+                        onclick="planRemoveContainerItem('${planEncode(group._containerGroupId)}','${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">&#128465;</button>` : `<button type="button" class="plan-button plan-button-danger plan-button-small"
                         title="Remove requirement"
                         onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
                   &#128465;
@@ -2854,13 +2932,14 @@ function renderPlanRequirementsCard() {
               <span aria-hidden="true">⌄</span>
             </span>
           </summary>
-          <div class="plan-requirement-head">
+          ${containerHtml}
+          ${standardRows.length ? `<div class="plan-requirement-head">
             <span>Brand / Model</span>
             <span>Description</span>
             <span></span>
             <span>Required Qty</span>
             <span></span>
-          </div>
+          </div>` : ''}
           ${rowHtml}
         </details>
       `;
@@ -2884,8 +2963,7 @@ function renderPlanRequirementsCard() {
         ` : ''}
       </div>
       <div class="plan-requirements-scroll">
-        ${renderPlanContainerGroups()}
-        ${departmentsHtml || (planContainerGroups().length ? '' : '<div class="plan-empty">No assets planned yet. Add models from the left.</div>')}
+        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left.</div>'}
       </div>
     </section>
   `;
@@ -3783,6 +3861,10 @@ async function planAddContainerContents(encodedContainerId) {
 
 function planToggleContainerGrouping(grouped) {
   planPageState.showGroupedContainers = !!grouped;
+  if (typeof prepareNewPageState !== 'undefined') {
+    prepareNewPageState.showGroupedContainers = !!grouped;
+  }
+  eventSaveContainerGroupingPreference(!!grouped);
   renderPlanRealtimeAssets();
 }
 
@@ -3804,6 +3886,92 @@ async function planBreakContainerGroup(encodedGroupId) {
       {}
     );
     showNotification('success', 'Container group broken into individual requirements');
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planRemoveContainerGroup(encodedGroupId, skipConfirm = false) {
+  const groupId = planDecode(encodedGroupId);
+  const container = eventContainerGroupsForState(planPageState.event, planPageState)
+    .find(group => String(group.id) === groupId);
+  const confirmed = skipConfirm || await showAppConfirm({
+    title: 'Remove Container Group',
+    message: `Remove ${container?.title || container?.containerId || 'this container'} and all requirements supplied by this group? Any assets already prepared will remain attached to the event as extras.`,
+    confirmText: 'Remove Group',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  try {
+    await apiCall(
+      `/api/events/${planPageState.eventId}/container-groups/${encodeURIComponent(groupId)}`,
+      'DELETE'
+    );
+    showNotification('success', 'Container group and requirements removed');
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planSetContainerItemQuantity(encodedGroupId, encodedDepartment, encodedBrand, encodedModel, encodedDescription, rawQuantity, input) {
+  const quantity = Number(rawQuantity);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) {
+    showNotification('warning', 'Enter a whole quantity between 1 and 100000.');
+    await refreshPlanSelectedEvent();
+    return;
+  }
+  const groupId = planDecode(encodedGroupId);
+  const control = input?.closest('.plan-qty-control');
+  if (input) input.disabled = true;
+  control?.querySelectorAll('button').forEach(button => { button.disabled = true; });
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/container-groups/${encodeURIComponent(groupId)}/items`, 'PUT', {
+      department: planDecode(encodedDepartment),
+      brand: planDecode(encodedBrand),
+      model: planDecode(encodedModel),
+      description: planDecode(encodedDescription),
+      quantity
+    });
+    await refreshPlanSelectedEvent();
+  } catch (error) {
+    if (input) input.disabled = false;
+    control?.querySelectorAll('button').forEach(button => { button.disabled = false; });
+  }
+}
+
+function planAdjustContainerItemQuantity(encodedGroupId, encodedDepartment, encodedBrand, encodedModel, encodedDescription, delta, button) {
+  const input = planQuantityInput(button);
+  if (input?.disabled) return;
+  const quantity = Number(input?.value || 0) + Number(delta || 0);
+  if (quantity < 1) return;
+  if (input) input.value = String(quantity);
+  planSetContainerItemQuantity(encodedGroupId, encodedDepartment, encodedBrand, encodedModel, encodedDescription, quantity, input);
+}
+
+async function planRemoveContainerItem(encodedGroupId, encodedDepartment, encodedBrand, encodedModel, encodedDescription) {
+  const groupId = planDecode(encodedGroupId);
+  const brand = planDecode(encodedBrand);
+  const model = planDecode(encodedModel);
+  const choice = await showAppConfirm({
+    title: 'Remove Container Item',
+    message: `Remove ${brand} ${model} from this container, or remove the entire container group? Prepared assets will remain attached as extras.`,
+    confirmText: 'Remove Item',
+    confirmValue: 'item',
+    alternateText: 'Remove Group',
+    alternateValue: 'group',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (choice === 'group') {
+    await planRemoveContainerGroup(encodedGroupId, true);
+    return;
+  }
+  if (choice !== 'item') return;
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/container-groups/${encodeURIComponent(groupId)}/items`, 'DELETE', {
+      department: planDecode(encodedDepartment), brand, model,
+      description: planDecode(encodedDescription)
+    });
+    showNotification('success', 'Container item removed');
     await refreshPlanSelectedEvent();
   } catch (error) {}
 }
