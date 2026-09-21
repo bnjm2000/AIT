@@ -14,6 +14,7 @@ are in the [README](../README.md).
 | Page URLs and section permissions | `routes/pages.py` (`APP_PAGE_SECTIONS`) | Shell navigation in `app.js` |
 | Inventory and maintenance | `app.py`, `models.py`, `maintenance_logs.py` | `app.js`, `inventory-export.js` |
 | Asset Check | `routes/asset_check.py`; shared inventory policies supplied by `app.py` | `asset-check.js` |
+| Asset template import | `routes/asset_import.py` (file parsing, signed previews, validation, and saves) | `asset-import.js` |
 | Transfers between events and Store | `routes/transfers.py`; shared preparation and locking policies supplied by `app.py` | `transfer.js` |
 | Events, planning, preparation, returns | `app.py`, `models.py`, `event_concurrency.py` | `events-overview.js`, `plan.js`, `prepare.js`, `return.js`, `packing-list.js` |
 | Delivery orders | `routes/delivery_orders.py`, `services/delivery_orders.py` | `delivery-order.js` |
@@ -61,6 +62,8 @@ with its caller when separating it adds no useful boundary.
   with no literal caller does not prove a handler is unused.
   `clients.js` loads after `finance.js` and reuses its formatters and document
   cache; quotation-specific client editing remains with quotations.
+  `asset-import.js` owns import review state and loads after `app.js`, which
+  retains the inventory lookup and positional serial helpers shared with Add Asset.
 - **Asset loading:** `_render_app_page` supplies static version values. Update
   it, the template, and `tests/static_source.py` when changing the shell's script
   list. That test helper assembles selected source files, not a runtime bundle.

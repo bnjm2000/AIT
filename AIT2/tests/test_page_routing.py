@@ -157,6 +157,16 @@ class PageRoutingTests(unittest.TestCase):
         self.assertRegex(page, r'js/clients\.js\?v=\d+')
         self.assertEqual(self.client.get('/static/js/clients.js').status_code, 200)
 
+    def test_inventory_loads_versioned_asset_import_after_shared_helpers(self):
+        self.login('owner')
+        response = self.client.get('/inventory')
+        self.assertEqual(response.status_code, 200)
+        page = response.get_data(as_text=True)
+        self.assertLess(page.index('js/app.js'), page.index('js/asset-import.js'))
+        self.assertEqual(page.count('js/asset-import.js'), 1)
+        self.assertRegex(page, r'js/asset-import\.js\?v=\d+')
+        self.assertEqual(self.client.get('/static/js/asset-import.js').status_code, 200)
+
     def test_record_deep_links_restore_authorised_workspaces(self):
         self.login('owner')
         quotation = self.client.get('/quotations/quote-123')

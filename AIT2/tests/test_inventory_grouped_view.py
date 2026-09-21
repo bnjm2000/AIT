@@ -699,14 +699,18 @@ def test_expanded_inventory_rows_show_an_aligned_version_column():
     script = APP_BUNDLE_SOURCE
 
     assert ".inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:" in template
-    assert "minmax(100px,.7fr) 90px" in template
-    assert '<span>Asset ID</span><span>Version</span><span>Availability</span>' in script
+    assert "minmax(90px,.7fr) 90px" in template
+    assert '<span>Asset ID</span><span>Version</span><span>Container</span><span>Availability</span>' in script
     row_source = script[
         script.index("function inventoryIndividualRowHtml"):
         script.index("function toggleInventoryModelGroup")
     ]
     assert "inventory-individual-version" in row_source
     assert "asset.version || '-'" in row_source
+    assert "inventoryAssetContainersHtml(asset)" in row_source
+    assert 'class="inventory-container-badge"' in script
+    assert "inventoryOpenContainer(event," in script
+    assert '.inventory-container-memberships' in template
     assert "const assetTags = (group?.assets || []).map(assetTagSearchText);" in script
     assert "...(item.tags || [])" in script
 

@@ -2,6 +2,7 @@ import csv
 import io
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from openpyxl import Workbook
 
@@ -103,6 +104,62 @@ class AssetTemplateImportTests(unittest.TestCase):
         rows = list(csv.reader(io.StringIO(response.data.decode('utf-8-sig'))))
         self.assertEqual(rows, [IMPORT_HEADERS])
         self.assertNotIn('Asset ID', rows[0])
+
+    def test_import_routes_require_an_authenticated_admin(self):
+        self.data_manager.users['normal'] = User('normal', '', '', False, True)
+        self.data_manager.save_users()
+        for username, status in ((None, 401), ('normal', 403)):
+            with self.client.session_transaction() as session:
+                session.clear()
+                if username:
+                    session['user'] = username
+            for path, method in (
+                ('import-template', 'GET'), ('import-preview', 'POST'),
+                ('import-plan', 'POST'), ('import', 'POST'),
+            ):
+                with self.subTest(username=username, path=path):
+                    response = self.client.open(f'/api/assets/{path}', method=method, json={})
+                    self.assertEqual(response.status_code, status)
+        self.assertEqual(set(self.data_manager.inventory), {'A#01'})
+
+    def test_import_rejects_edited_rows_and_another_users_preview(self):
+        plan = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'Test', 'model': 'Signed', 'department': 'AX', 'quantity': 1,
+        }]}).get_json()['data']
+        original_model = plan['rows'][0]['model']
+        plan['rows'][0]['model'] = 'Edited after preview'
+        edited = self.client.post('/api/assets/import', json=plan)
+        self.assertEqual(edited.status_code, 409)
+        self.assertIn('edited', edited.get_json()['error'])
+        plan['rows'][0]['model'] = original_model
+        self.data_manager.users['other-admin'] = User('other-admin', '', '', True, True)
+        self.data_manager.save_users()
+        with self.client.session_transaction() as session:
+            session['user'] = 'other-admin'
+        other_user = self.client.post('/api/assets/import', json=plan)
+        self.assertEqual(other_user.status_code, 409)
+        self.assertIn('different user or company', other_user.get_json()['error'])
+        self.assertEqual(set(self.data_manager.inventory), {'A#01'})
+
+    def test_failed_inventory_save_rolls_back_imported_assets_and_new_departments(self):
+        plan = self.client.post('/api/assets/import-plan', json={'rows': [{
+            'brand': 'Test', 'model': 'Rollback', 'department': 'Fixture Department',
+            'quantity': 2, 'assetIdPrefix': 'ROLLBACK', 'createDepartment': True,
+            'newDepartmentCode': 'ROLLBACK', 'newDepartmentName': 'Fixture Department',
+        }]}).get_json()['data']
+        departments_before = app_module._load_departments()
+        with patch.object(self.data_manager, 'save_inventory', side_effect=OSError('test disk failure')):
+            response = self.client.post('/api/assets/import', json=plan)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(set(self.data_manager.inventory), {'A#01'})
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(set(reloaded.inventory), {'A#01'})
+        self.assertEqual(app_module._load_departments(), departments_before)
+        # A failed save leaves the original preview usable once storage recovers.
+        retried = self.client.post('/api/assets/import', json=plan)
+        self.assertEqual(retried.status_code, 200, retried.get_data(as_text=True))
+        self.assertEqual(set(self.data_manager.inventory), {'A#01', 'ROLLBACK#01', 'ROLLBACK#02'})
 
     def test_preview_accepts_csv_and_modern_excel(self):
         row = [
@@ -298,6 +355,9 @@ class AssetTemplateImportTests(unittest.TestCase):
             'isBulk': True,
             'defaultLocation': 'Store',
             'assetIdPrefix': 'IGNORED',
+            'version': 'v2', 'dateOfPurchase': '2026-08-01',
+            'notes': 'Imported bulk stock', 'tags': ['cable'],
+            'serials': ['ignored-primary'], 'secondarySerials': ['ignored-secondary'],
         }]
         plan_response = self.client.post('/api/assets/import-plan', json={'rows': rows})
         self.assertEqual(plan_response.status_code, 200, plan_response.get_data(as_text=True))
@@ -309,6 +369,15 @@ class AssetTemplateImportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn('BULK-0001', self.data_manager.inventory)
         self.assertEqual(self.data_manager.inventory['BULK-0001'].quantity, 25)
+        asset = self.data_manager.inventory['BULK-0001']
+        self.assertTrue(asset.is_bulk)
+        self.assertEqual((asset.serial_number, asset.secondary_serial_number), ('', ''))
+        self.assertEqual(asset.version, 'v2')
+        self.assertEqual(asset.date_of_purchase, '2026-08-01')
+        self.assertEqual(asset.notes, 'Imported bulk stock')
+        self.assertEqual(asset.tags, ['cable'])
+        self.assertTrue(asset.date_added)
+        self.assertEqual(asset.date_added, asset.date_modified)
 
     def test_blank_serial_positions_are_preserved_through_import(self):
         response = self.client.post(
@@ -481,7 +550,7 @@ def test_asset_import_review_ui_is_compact_categorized_and_editable():
 
     root = Path(__file__).resolve().parents[1]
     template = (root / 'templates' / 'index.html').read_text(encoding='utf-8')
-    script = (root / 'static' / 'js' / 'app.js').read_text(encoding='utf-8')
+    script = (root / 'static' / 'js' / 'asset-import.js').read_text(encoding='utf-8')
 
     assert 'Download Template' in template
     assert 'Upload Template' in template

@@ -87,6 +87,27 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertEqual(reloaded.containers['CABLE-CASE'].asset_ids, ['A#01'])
         self.assertEqual(reloaded.containers['CABLE-CASE'].bulk_items, {'BULK-0001': 4})
 
+    def test_inventory_payload_lists_every_container_membership(self):
+        first = self.create_container('CASE-01', 4, ['A#01'])
+        second = self.create_container('ALL-GEAR', 2, ['A#01'])
+        self.assertEqual(first.status_code, 201, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 201, second.get_data(as_text=True))
+
+        response = self.client.get('/api/assets?view=summary')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        by_id = {
+            item['internalId']: item
+            for item in response.get_json()['data']
+        }
+        self.assertEqual(by_id['A#01']['containers'], [
+            {'id': 'ALL-GEAR', 'quantity': 1},
+            {'id': 'CASE-01', 'quantity': 1},
+        ])
+        self.assertEqual(by_id['BULK-0001']['containers'], [
+            {'id': 'ALL-GEAR', 'quantity': 2},
+            {'id': 'CASE-01', 'quantity': 4},
+        ])
+
     def test_bulk_quantity_cannot_be_overallocated_across_containers(self):
         first = self.create_container('CASE-A', 7)
         second = self.create_container('CASE-B', 4)
