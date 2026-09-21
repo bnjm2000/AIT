@@ -15,7 +15,8 @@ var prepareNewPageState = {
   expandedModels: new Set(),
   expandedCustomGroups: new Set(),
   suppressRealtimeUntil: 0,
-  activeSubprojectId: ''
+  activeSubprojectId: '',
+  showGroupedContainers: true
 };
 
 var prepareNewNotesTimer = null;
@@ -151,6 +152,33 @@ function prepareNewIsComplete(event = prepareNewPageState.event) {
   return totals.lineCount > 0 && totals.prepared >= totals.required;
 }
 
+function prepareNewUngroupedModelGroups(event = prepareNewPageState.event, state = prepareNewPageState) {
+  const groups = prepareNewPageState.showGroupedContainers
+    ? eventUngroupedModelGroups(event, state)
+    : eventSubprojectModelGroups(event, state);
+  return groups
+    .filter(group => (
+      Number(group?.requiredQuantity || 0) > 0
+      || prepareNewExtraPreparedEverQuantity(group) > 0
+      || (group?.assignedAssets || []).some(asset => asset?.isExtra)
+    ))
+    .sort((a, b) => (
+      normalizeDepartmentCode(a.department || 'UN').localeCompare(
+        normalizeDepartmentCode(b.department || 'UN'), undefined,
+        { numeric: true, sensitivity: 'base' }
+      ) || modelGroupSortName(a).localeCompare(
+        modelGroupSortName(b), undefined,
+        { numeric: true, sensitivity: 'base' }
+      )
+    ));
+}
+
+function prepareNewContainerGroups(event = prepareNewPageState.event, state = prepareNewPageState) {
+  return prepareNewPageState.showGroupedContainers
+    ? eventContainerGroupModelGroups(event, state)
+    : [];
+}
+
 function prepareNewEventTotals(event = prepareNewPageState.event) {
   return prepareNewTotals(event, { ...prepareNewPageState, activeSubprojectId: EVENT_CONSOLIDATED_SUBPROJECT_ID });
 }
@@ -213,6 +241,8 @@ function prepareNewExtraPreparedEverQuantity(group) {
 
 function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewPageState) {
   const groups = prepareNewModelGroups(event, state);
+  const visibleLineCount = prepareNewUngroupedModelGroups(event, state).length
+    + prepareNewContainerGroups(event, state).length;
   const customAssets = prepareNewCustomAssets(event, state);
   const departmentsInUse = new Set(
     [
@@ -229,7 +259,7 @@ function prepareNewTotals(event = prepareNewPageState.event, state = prepareNewP
         : subtotal
     ), 0), 0);
   return {
-    lineCount: groups.length + customAssets.length,
+    lineCount: visibleLineCount + customAssets.length,
     required,
     prepared,
     extra: groups.reduce((sum, row) => sum + prepareNewExtraPreparedEverQuantity(row), 0),
@@ -511,7 +541,8 @@ function prepareNewModelSection(group) {
   const key = prepareNewModelKey(group);
   const complete = countablePrepared >= required;
   const hasReturnedAnonymousSlots = Number(group.returnedPreparedSlotQuantity || 0) > 0;
-  const isOpen = !isBulk && prepareNewPageState.expandedModels.has(key);
+  const isOpen = !isBulk && !group._containerChild
+    && prepareNewPageState.expandedModels.has(key);
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
   const canAssignExactAssets = !isBulk;
   const encodedKey = planEncode(key);
@@ -751,9 +782,49 @@ function prepareNewExtrasSection() {
   `;
 }
 
+function prepareNewContainerSection(container) {
+  const required = (container.modelGroups || []).reduce(
+    (sum, group) => sum + Math.max(0, Number(group.requiredQuantity || 0)), 0
+  );
+  const prepared = (container.modelGroups || []).reduce(
+    (sum, group) => sum + prepareNewCountablePreparedEverQuantity(group), 0
+  );
+  const percent = required ? Math.min(100, Math.round((prepared / required) * 100)) : 0;
+  const panelKey = `container|${container.id}`;
+  const encodedPanelKey = planEncode(panelKey);
+  const isOpen = prepareNewPageState.expandedModels.has(panelKey);
+  const sets = Math.max(1, Number(container.quantity || 1));
+  return `
+    <details class="prepare-new-department prepare-new-container-group" ${isOpen ? 'open' : ''}
+             data-prepare-render-version="${prepareNewPageState.renderVersion}"
+             ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
+      <summary>
+        <span class="prepare-new-department-name">
+          <span class="prepare-container-icon" aria-hidden="true">&#9638;</span>
+          ${escapeHtml(container.title || container.containerId || 'Container')}
+          <span class="plan-badge">${sets} set${sets === 1 ? '' : 's'}</span>
+        </span>
+        <span class="prepare-new-progress ${prepared < required ? 'prepare-new-pending-count' : ''}">
+          ${prepared} / ${required} prepared
+          <span class="prepare-new-progress-track"><span style="width:${percent}%"></span></span>
+        </span>
+        <span class="prepare-new-model-actions">
+          <button type="button" class="plan-button plan-button-danger plan-button-small"
+                  onclick="event.preventDefault();event.stopPropagation();prepareNewBreakContainerGroup('${planEncode(container.id)}')">Break group</button>
+          <span aria-hidden="true">⌄</span>
+        </span>
+      </summary>
+      <div class="prepare-container-contents">
+        ${(container.modelGroups || []).map(prepareNewModelSection).join('')}
+      </div>
+    </details>
+  `;
+}
+
 function renderPrepareNewAssignment() {
-  const groups = prepareNewModelGroups();
-  if (!groups.length) {
+  const groups = prepareNewUngroupedModelGroups();
+  const containers = prepareNewContainerGroups();
+  if (!groups.length && !containers.length) {
     const snapshot = prepareNewSnapshot();
     if (!snapshot.rows.length) {
       return '<div class="prepare-new-empty">This event has no planned requirements yet.</div>';
@@ -800,7 +871,31 @@ function renderPrepareNewAssignment() {
       </details>
     `;
   }).join('');
-  return departments + prepareNewExtrasSection();
+  return containers.map(prepareNewContainerSection).join('')
+    + departments
+    + prepareNewExtrasSection();
+}
+
+async function prepareNewBreakContainerGroup(encodedGroupId) {
+  const groupId = planDecode(encodedGroupId);
+  const container = prepareNewContainerGroups().find(group => String(group.id) === groupId);
+  const confirmed = await showAppConfirm({
+    title: 'Break Container Group',
+    message: `Break ${container?.title || container?.containerId || 'this container'} into individual asset requirements? This cannot be undone. To restore the group, remove all of its assets and add the container again.`,
+    confirmText: 'Break Group',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  try {
+    await apiCall(
+      `/api/events/${prepareNewPageState.eventId}/container-groups/${encodeURIComponent(groupId)}/break`,
+      'POST',
+      {}
+    );
+    showNotification('success', 'Container group broken into individual requirements');
+    await refreshPrepareNewSelectedEvent({ preserve: true });
+  } catch (error) {}
 }
 
 function prepareNewCustomAssets(event = prepareNewPageState.event, state = prepareNewPageState) {
@@ -1265,9 +1360,20 @@ function renderPrepareNewPage() {
         <section class="prepare-new-card prepare-new-assignment-card">
           <div class="prepare-new-card-header">
             <h3><span class="prepare-new-heading-icon">${planMetricIconSvg('assignment')}</span>Assignment Workspace</h3>
-            <span id="prepareNewAssignmentProgress" class="prepare-new-status prepare-new-status-${totals.lineCount > 0 && totals.prepared >= totals.required ? 'complete' : 'pending'}">
-              ${totals.prepared} / ${totals.required} prepared
-            </span>
+            <div class="prepare-new-assignment-header-actions">
+              ${eventContainerGroupsForState(event, prepareNewPageState).length ? `
+                <label class="prepare-new-toggle" title="Switch between container groups and their individual asset requirements">
+                  <span>Group containers</span>
+                  <input type="checkbox" ${prepareNewPageState.showGroupedContainers ? 'checked' : ''}
+                         onchange="prepareNewToggleContainerGrouping(this.checked)">
+                  <i class="prepare-new-toggle-track" aria-hidden="true"></i>
+                  <span>${prepareNewPageState.showGroupedContainers ? 'Grouped' : 'Individual'}</span>
+                </label>
+              ` : ''}
+              <span id="prepareNewAssignmentProgress" class="prepare-new-status prepare-new-status-${totals.lineCount > 0 && totals.prepared >= totals.required ? 'complete' : 'pending'}">
+                ${totals.prepared} / ${totals.required} prepared
+              </span>
+            </div>
           </div>
           <div class="prepare-new-assignment-scroll">${renderPrepareNewAssignment()}</div>
         </section>
@@ -1285,6 +1391,11 @@ function renderPrepareNewPage() {
     </div>
   `;
   prepareNewRenderScanQueueStatus();
+}
+
+function prepareNewToggleContainerGrouping(grouped) {
+  prepareNewPageState.showGroupedContainers = !!grouped;
+  renderPrepareNewPage();
 }
 
 function prepareNewCaptureViewState() {

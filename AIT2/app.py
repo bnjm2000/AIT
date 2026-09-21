@@ -6059,6 +6059,122 @@ def _sync_event_model_markers_from_subprojects(event, group_keys=None):
     event.prepared_items = preserved
 
 
+def _normalise_event_container_item(value):
+    """Return one safe, per-container model requirement."""
+    value = value if isinstance(value, dict) else {}
+    department = _normalise_department_code(
+        value.get('departmentCode') or value.get('department')
+    ) or 'UN'
+    brand = str(value.get('brand') or '').strip()[:240]
+    model = str(value.get('model') or '').strip()[:240]
+    quantity = max(0, _safe_int(round(_safe_float(value.get('quantity'), 0)), 0))
+    if not brand or not model or quantity <= 0:
+        return None
+    return {
+        'department': department,
+        'departmentCode': department,
+        'brand': brand,
+        'model': model,
+        'description': str(value.get('description') or '').strip()[:1000],
+        'quantity': quantity,
+    }
+
+
+def _normalise_event_container_group(value):
+    """Normalise persistent metadata for one intact container group."""
+    value = value if isinstance(value, dict) else {}
+    container_id = str(
+        value.get('containerId') or value.get('title') or ''
+    ).strip()[:500]
+    quantity = max(0, _safe_int(round(_safe_float(value.get('quantity'), 1)), 0))
+    items = []
+    by_key = {}
+    for raw_item in value.get('items') or []:
+        item = _normalise_event_container_item(raw_item)
+        if not item:
+            continue
+        key = _event_model_group_key(item)
+        if key in by_key:
+            by_key[key]['quantity'] += item['quantity']
+        else:
+            by_key[key] = item
+            items.append(item)
+    if not container_id or quantity <= 0 or not items:
+        return None
+    group_id = re.sub(
+        r'[^A-Za-z0-9_-]+', '', str(value.get('id') or '')
+    )[:80] or f"container_{secrets.token_hex(8)}"
+    return {
+        'id': group_id,
+        'containerId': container_id,
+        'title': str(value.get('title') or container_id).strip()[:500] or container_id,
+        'quantity': quantity,
+        'subprojectId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
+        )[:80] or 'main',
+        'items': items,
+        'source': (
+            'quotation'
+            if str(value.get('source') or '').strip().lower() == 'quotation'
+            else 'plan'
+        ),
+    }
+
+
+def _event_container_groups(event):
+    groups = []
+    for value in getattr(event, 'container_groups', []) or []:
+        group = _normalise_event_container_group(value)
+        if group:
+            groups.append(group)
+    return groups
+
+
+def _event_container_coverage_for_group(event, group, subproject_id=None):
+    group_key = _event_model_group_key(group)
+    total = 0
+    for container_group in _event_container_groups(event):
+        if (
+            subproject_id is not None
+            and str(container_group.get('subprojectId') or 'main')
+            != str(subproject_id)
+        ):
+            continue
+        for item in container_group.get('items') or []:
+            if _event_model_group_key(item) == group_key:
+                total += (
+                    max(0, _safe_int(item.get('quantity'), 0))
+                    * max(0, _safe_int(container_group.get('quantity'), 0))
+                )
+    return total
+
+
+def _event_append_container_group(
+    event,
+    container_id,
+    items,
+    quantity=1,
+    subproject_id='main',
+    source='plan',
+    group_id='',
+):
+    group = _normalise_event_container_group({
+        'id': group_id,
+        'containerId': container_id,
+        'title': container_id,
+        'quantity': quantity,
+        'subprojectId': subproject_id,
+        'items': items,
+        'source': source,
+    })
+    if not group:
+        raise ValueError('Container group has no valid model contents')
+    current = _event_container_groups(event)
+    current.append(group)
+    event.container_groups = current
+    return group
+
+
 def _event_subproject_adjust_prepared(subproject, group, delta):
     matches = _event_subproject_group_items(subproject, group)
     if not matches:
@@ -23396,6 +23512,7 @@ def get_events():
                     'returnableRefs': returnable_counts['refs'],
                     'modelGroups': model_groups,
                     'subprojects': getattr(event, 'subprojects', []) or [],
+                    'containerGroups': _event_container_groups(event),
                 })
             events_data.append(event_payload)
 
@@ -23812,6 +23929,7 @@ def get_event(event_id):
             'assetsByDepartment': sorted_departments,
             'modelGroups': model_groups,
             'subprojects': getattr(event, 'subprojects', []) or [],
+            'containerGroups': _event_container_groups(event),
             'forceStateOverride': getattr(event, 'force_state_override', False),
             'notes': getattr(event, 'notes', '') or '',
         }
@@ -25355,6 +25473,19 @@ def manage_event_models(event_id):
                 if current_room_quantity <= 0:
                     return jsonify({'error': 'Model assignment not found'}), 404
 
+            grouped_minimum = _event_container_coverage_for_group(
+                event,
+                group,
+                subproject.get('id'),
+            )
+            if next_room_quantity < grouped_minimum:
+                return jsonify({
+                    'error': (
+                        f'{grouped_minimum} unit(s) belong to an intact container. '
+                        'Break the container group before removing them.'
+                    )
+                }), 409
+
             projected_total = current_total - current_room_quantity + next_room_quantity
 
             _event_subproject_set_group_quantity(
@@ -25450,6 +25581,20 @@ def manage_event_models(event_id):
 
             if not matching_indexes:
                 return jsonify({'error': 'Model assignment not found'}), 404
+
+            grouped_minimum = _event_container_coverage_for_group(event, {
+                'department': department,
+                'brand': brand,
+                'model': model,
+                'description': display_description,
+            })
+            if new_quantity < grouped_minimum:
+                return jsonify({
+                    'error': (
+                        f'{grouped_minimum} unit(s) belong to an intact container. '
+                        'Break the container group before reducing them.'
+                    )
+                }), 409
 
             updated_marker = _make_model_marker({
                 'department': department,
@@ -25609,6 +25754,19 @@ def manage_event_models(event_id):
 
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
+
+            if _event_container_coverage_for_group(event, {
+                'department': department,
+                'brand': brand,
+                'model': model,
+                'description': (data.get('description') or '').strip(),
+            }) > 0:
+                return jsonify({
+                    'error': (
+                        'This requirement belongs to an intact container. '
+                        'Break the container group before removing it.'
+                    )
+                }), 409
 
             # Find matching model assignments for this dept/brand/model
             description_to_match = (data.get('description') or '').strip()
@@ -26325,88 +26483,53 @@ def add_container_models_to_event(event_id):
                     room_quantity + row['quantity'],
                 )
             _sync_event_model_markers_from_subprojects(event)
-            update_event_state(event)
-            data_manager.save_event(event)
-            invalidate_cache()
-            log_action(
-                f"Added model contents of container {container.container_id} "
-                f"to {subproject.get('name') or 'sub-project'} for event {event_id}"
-            )
-            mark_realtime_change(
-                'event-assets',
-                {'eventId': event_id, 'action': 'add-container-models'},
-            )
-            return jsonify({
-                'success': True,
-                'message': 'Container model contents added',
-                'data': {
-                    'containerId': container.container_id,
-                    'assetCount': sum(row['quantity'] for row in grouped.values()),
-                    'modelCount': len(grouped),
-                    'skippedAssetIds': skipped,
-                    'subprojectId': subproject.get('id'),
-                },
-            })
-
-        for row in grouped.values():
-            existing_refs = []
-            existing_quantity = 0
-            key = _model_key_from_parts(
-                row['department'],
-                row['brand'],
-                row['model'],
-                row.get('description'),
-            )
-            for ref in list(event.prepared_items):
-                marker = _parse_model_marker(ref)
-                if not marker:
-                    continue
-                marker_key = _model_key_from_parts(
-                    marker['department'],
-                    marker['brand'],
-                    marker['model'],
-                    marker.get('description'),
-                )
-                if marker_key == key:
-                    existing_refs.append(ref)
-                    existing_quantity += max(
-                        1,
-                        _safe_int(marker.get('quantity'), 1),
-                    )
-                    if not row['description'] and marker.get('description'):
-                        row['description'] = marker['description']
-
-            for ref in existing_refs:
-                event.prepared_items.remove(ref)
-            event.prepared_items.append(
-                _make_model_marker(
+        else:
+            for row in grouped.values():
+                _add_or_increment_model_marker(
+                    event.prepared_items,
                     row,
-                    existing_quantity + row['quantity'],
+                    row['quantity'],
                 )
-            )
 
+        subproject_id = str(
+            (subproject or {}).get('id')
+            or data.get('subprojectId')
+            or 'main'
+        )
+        container_group = _event_append_container_group(
+            event,
+            container.container_id,
+            list(grouped.values()),
+            subproject_id=subproject_id,
+            source='plan',
+        )
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
+        room_label = (subproject or {}).get('name') or 'event'
         log_action(
-            f"Added model contents of container {container.container_id} "
-            f"to event {event_id}"
+            f"Added container group {container.container_id} "
+            f"to {room_label} for event {event_id}"
         )
         mark_realtime_change(
             'event-assets',
-            {'eventId': event_id, 'action': 'add-container-models'},
+            {'eventId': event_id, 'action': 'add-container-group'},
         )
         return jsonify({
             'success': True,
+            'message': 'Container group added',
             'data': {
                 'containerId': container.container_id,
+                'containerGroup': container_group,
+                'assetCount': sum(row['quantity'] for row in grouped.values()),
                 'modelCount': len(grouped),
-                'assetCount': sum(
-                    row['quantity'] for row in grouped.values()
-                ),
-                'skippedCount': len(skipped),
+                'skippedAssetIds': skipped,
+                'subprojectId': subproject_id,
             },
         })
+
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     except Exception as exc:
         logger.error(
             "Failed to add container models to event %s: %s",
@@ -26414,7 +26537,42 @@ def add_container_models_to_event(event_id):
             exc,
             exc_info=True,
         )
-        return jsonify({'error': 'Failed to add container contents'}), 500
+        return jsonify({'error': 'Failed to add container to event'}), 500
+
+
+@app.route('/api/events/<int:event_id>/container-groups/<group_id>/break', methods=['POST'])
+@require_auth
+@require_event_access
+@with_prepare_action_lock
+def break_event_container_group(event_id, group_id):
+    """Permanently reveal a container's contents as ordinary requirements."""
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    clean_group_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(group_id or ''))[:80]
+    groups = _event_container_groups(event)
+    removed = next((row for row in groups if row['id'] == clean_group_id), None)
+    if not removed:
+        return jsonify({'error': 'Container group not found'}), 404
+    event.container_groups = [
+        row for row in groups if row['id'] != clean_group_id
+    ]
+    data_manager.save_event(event)
+    invalidate_cache()
+    _finance_detach_managed_event_documents(event_id)
+    log_action(
+        f"Broke container group {removed['containerId']} into individual "
+        f"requirements for event {event_id}"
+    )
+    mark_realtime_change(
+        'event-assets',
+        {'eventId': event_id, 'action': 'break-container-group'},
+    )
+    return jsonify({
+        'success': True,
+        'message': 'Container group broken into individual requirements',
+        'data': {'groupId': clean_group_id},
+    })
 
 
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])
@@ -34211,6 +34369,8 @@ def _normalise_finance_line(value):
             r'[^A-Za-z0-9_-]+', '', str(value.get('groupId') or '')
         )[:80],
         'groupTitle': str(value.get('groupTitle') or '').strip()[:500],
+        'isContainerGroup': bool(value.get('isContainerGroup')),
+        'containerId': str(value.get('containerId') or '').strip()[:500],
         'groupDisplayFields': group_display_fields or ['brand', 'model', 'description'],
         'groupCustomText': bool(value.get('groupCustomText')),
         'groupPlaceholder': bool(value.get('groupPlaceholder')),
@@ -38934,6 +39094,53 @@ def _finance_event_subprojects(document):
     return result
 
 
+def _finance_event_container_groups(document):
+    """Project quotation container packages into persistent event groups."""
+    grouped = {}
+    order = []
+    for line in (document or {}).get('lineItems') or []:
+        if not isinstance(line, dict) or not line.get('groupId'):
+            continue
+        if not (line.get('isContainerGroup') or line.get('containerId')):
+            continue
+        key = (
+            str(line.get('subprojectId') or 'main'),
+            str(line.get('groupId') or ''),
+        )
+        if key not in grouped:
+            grouped[key] = {
+                'id': f"quote_{re.sub(r'[^A-Za-z0-9_-]+', '', key[1])}"[:80],
+                'containerId': str(
+                    line.get('containerId') or line.get('groupTitle') or ''
+                ).strip(),
+                'title': str(
+                    line.get('groupTitle') or line.get('containerId') or ''
+                ).strip(),
+                'quantity': max(0, _safe_int(round(_safe_float(
+                    line.get('groupHeaderQuantity', line.get('quantity')), 1
+                )), 0)),
+                'subprojectId': key[0],
+                'items': [],
+                'source': 'quotation',
+            }
+            order.append(key)
+        inventory_group = _finance_inventory_group_from_line(line)
+        item_quantity = max(0, _safe_int(round(_safe_float(
+            line.get('groupItemQuantity'), 0
+        )), 0))
+        if inventory_group and item_quantity > 0:
+            grouped[key]['items'].append({
+                **inventory_group,
+                'quantity': item_quantity,
+            })
+    result = []
+    for key in order:
+        group = _normalise_event_container_group(grouped[key])
+        if group:
+            result.append(group)
+    return result
+
+
 def _costing_event_loan_marker(costing, line):
     costing_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(
         (costing or {}).get('id') or 'costing'
@@ -39360,6 +39567,7 @@ def _finance_event_asset_fingerprint(event):
         'extraAssets': getattr(event, 'extra_assets', []) or [],
         'customCollected': getattr(event, 'custom_collected', []) or [],
         'subprojects': getattr(event, 'subprojects', []) or [],
+        'containerGroups': _event_container_groups(event),
     }
     return hashlib.sha256(json.dumps(
         payload,
@@ -39373,6 +39581,30 @@ def _finance_clear_event_link(document):
     document['eventId'] = None
     document['eventManagedByQuotation'] = False
     document['eventSyncFingerprint'] = ''
+
+
+def _finance_detach_managed_event_documents(event_id):
+    """Keep a manual event edit from being overwritten by quotation sync."""
+    event_id = _safe_int(event_id, 0)
+    if not event_id:
+        return 0
+    changed = 0
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        for document in finance_data.get('documents') or []:
+            if (
+                not isinstance(document, dict)
+                or document.get('type') != 'quotation'
+                or _safe_int(document.get('eventId'), 0) != event_id
+                or not document.get('eventManagedByQuotation')
+            ):
+                continue
+            document['eventManagedByQuotation'] = False
+            document['eventSyncFingerprint'] = ''
+            changed += 1
+        if changed:
+            _save_finance_data(finance_data)
+    return changed
 
 
 def _finance_remove_deleted_event_references(event_id):
@@ -39512,6 +39744,7 @@ def _finance_sync_managed_event(document, finance_data=None, force=False):
         if linked_costing
         else _finance_event_subprojects(document)
     )
+    event.container_groups = _finance_event_container_groups(document)
     _finance_apply_managed_event_metadata(event, document)
     data_manager.save_event(event)
     invalidate_cache()
@@ -39551,6 +39784,7 @@ def _finance_create_event(document, finance_data=None, mark_accepted=True):
         if linked_costing
         else _finance_event_subprojects(document)
     )
+    event_container_groups = _finance_event_container_groups(document)
 
     assigned_users = _finance_event_assignees(document)
 
@@ -39575,6 +39809,7 @@ def _finance_create_event(document, finance_data=None, mark_accepted=True):
             assigned_users=assigned_users,
             notes=f"Created from quotation {document.get('number')}",
             subprojects=event_subprojects,
+            container_groups=event_container_groups,
         )
 
     event = _create_event_with_available_id(build_event)
@@ -42872,7 +43107,7 @@ def _finance_compare_identity_key(identity):
         for key, value in (identity or {}).items()
         if key in {
             'kind', 'department', 'brand', 'model', 'description',
-            'name', 'type', 'company'
+            'name', 'type', 'company', 'containerId'
         }
     }
     return hashlib.sha1(
@@ -42897,6 +43132,13 @@ def _finance_compare_custom_identity(asset_type='MISC', name='', department='UN'
         'name': str(name or '').strip(),
         'department': _normalise_department_code(department) or 'UN',
         'company': str(company or '').strip(),
+    }
+
+
+def _finance_compare_container_identity(container_id=''):
+    return {
+        'kind': 'container',
+        'containerId': str(container_id or '').strip(),
     }
 
 
@@ -43016,11 +43258,64 @@ def _finance_compare_quote_items(
     if subproject_id is None:
         return items
     custom_groups = set()
+    container_groups = set()
     for line in (document or {}).get('lineItems') or []:
         if (
             subproject_id is not _FINANCE_COMPARE_ALL_SUBPROJECTS
             and str(line.get('subprojectId') or 'main') != str(subproject_id)
         ):
+            continue
+        container_group_key = (
+            str(line.get('subprojectId') or 'main'),
+            str(line.get('groupId') or ''),
+        ) if (
+            line.get('groupId')
+            and (line.get('isContainerGroup') or line.get('containerId'))
+        ) else None
+        if container_group_key:
+            if container_group_key in container_groups:
+                continue
+            container_groups.add(container_group_key)
+            members = [
+                member
+                for member in (document or {}).get('lineItems') or []
+                if isinstance(member, dict)
+                and str(member.get('subprojectId') or 'main') == container_group_key[0]
+                and str(member.get('groupId') or '') == container_group_key[1]
+            ]
+            container_id = str(
+                line.get('containerId') or line.get('groupTitle') or ''
+            ).strip()
+            container_items = []
+            for member in members:
+                group = _finance_inventory_group_from_line(member)
+                item_quantity = max(0, _safe_int(round(_safe_float(
+                    member.get('groupItemQuantity'), 0
+                )), 0))
+                if group and item_quantity > 0:
+                    container_items.append({**group, 'quantity': item_quantity})
+            quantity = max(0, _safe_int(round(_safe_float(
+                line.get('groupHeaderQuantity', line.get('quantity')), 0
+            )), 0))
+            if container_id and quantity > 0 and container_items:
+                identity = _finance_compare_container_identity(container_id)
+                _finance_compare_add_item(items, identity, quantity, {
+                    'title': container_id,
+                    'subtitle': f"Container group · {sum(item['quantity'] for item in container_items)} assets per set",
+                    'department': 'Container',
+                    'departmentCode': 'CONTAINER',
+                    'uom': 'sets',
+                    'description': container_id,
+                    'containerId': container_id,
+                    'containerItems': container_items,
+                })
+                item_key = _finance_compare_identity_key(identity)
+                for member_line_id in [
+                    str(member.get('id')) for member in members
+                    if str(member.get('id') or '')
+                ]:
+                    if member_line_id not in items[item_key]['lineIds']:
+                        items[item_key]['lineIds'].append(member_line_id)
             continue
         custom_group_key = (
             str(line.get('subprojectId') or 'main'),
@@ -43209,6 +43504,63 @@ def _finance_compare_event_items(
     items = {}
     if subproject_id is None:
         return items
+    covered = {}
+    for container_group in _event_container_groups(event):
+        if (
+            subproject_id is not _FINANCE_COMPARE_ALL_SUBPROJECTS
+            and str(container_group.get('subprojectId') or 'main')
+            != str(subproject_id)
+        ):
+            continue
+        container_id = container_group['containerId']
+        identity = _finance_compare_container_identity(container_id)
+        per_set_count = sum(
+            max(0, _safe_int(item.get('quantity'), 0))
+            for item in container_group.get('items') or []
+        )
+        _finance_compare_add_item(
+            items,
+            identity,
+            container_group['quantity'],
+            {
+                'title': container_group.get('title') or container_id,
+                'subtitle': f"Container group · {per_set_count} assets per set",
+                'department': 'Container',
+                'departmentCode': 'CONTAINER',
+                'uom': 'sets',
+                'description': container_id,
+                'containerId': container_id,
+                'containerItems': copy.deepcopy(container_group.get('items') or []),
+            },
+            ref=container_group.get('id'),
+        )
+        for child in container_group.get('items') or []:
+            child_identity = _finance_compare_model_identity(
+                child.get('department'),
+                child.get('brand'),
+                child.get('model'),
+                child.get('description'),
+            )
+            child_key = _finance_compare_identity_key(child_identity)
+            covered[child_key] = covered.get(child_key, 0) + (
+                max(0, _safe_int(child.get('quantity'), 0))
+                * container_group['quantity']
+            )
+
+    def add_uncovered(parsed, line_id=None, ref=None):
+        if not parsed:
+            return
+        identity, quantity, details = parsed
+        if identity.get('kind') == 'model':
+            identity_key = _finance_compare_identity_key(identity)
+            deduction = min(quantity, covered.get(identity_key, 0))
+            if deduction:
+                covered[identity_key] -= deduction
+                quantity -= deduction
+        _finance_compare_add_item(
+            items, identity, quantity, details, line_id=line_id, ref=ref
+        )
+
     subprojects = [
         row for row in (getattr(event, 'subprojects', []) or [])
         if isinstance(row, dict)
@@ -43221,15 +43573,8 @@ def _finance_compare_event_items(
             ):
                 continue
             for item in subproject.get('items') or []:
-                parsed = _finance_compare_item_from_subproject_item(item)
-                if not parsed:
-                    continue
-                identity, quantity, details = parsed
-                _finance_compare_add_item(
-                    items,
-                    identity,
-                    quantity,
-                    details,
+                add_uncovered(
+                    _finance_compare_item_from_subproject_item(item),
                     line_id=(item or {}).get('lineId'),
                 )
         return items
@@ -43237,11 +43582,7 @@ def _finance_compare_event_items(
     if subproject_id not in (_FINANCE_COMPARE_ALL_SUBPROJECTS, 'main'):
         return items
     for ref in getattr(event, 'prepared_items', []) or []:
-        parsed = _finance_compare_item_from_event_ref(ref)
-        if not parsed:
-            continue
-        identity, quantity, details = parsed
-        _finance_compare_add_item(items, identity, quantity, details, ref=ref)
+        add_uncovered(_finance_compare_item_from_event_ref(ref), ref=ref)
     return items
 
 
@@ -43271,6 +43612,8 @@ def _finance_compare_display_item(item):
         'lineIds': item.get('lineIds') or [],
         'refs': item.get('refs') or [],
         'description': item.get('description') or '',
+        'containerId': item.get('containerId') or '',
+        'containerItems': copy.deepcopy(item.get('containerItems') or []),
     }
 
 
@@ -43533,6 +43876,72 @@ def _finance_compare_set_event_quantity(
         else None
     )
     subprojects = [target_subproject] if target_subproject else all_subprojects
+    if kind == 'container':
+        # Compare can be opened for older events that still store requirements
+        # only as aggregate markers. Materialise Main Room before changing a
+        # container so rebuilding the aggregate markers cannot discard those
+        # legacy requirements.
+        destination = target_subproject or _finance_compare_main_subproject(
+            event, create=True
+        )
+        container_id = str((identity or {}).get('containerId') or '').strip()
+        groups = _event_container_groups(event)
+        matching = [
+            group for group in groups
+            if group.get('containerId', '').casefold() == container_id.casefold()
+            and (
+                not target_subproject_id
+                or str(group.get('subprojectId') or 'main')
+                == str(target_subproject_id)
+            )
+        ]
+        current_quantity = sum(group['quantity'] for group in matching)
+        if target_quantity > current_quantity:
+            container_items = (display_item or {}).get('containerItems') or []
+            if not container_items:
+                raise ValueError('Container group has no transferable contents')
+            addition = target_quantity - current_quantity
+            for raw_item in container_items:
+                item = _normalise_event_container_item(raw_item)
+                if not item:
+                    continue
+                room_quantity = _event_subproject_required_quantity(destination, item)
+                _event_subproject_set_group_quantity(
+                    destination,
+                    item,
+                    room_quantity + item['quantity'] * addition,
+                )
+            _event_append_container_group(
+                event,
+                container_id or (display_item or {}).get('title'),
+                container_items,
+                quantity=addition,
+                subproject_id=destination.get('id') or 'main',
+                source='quotation',
+            )
+        elif target_quantity < current_quantity:
+            remaining = current_quantity - target_quantity
+            for group in reversed(matching):
+                if remaining <= 0:
+                    break
+                reduction = min(group['quantity'], remaining)
+                room = _event_subproject(event, group.get('subprojectId'))
+                if room:
+                    for item in group.get('items') or []:
+                        room_quantity = _event_subproject_required_quantity(room, item)
+                        _event_subproject_set_group_quantity(
+                            room,
+                            item,
+                            max(0, room_quantity - item['quantity'] * reduction),
+                        )
+                group['quantity'] -= reduction
+                remaining -= reduction
+            event.container_groups = [
+                group for group in groups if group['quantity'] > 0
+            ]
+        _sync_event_model_markers_from_subprojects(event)
+        _reconcile_event_subproject_extras(event)
+        return
     if subprojects:
         identity_key = _finance_compare_identity_key(identity)
         matching_by_room = []
@@ -43771,7 +44180,33 @@ def _finance_compare_add_to_event(event, row, target_subproject_id=None):
         if target_subproject_id
         else None
     ) or main
-    if identity.get('kind') == 'custom':
+    if identity.get('kind') == 'container':
+        container_items = [
+            item for item in (quote_item.get('containerItems') or [])
+            if _normalise_event_container_item(item)
+        ]
+        if not container_items:
+            raise ValueError('Container group has no transferable contents')
+        for raw_item in container_items:
+            item = _normalise_event_container_item(raw_item)
+            current_quantity = _event_subproject_required_quantity(
+                target_subproject, item
+            )
+            _event_subproject_set_group_quantity(
+                target_subproject,
+                item,
+                current_quantity + item['quantity'] * quantity_to_add,
+            )
+        _sync_event_model_markers_from_subprojects(event)
+        _event_append_container_group(
+            event,
+            identity.get('containerId') or quote_item.get('containerId') or quote_item.get('title'),
+            container_items,
+            quantity=quantity_to_add,
+            subproject_id=target_subproject.get('id') or 'main',
+            source='quotation',
+        )
+    elif identity.get('kind') == 'custom':
         marker = _make_custom_marker(
             identity.get('type') or 'MISC',
             identity.get('name') or quote_item.get('title') or 'Custom item',
@@ -43912,6 +44347,95 @@ def _finance_category_for_department(document, department, department_code, subp
     return ''
 
 
+def _finance_compare_container_lines_from_event_item(
+    event_item,
+    quantity,
+    event,
+    finance_data,
+    subproject_id,
+):
+    container_id = str(
+        event_item.get('containerId')
+        or (event_item.get('identity') or {}).get('containerId')
+        or event_item.get('title')
+        or 'Container'
+    ).strip()
+    group_id = f"container_{secrets.token_hex(8)}"
+    days = _finance_date_days(
+        _event_date_for_input(getattr(event, 'start_date', '')),
+        _event_date_for_input(getattr(event, 'end_date', '')),
+    )
+    lines = []
+    for raw_item in event_item.get('containerItems') or []:
+        item = _normalise_event_container_item(raw_item)
+        if not item:
+            continue
+        child_identity = _finance_compare_model_identity(
+            item['department'], item['brand'], item['model'], item['description']
+        )
+        child = {
+            'identity': child_identity,
+            'departmentCode': item['department'],
+            'department': _finance_compare_department_name(item['department']),
+            'description': item['description'],
+            'title': _finance_display_description(
+                item['brand'], item['model'], item['description']
+            ),
+            'subtitle': item['description'],
+            'uom': 'units',
+        }
+        line = _finance_compare_line_from_event_item(
+            child, item['quantity'], event, finance_data
+        )
+        item_days = max(0, _safe_float(line.get('days'), days))
+        item_unit_price = max(0, _safe_float(line.get('unitPrice'), 0))
+        item_discount = _safe_float(line.get('discountPercent'), 0)
+        contribution = (
+            item['quantity'] * item_unit_price
+            * (1 - item_discount / 100)
+        )
+        line.update({
+            'subprojectId': str(subproject_id or 'main'),
+            'groupId': group_id,
+            'groupTitle': container_id,
+            'isContainerGroup': True,
+            'containerId': container_id,
+            'groupDisplayFields': ['brand', 'model', 'description'],
+            'groupCustomText': False,
+            'groupPlaceholder': False,
+            'groupItemQuantity': item['quantity'],
+            'groupHeaderQuantity': quantity,
+            'groupItemDays': item_days,
+            'groupItemUom': 'units',
+            'groupItemUnitPrice': item_unit_price,
+            'groupItemDiscountPercent': item_discount,
+            'groupItemTotalMode': line.get('totalMode') or 'calculated',
+            'groupItemTotal': max(0, _safe_float(line.get('total'), 0)),
+            'groupItemPriceContribution': contribution,
+            'groupItemCommercialStored': True,
+            'groupPricingMode': 'items',
+        })
+        lines.append(line)
+    if not lines:
+        raise ValueError('Container group has no transferable contents')
+    header_unit_price = round(sum(
+        max(0, _safe_float(line.get('groupItemPriceContribution'), 0))
+        for line in lines
+    ), 2)
+    for index, line in enumerate(lines):
+        line.update({
+            'days': days,
+            'quantity': quantity,
+            'uom': 'sets',
+            'unitPrice': header_unit_price,
+            'discountPercent': 0,
+            'totalMode': 'amount',
+            'total': round(days * quantity * header_unit_price, 2) if index == 0 else 0,
+            'groupLeader': index == 0,
+        })
+    return lines
+
+
 def _finance_compare_apply_to_quotation(
     finance_data,
     quotation,
@@ -43926,7 +44450,40 @@ def _finance_compare_apply_to_quotation(
     delta = event_qty - quote_qty
     if delta <= 0:
         raise ValueError('The quotation already covers this item')
+    identity = event_item.get('identity') or {}
     line_ids = quote_item.get('lineIds') or []
+    if identity.get('kind') == 'container':
+        if line_ids:
+            line_id_set = {str(value) for value in line_ids}
+            group_lines = [
+                line for line in quotation.get('lineItems') or []
+                if str(line.get('id') or '') in line_id_set
+            ]
+            if not group_lines:
+                raise ValueError('Container group could not be found in the quotation')
+            new_quantity = quote_qty + delta
+            for line in group_lines:
+                line['quantity'] = new_quantity
+                line['groupHeaderQuantity'] = new_quantity
+                if line.get('groupLeader'):
+                    line['total'] = round(
+                        max(0, _safe_float(line.get('days'), 1))
+                        * new_quantity
+                        * max(0, _safe_float(line.get('unitPrice'), 0))
+                        * (1 - _safe_float(line.get('discountPercent'), 0) / 100),
+                        2,
+                    )
+            return
+        quotation.setdefault('lineItems', []).extend(
+            _finance_compare_container_lines_from_event_item(
+                event_item,
+                delta,
+                event,
+                finance_data,
+                target_subproject_id or 'main',
+            )
+        )
+        return
     if line_ids:
         target_line_id = str(line_ids[0])
         for line in quotation.get('lineItems') or []:
@@ -43963,7 +44520,6 @@ def _finance_compare_apply_to_quotation(
                     line['quantity'] = round(
                         _safe_float(line.get('quantity'), 0) + delta, 4
                     )
-                identity = event_item.get('identity') or {}
                 if identity.get('kind') == 'model':
                     brand = str(identity.get('brand') or '').strip()
                     model = str(identity.get('model') or '').strip()

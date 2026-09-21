@@ -9,6 +9,7 @@ var planPageState = {
   search: '',
   department: 'ALL',
   showContainers: true,
+  showGroupedContainers: true,
   loading: false,
   activeSubprojectId: '',
   editingCustomAssetId: '',
@@ -990,8 +991,164 @@ function planCustomAssets(eventData = planPageState.event) {
   );
 }
 
+function eventContainerGroupsForState(eventData, state) {
+  const groups = Array.isArray(eventData?.containerGroups)
+    ? eventData.containerGroups
+    : [];
+  const room = eventActiveSubproject(state, eventData);
+  if (!room) return groups;
+  return groups.filter(group => (
+    String(group?.subprojectId || 'main') === String(room.id || 'main')
+  ));
+}
+
+function eventContainerCoverage(eventData, state) {
+  const coverage = new Map();
+  eventContainerGroupsForState(eventData, state).forEach(container => {
+    const sets = Math.max(0, Number(container?.quantity || 0));
+    (container?.items || []).forEach(item => {
+      const key = eventSubprojectGroupKey(item);
+      coverage.set(
+        key,
+        (coverage.get(key) || 0) + Math.max(0, Number(item?.quantity || 0)) * sets
+      );
+    });
+  });
+  return coverage;
+}
+
+function eventUngroupedModelGroups(eventData, state) {
+  const coverage = eventContainerCoverage(eventData, state);
+  return eventSubprojectModelGroups(eventData, state).map(group => {
+    const key = eventSubprojectGroupKey(group);
+    const required = Math.max(0, Number(group?.requiredQuantity || 0));
+    const grouped = Math.min(required, coverage.get(key) || 0);
+    coverage.set(key, Math.max(0, (coverage.get(key) || 0) - grouped));
+    const outsideRequired = required - grouped;
+    const cap = value => Math.min(
+      Math.max(0, Number(value || 0)),
+      outsideRequired
+    );
+    let remainingAssets = outsideRequired;
+    const outsideAssets = [];
+    (group.assignedAssets || []).forEach(asset => {
+      if (asset?.isExtra) {
+        outsideAssets.push(asset);
+        return;
+      }
+      if (remainingAssets <= 0) return;
+      const quantity = Math.max(1, Number(asset?.quantity || 1));
+      const allocated = Math.min(quantity, remainingAssets);
+      outsideAssets.push(
+        allocated === quantity ? asset : { ...asset, quantity: allocated }
+      );
+      remainingAssets -= allocated;
+    });
+    return {
+      ...group,
+      requiredQuantity: outsideRequired,
+      preparedQuantity: cap(group.preparedQuantity),
+      assignedQuantity: cap(group.assignedQuantity),
+      preparedEverQuantity: cap(
+        group.preparedEverQuantity ?? group.assignedQuantity
+      ),
+      countablePreparedEverQuantity: cap(
+        group.countablePreparedEverQuantity ?? group.preparedEverQuantity
+      ),
+      returnedQuantity: cap(group.returnedQuantity),
+      countableReturnedQuantity: cap(group.countableReturnedQuantity),
+      assignedAssets: outsideAssets
+    };
+  });
+}
+
+function eventContainerGroupModelGroups(eventData, state) {
+  const sourceGroups = eventSubprojectModelGroups(eventData, state);
+  const sources = new Map(sourceGroups.map(group => (
+    [eventSubprojectGroupKey(group), group]
+  )));
+  const coverage = eventContainerCoverage(eventData, state);
+  const outsideRequired = new Map(sourceGroups.map(group => {
+    const key = eventSubprojectGroupKey(group);
+    return [key, Math.max(
+      0,
+      Number(group?.requiredQuantity || 0) - Number(coverage.get(key) || 0)
+    )];
+  }));
+  const used = new Map();
+  const allocate = (key, field, available, required) => {
+    const counterKey = `${key}|${field}`;
+    // Matching assets always satisfy loose/outside requirements before they
+    // count toward an intact container group.
+    const consumed = used.has(counterKey)
+      ? used.get(counterKey)
+      : Math.min(
+          Math.max(0, Number(available || 0)),
+          Math.max(0, Number(outsideRequired.get(key) || 0))
+        );
+    const quantity = Math.min(required, Math.max(0, Number(available || 0) - consumed));
+    used.set(counterKey, consumed + quantity);
+    return quantity;
+  };
+  return eventContainerGroupsForState(eventData, state).map(container => ({
+    ...container,
+    modelGroups: (container?.items || []).map(item => {
+      const key = eventSubprojectGroupKey(item);
+      const source = sources.get(key) || item;
+      const required = Math.max(0, Number(item?.quantity || 0))
+        * Math.max(0, Number(container?.quantity || 0));
+      return {
+        ...source,
+        department: item.departmentCode || item.department || source.department,
+        brand: item.brand || source.brand,
+        model: item.model || source.model,
+        description: item.description || source.description || '',
+        requiredQuantity: required,
+        preparedQuantity: allocate(key, 'prepared', getPreparedQuantity(source), required),
+        preparedEverQuantity: allocate(
+          key,
+          'preparedEver',
+          source.preparedEverQuantity ?? source.assignedQuantity ?? getPreparedQuantity(source),
+          required
+        ),
+        countablePreparedEverQuantity: allocate(
+          key,
+          'countablePreparedEver',
+          source.countablePreparedEverQuantity ?? source.preparedEverQuantity ?? getPreparedQuantity(source),
+          required
+        ),
+        returnedQuantity: allocate(key, 'returned', source.returnedQuantity, required),
+        countableReturnedQuantity: allocate(
+          key, 'countableReturned', source.countableReturnedQuantity, required
+        ),
+        assignedAssets: [],
+        _containerChild: true,
+        _containerGroupId: container.id
+      };
+    })
+  }));
+}
+
+function planContainerGroups(eventData = planPageState.event) {
+  return planPageState.showGroupedContainers
+    ? eventContainerGroupModelGroups(eventData, planPageState)
+    : [];
+}
+
 function planModelGroups(eventData = planPageState.event) {
-  return eventSubprojectModelGroups(eventData, planPageState)
+  const groups = planPageState.showGroupedContainers
+    ? eventUngroupedModelGroups(eventData, planPageState)
+    : (() => {
+        const coverage = eventContainerCoverage(eventData, planPageState);
+        return eventSubprojectModelGroups(eventData, planPageState).map(group => ({
+          ...group,
+          _containerCoveredQuantity: Math.min(
+            Math.max(0, Number(group?.requiredQuantity || 0)),
+            Math.max(0, Number(coverage.get(eventSubprojectGroupKey(group)) || 0))
+          )
+        }));
+      })();
+  return groups
     .filter(group => Number(group?.requiredQuantity || 0) > 0)
     .sort((a, b) => (
       compareByDisplayName(a.department, b.department) ||
@@ -1001,6 +1158,7 @@ function planModelGroups(eventData = planPageState.event) {
 
 function planTotals() {
   const models = planModelGroups();
+  const containers = planContainerGroups();
   const customAssets = planCustomAssets();
   const departmentsInUse = new Set();
   let totalQuantity = 0;
@@ -1013,9 +1171,15 @@ function planTotals() {
     totalQuantity += Math.max(1, Number(custom.quantity || 1));
     departmentsInUse.add(normalizeDepartmentCode(custom.department || 'UN'));
   });
+  containers.forEach(container => {
+    (container.modelGroups || []).forEach(group => {
+      totalQuantity += Math.max(0, Number(group.requiredQuantity || 0));
+      departmentsInUse.add(normalizeDepartmentCode(group.department || 'UN'));
+    });
+  });
 
   return {
-    lineCount: models.length + customAssets.length,
+    lineCount: models.length + customAssets.length + containers.length,
     totalQuantity,
     departmentCount: departmentsInUse.size
   };
@@ -1945,6 +2109,7 @@ function planSetDepartmentFilter(encodedDepartment) {
 
 function planRequirementQuantityControl(group) {
   const quantity = Math.max(1, Number(group.requiredQuantity || 1));
+  const minimum = Math.max(1, Number(group._containerCoveredQuantity || 0));
   if (eventIsConsolidated(planPageState, planPageState.event)) {
     return `
       <div class="plan-qty-total" aria-label="${quantity} required across all rooms">
@@ -1960,9 +2125,9 @@ function planRequirementQuantityControl(group) {
   ].map(value => `'${value}'`).join(',');
   return `
     <div class="plan-qty-control" aria-label="Required quantity">
-      <button type="button" ${quantity <= 1 ? 'disabled' : ''}
+      <button type="button" ${quantity <= minimum ? 'disabled' : ''}
               onclick="planAdjustModelQuantity(${args},-1,this)">−</button>
-      <input type="number" min="1" value="${quantity}"
+      <input type="number" min="${minimum}" value="${quantity}"
              onchange="planSetModelQuantity(${args},this.value,this)">
       <button type="button" onclick="planAdjustModelQuantity(${args},1,this)">+</button>
     </div>
@@ -2521,6 +2686,40 @@ async function planConvertRequirementToLoan(event) {
   }
 }
 
+function renderPlanContainerGroups() {
+  return planContainerGroups().map(container => {
+    const setQuantity = Math.max(1, Number(container.quantity || 1));
+    const assetQuantity = (container.modelGroups || []).reduce(
+      (sum, group) => sum + Math.max(0, Number(group.requiredQuantity || 0)),
+      0
+    );
+    const contents = (container.modelGroups || []).map(group => `
+      <div class="plan-container-child">
+        <span><strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model')}</strong><small>${escapeHtml(group.description || 'No description')}</small></span>
+        ${planDepartmentCodeBadgeHtml(group.department)}
+        <strong class="plan-container-child-quantity">${Math.max(0, Number(group.requiredQuantity || 0))}</strong>
+      </div>
+    `).join('');
+    return `
+      <details class="plan-container-group" open>
+        <summary>
+          <span class="plan-container-group-title">
+            <span class="plan-container-icon" aria-hidden="true">&#9638;</span>
+            <span><strong>${escapeHtml(container.title || container.containerId || 'Container')}</strong><small>Container group · ${assetQuantity} asset${assetQuantity === 1 ? '' : 's'}</small></span>
+          </span>
+          <span class="plan-badge">${setQuantity} set${setQuantity === 1 ? '' : 's'}</span>
+          <button type="button" class="plan-button plan-button-danger plan-button-small"
+                  onclick="event.preventDefault();event.stopPropagation();planBreakContainerGroup('${planEncode(container.id)}')">
+            Break group
+          </button>
+          <span aria-hidden="true">⌄</span>
+        </summary>
+        <div class="plan-container-children">${contents}</div>
+      </details>
+    `;
+  }).join('');
+}
+
 function renderPlanRequirementsCard() {
   const byDepartment = new Map();
   planModelGroups().forEach(group => {
@@ -2583,18 +2782,18 @@ function renderPlanRequirementsCard() {
               </div>
               <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
               <div class="plan-replace-slot">
-                ${warning ? `
+                ${warning && !group._containerCoveredQuantity ? `
                   <button type="button" class="plan-button plan-button-small plan-swap-button ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
                           onclick="planOpenResolution('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Resolve</button>
-                ` : ''}
+                ` : (group._containerCoveredQuantity ? '<span class="plan-container-locked">Grouped</span>' : '')}
               </div>
               ${planRequirementQuantityControl(group)}
               <div class="plan-row-actions">
-                <button type="button" class="plan-button plan-button-danger plan-button-small"
+                ${group._containerCoveredQuantity ? '' : `<button type="button" class="plan-button plan-button-danger plan-button-small"
                         title="Remove requirement"
                         onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
                   &#128465;
-                </button>
+                </button>`}
               </div>
             </div>
           `;
@@ -2674,9 +2873,19 @@ function renderPlanRequirementsCard() {
           <h3>Planned Requirements</h3>
           <p>Changes save immediately. Departments appear when their first item is added.</p>
         </div>
+        ${eventContainerGroupsForState(planPageState.event, planPageState).length ? `
+          <label class="prepare-new-toggle" title="Switch between container groups and their individual asset requirements">
+            <span>Group containers</span>
+            <input type="checkbox" ${planPageState.showGroupedContainers ? 'checked' : ''}
+                   onchange="planToggleContainerGrouping(this.checked)">
+            <i class="prepare-new-toggle-track" aria-hidden="true"></i>
+            <span>${planPageState.showGroupedContainers ? 'Grouped' : 'Individual'}</span>
+          </label>
+        ` : ''}
       </div>
       <div class="plan-requirements-scroll">
-        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left.</div>'}
+        ${renderPlanContainerGroups()}
+        ${departmentsHtml || (planContainerGroups().length ? '' : '<div class="plan-empty">No assets planned yet. Add models from the left.</div>')}
       </div>
     </section>
   `;
@@ -3568,6 +3777,33 @@ async function planAddContainerContents(encodedContainerId) {
       'success',
       `Added ${added.assetCount || 0} item(s) from ${containerId} as model requirements`
     );
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+function planToggleContainerGrouping(grouped) {
+  planPageState.showGroupedContainers = !!grouped;
+  renderPlanRealtimeAssets();
+}
+
+async function planBreakContainerGroup(encodedGroupId) {
+  const groupId = planDecode(encodedGroupId);
+  const container = planContainerGroups().find(group => String(group.id) === groupId);
+  const confirmed = await showAppConfirm({
+    title: 'Break Container Group',
+    message: `Break ${container?.title || container?.containerId || 'this container'} into individual asset requirements? This cannot be undone. To restore the group, remove all of its assets and add the container again.`,
+    confirmText: 'Break Group',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  try {
+    await apiCall(
+      `/api/events/${planPageState.eventId}/container-groups/${encodeURIComponent(groupId)}/break`,
+      'POST',
+      {}
+    );
+    showNotification('success', 'Container group broken into individual requirements');
     await refreshPlanSelectedEvent();
   } catch (error) {}
 }

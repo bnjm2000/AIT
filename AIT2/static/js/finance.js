@@ -1840,7 +1840,7 @@ function financeClearLineGroupFields(line) {
   if (!line) return;
   [
     'groupId', 'groupTitle', 'groupDisplayFields', 'groupCustomText',
-    'groupPlaceholder',
+    'groupPlaceholder', 'isContainerGroup', 'containerId',
     'groupItemQuantity', 'groupHeaderQuantity', 'groupLeader',
     'groupItemDays', 'groupItemUom', 'groupItemUnitPrice',
     'groupItemDiscountPercent', 'groupItemTotalMode', 'groupItemTotal',
@@ -8746,6 +8746,8 @@ function financeAddContainerAsGroup(
     subprojectId,
     groupId,
     groupTitle: containerId,
+    isContainerGroup: true,
+    containerId,
     groupDisplayFields: ['brand', 'model', 'description'],
     groupCustomText: false
   }));

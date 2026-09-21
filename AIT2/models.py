@@ -368,6 +368,7 @@ class Event:
         subprojects=None,
         delivery_order=None,
         vendor_management=None,
+        container_groups=None,
     ):
         clean_name, clean_location, legacy_location_extracted = (
             split_legacy_event_name_location(name, location)
@@ -394,6 +395,10 @@ class Event:
         self.subprojects = list(subprojects or [])
         self.delivery_order = dict(delivery_order or {})
         self.vendor_management = list(vendor_management or [])
+        # Container groups are display/transfer metadata layered over the
+        # ordinary model requirements. Keeping the requirements canonical
+        # means all existing availability and preparation logic still works.
+        self.container_groups = list(container_groups or [])
 
 
 class LogEntry:

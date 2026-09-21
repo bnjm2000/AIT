@@ -70,8 +70,26 @@ test('container group uses the category with the most assets, not the container 
   assert.equal(lines.length, 3);
   assert.ok(lines.every(line => line.systemName === 'Audio System'));
   assert.ok(lines.every(line => line.groupTitle === 'BOX-1'));
+  assert.ok(lines.every(line => line.isContainerGroup === true));
+  assert.ok(lines.every(line => line.containerId === 'BOX-1'));
   assert.equal(lines[2].quantity, 6);
   assert.equal(lines[2].department, 'Audio Department');
+});
+
+test('ungrouping clears container transfer metadata', () => {
+  const context = setup();
+  context.line = {
+    groupId: 'container-group',
+    groupTitle: 'BOX-1',
+    isContainerGroup: true,
+    containerId: 'BOX-1',
+  };
+
+  vm.runInContext('financeClearLineGroupFields(line)', context);
+
+  assert.equal(context.line.groupId, undefined);
+  assert.equal(context.line.isContainerGroup, undefined);
+  assert.equal(context.line.containerId, undefined);
 });
 
 test('container category follows an existing renamed category in this sub-project', () => {

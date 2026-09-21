@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager
@@ -158,6 +159,211 @@ class ContainerBulkAssetTests(unittest.TestCase):
         self.assertEqual(response.get_json()['data']['assetCount'], 4)
         marker = app_module._parse_model_marker(event.prepared_items[0])
         self.assertEqual(int(marker['quantity']), 4)
+        self.assertEqual(len(event.container_groups), 1)
+        group = event.container_groups[0]
+        self.assertEqual(group['containerId'], 'PLAN-CASE')
+        self.assertEqual(group['quantity'], 1)
+        self.assertEqual(group['items'][0]['quantity'], 4)
+
+        detail = self.client.get(
+            f'/api/events/{event.event_id}?view=prepare'
+        )
+        self.assertEqual(detail.status_code, 200, detail.get_data(as_text=True))
+        self.assertEqual(
+            detail.get_json()['data']['containerGroups'][0]['containerId'],
+            'PLAN-CASE',
+        )
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_events()
+        self.assertEqual(
+            reloaded.events[event.event_id].container_groups[0]['containerId'],
+            'PLAN-CASE',
+        )
+
+    def test_breaking_container_group_keeps_individual_requirements(self):
+        self.assertEqual(self.create_container('BREAK-CASE', 3).status_code, 201)
+        event = Event(
+            event_id=503,
+            name='Break Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[],
+            assigned_users=['admin', 'normal'],
+        )
+        self.data_manager.events[event.event_id] = event
+        self.login('admin', True)
+        added = self.client.post(
+            f'/api/events/{event.event_id}/container-models',
+            json={'containerId': 'BREAK-CASE'},
+        )
+        group_id = added.get_json()['data']['containerGroup']['id']
+        linked_document = {
+            'type': 'quotation',
+            'eventId': event.event_id,
+            'eventManagedByQuotation': True,
+            'eventSyncFingerprint': app_module._finance_event_asset_fingerprint(event),
+        }
+
+        protected = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'Showbase',
+                'model': 'Bulk Cable',
+                'description': 'Cable stock',
+            },
+        )
+        self.assertEqual(protected.status_code, 409)
+        self.assertIn('Break the container group', protected.get_json()['error'])
+
+        self.login('normal')
+        finance_data = {'documents': [linked_document]}
+        with (
+            patch.object(app_module, '_load_finance_data', return_value=finance_data),
+            patch.object(app_module, '_save_finance_data') as save_finance,
+        ):
+            response = self.client.post(
+                f'/api/events/{event.event_id}/container-groups/{group_id}/break',
+                json={},
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.container_groups, [])
+        marker = app_module._parse_model_marker(event.prepared_items[0])
+        self.assertEqual(int(marker['quantity']), 3)
+        save_finance.assert_called_once_with(finance_data)
+        self.assertFalse(linked_document['eventManagedByQuotation'])
+        self.assertEqual(linked_document['eventSyncFingerprint'], '')
+        self.assertEqual(event.container_groups, [])
+
+    def test_quotation_container_metadata_round_trips_to_event_group(self):
+        document = {
+            'subprojects': [{'id': 'main', 'name': 'Main Room'}],
+            'lineItems': [
+                {
+                    'id': 'speaker-line',
+                    'groupId': 'container-group',
+                    'groupTitle': 'QUOTE-CASE',
+                    'isContainerGroup': True,
+                    'containerId': 'QUOTE-CASE',
+                    'subprojectId': 'main',
+                    'department': 'Audio',
+                    'departmentCode': 'AX',
+                    'brand': 'Showbase',
+                    'model': 'Speaker',
+                    'description': 'Test speaker',
+                    'catalogKey': 'AX|Showbase|Speaker|Test speaker',
+                    'quantity': 2,
+                    'groupHeaderQuantity': 2,
+                    'groupItemQuantity': 3,
+                },
+            ],
+        }
+
+        groups = app_module._finance_event_container_groups(document)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['containerId'], 'QUOTE-CASE')
+        self.assertEqual(groups[0]['quantity'], 2)
+        self.assertEqual(groups[0]['items'][0]['quantity'], 3)
+
+        event = Event(
+            event_id=504,
+            name='Quotation Container Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=['[MODEL]AX|Showbase|Speaker|6|Test speaker'],
+            assigned_users=['admin'],
+            container_groups=groups,
+        )
+        compared = app_module._finance_compare_event_items(event)
+        self.assertEqual(len(compared), 1)
+        row = next(iter(compared.values()))
+        self.assertEqual(row['identity']['kind'], 'container')
+        self.assertEqual(row['quantity'], 2)
+
+        quotation = {'lineItems': [], 'subprojects': [{'id': 'main', 'name': 'Main Room'}]}
+        compare_row = {
+            'eventItem': app_module._finance_compare_display_item(row),
+            'quotationItem': app_module._finance_compare_display_item(None),
+        }
+        app_module._finance_compare_apply_to_quotation(
+            {'priceBook': {}, 'documents': []},
+            quotation,
+            event,
+            compare_row,
+            'main',
+        )
+        self.assertEqual(len(quotation['lineItems']), 1)
+        quote_line = quotation['lineItems'][0]
+        self.assertTrue(quote_line['isContainerGroup'])
+        self.assertEqual(quote_line['containerId'], 'QUOTE-CASE')
+        self.assertEqual(quote_line['groupItemQuantity'], 3)
+        self.assertEqual(quote_line['groupHeaderQuantity'], 2)
+
+        blank_event = Event(
+            event_id=505,
+            name='Compare Target Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[],
+            assigned_users=['admin'],
+        )
+        rows, _counts, _quote_items, _event_items = app_module._finance_compare_rows(
+            blank_event,
+            quotation,
+        )
+        app_module._finance_compare_add_to_event(blank_event, rows[0], 'main')
+        self.assertEqual(blank_event.container_groups[0]['containerId'], 'QUOTE-CASE')
+        self.assertEqual(blank_event.container_groups[0]['quantity'], 2)
+        self.assertEqual(blank_event.subprojects[0]['items'][0]['quantity'], 6)
+
+    def test_compare_container_reduction_preserves_other_legacy_requirements(self):
+        event = Event(
+            event_id=506,
+            name='Legacy Container Compare Event',
+            start_date='20260810',
+            end_date='20260810',
+            asset_models=[],
+            prepared_items=[
+                '[MODEL]AX|Showbase|Speaker|2|Test speaker',
+                '[MODEL]LX|Showbase|Lamp|1|Test lamp',
+            ],
+            assigned_users=['admin'],
+            container_groups=[{
+                'id': 'legacy-case',
+                'containerId': 'LEGACY-CASE',
+                'title': 'LEGACY-CASE',
+                'quantity': 1,
+                'subprojectId': 'main',
+                'items': [{
+                    'department': 'AX',
+                    'brand': 'Showbase',
+                    'model': 'Speaker',
+                    'description': 'Test speaker',
+                    'quantity': 2,
+                }],
+            }],
+        )
+
+        app_module._finance_compare_set_event_quantity(
+            event,
+            {'kind': 'container', 'containerId': 'LEGACY-CASE'},
+            0,
+        )
+
+        self.assertEqual(event.container_groups, [])
+        markers = [
+            app_module._parse_model_marker(item)
+            for item in event.prepared_items
+            if app_module._parse_model_marker(item)
+        ]
+        self.assertEqual(len(markers), 1)
+        self.assertEqual(markers[0]['model'], 'Lamp')
+        self.assertEqual(int(markers[0]['quantity']), 1)
 
     def test_preparing_container_bulk_quantity_deploys_that_quantity(self):
         event = Event(
